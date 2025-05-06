@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -14,6 +13,7 @@ const PersonalDetailsForm = () => {
     dateOfBirth: "",
     gender: "",
     profession: "",
+    referralCode: "",  // New referral code field
   });
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -82,7 +82,7 @@ const PersonalDetailsForm = () => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-3">
-            <Label htmlFor="name">Full Name</Label>
+            <Label htmlFor="name">Full Name <span className="text-red-500">*</span></Label>
             <Input
               id="name"
               name="name"
@@ -93,7 +93,7 @@ const PersonalDetailsForm = () => {
           </div>
 
           <div className="space-y-3">
-            <Label htmlFor="dateOfBirth">Date of Birth</Label>
+            <Label htmlFor="dateOfBirth">Date of Birth <span className="text-red-500">*</span></Label>
             <Input
               id="dateOfBirth"
               name="dateOfBirth"
@@ -105,7 +105,7 @@ const PersonalDetailsForm = () => {
           </div>
 
           <div className="space-y-3">
-            <Label htmlFor="gender">Gender</Label>
+            <Label htmlFor="gender">Gender <span className="text-red-500">*</span></Label>
             <Select 
               value={formData.gender} 
               onValueChange={(value) => handleSelectChange("gender", value)}
@@ -122,12 +122,24 @@ const PersonalDetailsForm = () => {
           </div>
 
           <div className="space-y-3">
-            <Label htmlFor="profession">Profession</Label>
+            <Label htmlFor="profession">Profession <span className="text-red-500">*</span></Label>
             <Input
               id="profession"
               name="profession"
               placeholder="Enter your profession"
               value={formData.profession}
+              onChange={handleChange}
+            />
+          </div>
+
+          {/* Referral Code (Optional) */}
+          <div className="space-y-3">
+            <Label htmlFor="referralCode">Referral Code (Optional)</Label>
+            <Input
+              id="referralCode"
+              name="referralCode"
+              placeholder="Enter referral code (if any)"
+              value={formData.referralCode}
               onChange={handleChange}
             />
           </div>
