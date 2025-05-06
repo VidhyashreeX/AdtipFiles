@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
@@ -76,7 +75,7 @@ const Home = () => {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [postViewCount, setPostViewCount] = useState(0);
-  const { isAuthenticated, user, updateUserProfile } = useAuth();
+  const { isAuthenticated } = useAuth();
 
   // Check if user is viewing posts and prompt login after a few posts
   useEffect(() => {
@@ -89,18 +88,8 @@ const Home = () => {
     // Increase view count for non-authenticated users
     if (!isAuthenticated) {
       setPostViewCount(prevCount => prevCount + 1);
-    } else {
-      // If user is authenticated, update wallet
-      if (user) {
-        const currentWallet = user.wallet || 0;
-        const isPremium = user.isPremium || false;
-        const earnAmount = isPremium ? 1 : 0.06;
-        
-        updateUserProfile({
-          wallet: currentWallet + earnAmount
-        });
-      }
     }
+    // We removed the wallet update logic here as requested
   };
 
   return (

@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 interface User {
+  referralEarnings: number;
   id?: string;
   phoneNumber?: string;
   name?: string;
@@ -75,6 +76,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         username: "newuser",
         bio: "Welcome to AdTip! Start earning by watching ads and creating content.",
         isPremium: false // Default to non-premium
+        ,
+        referralEarnings: 0
       };
       
       setUser(newUser);

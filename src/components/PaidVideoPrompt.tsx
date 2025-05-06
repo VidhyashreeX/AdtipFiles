@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
@@ -54,6 +53,7 @@ const PaidVideoPrompt = ({
     setTimeout(() => {
       // Deduct amount from wallet
       if (user) {
+        // Here we're keeping the deduction functionality but not adding money for watching
         updateUserProfile({
           wallet: userBalance - totalPrice,
         });
@@ -70,9 +70,9 @@ const PaidVideoPrompt = ({
   };
   
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-      <div className="bg-white w-11/12 max-w-md rounded-lg p-6 relative">
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+      <div className="bg-white w-full max-w-md rounded-lg p-5 relative">
+        <button onClick={onClose} className="absolute top-3 right-3 text-gray-500">
           <X size={20} />
         </button>
         
@@ -84,14 +84,14 @@ const PaidVideoPrompt = ({
         </div>
         
         <div className="bg-gray-50 rounded-lg p-4 mb-4">
-          <h3 className="font-medium mb-1">{videoTitle}</h3>
+          <h3 className="font-medium mb-1 line-clamp-2">{videoTitle}</h3>
           <div className="flex items-center justify-between text-sm">
             <span>Duration: {Math.floor(videoDuration / 60)}:{(videoDuration % 60).toString().padStart(2, '0')}</span>
             <span className="text-adtip-teal font-medium">₹{pricePerMinute}/min</span>
           </div>
         </div>
         
-        <div className="mb-6">
+        <div className="mb-5">
           <div className="flex justify-between items-center mb-1">
             <span className="font-medium">Total Price:</span>
             <span className="font-bold text-lg">₹{totalPrice}</span>

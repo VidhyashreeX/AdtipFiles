@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Search } from "lucide-react";
@@ -112,7 +111,7 @@ const TipTube = () => {
   const [showPaidVideoPrompt, setShowPaidVideoPrompt] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<number | null>(null);
   const [videoWatchCount, setVideoWatchCount] = useState(0);
-  const { isAuthenticated, user, updateUserProfile } = useAuth();
+  const { isAuthenticated } = useAuth();
   
   // Check if user is watching videos and prompt login after a few videos
   useEffect(() => {
@@ -141,18 +140,8 @@ const TipTube = () => {
     // Increase watch count for non-authenticated users
     if (!isAuthenticated) {
       setVideoWatchCount(prevCount => prevCount + 1);
-    } else {
-      // If user is authenticated, update wallet
-      if (user) {
-        const currentWallet = user.wallet || 0;
-        const isPremium = user.isPremium || false;
-        const earnAmount = isPremium ? 1 : 0.06;
-        
-        updateUserProfile({
-          wallet: currentWallet + earnAmount
-        });
-      }
     }
+    // We removed the wallet update logic here as requested
   }
   
   const handlePaidVideoContinue = () => {
@@ -249,11 +238,11 @@ const TipTube = () => {
           </div>
         </div>
 
-        {/* Watch to Earn Banner */}
+        {/* Watch to Earn Banner - Updated the text to remove specific earning mention */}
         <div className="mb-6 bg-gradient-to-r from-adtip-teal to-[#13b799] rounded-lg p-4 text-white">
-          <h3 className="font-bold text-lg mb-1">Watch to Earn!</h3>
+          <h3 className="font-bold text-lg mb-1">TipTube Videos</h3>
           <p className="text-sm mb-1">
-            TipTube is a great place to enjoy your favourite content and to earn some cash while watching in between ads!
+            Enjoy your favorite content from creators around the world!
           </p>
         </div>
 

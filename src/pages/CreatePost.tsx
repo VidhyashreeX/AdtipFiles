@@ -1,4 +1,3 @@
-
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -7,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Upload, Video } from "lucide-react";
+import { ArrowLeft, Upload } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -15,16 +14,17 @@ const CreatePost = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef(null);
   
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [postType, setPostType] = useState("post"); // New state for post type
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [isVideo, setIsVideo] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
-  const [pricePerMinute, setPricePerMinute] = useState<number>(0);
+  const [pricePerMinute, setPricePerMinute] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
   // Check if user is authenticated
@@ -33,15 +33,32 @@ const CreatePost = () => {
     return null;
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check if the file is a video
+    // Validate file type based on post type
     const isVideoFile = file.type.startsWith('video/');
-    setIsVideo(isVideoFile);
+    const isImageFile = file.type.startsWith('image/');
     
-    // Create a preview URL
+    if (postType === "post" && !isImageFile) {
+      toast({
+        title: "Invalid file type",
+        description: "Please upload an image for regular posts",
+        variant: "destructive",
+      });
+      return;
+    }
+    if ((postType === "tip-tube" || postType === "tip-shorts") && !isVideoFile) {
+      toast({
+        title: "Invalid file type",
+        description: `Please upload a video for ${postType === "tip-tube" ? "Tip Tube" : "Tip Shorts"}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsVideo(isVideoFile);
     const url = URL.createObjectURL(file);
     setPreviewUrl(url);
     setSelectedFile(file);
@@ -51,7 +68,7 @@ const CreatePost = () => {
     fileInputRef.current?.click();
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!title.trim()) {
@@ -72,7 +89,7 @@ const CreatePost = () => {
       return;
     }
 
-    if (isPaid && (pricePerMinute <= 0)) {
+    if (isPaid && (pricePerMinute <= 0) && (postType === "tip-tube" || postType === "tip-shorts")) {
       toast({
         title: "Invalid price",
         description: "Please set a valid price per minute",
@@ -86,13 +103,13 @@ const CreatePost = () => {
     // Simulate uploading
     setTimeout(() => {
       toast({
-        title: "Post created successfully",
-        description: isPaid 
-          ? `Your paid video has been uploaded at ₹${pricePerMinute}/minute` 
-          : "Your post has been uploaded",
+        title: `${postType === "post" ? "Post" : postType === "tip-tube" ? "Tip Tube" : "Tip Shorts"} created successfully`,
+        description: isPaid && (postType !== "post")
+          ? `Your paid video has been uploaded ata ₹${pricePerMinute}/minute`
+          : "Your content has been uploaded",
       });
       setIsLoading(false);
-      navigate("/tiptube");
+      navigate(postType === "post" ? "/posts" : "/tiptube");
     }, 2000);
   };
 
@@ -102,7 +119,7 @@ const CreatePost = () => {
         <button onClick={() => navigate(-1)} className="mr-4">
           <ArrowLeft className="h-6 w-6" />
         </button>
-        <h1 className="text-lg font-semibold flex-1">Create Post</h1>
+        <h1 className="text-lg font-semibold flex-1">Create {postType === "post" ? "Post" : postType === "tip-tube" ? "Tip Tube" : "Tip Shorts"}</h1>
         <Button 
           onClick={handleSubmit} 
           className="teal-button"
@@ -114,6 +131,28 @@ const CreatePost = () => {
 
       <div className="max-w-screen-md mx-auto p-4">
         <form className="space-y-6">
+          {/* Post Type Selection */}
+          <div>
+            <Label htmlFor="post-type">Post Type</Label>
+            <Select value={postType} onValueChange={(value) => {
+              setPostType(value);
+              setSelectedFile(null);
+              setPreviewUrl(null);
+              setIsVideo(value !== "post");
+              setIsPaid(false);
+              setPricePerMinute(0);
+            }}>
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Select post type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="post">Create a Post</SelectItem>
+                <SelectItem value="tip-tube">Tip Tube</SelectItem>
+                <SelectItem value="tip-shorts">Tip Shorts</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* File Upload */}
           <div 
             onClick={triggerFileInput}
@@ -125,7 +164,7 @@ const CreatePost = () => {
               type="file" 
               ref={fileInputRef}
               className="hidden" 
-              accept="image/*,video/*"
+              accept={postType === "post" ? "image/*" : "video/*"}
               onChange={handleFileChange}
             />
             
@@ -155,7 +194,7 @@ const CreatePost = () => {
                 <Upload className="h-10 w-10 text-gray-400 mb-2" />
                 <p className="text-sm font-medium">Click to upload</p>
                 <p className="text-xs text-gray-500">
-                  Support for images and videos
+                  {postType === "post" ? "Upload an image" : "Upload a video"}
                 </p>
               </div>
             )}
@@ -205,12 +244,12 @@ const CreatePost = () => {
             </Select>
           </div>
 
-          {/* Paid Video Toggle - Only show for videos */}
-          {isVideo && (
+          {/* Paid Video Toggle - Only for Tip Tube and Tip Shorts */}
+          {(postType === "tip-tube" || postType === "tip-shorts") && (
             <div className="border rounded-lg p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-medium">Paid Video (Tip Video)</h3>
+                  <h3 className="font-medium">Paid Video ({postType === "tip-tube" ? "Tip Tube" : "Tip Shorts"})</h3>
                   <p className="text-sm text-gray-500">
                     Viewers will pay per minute to watch your video
                   </p>

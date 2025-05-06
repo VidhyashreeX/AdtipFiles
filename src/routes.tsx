@@ -14,10 +14,18 @@ import TipCall from "./pages/TipCall";
 import Profile from "./pages/Profile";
 import EditProfile from "./pages/EditProfile";
 import CreatePost from "./pages/CreatePost";
-import Wallet from "./pages/Wallet";
+import Wallet from "./components/Wallet";
 import Interests from "./pages/Interests";
 import TermsAndConditions from "./pages/TermsAndConditions";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import HowToEarnCreator from "./pages/HowToEarnCreator";
+import HowToEarnUser from "./pages/HowToEarnUser";
+import Refer from "./pages/Refer";
+import AdsTracker from "./pages/AdsTracker";
+import Premium from "./pages/Premium";
+import Settings from "./pages/Settings";
+import ContactUs from "./pages/Contactus";
+
 
 export const router = createBrowserRouter([
   {
@@ -40,6 +48,15 @@ export const router = createBrowserRouter([
       { path: "wallet", element: <Wallet /> },
       { path: "terms", element: <TermsAndConditions /> },
       { path: "privacy", element: <PrivacyPolicy /> },
+      { path: "how-to-earn-creator", element: <HowToEarnCreator /> },
+  { path: "how-to-earn-user", element: <HowToEarnUser /> },
+  { path: "refer", element: <Refer /> },
+  { path: "ads-tracker", element: <AdsTracker /> },
+  { path: "premium", element: <Premium /> },
+  { path: "settings", element: <Settings /> },
+  { path: "contact-us", element: <ContactUs /> },
+      
+
       { path: "*", element: <NotFound /> }
     ]
   }
