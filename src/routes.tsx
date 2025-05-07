@@ -24,7 +24,7 @@ import Refer from "./pages/Refer";
 import AdsTracker from "./pages/AdsTracker";
 import Premium from "./pages/Premium";
 import Settings from "./pages/Settings";
-import ContactUs from "./pages/Contactus";
+import ContactUs from "./pages/ContactUs";
 
 
 export const router = createBrowserRouter([

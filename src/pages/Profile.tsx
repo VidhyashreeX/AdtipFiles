@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,7 +23,6 @@ const Profile = () => {
 
   // Check if the user is authenticated
   if (!isAuthenticated) {
-    // Redirect to login if not authenticated
     navigate("/login");
     return null;
   }

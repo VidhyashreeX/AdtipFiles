@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -12,16 +11,19 @@ const queryClient = new QueryClient();
 
 const App = () => {
   const location = useLocation();
-  
-  // Don't show navbar on onboarding and auth pages
-  const isAuthPage = 
-    location.pathname === "/" || 
-    location.pathname === "/onboarding" ||
-    location.pathname === "/login" || 
-    location.pathname === "/verify-otp" ||
-    location.pathname === "/personal-details" ||
-    location.pathname === "/interests";
-  
+
+  // Define an array of authentication-related paths for easier scalability
+  const authPages = [
+    "/",
+    "/onboarding",
+    "/login",
+    "/verify-otp",
+    "/personal-details",
+    "/interests",
+  ];
+
+  const isAuthPage = authPages.includes(location.pathname);
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -29,6 +31,7 @@ const App = () => {
           <Toaster />
           <Sonner />
           <div className="min-h-screen bg-background flex flex-col">
+            {/* Conditionally render the Navbar based on whether it's an auth page */}
             {!isAuthPage && <Navbar />}
             <main className="flex-1">
               <Outlet />

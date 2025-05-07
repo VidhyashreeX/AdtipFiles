@@ -21,6 +21,13 @@ const OTPVerify = () => {
     }
   }, [timer]);
 
+  const handleOtpChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (/^\d*$/.test(value)) {
+      setOtp(value);
+    }
+  };
+
   const verifyOTP = async () => {
     if (!userId) {
       setError("User ID missing");
@@ -28,13 +35,11 @@ const OTPVerify = () => {
     }
     try {
       setLoading(true);
-      console.log("Verifying OTP for userId:", userId, "OTP:", otp);
       const response = await axios.post(
         `${BASE_URL}otpverify`,
         { id: userId, otp },
         { headers: { "Content-Type": "application/json" } }
       );
-      console.log("OTP Verify Response:", response);
       if (response.status === 200) {
         const data = response.data.data[0];
         localStorage.setItem("UserLoggedIn", response.data.accessToken);
@@ -46,10 +51,10 @@ const OTPVerify = () => {
         localStorage.setItem("maritalStatus", data.maternal_status || "");
         localStorage.setItem("age", data.dob || "");
         alert("OTP verified successfully!");
-        navigate("/dashboard"); // Adjust based on checkUserDetailsAndRedirect logic
+        navigate("/dashboard"); // Redirect to dashboard
       }
     } catch (err) {
-      console.error("OTP Verify Error:", err.response || err.message);
+      console.error("OTP Verify Error:", err.response ? err.response : err.message);
       setError("Invalid OTP");
     } finally {
       setLoading(false);
@@ -69,7 +74,7 @@ const OTPVerify = () => {
         alert("OTP resent successfully!");
       }
     } catch (err) {
-      console.error("Resend OTP Error:", err.response || err.message);
+      console.error("Resend OTP Error:", err.response ? err.response : err.message);
       setError("Failed to resend OTP");
     } finally {
       setLoading(false);
@@ -83,9 +88,10 @@ const OTPVerify = () => {
       <input
         type="text"
         value={otp}
-        onChange={(e) => setOtp(e.target.value)}
+        onChange={handleOtpChange}
         placeholder="Enter OTP"
         className="w-full px-4 py-2 border border-gray-200 rounded-lg mb-4"
+        autoFocus
       />
       <Button
         onClick={verifyOTP}
