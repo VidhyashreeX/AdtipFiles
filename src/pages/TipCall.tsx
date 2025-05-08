@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Search, Star } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,37 +9,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
-// Sample call experts data
-const expertData = [
-  {
-    id: 1,
-    name: "Dr. Sarah Miller",
-    specialty: "Health & Nutrition",
-    rating: 4.9,
-    ratingCount: 248,
-    price: 199,
-    avatar: "/placeholder.svg",
-    available: true,
-    premium: true,
-    description: "Certified nutritionist with 10+ years of experience. Specializing in weight management and dietary planning."
-  },
-  {
-    id: 2,
-    name: "John Tech",
-    specialty: "Software Development",
-    rating: 4.7,
-    ratingCount: 183,
-    price: 249,
-    avatar: "/placeholder.svg",
-    available: true,
-    premium: false,
-    description: "Full-stack developer with expertise in React, Node.js, and cloud architecture. Can help with coding problems and project planning."
-  },
-  // More experts...
-];
-
 const categories = [
-  "Health", "Finance", "Tech", "Business", "Education", 
+  "Health", "Finance", "Tech", "Business", "Education",
   "Lifestyle", "Career", "Arts", "Legal", "Sports"
 ];
 
@@ -48,24 +19,48 @@ const TipCall = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showCallDialog, setShowCallDialog] = useState(false);
   const [selectedExpert, setSelectedExpert] = useState<any>(null);
-  const [callType, setCallType] = useState<"voice" | null>(null);  // Removed 'video'
-  const [filteredExperts, setFilteredExperts] = useState(expertData);
+  const [callType, setCallType] = useState<"voice" | null>(null);
+  const [expertData, setExpertData] = useState<any[]>([]);
+  const [filteredExperts, setFilteredExperts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const fetchExperts = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/experts`);
+        const data = await res.json();
+        setExpertData(data);
+        setFilteredExperts(data);
+      } catch (error) {
+        toast({
+          title: "Failed to fetch experts",
+          description: "Please try again later.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchExperts();
+  }, []);
+
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
     setSearchQuery(query);
-    
+
     if (!query) {
       setFilteredExperts(expertData);
       return;
     }
-    
+
     const filtered = expertData.filter(
-      expert => 
-        expert.name.toLowerCase().includes(query.toLowerCase()) || 
+      expert =>
+        expert.name.toLowerCase().includes(query.toLowerCase()) ||
         expert.specialty.toLowerCase().includes(query.toLowerCase())
     );
     setFilteredExperts(filtered);
@@ -81,7 +76,7 @@ const TipCall = () => {
         expert => expert.specialty.toLowerCase().includes(category.toLowerCase())
       );
       setFilteredExperts(filtered);
-      
+
       toast({
         title: `${category} selected`,
         description: `Showing experts in ${category}`,
@@ -89,23 +84,22 @@ const TipCall = () => {
     }
   };
 
-  const handleCallRequest = (expert: any) => {  // Only voice call now
+  const handleCallRequest = (expert: any) => {
     if (!isAuthenticated) {
       navigate("/login");
       return;
     }
 
     setSelectedExpert(expert);
-    setCallType("voice");  // Fixed to only voice
+    setCallType("voice");
     setShowCallDialog(true);
   };
 
   const initiateCall = () => {
     if (!selectedExpert || !callType) return;
 
-    const callPrice = selectedExpert.price;  // Only using price for voice call
+    const callPrice = selectedExpert.price;
 
-    // Check if user has enough balance
     if ((user?.wallet || 0) < callPrice) {
       toast({
         title: "Insufficient balance",
@@ -122,14 +116,12 @@ const TipCall = () => {
       description: `Connecting to ${selectedExpert.name}...`,
     });
 
-    // Simulate call connection
     setTimeout(() => {
       toast({
         title: "Call connected",
         description: `You're now connected with ${selectedExpert.name}. ₹${callPrice}/min will be charged.`,
       });
 
-      // Simulate a 1-minute call for demo purposes
       setTimeout(() => {
         toast({
           title: "Call ended",
@@ -143,7 +135,7 @@ const TipCall = () => {
 
   return (
     <div className="pb-20 md:pb-0 bg-gray-50">
-      {/* Search bar - sticky */}
+      {/* Search bar */}
       <div className="bg-white sticky top-[60px] md:top-[57px] z-10 py-4 px-4 shadow-sm">
         <div className="relative max-w-md mx-auto">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -157,7 +149,6 @@ const TipCall = () => {
         </div>
       </div>
 
-      {/* Main content */}
       <div className="max-w-screen-md mx-auto px-4 pt-4">
         {/* Talk to Earn Banner */}
         <div className="bg-white rounded-lg overflow-hidden shadow-sm mb-6">
@@ -178,9 +169,9 @@ const TipCall = () => {
                 </Button>
               </div>
               <div className="w-full md:w-1/2 md:pl-6">
-                <img 
-                  src="/lovable-uploads/1052f74a-1ca9-4c6f-b7ad-09d964f20cd1.png" 
-                  alt="Talk to Earn" 
+                <img
+                  src="/lovable-uploads/1052f74a-1ca9-4c6f-b7ad-09d964f20cd1.png"
+                  alt="Talk to Earn"
                   className="w-full h-auto rounded-lg"
                 />
               </div>
@@ -188,7 +179,7 @@ const TipCall = () => {
           </div>
         </div>
 
-        {/* Tabs for different views */}
+        {/* Tabs */}
         <Tabs defaultValue="browse" className="mb-6">
           <TabsList className="grid grid-cols-2 w-full">
             <TabsTrigger value="browse">Browse Experts</TabsTrigger>
@@ -214,39 +205,45 @@ const TipCall = () => {
             </div>
 
             {/* Expert Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredExperts.map(expert => (
-                <Card key={expert.id} className="shadow-md flex flex-col justify-between">
-                  <CardHeader>
-                    <div className="flex items-center gap-3">
-                      <img src={expert.avatar} alt={expert.name} className="w-12 h-12 rounded-full" />
-                      <div>
-                        <CardTitle className="text-lg font-bold">{expert.name}</CardTitle>
-                        <CardDescription className="text-sm text-gray-500">{expert.specialty}</CardDescription>
+            {loading ? (
+              <p className="text-center text-gray-500">Loading experts...</p>
+            ) : filteredExperts.length === 0 ? (
+              <p className="text-center text-gray-500">No experts found.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredExperts.map(expert => (
+                  <Card key={expert.id} className="shadow-md flex flex-col justify-between">
+                    <CardHeader>
+                      <div className="flex items-center gap-3">
+                        <img src={expert.avatar || "/placeholder.svg"} alt={expert.name} className="w-12 h-12 rounded-full" />
+                        <div>
+                          <CardTitle className="text-lg font-bold">{expert.name}</CardTitle>
+                          <CardDescription className="text-sm text-gray-500">{expert.specialty}</CardDescription>
+                        </div>
                       </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-gray-700">{expert.description}</p>
-                    <div className="flex items-center mt-4">
-                      <Star className="h-4 w-4 text-yellow-400" />
-                      <span className="text-sm ml-1">{expert.rating} ({expert.ratingCount} reviews)</span>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="flex flex-col justify-end items-center">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-lg font-semibold">₹{expert.price}/min</span>
-                    </div>
-                    <Button
-                      className="teal-button py-1 px-4 text-sm"
-                      onClick={() => handleCallRequest(expert)}
-                    >
-                      Request Call
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-gray-700">{expert.description}</p>
+                      <div className="flex items-center mt-4">
+                        <Star className="h-4 w-4 text-yellow-400" />
+                        <span className="text-sm ml-1">{expert.rating} ({expert.ratingCount} reviews)</span>
+                      </div>
+                    </CardContent>
+                    <CardFooter className="flex flex-col justify-end items-center">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-lg font-semibold">₹{expert.price}/min</span>
+                      </div>
+                      <Button
+                        className="teal-button py-1 px-4 text-sm"
+                        onClick={() => handleCallRequest(expert)}
+                      >
+                        Request Call
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
@@ -255,7 +252,7 @@ const TipCall = () => {
       <Dialog open={showCallDialog} onOpenChange={() => setShowCallDialog(false)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Request a {callType === "voice" ? "Voice" : ""} Call</DialogTitle>
+            <DialogTitle>Request a Voice Call</DialogTitle>
             <DialogDescription>
               {selectedExpert && (
                 <>

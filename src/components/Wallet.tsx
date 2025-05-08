@@ -6,46 +6,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import axios from "axios";
 
-const BASE_URL = "http://localhost:7082/api";
-
-// Sample transaction data
-const transactions = [
-  {
-    id: 1,
-    type: "credit",
-    amount: 50,
-    description: "Video view rewards",
-    date: "2023-09-15",
-  },
-  {
-    id: 2,
-    type: "credit",
-    amount: 25,
-    description: "Referral bonus",
-    date: "2023-09-14",
-  },
-  {
-    id: 3,
-    type: "debit",
-    amount: 100,
-    description: "Withdrawal to PayTM",
-    date: "2023-09-10",
-  },
-  {
-    id: 4,
-    type: "credit",
-    amount: 75,
-    description: "Content creation reward",
-    date: "2023-09-08",
-  },
-  {
-    id: 5,
-    type: "credit",
-    amount: 15,
-    description: "Daily login bonus",
-    date: "2023-09-07",
-  },
-];
+// Use the environment variable for the base URL with /api path appended if needed
+const BASE_URL = import.meta.env.VITE_API_URL?.endsWith('/api') ? import.meta.env.VITE_API_URL : `${import.meta.env.VITE_API_URL}/api`;
 
 const Wallet = () => {
   const navigate = useNavigate();
@@ -55,30 +17,28 @@ const Wallet = () => {
   const [balance, setBalance] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [transactions, setTransactions] = useState<any[]>([]);
 
-  const userId = localStorage.getItem("UserId") || "54625";
-  const token = localStorage.getItem("UserLoggedIn") || "";
+  const userId = localStorage.getItem("User  Id") || "54625"; // Ensure this is the correct user ID
+  const token = localStorage.getItem("User  LoggedIn") || ""; // Ensure this is a valid token
 
   // Fetch wallet balance
   useEffect(() => {
     const fetchBalance = async () => {
       try {
         setLoading(true);
-        console.log("Fetching balance for userId:", userId);
-        console.log("Using token:", token);
         const response = await axios.get(`${BASE_URL}/getfunds/${userId}`, {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
         });
-        console.log("API Response:", response);
         if (response.status === 200) {
           setBalance(response.data.data.balance || 0);
         } else {
           setError("Failed to fetch balance");
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("API Error:", err.response || err.message);
         setError("Error fetching balance");
       } finally {
@@ -88,10 +48,41 @@ const Wallet = () => {
     fetchBalance();
   }, [userId, token]);
 
+  // Fetch transactions
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        const response = await axios.get(`${BASE_URL}/gettransactions/${userId}`, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (response.status === 200) {
+          setTransactions(response.data.data.transactions || []);
+        } else {
+          setError("Failed to fetch transactions");
+        }
+      } catch (err: any) {
+        console.error("API Error:", err.response || err.message);
+        setError("Error fetching transactions");
+      }
+    };
+    fetchTransactions();
+  }, [userId, token]);
+
   // Handle withdrawal
   const handleWithdraw = () => {
     if (Number(withdrawAmount) > balance) {
       alert("Insufficient balance");
+      return;
+    }
+    if (!selectedMethod) {
+      alert("Please select a withdrawal method");
+      return;
+    }
+    if (Number(withdrawAmount) < 50) {
+      alert("Minimum withdrawal amount is ₹50");
       return;
     }
     alert(`Withdrawal of ₹${withdrawAmount} initiated via ${selectedMethod}!`);
@@ -99,7 +90,7 @@ const Wallet = () => {
   };
 
   // Group transactions by date
-  const groupedTransactions: { [key: string]: typeof transactions } = {};
+  const groupedTransactions: { [key: string]: any[] } = {};
   transactions.forEach((transaction) => {
     const date = new Date(transaction.date).toLocaleDateString("en-US", {
       year: "numeric",
@@ -140,7 +131,7 @@ const Wallet = () => {
               >
                 Add Money
               </Button>
-              <Button className="bg-white text-adtip-teal hover:bg-white/90">
+              <Button className="bg-white text-adtip-teal hover:bg-white/90" onClick={() => {}}>
                 Withdraw
               </Button>
             </div>
@@ -155,10 +146,7 @@ const Wallet = () => {
           <p className="text-gray-500 text-sm mb-4">
             Upgrade to premium to enjoy better features and higher earnings
           </p>
-          <Button
-            className="teal-button"
-            onClick={() => navigate("/upgrade-premium")}
-          >
+          <Button className="teal-button" onClick={() => navigate("/upgrade-premium")}>
             Upgrade Plan
           </Button>
         </div>
@@ -184,19 +172,27 @@ const Wallet = () => {
                   </TabsTrigger>
                 </TabsList>
 
-                <TabsContent
-                  value="earnings"
-                  className="bg-white rounded-lg p-6 shadow-sm"
-                >
+                <TabsContent value="earnings" className="bg-white rounded-lg p-6 shadow-sm">
                   <div className="text-center py-10">
-                    <p className="text-gray-500">No Transactions</p>
+                    {transactions.length === 0 ? (
+                      <p className="text-gray-500">No Transactions</p>
+                    ) : (
+                      Object.entries(groupedTransactions).map(([date, items]) => (
+                        <div key={date} className="mb-4">
+                          <h4 className="font-semibold mb-2">{date}</h4>
+                          {items.map((transaction) => (
+                            <div key={transaction.id} className="flex justify-between border-b border-gray-200 py-2">
+                              <span>{transaction.description}</span>
+                              <span>₹{transaction.amount}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ))
+                    )}
                   </div>
                 </TabsContent>
 
-                <TabsContent
-                  value="withdrawals"
-                  className="bg-white rounded-lg p-6 shadow-sm"
-                >
+                <TabsContent value="withdrawals" className="bg-white rounded-lg p-6 shadow-sm">
                   <div className="text-center py-10">
                     <p className="text-gray-500">No Withdrawal Requests</p>
                   </div>
@@ -205,98 +201,51 @@ const Wallet = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="withdraw">
+          <TabsContent value ="withdraw">
             <div className="bg-white rounded-lg p-6 shadow-sm">
               <h3 className="font-semibold mb-4">Withdraw to</h3>
 
               <div className="space-y-3 mb-6">
-                <div
-                  onClick={() => setSelectedMethod("PayTM")}
-                  className={`border rounded-lg p-4 flex items-center cursor-pointer transition-colors ${
-                    selectedMethod === "PayTM"
-                      ? "border-adtip-teal bg-adtip-teal/5"
-                      : "border-gray-200"
-                  }`}
-                >
-                  <div className="w-10 h-10 bg-blue-500 rounded-md flex items-center justify-center text-white font-bold">
-                    P
-                  </div>
-                  <div className="ml-3">PayTM</div>
-                  <div className="ml-auto">
+                {["PayTM", "Bank Transfer", "UPI"].map((method) => (
+                  <div
+                    key={method}
+                    onClick={() => setSelectedMethod(method)}
+                    className={`border rounded-lg p-4 flex items-center cursor-pointer transition-colors ${
+                      selectedMethod === method
+                        ? "border-adtip-teal bg-adtip-teal/5"
+                        : "border-gray-200"
+                    }`}
+                  >
                     <div
-                      className={`w-5 h-5 rounded-full border ${
-                        selectedMethod === "PayTM"
-                          ? "border-adtip-teal"
-                          : "border-gray-300"
-                      } flex items-center justify-center`}
+                      className={`w-10 h-10 rounded-md flex items-center justify-center text-white font-bold ${
+                        method === "PayTM"
+                          ? "bg-blue-500"
+                          : method === "Bank Transfer"
+                          ? "bg-green-500"
+                          : "bg-purple-500"
+                      }`}
                     >
-                      {selectedMethod === "PayTM" && (
-                        <div className="w-3 h-3 rounded-full bg-adtip-teal"></div>
-                      )}
+                      {method[0]}
+                    </div>
+                    <div className="ml-3">{method}</div>
+                    <div className="ml-auto">
+                      <div
+                        className={`w-5 h-5 rounded-full border ${
+                          selectedMethod === method ? "border-adtip-teal" : "border-gray-300"
+                        } flex items-center justify-center`}
+                      >
+                        {selectedMethod === method && (
+                          <div className="w-3 h-3 rounded-full bg-adtip-teal"></div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-
-                <div
-                  onClick={() => setSelectedMethod("Bank Transfer")}
-                  className={`border rounded-lg p-4 flex items-center cursor-pointer transition-colors ${
-                    selectedMethod === "Bank Transfer"
-                      ? "border-adtip-teal bg-adtip-teal/5"
-                      : "border-gray-200"
-                  }`}
-                >
-                  <div className="w-10 h-10 bg-green-500 rounded-md flex items-center justify-center text-white font-bold">
-                    B
-                  </div>
-                  <div className="ml-3">Bank Transfer</div>
-                  <div className="ml-auto">
-                    <div
-                      className={`w-5 h-5 rounded-full border ${
-                        selectedMethod === "Bank Transfer"
-                          ? "border-adtip-teal"
-                          : "border-gray-300"
-                      } flex items-center justify-center`}
-                    >
-                      {selectedMethod === "Bank Transfer" && (
-                        <div className="w-3 h-3 rounded-full bg-adtip-teal"></div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  onClick={() => setSelectedMethod("UPI")}
-                  className={`border rounded-lg p-4 flex items-center cursor-pointer transition-colors ${
-                    selectedMethod === "UPI"
-                      ? "border-adtip-teal bg-adtip-teal/5"
-                      : "border-gray-200"
-                  }`}
-                >
-                  <div className="w-10 h-10 bg-purple-500 rounded-md flex items-center justify-center text-white font-bold">
-                    U
-                  </div>
-                  <div className="ml-3">UPI</div>
-                  <div className="ml-auto">
-                    <div
-                      className={`w-5 h-5 rounded-full border ${
-                        selectedMethod === "UPI"
-                          ? "border-adtip-teal"
-                          : "border-gray-300"
-                      } flex items-center justify-center`}
-                    >
-                      {selectedMethod === "UPI" && (
-                        <div className="w-3 h-3 rounded-full bg-adtip-teal"></div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
 
               <h3 className="font-semibold mb-4">Enter amount</h3>
               <div className="relative mb-6">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                  ₹
-                </span>
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
                 <input
                   type="number"
                   value={withdrawAmount}

@@ -60,11 +60,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (phoneNumber: string): Promise<void> => {
     try {
       const res = await apiSendOtp(phoneNumber);
+      console.log("apiSendOtp response:", res);
       localStorage.setItem("tempPhone", phoneNumber);
       if (res.id) {
         localStorage.setItem("tempUserId", res.id);
       }
-      setUser({
+      const newUser = {
         phoneNumber,
         id: res.id || Math.random().toString(36).substring(2, 15),
         wallet: 0,
@@ -73,7 +74,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isPremium: false,
         referralEarnings: 0,
         isRegistered: res.isRegistered || false,
-      });
+      };
+      console.log("Setting user in AuthContext:", newUser);
+      setUser(newUser);
     } catch (err: any) {
       console.error("OTP sending failed", {
         message: err.message,
@@ -93,6 +96,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const tempUserId = localStorage.getItem("tempUserId") || user?.id || "0";
     try {
       const res = await apiVerifyOtp(phoneNumber, otp, tempUserId);
+      console.log("apiVerifyOtp response:", res);
       if (res.status === 200) {
         const newUser: User = {
           id: res.id || user?.id || Math.random().toString(36).substring(2, 15),
@@ -110,6 +114,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           profilePic: res.profilePic,
           interests: res.interests,
         };
+        console.log("Setting user after OTP verification:", newUser);
         setUser(newUser);
         setIsAuthenticated(true);
         localStorage.removeItem("tempPhone");

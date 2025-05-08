@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import axios from "axios"; // Import axios
+import { BASE_URL } from "../api"; // Import BASE_URL from your api file
 
 const Login = () => {
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -13,6 +15,28 @@ const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
 
+  // Define the function to send OTP
+  const apiSendOtp = async (mobileNumber: string) => {
+    const url = `${BASE_URL}/api/otplogin`;
+    try {
+      console.log("Sending OTP request:", { mobileNumber, url });
+      const response = await axios.post(url, { mobileNumber });
+      console.log("OTP response:", response.data);
+      return response.data; // Ensure this returns the expected structure
+    } catch (error: any) {
+      console.error("apiSendOtp error:", {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+        url,
+      });
+      // Check if the server returned a specific error message
+      const errorMessage = error.response?.data?.error || "Failed to send OTP. Please try again.";
+      throw new Error(errorMessage); // Throw the specific error message
+    }
+  };
+
+  // Define the handleSubmit function
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -31,8 +55,10 @@ const Login = () => {
 
     try {
       const fullPhoneNumber = `${countryCode}${phoneNumber}`;
-      await login(fullPhoneNumber);
+      console.log("Attempting login with:", { fullPhoneNumber });
+      await apiSendOtp(fullPhoneNumber); // Call the apiSendOtp function
       setIsLoading(false);
+      console.log("Navigating to /verify-otp");
       navigate("/verify-otp");
     } catch (err: any) {
       console.error("Login error:", {

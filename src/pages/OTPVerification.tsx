@@ -16,8 +16,10 @@ const OTPVerification = () => {
   const { user, setUser } = useUser();
 
   useEffect(() => {
+    console.log("OTPVerification useEffect:", { userId: user.id, phone: user.phone });
     let isMounted = true;
     if (!user.id || !user.phone) {
+      console.log("Redirecting to /login due to missing user data");
       if (isMounted) {
         navigate("/login");
       }
@@ -68,7 +70,9 @@ const OTPVerification = () => {
     setIsLoading(true);
     try {
       const userId = localStorage.getItem("tempUserId") || user.id || "0";
+      console.log("Verifying OTP:", { phone: user.phone, otp: otpValue, userId });
       const res = await apiVerifyOtp(user.phone!, otpValue, userId);
+      console.log("OTP verify response:", res);
       if (res.status === 200) {
         setUser({
           ...user,
@@ -88,8 +92,10 @@ const OTPVerification = () => {
           interests: res.interests || user.interests,
         });
         if (res.isRegistered || user.isRegistered) {
+          console.log("Navigating to /home");
           navigate("/home");
         } else {
+          console.log("Navigating to /personal-details");
           navigate("/personal-details");
         }
       } else {
@@ -107,6 +113,7 @@ const OTPVerification = () => {
     setCounter(30);
     setError("");
     try {
+      console.log("Resending OTP for:", user.phone);
       await apiSendOtp(user.phone!);
       alert("OTP has been resent!");
     } catch (err: any) {
@@ -115,6 +122,7 @@ const OTPVerification = () => {
     }
   };
 
+  console.log("Rendering OTPVerification");
   return (
     <div className="flex flex-col min-h-screen p-6">
       <div className="mb-8">
