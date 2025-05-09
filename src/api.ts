@@ -1,15 +1,13 @@
 import axios from "axios";
 
-const VITE_API_URL = import.meta.env.VITE_API_URL || "http://3.6.15.198:7082";
-export const BASE_URL = VITE_API_URL.replace(/\/api$|\/$/, "");
-
-console.log("API Configuration:", { VITE_API_URL, BASE_URL });
+const BASE_URL = "http://3.6.15.198:7082";
 
 export async function apiSendOtp(mobileNumber: string) {
   const url = `${BASE_URL}/api/otplogin`;
   try {
     console.log("Sending OTP request:", { mobileNumber, url });
-    const response = await axios.post(url, { mobileNumber });
+    const payload = { mobileNumber }; // Try: { phone: mobileNumber }
+    const response = await axios.post(url, payload);
     console.log("OTP response:", response.data);
     return response.data;
   } catch (error: any) {
@@ -19,7 +17,7 @@ export async function apiSendOtp(mobileNumber: string) {
       data: error.response?.data,
       url,
     });
-    const errorMessage = error.response?.data?.error || "Failed to send OTP. Please try again.";
+    const errorMessage = error.response?.data?.error || error.response?.data?.message || "Failed to send OTP. Please try again.";
     throw new Error(errorMessage);
   }
 }
@@ -28,11 +26,8 @@ export async function apiVerifyOtp(mobileNumber: string, otp: string, id: string
   const url = `${BASE_URL}/api/otpverify`;
   try {
     console.log("Verifying OTP:", { mobileNumber, otp, id, url });
-    const response = await axios.post(url, {
-      mobile_number: mobileNumber,
-      otp,
-      id,
-    });
+    const payload = { mobileNumber, otp, id }; // Try alternative payloads
+    const response = await axios.post(url, payload);
     console.log("OTP verify response:", response.data);
     return response.data;
   } catch (error: any) {
@@ -42,7 +37,7 @@ export async function apiVerifyOtp(mobileNumber: string, otp: string, id: string
       data: error.response?.data,
       url,
     });
-    const errorMessage = error.response?.data?.error || "Failed to verify OTP.";
+    const errorMessage = error.response?.data?.error || error.response?.data?.message || "Failed to verify OTP.";
     throw new Error(errorMessage);
   }
 }

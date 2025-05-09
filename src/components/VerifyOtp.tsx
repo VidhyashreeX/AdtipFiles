@@ -24,8 +24,8 @@ const VerifyOtp = () => {
       return;
     }
 
-    if (otp.length !== 6) {
-      setError("Please enter a valid 6-digit OTP");
+    if (otp.length !== 4) {
+      setError("Please enter a valid 4-digit OTP");
       return;
     }
 
@@ -34,7 +34,13 @@ const VerifyOtp = () => {
       const response = await apiVerifyOtp(phoneNumber, otp, id || "");
       console.log("OTP verified:", response);
       setIsLoading(false);
-      navigate("/personal-details", { state: { phoneNumber } });
+      if (response.status === 200) {
+        navigate(response.isRegistered ? "/home" : "/personal-details", {
+          state: { phoneNumber },
+        });
+      } else {
+        setError("Invalid OTP");
+      }
     } catch (err: any) {
       console.error("OTP verification error:", {
         message: err.message,
@@ -78,7 +84,7 @@ const VerifyOtp = () => {
 
         <h1 className="text-2xl font-bold mb-8 text-center">Verify OTP</h1>
         <p className="text-center mb-4">
-          Enter the OTP sent to {phoneNumber || "your phone number"}
+          Enter the 4-digit OTP sent to {phoneNumber || "your phone number"}
         </p>
 
         <form onSubmit={handleVerify} className="space-y-6">
@@ -88,7 +94,7 @@ const VerifyOtp = () => {
               placeholder="Enter OTP"
               value={otp}
               onChange={(e) =>
-                setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+                setOtp(e.target.value.replace(/\D/g, "").slice(0, 4))
               }
               className="flex-1 border-none focus-visible:ring-0"
             />

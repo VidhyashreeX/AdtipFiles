@@ -7,7 +7,7 @@ import { useUser } from "../UserContext";
 import { apiVerifyOtp, apiSendOtp } from "../api";
 
 const OTPVerification = () => {
-  const [otp, setOtp] = useState(["", "", "", ""]);
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [counter, setCounter] = useState(30);
@@ -42,7 +42,7 @@ const OTPVerification = () => {
       return newOtp;
     });
 
-    if (value && index < 3) {
+    if (value && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
   };
@@ -58,15 +58,21 @@ const OTPVerification = () => {
     setError("");
 
     const otpValue = otp.join("");
-    if (otpValue.length !== 4) {
-      setError("Please enter the complete OTP");
+    if (otpValue.length !== 6) {
+      setError("Please enter the complete 6-digit OTP");
       return;
     }
 
     setIsLoading(true);
     try {
-      const userId = id || localStorage.getItem("tempUserId") || user.id || "0";
+      const userId = localStorage.getItem("tempUserId") || id || user.id;
       const phone = phoneNumber || user.phone || "";
+      if (!phone) {
+        throw new Error("Phone number is missing");
+      }
+      if (!userId) {
+        throw new Error("User ID is missing");
+      }
       console.log("Verifying OTP:", { phone, otp: otpValue, userId });
       const res = await apiVerifyOtp(phone, otpValue, userId);
       console.log("OTP verify response:", res);
@@ -74,7 +80,7 @@ const OTPVerification = () => {
         setUser({
           ...user,
           accessToken: res.accessToken || user.accessToken,
-          id: res.id || user.id,
+          id: res.id || user.id || userId,
           phone: phone,
           isRegistered: res.isRegistered !== undefined ? res.isRegistered : true,
           username: res.username || user.username || "newuser",
@@ -89,6 +95,7 @@ const OTPVerification = () => {
           profilePic: res.profilePic || user.profilePic,
           interests: res.interests || user.interests,
         });
+        localStorage.removeItem("tempUserId");
         if (res.isRegistered || user.isRegistered) {
           console.log("Navigating to /home");
           navigate("/home");
@@ -100,8 +107,8 @@ const OTPVerification = () => {
         setError("Invalid OTP");
       }
     } catch (err: any) {
-      console.error("OTP verification error:", err.response?.data || err.message);
-      setError(err.response?.data?.error || "Something went wrong, please try again");
+      console.error("OTP verification error:", err.message, err.response?.data);
+      setError(err.message || "Something went wrong, please try again");
     } finally {
       setIsLoading(false);
     }
@@ -112,12 +119,18 @@ const OTPVerification = () => {
     setError("");
     try {
       const phone = phoneNumber || user.phone || "";
+      if (!phone) {
+        throw new Error("Phone number is missing for resend");
+      }
       console.log("Resending OTP for:", phone);
-      await apiSendOtp(phone);
+      const res = await apiSendOtp(phone);
+      if (res.id) {
+        localStorage.setItem("tempUserId", res.id);
+      }
       alert("OTP has been resent!");
     } catch (err: any) {
-      console.error("Resend OTP error:", err.response?.data || err.message);
-      setError(err.response?.data?.error || "Failed to resend OTP. Please try again.");
+      console.error("Resend OTP error:", err.message, err.response?.data);
+      setError(err.message || "Failed to resend OTP. Please try again.");
     }
   };
 
@@ -142,12 +155,12 @@ const OTPVerification = () => {
         <h1 className="text-2xl font-bold mb-2 text-center">Verify your number</h1>
 
         <p className="text-center text-gray-500 mb-8">
-          Enter the 4-digit code sent to your phone
+          Enter the 6-digit code sent to {phoneNumber || user.phone || "your phone"}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="flex justify-between max-w-xs mx-auto">
-            {[0, 1, 2, 3].map((index) => (
+          <div className="flex justify-between max-w-sm mx-auto">
+            {[0, 1, 2, 3, 4, 5].map((index) => (
               <Input
                 key={index}
                 ref={(el) => (inputRefs.current[index] = el)}
@@ -156,7 +169,7 @@ const OTPVerification = () => {
                 value={otp[index]}
                 onChange={(e) => handleChange(e, index)}
                 onKeyDown={(e) => handleKeyDown(e, index)}
-                className="w-16 h-16 text-center text-2xl"
+                className="w-12 h-12 text-center text-xl"
               />
             ))}
           </div>
