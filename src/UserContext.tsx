@@ -1,44 +1,43 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useState, ReactNode } from "react";
 
-type UserData = {
-  id: string | null;
+interface UserData {
+  id: string;
+  phone: string;
   accessToken: string | null;
-  phone: string | null;
-  isRegistered?: boolean;
-  username?: string;
-  bio?: string;
-  wallet?: number;
-  isPremium?: boolean;
-  referralEarnings?: number;
+  isRegistered: boolean;
+  username: string;
+  bio: string;
+  wallet: number;
+  isPremium: boolean;
+  referralEarnings: number;
   name?: string;
   gender?: string;
   dateOfBirth?: string;
   profession?: string;
   profilePic?: string;
   interests?: string[];
-};
+  maritalStatus?: string;
+}
 
-const UserContext = createContext<{
+interface UserContextType {
   user: UserData;
-  setUser: React.Dispatch<React.SetStateAction<UserData>>;
-}>({
-  user: { id: null, accessToken: null, phone: null },
-  setUser: () => {},
-});
+  setUser: (user: UserData) => void;
+}
 
-export const UserProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<UserData>(() => {
-    const storedUser = localStorage.getItem("user");
-    return storedUser
-      ? JSON.parse(storedUser)
-      : { id: null, accessToken: null, phone: null };
+const UserContext = createContext<UserContextType | undefined>(undefined);
+
+export const UserProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<UserData>({
+    id: "",
+    phone: "",
+    accessToken: null,
+    isRegistered: false,
+    username: "newuser",
+    bio: "Welcome to AdTip!",
+    wallet: 0,
+    isPremium: false,
+    referralEarnings: 0,
   });
-
-  useEffect(() => {
-    if (user.id !== null && user.accessToken !== null) {
-      localStorage.setItem("user", JSON.stringify(user));
-    }
-  }, [user]);
 
   return (
     <UserContext.Provider value={{ user, setUser }}>
@@ -48,5 +47,9 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
 };
 
 export const useUser = () => {
-  return useContext(UserContext);
+  const context = useContext(UserContext);
+  if (!context) {
+    throw new Error("useUser must be used within a UserProvider");
+  }
+  return context;
 };

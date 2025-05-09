@@ -15,12 +15,13 @@ const OTPVerification = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, setUser } = useUser();
-  const { phoneNumber, id } = location.state || {};
+  const { phoneNumber, id, isSaveUserDetails } = location.state || {};
 
   useEffect(() => {
-    console.log("OTPVerification useEffect:", { userId: user.id, phone: user.phone, locationState: { phoneNumber, id } });
-    if (!phoneNumber && (!user.phone || !user.id)) {
-      console.log("Redirecting to /login due to missing user data and location state");
+    // Redirect to login if no phone number or ID is available
+    const storedPhone = localStorage.getItem("mobileNumber") || phoneNumber || user.phone;
+    const storedId = localStorage.getItem("tempUserId") || id || user.id;
+    if (!storedPhone || !storedId) {
       navigate("/login");
     }
   }, [user, phoneNumber, id, navigate]);
@@ -65,49 +66,51 @@ const OTPVerification = () => {
 
     setIsLoading(true);
     try {
+      // Prioritize stored values from localStorage or UserContext
       const userId = localStorage.getItem("tempUserId") || id || user.id;
-      const phone = phoneNumber || user.phone || "";
-      if (!phone) {
-        throw new Error("Phone number is missing");
-      }
-      if (!userId) {
-        throw new Error("User ID is missing");
-      }
-      console.log("Verifying OTP:", { phone, otp: otpValue, userId });
+      const phone = localStorage.getItem("mobileNumber") || phoneNumber || user.phone || "";
+      if (!phone || !userId) throw new Error("Missing phone number or user ID");
+
       const res = await apiVerifyOtp(phone, otpValue, userId);
-      console.log("OTP verify response:", res);
+      console.log("apiVerifyOtp response:", res);
+
       if (res.status === 200) {
+        const userData = res.data?.[0] || {};
         setUser({
           ...user,
           accessToken: res.accessToken || user.accessToken,
-          id: res.id || user.id || userId,
+          id: userData.id?.toString() || user.id || userId,
           phone: phone,
-          isRegistered: res.isRegistered !== undefined ? res.isRegistered : true,
-          username: res.username || user.username || "newuser",
-          bio: res.bio || user.bio || "Welcome to AdTip!",
-          wallet: res.wallet || user.wallet || 0,
-          isPremium: res.isPremium || user.isPremium || false,
-          referralEarnings: res.referralEarnings || user.referralEarnings || 0,
-          name: res.name || user.name,
-          gender: res.gender || user.gender,
-          dateOfBirth: res.dateOfBirth || user.dateOfBirth,
-          profession: res.profession || user.profession,
-          profilePic: res.profilePic || user.profilePic,
-          interests: res.interests || user.interests,
+          isRegistered: userData.isSaveUserDetails === 1,
+          username: userData.username || userData.name || user.username || "newuser",
+          bio: userData.bio || user.bio || "Welcome to AdTip!",
+          wallet: userData.referal_earnings || user.wallet || 0,
+          isPremium: userData.is_premium || userData.premium_plan_id !== 0 || user.isPremium || false,
+          referralEarnings: userData.referal_earnings || user.referralEarnings || 0,
+          name: userData.name || user.name,
+          gender: userData.gender || user.gender,
+          dateOfBirth: userData.dob || user.dateOfBirth,
+          profession: userData.profession || user.profession,
+          profilePic: userData.profile_image || user.profilePic,
+          interests: userData.interests?.map((i: { name: string }) => i.name) || user.interests,
+          maritalStatus: userData.maternal_status || user.maritalStatus,
         });
         localStorage.removeItem("tempUserId");
-        if (res.isRegistered || user.isRegistered) {
-          console.log("Navigating to /home");
+        localStorage.removeItem("mobileNumber");
+
+        // Navigate based on isSaveUserDetails
+        if (userData.isSaveUserDetails === 1) {
+          console.log("Navigating to /home: User details are saved");
           navigate("/home");
         } else {
-          console.log("Navigating to /personal-details");
+          console.log("Navigating to /personal-details: User needs to complete profile");
           navigate("/personal-details");
         }
       } else {
-        setError("Invalid OTP");
+        setError(res.message || "Invalid OTP");
       }
     } catch (err: any) {
-      console.error("OTP verification error:", err.message, err.response?.data);
+      console.error("OTP verification error:", err.message);
       setError(err.message || "Something went wrong, please try again");
     } finally {
       setIsLoading(false);
@@ -118,23 +121,21 @@ const OTPVerification = () => {
     setCounter(30);
     setError("");
     try {
-      const phone = phoneNumber || user.phone || "";
-      if (!phone) {
-        throw new Error("Phone number is missing for resend");
-      }
-      console.log("Resending OTP for:", phone);
+      const phone = localStorage.getItem("mobileNumber") || phoneNumber || user.phone || "";
+      if (!phone) throw new Error("Phone number is missing for resend");
+
       const res = await apiSendOtp(phone);
-      if (res.id) {
-        localStorage.setItem("tempUserId", res.id);
+      if (res.data?.[0]?.id) {
+        localStorage.setItem("tempUserId", res.data[0].id.toString());
+        localStorage.setItem("mobileNumber", res.data[0].mobile_number);
       }
       alert("OTP has been resent!");
     } catch (err: any) {
-      console.error("Resend OTP error:", err.message, err.response?.data);
+      console.error("Resend OTP error:", err.message);
       setError(err.message || "Failed to resend OTP. Please try again.");
     }
   };
 
-  console.log("Rendering OTPVerification");
   return (
     <div className="flex flex-col min-h-screen p-6">
       <div className="mb-8">
@@ -155,7 +156,7 @@ const OTPVerification = () => {
         <h1 className="text-2xl font-bold mb-2 text-center">Verify your number</h1>
 
         <p className="text-center text-gray-500 mb-8">
-          Enter the 6-digit code sent to {phoneNumber || user.phone || "your phone"}
+          Enter the 6-digit code sent to {localStorage.getItem("mobileNumber") || phoneNumber || user.phone || "your phone"}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -191,10 +192,7 @@ const OTPVerification = () => {
               Resend code in <span className="font-semibold">{counter}s</span>
             </p>
           ) : (
-            <button
-              onClick={resendOTP}
-              className="text-adtip-teal font-medium"
-            >
+            <button onClick={resendOTP} className="text-adtip-teal font-medium">
               Resend Code
             </button>
           )}
