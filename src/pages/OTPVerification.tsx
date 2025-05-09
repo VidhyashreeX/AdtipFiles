@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useRef, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft } from "lucide-react";
@@ -13,21 +13,17 @@ const OTPVerification = () => {
   const [counter, setCounter] = useState(30);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, setUser } = useUser();
+  const { phoneNumber, id } = location.state || {};
 
   useEffect(() => {
-    console.log("OTPVerification useEffect:", { userId: user.id, phone: user.phone });
-    let isMounted = true;
-    if (!user.id || !user.phone) {
-      console.log("Redirecting to /login due to missing user data");
-      if (isMounted) {
-        navigate("/login");
-      }
+    console.log("OTPVerification useEffect:", { userId: user.id, phone: user.phone, locationState: { phoneNumber, id } });
+    if (!phoneNumber && (!user.phone || !user.id)) {
+      console.log("Redirecting to /login due to missing user data and location state");
+      navigate("/login");
     }
-    return () => {
-      isMounted = false;
-    };
-  }, [user, navigate]);
+  }, [user, phoneNumber, id, navigate]);
 
   useEffect(() => {
     if (counter > 0) {
@@ -69,15 +65,17 @@ const OTPVerification = () => {
 
     setIsLoading(true);
     try {
-      const userId = localStorage.getItem("tempUserId") || user.id || "0";
-      console.log("Verifying OTP:", { phone: user.phone, otp: otpValue, userId });
-      const res = await apiVerifyOtp(user.phone!, otpValue, userId);
+      const userId = id || localStorage.getItem("tempUserId") || user.id || "0";
+      const phone = phoneNumber || user.phone || "";
+      console.log("Verifying OTP:", { phone, otp: otpValue, userId });
+      const res = await apiVerifyOtp(phone, otpValue, userId);
       console.log("OTP verify response:", res);
       if (res.status === 200) {
         setUser({
           ...user,
-          accessToken: res.accessToken,
+          accessToken: res.accessToken || user.accessToken,
           id: res.id || user.id,
+          phone: phone,
           isRegistered: res.isRegistered !== undefined ? res.isRegistered : true,
           username: res.username || user.username || "newuser",
           bio: res.bio || user.bio || "Welcome to AdTip!",
@@ -113,8 +111,9 @@ const OTPVerification = () => {
     setCounter(30);
     setError("");
     try {
-      console.log("Resending OTP for:", user.phone);
-      await apiSendOtp(user.phone!);
+      const phone = phoneNumber || user.phone || "";
+      console.log("Resending OTP for:", phone);
+      await apiSendOtp(phone);
       alert("OTP has been resent!");
     } catch (err: any) {
       console.error("Resend OTP error:", err.response?.data || err.message);

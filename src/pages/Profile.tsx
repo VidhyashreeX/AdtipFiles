@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react"; // Add useEffect import
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Settings, LogOut } from "lucide-react";
@@ -21,16 +21,22 @@ const Profile = () => {
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
 
-  // Check if the user is authenticated
-  if (!isAuthenticated) {
-    navigate("/login");
-    return null;
-  }
+  // Check authentication in useEffect to avoid render-phase navigation
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate("/login");
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleLogout = () => {
     logout();
     navigate("/login");
   };
+
+  // If not authenticated, return null to avoid rendering
+  if (!isAuthenticated) {
+    return null;
+  }
 
   const isNewUser = !user?.name || !user?.username;
 
@@ -128,10 +134,11 @@ const Profile = () => {
             </TabsContent>
             
             <TabsContent value="stories">
-              <div className="text-center py-10 text-gray-400">
-                No stories yet
-              </div>
-            </TabsContent>
+  <div className="text-center py-10 text-gray-400">
+    No stories yet
+  </div>
+  Beaufort, SC 29902 {/* This is invalid JSX */}
+</TabsContent>
             
             <TabsContent value="saved">
               <div className="text-center py-10 text-gray-400">

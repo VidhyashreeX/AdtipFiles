@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const VITE_API_URL = import.meta.env.VITE_API_URL || "http://3.6.15.198:7082";
-export const BASE_URL = VITE_API_URL.replace(/\/api$|\/$/, ""); // Remove trailing /api or /
+export const BASE_URL = VITE_API_URL.replace(/\/api$|\/$/, "");
 
 console.log("API Configuration:", { VITE_API_URL, BASE_URL });
 
@@ -11,7 +11,7 @@ export async function apiSendOtp(mobileNumber: string) {
     console.log("Sending OTP request:", { mobileNumber, url });
     const response = await axios.post(url, { mobileNumber });
     console.log("OTP response:", response.data);
-    return response.data; // Ensure this returns the expected structure
+    return response.data;
   } catch (error: any) {
     console.error("apiSendOtp error:", {
       message: error.message,
@@ -19,9 +19,8 @@ export async function apiSendOtp(mobileNumber: string) {
       data: error.response?.data,
       url,
     });
-    // Check if the server returned a specific error message
     const errorMessage = error.response?.data?.error || "Failed to send OTP. Please try again.";
-    throw new Error(errorMessage); // Throw the specific error message
+    throw new Error(errorMessage);
   }
 }
 
@@ -43,7 +42,8 @@ export async function apiVerifyOtp(mobileNumber: string, otp: string, id: string
       data: error.response?.data,
       url,
     });
-    throw error;
+    const errorMessage = error.response?.data?.error || "Failed to verify OTP.";
+    throw new Error(errorMessage);
   }
 }
 

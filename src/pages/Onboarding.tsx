@@ -31,17 +31,17 @@ const OnboardingStep = ({
   buttonText?: string;
 }) => {
   return (
-    <div className="flex flex-col items-center justify-between min-h-screen p-6 text-center animate-fade-in">
-      <div className="w-full flex-1 flex flex-col items-center justify-center">
+    <div className="flex flex-col items-center min-h-screen p-6 text-center animate-fade-in">
+      <div className="w-full flex flex-col items-center justify-center flex-1">
         <div className="w-24 h-24 rounded-full bg-teal-100 flex items-center justify-center mb-8">
           {icon}
         </div>
         <h1 className="text-2xl font-bold mb-4">{title}</h1>
-        <p className="text-gray-600 mb-12 max-w-xs">{subtext}</p>
+        <p className="text-gray-600 mb-6 max-w-xs">{subtext}</p>
+        <Button onClick={onContinue} className="bg-teal-500 hover:bg-teal-600 w-full max-w-xs">
+          {buttonText} <ArrowRight className="ml-2 h-5 w-5" />
+        </Button>
       </div>
-      <Button onClick={onContinue} className="bg-teal-500 hover:bg-teal-600 w-full max-w-xs">
-        {buttonText} <ArrowRight className="ml-2 h-5 w-5" />
-      </Button>
     </div>
   );
 };
@@ -88,7 +88,7 @@ const Onboarding = () => {
   const currentStep = onboardingSteps[step];
 
   return (
-    <div className="bg-white">
+    <div className="bg-white min-h-screen relative">
       <OnboardingStep
         title={currentStep.title}
         subtext={currentStep.subtext}

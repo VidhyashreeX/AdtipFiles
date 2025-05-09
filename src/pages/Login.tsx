@@ -4,41 +4,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
-import axios from "axios"; // Import axios
-import { BASE_URL } from "../api"; // Import BASE_URL from your api file
+import { useUser } from "../UserContext";
 
 const Login = () => {
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [countryCode, setCountryCode] = useState("+91");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { setUser } = useUser();
 
-  // Define the function to send OTP
-  const apiSendOtp = async (mobileNumber: string) => {
-    const url = `${BASE_URL}/api/otplogin`;
-    try {
-      console.log("Sending OTP request:", { mobileNumber, url });
-      const response = await axios.post(url, { mobileNumber });
-      console.log("OTP response:", response.data);
-      return response.data; // Ensure this returns the expected structure
-    } catch (error: any) {
-      console.error("apiSendOtp error:", {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data,
-        url,
-      });
-      // Check if the server returned a specific error message
-      const errorMessage = error.response?.data?.error || "Failed to send OTP. Please try again.";
-      throw new Error(errorMessage); // Throw the specific error message
-    }
-  };
-
-  // Define the handleSubmit function
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setError("");
 
     if (!phoneNumber.trim()) {
@@ -54,12 +32,22 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const fullPhoneNumber = `${countryCode}${phoneNumber}`;
-      console.log("Attempting login with:", { fullPhoneNumber });
-      await apiSendOtp(fullPhoneNumber); // Call the apiSendOtp function
+      console.log("Attempting login with:", { phoneNumber });
+      const response = await login(phoneNumber);
+      console.log("Login successful, response:", response);
+      setUser({
+        id: response?.id || Math.random().toString(36).substring(2, 15),
+        phone: phoneNumber,
+        accessToken: null,
+        isRegistered: response?.isRegistered || false,
+        username: "newuser",
+        bio: "Welcome to AdTip!",
+        wallet: 0,
+        isPremium: false,
+        referralEarnings: 0,
+      });
       setIsLoading(false);
-      console.log("Navigating to /verify-otp");
-      navigate("/verify-otp");
+      navigate("/verify-otp", { state: { phoneNumber, id: response?.id || "" } });
     } catch (err: any) {
       console.error("Login error:", {
         message: err.message,
@@ -68,9 +56,11 @@ const Login = () => {
       });
       setIsLoading(false);
       const errorMessage =
-        err.response?.status === 404
-          ? "Unable to connect to OTP service. Please try again later."
-          : err.response?.data?.error || err.message || "Could not send OTP. Please try again.";
+        err.message ||
+        err.response?.data?.error ||
+        (err.response?.status === 500
+          ? "Server error: Database issue. Please try again later."
+          : "Could not send OTP. Please try again.");
       setError(errorMessage);
     }
   };
@@ -97,18 +87,7 @@ const Login = () => {
         </h1>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="flex border border-gray-300 rounded-md overflow-hidden">
-            <div className="bg-gray-50 px-3 py-2 border-r border-gray-300 flex items-center">
-              <select
-                value={countryCode}
-                onChange={(e) => setCountryCode(e.target.value)}
-                className="bg-transparent focus:outline-none text-gray-700"
-              >
-                <option value="+91">+91 IN</option>
-                <option value="+1">+1 US</option>
-                <option value="+44">+44 UK</option>
-              </select>
-            </div>
+          <div className="border border-gray-300 rounded-md overflow-hidden">
             <Input
               type="tel"
               placeholder="Phone number"

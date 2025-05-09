@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { apiSendOtp, apiVerifyOtp } from "../api";
+import { useUser } from "../UserContext";
 
 interface User {
   id?: string;
@@ -21,7 +22,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (phoneNumber: string) => Promise<void>;
+  login: (phoneNumber: string) => Promise<any>;
   verifyOTP: (otp: string) => Promise<boolean>;
   updateUserProfile: (userData: Partial<User>) => void;
   logout: () => void;
@@ -40,24 +41,60 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const { setUser: setUserContext } = useUser();
 
   useEffect(() => {
     const storedUser = localStorage.getItem("adtip_user");
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+      setUserContext({
+        id: parsedUser.id,
+        phone: parsedUser.phoneNumber,
+        accessToken: null,
+        isRegistered: parsedUser.isRegistered,
+        username: parsedUser.username,
+        bio: parsedUser.bio,
+        wallet: parsedUser.wallet,
+        isPremium: parsedUser.isPremium,
+        referralEarnings: parsedUser.referralEarnings,
+        name: parsedUser.name,
+        gender: parsedUser.gender,
+        dateOfBirth: parsedUser.dateOfBirth,
+        profession: parsedUser.profession,
+        profilePic: parsedUser.profilePic,
+        interests: parsedUser.interests,
+      });
       setIsAuthenticated(true);
     }
-  }, []);
+  }, [setUserContext]);
 
   useEffect(() => {
     if (user) {
       localStorage.setItem("adtip_user", JSON.stringify(user));
+      setUserContext({
+        id: user.id || null,
+        phone: user.phoneNumber || null,
+        accessToken: null,
+        isRegistered: user.isRegistered,
+        username: user.username,
+        bio: user.bio,
+        wallet: user.wallet,
+        isPremium: user.isPremium,
+        referralEarnings: user.referralEarnings,
+        name: user.name,
+        gender: user.gender,
+        dateOfBirth: user.dateOfBirth,
+        profession: user.profession,
+        profilePic: user.profilePic,
+        interests: user.interests,
+      });
     } else {
       localStorage.removeItem("adtip_user");
     }
-  }, [user]);
+  }, [user, setUserContext]);
 
-  const login = async (phoneNumber: string): Promise<void> => {
+  const login = async (phoneNumber: string): Promise<any> => {
     try {
       const res = await apiSendOtp(phoneNumber);
       console.log("apiSendOtp response:", res);
@@ -77,6 +114,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       console.log("Setting user in AuthContext:", newUser);
       setUser(newUser);
+      setUserContext({
+        id: newUser.id,
+        phone: phoneNumber,
+        accessToken: null,
+        isRegistered: newUser.isRegistered,
+        username: newUser.username,
+        bio: newUser.bio,
+        wallet: newUser.wallet,
+        isPremium: newUser.isPremium,
+        referralEarnings: newUser.referralEarnings,
+      });
+      return res;
     } catch (err: any) {
       console.error("OTP sending failed", {
         message: err.message,
@@ -84,9 +133,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         data: err.response?.data,
       });
       throw new Error(
-        err.response?.status === 404
-          ? "Unable to connect to OTP service. Please try again later."
-          : err.response?.data?.error || err.message || "Could not send OTP. Please try again."
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        (err.response?.status === 500
+          ? "Server error: Database issue. Please try again later."
+          : "Could not send OTP. Please try again.")
       );
     }
   };
@@ -116,6 +167,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
         console.log("Setting user after OTP verification:", newUser);
         setUser(newUser);
+        setUserContext({
+          id: newUser.id,
+          phone: phoneNumber,
+          accessToken: res.accessToken || null,
+          isRegistered: newUser.isRegistered,
+          username: newUser.username,
+          bio: newUser.bio,
+          wallet: newUser.wallet,
+          isPremium: newUser.isPremium,
+          referralEarnings: newUser.referralEarnings,
+          name: newUser.name,
+          gender: newUser.gender,
+          dateOfBirth: newUser.dateOfBirth,
+          profession: newUser.profession,
+          profilePic: newUser.profilePic,
+          interests: newUser.interests,
+        });
         setIsAuthenticated(true);
         localStorage.removeItem("tempPhone");
         localStorage.removeItem("tempUserId");
@@ -133,13 +201,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateUserProfile = (userData: Partial<User>) => {
-    setUser((prevUser) => (prevUser ? { ...prevUser, ...userData } : prevUser));
+    setUser((prevUser) => {
+      const updatedUser = prevUser ? { ...prevUser, ...userData } : prevUser;
+      if (updatedUser) {
+        setUserContext({
+          id: updatedUser.id || null,
+          phone: updatedUser.phoneNumber || null,
+          accessToken: null,
+          isRegistered: updatedUser.isRegistered,
+          username: updatedUser.username,
+          bio: updatedUser.bio,
+          wallet: updatedUser.wallet,
+          isPremium: updatedUser.isPremium,
+          referralEarnings: updatedUser.referralEarnings,
+          name: updatedUser.name,
+          gender: updatedUser.gender,
+          dateOfBirth: updatedUser.dateOfBirth,
+          profession: updatedUser.profession,
+          profilePic: updatedUser.profilePic,
+          interests: updatedUser.interests,
+        });
+      }
+      return updatedUser;
+    });
   };
 
   const logout = () => {
     setUser(null);
     setIsAuthenticated(false);
+    setUserContext({ id: null, accessToken: null, phone: null });
     localStorage.removeItem("adtip_user");
+    localStorage.removeItem("user");
   };
 
   const value: AuthContextType = {
