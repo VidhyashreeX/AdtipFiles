@@ -80,4 +80,4 @@ export async function apiLogout(id: string) {
       "Failed to logout. Please try again.";
     throw new Error(errorMessage);
   }
-}
+} 
