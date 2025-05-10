@@ -96,7 +96,7 @@ const Home = () => {
             {/* Referral Banner */}
             <div className="mb-6 bg-gradient-to-r from-adtip-teal to-[#13b799] rounded-lg p-4 text-white">
               <h3 className="font-bold text-lg mb-1">Refer & Earn!</h3>
-              <p className="text-sm mb-3">Invite friends and earn ₹50 when they join!</p>
+              <p className="text-sm mb-3">Get ₹3 for every successful referral and earn ₹30 for each premium upgrade</p>
               <Button variant="secondary" size="sm">
                 Share Now
               </Button>
