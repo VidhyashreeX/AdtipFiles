@@ -41,6 +41,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const storedUser = localStorage.getItem("adtip_user");
     if (storedUser) {
       const parsedUser = JSON.parse(storedUser);
+      console.log("Loaded user from localStorage:", parsedUser);
       setUser((prevUser) => {
         if (JSON.stringify(prevUser) !== JSON.stringify(parsedUser)) {
           return parsedUser;
@@ -48,8 +49,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return prevUser;
       });
       setIsAuthenticated(true);
+    } else {
+      console.log("No user found in localStorage");
     }
-  }, []); // Empty dependency array to run only on mount
+  }, []);
 
   const login = async (phone: string) => {
     try {
@@ -57,7 +60,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw new Error("Phone number is required");
       }
       const res = await apiSendOtp(phone);
-      console.log("apiSendOtp response:", res);
+      console.log("apiSendOtp response:", JSON.stringify(res, null, 2));
 
       // Store id and mobile_number in localStorage
       const userId = res.data?.[0]?.id?.toString();
@@ -99,13 +102,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const tempUserId = localStorage.getItem("tempUserId") || user?.id || "0";
     try {
       const res = await apiVerifyOtp(mobile_number, otp, tempUserId);
-      console.log("apiVerifyOtp response:", res);
+      console.log("apiVerifyOtp full response:", JSON.stringify(res, null, 2));
       if (res.status === 200) {
         const userData = res.data?.[0] || {};
         const newUser: UserData = {
           id: userData.id?.toString() || user?.id || Math.random().toString(36).substring(2, 15),
           phone: mobile_number,
-          accessToken: res.accessToken || null,
+          accessToken: res.accessToken || null, // Use the correct key
           isRegistered: userData.isSaveUserDetails === 1,
           username: userData.username || userData.name || "newuser",
           bio: userData.bio || "Welcome to AdTip! Start earning by watching ads and creating content.",
@@ -122,13 +125,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           maritalStatus: userData.maritalStatus || "",
         };
         console.log("Setting user after OTP verification:", newUser);
+        if (!newUser.accessToken) {
+          console.warn("No accessToken found in apiVerifyOtp response");
+        }
         setUser(newUser);
         localStorage.setItem("adtip_user", JSON.stringify(newUser));
+        console.log("Saved to localStorage:", JSON.parse(localStorage.getItem("adtip_user") || "{}"));
         setIsAuthenticated(true);
         localStorage.removeItem("tempUserId");
         localStorage.removeItem("mobile_number");
         return true;
       }
+      console.warn("apiVerifyOtp failed with status:", res.status);
       return false;
     } catch (err: any) {
       console.error("OTP verification failed", {

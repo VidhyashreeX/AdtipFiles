@@ -6,73 +6,79 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import axios from "axios";
 
-// Use the environment variable for the base URL with /api path appended if needed
-const BASE_URL = import.meta.env.VITE_API_URL?.endsWith('/api') ? import.meta.env.VITE_API_URL : `${import.meta.env.VITE_API_URL}/api`;
+const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
+  ? import.meta.env.VITE_API_URL
+  : `${import.meta.env.VITE_API_URL}/api`;
 
 const Wallet = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
   const [balance, setBalance] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [transactions, setTransactions] = useState<any[]>([]);
 
-  const userId = localStorage.getItem("User  Id") || "54625"; // Ensure this is the correct user ID
-  const token = localStorage.getItem("User  LoggedIn") || ""; // Ensure this is a valid token
+  const userId = user?.id || null;
+  const token = user?.accessToken || null;
+
+  // Wait for AuthContext to initialize
+  useEffect(() => {
+    console.log("Wallet user:", user); // Debug log
+    if (user === null && isAuthenticated === false) {
+      return;
+    }
+    setAuthLoading(false);
+    if (!userId || !token) {
+      setError("Please sign in to view your wallet.");
+      navigate("/login");
+    }
+  }, [user, isAuthenticated, userId, token, navigate]);
 
   // Fetch wallet balance
   useEffect(() => {
     const fetchBalance = async () => {
+      if (!userId || !token) return;
       try {
         setLoading(true);
+        console.log("Fetching balance with token:", token); // Debug log
         const response = await axios.get(`${BASE_URL}/getfunds/${userId}`, {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
         });
+        console.log("getfunds response:", response.data); // Debug log
         if (response.status === 200) {
-          setBalance(response.data.data.balance || 0);
+          setBalance(parseFloat(response.data.availableBalance) || 0);
         } else {
-          setError("Failed to fetch balance");
+          throw new Error(`Unexpected response status: ${response.status}`);
         }
       } catch (err: any) {
-        console.error("API Error:", err.response || err.message);
-        setError("Error fetching balance");
+        console.error("getfunds error:", err.response?.data || err.message);
+        if (err.response?.status === 401) {
+          setError("Unauthorized. Please sign in again.");
+          navigate("/login");
+        } else {
+          setError(err.response?.data?.message || "Error fetching balance");
+        }
       } finally {
         setLoading(false);
       }
     };
-    fetchBalance();
-  }, [userId, token]);
-
-  // Fetch transactions
-  useEffect(() => {
-    const fetchTransactions = async () => {
-      try {
-        const response = await axios.get(`${BASE_URL}/gettransactions/${userId}`, {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        if (response.status === 200) {
-          setTransactions(response.data.data.transactions || []);
-        } else {
-          setError("Failed to fetch transactions");
-        }
-      } catch (err: any) {
-        console.error("API Error:", err.response || err.message);
-        setError("Error fetching transactions");
-      }
-    };
-    fetchTransactions();
-  }, [userId, token]);
+    if (!authLoading) {
+      fetchBalance();
+    }
+  }, [userId, token, navigate, authLoading]);
 
   // Handle withdrawal
   const handleWithdraw = () => {
+    if (!userId || !token) {
+      setError("Please sign in to withdraw funds.");
+      navigate("/login");
+      return;
+    }
     if (Number(withdrawAmount) > balance) {
       alert("Insufficient balance");
       return;
@@ -89,19 +95,11 @@ const Wallet = () => {
     navigate("/home");
   };
 
-  // Group transactions by date
-  const groupedTransactions: { [key: string]: any[] } = {};
-  transactions.forEach((transaction) => {
-    const date = new Date(transaction.date).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-    if (!groupedTransactions[date]) {
-      groupedTransactions[date] = [];
-    }
-    groupedTransactions[date].push(transaction);
-  });
+  if (authLoading) {
+    return <div>Loading authentication...</div>;
+  }
+
+  if (!userId || !token) return null;
 
   return (
     <div className="pb-20 md:pb-0 bg-gray-50 min-h-screen">
@@ -122,7 +120,7 @@ const Wallet = () => {
             ) : error ? (
               <div className="text-red-500 mb-4">{error}</div>
             ) : (
-              <div className="text-4xl font-bold mb-4">₹{balance}</div>
+              <div className="text-4xl font-bold mb-4">₹{balance.toFixed(2)}</div>
             )}
             <div className="flex justify-center gap-4">
               <Button
@@ -131,7 +129,10 @@ const Wallet = () => {
               >
                 Add Money
               </Button>
-              <Button className="bg-white text-adtip-teal hover:bg-white/90" onClick={() => {}}>
+              <Button
+                className="bg-white text-adtip-teal hover:bg-white/90"
+                onClick={() => {}}
+              >
                 Withdraw
               </Button>
             </div>
@@ -146,7 +147,10 @@ const Wallet = () => {
           <p className="text-gray-500 text-sm mb-4">
             Upgrade to premium to enjoy better features and higher earnings
           </p>
-          <Button className="teal-button" onClick={() => navigate("/upgrade-premium")}>
+          <Button
+            className="teal-button"
+            onClick={() => navigate("/upgrade-premium")}
+          >
             Upgrade Plan
           </Button>
         </div>
@@ -154,54 +158,12 @@ const Wallet = () => {
 
       {/* Tabs */}
       <div className="max-w-screen-md mx-auto p-4 mt-4">
-        <Tabs defaultValue="transactions" className="w-full">
-          <TabsList className="grid grid-cols-2 w-full mb-4">
-            <TabsTrigger value="transactions">Transactions</TabsTrigger>
+        <Tabs defaultValue="withdraw" className="w-full">
+          <TabsList className="grid grid-cols-1 w-full mb-4">
             <TabsTrigger value="withdraw">Withdraw</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="transactions">
-            <div className="space-y-6">
-              <Tabs defaultValue="earnings">
-                <TabsList className="w-full mb-4">
-                  <TabsTrigger className="flex-1" value="earnings">
-                    My Ads Earnings
-                  </TabsTrigger>
-                  <TabsTrigger className="flex-1" value="withdrawals">
-                    Withdrawal Requests
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="earnings" className="bg-white rounded-lg p-6 shadow-sm">
-                  <div className="text-center py-10">
-                    {transactions.length === 0 ? (
-                      <p className="text-gray-500">No Transactions</p>
-                    ) : (
-                      Object.entries(groupedTransactions).map(([date, items]) => (
-                        <div key={date} className="mb-4">
-                          <h4 className="font-semibold mb-2">{date}</h4>
-                          {items.map((transaction) => (
-                            <div key={transaction.id} className="flex justify-between border-b border-gray-200 py-2">
-                              <span>{transaction.description}</span>
-                              <span>₹{transaction.amount}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="withdrawals" className="bg-white rounded-lg p-6 shadow-sm">
-                  <div className="text-center py-10">
-                    <p className="text-gray-500">No Withdrawal Requests</p>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </div>
-          </TabsContent>
-
-          <TabsContent value ="withdraw">
+          <TabsContent value="withdraw">
             <div className="bg-white rounded-lg p-6 shadow-sm">
               <h3 className="font-semibold mb-4">Withdraw to</h3>
 
@@ -231,7 +193,9 @@ const Wallet = () => {
                     <div className="ml-auto">
                       <div
                         className={`w-5 h-5 rounded-full border ${
-                          selectedMethod === method ? "border-adtip-teal" : "border-gray-300"
+                          selectedMethod === method
+                            ? "border-adtip-teal"
+                            : "border-gray-300"
                         } flex items-center justify-center`}
                       >
                         {selectedMethod === method && (
@@ -245,7 +209,9 @@ const Wallet = () => {
 
               <h3 className="font-semibold mb-4">Enter amount</h3>
               <div className="relative mb-6">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                  ₹
+                </span>
                 <input
                   type="number"
                   value={withdrawAmount}

@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft } from "lucide-react";
-import { useUser } from "../UserContext";
+import { useAuth } from "../contexts/AuthContext"; // Use AuthContext
 import { apiVerifyOtp, apiSendOtp } from "../api";
 
 const OTPVerification = () => {
@@ -14,13 +14,13 @@ const OTPVerification = () => {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, setUser } = useUser();
+  const { user, verifyOTP } = useAuth(); // Use verifyOTP from AuthContext
   const { phoneNumber, id, isSaveUserDetails } = location.state || {};
 
   useEffect(() => {
     // Redirect to login if no phone number or ID is available
-    const storedPhone = localStorage.getItem("mobileNumber") || phoneNumber || user.phone;
-    const storedId = localStorage.getItem("tempUserId") || id || user.id;
+    const storedPhone = localStorage.getItem("mobile_number") || phoneNumber || user?.phone;
+    const storedId = localStorage.getItem("tempUserId") || id || user?.id;
     if (!storedPhone || !storedId) {
       navigate("/login");
     }
@@ -66,48 +66,14 @@ const OTPVerification = () => {
 
     setIsLoading(true);
     try {
-      // Prioritize stored values from localStorage or UserContext
-      const userId = localStorage.getItem("tempUserId") || id || user.id;
-      const phone = localStorage.getItem("mobileNumber") || phoneNumber || user.phone || "";
-      if (!phone || !userId) throw new Error("Missing phone number or user ID");
-
-      const res = await apiVerifyOtp(phone, otpValue, userId);
-      console.log("apiVerifyOtp response:", res);
-
-      if (res.status === 200) {
-        const userData = res.data?.[0] || {};
-        setUser({
-          ...user,
-          accessToken: res.accessToken || user.accessToken,
-          id: userData.id?.toString() || user.id || userId,
-          phone: phone,
-          isRegistered: userData.isSaveUserDetails === 1,
-          username: userData.username || userData.name || user.username || "newuser",
-          bio: userData.bio || user.bio || "Welcome to AdTip!",
-          wallet: userData.referal_earnings || user.wallet || 0,
-          isPremium: userData.is_premium || userData.premium_plan_id !== 0 || user.isPremium || false,
-          referralEarnings: userData.referal_earnings || user.referralEarnings || 0,
-          name: userData.name || user.name,
-          gender: userData.gender || user.gender,
-          dateOfBirth: userData.dob || user.dateOfBirth,
-          profession: userData.profession || user.profession,
-          profilePic: userData.profile_image || user.profilePic,
-          interests: userData.interests?.map((i: { name: string }) => i.name) || user.interests,
-          maritalStatus: userData.maternal_status || user.maritalStatus,
-        });
-        localStorage.removeItem("tempUserId");
-        localStorage.removeItem("mobileNumber");
-
-        // Navigate based on isSaveUserDetails
-        if (userData.isSaveUserDetails === 1) {
-          console.log("Navigating to /home: User details are saved");
-          navigate("/home");
-        } else {
-          console.log("Navigating to /personal-details: User needs to complete profile");
-          navigate("/personal-details");
-        }
+      const success = await verifyOTP(otpValue);
+      console.log("verifyOTP response:", { success, user });
+      if (success) {
+        const isRegistered = user?.isRegistered || isSaveUserDetails === 1;
+        console.log(`Navigating to ${isRegistered ? "/home" : "/personal-details"}: User details ${isRegistered ? "are saved" : "need to be completed"}`);
+        navigate(isRegistered ? "/home" : "/personal-details");
       } else {
-        setError(res.message || "Invalid OTP");
+        setError("Invalid OTP");
       }
     } catch (err: any) {
       console.error("OTP verification error:", err.message);
@@ -121,13 +87,13 @@ const OTPVerification = () => {
     setCounter(30);
     setError("");
     try {
-      const phone = localStorage.getItem("mobileNumber") || phoneNumber || user.phone || "";
+      const phone = localStorage.getItem("mobile_number") || phoneNumber || user?.phone || "";
       if (!phone) throw new Error("Phone number is missing for resend");
 
       const res = await apiSendOtp(phone);
       if (res.data?.[0]?.id) {
         localStorage.setItem("tempUserId", res.data[0].id.toString());
-        localStorage.setItem("mobileNumber", res.data[0].mobile_number);
+        localStorage.setItem("mobile_number", res.data[0].mobile_number);
       }
       alert("OTP has been resent!");
     } catch (err: any) {
@@ -156,7 +122,7 @@ const OTPVerification = () => {
         <h1 className="text-2xl font-bold mb-2 text-center">Verify your number</h1>
 
         <p className="text-center text-gray-500 mb-8">
-          Enter the 6-digit code sent to {localStorage.getItem("mobileNumber") || phoneNumber || user.phone || "your phone"}
+          Enter the 6-digit code sent to {localStorage.getItem("mobile_number") || phoneNumber || user?.phone || "your phone"}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
