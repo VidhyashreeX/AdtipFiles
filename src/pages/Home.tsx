@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
@@ -5,11 +6,25 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import VideoLoginPrompt from "../components/VideoLoginPrompt";
+import axios from "axios";
 
-// Sample data for popular categories (kept as-is since no API was provided for categories)
+const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
+  ? import.meta.env.VITE_API_URL
+  : `${import.meta.env.VITE_API_URL}/api`;
+
+// Sample data for popular categories
 const popularCategories = [
-  "All", "Art", "Beauty", "Business", "Fashion", "Fitness", 
-  "Food", "Gaming", "Music", "Tech", "Travel"
+  "All",
+  "Art",
+  "Beauty",
+  "Business",
+  "Fashion",
+  "Fitness",
+  "Food",
+  "Gaming",
+  "Music",
+  "Tech",
+  "Travel",
 ];
 
 const Home = () => {
@@ -17,32 +32,55 @@ const Home = () => {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [postViewCount, setPostViewCount] = useState(0);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [feedData, setFeedData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
-  // Fetch video data from the API
+  // Fetch posts from /api/list-posts
   useEffect(() => {
-    const fetchVideos = async () => {
+    const fetchPosts = async () => {
+      if (!user?.id || !user?.accessToken) {
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch("http://3.6.15.198:7082/api/getvideos/51951/0/1");
-        if (!response.ok) {
-          throw new Error(`Failed to fetch videos: ${response.status} ${response.statusText}`);
+        const response = await axios.post(
+          `${BASE_URL}/list-posts`,
+          {
+            category: selectedCategory === "All" ? 0 : selectedCategory,
+            page: page,
+            limit: 5,
+            loggined_user_id: user.id,
+          },
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${user.accessToken}`,
+            },
+          }
+        );
+        console.log("list-posts response:", response.data); // Debug log
+        if (response.data.status) {
+          setFeedData(response.data.data);
+          setTotalPages(response.data.pagination.total_page);
+        } else {
+          throw new Error(response.data.message || "Failed to fetch posts");
         }
-        const data = await response.json();
-        setFeedData(data);
-      } catch (err) {
-        setError(err.message);
+      } catch (err: any) {
+        console.error("list-posts error:", err.response?.data || err.message);
+        setError(err.response?.data?.message || err.message);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchVideos();
-  }, []);
+    fetchPosts();
+  }, [user, selectedCategory, page]);
 
   // Check if user is viewing posts and prompt login after a few posts
   useEffect(() => {
@@ -50,11 +88,11 @@ const Home = () => {
       setShowLoginPrompt(true);
     }
   }, [postViewCount, isAuthenticated]);
-  
-  const handlePostClick = (id) => {
+
+  const handlePostClick = (id: number) => {
     // Increase view count for non-authenticated users
     if (!isAuthenticated) {
-      setPostViewCount(prevCount => prevCount + 1);
+      setPostViewCount((prevCount) => prevCount + 1);
     }
   };
 
@@ -64,13 +102,16 @@ const Home = () => {
       {showLoginPrompt && (
         <VideoLoginPrompt onClose={() => setShowLoginPrompt(false)} />
       )}
-      
+
       {/* Categories horizontal scroll - Made sticky with different z-index */}
       <div className="bg-white sticky top-[60px] md:top-[57px] z-10 py-3 px-4 overflow-x-auto flex whitespace-nowrap gap-3 no-scrollbar shadow-sm">
         {popularCategories.map((category) => (
           <button
             key={category}
-            onClick={() => setSelectedCategory(category)}
+            onClick={() => {
+              setSelectedCategory(category);
+              setPage(1); // Reset page on category change
+            }}
             className={`px-4 py-1.5 rounded-full text-sm transition-all ${
               selectedCategory === category
                 ? "bg-adtip-teal text-white"
@@ -87,16 +128,26 @@ const Home = () => {
         {/* Tabs */}
         <Tabs defaultValue="for-you" className="mb-6">
           <TabsList className="grid grid-cols-2 w-full">
-            <TabsTrigger value="for-you" onClick={() => setActiveTab("for-you")}>For You</TabsTrigger>
-            <TabsTrigger value="following" onClick={() => setActiveTab("following")}>Following</TabsTrigger>
+            <TabsTrigger value="for-you" onClick={() => setActiveTab("for-you")}>
+              For You
+            </TabsTrigger>
+            <TabsTrigger
+              value="following"
+              onClick={() => setActiveTab("following")}
+            >
+              Following
+            </TabsTrigger>
           </TabsList>
-          
+
           {/* For You Tab */}
           <TabsContent value="for-you">
             {/* Referral Banner */}
             <div className="mb-6 bg-gradient-to-r from-adtip-teal to-[#13b799] rounded-lg p-4 text-white">
               <h3 className="font-bold text-lg mb-1">Refer & Earn!</h3>
-              <p className="text-sm mb-3">Get ₹3 for every successful referral and earn ₹30 for each premium upgrade</p>
+              <p className="text-sm mb-3">
+                Get ₹3 for every successful referral and earn ₹30 for each premium
+                upgrade
+              </p>
               <Button variant="secondary" size="sm">
                 Share Now
               </Button>
@@ -105,7 +156,7 @@ const Home = () => {
             {/* Loading State */}
             {loading && (
               <div className="text-center py-10">
-                <p className="text-gray-500">Loading videos...</p>
+                <p className="text-gray-500">Loading posts...</p>
               </div>
             )}
 
@@ -122,111 +173,146 @@ const Home = () => {
             {/* Feed Posts */}
             {!loading && !error && feedData.length === 0 && (
               <div className="text-center py-10">
-                <p className="text-gray-500">No videos available at the moment.</p>
+                <p className="text-gray-500">No posts available at the moment.</p>
               </div>
             )}
 
             {!loading && !error && feedData.length > 0 && (
               <div className="space-y-6">
-                {feedData.map((post) => (
-                  <div 
-                    key={post.id} 
+                {feedData.map((post: any) => (
+                  <div
+                    key={post.id}
                     className="bg-white rounded-lg shadow-sm overflow-hidden cursor-pointer"
                     onClick={() => handlePostClick(post.id)}
                   >
                     {/* Post header */}
                     <div className="flex items-center p-4">
-                      <img 
-                        src={post.user.avatar} 
-                        alt={post.user.name} 
+                      <img
+                        src={
+                          post.user_profile_image ||
+                          "https://via.placeholder.com/40"
+                        }
+                        alt={post.user_name}
                         className="w-10 h-10 rounded-full object-cover"
                       />
                       <div className="ml-3">
                         <div className="flex items-center">
-                          <h3 className="font-semibold">{post.user.name}</h3>
-                          {post.user.isVerified && (
-                            <span className="ml-1 text-adtip-teal">✓</span>
-                          )}
+                          <h3 className="font-semibold">{post.user_name}</h3>
                         </div>
                         <p className="text-xs text-gray-500">
-                          {post.sponsored ? "Sponsored" : "2h ago"}
+                          {post.is_promoted ? "Sponsored" : "Posted recently"}
                         </p>
                       </div>
                       <button className="ml-auto text-gray-500">•••</button>
                     </div>
-                    
+
                     {/* Post content */}
                     <div className="relative">
-                      {post.content.type === "video" ? (
+                      {post.media_type === "video" && post.media_url ? (
                         <div className="aspect-video bg-gray-200 flex items-center justify-center">
-                          <img 
-                            src={post.content.thumbnail} 
-                            alt="Video thumbnail" 
+                          <img
+                            src={
+                              post.thumbnail ||
+                              "https://via.placeholder.com/640x360"
+                            }
+                            alt="Video thumbnail"
                             className="w-full h-full object-cover"
                           />
                           <div className="absolute inset-0 flex items-center justify-center">
                             <div className="w-16 h-16 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center">
                               <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center">
-                                <svg className="h-6 w-6 text-adtip-teal" viewBox="0 0 24 24" fill="currentColor">
+                                <svg
+                                  className="h-6 w-6 text-adtip-teal"
+                                  viewBox="0 0 24 24"
+                                  fill="currentColor"
+                                >
                                   <path d="M8 5v14l11-7z" />
                                 </svg>
                               </div>
                             </div>
                           </div>
                           <div className="absolute bottom-3 right-3 bg-black/60 text-white px-2 py-1 rounded text-xs">
-                            03:45
+                            {post.duration || "03:45"}
                           </div>
                         </div>
-                      ) : (
-                        <img 
-                          src={post.content.image} 
-                          alt="Post" 
+                      ) : post.media_type === "image" && post.media_url ? (
+                        <img
+                          src={post.media_url}
+                          alt="Post"
                           className="w-full aspect-square object-cover"
                         />
+                      ) : (
+                        <div className="aspect-square bg-gray-200 flex items-center justify-center text-gray-500">
+                          No media available
+                        </div>
                       )}
                     </div>
-                    
+
                     {/* Post description */}
                     <div className="p-4">
-                      <p className="text-sm">{post.content.description}</p>
-                      
+                      <p className="text-sm">{post.content}</p>
+
                       {/* Post stats */}
                       <div className="flex items-center mt-4 text-sm text-gray-500">
                         <div className="flex items-center mr-4">
-                          <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <svg
+                            className="w-4 h-4 mr-1"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
                             <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
                           </svg>
-                          {post.content.likes}
+                          {post.likeCount}
                         </div>
                         <div className="flex items-center mr-4">
-                          <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <svg
+                            className="w-4 h-4 mr-1"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z" />
                           </svg>
-                          {post.content.comments}
+                          {post.commentCount}
                         </div>
-                        <div className="flex items-center">
-                          <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                            <polyline points="16 6 12 2 8 6" />
-                            <line x1="12" y1="2" x2="12" y2="15" />
-                          </svg>
-                          {post.content.shares}
-                        </div>
-                        <div className="ml-auto text-xs">
-                          {post.content.views} views
-                        </div>
+                        <div className="ml-auto text-xs">{post.views || 0} views</div>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
+
+            {/* Pagination */}
+            {!loading && !error && feedData.length > 0 && (
+              <div className="flex justify-center gap-4 mt-6">
+                <Button
+                  onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={page === 1}
+                  className="teal-button"
+                >
+                  Previous
+                </Button>
+                <Button
+                  onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
+                  disabled={page === totalPages}
+                  className="teal-button"
+                >
+                  Next
+                </Button>
+              </div>
+            )}
           </TabsContent>
-          
+
           {/* Following Tab */}
           <TabsContent value="following">
             <div className="text-center py-10">
-              <h3 className="text-xl font-semibold mb-4">Start following creators</h3>
+              <h3 className="text-xl font-semibold mb-4">
+                Start following creators
+              </h3>
               <p className="text-gray-500 mb-6">
                 Follow creators to see their content in your feed
               </p>

@@ -71,7 +71,7 @@ const OTPVerification = () => {
       if (success) {
         const isRegistered = user?.isRegistered || isSaveUserDetails === 1;
         console.log(`Navigating to ${isRegistered ? "/home" : "/personal-details"}: User details ${isRegistered ? "are saved" : "need to be completed"}`);
-        navigate(isRegistered ? "/home" : "/personal-details");
+        navigate(isRegistered ? "/home" : "/home");
       } else {
         setError("Invalid OTP");
       }
