@@ -1,97 +1,116 @@
 import * as React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   Home,
+  Play,
   Video,
-  Clapperboard,
-  PhoneCall,
+  Phone,
   Users,
-  Wallet,
-  User,
+  Settings,
+  PlusCircle,
+  Gift,
+  ArrowUpRight,
+  Crown,
+  MessageSquare,
+  FileText,
 } from "lucide-react";
-
 import {
-  Sidebar,
+  Dialog,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import CreatePostDialog from "../CreatePostDialog";
+import {
+  Sidebar as SidebarComponent,
   SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarInput,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarFooter,
   SidebarSeparator,
-} from "@/components/ui/sidebar";
+  useSidebar,
+} from "./sidebar-components";
+import { cn } from "@/lib/utils";
+
+// Define props for SidebarComponent to avoid type errors
+interface SidebarProps {
+  side?: "left" | "right";
+  collapsible?: "offcanvas" | "icon" | "none";
+  className?: string;
+  children: React.ReactNode;
+}
 
 const AdTipSidebar = () => {
-  const { user } = useAuth();
-  const [searchQuery, setSearchQuery] = React.useState("");
   const location = useLocation();
+  const { user } = useAuth();
+  const [isCreatePostOpen, setIsCreatePostOpen] = React.useState(false);
+  const { state } = useSidebar(); // Use the sidebar context to check expanded/collapsed state
 
-  // Navigation items
-  const navItems = [
-    { to: "/home", label: "Home", icon: <Home className="h-4 w-4" /> },
-    { to: "/tiptube", label: "TipTube", icon: <Video className="h-4 w-4" /> },
-    { to: "/tipshort", label: "TipShort", icon: <Clapperboard className="h-4 w-4" /> },
-    { to: "/tipcall", label: "TipCall", icon: <PhoneCall className="h-4 w-4" /> },
-    { to: "/follow", label: "Follow", icon: <Users className="h-4 w-4" /> },
+  const mainNavItems = [
+    { to: "/", label: "Home", icon: <Home className="h-5 w-5" /> },
+    { to: "/tiptube", label: "TipTube", icon: <Play className="h-5 w-5" /> },
+    { to: "/tipshort", label: "TipShort", icon: <Video className="h-5 w-5" /> },
+    { to: "/tipcall", label: "TipCall", icon: <Phone className="h-5 w-5" /> },
+    { to: "/follow", label: "Follow", icon: <Users className="h-5 w-5" /> },
+    { to: "/settings", label: "Settings", icon: <Settings className="h-5 w-5" /> },
+    { to: "/refer", label: "Refer & Earn", icon: <Gift className="h-5 w-5" /> },
+    { to: "/premium", label: "Premium Upgrade", icon: <ArrowUpRight className="h-5 w-5" /> },
+    { to: "/upgrade-content", label: "Content Premium", icon: <Crown className="h-5 w-5" /> },
+    { to: "/contact-us", label: "Contact Us", icon: <MessageSquare className="h-5 w-5" /> },
+    { to: "/terms", label: "Terms & Conditions", icon: <FileText className="h-5 w-5" /> },
   ];
 
   return (
-    <Sidebar side="left" collapsible="icon">
-      {/* Header: Profile and Search */}
-      <SidebarHeader>
-        {/* Profile */}
-        <Link to="/profile" className="flex items-center gap-2 p-2">
-          {user?.profilePic ? (
-            <img
-              src={user.profilePic}
-              alt="Profile"
-              className="h-8 w-8 rounded-full object-cover"
-            />
-          ) : (
-            <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
-              <User className="h-5 w-5 text-gray-500" />
-            </div>
-          )}
-          <span className="text-sm font-medium text-gray-800 truncate">
-            {user?.name || "User"}
-          </span>
-        </Link>
+    <SidebarComponent
+      side="left"
+      collapsible="icon"
+      className="bg-white border-r border-gray-200 w-[260px] md:w-[280px] shrink-0 transition-all duration-300 ease-in-out shadow-sm"
+    >
+      {/* Fixed Create Post Button */}
+      <div className="px-4 pt-4 pb-2 min-h-[48px] block bg-white z-10">
+        <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
+          <DialogTrigger asChild>
+            <Button
+              className={cn(
+                "flex items-center justify-center gap-2 rounded-lg shadow-md transition-all duration-200",
+                state === "expanded"
+                  ? "w-full bg-gradient-to-r from-adtip-teal to-teal-500 hover:from-adtip-teal/90 hover:to-teal-600 text-white py-3"
+                  : "w-8 h-8 bg-gradient-to-r from-adtip-teal to-teal-500 hover:from-adtip-teal/90 hover:to-teal-600 text-white p-0 mx-auto"
+              )}
+            >
+              <PlusCircle className="h-5 w-5" />
+              {state === "expanded" && (
+                <span className="font-semibold text-sm">Create Post</span>
+              )}
+            </Button>
+          </DialogTrigger>
+          <CreatePostDialog onClose={() => setIsCreatePostOpen(false)} />
+        </Dialog>
+      </div>
 
-        {/* Search Bar */}
-        <SidebarInput
-          placeholder="Search users or content..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="bg-gray-100"
-        />
-
-        {/* Wallet */}
-        <Link to="/wallet" className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded-md">
-          <Wallet className="h-4 w-4 text-gray-500" />
-          <span className="text-sm font-medium text-gray-700">
-            ₹{user?.wallet || "0"}
-          </span>
-        </Link>
-      </SidebarHeader>
-
-      <SidebarSeparator />
-
-      {/* Navigation Menu */}
-      <SidebarContent>
-        <SidebarMenu>
-          {navItems.map((item) => (
+      {/* Scrollable Navigation Area */}
+      <SidebarContent
+        className="overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 group-data-[collapsible=icon]:overflow-visible"
+        style={{ maxHeight: "calc(100vh - 4rem - 48px - 120px)" }} // Adjusted for heading bar (4rem), Create Post button (48px), and footer (120px)
+      >
+        {/* Combined Navigation with Increased Spacing */}
+        <SidebarMenu className="gap-3">
+          {mainNavItems.map((item) => (
             <SidebarMenuItem key={item.to}>
               <SidebarMenuButton
                 asChild
                 tooltip={item.label}
                 isActive={location.pathname === item.to}
-                className={location.pathname === item.to ? "text-adtip-teal" : ""}
+                className={`flex items-center justify-start pl-4 pr-2 py-2 gap-3 w-full text-left transition-all duration-150 ${
+                  location.pathname === item.to
+                    ? "bg-adtip-teal/10 text-adtip-teal font-semibold"
+                    : "text-gray-700 hover:bg-gray-100"
+                }`}
               >
-                <Link to={item.to}>
+                <Link to={item.to} className="flex items-center gap-3 w-full">
                   {item.icon}
-                  <span>{item.label}</span>
+                  <span className="text-sm font-bold">{item.label}</span> {/* Bolded the label text */}
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -99,14 +118,27 @@ const AdTipSidebar = () => {
         </SidebarMenu>
       </SidebarContent>
 
-      {/* Footer: Logo */}
-      <SidebarFooter>
-        <Link to="/home" className="flex items-center gap-2 p-2">
-          <img src="logo.png" alt="AdTip Logo" className="h-6 w-6" />
-          <span className="text-lg font-bold text-adtip-teal">AdTip</span>
+      {/* Footer Profile - Outside Scrollable Area */}
+      <SidebarFooter className="mt-auto p-4 border-t border-gray-100">
+        <Link to="/profile" className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg transition-all duration-200">
+          {user?.profilePic ? (
+            <img
+              src={user.profilePic}
+              alt="Profile"
+              className="h-10 w-10 rounded-full object-cover"
+            />
+          ) : (
+            <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
+              <Users className="h-6 w-6 text-gray-400" />
+            </div>
+          )}
+          <div className="flex flex-col">
+            <span className="font-semibold text-sm text-gray-700">{user?.name || "User"}</span>
+            <span className="text-xs text-gray-400">View profile</span>
+          </div>
         </Link>
       </SidebarFooter>
-    </Sidebar>
+    </SidebarComponent>
   );
 };
 
