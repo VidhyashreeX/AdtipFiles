@@ -1,6 +1,6 @@
 import * as React from "react";
-import { Link } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
+import { Link, useLocation } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Home,
   Video,
@@ -26,6 +26,7 @@ import {
 const AdTipSidebar = () => {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = React.useState("");
+  const location = useLocation();
 
   // Navigation items
   const navItems = [
