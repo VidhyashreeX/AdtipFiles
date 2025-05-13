@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
@@ -10,7 +9,7 @@ import axios from "axios";
 
 // Define TypeScript interfaces
 interface User {
-  id: number;
+  id: string;
   accessToken: string;
 }
 
@@ -58,19 +57,19 @@ const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
   ? import.meta.env.VITE_API_URL
   : `${import.meta.env.VITE_API_URL}/api`;
 
-// Sample data for popular categories
+// Sample data for popular categories with mapping to video_category_id
 const popularCategories = [
-  "All",
-  "Art",
-  "Beauty",
-  "Business",
-  "Fashion",
-  "Fitness",
-  "Food",
-  "Gaming",
-  "Music",
-  "Tech",
-  "Travel",
+  { name: "All", id: 0 },
+  { name: "Art", id: 9 }, // Based on sample response (e.g., post ID 996)
+  { name: "Beauty", id: 10 },
+  { name: "Business", id: 11 },
+  { name: "Fashion", id: 12 },
+  { name: "Fitness", id: 14 },
+  { name: "Food", id: 15 },
+  { name: "Gaming", id: 16 },
+  { name: "Music", id: 17 },
+  { name: "Tech", id: 20 },
+  { name: "Travel", id: 21 },
 ];
 
 const Home = () => {
@@ -85,24 +84,59 @@ const Home = () => {
   const [page, setPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
 
+  useEffect(() => {
+    console.log("Rendering Home component", {
+      isAuthenticated,
+      user: user ? { id: user.id, accessToken: user.accessToken } : null,
+      selectedCategory,
+      page,
+      localStorage: {
+        adtip_user: localStorage.getItem("adtip_user"),
+      },
+    });
+    if (!isAuthenticated || !user?.id || !user?.accessToken) {
+      console.warn("User not authenticated or missing data, skipping fetch", {
+        isAuthenticated,
+        userId: user?.id,
+        accessToken: user?.accessToken,
+      });
+      setLoading(false);
+      setError("Please log in to view posts");
+    }
+  }, [isAuthenticated, user]);
+
   // Fetch posts from /api/list-posts
   useEffect(() => {
     const fetchPosts = async () => {
-      if (!user?.id || !user?.accessToken) {
-        setLoading(false);
+      if (!isAuthenticated || !user?.id || !user?.accessToken) {
         return;
       }
       try {
         setLoading(true);
         setError(null);
+
+        // Map category name to ID
+        const categoryObj = popularCategories.find((cat) => cat.name === selectedCategory);
+        const categoryId = categoryObj ? categoryObj.id : 0;
+
+        const payload = {
+          category: categoryId,
+          page: page,
+          limit: 5,
+          loggined_user_id: parseInt(user.id), // Ensure number
+        };
+        console.log("Sending /api/list-posts request:", {
+          url: `${BASE_URL}/list-posts`,
+          payload,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user.accessToken}`,
+          },
+        });
+
         const response = await axios.post<ApiResponse>(
           `${BASE_URL}/list-posts`,
-          {
-            category: selectedCategory === "All" ? 0 : selectedCategory,
-            page: page,
-            limit: 5,
-            loggined_user_id: user.id,
-          },
+          payload,
           {
             headers: {
               "Content-Type": "application/json",
@@ -110,23 +144,37 @@ const Home = () => {
             },
           }
         );
-        console.log("list-posts response:", response.data); // Debug log
+
+        console.log("list-posts response:", {
+          status: response.data.status,
+          message: response.data.message,
+          dataLength: response.data.data.length,
+          pagination: response.data.pagination,
+        });
+
         if (response.data.status) {
           setFeedData(response.data.data);
           setTotalPages(response.data.pagination.total_page);
+          if (response.data.data.length === 0) {
+            console.warn("No posts returned in response", { selectedCategory, page });
+          }
         } else {
           throw new Error(response.data.message || "Failed to fetch posts");
         }
       } catch (err: any) {
-        console.error("list-posts error:", err.response?.data || err.message);
-        setError(err.response?.data?.message || err.message);
+        console.error("list-posts error:", {
+          message: err.message,
+          status: err.response?.status,
+          data: err.response?.data,
+        });
+        setError(err.response?.data?.message || err.message || "Failed to load posts");
       } finally {
         setLoading(false);
       }
     };
 
     fetchPosts();
-  }, [user, selectedCategory, page]);
+  }, [isAuthenticated, user, selectedCategory, page]);
 
   // Check if user is viewing posts and prompt login after a few posts
   useEffect(() => {
@@ -136,7 +184,7 @@ const Home = () => {
   }, [postViewCount, isAuthenticated]);
 
   const handlePostClick = (id: number) => {
-    // Increase view count for non-authenticated users
+    console.log("Post clicked:", { postId: id });
     if (!isAuthenticated) {
       setPostViewCount((prevCount) => prevCount + 1);
     }
@@ -149,22 +197,22 @@ const Home = () => {
         <VideoLoginPrompt onClose={() => setShowLoginPrompt(false)} />
       )}
 
-      {/* Categories horizontal scroll - Made sticky with different z-index */}
+      {/* Categories horizontal scroll */}
       <div className="bg-white sticky top-[60px] md:top-[57px] z-10 py-3 px-4 overflow-x-auto flex whitespace-nowrap gap-3 no-scrollbar shadow-sm">
         {popularCategories.map((category) => (
           <button
-            key={category}
+            key={category.name}
             onClick={() => {
-              setSelectedCategory(category);
-              setPage(1); // Reset page on category change
+              setSelectedCategory(category.name);
+              setPage(1);
             }}
             className={`px-4 py-1.5 rounded-full text-sm transition-all ${
-              selectedCategory === category
+              selectedCategory === category.name
                 ? "bg-adtip-teal text-white"
                 : "bg-gray-100 text-gray-800 hover:bg-gray-200"
             }`}
           >
-            {category}
+            {category.name}
           </button>
         ))}
       </div>
@@ -191,8 +239,7 @@ const Home = () => {
             <div className="mb-6 bg-gradient-to-r from-adtip-teal to-[#13b799] rounded-lg p-4 text-white">
               <h3 className="font-bold text-lg mb-1">Refer & Earn!</h3>
               <p className="text-sm mb-3">
-                Get ₹3 for every successful referral and earn ₹30 for each premium
-                upgrade
+                Get ₹3 for every successful referral and earn ₹30 for each premium upgrade
               </p>
               <Button variant="secondary" size="sm">
                 Share Now
@@ -219,7 +266,17 @@ const Home = () => {
             {/* Feed Posts */}
             {!loading && !error && feedData.length === 0 && (
               <div className="text-center py-10">
-                <p className="text-gray-500">No posts available at the moment.</p>
+                <p className="text-gray-500">
+                  {selectedCategory === "All"
+                    ? "No posts available at the moment."
+                    : `No posts available for ${selectedCategory}. Try another category.`}
+                </p>
+                <Button
+                  onClick={() => setSelectedCategory("All")}
+                  className="mt-4 teal-button"
+                >
+                  View All Posts
+                </Button>
               </div>
             )}
 
