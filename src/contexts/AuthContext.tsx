@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { apiSendOtp, apiVerifyOtp } from "../api";
 
 interface UserData {
@@ -19,13 +19,14 @@ interface UserData {
   profilePic?: string;
   interests?: string[];
   maritalStatus?: string;
+  languages?: string;
 }
 
 interface AuthContextType {
   user: UserData | null;
   isAuthenticated: boolean;
   login: (phone: string) => Promise<any>;
-  verifyOTP: (otp: string) => Promise<boolean>;
+  verifyOTP: (otp: string) => Promise<{ success: boolean; data?: any }>;
   updateUserProfile: (profileData: Partial<UserData>) => void;
   logout: () => UserData;
 }
@@ -36,19 +37,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UserData | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
-  // Load user from localStorage on mount
   useEffect(() => {
     const storedUser = localStorage.getItem("adtip_user");
     if (storedUser) {
       const parsedUser = JSON.parse(storedUser);
       console.log("Loaded user from localStorage:", parsedUser);
-      setUser((prevUser) => {
-        if (JSON.stringify(prevUser) !== JSON.stringify(parsedUser)) {
-          return parsedUser;
-        }
-        return prevUser;
-      });
-      setIsAuthenticated(true);
+      setUser(parsedUser);
+      setIsAuthenticated(!!parsedUser.accessToken);
     } else {
       console.log("No user found in localStorage");
     }
@@ -60,21 +55,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw new Error("Phone number is required");
       }
       const res = await apiSendOtp(phone);
-      console.log("apiSendOtp response:", JSON.stringify(res, null, 2));
+      console.log("apiSendOtp response:", res);
 
-      // Store id and mobile_number in localStorage
-      const userId = res.data?.[0]?.id?.toString();
-      const mobile_number = res.data?.[0]?.mobile_number || phone;
-      if (userId && mobile_number) {
-        localStorage.setItem("tempUserId", userId);
-        localStorage.setItem("mobile_number", mobile_number);
+      const userData = res.data
+        ? Array.isArray(res.data)
+          ? res.data[0]
+          : res.data
+        : {};
+      if (!userData.id || !userData.mobile_number) {
+        console.warn("Invalid API response, missing id or mobile_number:", res);
+        throw new Error("Invalid response from server");
       }
-
       const newUser: UserData = {
-        id: userId || Math.random().toString(36).substring(2, 15),
-        phone: mobile_number,
+        id: userData.id.toString(),
+        phone: userData.mobile_number,
         accessToken: null,
-        isRegistered: res.data?.[0]?.isSaveUserDetails === 1 || false,
+        isRegistered: userData.isSaveUserDetails === 1,
         username: "newuser",
         bio: "Welcome to AdTip!",
         wallet: 0,
@@ -97,23 +93,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const verifyOTP = async (otp: string): Promise<boolean> => {
-    const mobile_number = localStorage.getItem("mobile_number") || "";
-    const tempUserId = localStorage.getItem("tempUserId") || user?.id || "0";
+  const verifyOTP = async (otp: string): Promise<{ success: boolean; data?: any }> => {
+    const mobile_number = localStorage.getItem("mobile_number") || user?.phone || "";
+    const tempUserId = localStorage.getItem("tempUserId") || user?.id || "";
+    if (!mobile_number || !tempUserId) {
+      throw new Error("Missing mobile number or user ID");
+    }
+
     try {
       const res = await apiVerifyOtp(mobile_number, otp, tempUserId);
-      console.log("apiVerifyOtp full response:", JSON.stringify(res, null, 2));
+      console.log("apiVerifyOtp response:", res);
       if (res.status === 200) {
-        const userData = res.data?.[0] || {};
+        const userData = res.data
+          ? Array.isArray(res.data)
+            ? res.data[0]
+            : res.data
+          : {};
         const newUser: UserData = {
-          id: userData.id?.toString() || user?.id || Math.random().toString(36).substring(2, 15),
+          id: userData.id?.toString() || tempUserId,
           phone: mobile_number,
-          accessToken: res.accessToken || null, // Use the correct key
+          accessToken: res.accessToken || null,
           isRegistered: userData.isSaveUserDetails === 1,
           username: userData.username || userData.name || "newuser",
-          bio: userData.bio || "Welcome to AdTip! Start earning by watching ads and creating content.",
+          bio: userData.bio || "Welcome to AdTip!",
           wallet: userData.referal_earnings || 0,
-          isPremium: userData.is_premium || userData.premium_plan_id !== 0 || false,
+          isPremium: userData.is_premium || userData.premium_plan_id !== 0,
           referralEarnings: userData.referal_earnings || 0,
           name: userData.name,
           gender: userData.gender,
@@ -121,30 +125,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           profession: userData.profession,
           profilePic: userData.profile_image,
           interests: userData.interests?.map((i: { name: string }) => i.name) || [],
-          email: userData.email || "",
-          maritalStatus: userData.maritalStatus || "",
+          email: userData.emailId || "",
+          maritalStatus: userData.maternal_status || "",
+          languages: userData.languages?.[0]?.name || "",
         };
         console.log("Setting user after OTP verification:", newUser);
-        if (!newUser.accessToken) {
-          console.warn("No accessToken found in apiVerifyOtp response");
-        }
         setUser(newUser);
         localStorage.setItem("adtip_user", JSON.stringify(newUser));
-        console.log("Saved to localStorage:", JSON.parse(localStorage.getItem("adtip_user") || "{}"));
         setIsAuthenticated(true);
         localStorage.removeItem("tempUserId");
         localStorage.removeItem("mobile_number");
-        return true;
+        return { success: true, data: userData };
       }
       console.warn("apiVerifyOtp failed with status:", res.status);
-      return false;
+      return { success: false };
     } catch (err: any) {
       console.error("OTP verification failed", {
         message: err.message,
         status: err.response?.status,
         data: err.response?.data,
       });
-      return false;
+      throw err;
     }
   };
 
@@ -168,6 +169,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         interests: profileData.interests || prevUser?.interests || [],
         email: prevUser?.email || profileData.email || "",
         maritalStatus: prevUser?.maritalStatus || profileData.maritalStatus || "",
+        languages: prevUser?.languages || profileData.languages || "",
       };
       localStorage.setItem("adtip_user", JSON.stringify(updatedUser));
       return updatedUser;
@@ -190,14 +192,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       wallet: 0,
       isPremium: false,
       referralEarnings: 0,
-      name: undefined,
-      gender: undefined,
-      dateOfBirth: undefined,
-      profession: undefined,
-      profilePic: undefined,
-      interests: undefined,
-      email: undefined,
-      maritalStatus: undefined,
     };
   };
 

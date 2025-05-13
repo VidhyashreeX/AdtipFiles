@@ -8,6 +8,52 @@ import { useAuth } from "../contexts/AuthContext";
 import VideoLoginPrompt from "../components/VideoLoginPrompt";
 import axios from "axios";
 
+// Define TypeScript interfaces
+interface User {
+  id: number;
+  accessToken: string;
+}
+
+interface Post {
+  id: number;
+  user_id: number;
+  title: string;
+  content: string;
+  media_url: string;
+  media_type: "video" | "image";
+  is_promoted: number;
+  video_category_id: number;
+  user_name: string;
+  user_profile_image: string | null;
+  address: string;
+  category_name: string;
+  post_promotion_id: number | null;
+  target_min_age: number | null;
+  target_max_age: number | null;
+  reach_goal: number | null;
+  duration_days: number | null;
+  pay_per_view: string | null;
+  total_pay: string | null;
+  platform_fee: string | null;
+  likeCount: number;
+  commentCount: number;
+  is_liked: boolean;
+  thumbnail?: string;
+  duration?: string;
+  views?: number;
+}
+
+interface ApiResponse {
+  status: boolean;
+  message: string;
+  data: Post[];
+  pagination: {
+    current_page: number;
+    total_page: number;
+    total_count: number;
+  };
+}
+
 const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
   ? import.meta.env.VITE_API_URL
   : `${import.meta.env.VITE_API_URL}/api`;
@@ -28,16 +74,16 @@ const popularCategories = [
 ];
 
 const Home = () => {
-  const [activeTab, setActiveTab] = useState("for-you");
-  const [selectedCategory, setSelectedCategory] = useState("All");
-  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
-  const [postViewCount, setPostViewCount] = useState(0);
+  const [activeTab, setActiveTab] = useState<"for-you" | "following">("for-you");
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [showLoginPrompt, setShowLoginPrompt] = useState<boolean>(false);
+  const [postViewCount, setPostViewCount] = useState<number>(0);
   const { isAuthenticated, user } = useAuth();
-  const [feedData, setFeedData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [feedData, setFeedData] = useState<Post[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [page, setPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
 
   // Fetch posts from /api/list-posts
   useEffect(() => {
@@ -49,7 +95,7 @@ const Home = () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await axios.post(
+        const response = await axios.post<ApiResponse>(
           `${BASE_URL}/list-posts`,
           {
             category: selectedCategory === "All" ? 0 : selectedCategory,
@@ -179,7 +225,7 @@ const Home = () => {
 
             {!loading && !error && feedData.length > 0 && (
               <div className="space-y-6">
-                {feedData.map((post: any) => (
+                {feedData.map((post) => (
                   <div
                     key={post.id}
                     className="bg-white rounded-lg shadow-sm overflow-hidden cursor-pointer"
@@ -209,30 +255,21 @@ const Home = () => {
                     {/* Post content */}
                     <div className="relative">
                       {post.media_type === "video" && post.media_url ? (
-                        <div className="aspect-video bg-gray-200 flex items-center justify-center">
-                          <img
-                            src={
+                        <div className="aspect-video bg-gray-200">
+                          <video
+                            className="w-full h-full object-cover"
+                            controls
+                            preload="metadata"
+                            poster={
                               post.thumbnail ||
                               "https://via.placeholder.com/640x360"
                             }
-                            alt="Video thumbnail"
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-16 h-16 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center">
-                              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center">
-                                <svg
-                                  className="h-6 w-6 text-adtip-teal"
-                                  viewBox="0 0 24 24"
-                                  fill="currentColor"
-                                >
-                                  <path d="M8 5v14l11-7z" />
-                                </svg>
-                              </div>
-                            </div>
-                          </div>
+                          >
+                            <source src={post.media_url} type="video/mp4" />
+                            Your browser does not support the video tag.
+                          </video>
                           <div className="absolute bottom-3 right-3 bg-black/60 text-white px-2 py-1 rounded text-xs">
-                            {post.duration || "03:45"}
+                            {post.duration || "00:00"}
                           </div>
                         </div>
                       ) : post.media_type === "image" && post.media_url ? (
@@ -278,7 +315,9 @@ const Home = () => {
                           </svg>
                           {post.commentCount}
                         </div>
-                        <div className="ml-auto text-xs">{post.views || 0} views</div>
+                        <div className="ml-auto text-xs">
+                          {post.views || 0} views
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -297,7 +336,9 @@ const Home = () => {
                   Previous
                 </Button>
                 <Button
-                  onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
+                  onClick={() =>
+                    setPage((prev) => Math.min(prev + 1, totalPages))
+                  }
                   disabled={page === totalPages}
                   className="teal-button"
                 >

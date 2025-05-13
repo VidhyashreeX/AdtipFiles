@@ -3,8 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft } from "lucide-react";
-import { useAuth } from "../contexts/AuthContext"; // Use AuthContext
-import { apiVerifyOtp, apiSendOtp } from "../api";
+import { useAuth } from "../contexts/AuthContext";
+import { apiSendOtp } from "../api";
 
 const OTPVerification = () => {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -14,15 +14,27 @@ const OTPVerification = () => {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, verifyOTP } = useAuth(); // Use verifyOTP from AuthContext
-  const { phoneNumber, id, isSaveUserDetails } = location.state || {};
+  const { user, verifyOTP } = useAuth();
+  const { phoneNumber, id, isSaveUserDetails: stateIsSaveUserDetails } = location.state || {};
 
   useEffect(() => {
-    // Redirect to login if no phone number or ID is available
+    console.log("Rendering OTPVerification component", {
+      phoneNumber,
+      id,
+      stateIsSaveUserDetails,
+      locationState: location.state,
+      user,
+      localStorage: {
+        mobile_number: localStorage.getItem("mobile_number"),
+        tempUserId: localStorage.getItem("tempUserId"),
+        adtip_user: localStorage.getItem("adtip_user"),
+      },
+    });
     const storedPhone = localStorage.getItem("mobile_number") || phoneNumber || user?.phone;
     const storedId = localStorage.getItem("tempUserId") || id || user?.id;
     if (!storedPhone || !storedId) {
-      navigate("/login");
+      console.warn("Missing phone or ID, redirecting to login", { storedPhone, storedId });
+      navigate("/login", { replace: true });
     }
   }, [user, phoneNumber, id, navigate]);
 
@@ -66,17 +78,29 @@ const OTPVerification = () => {
 
     setIsLoading(true);
     try {
-      const success = await verifyOTP(otpValue);
-      console.log("verifyOTP response:", { success, user });
-      if (success) {
-        const isRegistered = user?.isRegistered || isSaveUserDetails === 1;
-        console.log(`Navigating to ${isRegistered ? "/home" : "/personal-details"}: User details ${isRegistered ? "are saved" : "need to be completed"}`);
-        navigate(isRegistered ? "/home" : "/home");
+      const verifyResponse = await verifyOTP(otpValue);
+      console.log("verifyOTP response:", { verifyResponse, user });
+      if (verifyResponse.success) {
+        // Prioritize isSaveUserDetails from verifyOTP response
+        const apiIsSaveUserDetails = verifyResponse.data?.isSaveUserDetails ?? stateIsSaveUserDetails ?? user?.isRegistered ? 1 : 0;
+        const isRegistered = apiIsSaveUserDetails === 1;
+        const nextPath = isRegistered ? "/home" : "/personal-details";
+        console.log(`Navigating to ${nextPath}`, {
+          apiIsSaveUserDetails,
+          stateIsSaveUserDetails,
+          isRegistered,
+          userIsRegistered: user?.isRegistered,
+        });
+        navigate(nextPath, { replace: true });
       } else {
         setError("Invalid OTP");
       }
     } catch (err: any) {
-      console.error("OTP verification error:", err.message);
+      console.error("OTP verification error:", {
+        message: err.message,
+        status: err.response?.status,
+        data: err.response?.data,
+      });
       setError(err.message || "Something went wrong, please try again");
     } finally {
       setIsLoading(false);
@@ -91,10 +115,7 @@ const OTPVerification = () => {
       if (!phone) throw new Error("Phone number is missing for resend");
 
       const res = await apiSendOtp(phone);
-      if (res.data?.[0]?.id) {
-        localStorage.setItem("tempUserId", res.data[0].id.toString());
-        localStorage.setItem("mobile_number", res.data[0].mobile_number);
-      }
+      console.log("Resend OTP response:", res);
       alert("OTP has been resent!");
     } catch (err: any) {
       console.error("Resend OTP error:", err.message);
@@ -126,7 +147,7 @@ const OTPVerification = () => {
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="flex justify-between max-w-sm mx-auto">
+          <div className="flex justify-between max-w-sm mx Newark-auto">
             {[0, 1, 2, 3, 4, 5].map((index) => (
               <Input
                 key={index}

@@ -4,8 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
-import { useUser } from "../UserContext";
-import { apiSendOtp } from "../api";
 
 const Login = () => {
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -13,7 +11,6 @@ const Login = () => {
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const { login } = useAuth();
-  const { setUser } = useUser();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,34 +33,14 @@ const Login = () => {
       console.log("Attempting login with:", { phoneNumber });
       const response = await login(phoneNumber);
       console.log("Login successful, response:", response);
-
-      // Store id and mobile_number in localStorage
-      if (response.data?.[0]?.id && response.data?.[0]?.mobile_number) {
-        localStorage.setItem("tempUserId", response.data[0].id);
-        localStorage.setItem("mobileNumber", response.data[0].mobile_number);
-      }
-
-      // Update UserContext with initial user data
-      setUser({
-        id: response.data?.[0]?.id || Math.random().toString(36).substring(2, 15),
-        phone: response.data?.[0]?.mobile_number || phoneNumber,
-        accessToken: null,
-        isRegistered: response.data?.[0]?.isSaveUserDetails === 1 || false,
-        username: "newuser",
-        bio: "Welcome to AdTip!",
-        wallet: 0,
-        isPremium: false,
-        referralEarnings: 0,
-      });
-
+      const navState = {
+        phoneNumber: response.data?.[0]?.mobile_number || phoneNumber,
+        id: response.data?.[0]?.id?.toString() || "",
+        isSaveUserDetails: response.data?.[0]?.isSaveUserDetails ?? 0,
+      };
+      console.log("Navigating to /verify-otp with state:", navState);
       setIsLoading(false);
-      navigate("/verify-otp", {
-        state: {
-          phoneNumber: response.data?.[0]?.mobile_number || phoneNumber,
-          id: response.data?.[0]?.id || "",
-          isSaveUserDetails: response.data?.[0]?.isSaveUserDetails || 0,
-        },
-      });
+      navigate("/verify-otp", { state: navState });
     } catch (err: any) {
       console.error("Login error:", {
         message: err.message,
@@ -71,13 +48,7 @@ const Login = () => {
         data: err.response?.data,
       });
       setIsLoading(false);
-      const errorMessage =
-        err.message ||
-        err.response?.data?.error ||
-        (err.response?.status === 500
-          ? "Server error: Database issue. Please try again later."
-          : "Could not send OTP. Please try again.");
-      setError(errorMessage);
+      setError(err.message || "Could not send OTP. Please try again.");
     }
   };
 
