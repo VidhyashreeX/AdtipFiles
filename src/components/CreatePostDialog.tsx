@@ -1,4 +1,3 @@
-
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -143,7 +142,7 @@ const CreatePostDialog: React.FC<CreatePostDialogProps> = ({ onClose }) => {
             type="file" 
             ref={fileInputRef}
             className="hidden" 
-            accept={postType === "post" ? "image/*" : "video/*"}
+            accept={postType === "post" ? "image/" : "video/"}
             onChange={handleFileChange}
           />
           
