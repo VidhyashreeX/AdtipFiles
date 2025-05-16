@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useState, useEffect, ReactNode, useContext } from "react";
 import { apiSendOtp, apiVerifyOtp } from "../api";
 
 interface UserData {
@@ -22,16 +22,35 @@ interface UserData {
   languages?: string;
 }
 
+// Define API response types
+interface ApiResponse {
+  status: number;
+  data?: Record<string, unknown> | Array<Record<string, unknown>>;
+  accessToken?: string;
+  message?: string;
+}
+
+interface ApiErrorResponse {
+  message: string;
+  response?: {
+    status?: number;
+    data?: unknown;
+  };
+}
+
 interface AuthContextType {
   user: UserData | null;
   isAuthenticated: boolean;
-  login: (phone: string) => Promise<any>;
-  verifyOTP: (otp: string) => Promise<{ success: boolean; data?: any }>;
+  login: (phone: string) => Promise<ApiResponse>;
+  verifyOTP: (otp: string) => Promise<{ success: boolean; data?: Record<string, unknown> }>;
   updateUserProfile: (profileData: Partial<UserData>) => void;
   logout: () => UserData;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Export the context for use in the separate hook file
+export { AuthContext };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UserData | null>(null);
@@ -50,7 +69,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  const login = async (phone: string) => {
+  const login = async (phone: string): Promise<ApiResponse> => {
     try {
       if (!phone) {
         throw new Error("Phone number is required");
@@ -69,7 +88,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
       const newUser: UserData = {
         id: userData.id.toString(),
-        phone: userData.mobile_number,
+        phone: userData.mobile_number as string,
         accessToken: null,
         isRegistered: userData.isSaveUserDetails === 1,
         username: "newuser",
@@ -84,7 +103,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       localStorage.setItem("adtip_user", JSON.stringify(newUser));
       setIsAuthenticated(true);
       return res;
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const err = error as ApiErrorResponse;
       console.error("OTP sending failed", {
         message: err.message,
         status: err.response?.status,
@@ -94,7 +114,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const verifyOTP = async (otp: string): Promise<{ success: boolean; data?: any }> => {
+  const verifyOTP = async (otp: string): Promise<{ success: boolean; data?: Record<string, unknown> }> => {
     const mobile_number = localStorage.getItem("mobile_number") || user?.phone || "";
     const tempUserId = localStorage.getItem("tempUserId") || user?.id || "";
     if (!mobile_number || !tempUserId) {
@@ -111,24 +131,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             : res.data
           : {};
         const newUser: UserData = {
-          id: userData.id?.toString() || tempUserId,
+          id: (userData.id?.toString() as string) || tempUserId,
           phone: mobile_number,
           accessToken: res.accessToken || null,
           isRegistered: userData.isSaveUserDetails === 1,
-          username: userData.username || userData.name || "newuser",
-          bio: userData.bio || "Welcome to AdTip!",
-          wallet: userData.referal_earnings || 0,
-          isPremium: userData.is_premium || userData.premium_plan_id !== 0,
-          referralEarnings: userData.referal_earnings || 0,
-          name: userData.name,
-          gender: userData.gender,
-          dateOfBirth: userData.dob,
-          profession: userData.profession,
-          profilePic: userData.profile_image,
-          interests: userData.interests?.map((i: { name: string }) => i.name) || [],
-          email: userData.emailId || "",
-          maritalStatus: userData.maternal_status || "",
-          languages: userData.languages?.[0]?.name || "",
+          username: (userData.username as string) || (userData.name as string) || "newuser",
+          bio: (userData.bio as string) || "Welcome to AdTip!",
+          wallet: (userData.referal_earnings as number) || 0,
+          isPremium: (userData.is_premium as boolean) || (userData.premium_plan_id as number) !== 0,
+          referralEarnings: (userData.referal_earnings as number) || 0,
+          name: userData.name as string,
+          gender: userData.gender as string,
+          dateOfBirth: userData.dob as string,
+          profession: userData.profession as string,
+          profilePic: userData.profile_image as string,
+          interests: Array.isArray(userData.interests) 
+            ? userData.interests.map((i: { name: string }) => i.name)
+            : [],
+          email: (userData.emailId as string) || "",
+          maritalStatus: (userData.maternal_status as string) || "",
+          languages: Array.isArray(userData.languages) && userData.languages.length > 0
+            ? (userData.languages[0]?.name as string) || ""
+            : "",
         };
         console.log("Setting user after OTP verification:", newUser);
         setUser(newUser);
@@ -140,7 +164,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
       console.warn("apiVerifyOtp failed with status:", res.status);
       return { success: false };
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const err = error as ApiErrorResponse;
       console.error("OTP verification failed", {
         message: err.message,
         status: err.response?.status,
