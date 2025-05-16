@@ -1,14 +1,15 @@
-import { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useRef, useEffect } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Upload } from "lucide-react";
+import { ArrowLeft, Upload, Lock } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
 const CreatePost = () => {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ const CreatePost = () => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
-  const [postType, setPostType] = useState("post"); // New state for post type
+  const [postType, setPostType] = useState("post");
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isVideo, setIsVideo] = useState(false);
@@ -27,12 +28,13 @@ const CreatePost = () => {
   const [pricePerMinute, setPricePerMinute] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Check if user is authenticated
-  if (!isAuthenticated) {
-    navigate("/login");
-    return null;
-  }
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    // We don't automatically redirect here anymore
+    // Let the rendering logic handle showing login prompt
+  }, []);
 
+  // Handle file upload logic
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -105,7 +107,7 @@ const CreatePost = () => {
       toast({
         title: `${postType === "post" ? "Post" : postType === "tip-tube" ? "Tip Tube" : "Tip Shorts"} created successfully`,
         description: isPaid && (postType !== "post")
-          ? `Your paid video has been uploaded ata ₹${pricePerMinute}/minute`
+          ? `Your paid video has been uploaded at ₹${pricePerMinute}/minute`
           : "Your content has been uploaded",
       });
       setIsLoading(false);
@@ -113,6 +115,45 @@ const CreatePost = () => {
     }, 2000);
   };
 
+  // If user is not authenticated, show login prompt
+  if (!isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-4 bg-gray-50">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <div className="flex items-center justify-center mb-4">
+              <Lock className="h-10 w-10 text-teal-500" />
+            </div>
+            <CardTitle className="text-center">Authentication Required</CardTitle>
+            <CardDescription className="text-center">
+              You need to be logged in to create a post
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-center text-sm text-gray-600">
+              Please log in to your account to create posts, upload videos, and share content with the community.
+            </p>
+          </CardContent>
+          <CardFooter className="flex flex-col gap-4">
+            <Button 
+              className="w-full teal-button" 
+              onClick={() => navigate("/login", { state: { returnUrl: "/create" } })}
+            >
+              Log In
+            </Button>
+            <div className="text-center text-sm">
+              Don't have an account?{" "}
+              <Link to="/signup" className="text-teal-600 hover:underline">
+                Sign Up
+              </Link>
+            </div>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
+  // If authenticated, show the create post form
   return (
     <div className="pb-20 md:pb-0">
       <div className="bg-white sticky top-0 z-10 p-4 flex items-center border-b">

@@ -43,7 +43,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const parsedUser = JSON.parse(storedUser);
       console.log("Loaded user from localStorage:", parsedUser);
       setUser(parsedUser);
-      setIsAuthenticated(!!parsedUser.accessToken);
+      // Only consider authenticated if user has a valid accessToken
+      setIsAuthenticated(!!parsedUser && !!parsedUser.accessToken);
     } else {
       console.log("No user found in localStorage");
     }
