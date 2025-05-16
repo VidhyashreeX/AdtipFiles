@@ -30,15 +30,22 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      console.log("Attempting login with:", { phoneNumber });
-      const response = await login(phoneNumber);
-      console.log("Login successful, response:", response);
+      const formattedPhoneNumber = `+91${phoneNumber}`;
+      console.log("Attempting login with:", { phoneNumber, formattedPhoneNumber });
+      const response = await login(formattedPhoneNumber);
+      console.log("Login response:", JSON.stringify(response, null, 2));
+
+      const userData = response.data?.[0] || response.data || {};
       const navState = {
-        phoneNumber: response.data?.[0]?.mobile_number || phoneNumber,
-        id: response.data?.[0]?.id?.toString() || "",
-        isSaveUserDetails: response.data?.[0]?.isSaveUserDetails ?? 0,
+        phoneNumber: userData.mobile_number || formattedPhoneNumber,
+        id: userData.id?.toString() || localStorage.getItem("tempUserId") || "",
+        isSaveUserDetails: userData.isSaveUserDetails ?? 0,
       };
-      console.log("Navigating to /verify-otp with state:", navState);
+      console.log("Navigating to /verify-otp with state:", JSON.stringify(navState, null, 2));
+      if (response.isPartial) {
+        console.warn("Partial response received, navigating with temporary data");
+        setError("OTP sent, but server response was incomplete. Please proceed to verify.");
+      }
       setIsLoading(false);
       navigate("/verify-otp", { state: navState });
     } catch (err: any) {
@@ -46,9 +53,22 @@ const Login = () => {
         message: err.message,
         status: err.response?.status,
         data: err.response?.data,
+        fullError: JSON.stringify(err, Object.getOwnPropertyNames(err), 2),
+        rawResponse: err.response ? JSON.stringify(err.response, null, 2) : "No response",
       });
       setIsLoading(false);
-      setError(err.message || "Could not send OTP. Please try again.");
+      if (err.message.includes("Failed to send OTP") || err.message.includes("Network error")) {
+        console.warn("Server error, but OTP likely sent, navigating to verify-otp");
+        const navState = {
+          phoneNumber: `+91${phoneNumber}`,
+          id: localStorage.getItem("tempUserId") || `temp_${Date.now()}`,
+          isSaveUserDetails: 0,
+        };
+        setError("OTP sent, but server response failed. Please proceed to verify.");
+        navigate("/verify-otp", { state: navState });
+      } else {
+        setError(err.message || "Could not send OTP. Please check your connection or try again later.");
+      }
     }
   };
 

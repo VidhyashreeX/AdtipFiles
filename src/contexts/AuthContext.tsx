@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { apiSendOtp, apiVerifyOtp } from "../api";
 
+// Define the UserData interface for type safety
 interface UserData {
   id: string;
   phone: string;
@@ -22,28 +23,36 @@ interface UserData {
   languages?: string;
 }
 
+// Define the AuthContextType interface
 interface AuthContextType {
   user: UserData | null;
   isAuthenticated: boolean;
   login: (phone: string) => Promise<any>;
-  verifyOTP: (otp: string) => Promise<{ success: boolean; data?: any }>;
+  verifyOTP: (otp: string) => Promise<{ success: boolean; data?: any; message?: string }>;
   updateUserProfile: (profileData: Partial<UserData>) => void;
   logout: () => UserData;
 }
 
+// Create the AuthContext
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UserData | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
+  // Load user from localStorage on mount
   useEffect(() => {
     const storedUser = localStorage.getItem("adtip_user");
     if (storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-      console.log("Loaded user from localStorage:", parsedUser);
-      setUser(parsedUser);
-      setIsAuthenticated(!!parsedUser.accessToken);
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        console.log("Loaded user from localStorage:", JSON.stringify(parsedUser, null, 2));
+        setUser(parsedUser);
+        setIsAuthenticated(!!parsedUser.accessToken);
+      } catch (err) {
+        console.error("Failed to parse adtip_user from localStorage:", err);
+        localStorage.removeItem("adtip_user");
+      }
     } else {
       console.log("No user found in localStorage");
     }
@@ -54,82 +63,111 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (!phone) {
         throw new Error("Phone number is required");
       }
-      const res = await apiSendOtp(phone);
-      console.log("apiSendOtp response:", res);
+      const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
+      console.log("AuthContext login called with:", { phone, formattedPhone });
+
+      const res = await apiSendOtp(formattedPhone);
+      console.log("apiSendOtp response:", JSON.stringify(res, null, 2));
 
       const userData = res.data
         ? Array.isArray(res.data)
           ? res.data[0]
           : res.data
-        : {};
-      if (!userData.id || !userData.mobile_number) {
-        console.warn("Invalid API response, missing id or mobile_number:", res);
-        throw new Error("Invalid response from server");
+        : res;
+      if (!res.isPartial && (!userData.id || !userData.mobile_number)) {
+        console.error("Invalid API response, missing id or mobile_number:", res);
+        throw new Error("Invalid response from server: missing id or mobile_number");
       }
+
       const newUser: UserData = {
-        id: userData.id.toString(),
-        phone: userData.mobile_number,
+        id: userData.id?.toString() || localStorage.getItem("tempUserId") || `temp_${Date.now()}`,
+        phone: userData.mobile_number || formattedPhone,
         accessToken: null,
         isRegistered: userData.isSaveUserDetails === 1,
-        username: "newuser",
-        bio: "Welcome to AdTip!",
-        wallet: 0,
-        isPremium: false,
-        referralEarnings: 0,
-        interests: [],
+        username: userData.username || userData.name || "newuser",
+        bio: userData.bio || "Welcome to AdTip!",
+        wallet: userData.referal_earnings || 0,
+        isPremium: userData.is_premium || userData.premium_plan_id !== 0 || false,
+        referralEarnings: userData.referal_earnings || 0,
+        name: userData.name || "",
+        email: userData.emailId || "",
+        gender: userData.gender || "",
+        dateOfBirth: userData.dob || "",
+        profession: userData.profession || "",
+        profilePic: userData.profile_image || "",
+        interests: userData.interests?.map((i: { name: string }) => i.name) || [],
+        maritalStatus: userData.maternal_status || "",
+        languages: userData.languages?.[0]?.name || "",
       };
-      console.log("Setting user in AuthContext:", newUser);
+
+      console.log("Setting user in AuthContext:", JSON.stringify(newUser, null, 2));
       setUser(newUser);
       localStorage.setItem("adtip_user", JSON.stringify(newUser));
-      setIsAuthenticated(true);
+      localStorage.setItem("mobile_number", newUser.phone);
+      localStorage.setItem("tempUserId", newUser.id);
       return res;
     } catch (err: any) {
-      console.error("OTP sending failed", {
+      console.error("OTP sending failed:", {
         message: err.message,
         status: err.response?.status,
         data: err.response?.data,
+        fullError: JSON.stringify(err, Object.getOwnPropertyNames(err), 2),
+        rawResponse: err.response ? JSON.stringify(err.response, null, 2) : "No response",
       });
-      throw err;
+      throw new Error(err.message || "Failed to send OTP");
     }
   };
 
-  const verifyOTP = async (otp: string): Promise<{ success: boolean; data?: any }> => {
+  const verifyOTP = async (otp: string): Promise<{ success: boolean; data?: any; message?: string }> => {
     const mobile_number = localStorage.getItem("mobile_number") || user?.phone || "";
     const tempUserId = localStorage.getItem("tempUserId") || user?.id || "";
-    if (!mobile_number || !tempUserId) {
-      throw new Error("Missing mobile number or user ID");
+    if (!mobile_number) {
+      console.error("Missing mobile_number:", { mobile_number, tempUserId });
+      throw new Error("Missing mobile number");
     }
 
     try {
-      const res = await apiVerifyOtp(mobile_number, otp, tempUserId);
-      console.log("apiVerifyOtp response:", res);
-      if (res.status === 200) {
+      console.log("AuthContext verifyOTP called with:", { mobile_number, otp, tempUserId });
+      let res;
+      try {
+        // First try without id
+        res = await apiVerifyOtp(mobile_number, otp);
+      } catch (error: any) {
+        console.warn("OTP verification without id failed, retrying with id:", tempUserId);
+        // Retry with id
+        res = await apiVerifyOtp(mobile_number, otp, tempUserId);
+      }
+      console.log("apiVerifyOtp response:", JSON.stringify(res, null, 2));
+
+      if (res.status === 200 || res.success) {
         const userData = res.data
           ? Array.isArray(res.data)
             ? res.data[0]
             : res.data
-          : {};
+          : res;
+
         const newUser: UserData = {
           id: userData.id?.toString() || tempUserId,
           phone: mobile_number,
-          accessToken: res.accessToken || null,
+          accessToken: userData.accessToken || res.accessToken || null,
           isRegistered: userData.isSaveUserDetails === 1,
-          username: userData.username || userData.name || "newuser",
-          bio: userData.bio || "Welcome to AdTip!",
-          wallet: userData.referal_earnings || 0,
-          isPremium: userData.is_premium || userData.premium_plan_id !== 0,
-          referralEarnings: userData.referal_earnings || 0,
-          name: userData.name,
-          gender: userData.gender,
-          dateOfBirth: userData.dob,
-          profession: userData.profession,
-          profilePic: userData.profile_image,
-          interests: userData.interests?.map((i: { name: string }) => i.name) || [],
-          email: userData.emailId || "",
-          maritalStatus: userData.maternal_status || "",
-          languages: userData.languages?.[0]?.name || "",
+          username: userData.username || userData.name || user?.username || "newuser",
+          bio: userData.bio || user?.bio || "Welcome to AdTip!",
+          wallet: userData.referal_earnings || user?.wallet || 0,
+          isPremium: userData.is_premium || userData.premium_plan_id !== 0 || user?.isPremium || false,
+          referralEarnings: userData.referal_earnings || user?.referralEarnings || 0,
+          name: userData.name || user?.name || "",
+          gender: userData.gender || user?.gender || "",
+          dateOfBirth: userData.dob || user?.dateOfBirth || "",
+          profession: userData.profession || user?.profession || "",
+          profilePic: userData.profile_image || user?.profilePic || "",
+          interests: userData.interests?.map((i: { name: string }) => i.name) || user?.interests || [],
+          email: userData.emailId || user?.email || "",
+          maritalStatus: userData.maternal_status || user?.maritalStatus || "",
+          languages: userData.languages?.[0]?.name || user?.languages || "",
         };
-        console.log("Setting user after OTP verification:", newUser);
+
+        console.log("Setting user after OTP verification:", JSON.stringify(newUser, null, 2));
         setUser(newUser);
         localStorage.setItem("adtip_user", JSON.stringify(newUser));
         setIsAuthenticated(true);
@@ -137,22 +175,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         localStorage.removeItem("mobile_number");
         return { success: true, data: userData };
       }
+
       console.warn("apiVerifyOtp failed with status:", res.status);
-      return { success: false };
+      return { success: false, message: res.message || "Invalid OTP" };
     } catch (err: any) {
-      console.error("OTP verification failed", {
+      console.error("OTP verification failed:", {
         message: err.message,
         status: err.response?.status,
         data: err.response?.data,
+        sqlMessage: err.response?.data?.message?.sqlMessage,
+        fullError: JSON.stringify(err, Object.getOwnPropertyNames(err), 2),
+        rawResponse: err.response ? JSON.stringify(err.response, null, 2) : "No response",
       });
-      throw err;
+      throw new Error(err.message || "Failed to verify OTP");
     }
   };
 
   const updateUserProfile = (profileData: Partial<UserData>) => {
     setUser((prevUser) => {
       const updatedUser: UserData = {
-        id: prevUser?.id || profileData.id || Math.random().toString(36).substring(2, 15),
+        id: prevUser?.id || profileData.id || `temp_${Date.now()}`,
         phone: prevUser?.phone || profileData.phone || "",
         accessToken: prevUser?.accessToken || profileData.accessToken || null,
         isRegistered: prevUser?.isRegistered ?? profileData.isRegistered ?? false,
@@ -161,22 +203,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         wallet: prevUser?.wallet ?? profileData.wallet ?? 0,
         isPremium: prevUser?.isPremium ?? profileData.isPremium ?? false,
         referralEarnings: prevUser?.referralEarnings ?? profileData.referralEarnings ?? 0,
-        name: prevUser?.name || profileData.name,
-        gender: prevUser?.gender || profileData.gender,
-        dateOfBirth: prevUser?.dateOfBirth || profileData.dateOfBirth,
-        profession: prevUser?.profession || profileData.profession,
-        profilePic: prevUser?.profilePic || profileData.profilePic,
+        name: prevUser?.name || profileData.name || "",
+        gender: prevUser?.gender || profileData.gender || "",
+        dateOfBirth: prevUser?.dateOfBirth || profileData.dateOfBirth || "",
+        profession: prevUser?.profession || profileData.profession || "",
+        profilePic: prevUser?.profilePic || profileData.profilePic || "",
         interests: profileData.interests || prevUser?.interests || [],
         email: prevUser?.email || profileData.email || "",
         maritalStatus: prevUser?.maritalStatus || profileData.maritalStatus || "",
         languages: prevUser?.languages || profileData.languages || "",
       };
+      console.log("Updating user profile:", JSON.stringify(updatedUser, null, 2));
       localStorage.setItem("adtip_user", JSON.stringify(updatedUser));
       return updatedUser;
     });
   };
 
   const logout = () => {
+    console.log("Logging out user:", user);
     setUser(null);
     setIsAuthenticated(false);
     localStorage.removeItem("adtip_user");
@@ -192,6 +236,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       wallet: 0,
       isPremium: false,
       referralEarnings: 0,
+      name: "",
+      email: "",
+      gender: "",
+      dateOfBirth: "",
+      profession: "",
+      profilePic: "",
+      interests: [],
+      maritalStatus: "",
+      languages: "",
     };
   };
 

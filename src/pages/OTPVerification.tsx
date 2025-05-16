@@ -30,8 +30,8 @@ const OTPVerification = () => {
         adtip_user: localStorage.getItem("adtip_user"),
       },
     });
-    const storedPhone = localStorage.getItem("mobile_number") || phoneNumber || user?.phone;
-    const storedId = localStorage.getItem("tempUserId") || id || user?.id;
+    const storedPhone = phoneNumber || localStorage.getItem("mobile_number") || user?.phone;
+    const storedId = id || localStorage.getItem("tempUserId") || user?.id;
     if (!storedPhone || !storedId) {
       console.warn("Missing phone or ID, redirecting to login", { storedPhone, storedId });
       navigate("/login", { replace: true });
@@ -78,11 +78,13 @@ const OTPVerification = () => {
 
     setIsLoading(true);
     try {
+      const storedPhone = phoneNumber || localStorage.getItem("mobile_number") || user?.phone;
+      const storedId = id || localStorage.getItem("tempUserId") || user?.id;
+      console.log("Verifying OTP with:", { mobile_number: storedPhone, otp: otpValue, id: storedId });
       const verifyResponse = await verifyOTP(otpValue);
-      console.log("verifyOTP response:", { verifyResponse, user });
+      console.log("verifyOTP response:", JSON.stringify(verifyResponse, null, 2));
       if (verifyResponse.success) {
-        // Prioritize isSaveUserDetails from verifyOTP response
-        const apiIsSaveUserDetails = verifyResponse.data?.isSaveUserDetails ?? stateIsSaveUserDetails ?? user?.isRegistered ? 1 : 0;
+        const apiIsSaveUserDetails = verifyResponse.data?.isSaveUserDetails ?? stateIsSaveUserDetails ?? (user?.isRegistered ? 1 : 0);
         const isRegistered = apiIsSaveUserDetails === 1;
         const nextPath = isRegistered ? "/home" : "/personal-details";
         console.log(`Navigating to ${nextPath}`, {
@@ -93,15 +95,18 @@ const OTPVerification = () => {
         });
         navigate(nextPath, { replace: true });
       } else {
-        setError("Invalid OTP");
+        setError(verifyResponse.message || "Invalid OTP");
       }
     } catch (err: any) {
       console.error("OTP verification error:", {
         message: err.message,
         status: err.response?.status,
         data: err.response?.data,
+        sqlMessage: err.response?.data?.message?.sqlMessage,
+        fullError: JSON.stringify(err, Object.getOwnPropertyNames(err), 2),
+        rawResponse: err.response ? JSON.stringify(err.response, null, 2) : "No response",
       });
-      setError(err.message || "Something went wrong, please try again");
+      setError(err.message || "Failed to verify OTP. Please try again or request a new OTP.");
     } finally {
       setIsLoading(false);
     }
@@ -114,11 +119,18 @@ const OTPVerification = () => {
       const phone = localStorage.getItem("mobile_number") || phoneNumber || user?.phone || "";
       if (!phone) throw new Error("Phone number is missing for resend");
 
+      console.log("Resending OTP for:", phone);
       const res = await apiSendOtp(phone);
-      console.log("Resend OTP response:", res);
+      console.log("Resend OTP response:", JSON.stringify(res, null, 2));
       alert("OTP has been resent!");
     } catch (err: any) {
-      console.error("Resend OTP error:", err.message);
+      console.error("Resend OTP error:", {
+        message: err.message,
+        status: err.response?.status,
+        data: err.response?.data,
+        fullError: JSON.stringify(err, Object.getOwnPropertyNames(err), 2),
+        rawResponse: err.response ? JSON.stringify(err.response, null, 2) : "No response",
+      });
       setError(err.message || "Failed to resend OTP. Please try again.");
     }
   };
@@ -147,7 +159,7 @@ const OTPVerification = () => {
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="flex justify-between max-w-sm mx Newark-auto">
+          <div className="flex justify-between max-w-sm mx-auto">
             {[0, 1, 2, 3, 4, 5].map((index) => (
               <Input
                 key={index}
