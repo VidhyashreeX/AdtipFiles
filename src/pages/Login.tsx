@@ -22,7 +22,7 @@ const Login = () => {
       return;
     }
 
-    if (phoneNumber.length !== 10) {
+    if (phoneNumber.length !== 10 || !/^\d{10}$/.test(phoneNumber)) {
       setError("Please enter a valid 10-digit phone number");
       return;
     }
@@ -30,22 +30,17 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const formattedPhoneNumber = `+91${phoneNumber}`;
-      console.log("Attempting login with:", { phoneNumber, formattedPhoneNumber });
-      const response = await login(formattedPhoneNumber);
+      console.log("Attempting login with:", { phoneNumber });
+      const response = await login(phoneNumber); // Pass 10-digit phone number
       console.log("Login response:", JSON.stringify(response, null, 2));
 
       const userData = response.data?.[0] || response.data || {};
       const navState = {
-        phoneNumber: userData.mobile_number || formattedPhoneNumber,
+        phoneNumber: userData.mobile_number || phoneNumber, // Store without +91
         id: userData.id?.toString() || localStorage.getItem("tempUserId") || "",
         isSaveUserDetails: userData.isSaveUserDetails ?? 0,
       };
       console.log("Navigating to /verify-otp with state:", JSON.stringify(navState, null, 2));
-      if (response.isPartial) {
-        console.warn("Partial response received, navigating with temporary data");
-        setError("OTP sent, but server response was incomplete. Please proceed to verify.");
-      }
       setIsLoading(false);
       navigate("/verify-otp", { state: navState });
     } catch (err: any) {
@@ -57,17 +52,10 @@ const Login = () => {
         rawResponse: err.response ? JSON.stringify(err.response, null, 2) : "No response",
       });
       setIsLoading(false);
-      if (err.message.includes("Failed to send OTP") || err.message.includes("Network error")) {
-        console.warn("Server error, but OTP likely sent, navigating to verify-otp");
-        const navState = {
-          phoneNumber: `+91${phoneNumber}`,
-          id: localStorage.getItem("tempUserId") || `temp_${Date.now()}`,
-          isSaveUserDetails: 0,
-        };
-        setError("OTP sent, but server response failed. Please proceed to verify.");
-        navigate("/verify-otp", { state: navState });
+      if (err.message.includes("Unknown column")) {
+        setError("Server error: Unable to send OTP. Please try again or contact support.");
       } else {
-        setError(err.message || "Could not send OTP. Please check your connection or try again later.");
+        setError(err.message || "Could not send OTP. Please check your phone number and try again.");
       }
     }
   };

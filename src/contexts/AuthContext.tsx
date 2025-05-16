@@ -28,7 +28,7 @@ interface AuthContextType {
   user: UserData | null;
   isAuthenticated: boolean;
   login: (phone: string) => Promise<any>;
-  verifyOTP: (otp: string) => Promise<{ success: boolean; data?: any; message?: string }>;
+  verifyOTP: (otp: string, id: string) => Promise<{ success: boolean; data?: any; message?: string }>;
   updateUserProfile: (profileData: Partial<UserData>) => void;
   logout: () => UserData;
 }
@@ -63,10 +63,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (!phone) {
         throw new Error("Phone number is required");
       }
-      const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
-      console.log("AuthContext login called with:", { phone, formattedPhone });
+      console.log("AuthContext login called with:", { phone });
 
-      const res = await apiSendOtp(formattedPhone);
+      const res = await apiSendOtp(phone);
       console.log("apiSendOtp response:", JSON.stringify(res, null, 2));
 
       const userData = res.data
@@ -74,14 +73,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           ? res.data[0]
           : res.data
         : res;
-      if (!res.isPartial && (!userData.id || !userData.mobile_number)) {
+
+      if (!userData.id || !userData.mobile_number) {
         console.error("Invalid API response, missing id or mobile_number:", res);
         throw new Error("Invalid response from server: missing id or mobile_number");
       }
 
       const newUser: UserData = {
-        id: userData.id?.toString() || localStorage.getItem("tempUserId") || `temp_${Date.now()}`,
-        phone: userData.mobile_number || formattedPhone,
+        id: userData.id?.toString(),
+        phone: userData.mobile_number.replace(/\D/g, "").slice(-10) || phone,
         accessToken: null,
         isRegistered: userData.isSaveUserDetails === 1,
         username: userData.username || userData.name || "newuser",
@@ -118,25 +118,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const verifyOTP = async (otp: string): Promise<{ success: boolean; data?: any; message?: string }> => {
+  const verifyOTP = async (otp: string, id: string): Promise<{ success: boolean; data?: any; message?: string }> => {
     const mobile_number = localStorage.getItem("mobile_number") || user?.phone || "";
-    const tempUserId = localStorage.getItem("tempUserId") || user?.id || "";
-    if (!mobile_number) {
-      console.error("Missing mobile_number:", { mobile_number, tempUserId });
-      throw new Error("Missing mobile number");
+    if (!mobile_number || !id) {
+      console.error("Missing mobile_number or id:", { mobile_number, id });
+      throw new Error("Missing mobile number or ID");
     }
 
     try {
-      console.log("AuthContext verifyOTP called with:", { mobile_number, otp, tempUserId });
-      let res;
-      try {
-        // First try without id
-        res = await apiVerifyOtp(mobile_number, otp);
-      } catch (error: any) {
-        console.warn("OTP verification without id failed, retrying with id:", tempUserId);
-        // Retry with id
-        res = await apiVerifyOtp(mobile_number, otp, tempUserId);
-      }
+      console.log("AuthContext verifyOTP called with:", { mobile_number, otp, id });
+      const res = await apiVerifyOtp(mobile_number, otp, id);
       console.log("apiVerifyOtp response:", JSON.stringify(res, null, 2));
 
       if (res.status === 200 || res.success) {
@@ -147,7 +138,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           : res;
 
         const newUser: UserData = {
-          id: userData.id?.toString() || tempUserId,
+          id: userData.id?.toString() || `user_${Date.now()}`,
           phone: mobile_number,
           accessToken: userData.accessToken || res.accessToken || null,
           isRegistered: userData.isSaveUserDetails === 1,
@@ -183,7 +174,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         message: err.message,
         status: err.response?.status,
         data: err.response?.data,
-        sqlMessage: err.response?.data?.message?.sqlMessage,
         fullError: JSON.stringify(err, Object.getOwnPropertyNames(err), 2),
         rawResponse: err.response ? JSON.stringify(err.response, null, 2) : "No response",
       });

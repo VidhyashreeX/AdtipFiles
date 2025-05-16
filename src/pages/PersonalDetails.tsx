@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "../contexts/AuthContext";
 import { ArrowLeft, User, Mail, Calendar, ChevronDown, Key, MapPin } from "lucide-react";
-import axios from "axios";
+import { apiSaveUserDetails } from "../api";
 import { debounce } from "lodash";
 
 const LANGUAGES = [
@@ -115,11 +115,11 @@ const PersonalDetailsForm = () => {
         adtip_user: localStorage.getItem("adtip_user"),
       },
     });
-    // Warn if user is already registered
     if (user?.isRegistered) {
-      console.warn("User already registered, should redirect to /home", { user });
+      console.warn("User already registered, redirecting to /home", { user });
+      navigate("/home", { replace: true });
     }
-  }, [user]);
+  }, [user, navigate]);
 
   const requestLocation = useCallback(() => {
     if (navigator.geolocation) {
@@ -226,20 +226,15 @@ const PersonalDetailsForm = () => {
     setIsLoading(true);
 
     try {
-      const userId = user?.id || "";
+      const userId = user?.id || localStorage.getItem("tempUserId");
       if (!userId) {
         setError("User ID is missing. Please log in again.");
         navigate("/login");
         return;
       }
-      if (!user?.accessToken) {
-        setError("Authentication token is missing. Please log in again.");
-        navigate("/login");
-        return;
-      }
 
       const payload = {
-        id: userId,
+        id: parseInt(userId),
         name: formData.name,
         firstname: formData.firstname,
         lastname: formData.lastname,
@@ -248,18 +243,17 @@ const PersonalDetailsForm = () => {
         gender: formData.gender,
         profession: formData.profession,
         maternal_status: formData.maritalStatus,
-        referral_code: formData.referralCode || null,
+        referal_code: formData.referralCode || "",
         address: formData.address,
         pincode: formData.pincode,
         longitude: formData.longitude,
         latitude: formData.latitude,
-        language: formData.language,
-        interest: formData.interest,
+        languages: formData.language ? [formData.language] : [],
+        interests: formData.interest ? [formData.interest] : [],
+        profile_image: "",
       };
-      console.log("Saving personal details:", payload);
-      await axios.post("http://3.6.15.198:7082/api/saveuserdetails", payload, {
-        headers: { Authorization: `Bearer ${user.accessToken}` },
-      });
+      console.log("Saving personal details:", JSON.stringify(payload, null, 2));
+      await apiSaveUserDetails(payload);
 
       updateUserProfile({
         name: formData.name,
@@ -284,7 +278,7 @@ const PersonalDetailsForm = () => {
         status: err.response?.status,
         data: err.response?.data,
       });
-      setError(err.response?.data?.message || err.message || "Failed to save profile. Please try again.");
+      setError(err.message || "Failed to save profile. Please try again.");
     } finally {
       setIsLoading(false);
     }

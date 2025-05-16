@@ -80,8 +80,11 @@ const OTPVerification = () => {
     try {
       const storedPhone = phoneNumber || localStorage.getItem("mobile_number") || user?.phone;
       const storedId = id || localStorage.getItem("tempUserId") || user?.id;
+      if (!storedPhone || !storedId) {
+        throw new Error("Missing phone number or ID");
+      }
       console.log("Verifying OTP with:", { mobile_number: storedPhone, otp: otpValue, id: storedId });
-      const verifyResponse = await verifyOTP(otpValue);
+      const verifyResponse = await verifyOTP(otpValue, storedId);
       console.log("verifyOTP response:", JSON.stringify(verifyResponse, null, 2));
       if (verifyResponse.success) {
         const apiIsSaveUserDetails = verifyResponse.data?.isSaveUserDetails ?? stateIsSaveUserDetails ?? (user?.isRegistered ? 1 : 0);
@@ -102,7 +105,6 @@ const OTPVerification = () => {
         message: err.message,
         status: err.response?.status,
         data: err.response?.data,
-        sqlMessage: err.response?.data?.message?.sqlMessage,
         fullError: JSON.stringify(err, Object.getOwnPropertyNames(err), 2),
         rawResponse: err.response ? JSON.stringify(err.response, null, 2) : "No response",
       });
