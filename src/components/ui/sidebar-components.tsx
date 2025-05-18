@@ -226,10 +226,9 @@ const Sidebar = React.forwardRef<
               ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
               : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
             variant === "floating" || variant === "inset"
-              ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]"
+              ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+_theme(spacing.4)+2px)]"
               : "group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l",
-            // Adjusted positioning and height to account for heading bar
-            "top-16 h-[calc(100vh-4rem)] w-[--sidebar-width]", // top: 64px (4rem), height adjusted accordingly
+            "top-16 h-[calc(100vh-4rem)] w-[--sidebar-width]",
             className
           )}
           {...props}
@@ -289,8 +288,8 @@ const SidebarRail = React.forwardRef<
       title="Toggle Sidebar"
       className={cn(
         "absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-sidebar-border group-data-[side=left]:-right-4 group-data-[side=right]:left-0 sm:flex",
-        "[[data-side=left]*&]:cursor-w-resize [[data-side=right]*&]:cursor-e-resize",
-        "[[data-side=left][data-state=collapsed]*&]:cursor-e-resize [[data-side=right][data-state=collapsed]*&]:cursor-w-resize",
+        "[[data-side=left]&]:cursor-w-resize [[data-side=right]&]:cursor-e-resize",
+        "[[data-side=left][data-state=collapsed]&]:cursor-e-resize [[data-side=right][data-state=collapsed]&]:cursor-w-resize",
         "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full group-data-[collapsible=offcanvas]:hover:bg-sidebar",
         "[[data-side=left][data-collapsible=offcanvas]*&]:-right-2",
         "[[data-side=right][data-collapsible=offcanvas]*&]:-left-2",
@@ -634,9 +633,7 @@ const SidebarMenuSkeleton = React.forwardRef<
     showIcon?: boolean;
   }
 >(({ className, showIcon = false, ...props }, ref) => {
-  const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`;
-  }, []);
+  const width = `${Math.floor(Math.random() * 40) + 50}%`;
 
   return (
     <div

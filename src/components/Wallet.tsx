@@ -16,6 +16,7 @@ const Wallet = () => {
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
   const [balance, setBalance] = useState<number>(0);
+  const [isPremium, setIsPremium] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +26,7 @@ const Wallet = () => {
 
   // Wait for AuthContext to initialize
   useEffect(() => {
-    console.log("Wallet user:", user); // Debug log
+    console.log("Wallet user:", user);
     if (user === null && isAuthenticated === false) {
       return;
     }
@@ -36,39 +37,56 @@ const Wallet = () => {
     }
   }, [user, isAuthenticated, userId, token, navigate]);
 
-  // Fetch wallet balance
+  // Fetch wallet balance and premium status
   useEffect(() => {
-    const fetchBalance = async () => {
+    const fetchWalletData = async () => {
       if (!userId || !token) return;
       try {
         setLoading(true);
-        console.log("Fetching balance with token:", token); // Debug log
-        const response = await axios.get(`${BASE_URL}/getfunds/${userId}`, {
+        console.log("Fetching wallet data with token:", token);
+
+        // Fetch balance
+        const balanceResponse = await axios.get(`${BASE_URL}/getfunds/${userId}`, {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
         });
-        console.log("getfunds response:", response.data); // Debug log
-        if (response.status === 200) {
-          setBalance(parseFloat(response.data.availableBalance) || 0);
+        console.log("getfunds response:", balanceResponse.data);
+        if (balanceResponse.status === 200) {
+          setBalance(parseFloat(balanceResponse.data.availableBalance) || 0);
         } else {
-          throw new Error(`Unexpected response status: ${response.status}`);
+          throw new Error(`Unexpected response status: ${balanceResponse.status}`);
         }
+
+        // Fetch premium status
+        const premiumResponse = await axios.get(`${BASE_URL}/check-premium/${userId}`, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        console.log("check-premium response:", premiumResponse.data);
+        if (premiumResponse.status === 200) {
+          setIsPremium(premiumResponse.data.isPremium || false);
+        } else {
+          throw new Error(`Unexpected response status: ${premiumResponse.status}`);
+        }
+
       } catch (err: any) {
-        console.error("getfunds error:", err.response?.data || err.message);
+        console.error("Wallet data error:", err.response?.data || err.message);
         if (err.response?.status === 401) {
           setError("Unauthorized. Please sign in again.");
           navigate("/login");
         } else {
-          setError(err.response?.data?.message || "Error fetching balance");
+          setError(err.response?.data?.message || "Error fetching wallet data");
         }
       } finally {
         setLoading(false);
       }
     };
     if (!authLoading) {
-      fetchBalance();
+      fetchWalletData();
     }
   }, [userId, token, navigate, authLoading]);
 
@@ -102,7 +120,7 @@ const Wallet = () => {
   if (!userId || !token) return null;
 
   return (
-    <div className="pb-20 md:pb-0 bg-gray-50 min-h-screen">
+    <div className="pb-20 md:pb̔-0 bg-gray-50 min-h-screen">
       {/* Header */}
       <div className="bg-gradient-to-r from-adtip-teal to-[#13b799] text-white">
         <div className="max-w-screen-md mx-auto p-6">
@@ -140,19 +158,38 @@ const Wallet = () => {
         </div>
       </div>
 
-      {/* No Active Plan */}
+      {/* Subscription Status */}
       <div className="max-w-screen-md mx-auto p-4 bg-white rounded-lg shadow-sm mt-4">
         <div className="text-center py-6">
-          <h3 className="text-lg font-medium mb-2">No Active Subscription Plan</h3>
-          <p className="text-gray-500 text-sm mb-4">
-            Upgrade to premium to enjoy better features and higher earnings
-          </p>
-          <Button
-            className="teal-button"
-            onClick={() => navigate("/upgrade-premium")}
-          >
-            Upgrade Plan
-          </Button>
+          {loading ? (
+            <h3 className="text-lg font-medium mb-2">Loading subscription status...</h3>
+          ) : isPremium ? (
+            <>
+              <h3 className="text-lg font-medium mb-2">Premium Subscription Active</h3>
+              <p className="text-gray-500 text-sm mb-4">
+                Enjoy enhanced features and higher earnings with your premium plan
+              </p>
+              <Button
+                className="teal-button"
+                onClick={() => navigate("/manage-subscription")}
+              >
+                Manage Subscription
+              </Button>
+            </>
+          ) : (
+            <>
+              <h3 className="text-lg font-medium mb-2">No Active Subscription Plan</h3>
+              <p className="text-gray-500 text-sm mb-4">
+                Upgrade to premium to enjoy better features and higher earnings
+              </p>
+              <Button
+                className="teal-button"
+                onClick={() => navigate("/upgrade-premium")}
+              >
+                Upgrade Plan
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -168,7 +205,7 @@ const Wallet = () => {
               <h3 className="font-semibold mb-4">Withdraw to</h3>
 
               <div className="space-y-3 mb-6">
-                {["PayTM", "Bank Transfer", "UPI"].map((method) => (
+                {["PayTM", " Ascending", "Bank Transfer", "UPI"].map((method) => (
                   <div
                     key={method}
                     onClick={() => setSelectedMethod(method)}

@@ -1,4 +1,3 @@
-
 import { createBrowserRouter } from "react-router-dom";
 import App from "./App";
 import Index from "./pages/Index";
@@ -25,7 +24,8 @@ import AdsTracker from "./pages/AdsTracker";
 import Premium from "./pages/Premium";
 import Settings from "./pages/Settings";
 import ContactUs from "./pages/ContactUs";
-
+import TipShorts from "./pages/TipShorts";
+import TipShortsPreview from "./pages/TipShorts";
 
 export const router = createBrowserRouter([
   {
@@ -42,6 +42,8 @@ export const router = createBrowserRouter([
       { path: "home", element: <Home /> },
       { path: "tiptube", element: <TipTube /> },
       { path: "tipcall", element: <TipCall /> },
+      { path: "tipshorts", element: <TipShorts /> },
+      { path: "tipshorts-preview", element: <TipShortsPreview /> },
       { path: "profile", element: <Profile /> },
       { path: "edit-profile", element: <EditProfile /> },
       { path: "create-post", element: <CreatePost /> },
@@ -49,14 +51,12 @@ export const router = createBrowserRouter([
       { path: "terms", element: <TermsAndConditions /> },
       { path: "privacy", element: <PrivacyPolicy /> },
       { path: "how-to-earn-creator", element: <HowToEarnCreator /> },
-  { path: "how-to-earn-user", element: <HowToEarnUser /> },
-  { path: "refer", element: <Refer /> },
-  { path: "ads-tracker", element: <AdsTracker /> },
-  { path: "premium", element: <Premium /> },
-  { path: "settings", element: <Settings /> },
-  { path: "contact-us", element: <ContactUs /> },
-      
-
+      { path: "how-to-earn-user", element: <HowToEarnUser /> },
+      { path: "refer", element: <Refer /> },
+      { path: "ads-tracker", element: <AdsTracker /> },
+      { path: "premium", element: <Premium /> },
+      { path: "settings", element: <Settings /> },
+      { path: "contact-us", element: <ContactUs /> },
       { path: "*", element: <NotFound /> }
     ]
   }

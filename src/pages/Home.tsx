@@ -1,8 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import VideoLoginPrompt from "../components/VideoLoginPrompt";
 import axios from "axios";
@@ -22,9 +21,9 @@ interface Post {
   media_type: "video" | "image";
   is_promoted: number;
   video_category_id: number;
-  user_name: string;
+  user_name: string | null;
   user_profile_image: string | null;
-  address: string;
+  address: string | null;
   category_name: string;
   post_promotion_id: number | null;
   target_min_age: number | null;
@@ -53,14 +52,21 @@ interface ApiResponse {
   };
 }
 
+interface WalletResponse {
+  status: boolean;
+  message: string;
+  data: {
+    balance: string;
+  };
+}
+
 const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
   ? import.meta.env.VITE_API_URL
   : `${import.meta.env.VITE_API_URL}/api`;
 
-// Sample data for popular categories with mapping to video_category_id
 const popularCategories = [
   { name: "All", id: 0 },
-  { name: "Art", id: 9 }, // Based on sample response (e.g., post ID 996)
+  { name: "Art", id: 9 },
   { name: "Beauty", id: 10 },
   { name: "Business", id: 11 },
   { name: "Fashion", id: 12 },
@@ -79,104 +85,181 @@ const Home = () => {
   const [postViewCount, setPostViewCount] = useState<number>(0);
   const { isAuthenticated, user } = useAuth();
   const [feedData, setFeedData] = useState<Post[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
+  const [walletBalance, setWalletBalance] = useState<string | null>(null);
 
+  const userId = user?.id || null;
+  const token = user?.accessToken || null;
+
+  // Log component rendering and authentication status
   useEffect(() => {
     console.log("Rendering Home component", {
       isAuthenticated,
-      user: user ? { id: user.id, accessToken: user.accessToken } : null,
+      userId,
+      token,
       selectedCategory,
       page,
       localStorage: {
         adtip_user: localStorage.getItem("adtip_user"),
       },
+      baseUrl: BASE_URL,
     });
-    if (!isAuthenticated || !user?.id || !user?.accessToken) {
+    if (!isAuthenticated || !userId || !token) {
       console.warn("User not authenticated or missing data, skipping fetch", {
         isAuthenticated,
-        userId: user?.id,
-        accessToken: user?.accessToken,
+        userId,
+        token,
       });
-      setLoading(false);
       setError("Please log in to view posts");
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, userId, token]);
 
-  // Fetch posts from /api/list-posts
-  useEffect(() => {
-    const fetchPosts = async () => {
-      if (!isAuthenticated || !user?.id || !user?.accessToken) {
-        return;
-      }
-      try {
-        setLoading(true);
-        setError(null);
+  // Fetch wallet balance
+  const fetchWalletBalance = useCallback(async () => {
+    if (!isAuthenticated || !userId || !token) {
+      return;
+    }
+    const abortController = new AbortController();
+    try {
+      console.log("Sending /api/getfunds request:", {
+        url: `${BASE_URL}/getfunds/${userId}`,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-        // Map category name to ID
-        const categoryObj = popularCategories.find((cat) => cat.name === selectedCategory);
-        const categoryId = categoryObj ? categoryObj.id : 0;
-
-        const payload = {
-          category: categoryId,
-          page: page,
-          limit: 5,
-          loggined_user_id: parseInt(user.id), // Ensure number
-        };
-        console.log("Sending /api/list-posts request:", {
-          url: `${BASE_URL}/list-posts`,
-          payload,
+      const response = await axios.get<WalletResponse>(
+        `${BASE_URL}/getfunds/${userId}`,
+        {
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${user.accessToken}`,
+            Authorization: `Bearer ${token}`,
           },
-        });
-
-        const response = await axios.post<ApiResponse>(
-          `${BASE_URL}/list-posts`,
-          payload,
-          {
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${user.accessToken}`,
-            },
-          }
-        );
-
-        console.log("list-posts response:", {
-          status: response.data.status,
-          message: response.data.message,
-          dataLength: response.data.data.length,
-          pagination: response.data.pagination,
-        });
-
-        if (response.data.status) {
-          setFeedData(response.data.data);
-          setTotalPages(response.data.pagination.total_page);
-          if (response.data.data.length === 0) {
-            console.warn("No posts returned in response", { selectedCategory, page });
-          }
-        } else {
-          throw new Error(response.data.message || "Failed to fetch posts");
+          signal: abortController.signal,
         }
-      } catch (err: any) {
-        console.error("list-posts error:", {
-          message: err.message,
-          status: err.response?.status,
-          data: err.response?.data,
-        });
-        setError(err.response?.data?.message || err.message || "Failed to load posts");
-      } finally {
-        setLoading(false);
+      );
+
+      console.log("getfunds response:", {
+        status: response.data.status,
+        message: response.data.message,
+        balance: response.data.data.balance,
+      });
+
+      if (response.data.status) {
+        setWalletBalance(response.data.data.balance);
+      } else {
+        throw new Error(response.data.message || "Failed to fetch wallet balance");
       }
-    };
+    } catch (err: any) {
+      if (err.name === "AbortError") return;
+      console.error("getfunds error:", {
+        message: err.message,
+        status: err.response?.status,
+        data: err.response?.data,
+      });
+      setWalletBalance(null);
+    }
+    return () => abortController.abort();
+  }, [isAuthenticated, userId, token]);
 
+  useEffect(() => {
+    fetchWalletBalance();
+  }, [fetchWalletBalance]);
+
+  // Fetch posts
+  const fetchPosts = useCallback(async () => {
+    if (!isAuthenticated || !userId || !token) {
+      return;
+    }
+    const abortController = new AbortController();
+    try {
+      setLoading(true);
+      setError(null);
+
+      const categoryObj = popularCategories.find((cat) => cat.name === selectedCategory);
+      const categoryId = categoryObj ? categoryObj.id : 0;
+
+      const payload = {
+        category: categoryId,
+        page: page,
+        limit: 5,
+        loggined_user_id: parseInt(userId),
+      };
+      console.log("Sending /api/list-posts request:", {
+        url: `${BASE_URL}/list-posts`,
+        payload,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const response = await axios.post<ApiResponse>(
+        `${BASE_URL}/list-posts`,
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          timeout: 10000,
+          signal: abortController.signal,
+        }
+      );
+
+      console.log("list-posts response:", {
+        status: response.data.status,
+        message: response.data.message,
+        dataLength: response.data.data.length,
+        pagination: response.data.pagination,
+      });
+
+      if (response.data.status) {
+        const sanitizedPosts = response.data.data.map((post) => ({
+          ...post,
+          media_url: post.media_url || "",
+          user_name: post.user_name || "Anonymous",
+          user_profile_image: post.user_profile_image || null,
+          address: post.address || "Location not provided",
+          title: post.title || "Untitled",
+          content: post.content || "No content",
+        }));
+        setFeedData(sanitizedPosts);
+        setTotalPages(response.data.pagination.total_page);
+        if (response.data.data.length === 0) {
+          console.warn("No posts returned in response", { selectedCategory, page });
+        }
+      } else {
+        throw new Error(response.data.message || "Failed to fetch posts");
+      }
+    } catch (err: any) {
+      if (err.name === "AbortError") return;
+      console.error("list-posts error:", {
+        message: err.message,
+        status: err.response?.status,
+        data: err.response?.data,
+        code: err.code,
+      });
+      setError(
+        err.message === "Network Error"
+          ? "Unable to connect to the server. Please check your internet connection."
+          : err.response?.data?.message || err.message || "Failed to load posts"
+      );
+    } finally {
+      setLoading(false);
+    }
+    return () => abortController.abort();
+  }, [isAuthenticated, userId, token, selectedCategory, page]);
+
+  useEffect(() => {
     fetchPosts();
-  }, [isAuthenticated, user, selectedCategory, page]);
+  }, [fetchPosts]);
 
-  // Check if user is viewing posts and prompt login after a few posts
+  // Check if user is viewing posts and prompt login
   useEffect(() => {
     if (!isAuthenticated && postViewCount >= 2) {
       setShowLoginPrompt(true);
@@ -192,13 +275,26 @@ const Home = () => {
 
   return (
     <div className="pb-20 md:pb-0 bg-gray-50">
-      {/* Show login prompt if needed */}
       {showLoginPrompt && (
         <VideoLoginPrompt onClose={() => setShowLoginPrompt(false)} />
       )}
 
-      {/* Categories horizontal scroll */}
-      <div className="bg-white sticky top-[60px] md:top-[57px] z-10 py-3 px-4 overflow-x-auto flex whitespace-nowrap gap-3 no-scrollbar shadow-sm">
+      {isAuthenticated && walletBalance !== null && (
+        <div className="bg-white sticky top-[60px] md:top-[57px] z-20 py-3 px-4 shadow-sm">
+          <div className="max-w-screen-md mx-auto flex items-center justify-between">
+            <span className="text-sm font-semibold text-gray-800">
+              Wallet Balance: ₹{walletBalance}
+            </span>
+            <Link to="/add-funds">
+              <Button variant="outline" size="sm" className="teal-button">
+                Add Funds
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white sticky top-[104px] md:top-[101px] z-10 py-3 px-4 overflow-x-auto flex whitespace-nowrap gap-3 no-scrollbar shadow-sm">
         {popularCategories.map((category) => (
           <button
             key={category.name}
@@ -217,9 +313,7 @@ const Home = () => {
         ))}
       </div>
 
-      {/* Main content */}
       <div className="max-w-screen-md mx-auto pt-4 px-4">
-        {/* Tabs */}
         <Tabs defaultValue="for-you" className="mb-6">
           <TabsList className="grid grid-cols-2 w-full">
             <TabsTrigger value="for-you" onClick={() => setActiveTab("for-you")}>
@@ -233,9 +327,7 @@ const Home = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* For You Tab */}
           <TabsContent value="for-you">
-            {/* Referral Banner */}
             <div className="mb-6 bg-gradient-to-r from-adtip-teal to-[#13b799] rounded-lg p-4 text-white">
               <h3 className="font-bold text-lg mb-1">Refer & Earn!</h3>
               <p className="text-sm mb-3">
@@ -246,24 +338,21 @@ const Home = () => {
               </Button>
             </div>
 
-            {/* Loading State */}
             {loading && (
               <div className="text-center py-10">
                 <p className="text-gray-500">Loading posts...</p>
               </div>
             )}
 
-            {/* Error State */}
             {error && (
               <div className="text-center py-10">
-                <p className="text-red-500">Error: {error}</p>
+                <p className="text-red-500">{error}</p>
                 <Button onClick={() => window.location.reload()} className="mt-4">
                   Retry
                 </Button>
               </div>
             )}
 
-            {/* Feed Posts */}
             {!loading && !error && feedData.length === 0 && (
               <div className="text-center py-10">
                 <p className="text-gray-500">
@@ -288,14 +377,13 @@ const Home = () => {
                     className="bg-white rounded-lg shadow-sm overflow-hidden cursor-pointer"
                     onClick={() => handlePostClick(post.id)}
                   >
-                    {/* Post header */}
                     <div className="flex items-center p-4">
                       <img
                         src={
                           post.user_profile_image ||
                           "https://via.placeholder.com/40"
                         }
-                        alt={post.user_name}
+                        alt={post.user_name || "User"}
                         className="w-10 h-10 rounded-full object-cover"
                       />
                       <div className="ml-3">
@@ -309,7 +397,6 @@ const Home = () => {
                       <button className="ml-auto text-gray-500">•••</button>
                     </div>
 
-                    {/* Post content */}
                     <div className="relative">
                       {post.media_type === "video" && post.media_url ? (
                         <div className="aspect-video bg-gray-200">
@@ -332,8 +419,8 @@ const Home = () => {
                       ) : post.media_type === "image" && post.media_url ? (
                         <img
                           src={post.media_url}
-                          alt="Post"
-                          className="w-full aspect-square object-cover"
+                          alt={post.title}
+                          className="w Zenith-full aspect-square object-cover"
                         />
                       ) : (
                         <div className="aspect-square bg-gray-200 flex items-center justify-center text-gray-500">
@@ -342,11 +429,10 @@ const Home = () => {
                       )}
                     </div>
 
-                    {/* Post description */}
                     <div className="p-4">
+                      <h4 className="font-semibold text-sm mb-1">{post.title}</h4>
                       <p className="text-sm">{post.content}</p>
 
-                      {/* Post stats */}
                       <div className="flex items-center mt-4 text-sm text-gray-500">
                         <div className="flex items-center mr-4">
                           <svg
@@ -382,7 +468,6 @@ const Home = () => {
               </div>
             )}
 
-            {/* Pagination */}
             {!loading && !error && feedData.length > 0 && (
               <div className="flex justify-center gap-4 mt-6">
                 <Button
@@ -405,7 +490,6 @@ const Home = () => {
             )}
           </TabsContent>
 
-          {/* Following Tab */}
           <TabsContent value="following">
             <div className="text-center py-10">
               <h3 className="text-xl font-semibold mb-4">
