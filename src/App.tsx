@@ -1,12 +1,13 @@
 
+import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { UserProvider } from "./UserContext";
-import { useLocation } from "react-router-dom";
+import { ShoppingProvider } from "./contexts/ShoppingContext";
 import AppLayout from "./AppLayout";
 
 const queryClient = new QueryClient();
@@ -28,25 +29,27 @@ const App = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <UserProvider>
-        <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            {isAuthPage ? (
-              <div className="min-h-screen bg-background flex flex-col">
-                <main className="flex-1">
+      <AuthProvider>
+        <UserProvider>
+          <ShoppingProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              {isAuthPage ? (
+                <div className="min-h-screen bg-background flex flex-col">
+                  <main className="flex-1">
+                    <Outlet />
+                  </main>
+                </div>
+              ) : (
+                <AppLayout>
                   <Outlet />
-                </main>
-              </div>
-            ) : (
-              <AppLayout>
-                <Outlet />
-              </AppLayout>
-            )}
-          </TooltipProvider>
-        </AuthProvider>
-      </UserProvider>
+                </AppLayout>
+              )}
+            </TooltipProvider>
+          </ShoppingProvider>
+        </UserProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 };

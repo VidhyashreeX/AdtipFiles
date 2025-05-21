@@ -12,7 +12,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { ArrowLeft, User, Mail, Calendar, ChevronDown, Key, MapPin } from "lucide-react";
 import { apiSaveUserDetails } from "../api";
-import { debounce } from "lodash";
+import debounce from "lodash/debounce";
 
 const LANGUAGES = [
   { id: 1, name: "hindi" },
