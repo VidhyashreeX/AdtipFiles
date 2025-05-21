@@ -1,4 +1,10 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import PhoneLogin from './components/PhoneLogin';
+import OtpPage from './components/OtpPage';
+import { UserProvider } from './UserContext'; // ⬅️ for global state
 
+<<<<<<< HEAD
 import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -51,7 +57,17 @@ const App = () => {
         </UserProvider>
       </AuthProvider>
     </QueryClientProvider>
+=======
+export default function App() {
+  return (
+    <UserProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<PhoneLogin />} />
+          <Route path="/otp" element={<OtpPage />} />
+        </Routes>
+      </Router>
+    </UserProvider>
+>>>>>>> bffb8d82164a4e29ac985da94d8b6a3e8e279e2c
   );
-};
-
-export default App;
+}
