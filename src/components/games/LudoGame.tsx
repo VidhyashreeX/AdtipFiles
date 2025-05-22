@@ -354,18 +354,13 @@ const LudoBoardGame: React.FC<LudoBoardGameProps> = ({ onClose, amount }) => {
             </div>
             
             <div className="mb-6">
-              <h4 className="mb-2">rotate</h4>
+              <h4 className="mb-2"></h4>
               <div className="flex justify-between items-center">
-                <Button variant="outline" className="flex-1">
-                  <RotateCw className="h-4 w-4 mr-1" />
-                  ROTATE
+                <Button variant="outline" className="flex-1 font-bold">
+                  ROTATE LEFT
                 </Button>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="ml-4"
-                >
-                  RESET
+                <Button variant="outline" className="flex-1 font-bold ml-4">
+                  ROTATE RIGHT
                 </Button>
               </div>
             </div>

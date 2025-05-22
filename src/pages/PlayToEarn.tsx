@@ -70,16 +70,16 @@ const PlayToEarn = () => {
     <>
       {/* Challenge Amount Modal */}
       <Dialog open={showChallengeModal} onOpenChange={setShowChallengeModal}>
-        <DialogContent className="max-w-lg mx-auto">
+        <DialogContent className="max-w-md mx-auto">
           <DialogHeader>
             <DialogTitle className="text-center">Ludo Challenge</DialogTitle>
           </DialogHeader>
-          <div className="flex gap-4 overflow-x-auto py-2 px-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 py-2 px-1 justify-items-center max-h-[60vh] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
             {challengeAmounts.map((amt) => (
-              <div key={amt} className="min-w-[120px] border rounded-lg p-4 flex flex-col items-center bg-white shadow">
+              <div key={amt} className="w-48 border rounded-lg p-6 flex flex-col items-center bg-white shadow">
                 <span className="font-semibold mb-2">Challenge</span>
                 <span className="text-2xl font-bold mb-2">₹{amt}</span>
-                <Button size="sm" className="w-full" onClick={() => { setSelectedChallenge(amt); setShowConfirm(true); }}>
+                <Button size="sm" className="w-full bg-teal-300 hover:bg-teal-400 text-black font-semibold" onClick={() => { setSelectedChallenge(amt); setShowConfirm(true); }}>
                   Select
                 </Button>
               </div>
@@ -92,17 +92,17 @@ const PlayToEarn = () => {
       </Dialog>
       {/* Confirmation Dialog */}
       <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
-        <DialogContent className="max-w-xs mx-auto">
+        <DialogContent className="max-w-sm mx-auto">
           <DialogHeader>
-            <DialogTitle className="text-center">Confirm Challenge</DialogTitle>
+            <DialogTitle className="text-center">Confirmation</DialogTitle>
           </DialogHeader>
           <div className="text-center my-4">
-            <p className="mb-2">You selected the <span className="font-bold">₹{selectedChallenge}</span> challenge.</p>
-            <p>Do you want to start the game?</p>
+            <p className="mb-2 text-lg font-medium">Do you want to lose ₹{selectedChallenge}?</p>
+            <p className="text-gray-500 text-sm">By proceeding, you agree to play the Ludo Challenge game with the selected amount.</p>
           </div>
-          <DialogFooter className="flex flex-col gap-2">
-            <Button className="w-full" onClick={() => { setShowConfirm(false); setShowChallengeModal(false); setShowLudo(true); }}>Start Game</Button>
-            <Button variant="outline" className="w-full" onClick={() => setShowConfirm(false)}>Cancel</Button>
+          <DialogFooter className="flex flex-row gap-2 justify-center">
+            <Button variant="outline" className="w-32" onClick={() => setShowConfirm(false)}>No</Button>
+            <Button className="w-32 bg-teal-300 hover:bg-teal-400 text-black font-semibold" onClick={() => { setShowConfirm(false); setShowChallengeModal(false); setShowLudo(true); }}>Yes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -128,6 +128,7 @@ const PlayToEarn = () => {
         </div>
       )}
       {/* Main Page Content */}
+      <div className="min-h-screen w-full" style={{ background: 'linear-gradient(to bottom, #d1f7f2 0%, #eafff7 100%)' }}>
       <div className="container mx-auto py-6 px-4">
         <div className="flex flex-col items-center text-center mb-10">
           <Award className="h-16 w-16 text-adtip-teal mb-4" />
@@ -254,6 +255,7 @@ const PlayToEarn = () => {
           <Button size="lg" variant="outline" className="mr-4">View All Games</Button>
           <Button size="lg" variant="green">Start Earning</Button>
         </div>
+      </div>
       </div>
     </>
   );
