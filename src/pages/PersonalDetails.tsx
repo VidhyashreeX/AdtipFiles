@@ -12,7 +12,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { ArrowLeft, User, Mail, Calendar, ChevronDown, Key, MapPin } from "lucide-react";
 import { apiSaveUserDetails } from "../api";
-import debounce from "lodash/debounce";
+import { debounce } from "lodash";
 
 const LANGUAGES = [
   { id: 1, name: "hindi" },
@@ -551,3 +551,11 @@ const PersonalDetailsForm = () => {
 };
 
 export default React.memo(PersonalDetailsForm);
+
+
+
+
+
+ 
+
+
