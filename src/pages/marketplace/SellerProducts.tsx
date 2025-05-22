@@ -270,6 +270,7 @@ const SellerProducts = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
+
       <div className="flex items-center mb-8">
         <Button
           variant="ghost"
@@ -332,6 +333,105 @@ const SellerProducts = () => {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Dashboard/Summary Block (as requested, below products) */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        {/* Total Products */}
+        <div className="bg-white border rounded-lg p-4 flex flex-col items-center shadow-sm">
+          <span className="text-3xl font-bold text-teal-600">2</span>
+          <span className="text-sm text-gray-500 mt-1">Total Products</span>
+        </div>
+        {/* Active/Inactive Products */}
+        <div className="bg-white border rounded-lg p-4 flex flex-col items-center shadow-sm">
+          <span className="text-lg font-semibold text-green-600">1</span>
+          <span className="text-xs text-gray-500">Active</span>
+          <span className="text-lg font-semibold text-gray-400 mt-2">42</span>
+          <span className="text-xs text-gray-500">Inactive</span>
+        </div>
+        {/* Orders & Buyers (Mock Data) */}
+        <div className="bg-white border rounded-lg p-4 flex flex-col items-center shadow-sm">
+          <span className="text-lg font-semibold text-blue-600">17</span>
+          <span className="text-xs text-gray-500">Total Orders</span>
+          <span className="text-lg font-semibold text-amber-600 mt-2">Unique Buyers</span>
+        </div>
+        {/* Popular Locations (Mock Data) */}
+        <div className="bg-white border rounded-lg p-4 flex flex-col items-center shadow-sm">
+          <span className="text-xs text-gray-500 mb-2">Popular Locations</span>
+          <ul className="text-sm text-gray-700 space-y-1">
+            <li>New York <span className="text-xs text-gray-400">(22%)</span></li>
+            <li>Los Angeles <span className="text-xs text-gray-400">(18%)</span></li>
+            <li>Chicago <span className="text-xs text-gray-400">(15%)</span></li>
+          </ul>
+        </div>
+      </div>
+
+      {/* Customer Reviews (Mock Data) */}
+      <div className="bg-white border rounded-lg p-6 mb-8 shadow-sm">
+        <h2 className="text-lg font-semibold mb-4">Customer Reviews</h2>
+        <div className="space-y-4">
+          {/* Example Review 1 */}
+          <div className="border-b pb-4 flex flex-col md:flex-row gap-4">
+            <div className="flex-shrink-0">
+              <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="User" className="w-12 h-12 rounded-full" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">John Doe</span>
+                <span className="text-yellow-400">★★★★★</span>
+                <span className="text-xs text-gray-400">2 days ago</span>
+              </div>
+              <p className="text-gray-700 mt-1">Great product, fast delivery. Will buy again!</p>
+              <div className="flex gap-2 mt-2">
+                <img src="https://images.unsplash.com/photo-1616279969096-54b228f2b9d4" alt="Review" className="w-16 h-16 object-cover rounded" />
+              </div>
+              <div className="mt-2">
+                <button className="text-xs text-blue-600 hover:underline">Reply</button>
+              </div>
+            </div>
+          </div>
+          {/* Example Review 2 */}
+          <div className="border-b pb-4 flex flex-col md:flex-row gap-4">
+            <div className="flex-shrink-0">
+              <img src="https://randomuser.me/api/portraits/women/44.jpg" alt="User" className="w-12 h-12 rounded-full" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Jane Smith</span>
+                <span className="text-yellow-400">★★★★☆</span>
+                <span className="text-xs text-gray-400">5 days ago</span>
+              </div>
+              <p className="text-gray-700 mt-1">Product quality is good, but delivery took longer than expected.</p>
+              <div className="flex gap-2 mt-2">
+                <img src="https://images.unsplash.com/photo-1583683843966-794d80340411" alt="Review" className="w-16 h-16 object-cover rounded" />
+                <img src="https://images.unsplash.com/photo-1543362906-acfc16c67564" alt="Review" className="w-16 h-16 object-cover rounded" />
+              </div>
+              <div className="mt-2">
+                <button className="text-xs text-blue-600 hover:underline">Reply</button>
+              </div>
+            </div>
+          </div>
+          {/* Example Review 3 */}
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-shrink-0">
+              <img src="https://randomuser.me/api/portraits/men/65.jpg" alt="User" className="w-12 h-12 rounded-full" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Alex Lee</span>
+                <span className="text-yellow-400">★★★★★</span>
+                <span className="text-xs text-gray-400">1 week ago</span>
+              </div>
+              <p className="text-gray-700 mt-1">Amazing value for money. Highly recommend!</p>
+              <div className="flex gap-2 mt-2">
+                <img src="https://images.unsplash.com/photo-1616279969096-54b228f2b9d4" alt="Review" className="w-16 h-16 object-cover rounded" />
+              </div>
+              <div className="mt-2">
+                <button className="text-xs text-blue-600 hover:underline">Reply</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Ad Type Selection Dialog */}
       {selectedProduct && showAdOptions && (
