@@ -1,0 +1,24 @@
+.players-rank > p{
+    margin-bottom: 0;
+}
+
+.players-ranks > p{
+    margin-bottom: 0;
+}
+
+.player-rank {
+    font-family: "Jaro", sans-serif;
+    text-transform: uppercase;
+}
+
+.pr-position{
+    border-bottom: 1px solid #fdfdfd3d;
+    display: flex;
+    justify-content: space-between;
+}
+
+@media screen and (min-width: 550px) and (max-width: 767px) {
+    .pr-position {
+        margin: 5px;
+    }
+}

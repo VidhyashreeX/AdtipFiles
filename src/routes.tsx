@@ -42,6 +42,14 @@ import EarnOpportunities from "./pages/EarnOpportunities";
 import Cart from "./pages/marketplace/Cart";
 import MyOrders from "./pages/marketplace/MyOrders";
 import Favorites from "./pages/marketplace/Favorites";
+import SellerProducts from "./pages/marketplace/SellerProducts";
+import OrderTracking from "./pages/marketplace/OrderTracking"; 
+import WalletPage from "./pages/WalletPage";
+import FollowPage from "./pages/FollowPage";
+import BulkUpload from "./pages/marketplace/BulkUpload";
+import PlayToEarn from "./pages/PlayToEarn";
+import InstallToEarn from "./pages/InstallToEarn";
+import AdCategorySelect from "./pages/marketplace/AdCategorySelect";
 
 const router = createBrowserRouter([
   {
@@ -105,6 +113,14 @@ const router = createBrowserRouter([
         element: <TipCall />,
       },
       {
+        path: "play-to-earn",
+        element: <PlayToEarn />,
+      },
+      {
+        path: "install-to-earn",
+        element: <InstallToEarn />,
+      },
+      {
         path: "refer",
         element: <Refer />,
       },
@@ -158,6 +174,10 @@ const router = createBrowserRouter([
       },
       {
         path: "post-ads",
+        element: <AdCategorySelect />,
+      },
+      {
+        path: "post-ads/:category",
         element: <PostAds />,
       },
       {
@@ -207,6 +227,26 @@ const router = createBrowserRouter([
       {
         path: "marketplace/favorites",
         element: <Favorites />,
+      },
+      {
+        path: "marketplace/seller-products",
+        element: <SellerProducts />,
+      },
+      {
+        path: "marketplace/track-order/:id",
+        element: <OrderTracking />,
+      },
+      {
+        path: "wallet",
+        element: <WalletPage />,
+      },
+      {
+        path: "follow",
+        element: <FollowPage />,
+      },
+      {
+        path: "marketplace/bulk-upload",
+        element: <BulkUpload />,
       },
       {
         path: "*",

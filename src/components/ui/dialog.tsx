@@ -1,3 +1,4 @@
+
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
@@ -106,6 +107,33 @@ const DialogDescription = React.forwardRef<
 ))
 DialogDescription.displayName = DialogPrimitive.Description.displayName
 
+const DialogAction = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Close>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Close> & {
+    variant?: "default" | "success" | "destructive" | "outline"
+  }
+>(({ className, variant = "default", ...props }, ref) => {
+  const variantClasses = {
+    default: "bg-primary text-primary-foreground hover:bg-primary/90",
+    success: "bg-green-500 text-white hover:bg-green-600",
+    destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+    outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground"
+  }
+  
+  return (
+    <DialogPrimitive.Close
+      ref={ref}
+      className={cn(
+        "inline-flex h-10 items-center justify-center rounded-md px-4 py-2 text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+        variantClasses[variant],
+        className
+      )}
+      {...props}
+    />
+  )
+})
+DialogAction.displayName = "DialogAction"
+
 export {
   Dialog,
   DialogPortal,
@@ -117,4 +145,5 @@ export {
   DialogFooter,
   DialogTitle,
   DialogDescription,
+  DialogAction,
 }

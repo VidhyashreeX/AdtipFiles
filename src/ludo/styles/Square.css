@@ -1,0 +1,115 @@
+.square {
+    border: solid 5px whitesmoke;
+    position: relative;
+    overflow: hidden;
+    border-radius: 10%;
+}
+
+.win-containers {
+    position: relative;
+    width: 150%;
+    height: 150%;
+    transform: rotate(-45deg);
+    top: -38px;
+    left: -38px;
+  }
+  
+  .win-color {
+    display: grid;
+    border-radius: 5%;
+    position: absolute;
+    width: 50%;
+    height: 50%;
+    background: #FFEC85;
+    background: linear-gradient(135deg, #FFEC85, #FFD701);
+  }
+
+  .win-color > div {
+    zoom: 0.5;
+  }
+
+  .winner-collecting {
+    padding: 15px;
+    display: grid;
+    gap: 3px;
+    grid-template-rows: repeat(5, 1fr);
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  /* Position the red pieces in the win area. */
+  .wc-red > #red-0 {
+    grid-column: 5;
+  }
+  .wc-red > #red-1 {
+    grid-column: 4;
+  }
+  .wc-red > #red-2 {
+    grid-column: 5;
+    grid-row: 2;
+  }
+  .wc-red > #red-3 {
+    grid-column: 4;
+    grid-row: 2;
+  }
+
+  /* Position the green pieces in the win area. */
+  .wc-green > #green-0 {
+    grid-row: 4;
+  }
+  .wc-green > #green-1 {
+    grid-row: 3;
+    grid-column: 1;
+  }
+  .wc-green > #green-2 {
+    grid-row: 4;
+    grid-column: 2;
+  }
+  .wc-green > #green-3 {
+    grid-row: 3;
+    grid-column: 2;
+  }
+
+  /* Position the yellow pieces in the win area. */
+  .wc-yellow > #yellow-0 {
+    grid-row: 4;
+    grid-column: 5;
+  }
+  .wc-yellow > #yellow-1 {
+    grid-row: 3;
+    grid-column: 5;
+  }
+  .wc-yellow > #yellow-2 {
+    grid-row: 4;
+    grid-column: 4;
+  }
+  .wc-yellow > #yellow-3 {
+    grid-row: 3;
+    grid-column: 4;
+  }
+  
+  .yellow-win {
+    top: 2px;
+    left: 2px;
+  }
+  
+  .green-win {
+    top: 5px;
+    right: 0;
+    background: #378801;
+    background: linear-gradient(45deg, #378801, #4AC601);
+  }
+  
+  .red-win {
+    bottom: 0;
+    left: 0;
+    background: #880101;
+    background: linear-gradient(315deg, #880101, #C60101);
+  }
+  
+  .blue-win {
+    bottom: 0;
+    right: 0;
+    background: #1101FF;
+    background: linear-gradient(315deg, #1101FF, #011D40);
+  }
+  

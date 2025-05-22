@@ -1,5 +1,8 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -37,17 +40,77 @@ const generateMockData = (numPoints: number) => {
   return data;
 };
 
+// Generate product-specific data
+const generateProductData = (productId: string | null) => {
+  const data = [];
+  for (let i = 0; i < 12; i++) {
+    const month = new Date(2025, i % 12, 1).toLocaleString('default', { month: 'short' });
+    data.push({
+      name: month,
+      views: Math.floor(Math.random() * 5000) + 1000,
+      clicks: Math.floor(Math.random() * 1000) + 100,
+      conversions: Math.floor(Math.random() * 200) + 20,
+      revenue: Math.floor(Math.random() * 5000) + 500,
+    });
+  }
+  return data;
+};
+
 const chartData = generateMockData(12);
 
 const Analysis = () => {
-  const [activeTab, setActiveTab] = useState("consumers");
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const productId = searchParams.get('product');
+  const tabFromQuery = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(tabFromQuery || (productId ? "product" : "advertisers"));
+  const [productData, setProductData] = useState<any[]>([]);
+  const [productName, setProductName] = useState<string>("Product");
+  
+  // Generate product specific data if productId is provided
+  useEffect(() => {
+    if (productId) {
+      setProductData(generateProductData(productId));
+      
+      // Set mock product name based on id
+      if (productId === "1") {
+        setProductName("Athletic Greens Ultimate Daily");
+      } else if (productId === "2") {
+        setProductName("Organic Green Juice Superfood Powder");
+      } else if (productId === "3") {
+        setProductName("Garden of Life Raw Organic Perfect Food");
+      } else {
+        setProductName(`Product #${productId}`);
+      }
+    }
+
+    // Set tab from URL parameter if available
+    if (tabFromQuery) {
+      setActiveTab(tabFromQuery);
+    }
+  }, [productId, tabFromQuery]);
 
   return (
     <div className="container mx-auto py-6 px-4">
-      <h1 className="text-2xl font-bold mb-8">Platform Analytics</h1>
+      <div className="flex items-center mb-6">
+        <Button
+          variant="ghost"
+          className="pl-0"
+          onClick={() => navigate("/marketplace/seller-products")}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
+        <h1 className="text-2xl font-bold ml-2">{productId ? `${productName} Analytics` : "Platform Analytics"}</h1>
+      </div>
 
-      <Tabs defaultValue="consumers" value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-2 md:grid-cols-4 mb-6">
+      <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid grid-cols-2 md:grid-cols-5 mb-6">
+          {productId && (
+            <TabsTrigger value="product" className="flex items-center gap-2">
+              <ShoppingBag className="h-4 w-4" /> Product
+            </TabsTrigger>
+          )}
           <TabsTrigger value="consumers" className="flex items-center gap-2">
             <Users className="h-4 w-4" /> Consumers
           </TabsTrigger>
@@ -61,6 +124,67 @@ const Analysis = () => {
             <Megaphone className="h-4 w-4" /> Advertisers
           </TabsTrigger>
         </TabsList>
+        
+        {/* Product-specific Tab */}
+        {productId && (
+          <TabsContent value="product">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <Card className="col-span-1 md:col-span-2 lg:col-span-2">
+                <CardHeader>
+                  <CardTitle>Performance Metrics</CardTitle>
+                  <CardDescription>Monthly performance for {productName}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={productData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <RechartsTooltip />
+                        <Legend />
+                        <Line type="monotone" dataKey="views" stroke="#2dd4bf" strokeWidth={2} />
+                        <Line type="monotone" dataKey="clicks" stroke="#8b5cf6" strokeWidth={2} />
+                        <Line type="monotone" dataKey="conversions" stroke="#f97316" strokeWidth={2} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="col-span-1">
+                <CardHeader>
+                  <CardTitle>Product Statistics</CardTitle>
+                  <CardDescription>Key performance indicators</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="text-gray-500 text-sm">Total Views</p>
+                      <p className="text-2xl font-bold">24,532</p>
+                      <p className="text-green-500 text-xs mt-1">↑ 8.7% from last month</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="text-gray-500 text-sm">Click-through Rate</p>
+                      <p className="text-2xl font-bold">4.8%</p>
+                      <p className="text-green-500 text-xs mt-1">↑ 1.3% from last month</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="text-gray-500 text-sm">Conversion Rate</p>
+                      <p className="text-2xl font-bold">2.1%</p>
+                      <p className="text-green-500 text-xs mt-1">↑ 0.5% from last month</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="text-gray-500 text-sm">Total Revenue</p>
+                      <p className="text-2xl font-bold">$12,842</p>
+                      <p className="text-green-500 text-xs mt-1">↑ 12.5% from last month</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        )}
         
         {/* Consumers Tab */}
         <TabsContent value="consumers">

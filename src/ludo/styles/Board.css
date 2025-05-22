@@ -1,0 +1,178 @@
+/* Home */
+#red-home{grid-area: rh;}
+#yellow-home{grid-area: yh;}
+#green-home{grid-area: gh;}
+#blue-home{grid-area: bh;}
+
+/* Tracks */
+.track-1{grid-area: t1;}
+.track-2{grid-area: t2;}
+.track-3{grid-area: t3;}
+.track-4{grid-area: t4;}
+.track-5{grid-area: t5;}
+.track-6{grid-area: t6;}
+.track-7{grid-area: t7;}
+.track-8{grid-area: t8;}
+.track-9{grid-area: t9;}
+.track-10{grid-area: t10;}
+.track-11{grid-area: t11;}
+.track-12{grid-area: t12;}
+.track-13{grid-area: t13;}
+.track-14{grid-area: t14;}
+.track-15{grid-area: t15;}
+.track-16{grid-area: t16;}
+.track-17{grid-area: t17;}
+.track-18{grid-area: t18;}
+.track-19{grid-area: t19;}
+.track-20{grid-area: t20;}
+.track-21{grid-area: t21;}
+.track-22{grid-area: t22;}
+.track-23{grid-area: t23;}
+.track-24{grid-area: t24;}
+.track-25{grid-area: t25;}
+.track-26{grid-area: t26;}
+.track-27{grid-area: t27;}
+.track-28{grid-area: t28;}
+.track-29{grid-area: t29;}
+.track-30{grid-area: t30;}
+.track-31{grid-area: t31;}
+.track-32{grid-area: t32;}
+.track-33{grid-area: t33;}
+.track-34{grid-area: t34;}
+.track-35{grid-area: t35;}
+.track-36{grid-area: t36;}
+.track-37{grid-area: t37;}
+.track-38{grid-area: t38;}
+.track-39{grid-area: t39;}
+.track-40{grid-area: t40;}
+.track-41{grid-area: t41;}
+.track-42{grid-area: t42;}
+.track-43{grid-area: t43;}
+.track-44{grid-area: t44;}
+.track-45{grid-area: t45;}
+.track-46{grid-area: t46;}
+.track-47{grid-area: t47;}
+.track-48{grid-area: t48;}
+.track-49{grid-area: t49;}
+.track-50{grid-area: t50;}
+.track-51{grid-area: t51;}
+.track-52{grid-area: t52;}
+
+/* red winner track */
+.track-101{grid-area: r1;}
+.track-102{grid-area: r2;}
+.track-103{grid-area: r3;}
+.track-104{grid-area: r4;}
+.track-105{grid-area: r5;}
+
+
+/* yellow home track */
+.track-201{grid-area: y1;}
+.track-202{grid-area: y2;}
+.track-203{grid-area: y3;}
+.track-204{grid-area: y4;}
+.track-205{grid-area: y5;}
+
+/* green home track */
+.track-301{grid-area: g1;}
+.track-302{grid-area: g2;}
+.track-303{grid-area: g3;}
+.track-304{grid-area: g4;}
+.track-305{grid-area: g5;}
+
+/* blue home track */
+.track-401{grid-area: b1;}
+.track-402{grid-area: b2;}
+.track-403{grid-area: b3;}
+.track-404{grid-area: b4;}
+.track-405{grid-area: b5;}
+
+/*win-win*/
+#win-win{grid-area: ww;}
+
+#board{
+  display: grid;
+  width: fit-content;
+  height: max-content;
+  background: white;
+  border-radius: 2%;
+  box-shadow: 0 0 10px #fff;
+  padding: 25px;
+  transform: scale(0.9);
+  grid-template-areas: 
+    'yh yh yh yh yh yh t24 t25 t26 gh gh gh gh gh gh'
+    'yh yh yh yh yh yh t23 g1 t27 gh gh gh gh gh gh'
+    'yh yh yh yh yh yh t22 g2 t28 gh gh gh gh gh gh'
+    'yh yh yh yh yh yh t21 g3 t29 gh gh gh gh gh gh'
+    'yh yh yh yh yh yh t20 g4 t30 gh gh gh gh gh gh'
+    'yh yh yh yh yh yh t19 g5 t31 gh gh gh gh gh gh'
+    't13 t14 t15 t16 t17 t18 ww ww ww t32 t33 t34 t35 t36 t37'
+    't12 y1 y2 y3 y4 y5 ww ww ww b5 b4 b3 b2 b1 t38'
+    't11 t10 t9 t8 t7 t6 ww ww ww t44 t43 t42 t41 t40 t39'
+    'rh rh rh rh rh rh t5 r5 t45 bh bh bh bh bh bh'
+    'rh rh rh rh rh rh t4 r4 t46 bh bh bh bh bh bh'
+    'rh rh rh rh rh rh t3 r3 t47 bh bh bh bh bh bh'
+    'rh rh rh rh rh rh t2 r2 t48 bh bh bh bh bh bh'
+    'rh rh rh rh rh rh t1 r1 t49 bh bh bh bh bh bh'
+    'rh rh rh rh rh rh t52 t51 t50 bh bh bh bh bh bh';
+}
+
+.track{
+  border: 1px solid #0000007d;
+  width: 50px;
+  height: 50px;
+  background-color: white;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  border-radius: 10%;
+}
+
+.track.red.final, .track.red.start{
+  background-color: #a70101;
+}
+
+.track.yellow.final, .track.yellow.start{
+  background-color: #ffd90e;
+} 
+
+.track.green.final, .track.green.start{
+  background-color: #398f01;
+} 
+
+.track.blue.final, .track.blue.start{
+  background-color: #0c15be;
+} 
+
+.track.start{
+  color: white;
+  position: relative;
+  font-size: 2.5rem;
+}
+
+.track.stop{
+  color: gray;
+  opacity: 0.5;
+  position: relative;
+  font-size: 2.5rem;
+  background-color: lightsteelblue;
+}
+
+.track.start::before, .track.stop::before{
+  content: '⚝';
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.track.multiple-pieces > div {
+  zoom: 0.5;
+}
+
+@media only screen and (max-width: 768px) {
+  #board {
+    transform: scale(0.5); /* Zoom level for mobile view */
+  }
+}

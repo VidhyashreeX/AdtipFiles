@@ -1,0 +1,160 @@
+#dice{
+  width: 50px;
+  height: 50px;
+  margin: 10px;
+  perspective: 1000px;
+  cursor: pointer;
+}
+
+.dice {
+  width: 50px;
+  height: 50px;
+  position: relative;
+  transform-style: preserve-3d;
+}
+
+.face {
+  width: 50px;
+  height: 50px;
+  background-color: #8a0000;
+  border-radius: 20%;
+  position: absolute;
+  transform-style: preserve-3d;
+}
+
+.shadow-on {
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5), 0 0 20px rgba(255, 255, 255, 0.3) inset; 
+}
+
+.inner-face {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    padding: 5px;
+}
+
+.dice-initial-face {
+    display: flex;
+    font-size: x-small;
+    font-weight: bold;
+    color: white;
+    justify-content: center;
+    align-items: center;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  background-color: #fff;
+  border-radius: 50%;
+  margin: auto;
+  box-shadow: 0 0 5px #000;
+}
+
+.face.front {
+  transform: translateZ(25px);
+}
+
+.face.back {
+  transform: translateZ(-25px);
+}
+
+.face.right {
+  transform: translateX(25px) rotateY(90deg);
+}
+
+.face.left {
+  transform: translateX(-25px) rotateY(-90deg);
+}
+
+.face.top {
+  transform: translateY(-25px) rotateX(90deg);
+}
+
+.face.bottom {
+  transform: translateY(25px) rotateX(-90deg);
+}
+
+/* Arranging the face with numbers */
+.face1 {
+  grid: none;
+}
+
+.face2 {
+  grid-template-rows: repeat(2, 1fr);
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.face3 {
+  grid-template-rows: repeat(3, 1fr);
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.face4 {
+  grid-template-rows: repeat(2, 1fr);
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.face5 {
+  grid-template-rows: repeat(3, 1fr);
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.face6 {
+  grid-template-rows: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* Arranging the face with 2 number */
+.face2 > .dot:nth-child(1) {
+  grid-column: 2 / 2;
+  grid-row: 1 / 2;
+}
+.face2 > .dot:nth-child(2) {
+  grid-column: 1 / 2;
+  grid-row: 2 / 2;
+}
+
+/* Arranging the face with 3 number */
+.face3 > .dot:nth-child(1) {
+  grid-column: 3 / 3;
+}
+.face3 > .dot:nth-child(2) {
+  grid-column: 2 / 3;
+  grid-row: 2 / 3;
+}
+.face3 > .dot:nth-child(3) {
+  grid-column: 1 / 2;
+  grid-row: 3 / 3;
+}
+
+/* Arranging the face with 5 number */
+.face5 > .dot:nth-child(2) {
+  grid-column: 3 / 3;
+}
+.face5 > .dot:nth-child(3) {
+  grid-column: 2 / 3;
+  grid-row: 2 / 3;
+}
+.face5 > .dot:nth-child(4) {
+  grid-row: 3 / 3;
+}
+.face5 > .dot:nth-child(5) {
+  grid-column: 3 / 3;
+  grid-row: 3 / 3;
+}
+
+@keyframes rotate {
+  0% {
+    transform: rotateX(0deg) rotateY(0deg);
+  }
+
+  100% {
+    transform: rotateX(720deg) rotateY(720deg);
+  }
+}
+
+/* Apply the rotation animation with cubic-bezier timing function */
+.dice.rotate {
+  animation: rotate 1s cubic-bezier(0.4, 0, 0.2, 1);
+}

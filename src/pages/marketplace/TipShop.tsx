@@ -1,8 +1,11 @@
+
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Search, Filter, ShoppingCart } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useShopping } from "@/contexts/ShoppingContext";
+import { useToast } from "@/components/ui/use-toast";
 
 // Mock product data
 const mockProducts = [
@@ -77,6 +80,9 @@ const categories = [
 const TipShop: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All Categories");
+  const navigate = useNavigate();
+  const { addToCart } = useShopping();
+  const { toast } = useToast();
   
   // Filter products based on search and category
   const filteredProducts = mockProducts.filter(product => {
@@ -85,6 +91,23 @@ const TipShop: React.FC = () => {
     const matchesCategory = selectedCategory === "All Categories" || product.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  // Handle Buy Now click
+  const handleBuyNow = (product) => {
+    addToCart({
+      ...product,
+      quantity: 1
+    });
+    
+    navigate("/checkout", {
+      state: {
+        products: [{
+          ...product,
+          quantity: 1
+        }]
+      }
+    });
+  };
 
   return (
     <div className="container mx-auto px-4 py-6">
@@ -144,13 +167,11 @@ const TipShop: React.FC = () => {
             </Link>
             <div className="p-4">
               <Button
-                asChild
+                onClick={() => handleBuyNow(product)}
                 className="w-full bg-adtip-teal hover:bg-adtip-teal-dark text-white"
               >
-                <Link to={`/product/${product.id}/buy`}>
-                  <ShoppingCart className="mr-2 h-4 w-4" />
-                  Buy Now
-                </Link>
+                <ShoppingCart className="mr-2 h-4 w-4" />
+                Buy Now
               </Button>
             </div>
           </Card>
