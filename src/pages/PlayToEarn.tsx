@@ -31,30 +31,6 @@ const PlayToEarn = () => {
       image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS0k3Gdijn0SnOVSj7moEVm1axALQbQMgqNLQ&s",
       level: "All Levels",
       action: () => setShowChallengeModal(true)
-    },
-    {
-      id: 2,
-      title: "Crypto Blasters",
-      description: "Battle in space and earn tokens for each victory!",
-      rewards: "Up to 500 TipCoins per week",
-      image: "/placeholder.svg",
-      level: "Beginner"
-    },
-    {
-      id: 3,
-      title: "NFT Heroes",
-      description: "Collect heroes, build your team, and earn by winning leagues.",
-      rewards: "Earn rare NFTs + 300 TipCoins daily",
-      image: "/placeholder.svg",
-      level: "Intermediate"
-    },
-    {
-      id: 4,
-      title: "Metaverse Tycoon",
-      description: "Build your virtual empire and earn passive income.",
-      rewards: "Passive earnings up to 1000 TipCoins weekly",
-      image: "/placeholder.svg",
-      level: "Advanced"
     }
   ];
 
@@ -114,7 +90,7 @@ const PlayToEarn = () => {
               className="absolute top-4 right-4 bg-white rounded-full shadow p-2 z-10 hover:bg-gray-200"
               onClick={() => setShowLudo(false)}
             >
-              <span className="text-xl font-bold">&times;</span>
+              <span className="text-xl font-bold">×</span>
             </button>
             {/* Zoom Controls Overlay */}
             <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
@@ -240,8 +216,8 @@ const PlayToEarn = () => {
               <CardFooter>
                 <Button 
                   className="w-full flex items-center justify-center gap-2"
-                  onClick={game.action || (() => {})}
-                  variant={game.id === 1 ? "green" : "default"}
+                  onClick={game.action}
+                  variant="green"
                 >
                   Play Now
                   <ArrowUpRight className="h-4 w-4" />
