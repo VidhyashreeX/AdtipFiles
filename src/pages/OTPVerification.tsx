@@ -1,148 +1,205 @@
-import { useState, useRef, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ArrowLeft } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { apiSendOtp } from "../api";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
+import { toast } from "sonner";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
+import { apiSendOtp, apiSendEmailOtp } from "../api";
 
 const OTPVerification = () => {
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [counter, setCounter] = useState(30);
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [otp, setOtp] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const [mobileNumber, setMobileNumber] = useState("");
+  const [email, setEmail] = useState("");
+  const [verificationType, setVerificationType] = useState<"phone" | "email">("phone");
   const navigate = useNavigate();
-  const location = useLocation();
-  const { user, verifyOTP } = useAuth();
-  const { phoneNumber, id, isSaveUserDetails: stateIsSaveUserDetails } = location.state || {};
+  const { verifyOTP, verifyEmailOTP, updateUserProfile } = useAuth();
 
   useEffect(() => {
-    console.log("Rendering OTPVerification component", {
-      phoneNumber,
-      id,
-      stateIsSaveUserDetails,
-      locationState: location.state,
-      user,
-      localStorage: {
-        mobile_number: localStorage.getItem("mobile_number"),
-        tempUserId: localStorage.getItem("tempUserId"),
-        adtip_user: localStorage.getItem("adtip_user"),
-      },
-    });
-    const storedPhone = phoneNumber || localStorage.getItem("mobile_number") || user?.phone;
-    const storedId = id || localStorage.getItem("tempUserId") || user?.id;
-    if (!storedPhone || !storedId) {
-      console.warn("Missing phone or ID, redirecting to login", { storedPhone, storedId });
-      navigate("/login", { replace: true });
-    }
-  }, [user, phoneNumber, id, navigate]);
+    const storedMobile = localStorage.getItem("mobile_number");
+    const storedEmail = localStorage.getItem("email");
+    const tempUserId = localStorage.getItem("tempUserId");
 
-  useEffect(() => {
-    if (counter > 0) {
-      const timer = setTimeout(() => setCounter(counter - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [counter]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
-    const value = e.target.value;
-    if (value && !/^\d*$/.test(value)) return;
-
-    setOtp((prev) => {
-      const newOtp = [...prev];
-      newOtp[index] = value.slice(-1);
-      return newOtp;
-    });
-
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
-    if (e.key === "Backspace" && !otp[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-
-    const otpValue = otp.join("");
-    if (otpValue.length !== 6) {
-      setError("Please enter the complete 6-digit OTP");
+    if (!tempUserId || (!storedMobile && !storedEmail)) {
+      toast.error("Please login first");
+      navigate("/login");
       return;
     }
 
-    setIsLoading(true);
-    try {
-      const storedPhone = phoneNumber || localStorage.getItem("mobile_number") || user?.phone;
-      const storedId = id || localStorage.getItem("tempUserId") || user?.id;
-      if (!storedPhone || !storedId) {
-        throw new Error("Missing phone number or ID");
+    if (storedMobile) {
+      setMobileNumber(storedMobile);
+      setVerificationType("phone");
+    } else if (storedEmail) {
+      setEmail(storedEmail);
+      setVerificationType("email");
+    }
+
+    // Start countdown if it exists
+    const storedCountdown = localStorage.getItem("otpCountdown");
+    if (storedCountdown) {
+      const timeLeft = parseInt(storedCountdown) - Math.floor(Date.now() / 1000);
+      if (timeLeft > 0) {
+        setCountdown(timeLeft);
       }
-      console.log("Verifying OTP with:", { mobile_number: storedPhone, otp: otpValue, id: storedId });
-      const verifyResponse = await verifyOTP(otpValue, storedId);
-      console.log("verifyOTP response:", JSON.stringify(verifyResponse, null, 2));
-      if (verifyResponse.success) {
-        const apiIsSaveUserDetails = verifyResponse.data?.isSaveUserDetails ?? stateIsSaveUserDetails ?? (user?.isRegistered ? 1 : 0);
-        const isRegistered = apiIsSaveUserDetails === 1;
-        const nextPath = isRegistered ? "/home" : "/personal-details";
-        console.log(`Navigating to ${nextPath}`, {
-          apiIsSaveUserDetails,
-          stateIsSaveUserDetails,
-          isRegistered,
-          userIsRegistered: user?.isRegistered,
+    }
+  }, [navigate]);
+
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            localStorage.removeItem("otpCountdown");
+            return 0;
+          }
+          return prev - 1;
         });
-        navigate(nextPath, { replace: true });
-      } else {
-        setError(verifyResponse.message || "Invalid OTP");
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [countdown]);
+
+  const handleVerifyOTP = async () => {
+    if (!otp || otp.length !== 6) {
+      toast.error("Please enter a valid 6-digit OTP");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const tempUserId = localStorage.getItem("tempUserId");
+      if (!tempUserId) {
+        throw new Error("Session expired. Please login again.");
       }
-    } catch (err: any) {
-      console.error("OTP verification error:", {
-        message: err.message,
-        status: err.response?.status,
-        data: err.response?.data,
-        fullError: JSON.stringify(err, Object.getOwnPropertyNames(err), 2),
-        rawResponse: err.response ? JSON.stringify(err.response, null, 2) : "No response",
-      });
-      setError(err.message || "Failed to verify OTP. Please try again or request a new OTP.");
+
+      let result;
+      if (verificationType === "phone") {
+        const storedMobile = localStorage.getItem("mobile_number");
+        if (!storedMobile) {
+          throw new Error("Session expired. Please login again.");
+        }
+        result = await verifyOTP(storedMobile, otp, tempUserId);
+      } else {
+        const storedEmail = localStorage.getItem("email");
+        if (!storedEmail) {
+          throw new Error("Session expired. Please login again.");
+        }
+        result = await verifyEmailOTP(storedEmail, otp, tempUserId);
+      }
+
+      if (result?.data?.success || result?.data?.message === "OTP verify successful.") {
+        // Handle array response properly
+        const userDataFromResponse = Array.isArray(result.data.data) ? result.data.data[0] : result.data.data;
+        
+        console.log("OTP verification response:", {
+          userData: userDataFromResponse,
+          accessToken: result.data.accessToken,
+          message: result.data.message
+        });
+        
+        if (!userDataFromResponse) {
+          throw new Error("Invalid response: Missing user data");
+        }
+
+        // Get access token from the correct location
+        const accessToken = result.data.accessToken;
+
+        if (!accessToken) {
+          throw new Error("Invalid response: Missing access token");
+        }
+
+        // Clean up temporary session values
+        localStorage.removeItem("tempUserId");
+        localStorage.removeItem("mobile_number");
+        localStorage.removeItem("email");
+        localStorage.removeItem("otpCountdown");
+        
+        // Create user data object with all necessary fields
+        const userData = {
+          id: userDataFromResponse.id,
+          name: userDataFromResponse.name || "",
+          phone: userDataFromResponse.mobile_number,
+          email: userDataFromResponse.email || "",
+          accessToken: accessToken,
+          isRegistered: userDataFromResponse.is_registered === 1,
+          isSaveUserDetails: userDataFromResponse.isSaveUserDetails
+        };
+
+        // Save user data in localStorage and update auth context
+        localStorage.setItem("user", JSON.stringify(userData));
+        localStorage.setItem("UserLoggedIn", accessToken);
+        localStorage.setItem("userId", userData.id.toString());
+
+        // Update the auth context with user data
+        updateUserProfile(userData);
+        
+        toast.success("OTP verified successfully");
+
+        // Only check isSaveUserDetails for redirection
+        if (userDataFromResponse.isSaveUserDetails === 0) {
+          console.log("User details not saved, redirecting to complete profile...", userData);
+          navigate("/complete-profile", { replace: true });
+          return;
+        }
+
+        // If user details are saved, redirect to home
+        console.log("User details saved, redirecting to home...", userData);
+        navigate("/home", { replace: true });
+      } else {
+        throw new Error(result?.data?.message || "Failed to verify OTP");
+      }
+    } catch (error) {
+      console.error("OTP verification error:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to verify OTP");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const resendOTP = async () => {
-    setCounter(30);
-    setError("");
-    try {
-      const phone = localStorage.getItem("mobile_number") || phoneNumber || user?.phone || "";
-      if (!phone) throw new Error("Phone number is missing for resend");
+  const handleResendOTP = async () => {
+    if (countdown > 0) {
+      toast.error(`Please wait ${countdown} seconds before requesting a new OTP`);
+      return;
+    }
 
-      console.log("Resending OTP for:", phone);
-      const res = await apiSendOtp(phone);
-      console.log("Resend OTP response:", JSON.stringify(res, null, 2));
-      alert("OTP has been resent!");
-    } catch (err: any) {
-      console.error("Resend OTP error:", {
-        message: err.message,
-        status: err.response?.status,
-        data: err.response?.data,
-        fullError: JSON.stringify(err, Object.getOwnPropertyNames(err), 2),
-        rawResponse: err.response ? JSON.stringify(err.response, null, 2) : "No response",
-      });
-      setError(err.message || "Failed to resend OTP. Please try again.");
+    setResendLoading(true);
+    try {
+      let response;
+      if (verificationType === "phone") {
+        response = await apiSendOtp(mobileNumber);
+      } else {
+        response = await apiSendEmailOtp(email);
+      }
+
+      if (response?.data?.success) {
+        localStorage.setItem("otpCountdown", (Math.floor(Date.now() / 1000) + 30).toString());
+        setCountdown(30);
+        toast.success("OTP resent successfully");
+      } else {
+        throw new Error(response?.data?.message || "Failed to resend OTP");
+      }
+    } catch (error) {
+      console.error("Resend OTP error:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to resend OTP");
+    } finally {
+      setResendLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col min-h-screen p-6">
+    <div className="flex flex-col min-h-screen p-6 bg-white">
       <div className="mb-8">
         <button
           onClick={() => navigate("/login")}
-          className="text-gray-500 flex items-center"
+          className="text-gray-500 flex items-center hover:text-gray-700 transition-colors"
         >
           <ArrowLeft size={20} className="mr-1" />
           <span>Back</span>
@@ -151,52 +208,68 @@ const OTPVerification = () => {
 
       <div className="flex-1 flex flex-col justify-center max-w-md mx-auto w-full">
         <div className="flex justify-center mb-6">
-          <img src="logo.png" alt="AdTip Logo" className="h-16 w-16" />
+          <img src="/logo.png" alt="AdTip Logo" className="h-16 w-16" />
         </div>
 
-        <h1 className="text-2xl font-bold mb-2 text-center">Verify your number</h1>
+        <h1 className="text-2xl font-bold mb-2 text-center text-gray-900">
+          Enter verification code
+        </h1>
 
-        <p className="text-center text-gray-500 mb-8">
-          Enter the 6-digit code sent to {localStorage.getItem("mobile_number") || phoneNumber || user?.phone || "your phone"}
+        <p className="text-center text-gray-600 mb-8">
+          We've sent a 6-digit code to{" "}
+          {verificationType === "phone" ? mobileNumber : email}
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="flex justify-between max-w-sm mx-auto">
-            {[0, 1, 2, 3, 4, 5].map((index) => (
-              <Input
-                key={index}
-                ref={(el) => (inputRefs.current[index] = el)}
-                type="text"
-                maxLength={1}
-                value={otp[index]}
-                onChange={(e) => handleChange(e, index)}
-                onKeyDown={(e) => handleKeyDown(e, index)}
-                className="w-12 h-12 text-center text-xl"
-              />
-            ))}
+        <div className="space-y-6">
+          <div className="flex justify-center">
+            <InputOTP
+              maxLength={6}
+              value={otp}
+              onChange={(value) => setOtp(value)}
+              render={({ slots }) => (
+                <InputOTPGroup>
+                  {slots.map((slot, index) => (
+                    <InputOTPSlot key={index} {...slot} index={index} />
+                  ))}
+                </InputOTPGroup>
+              )}
+            />
           </div>
 
-          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-
           <Button
-            type="submit"
-            className="teal-button w-full max-w-xs mx-auto block"
-            disabled={isLoading}
+            onClick={handleVerifyOTP}
+            className="w-full bg-adtip-teal hover:bg-adtip-teal/90 text-white"
+            disabled={loading || otp.length !== 6}
           >
-            {isLoading ? "Verifying..." : "Verify"}
+            {loading ? "Verifying..." : "Verify OTP"}
           </Button>
-        </form>
 
-        <div className="mt-8 text-center">
-          {counter > 0 ? (
-            <p className="text-gray-500">
-              Resend code in <span className="font-semibold">{counter}s</span>
-            </p>
-          ) : (
-            <button onClick={resendOTP} className="text-adtip-teal font-medium">
-              Resend Code
+          <div className="text-center">
+            <button
+              onClick={handleResendOTP}
+              disabled={resendLoading || countdown > 0}
+              className="text-adtip-teal hover:text-adtip-teal/90 disabled:text-gray-400 disabled:cursor-not-allowed"
+            >
+              {resendLoading
+                ? "Sending..."
+                : countdown > 0
+                ? `Resend OTP in ${countdown}s`
+                : "Resend OTP"}
             </button>
-          )}
+          </div>
+        </div>
+
+        <div className="mt-8 text-center text-sm text-gray-600">
+          <p>By continuing, you agree to our</p>
+          <p>
+            <a href="/terms" className="text-adtip-teal hover:text-adtip-teal/90 transition-colors">
+              Terms of Service
+            </a>{" "}
+            and{" "}
+            <a href="/privacy" className="text-adtip-teal hover:text-adtip-teal/90 transition-colors">
+              Privacy Policy
+            </a>
+          </p>
         </div>
       </div>
     </div>

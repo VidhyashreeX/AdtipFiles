@@ -1,17 +1,15 @@
-
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import App from "./App";
 import Index from "./pages/Index";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
-import OtpPage from "./pages/OtpPage";
+import OTPVerification from "./pages/OTPVerification";
 import Profile from "./pages/Profile";
 import EditProfile from "./pages/EditProfile";
 import TipTube from "./pages/TipTube";
 import TipShorts from "./pages/TipShorts";
 import NotFound from "./pages/NotFound";
 import Onboarding from "./pages/Onboarding";
-import OTPVerification from "./pages/OTPVerification";
 import PersonalDetails from "./pages/PersonalDetails";
 import Interests from "./pages/Interests";
 import CreatePost from "./pages/CreatePost";
@@ -42,14 +40,7 @@ import EarnOpportunities from "./pages/EarnOpportunities";
 import Cart from "./pages/marketplace/Cart";
 import MyOrders from "./pages/marketplace/MyOrders";
 import Favorites from "./pages/marketplace/Favorites";
-import SellerProducts from "./pages/marketplace/SellerProducts";
-import OrderTracking from "./pages/marketplace/OrderTracking"; 
-import WalletPage from "./pages/WalletPage";
-import FollowPage from "./pages/FollowPage";
-import BulkUpload from "./pages/marketplace/BulkUpload";
-import PlayToEarn from "./pages/PlayToEarn";
-import InstallToEarn from "./pages/InstallToEarn";
-import AdCategorySelect from "./pages/marketplace/AdCategorySelect";
+import CompleteProfile from "./pages/CompleteProfile";
 
 const router = createBrowserRouter([
   {
@@ -70,7 +61,7 @@ const router = createBrowserRouter([
       },
       {
         path: "verify-otp",
-        element: <OtpPage />,
+        element: <OTPVerification />,
       },
       {
         path: "profile",
@@ -111,14 +102,6 @@ const router = createBrowserRouter([
       {
         path: "tipcall",
         element: <TipCall />,
-      },
-      {
-        path: "play-to-earn",
-        element: <PlayToEarn />,
-      },
-      {
-        path: "install-to-earn",
-        element: <InstallToEarn />,
       },
       {
         path: "refer",
@@ -174,10 +157,6 @@ const router = createBrowserRouter([
       },
       {
         path: "post-ads",
-        element: <AdCategorySelect />,
-      },
-      {
-        path: "post-ads/:category",
         element: <PostAds />,
       },
       {
@@ -229,24 +208,8 @@ const router = createBrowserRouter([
         element: <Favorites />,
       },
       {
-        path: "marketplace/seller-products",
-        element: <SellerProducts />,
-      },
-      {
-        path: "marketplace/track-order/:id",
-        element: <OrderTracking />,
-      },
-      {
-        path: "wallet",
-        element: <WalletPage />,
-      },
-      {
-        path: "follow",
-        element: <FollowPage />,
-      },
-      {
-        path: "marketplace/bulk-upload",
-        element: <BulkUpload />,
+        path: "complete-profile",
+        element: <CompleteProfile />,
       },
       {
         path: "*",

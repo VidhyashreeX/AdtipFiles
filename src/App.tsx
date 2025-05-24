@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -23,6 +22,7 @@ const App = () => {
     "/verify-otp",
     "/personal-details",
     "/interests",
+    "/complete-profile", // <-- add this line
   ];
 
   const isAuthPage = authPages.includes(location.pathname);

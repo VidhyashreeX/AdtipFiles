@@ -115,7 +115,7 @@ const PhoneLogin: React.FC = () => {
         const userData = response.data.data[0];
         setUserId(userData.id);
         setTimer(40);
-        navigate('/otp', { state: { phoneNumber: userData.mobile_number, userId: userData.id } });
+        navigate('/verify-otp', { state: { phoneNumber: userData.mobile_number, userId: userData.id } });
       } else {
         alert(response.data.message || 'Failed to send OTP');
       }

@@ -1,3 +1,4 @@
+
 import * as React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
@@ -24,10 +25,6 @@ import {
   Package,
   Heart,
   ShoppingBag,
-  Map,
-  Truck,
-  Shield,
-  Award
 } from "lucide-react";
 import {
   Dialog,
@@ -70,8 +67,6 @@ const AdTipSidebar = () => {
     { to: "/tiptube", label: "TipTube", icon: <Play className="h-5 w-5" /> },
     { to: "/tipshort", label: "TipShort", icon: <Video className="h-5 w-5" /> },
     { to: "/tipcall", label: "TipCall", icon: <Phone className="h-5 w-5" /> },
-    { to: "/play-to-earn", label: "Play to Earn", icon: <Award className="h-5 w-5" /> },
-    { to: "/install-to-earn", label: "Install to Earn", icon: <Award className="h-5 w-5" /> },
   ];
   
   // E-commerce items
@@ -81,12 +76,9 @@ const AdTipSidebar = () => {
     { to: "/follow", label: "Follow", icon: <Users className="h-5 w-5" /> },
     { to: "/wallet", label: "My Wallet", icon: <Wallet className="h-5 w-5" /> },
     { to: "/become-seller-full", label: "Become Seller", icon: <Store className="h-5 w-5" />, external: true },
-    { to: "/marketplace/seller-products", label: "Seller Products", icon: <ShoppingBag className="h-5 w-5" /> },
     { to: "/post-ads", label: "Post Advertisers", icon: <BadgeDollarSign className="h-5 w-5" /> },
     { to: "/premium-content", label: "Premium Content", icon: <Layout className="h-5 w-5" /> },
     { to: "/premium", label: "Premium Upgrade", icon: <Crown className="h-5 w-5" /> },
-    { to: "/marketplace/track-order/1", label: "Track Orders", icon: <Truck className="h-5 w-5" /> },
-    { to: "/ads-tracker", label: "Ads Tracker", icon: <BarChart3 className="h-5 w-5" /> },
     { to: "/marketplace/my-orders", label: "My Orders", icon: <Package className="h-5 w-5" /> },
     { to: "/marketplace/cart", label: "Cart", icon: <ShoppingCart className="h-5 w-5" /> },
     { to: "/marketplace/favorites", label: "Favorites", icon: <Heart className="h-5 w-5" /> },
@@ -98,7 +90,6 @@ const AdTipSidebar = () => {
     { to: "/contact-us", label: "Contact Us", icon: <MessageSquare className="h-5 w-5" /> },
     { to: "/settings", label: "Settings", icon: <Settings className="h-5 w-5" /> },
     { to: "/terms", label: "Terms & Conditions", icon: <FileText className="h-5 w-5" /> },
-    { to: "/privacy", label: "Privacy Policy", icon: <Shield className="h-5 w-5" /> },
   ];
 
   return (

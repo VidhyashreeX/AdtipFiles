@@ -18,14 +18,6 @@ interface Order {
   total: number;
   status: string;
   items: Product[];
-  isAdCampaign?: boolean;
-  campaign?: string;
-  type?: string;
-  target?: string;
-  spent?: number;
-  budget?: number;
-  progress?: string;
-  image?: string;
 }
 
 interface ShoppingContextType {

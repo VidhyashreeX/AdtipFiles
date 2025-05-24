@@ -1,9 +1,11 @@
 import axios from "axios";
 
-const BASE_URL = "http://3.6.15.198:7082";
+const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
+  ? import.meta.env.VITE_API_URL
+  : `${import.meta.env.VITE_API_URL}/api`;
 
 export async function apiSendOtp(mobileNumber: string) {
-  const url = `${BASE_URL}/api/otplogin`;
+  const url = `${BASE_URL}/otplogin`;
   try {
     // Validate mobile number
     if (!mobileNumber || mobileNumber.trim() === "") {
@@ -14,94 +16,90 @@ export async function apiSendOtp(mobileNumber: string) {
     if (!/^\d{10}$/.test(formattedNumber)) {
       throw new Error("Invalid mobile number format");
     }
-    console.log("Sending OTP request:", { mobileNumber, formattedNumber, url });
-    // Use payload structure as per API spec
+
     const payload = {
       mobileNumber: formattedNumber,
       userType: "2"
     };
-    console.log("Sending OTP payload:", JSON.stringify(payload, null, 2));
+
     const response = await axios.post(url, payload, {
       headers: {
         "Content-Type": "application/json",
       },
     });
-    console.log("Raw OTP response:", JSON.stringify(response.data, null, 2));
 
-    // Handle response structure
+    if (response.status !== 200) {
+      throw new Error(response.data?.message || "Failed to send OTP");
+    }
+
     const userData = response.data.data
       ? Array.isArray(response.data.data)
         ? response.data.data[0]
         : response.data.data
       : response.data;
-    const { id, mobile_number } = userData;
 
-    if (id && mobile_number) {
-      localStorage.setItem("tempUserId", id.toString());
-      localStorage.setItem("mobile_number", mobile_number.replace(/\D/g, "").slice(-10)); // Store 10-digit number
-      console.log("Stored in localStorage from /api/otplogin:", { tempUserId: id, mobile_number: mobile_number.replace(/\D/g, "").slice(-10) });
-    } else {
-      console.error("Missing id or mobile_number in response:", response.data);
-      throw new Error("Invalid API response: missing id or mobile_number");
+    if (!userData?.id || !userData?.mobile_number) {
+      throw new Error("Invalid API response: missing user data");
     }
-    return response.data;
+
+    localStorage.setItem("tempUserId", userData.id.toString());
+    localStorage.setItem("mobile_number", userData.mobile_number.replace(/\D/g, "").slice(-10));
+
+    return response;
   } catch (error: any) {
-    console.error("apiSendOtp error:", {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-      url,
-      isNetworkError: error.message === "Network Error",
-      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error), 2),
-      rawResponse: error.response ? JSON.stringify(error.response, null, 2) : "No response",
-    });
-    const errorMessage = error.response?.data?.message || error.response?.data?.error || "Failed to send OTP. Server error occurred.";
-    throw new Error(errorMessage);
+    console.error("apiSendOtp error:", error);
+    throw new Error(
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to send OTP. Please try again."
+    );
   }
 }
 
 export async function apiVerifyOtp(mobile_number: string, otp: string, id: string) {
-  const url = `${BASE_URL}/api/otpverify`;
+  const url = `${BASE_URL}/otpverify`;
   try {
     // Validate inputs
     if (!mobile_number || !otp || !id) {
       throw new Error("Mobile number, OTP, and ID are required");
     }
+
     // Ensure 10-digit phone number
     const formattedNumber = mobile_number.replace(/\D/g, "").slice(-10);
     if (!/^\d{10}$/.test(formattedNumber)) {
       throw new Error("Invalid mobile number format");
     }
-    console.log("Verifying OTP:", { mobile_number, formattedNumber, otp, id, url });
+
     const payload = {
       mobile_number: formattedNumber,
       otp,
       id
     };
-    console.log("Verifying OTP payload:", JSON.stringify(payload, null, 2));
+
     const response = await axios.post(url, payload, {
       headers: {
         "Content-Type": "application/json",
       },
     });
-    console.log("Raw OTP verify response:", JSON.stringify(response.data, null, 2));
-    return response.data;
+
+    if (response.status !== 200) {
+      throw new Error(response.data?.message || "Failed to verify OTP");
+    }
+
+    return response;
   } catch (error: any) {
-    console.error("apiVerifyOtp error:", {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-      url,
-      isNetworkError: error.message === "Network Error",
-      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error), 2),
-      rawResponse: error.response ? JSON.stringify(error.response, null, 2) : "No response",
-    });
-    const errorMessage = error.response?.data?.message || error.response?.data?.error || "Failed to verify OTP. Server error occurred.";
-    throw new Error(errorMessage);
+    console.error("apiVerifyOtp error:", error);
+    throw new Error(
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to verify OTP. Please try again."
+    );
   }
 }
 
-export async function apiSaveUserDetails(userDetails: {
+export async function apiSaveUserDetails(payload: {
   id: number;
   name: string;
   firstname: string;
@@ -120,57 +118,189 @@ export async function apiSaveUserDetails(userDetails: {
   interests: number[];
   referal_code: string;
 }) {
-  const url = `${BASE_URL}/api/saveuserdetails`;
+  const url = `${BASE_URL}/saveuserdetails`;
   try {
-    // Validate inputs
-    if (!userDetails.id || !userDetails.name || !userDetails.emailId) {
-      throw new Error("User ID, name, and email are required");
+    // Validate required fields
+    const requiredFields = ['id', 'name', 'firstname', 'lastname', 'gender', 'dob', 'profession', 'maternal_status', 'address', 'emailId', 'longitude', 'latitude', 'pincode'];
+    const missingFields = requiredFields.filter(field => !payload[field as keyof typeof payload]);
+    
+    if (missingFields.length > 0) {
+      throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
     }
-    console.log("Saving user details:", { userDetails, url });
-    const response = await axios.post(url, userDetails, {
+
+    // Ensure arrays are not empty
+    if (!payload.languages || payload.languages.length === 0) {
+      throw new Error('At least one language must be selected');
+    }
+    if (!payload.interests || payload.interests.length === 0) {
+      throw new Error('At least one interest must be selected');
+    }
+
+    // Log the payload for debugging
+    console.log('Saving user details with payload:', JSON.stringify(payload, null, 2));
+
+    const response = await axios.post(url, payload, {
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('UserLoggedIn')}`,
       },
     });
-    console.log("Save user details response:", JSON.stringify(response.data, null, 2));
-    return response.data;
+
+    if (response.status !== 200) {
+      throw new Error(response.data?.message || 'Failed to save user details');
+    }
+
+    return response;
   } catch (error: any) {
-    console.error("apiSaveUserDetails error:", {
+    console.error('apiSaveUserDetails error:', {
       message: error.message,
+      response: error.response?.data,
       status: error.response?.status,
-      data: error.response?.data,
-      url,
-      isNetworkError: error.message === "Network Error",
-      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error), 2),
-      rawResponse: error.response ? JSON.stringify(error.response, null, 2) : "No response",
+      payload: JSON.stringify(payload, null, 2)
     });
-    const errorMessage = error.response?.data?.message || error.response?.data?.error || "Failed to save user details. Server error occurred.";
-    throw new Error(errorMessage);
+    throw new Error(
+      error.response?.data?.message ||
+      error.message ||
+      'Failed to save user details. Server error occurred.'
+    );
   }
 }
 
 export async function apiPing() {
   const url = `${BASE_URL}/api/ping`;
   try {
-    console.log("Pinging server:", { url });
     const response = await axios.get(url, {
       headers: {
         "Content-Type": "application/json",
       },
     });
-    console.log("Ping response:", JSON.stringify(response.data, null, 2));
+
+    if (response.status !== 200) {
+      throw new Error(response.data?.message || "Failed to ping server");
+    }
+
     return response.data;
   } catch (error: any) {
-    console.error("apiPing error:", {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-      url,
-      isNetworkError: error.message === "Network Error",
-      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error), 2),
-      rawResponse: error.response ? JSON.stringify(error.response, null, 2) : "No response",
+    console.error("apiPing error:", error);
+    throw new Error(
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to ping server. Please try again."
+    );
+  }
+}
+
+export async function apiSendEmailOtp(email: string) {
+  const url = `${BASE_URL}/emailotp`;
+  try {
+    // Validate email
+    if (!email || !email.includes('@')) {
+      throw new Error("Valid email is required");
+    }
+
+    const payload = {
+      email,
+      userType: "2"
+    };
+
+    const response = await axios.post(url, payload, {
+      headers: {
+        "Content-Type": "application/json",
+      },
     });
-    const errorMessage = error.response?.data?.message || error.response?.data?.error || "Failed to ping server. Server error occurred.";
-    throw new Error(errorMessage);
+
+    if (response.status !== 200) {
+      throw new Error(response.data?.message || "Failed to send OTP");
+    }
+
+    const userData = response.data.data
+      ? Array.isArray(response.data.data)
+        ? response.data.data[0]
+        : response.data.data
+      : response.data;
+
+    if (!userData?.id || !userData?.email) {
+      throw new Error("Invalid API response: missing user data");
+    }
+
+    localStorage.setItem("tempUserId", userData.id.toString());
+    localStorage.setItem("email", userData.email);
+
+    return response;
+  } catch (error: any) {
+    console.error("apiSendEmailOtp error:", error);
+    throw new Error(
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to send OTP. Please try again."
+    );
+  }
+}
+
+export async function apiVerifyEmailOtp(email: string, otp: string, id: string) {
+  const url = `${BASE_URL}/emailotpverify`;
+  try {
+    // Validate inputs
+    if (!email || !otp || !id) {
+      throw new Error("Email, OTP, and ID are required");
+    }
+
+    const payload = {
+      email,
+      otp,
+      id
+    };
+
+    const response = await axios.post(url, payload, {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (response.status !== 200) {
+      throw new Error(response.data?.message || "Failed to verify OTP");
+    }
+
+    return response;
+  } catch (error: any) {
+    console.error("apiVerifyEmailOtp error:", error);
+    throw new Error(
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to verify OTP. Please try again."
+    );
+  }
+}
+
+export async function apiGoogleSSO(token: string) {
+  const url = `${BASE_URL}/googleauth`;
+  try {
+    const payload = {
+      token,
+      userType: "2"
+    };
+
+    const response = await axios.post(url, payload, {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (response.status !== 200) {
+      throw new Error(response.data?.message || "Failed to authenticate with Google");
+    }
+
+    return response;
+  } catch (error: any) {
+    console.error("apiGoogleSSO error:", error);
+    throw new Error(
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to authenticate with Google. Please try again."
+    );
   }
 }

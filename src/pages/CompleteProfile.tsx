@@ -12,7 +12,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { ArrowLeft, User, Mail, Calendar, ChevronDown, Key, MapPin } from "lucide-react";
 import { apiSaveUserDetails } from "../api";
-import debounce from "lodash/debounce";
+import { debounce } from "lodash";
 
 const LANGUAGES = [
   { id: 1, name: "hindi" },
@@ -82,7 +82,7 @@ const INTERESTS = [
   { id: 50, name: "Teacher" },
 ];
 
-const PersonalDetailsForm = () => {
+const CompleteProfile = () => {
   const [formData, setFormData] = useState({
     name: "",
     firstname: "",
@@ -107,7 +107,7 @@ const PersonalDetailsForm = () => {
   const { updateUserProfile, user } = useAuth();
 
   useEffect(() => {
-    console.log("Rendering PersonalDetailsForm", {
+    console.log("Rendering CompleteProfile", {
       user,
       localStorage: {
         mobile_number: localStorage.getItem("mobile_number"),
@@ -146,13 +146,10 @@ const PersonalDetailsForm = () => {
     }
   }, []);
 
-  const handleChange = useCallback(
-    debounce((e: React.ChangeEvent<HTMLInputElement>) => {
-      const { name, value } = e.target;
-      setFormData((prev) => ({ ...prev, [name]: value }));
-    }, 300),
-    []
-  );
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  }, []);
 
   const handleSelectChange = useCallback((name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -550,4 +547,4 @@ const PersonalDetailsForm = () => {
   );
 };
 
-export default React.memo(PersonalDetailsForm);
+export default React.memo(CompleteProfile);
