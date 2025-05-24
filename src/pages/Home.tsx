@@ -53,11 +53,9 @@ interface ApiResponse {
 }
 
 interface WalletResponse {
-  status: boolean;
+  status: number;
   message: string;
-  data: {
-    balance: string;
-  };
+  availableBalance: string;
 }
 
 const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
@@ -146,11 +144,11 @@ const Home = () => {
       console.log("getfunds response:", {
         status: response.data.status,
         message: response.data.message,
-        balance: response.data.data.balance,
+        balance: response.data.availableBalance,
       });
 
-      if (response.data.status) {
-        setWalletBalance(response.data.data.balance);
+      if (response.data.status === 200) {
+        setWalletBalance(response.data.availableBalance);
       } else {
         throw new Error(response.data.message || "Failed to fetch wallet balance");
       }

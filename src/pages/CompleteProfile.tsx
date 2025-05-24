@@ -245,8 +245,8 @@ const CompleteProfile = () => {
         pincode: formData.pincode,
         longitude: formData.longitude,
         latitude: formData.latitude,
-        languages: formData.language ? [formData.language] : [],
-        interests: formData.interest ? [formData.interest] : [],
+        languages: formData.language ? Number(formData.language) : 0,
+        interests: formData.interest ? Number(formData.interest) : 0,
         profile_image: "",
       };
       console.log("Saving personal details:", JSON.stringify(payload, null, 2));
@@ -350,7 +350,7 @@ const CompleteProfile = () => {
           </div>
 
           <div className="relative">
-            <Input
+                    <Input 
               name="dateOfBirth"
               type="date"
               placeholder="Date of Birth"
@@ -370,13 +370,13 @@ const CompleteProfile = () => {
             >
               <SelectTrigger className="pl-10 py-6 rounded-xl">
                 <SelectValue placeholder="Gender" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="male">Male</SelectItem>
-                <SelectItem value="female">Female</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
+                      </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
             <ChevronDown className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
           </div>
 
@@ -409,14 +409,14 @@ const CompleteProfile = () => {
             >
               <SelectTrigger className="pl-10 py-6 rounded-xl">
                 <SelectValue placeholder="Select your marital status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="single">Single</SelectItem>
-                <SelectItem value="married">Married</SelectItem>
-                <SelectItem value="divorced">Divorced</SelectItem>
-                <SelectItem value="widowed">Widowed</SelectItem>
-              </SelectContent>
-            </Select>
+                      </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="single">Single</SelectItem>
+                      <SelectItem value="married">Married</SelectItem>
+                      <SelectItem value="divorced">Divorced</SelectItem>
+                      <SelectItem value="widowed">Widowed</SelectItem>
+                    </SelectContent>
+                  </Select>
             <ChevronDown className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
           </div>
 
@@ -466,7 +466,7 @@ const CompleteProfile = () => {
               disabled={isLoading}
             />
             <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-          </div>
+                    </div>
 
           <div className="relative">
             <Input
@@ -540,8 +540,8 @@ const CompleteProfile = () => {
             disabled={isLoading}
           >
             {isLoading ? "Saving..." : "Finish"}
-          </Button>
-        </form>
+            </Button>
+          </form>
       </div>
     </div>
   );
