@@ -1,16 +1,41 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { apiSendOtp, apiVerifyOtp, apiSendEmailOtp, apiVerifyEmailOtp, apiGoogleSSO } from "../api";
+import { authAPI } from "../services/api";
 import { toast } from "sonner";
 
 // Define the UserData interface for type safety
 interface UserData {
   id: number;
   name: string;
-  phone: string;
-  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  emailId: string | null;
+  mobile_number: string;
+  gender: string | null;
+  dob: string | null;
+  profile_image: string | null;
+  profession: string | null;
+  maternal_status: string | null;
+  address: string | null;
+  longitude: string | null;
+  latitude: string | null;
+  pincode: string | null;
+  isOtpVerified: number;
+  isSaveUserDetails: number;
+  online_status: boolean;
+  referal_code: string | null;
+  referal_earnings: number;
+  bio: string | null;
+  premium_plan_id: number;
+  content_creator_plan_id: number;
+  is_available: boolean;
+  dnd: boolean;
+  premium: number;
+  country_code: string;
+  country: string;
+  languages: Array<{ id: number; name: string; isPrimary: boolean }>;
+  interests: Array<{ id: number; name: string; isPrimary: boolean }>;
   accessToken: string;
-  isRegistered: boolean;
-  isSaveUserDetails?: number;
+  is_premium: boolean;
 }
 
 // Define the AuthContextType interface
@@ -19,25 +44,16 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (phoneNumber: string) => Promise<any>;
   loginWithEmail: (email: string) => Promise<any>;
-  loginWithGoogle: (token: string) => Promise<any>;
   verifyOTP: (phoneNumber: string, otp: string, id: string) => Promise<any>;
   verifyEmailOTP: (email: string, otp: string, id: string) => Promise<any>;
-  logout: () => void;
-  updateUserProfile: (userData: UserData) => void;
+  logout: () => Promise<void>;
+  updateUserProfile: (userData: Partial<UserData>) => void;
 }
 
 // Create the AuthContext
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Create the useAuth hook
-const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
-};
-
+// Create the AuthProvider component
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -45,167 +61,257 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Load user from localStorage on mount
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
-    if (storedUser) {
+    const token = localStorage.getItem("UserLoggedIn");
+
+    if (storedUser && token) {
       try {
         const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
-        setIsAuthenticated(Boolean(parsedUser?.accessToken));
-        console.log("Loaded user state:", { 
-          isAuthenticated: Boolean(parsedUser?.accessToken),
-          userId: parsedUser?.id,
-          token: parsedUser?.accessToken
-        });
+        if (parsedUser && parsedUser.accessToken) {
+          setUser(parsedUser);
+          setIsAuthenticated(true);
+        } else {
+          // If no access token, clear everything
+          localStorage.removeItem("user");
+          localStorage.removeItem("UserLoggedIn");
+        }
       } catch (err) {
         console.error("Error parsing stored user:", err);
         localStorage.removeItem("user");
+        localStorage.removeItem("UserLoggedIn");
       }
     }
   }, []);
 
-  // Update user profile function
-  const updateUserProfile = (userData: UserData) => {
-    setUser(userData);
-    setIsAuthenticated(Boolean(userData?.accessToken));
-    localStorage.setItem("user", JSON.stringify(userData));
-  };
-
+  // Login function
   const login = async (phoneNumber: string) => {
     try {
-      const response = await apiSendOtp(phoneNumber);
-      if (!response?.data?.success && response?.data?.message !== "OTP sent on registered mobile number.") {
-        throw new Error(response?.data?.message || "Failed to send OTP");
+      const response = await authAPI.sendOTP(phoneNumber);
+      // API returns status 200 even when successful
+      if (response.data.status === 200) {
+        // Return the response data for Login component to handle
+        return {
+          data: {
+            success: true,
+            message: response.data.message,
+            data: response.data.data
+          }
+        };
+      } else {
+        throw new Error(response.data.message || "Failed to send OTP");
       }
-      return response;
     } catch (error: any) {
       console.error("Login error:", error);
-      throw new Error(error.response?.data?.message || error.message || "Failed to send OTP");
+      throw error;
     }
   };
 
+  // Email login function
   const loginWithEmail = async (email: string) => {
     try {
-      const response = await apiSendEmailOtp(email);
-      if (!response?.data?.success) {
-        throw new Error(response?.data?.message || "Failed to send OTP");
+      const response = await authAPI.sendEmailOTP(email);
+      if (response.data.status === 200) {
+        return {
+          data: {
+            success: true,
+            message: response.data.message,
+            data: response.data.data
+          }
+        };
+      } else {
+        throw new Error(response.data.message || "Failed to send OTP");
       }
-      return response;
     } catch (error: any) {
       console.error("Email login error:", error);
-      throw new Error(error.response?.data?.message || error.message || "Failed to send OTP");
+      throw error;
     }
   };
 
-  const loginWithGoogle = async (token: string) => {
-    try {
-      const response = await apiGoogleSSO(token);
-      if (!response?.data?.success) {
-        throw new Error(response?.data?.message || "Failed to authenticate with Google");
-      }
-
-      const userData = response.data.data;
-      const newUser: UserData = {
-        id: userData.id,
-        name: userData.name || "",
-        phone: userData.mobile_number || "",
-        email: userData.email || "",
-        accessToken: userData.access_token,
-        isRegistered: userData.is_registered === 1
-      };
-
-      setUser(newUser);
-      setIsAuthenticated(true);
-      localStorage.setItem("user", JSON.stringify(newUser));
-      return response;
-    } catch (error: any) {
-      console.error("Google login error:", error);
-      throw new Error(error.response?.data?.message || error.message || "Failed to authenticate with Google");
-    }
-  };
-
+  // OTP verification function
   const verifyOTP = async (phoneNumber: string, otp: string, id: string) => {
     try {
-      const response = await apiVerifyOtp(phoneNumber, otp, id);
+      const response = await authAPI.verifyOTP(phoneNumber, otp, id);
       
-      // Consider both success flag and successful message
-      if (response?.data?.success || response?.data?.message === "OTP verify successful.") {
-        const userData = response.data.data;
+      if (response.data.status === 200) {
+        const userData = response.data.data[0];
+        const accessToken = response.data.accessToken;
+
+        // Create a standardized user object
         const newUser: UserData = {
-          id: userData.id,
-          name: userData.name || "",
-          phone: userData.mobile_number,
-          email: userData.email || "",
-          accessToken: userData.access_token,
-          isRegistered: userData.is_registered === 1
+          ...userData,
+          accessToken,
+          mobile_number: userData.mobile_number,
+          country_code: userData.country_code || "+91",
+          country: userData.country || "India",
+          referal_earnings: userData.referal_earnings || 0,
+          languages: userData.languages || [],
+          interests: userData.interests || [],
+          is_premium: Boolean(userData.premium),
+          isOtpVerified: userData.isOtpVerified || 0,
+          isSaveUserDetails: userData.isSaveUserDetails || 0,
+          online_status: userData.online_status || false,
+          is_available: userData.is_available || true,
+          dnd: userData.dnd || false,
+          premium: userData.premium || 0,
+          premium_plan_id: userData.premium_plan_id || 0,
+          content_creator_plan_id: userData.content_creator_plan_id || 0,
+          bio: userData.bio || null,
+          firstName: userData.firstName || null,
+          lastName: userData.lastName || null,
+          emailId: userData.emailId || null,
+          gender: userData.gender || null,
+          dob: userData.dob || null,
+          profile_image: userData.profile_image || null,
+          profession: userData.profession || null,
+          maternal_status: userData.maternal_status || null,
+          address: userData.address || null,
+          longitude: userData.longitude || null,
+          latitude: userData.latitude || null,
+          pincode: userData.pincode || null,
+          referal_code: userData.referal_code || null
         };
 
+        // Update local storage and state
         setUser(newUser);
         setIsAuthenticated(true);
         localStorage.setItem("user", JSON.stringify(newUser));
-        return response;
+        localStorage.setItem("UserLoggedIn", accessToken);
+        
+        return {
+          data: {
+            success: true,
+            message: response.data.message,
+            data: response.data.data
+          }
+        };
       } else {
-        throw new Error(response?.data?.message || "Failed to verify OTP");
+        throw new Error(response.data.message || "Failed to verify OTP");
       }
     } catch (error: any) {
       console.error("OTP verification error:", error);
+      // Clear any partial auth state on error
+      setUser(null);
+      setIsAuthenticated(false);
+      localStorage.removeItem("user");
+      localStorage.removeItem("UserLoggedIn");
       throw new Error(error.response?.data?.message || error.message || "Failed to verify OTP");
     }
   };
 
+  // Logout function
+  const logout = async () => {
+    try {
+      if (user?.id) {
+        await authAPI.logout(user.id.toString());
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      setUser(null);
+      setIsAuthenticated(false);
+      localStorage.removeItem("user");
+      localStorage.removeItem("UserLoggedIn");
+    }
+  };
+
+  // Email OTP verification function
   const verifyEmailOTP = async (email: string, otp: string, id: string) => {
     try {
-      const response = await apiVerifyEmailOtp(email, otp, id);
+      const response = await authAPI.verifyEmailOTP(email, otp, id);
       
-      if (response?.data?.success) {
-        const userData = response.data.data;
+      if (response.data.status === 200) {
+        const userData = response.data.data[0];
+        const accessToken = response.data.accessToken;
+
+        // Create a standardized user object
         const newUser: UserData = {
-          id: userData.id,
-          name: userData.name || "",
-          phone: userData.mobile_number || "",
-          email: userData.email,
-          accessToken: userData.access_token,
-          isRegistered: userData.is_registered === 1
+          ...userData,
+          accessToken,
+          mobile_number: userData.mobile_number || "",
+          country_code: userData.country_code || "+91",
+          country: userData.country || "India",
+          referal_earnings: userData.referal_earnings || 0,
+          languages: userData.languages || [],
+          interests: userData.interests || [],
+          is_premium: Boolean(userData.premium),
+          isOtpVerified: userData.isOtpVerified || 0,
+          isSaveUserDetails: userData.isSaveUserDetails || 0,
+          online_status: userData.online_status || false,
+          is_available: userData.is_available || true,
+          dnd: userData.dnd || false,
+          premium: userData.premium || 0,
+          premium_plan_id: userData.premium_plan_id || 0,
+          content_creator_plan_id: userData.content_creator_plan_id || 0,
+          bio: userData.bio || null,
+          firstName: userData.firstName || null,
+          lastName: userData.lastName || null,
+          emailId: userData.emailId || null,
+          gender: userData.gender || null,
+          dob: userData.dob || null,
+          profile_image: userData.profile_image || null,
+          profession: userData.profession || null,
+          maternal_status: userData.maternal_status || null,
+          address: userData.address || null,
+          longitude: userData.longitude || null,
+          latitude: userData.latitude || null,
+          pincode: userData.pincode || null,
+          referal_code: userData.referal_code || null
         };
 
+        // Update local storage and state
         setUser(newUser);
         setIsAuthenticated(true);
         localStorage.setItem("user", JSON.stringify(newUser));
-        return response;
+        localStorage.setItem("UserLoggedIn", accessToken);
+        
+        return {
+          data: {
+            success: true,
+            message: response.data.message,
+            data: response.data.data
+          }
+        };
       } else {
-        throw new Error(response?.data?.message || "Failed to verify OTP");
+        throw new Error(response.data.message || "Failed to verify OTP");
       }
     } catch (error: any) {
       console.error("Email OTP verification error:", error);
+      // Clear any partial auth state on error
+      setUser(null);
+      setIsAuthenticated(false);
+      localStorage.removeItem("user");
+      localStorage.removeItem("UserLoggedIn");
       throw new Error(error.response?.data?.message || error.message || "Failed to verify OTP");
     }
   };
 
-  const logout = () => {
-    console.log("Logging out user:", user);
-    setUser(null);
-    setIsAuthenticated(false);
-    localStorage.removeItem("user");
-    localStorage.removeItem("tempUserId");
-    localStorage.removeItem("mobile_number");
-    localStorage.removeItem("email");
+  // Update user profile function
+  const updateUserProfile = (userData: Partial<UserData>) => {
+    if (user) {
+      const updatedUser = { ...user, ...userData };
+      setUser(updatedUser);
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+    }
   };
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated,
-        login,
-        loginWithEmail,
-        loginWithGoogle,
-        verifyOTP,
-        verifyEmailOTP,
-        logout,
-        updateUserProfile,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+  const value = {
+    user,
+    isAuthenticated,
+    login,
+    loginWithEmail,
+    verifyOTP,
+    verifyEmailOTP,
+    logout,
+    updateUserProfile,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export { useAuth };
+// Create the useAuth hook
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+}

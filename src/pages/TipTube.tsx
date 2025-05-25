@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import VideoLoginPrompt from "../components/VideoLoginPrompt";
 import PaidVideoPrompt from "../components/PaidVideoPrompt";
+import { LoadingSpinner } from "../components/LoadingSpinner";
+import { Alert } from "../components/Alert";
 
 const popularCategories = [
   "All", "Tech", "Beauty", "Gaming", "Food", "Travel",
@@ -53,6 +55,21 @@ interface Analytics {
   videoCount: number;
 }
 
+interface APIResponse<T> {
+  status: number;
+  message: string;
+  data: T;
+}
+
+interface VideoAPIResponse extends APIResponse<Video[]> {
+  total_count?: number;
+  current_page?: number;
+}
+
+interface ChannelAPIResponse extends APIResponse<Channel> {}
+
+interface AnalyticsAPIResponse extends APIResponse<Analytics> {}
+
 const TipTube = () => {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
@@ -99,6 +116,29 @@ const TipTube = () => {
     userId: apiVideo.createdby || 0,
   });
 
+  const fetchWithRetry = useCallback(async (url: string, options: RequestInit, retries = 3): Promise<Response> => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const response = await fetch(url, options);
+        if (response.ok) return response;
+        
+        if (response.status === 401) {
+          setError("Authentication failed. Please log in again.");
+          setShowLoginPrompt(true);
+          throw new Error("Authentication failed");
+        }
+        
+        if (i === retries - 1) throw new Error(`Failed after ${retries} retries`);
+        
+        // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+      } catch (err) {
+        if (i === retries - 1) throw err;
+      }
+    }
+    throw new Error("Unexpected error in fetchWithRetry");
+  }, []);
+
   // Fetch data (videos, channel, analytics)
   const fetchData = useCallback(async () => {
     if (!userId || !token || !hasMore) {
@@ -114,136 +154,134 @@ const TipTube = () => {
     const abortController = new AbortController();
     setError(null);
 
-    // Fetch videos
     try {
       const categoryId = categoryToIdMap[selectedCategory] || 0;
       console.log(`Fetching videos from: ${BASE_URL}/getvideos/${userId}/${categoryId}/${offset}`);
-      const videoRes = await fetch(`${BASE_URL}/getvideos/${userId}/${categoryId}/${offset}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        signal: abortController.signal,
-      });
-
-      if (!videoRes.ok) {
-        if (videoRes.status === 401) {
-          setError("Authentication failed. Please log in again.");
-          setShowLoginPrompt(true);
-        } else if (videoRes.status === 404) {
-          setError("No videos found for this category.");
-        } else {
-          setError(`Failed to load videos: ${videoRes.statusText}`);
+      
+      const videoRes = await fetchWithRetry(
+        `${BASE_URL}/getvideos/${userId}/${categoryId}/${offset}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          signal: abortController.signal,
         }
-        throw new Error(`Video API returned status: ${videoRes.status}`);
+      );
+
+      const videoData = await videoRes.json() as VideoAPIResponse;
+      
+      if (!videoData || !Array.isArray(videoData.data)) {
+        throw new Error("Invalid video data format received from server");
       }
 
-      const videoData = await videoRes.json();
-      setApiResponseData(videoData);
-      console.log("Video API response:", videoData);
-
-      let videoList: Video[] = [];
-      if (videoData && typeof videoData === 'object' && 'data' in videoData && isVideoArray(videoData.data)) {
-        videoList = videoData.data.map(transformVideoData);
-      } else if (isVideoArray(videoData)) {
-        videoList = videoData.map(transformVideoData);
-      } else {
-        setError("Unexpected video data format");
-      }
-
+      const videoList = videoData.data.map(transformVideoData);
       console.log(`Processed ${videoList.length} videos`);
+      
       setVideos(prev => (offset === 1 ? videoList : [...prev, ...videoList]));
       setHasMore(videoList.length > 0);
+
+      // Fetch channel data if this is the first page
+      if (offset === 1) {
+        try {
+          const channelId = await fetchChannel(abortController);
+          if (channelId) {
+            await fetchAnalytics(abortController, channelId);
+          }
+        } catch (err) {
+          console.error("Error in channel/analytics fetch:", err);
+          // Don't rethrow - this is not critical for the main video display
+        }
+      }
     } catch (err: any) {
       if (err.name === "AbortError") return;
-      console.error("Error fetching videos:", err);
+      
+      console.error("Error in fetchData:", err);
+      const errorMessage = err.message === "Authentication failed"
+        ? "Authentication failed. Please log in again."
+        : "Failed to load content. Please try again.";
+      
+      setError(errorMessage);
+      if (err.message === "Authentication failed") {
+        setShowLoginPrompt(true);
+      }
+      
       setVideos(prev => prev || []);
-    }
-
-    // Fetch channel
-    try {
-      console.log(`Fetching channel from: ${BASE_URL}/getchannelbyuserid/${userId}`);
-      const channelRes = await fetch(`${BASE_URL}/getchannelbyuserid/${userId}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        signal: abortController.signal,
-      });
-
-      if (!channelRes.ok) {
-        if (channelRes.status === 401) {
-          setError("Authentication failed. Please log in again.");
-          setShowLoginPrompt(true);
-        }
-        console.warn(`Channel API returned status: ${channelRes.status}`);
-        setChannel(null);
-        return;
-      }
-
-      const channelData = await channelRes.json();
-      console.log("Channel API response:", channelData);
-
-      // Validate and set channel data
-      if (channelData && typeof channelData === 'object' && 'id' in channelData && 'name' in channelData) {
-        setChannel({
-          id: channelData.id,
-          name: channelData.name,
-          description: channelData.description || undefined,
-          avatar: channelData.avatar || undefined,
-        });
-      } else {
-        console.warn("Invalid channel data format:", channelData);
-        setChannel(null);
-      }
-
-      // Fetch analytics if channel ID exists
-      if (channelData?.id) {
-        try {
-          console.log(`Fetching analytics from: ${BASE_URL}/analytics/${channelData.id}`);
-          const analyticsRes = await fetch(`${BASE_URL}/analytics/${channelData.id}`, {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            signal: abortController.signal,
-          });
-
-          if (!analyticsRes.ok) {
-            if (analyticsRes.status === 401) {
-              setError("Authentication failed. Please log in again.");
-              setShowLoginPrompt(true);
-            }
-            console.warn(`Analytics API returned status: ${analyticsRes.status}`);
-            setAnalytics(null);
-            return;
-          }
-
-          const analyticsData = await analyticsRes.json();
-          console.log("Analytics API response:", analyticsData);
-          setAnalytics(analyticsData);
-        } catch (analyticsErr: any) {
-          if (analyticsErr.name === "AbortError") return;
-          console.error("Error fetching analytics:", analyticsErr);
-          setAnalytics(null);
-        }
-      } else {
-        console.warn("No channel ID found, skipping analytics fetch");
-      }
-    } catch (channelErr: any) {
-      if (channelErr.name === "AbortError") return;
-      console.error("Error fetching channel:", channelErr);
-      setChannel(null);
-      setAnalytics(null);
     } finally {
       setLoading(false);
     }
 
     return () => abortController.abort();
-  }, [userId, token, selectedCategory, offset, BASE_URL]);
+  }, [userId, token, selectedCategory, offset, BASE_URL, hasMore]);
+
+  const fetchChannel = async (abortController: AbortController) => {
+    try {
+      console.log(`Fetching channel from: ${BASE_URL}/getchannelbyuserid/${userId}`);
+      const res = await fetchWithRetry(
+        `${BASE_URL}/getchannelbyuserid/${userId}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          signal: abortController.signal,
+        }
+      );
+
+      const channelData = (await res.json()) as ChannelAPIResponse;
+      
+      if (!channelData?.data?.id) {
+        console.log("No valid channel data found");
+        setChannel(null);
+        setAnalytics(null);
+        return null;
+      }
+      
+      setChannel(channelData.data);
+      return channelData.data.id;
+    } catch (err: any) {
+      console.error("Error fetching channel:", err);
+      setChannel(null);
+      setAnalytics(null);
+      return null;
+    }
+  };
+
+  const fetchAnalytics = async (abortController: AbortController, channelId: number) => {
+    if (!channelId) {
+      console.log("Skipping analytics fetch - no channel ID");
+      return;
+    }
+    
+    try {
+      console.log(`Fetching analytics from: ${BASE_URL}/analytics/${channelId}`);
+      const res = await fetchWithRetry(
+        `${BASE_URL}/analytics/${channelId}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          signal: abortController.signal,
+        }
+      );
+
+      const analyticsData = (await res.json()) as AnalyticsAPIResponse;
+      if (!analyticsData?.data) {
+        console.log("No valid analytics data found");
+        setAnalytics(null);
+        return;
+      }
+      
+      setAnalytics(analyticsData.data);
+    } catch (err: any) {
+      console.error("Error fetching analytics:", err);
+      setAnalytics(null);
+    }
+  };
 
   const loadMore = () => setOffset(prev => prev + 1);
 
@@ -257,53 +295,89 @@ const TipTube = () => {
     }
   }, [videoWatchCount, isAuthenticated]);
 
-  const handleVideoClick = (id: number) => {
+  const processVideoView = useCallback(() => {
+    if (!isAuthenticated) {
+      setVideoWatchCount(prev => {
+        const newCount = prev + 1;
+        if (newCount >= 2) {
+          setShowLoginPrompt(true);
+        }
+        return newCount;
+      });
+    }
+  }, [isAuthenticated]);
+
+  const handleVideoClick = useCallback((id: number) => {
     const video = videos?.find(item => item.id === id);
-    if (!video) return;
+    if (!video) {
+      setError("Video not found");
+      return;
+    }
 
     if (video.isPaid) {
       setSelectedVideo(id);
       setShowPaidVideoPrompt(true);
-    } else {
-      if (playingVideoId !== null && playingVideoId !== id) {
-        const currentVideo = videoRefs.current[playingVideoId];
-        if (currentVideo) {
-          currentVideo.pause();
-        }
-      }
+      return;
+    }
 
-      const videoElement = videoRefs.current[id];
-      if (videoElement) {
-        videoElement.play().catch(err => {
-          console.error("Error playing video:", err);
-          setError("Failed to play video. Please check the video URL or browser compatibility.");
-        });
-        setPlayingVideoId(id);
-        processVideoView();
+    // Stop currently playing video if exists
+    if (playingVideoId !== null && playingVideoId !== id) {
+      const currentVideo = videoRefs.current[playingVideoId];
+      if (currentVideo) {
+        currentVideo.pause();
       }
     }
-  };
 
-  const handlePaidVideoContinue = () => {
+    const videoElement = videoRefs.current[id];
+    if (!videoElement) {
+      setError("Video player not initialized");
+      return;
+    }
+
+    videoElement.play().catch(err => {
+      console.error("Error playing video:", err);
+      setError("Failed to play video. Please try again.");
+    });
+
+    setPlayingVideoId(id);
+    processVideoView();
+  }, [videos, playingVideoId, processVideoView]);
+
+  const handlePaidVideoContinue = useCallback(() => {
     setShowPaidVideoPrompt(false);
     const video = videos?.find(item => item.id === selectedVideo);
-    if (video && selectedVideo !== null) {
-      const videoElement = videoRefs.current[selectedVideo];
-      if (videoElement) {
-        videoElement.play().catch(err => {
-          console.error("Error playing paid video:", err);
-          setError("Failed to play paid video. Please check the video URL or browser compatibility.");
-        });
-        setPlayingVideoId(selectedVideo);
-      }
+    if (!video || !selectedVideo) {
+      setError("Video not found");
+      return;
     }
-  };
 
-  const processVideoView = () => {
-    if (!isAuthenticated) {
-      setVideoWatchCount(prev => prev + 1);
+    const videoElement = videoRefs.current[selectedVideo];
+    if (!videoElement) {
+      setError("Video player not initialized");
+      return;
     }
-  };
+
+    videoElement.play().catch(err => {
+      console.error("Error playing paid video:", err);
+      setError("Failed to play video. Please try again.");
+    });
+
+    setPlayingVideoId(selectedVideo);
+    processVideoView();
+  }, [videos, selectedVideo, processVideoView]);
+
+  // Cleanup function for video resources
+  useEffect(() => {
+    return () => {
+      // Pause all videos and clear refs when component unmounts
+      Object.values(videoRefs.current).forEach(video => {
+        if (video) {
+          video.pause();
+        }
+      });
+      videoRefs.current = {};
+    };
+  }, []);
 
   const formatDuration = (seconds: number | undefined) => {
     if (seconds === undefined || isNaN(seconds)) {
@@ -328,6 +402,14 @@ const TipTube = () => {
         />
       )}
 
+      {error && (
+        <Alert
+          variant="error"
+          message={error}
+          onClose={() => setError(null)}
+        />
+      )}
+      
       <div className="bg-white sticky top-[60px] md:top-[57px] z-10 py-3 px-4 overflow-x-auto flex whitespace-nowrap gap-3 no-scrollbar shadow-sm">
         {popularCategories.map((category) => (
           <button
@@ -349,13 +431,6 @@ const TipTube = () => {
       </div>
 
       <div className="max-w-screen-lg mx-auto pt-4 px-4">
-        {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">
-            <h3 className="font-bold text-md mb-1">Error fetching data:</h3>
-            <p>{error}</p>
-          </div>
-        )}
-
         {import.meta.env.MODE === 'development' && apiResponseData && !videos?.length && (
           <div className="mb-6 bg-yellow-50 border border-yellow-200 text-yellow-700 p-4 rounded-lg">
             <h3 className="font-bold text-md mb-1">API Response Debug:</h3>
@@ -394,7 +469,9 @@ const TipTube = () => {
         <h3 className="font-bold text-lg mb-4">Recommended Videos</h3>
         <div className="space-y-6">
           {loading ? (
-            <div>Loading videos...</div>
+            <div className="flex justify-center py-4">
+              <LoadingSpinner />
+            </div>
           ) : videos.length === 0 ? (
             <div>No videos found. {userId ? `Using userId: ${userId}` : 'No userId specified'}</div>
           ) : (

@@ -20,26 +20,36 @@ const OTPVerification = () => {
   const [email, setEmail] = useState("");
   const [verificationType, setVerificationType] = useState<"phone" | "email">("phone");
   const navigate = useNavigate();
-  const { verifyOTP, verifyEmailOTP, updateUserProfile } = useAuth();
+  const { verifyOTP, verifyEmailOTP } = useAuth();
 
   useEffect(() => {
-    const storedMobile = localStorage.getItem("mobile_number");
-    const storedEmail = localStorage.getItem("email");
-    const tempUserId = localStorage.getItem("tempUserId");
+    const initializeVerification = () => {
+      // Check if we have required data
+      const storedMobile = localStorage.getItem("mobile_number");
+      const storedEmail = localStorage.getItem("email");
+      const tempUserId = localStorage.getItem("tempUserId");
+      
+      console.log("OTPVerification init:", { storedMobile, storedEmail, tempUserId });
 
-    if (!tempUserId || (!storedMobile && !storedEmail)) {
-      toast.error("Please login first");
-      navigate("/login");
-      return;
-    }
+      if (!tempUserId || (!storedMobile && !storedEmail)) {
+        console.warn("Missing required session data for OTP verification");
+        toast.error("Please login first");
+        navigate("/login");
+        return;
+      }
 
-    if (storedMobile) {
-      setMobileNumber(storedMobile);
-      setVerificationType("phone");
-    } else if (storedEmail) {
-      setEmail(storedEmail);
-      setVerificationType("email");
-    }
+      if (storedMobile) {
+        setMobileNumber(storedMobile);
+        setVerificationType("phone");
+        console.log("Initialized phone verification for:", storedMobile);
+      } else if (storedEmail) {
+        setEmail(storedEmail);
+        setVerificationType("email");
+        console.log("Initialized email verification for:", storedEmail);
+      }
+    };
+
+    initializeVerification();
 
     // Start countdown if it exists
     const storedCountdown = localStorage.getItem("otpCountdown");
@@ -52,19 +62,21 @@ const OTPVerification = () => {
   }, [navigate]);
 
   useEffect(() => {
+    let interval: NodeJS.Timeout;
     if (countdown > 0) {
-      const timer = setInterval(() => {
+      interval = setInterval(() => {
         setCountdown((prev) => {
           if (prev <= 1) {
-            clearInterval(timer);
-            localStorage.removeItem("otpCountdown");
+            clearInterval(interval);
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
-      return () => clearInterval(timer);
     }
+    return () => {
+      clearInterval(interval);
+    };
   }, [countdown]);
 
   const handleVerifyOTP = async () => {
@@ -96,63 +108,34 @@ const OTPVerification = () => {
       }
 
       if (result?.data?.success || result?.data?.message === "OTP verify successful.") {
-        // Handle array response properly
-        const userDataFromResponse = Array.isArray(result.data.data) ? result.data.data[0] : result.data.data;
-        
-        console.log("OTP verification response:", {
-          userData: userDataFromResponse,
-          accessToken: result.data.accessToken,
-          message: result.data.message
-        });
-        
-        if (!userDataFromResponse) {
-          throw new Error("Invalid response: Missing user data");
+        if (!result.data.data || !Array.isArray(result.data.data) || result.data.data.length === 0) {
+          throw new Error("Invalid server response: missing user data");
         }
 
-        // Get access token from the correct location
-        const accessToken = result.data.accessToken;
+        const userData = result.data.data[0];
+        const { id, name, mobile_number, email, is_registered, isSaveUserDetails = 0 } = userData;
 
-        if (!accessToken) {
-          throw new Error("Invalid response: Missing access token");
-        }
-
-        // Clean up temporary session values
+        // Clean up session storage
         localStorage.removeItem("tempUserId");
         localStorage.removeItem("mobile_number");
         localStorage.removeItem("email");
         localStorage.removeItem("otpCountdown");
-        
-        // Create user data object with all necessary fields
-        const userData = {
-          id: userDataFromResponse.id,
-          name: userDataFromResponse.name || "",
-          phone: userDataFromResponse.mobile_number,
-          email: userDataFromResponse.email || "",
-          accessToken: accessToken,
-          isRegistered: userDataFromResponse.is_registered === 1,
-          isSaveUserDetails: userDataFromResponse.isSaveUserDetails
-        };
 
-        // Save user data in localStorage and update auth context
-        localStorage.setItem("user", JSON.stringify(userData));
-        localStorage.setItem("UserLoggedIn", accessToken);
-        localStorage.setItem("userId", userData.id.toString());
-
-        // Update the auth context with user data
-        updateUserProfile(userData);
-        
         toast.success("OTP verified successfully");
 
-        // Only check isSaveUserDetails for redirection
-        if (userDataFromResponse.isSaveUserDetails === 0) {
-          console.log("User details not saved, redirecting to complete profile...", userData);
-          navigate("/complete-profile", { replace: true });
-          return;
+        // Handle navigation based on user status
+        if (is_registered === 1) {
+          if (isSaveUserDetails === 0) {
+            console.log("User registered but details not saved, redirecting to complete profile...");
+            navigate("/complete-profile", { replace: true });
+          } else {
+            console.log("User registered with complete profile, redirecting to home...");
+            navigate("/home", { replace: true });
+          }
+        } else {
+          console.log("New user, redirecting to onboarding...");
+          navigate("/onboarding", { replace: true });
         }
-
-        // If user details are saved, redirect to home
-        console.log("User details saved, redirecting to home...", userData);
-        navigate("/home", { replace: true });
       } else {
         throw new Error(result?.data?.message || "Failed to verify OTP");
       }
@@ -179,7 +162,7 @@ const OTPVerification = () => {
         response = await apiSendEmailOtp(email);
       }
 
-      if (response?.data?.success) {
+      if (response?.data?.success || response?.data?.status === 200) {
         localStorage.setItem("otpCountdown", (Math.floor(Date.now() / 1000) + 30).toString());
         setCountdown(30);
         toast.success("OTP resent successfully");
@@ -187,7 +170,7 @@ const OTPVerification = () => {
         throw new Error(response?.data?.message || "Failed to resend OTP");
       }
     } catch (error) {
-      console.error("Resend OTP error:", error);
+      console.error("OTP resend error:", error);
       toast.error(error instanceof Error ? error.message : "Failed to resend OTP");
     } finally {
       setResendLoading(false);
@@ -211,16 +194,17 @@ const OTPVerification = () => {
           <img src="/logo.png" alt="AdTip Logo" className="h-16 w-16" />
         </div>
 
-        <h1 className="text-2xl font-bold mb-2 text-center text-gray-900">
-          Enter verification code
-        </h1>
+        <div>
+          <h1 className="text-2xl font-bold text-center text-gray-900">
+            Enter verification code
+          </h1>
+          <p className="mt-2 text-center text-gray-600">
+            We've sent a 6-digit code to{" "}
+            {verificationType === "phone" ? mobileNumber : email}
+          </p>
+        </div>
 
-        <p className="text-center text-gray-600 mb-8">
-          We've sent a 6-digit code to{" "}
-          {verificationType === "phone" ? mobileNumber : email}
-        </p>
-
-        <div className="space-y-6">
+        <div className="mt-8 space-y-6">
           <div className="flex justify-center">
             <InputOTP
               maxLength={6}
@@ -229,7 +213,7 @@ const OTPVerification = () => {
               render={({ slots }) => (
                 <InputOTPGroup>
                   {slots.map((slot, index) => (
-                    <InputOTPSlot key={index} {...slot} index={index} />
+                    <InputOTPSlot key={index} {...slot} />
                   ))}
                 </InputOTPGroup>
               )}
@@ -262,11 +246,17 @@ const OTPVerification = () => {
         <div className="mt-8 text-center text-sm text-gray-600">
           <p>By continuing, you agree to our</p>
           <p>
-            <a href="/terms" className="text-adtip-teal hover:text-adtip-teal/90 transition-colors">
+            <a
+              href="/terms"
+              className="text-adtip-teal hover:text-adtip-teal/90 transition-colors"
+            >
               Terms of Service
             </a>{" "}
             and{" "}
-            <a href="/privacy" className="text-adtip-teal hover:text-adtip-teal/90 transition-colors">
+            <a
+              href="/privacy"
+              className="text-adtip-teal hover:text-adtip-teal/90 transition-colors"
+            >
               Privacy Policy
             </a>
           </p>

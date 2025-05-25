@@ -23,24 +23,40 @@ const Login = () => {
       toast.error("Please enter a valid 10-digit phone number");
       return;
     }
-
     setIsLoading(true);
     try {
       const response = await login(phoneNumber);
-      console.log("Phone OTP API response:", response); // Debug log
-      if (response?.data?.success || response?.data?.message === "OTP sent on registered mobile number.") {
-        // Store phone number and temp user id for OTP verification page
-        localStorage.setItem("mobile_number", phoneNumber);
-        if (response?.data?.data?.id) {
-          localStorage.setItem("tempUserId", response.data.data.id.toString());
-        }
-        localStorage.setItem("otpCountdown", (Math.floor(Date.now() / 1000) + 30).toString());
-        toast.success("OTP sent successfully");
-        console.log("Navigating to /verify-otp after phone OTP"); // Debug log
-        navigate("/verify-otp", { replace: true });
-      } else {
-        throw new Error(response?.data?.message || "Failed to send OTP");
+      console.log("Phone OTP API response:", response);
+
+      // Check for proper response format
+      if (!response?.data?.data || !Array.isArray(response.data.data) || response.data.data.length === 0) {
+        throw new Error("Invalid response format from server");
       }
+
+      const userData = response.data.data[0];
+      if (!userData.id) {
+        throw new Error("Missing user ID in response");
+      }
+
+      // Clear existing data
+      localStorage.removeItem("email");
+      localStorage.removeItem("mobile_number");
+      localStorage.removeItem("tempUserId");
+      localStorage.removeItem("otpCountdown");
+
+      // Set new data
+      localStorage.setItem("mobile_number", phoneNumber);
+      localStorage.setItem("tempUserId", userData.id.toString());
+      localStorage.setItem("otpCountdown", (Math.floor(Date.now() / 1000) + 30).toString());
+
+      console.log("Stored login data:", {
+        mobile: phoneNumber,
+        tempUserId: userData.id,
+        countdown: Math.floor(Date.now() / 1000) + 30
+      });
+
+      toast.success("OTP sent successfully");
+      navigate("/verify-otp");
     } catch (err: any) {
       console.error("Login error:", err);
       toast.error(err.message || "Could not send OTP. Please try again.");
@@ -56,24 +72,40 @@ const Login = () => {
       toast.error("Please enter a valid email address");
       return;
     }
-
     setIsLoading(true);
     try {
       const response = await loginWithEmail(email);
-      console.log("Email OTP API response:", response); // Debug log
-      if (response?.data?.success) {
-        // Store email and temp user id for OTP verification page
-        localStorage.setItem("email", email);
-        if (response?.data?.data?.id) {
-          localStorage.setItem("tempUserId", response.data.data.id.toString());
-        }
-        localStorage.setItem("otpCountdown", (Math.floor(Date.now() / 1000) + 30).toString());
-        toast.success("OTP sent successfully");
-        console.log("Navigating to /verify-otp after email OTP"); // Debug log
-        navigate("/verify-otp", { replace: true });
-      } else {
-        throw new Error("Failed to send OTP");
+      console.log("Email OTP API response:", response);
+
+      // Check for proper response format
+      if (!response?.data?.data || !Array.isArray(response.data.data) || response.data.data.length === 0) {
+        throw new Error("Invalid response format from server");
       }
+
+      const userData = response.data.data[0];
+      if (!userData.id) {
+        throw new Error("Missing user ID in response");
+      }
+
+      // Clear existing data
+      localStorage.removeItem("email");
+      localStorage.removeItem("mobile_number");
+      localStorage.removeItem("tempUserId");
+      localStorage.removeItem("otpCountdown");
+
+      // Set new data
+      localStorage.setItem("email", email);
+      localStorage.setItem("tempUserId", userData.id.toString());
+      localStorage.setItem("otpCountdown", (Math.floor(Date.now() / 1000) + 30).toString());
+
+      console.log("Stored login data:", {
+        email,
+        tempUserId: userData.id,
+        countdown: Math.floor(Date.now() / 1000) + 30
+      });
+
+      toast.success("OTP sent successfully");
+      navigate("/verify-otp");
     } catch (err: any) {
       console.error("Email login error:", err);
       toast.error(err.message || "Could not send OTP. Please try again.");

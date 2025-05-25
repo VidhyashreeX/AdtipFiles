@@ -32,18 +32,29 @@ export async function apiSendOtp(mobileNumber: string) {
       throw new Error(response.data?.message || "Failed to send OTP");
     }
 
-    const userData = response.data.data
-      ? Array.isArray(response.data.data)
-        ? response.data.data[0]
-        : response.data.data
-      : response.data;
-
-    if (!userData?.id || !userData?.mobile_number) {
+    // The API returns data in an array format
+    if (!response.data?.data || !Array.isArray(response.data.data) || response.data.data.length === 0) {
+      console.error("Invalid API response format:", response.data);
       throw new Error("Invalid API response: missing user data");
     }
 
+    const userData = response.data.data[0];
+    
+    if (!userData?.id) {
+      console.error("No user ID in response:", userData);
+      throw new Error("Invalid API response: missing user ID");
+    }
+
+    // Clear any existing session data first
+    localStorage.removeItem("email");
+    localStorage.removeItem("mobile_number");
+    localStorage.removeItem("tempUserId");
+    localStorage.removeItem("otpCountdown");
+
+    // Store new session data
     localStorage.setItem("tempUserId", userData.id.toString());
-    localStorage.setItem("mobile_number", userData.mobile_number.replace(/\D/g, "").slice(-10));
+    localStorage.setItem("mobile_number", mobileNumber);
+    localStorage.setItem("otpCountdown", (Math.floor(Date.now() / 1000) + 30).toString());
 
     return response;
   } catch (error: any) {

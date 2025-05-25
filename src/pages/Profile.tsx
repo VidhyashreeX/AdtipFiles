@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react"; // Add useEffect import
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Settings, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import ProfileStats from "../components/ProfileStats";
+import axios from "axios";
 import {
   Dialog,
   DialogContent,
@@ -15,22 +16,96 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 
+interface UserChannel {
+  id: number;
+  name: string;
+  subscribers: number;
+  // Add other channel fields as needed
+}
+
 const Profile = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [userChannel, setUserChannel] = useState<UserChannel | null>(null);
+  const [userStats, setUserStats] = useState(null);
 
-  // Check authentication in useEffect to avoid render-phase navigation
+  // Check authentication and fetch user data
   useEffect(() => {
-    if (!isAuthenticated) {
+    const token = localStorage.getItem("UserLoggedIn");
+
+    if (!isAuthenticated || !user?.id || !token) {
+      console.log("Auth check failed:", { isAuthenticated, userId: user?.id, token });
+      navigate("/login");
+      return;
+    }
+
+    const fetchUserData = async () => {
+      try {
+        // Fetch user channel data
+        const channelResponse = await axios.get(
+          `${import.meta.env.VITE_API_URL}/api/getchannelbyuserid/${user.id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (channelResponse.data.status) {
+          setUserChannel(channelResponse.data.data);
+
+          // Fetch user analytics if channel exists
+          if (channelResponse.data.data?.id) {
+            const analyticsResponse = await axios.get(
+              `${import.meta.env.VITE_API_URL}/api/analytics/${channelResponse.data.data.id}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              }
+            );
+
+            if (analyticsResponse.data.status) {
+              setUserStats(analyticsResponse.data.data);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+        // If we get a 401 unauthorized error, redirect to login
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+          navigate("/login");
+        }
+      }
+    };
+
+    fetchUserData();
+  }, [isAuthenticated, user, navigate]);
+
+  const handleLogout = async () => {
+    try {
+      if (user?.id) {
+        // Call logout API
+        await axios.post(
+          `${import.meta.env.VITE_API_URL}/api/logout`,
+          { id: user.id },
+          {
+            headers: {
+              Authorization: `Bearer ${user.accessToken}`,
+            },
+          }
+        );
+      }
+      logout();
+      navigate("/login");
+    } catch (error) {
+      console.error("Error during logout:", error);
+      // Still perform local logout even if API call fails
+      logout();
       navigate("/login");
     }
-  }, [isAuthenticated, navigate]);
-
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
   };
 
   // If not authenticated, return null to avoid rendering
@@ -101,11 +176,11 @@ const Profile = () => {
 
         {/* Profile Stats */}
         <div className="mt-6">
-          <ProfileStats 
-            followers={isNewUser ? 0 : 512} 
-            following={isNewUser ? 0 : 237} 
-            posts={isNewUser ? 0 : 48} 
-            tipTubeVideos={isNewUser ? 0 : 12} 
+          <ProfileStats
+            followers={isNewUser ? 0 : 512}
+            following={isNewUser ? 0 : 237}
+            posts={isNewUser ? 0 : 48}
+            tipTubeVideos={isNewUser ? 0 : 12}
             isNewUser={isNewUser}
           />
         </div>
@@ -118,7 +193,7 @@ const Profile = () => {
               <TabsTrigger value="stories">Stories</TabsTrigger>
               <TabsTrigger value="saved">Saved</TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="videos">
               <div className="grid grid-cols-3 gap-1 mt-4">
                 {isNewUser ? (
@@ -127,19 +202,21 @@ const Profile = () => {
                   </div>
                 ) : (
                   [1, 2, 3, 4, 5].map((item) => (
-                    <div key={item} className="aspect-video bg-gray-200 rounded"></div>
+                    <div
+                      key={item}
+                      className="aspect-video bg-gray-200 rounded"
+                    ></div>
                   ))
                 )}
               </div>
             </TabsContent>
-            
+
             <TabsContent value="stories">
-  <div className="text-center py-10 text-gray-400">
-    No stories yet
-  </div>
-  Beaufort, SC 29902 {/* This is invalid JSX */}
-</TabsContent>
-            
+              <div className="text-center py-10 text-gray-400">
+                No stories yet
+              </div>
+            </TabsContent>
+
             <TabsContent value="saved">
               <div className="text-center py-10 text-gray-400">
                 No saved content
@@ -156,8 +233,8 @@ const Profile = () => {
             <DialogTitle>Settings</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-4">
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               className="w-full justify-start text-left h-auto py-3"
               onClick={() => {
                 navigate("/how-to-earn-creator");
@@ -166,8 +243,8 @@ const Profile = () => {
             >
               How to earn as content creator
             </Button>
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               className="w-full justify-start text-left h-auto py-3"
               onClick={() => {
                 navigate("/how-to-earn-user");
@@ -176,8 +253,8 @@ const Profile = () => {
             >
               How to earn as user
             </Button>
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               className="w-full justify-start text-left h-auto py-3"
               onClick={() => {
                 navigate("/refer");
@@ -186,8 +263,8 @@ const Profile = () => {
             >
               Refer and earn
             </Button>
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               className="w-full justify-start text-left h-auto py-3"
               onClick={() => {
                 navigate("/ads-tracker");
@@ -196,8 +273,8 @@ const Profile = () => {
             >
               Ads tracker
             </Button>
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               className="w-full justify-start text-left h-auto py-3"
               onClick={() => {
                 navigate("/premium");
@@ -206,8 +283,8 @@ const Profile = () => {
             >
               Premium status: {user?.isPremium ? "Premium" : "Free"}
             </Button>
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               className="w-full justify-start text-left h-auto py-3"
               onClick={() => {
                 navigate("/wallet");
@@ -216,8 +293,8 @@ const Profile = () => {
             >
               Wallet: ₹{user?.wallet || 0}
             </Button>
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               className="w-full justify-start text-left h-auto py-3"
               onClick={() => {
                 navigate("/settings");
@@ -236,20 +313,21 @@ const Profile = () => {
           <DialogHeader>
             <DialogTitle>Log out of AdTip</DialogTitle>
             <DialogDescription>
-              Are you sure you want to log out? You'll need to enter your phone number and OTP to log back in.
+              Are you sure you want to log out? You'll need to enter your phone
+              number and OTP to log back in.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex flex-col sm:flex-row gap-2">
-            <Button 
-              variant="outline" 
-              className="sm:flex-1" 
+            <Button
+              variant="outline"
+              className="sm:flex-1"
               onClick={() => setShowLogoutDialog(false)}
             >
               Cancel
             </Button>
-            <Button 
-              variant="destructive" 
-              className="sm:flex-1" 
+            <Button
+              variant="destructive"
+              className="sm:flex-1"
               onClick={handleLogout}
             >
               Log Out
