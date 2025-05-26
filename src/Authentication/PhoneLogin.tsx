@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import CountrySelect from '../components/CountrySelect';
+import countryData from '../components/countryData.json';
 
 const PhoneLogin: React.FC = () => {
   const navigate = useNavigate();
 
   // State for phone OTP login
-  const [countryCode] = useState('+91');
+  const [countryCode, setCountryCode] = useState('+91');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [userId, setUserId] = useState<number | null>(null);
@@ -106,7 +108,7 @@ const PhoneLogin: React.FC = () => {
     try {
       setGetOtpLoading(true);
       const response = await axios.post(`${BASE_URL}otplogin`, {
-        mobileNumber: phone,
+        mobileNumber: countryCode + phone,
         userType: '2',
       }, {
         headers: { 'Content-Type': 'application/json' },
@@ -319,83 +321,99 @@ const PhoneLogin: React.FC = () => {
   };
 
   return (
-    <div className="p-4 max-w-md mx-auto">
-      <h2 className="text-xl mb-4">Login</h2>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+      <div className="bg-white p-8 rounded shadow-md w-full max-w-md">
+        <h2 className="text-2xl font-bold mb-6 text-center">Login with Phone</h2>
+        <form
+          onSubmit={e => {
+            e.preventDefault();
+            sendOTP();
+          }}
+        >
+          <div className="mb-4">
+            <label className="block mb-1 font-medium">Country</label>
+            <CountrySelect value={countryCode} onChange={setCountryCode} />
+          </div>
+          <div className="mb-4 flex items-center">
+            <span className="mr-2 text-lg">{countryData.find(c => c.dial_code === countryCode)?.flag}</span>
+            <span className="mr-2 font-semibold">{countryCode}</span>
+            <input
+              type="tel"
+              className="flex-1 border rounded px-3 py-2"
+              placeholder="Enter phone number"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full bg-blue-500 text-white px-4 py-2 rounded mb-4 disabled:bg-blue-300"
+            disabled={getOtpLoading}
+          >
+            {getOtpLoading ? 'Sending...' : 'Send OTP'}
+          </button>
 
-      <h3 className="text-lg mb-2">Phone OTP Login</h3>
-      <input
-        type="text"
-        placeholder="Enter Phone Number"
-        value={phone}
-        onChange={e => setPhone(e.target.value)}
-        className="border p-2 w-full mb-4 rounded"
-      />
-      <button
-        onClick={sendOTP}
-        disabled={getOtpLoading}
-        className="bg-blue-500 text-white px-4 py-2 rounded mb-4 disabled:bg-blue-300"
-      >
-        {getOtpLoading ? 'Sending...' : 'Send OTP'}
-      </button>
+          <input
+            type="text"
+            placeholder="Enter OTP"
+            value={otp}
+            onChange={e => setOtp(e.target.value)}
+            className="border p-2 w-full mb-4 rounded"
+          />
+          <button
+            onClick={verifyOTP}
+            disabled={verifyOtpLoading}
+            className="bg-green-500 text-white px-4 py-2 rounded mb-4 disabled:bg-green-300"
+          >
+            {verifyOtpLoading ? 'Verifying...' : 'Verify OTP'}
+          </button>
 
-      <input
-        type="text"
-        placeholder="Enter OTP"
-        value={otp}
-        onChange={e => setOtp(e.target.value)}
-        className="border p-2 w-full mb-4 rounded"
-      />
-      <button
-        onClick={verifyOTP}
-        disabled={verifyOtpLoading}
-        className="bg-green-500 text-white px-4 py-2 rounded mb-4 disabled:bg-green-300"
-      >
-        {verifyOtpLoading ? 'Verifying...' : 'Verify OTP'}
-      </button>
+          {timer > 0 && <p className="mt-2 text-gray-500 mb-4">Resend OTP in {timer}s</p>}
 
-      {timer > 0 && <p className="mt-2 text-gray-500 mb-4">Resend OTP in {timer}s</p>}
+          <hr className="my-6" />
 
-      <hr className="my-6" />
+          <h3 className="text-lg mb-2">Username/Password Login</h3>
+          <input
+            type="text"
+            placeholder="Enter Username"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            className="border p-2 w-full mb-4 rounded"
+          />
+          <input
+            type="password"
+            placeholder="Enter Password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            className="border p-2 w-full mb-4 rounded"
+          />
+          <button
+            onClick={login}
+            disabled={loginLoading}
+            className="bg-blue-600 text-white px-4 py-2 rounded mb-4 disabled:bg-blue-400"
+          >
+            {loginLoading ? 'Logging in...' : 'Login'}
+          </button>
 
-      <h3 className="text-lg mb-2">Username/Password Login</h3>
-      <input
-        type="text"
-        placeholder="Enter Username"
-        value={username}
-        onChange={e => setUsername(e.target.value)}
-        className="border p-2 w-full mb-4 rounded"
-      />
-      <input
-        type="password"
-        placeholder="Enter Password"
-        value={password}
-        onChange={e => setPassword(e.target.value)}
-        className="border p-2 w-full mb-4 rounded"
-      />
-      <button
-        onClick={login}
-        disabled={loginLoading}
-        className="bg-blue-600 text-white px-4 py-2 rounded mb-4 disabled:bg-blue-400"
-      >
-        {loginLoading ? 'Logging in...' : 'Login'}
-      </button>
+          <hr className="my-6" />
 
-      <hr className="my-6" />
+          <button
+            onClick={getLocationData}
+            disabled={geoLocationLoading}
+            className="bg-purple-500 text-white px-4 py-2 rounded mb-4 disabled:bg-purple-300"
+          >
+            {geoLocationLoading ? 'Fetching Location...' : 'Get Location'}
+          </button>
 
-      <button
-        onClick={getLocationData}
-        disabled={geoLocationLoading}
-        className="bg-purple-500 text-white px-4 py-2 rounded mb-4 disabled:bg-purple-300"
-      >
-        {geoLocationLoading ? 'Fetching Location...' : 'Get Location'}
-      </button>
-
-      <button
-        onClick={logout}
-        className="bg-red-500 text-white px-4 py-2 rounded"
-      >
-        Logout
-      </button>
+          <button
+            onClick={logout}
+            className="bg-red-500 text-white px-4 py-2 rounded"
+          >
+            Logout
+          </button>
+        </form>
+      </div>
     </div>
   );
 };

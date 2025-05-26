@@ -30,8 +30,8 @@ InputOTPGroup.displayName = "InputOTPGroup"
 
 const InputOTPSlot = React.forwardRef<
   HTMLInputElement,
-  React.InputHTMLAttributes<HTMLInputElement> & { index: number }
->(({ index, className, ...props }, ref) => {
+  React.InputHTMLAttributes<HTMLInputElement> & { index: number; showChar?: boolean }
+>(({ index, showChar = false, className, ...props }, ref) => {
   const inputOTPContext = React.useContext(OTPInputContext)
   const slot = inputOTPContext?.slots?.[index]
 
@@ -74,7 +74,7 @@ const InputOTPSlot = React.forwardRef<
         maxLength={1}
         {...props}
       />
-      {char && (
+      {char && showChar && (
         <div className="absolute inset-0 flex items-center justify-center bg-white text-black">
           {char}
         </div>

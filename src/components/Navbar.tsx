@@ -71,10 +71,10 @@ const Navbar = () => {
     <nav className="sticky top-0 z-30 w-full bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-screen-2xl mx-auto flex items-center justify-between px-6 py-3">
         {/* Left: Logo */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3"> {/* Increased gap from 2 to 3 */}
           <Link to="/home" className="flex items-center">
             <img src="/logo.png" alt="AdTip Logo" className="h-8 w-8" />
-            <span className="text-xl font-bold text-adtip-teal">AdTip</span>
+            <span className="text-xl font-bold text-adtip-teal ml-2">AdTip</span> {/* Added ml-2 for more space */}
           </Link>
         </div>
 
@@ -118,13 +118,13 @@ const Navbar = () => {
           >
             <Wallet className="h-6 w-6 mr-1" />
             <span className="font-medium">
-              {isLoading ? "..." : (user?.wallet || 0).toFixed(2)}
+              {isLoading ? "..." : "Wallet"}
             </span>
           </Link>
           <Link to="/profile" className="flex items-center ml-2">
-            {user?.profilePic ? (
+            {user?.profile_image ? (
               <img
-                src={user.profilePic}
+                src={user.profile_image}
                 alt="Profile"
                 className="h-9 w-9 rounded-full object-cover border-2 border-gray-200"
               />

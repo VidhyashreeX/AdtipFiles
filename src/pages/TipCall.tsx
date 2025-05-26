@@ -50,11 +50,12 @@ const TipCall = () => {
   const token = user?.accessToken || null;
 
   useEffect(() => {
+    let didCancel = false;
     const fetchExperts = async () => {
       setLoading(true);
       try {
         const interestId = selectedCategory ? [categoryToInterestMap[selectedCategory]] : [2];
-        const userId = user?.id ? parseInt(user.id) : null;
+        const userId = user?.id ? String(user.id) : null;
         const requestBody = {
           id: 0,
           page: page,
@@ -66,7 +67,6 @@ const TipCall = () => {
           loggined_user_id: userId,
           sortBy: {}
         };
-
         const res = await fetch(`${BASE_URL}/users`, {
           method: "POST",
           headers: {
@@ -75,46 +75,45 @@ const TipCall = () => {
           },
           body: JSON.stringify(requestBody),
         });
-
         if (!res.ok) {
           throw new Error(`Failed to fetch users: ${res.status}`);
         }
-
         const response = await res.json();
-        if (!response.status || !Array.isArray(response.data)) {
-          throw new Error(response.message || "Invalid response format");
+        if (!didCancel) {
+          if (!response.status || !Array.isArray(response.data)) {
+            throw new Error(response.message || "Invalid response format");
+          }
+          const mappedExperts = response.data.map((user) => ({
+            id: user.id,
+            name: user.name || "Anonymous User",
+            specialty: user.interests?.length > 0 ? user.interests[0].name : "General",
+            description: `Available for consultation. ${user.online_status ? "Online now" : "Offline"}`,
+            price: 100,
+            rating: 4.5,
+            ratingCount: 10,
+            avatar: "/placeholder.svg",
+            is_available: user.is_available,
+            online_status: user.online_status,
+          }));
+          setExpertData(mappedExperts);
+          setFilteredExperts(mappedExperts);
+          setTotalPages(response.pagination && response.pagination.limit && response.pagination.totalRecords ? Math.ceil(response.pagination.totalRecords / response.pagination.limit) : 1);
         }
-
-        // Map the API response to the expected expert data structure
-        const mappedExperts = response.data.map((user: any) => ({
-          id: user.id,
-          name: user.name || "Anonymous User",
-          specialty: user.interests?.length > 0 ? user.interests[0].name : "General",
-          description: `Available for consultation. ${user.online_status ? "Online now" : "Offline"}`,
-          price: 100,
-          rating: 4.5,
-          ratingCount: 10,
-          avatar: "/placeholder.svg",
-          is_available: user.is_available,
-          online_status: user.online_status,
-        }));
-
-        setExpertData(mappedExperts);
-        setFilteredExperts(mappedExperts);
-        setTotalPages(Math.ceil(response.pagination.totalRecords / response.pagination.limit));
       } catch (error) {
-        toast({
-          title: "Failed to fetch experts",
-          description: "Please try again later.",
-          variant: "destructive",
-        });
-        console.error("Error fetching experts:", error);
+        if (!didCancel) {
+          toast({
+            title: "Failed to fetch experts",
+            description: "Please try again later.",
+            variant: "destructive",
+          });
+          console.error("Error fetching experts:", error);
+        }
       } finally {
-        setLoading(false);
+        if (!didCancel) setLoading(false);
       }
     };
-
     fetchExperts();
+    return () => { didCancel = true; };
   }, [user, toast, page, selectedCategory, searchQuery, token]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {

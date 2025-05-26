@@ -212,10 +212,12 @@ const OTPVerification = () => {
               maxLength={6}
               value={otp}
               onChange={(value) => setOtp(value)}
+              inputMode="numeric"
+              autoFocus
               render={({ slots }) => (
                 <InputOTPGroup>
                   {slots.map((slot, index) => (
-                    <InputOTPSlot key={index} {...slot} />
+                    <InputOTPSlot key={index} index={index} {...slot} showChar />
                   ))}
                 </InputOTPGroup>
               )}

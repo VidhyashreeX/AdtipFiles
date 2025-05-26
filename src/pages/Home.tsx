@@ -170,32 +170,39 @@ const Home = () => {
 
   // Fetch posts
   const fetchPosts = useCallback(async () => {
-    if (!isAuthenticated || !userId || !token) {
+    // If not authenticated, fetch premium posts for guests
+    if (!isAuthenticated) {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await axios.get(`${BASE_URL}/list-premium-posts`);
+        if (response.data.status && Array.isArray(response.data.data)) {
+          setFeedData(response.data.data);
+          setTotalPages(1); // No pagination for guest premium posts
+        } else {
+          setFeedData([]);
+          setError("No premium posts available for guests.");
+        }
+      } catch (err: any) {
+        setFeedData([]);
+        setError("Failed to load premium posts. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
       return;
     }
     const abortController = new AbortController();
     try {
       setLoading(true);
       setError(null);
-
       const categoryObj = popularCategories.find((cat) => cat.name === selectedCategory);
       const categoryId = categoryObj ? categoryObj.id : 0;
-
       const payload = {
         category: categoryId,
-        page: page,
-        limit: 5,
-        loggined_user_id: parseInt(userId),
+        page: String(page),
+        limit: "5",
+        loggined_user_id: userId ? String(userId) : "0",
       };
-      console.log("Sending /api/list-posts request:", {
-        url: `${BASE_URL}/list-posts`,
-        payload,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
       const response = await axios.post<ApiResponse>(
         `${BASE_URL}/list-posts`,
         payload,
@@ -208,14 +215,6 @@ const Home = () => {
           signal: abortController.signal,
         }
       );
-
-      console.log("list-posts response:", {
-        status: response.data.status,
-        message: response.data.message,
-        dataLength: response.data.data.length,
-        pagination: response.data.pagination,
-      });
-
       if (response.data.status) {
         const sanitizedPosts = response.data.data.map((post) => ({
           ...post,
@@ -228,20 +227,11 @@ const Home = () => {
         }));
         setFeedData(sanitizedPosts);
         setTotalPages(response.data.pagination.total_page);
-        if (response.data.data.length === 0) {
-          console.warn("No posts returned in response", { selectedCategory, page });
-        }
       } else {
         throw new Error(response.data.message || "Failed to fetch posts");
       }
     } catch (err: any) {
       if (err.name === "AbortError") return;
-      console.error("list-posts error:", {
-        message: err.message,
-        status: err.response?.status,
-        data: err.response?.data,
-        code: err.code,
-      });
       setError(
         err.message === "Network Error"
           ? "Unable to connect to the server. Please check your internet connection."
