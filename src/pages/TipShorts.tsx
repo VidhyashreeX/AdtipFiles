@@ -1,281 +1,392 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Heart, MessageSquare, Share2, User } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Heart, MessageSquare, Share2, ThumbsDown } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
-import { contentAPI, userAPI } from '../services/api';
+import { useNavigate } from "react-router-dom";
 
 interface TipShort {
   id: number;
-  user_id: number;
-  title: string;
-  content: string;
-  media_url: string;
-  media_type: "video";
-  user_name: string;
-  user_profile_image: string | null;
-  likeCount: number;
-  commentCount: number;
-  is_liked: boolean;
-  views: number;
+  user: {
+    name: string;
+    avatar: string;
+    isVerified: boolean;
+  };
+  content: {
+    video: string;
+    description: string;
+    likes: string;
+    comments: number;
+    shares: number;
+  };
+  musicName: string;
+}
+
+interface ApiResponse<T> {
+  status?: string;
+  message?: string;
+  data?: T;
 }
 
 const TipShorts = () => {
-  const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
   const [shorts, setShorts] = useState<TipShort[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [liked, setLiked] = useState<{ [key: number]: boolean }>({});
-  const [balance, setBalance] = useState<string>("0");
+  const [disliked, setDisliked] = useState<{ [key: number]: boolean }>({});
   const [loading, setLoading] = useState(true);
-  const [videoLoading, setVideoLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const hasInitialized = useRef(false);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState<{ [key: number]: boolean }>({});
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const isMounted = useRef(true);
 
-  const fetchData = useCallback(async () => {
-    if (!isAuthenticated || !user?.id || !user?.accessToken) {
-      setError("User session expired. Please login again.");
+  const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
+    ? import.meta.env.VITE_API_URL
+    : `${import.meta.env.VITE_API_URL}/api`;
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    videoRefs.current = Array(shorts.length).fill(null);
+  }, [shorts]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
       navigate("/login");
-      return;
     }
-    // Prevent multiple fetches per mount
-    if (hasInitialized.current) return;
-    hasInitialized.current = true;
-    try {
+  }, [isAuthenticated, navigate]);
+
+  useEffect(() => {
+    const fetchShorts = async () => {
+      if (!isAuthenticated) return;
       setLoading(true);
       setError(null);
-      const [balanceResponse, shortsResponse] = await Promise.all([
-        userAPI.getWalletBalance(user.id.toString()),
-        contentAPI.getShorts(user.id.toString())
-      ]);
-      if (balanceResponse.data.status === 200) {
-        setBalance(balanceResponse.data.availableBalance);
-      }
-      // Defensive: shortsResponse.data.data must be an array
-      if (!shortsResponse.data || !Array.isArray(shortsResponse.data.data)) {
-        setShorts([]);
-        setError("No shorts available at the moment.");
-        return;
-      }
-      const validShorts = shortsResponse.data.data.filter(
-        (short) => short && short.media_url && short.media_type === "video"
-      );
-      setShorts(validShorts);
-      const likedState = {};
-      validShorts.forEach((short) => {
-        likedState[short.id] = short.is_liked;
-      });
-      setLiked(likedState);
-      if (validShorts.length === 0) {
-        setError("No shorts available at the moment.");
-      }
-    } catch (err) {
-      setError("Failed to load shorts. Please try again later.");
-      setShorts([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [isAuthenticated, user, navigate]);
 
-  // Only fetch data once on mount
-  useEffect(() => {
-    if (!hasInitialized.current) {
-      fetchData();
-    }
-    return () => {
-      hasInitialized.current = false;
-      videoRefs.current.forEach(video => {
-        if (video) {
+      try {
+        const userId = localStorage.getItem("userId") || "50816";
+        const apiUrl = `${BASE_URL}/getshots/${userId}`;
+        const res = await fetch(apiUrl);
+
+        if (!res.ok) {
+          throw new Error(`Failed to load tip shorts: ${res.status} ${await res.text()}`);
+        }
+
+        const contentType = res.headers.get("content-type");
+        if (!contentType?.includes("application/json")) {
+          throw new Error("API did not return JSON.");
+        }
+
+        const data: ApiResponse<unknown[]> = await res.json();
+        const rawShorts = Array.isArray(data.data) ? data.data : [];
+
+        const normalized: TipShort[] = rawShorts
+          .map((short): TipShort | null => {
+            const s = short as {
+              id: number;
+              video_link: string;
+              channelName?: string;
+              channel_profile?: string;
+              video_desciption?: string;
+              total_likes?: number;
+              total_comments?: number;
+              video_music?: string;
+            };
+            if (!s.video_link) return null;
+
+            return {
+              id: s.id,
+              user: {
+                name: s.channelName || "Unknown",
+                avatar: s.channel_profile || "/placeholder.svg",
+                isVerified: false,
+              },
+              content: {
+                video: s.video_link.startsWith("http")
+                  ? s.video_link
+                  : `${BASE_URL.replace(/\/api$/, "")}${s.video_link}`,
+                description: s.video_desciption || s.channelName || "No description",
+                likes: String(s.total_likes || 0),
+                comments: s.total_comments || 0,
+                shares: 0,
+              },
+              musicName: s.video_music || "Unknown",
+            };
+          })
+          .filter((s): s is TipShort => s !== null);
+
+        if (normalized.length === 0) {
+          throw new Error("No valid shorts found.");
+        }
+
+        setShorts(normalized);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unknown error");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchShorts();
+  }, [isAuthenticated, BASE_URL]);
+
+  const pauseAllVideosExcept = useCallback(
+    (exceptIndex: number) => {
+      videoRefs.current.forEach((video, idx) => {
+        if (video && idx !== exceptIndex && !video.paused && isMounted.current) {
           video.pause();
-          video.src = "";
-          video.load();
+          setIsPlaying((prev) => ({ ...prev, [shorts[idx].id]: false }));
         }
       });
-    };
-  }, []); // Only run on mount/unmount
+    },
+    [shorts]
+  );
 
-  // Handle video playback with better error handling
+  const playVideoAtIndex = useCallback(
+    (index: number) => {
+      const video = videoRefs.current[index];
+      if (video && isMounted.current) {
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              if (isMounted.current) {
+                setIsPlaying((prev) => ({ ...prev, [shorts[index].id]: true }));
+              }
+            })
+            .catch((err) => {
+              if (isMounted.current) {
+                setPlaybackError(`Failed to play video: ${err.message}`);
+              }
+            });
+        }
+      }
+    },
+    [shorts]
+  );
+
+  // Keyboard navigation: Up / Down arrow keys
   useEffect(() => {
-    if (!shorts.length || currentIndex < 0 || currentIndex >= shorts.length) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return; // Ignore repeated events on holding key
 
-    const currentVideo = videoRefs.current[currentIndex];
-    if (!currentVideo) return;
-
-    // Pause all other videos
-    videoRefs.current.forEach((video, index) => {
-      if (video && index !== currentIndex) {
-        video.pause();
-        video.currentTime = 0;
-      }
-    });
-
-    // Play current video
-    const playVideo = async () => {
-      try {
-        setVideoLoading(true);
-        await currentVideo.play();
-        setVideoLoading(false);
-      } catch (err) {
-        console.error("Error playing video:", err);
-        setVideoLoading(false);
-        setError("Failed to play video. Please try again.");
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (currentIndex < shorts.length - 1) {
+          const newIndex = currentIndex + 1;
+          setCurrentIndex(newIndex);
+          pauseAllVideosExcept(newIndex);
+          playVideoAtIndex(newIndex);
+          containerRef.current?.scrollTo({
+            top: newIndex * window.innerHeight,
+            behavior: "smooth",
+          });
+        }
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (currentIndex > 0) {
+          const newIndex = currentIndex - 1;
+          setCurrentIndex(newIndex);
+          pauseAllVideosExcept(newIndex);
+          playVideoAtIndex(newIndex);
+          containerRef.current?.scrollTo({
+            top: newIndex * window.innerHeight,
+            behavior: "smooth",
+          });
+        }
       }
     };
 
-    playVideo();
+    window.addEventListener("keydown", handleKeyDown);
 
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentIndex, shorts.length, pauseAllVideosExcept, playVideoAtIndex]);
+
+  // Scroll handler to change only one short per scroll event, debounce the scroll
+  useEffect(() => {
+    let scrollTimeout: NodeJS.Timeout | null = null;
+
+    const onScroll = () => {
+      if (scrollTimeout) return; // already waiting to handle
+
+      scrollTimeout = setTimeout(() => {
+        if (!containerRef.current || !isMounted.current) {
+          scrollTimeout = null;
+          return;
+        }
+
+        const scrollPos = containerRef.current.scrollTop;
+        const videoHeight = window.innerHeight;
+        const newIndex = Math.round(scrollPos / videoHeight);
+
+        if (newIndex !== currentIndex && newIndex >= 0 && newIndex < shorts.length) {
+          setCurrentIndex(newIndex);
+          pauseAllVideosExcept(newIndex);
+          playVideoAtIndex(newIndex);
+          // Snap scroll to exact newIndex to avoid partial scroll
+          containerRef.current.scrollTo({
+            top: newIndex * videoHeight,
+            behavior: "smooth",
+          });
+        }
+        scrollTimeout = null;
+      }, 100); // 100ms debounce to limit frequent index changes
+    };
+
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener("scroll", onScroll);
+    }
     return () => {
-      if (currentVideo) {
-        currentVideo.pause();
+      if (container) {
+        container.removeEventListener("scroll", onScroll);
       }
+      if (scrollTimeout) clearTimeout(scrollTimeout);
     };
-  }, [currentIndex, shorts]);
+  }, [currentIndex, shorts.length, pauseAllVideosExcept, playVideoAtIndex]);
 
-  const handleNext = () => {
-    if (currentIndex < shorts.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-      setVideoLoading(true);
+  useEffect(() => {
+    if (shorts.length > 0) {
+      playVideoAtIndex(0);
     }
-  };
-
-  const handlePrevious = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-      setVideoLoading(true);
-    }
-  };
+  }, [shorts, playVideoAtIndex]);
 
   const toggleLike = (id: number) => {
-    setLiked(prev => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
+    setLiked((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  if (loading) return <div className="text-white h-screen flex items-center justify-center">Loading videos...</div>;
-  if (error) return (
-    <div className="h-screen bg-gray-50 flex flex-col items-center justify-center text-center">
-      <div className="w-16 h-16 rounded-full bg-adtip-teal flex items-center justify-center mb-6">
-        <svg className="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="11" cy="11" r="8" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-      </div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">{error}</h1>
-      <Button onClick={() => { hasInitialized.current = false; fetchData(); }} className="mt-4">Retry</Button>
-      <Button onClick={() => navigate("/home")} className="bg-adtip-teal text-white hover:bg-adtip-teal/90 px-6 py-2 rounded-lg mb-2">Go to Home</Button>
-      <button onClick={() => navigate("/tiptube")} className="text-adtip-teal text-sm hover:underline">or explore TipTube</button>
-    </div>
-  );
-  if (!shorts.length) return (
-    <div className="h-screen bg-gray-50 flex flex-col items-center justify-center text-center">
-      <div className="w-16 h-16 rounded-full bg-adtip-teal flex items-center justify-center mb-6">
-        <svg className="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="11" cy="11" r="8" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-      </div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">No Shorts Found</h1>
-      <p className="text-gray-600 mb-6">It looks like there are no shorts available at the moment.</p>
-      <Button onClick={() => { hasInitialized.current = false; fetchData(); }} className="mt-4">Retry</Button>
-      <Button onClick={() => navigate("/home")} className="bg-adtip-teal text-white hover:bg-adtip-teal/90 px-6 py-2 rounded-lg mb-2">Go to Home</Button>
-      <button onClick={() => navigate("/tiptube")} className="text-adtip-teal text-sm hover:underline">or explore TipTube</button>
-    </div>
-  );
+  const toggleDislike = (id: number) => {
+    setDisliked((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
-  const currentShort = shorts[currentIndex];
+  const togglePlayPause = (id: number, index: number) => {
+    const video = videoRefs.current[index];
+    if (!video) return;
+    if (isPlaying[id]) {
+      video.pause();
+      setIsPlaying((prev) => ({ ...prev, [id]: false }));
+    } else {
+      pauseAllVideosExcept(index);
+      playVideoAtIndex(index);
+    }
+  };
+
+  if (loading)
+    return (
+      <div className="text-black h-screen flex items-center justify-center">Loading...</div>
+    );
+  if (error)
+    return (
+      <div className="text-red-500 h-screen flex items-center justify-center">{error}</div>
+    );
+  if (shorts.length === 0)
+    return (
+      <div className="text-black h-screen flex items-center justify-center">No shorts available</div>
+    );
 
   return (
-    <div className="h-screen bg-black overflow-hidden">
-      <div className="relative h-full w-full overflow-hidden">
-        <div className="h-full w-full bg-gray-900 flex items-center justify-center">
-          {videoLoading && (
-            <div className="absolute text-white">Loading video...</div>
-          )}
-          <video
-            ref={(el) => (videoRefs.current[currentIndex] = el)}
-            src={currentShort.media_url}
-            muted={false}
-            className="h-full w-full object-cover"
-            onCanPlay={() => setVideoLoading(false)}
-            onError={() => {
-              setVideoLoading(false);
-              setError("Failed to load video. Please try another short.");
-            }}
-          />
-        </div>
-
-        <div className="absolute top-4 left-4 right-4 flex justify-between items-center">
-          <div className="flex items-center space-x-2">
-            <span className="text-white text-sm font-semibold">Balance: ₹{parseFloat(balance).toFixed(2)}</span>
-          </div>
-          <Button
-            size="sm"
-            className="teal-button text-xs"
-            onClick={() => navigate("/premium")}
-          >
-            Go Premium
-          </Button>
-        </div>
-
-        <div className="absolute right-4 bottom-28 flex flex-col items-center space-y-6">
-          <button onClick={() => toggleLike(currentShort.id)} className="flex flex-col items-center">
-            <div className={`w-10 h-10 rounded-full ${liked[currentShort.id] ? 'bg-pink-500/20' : 'bg-black/20'} backdrop-blur-lg flex items-center justify-center`}>
-              <Heart className={`h-6 w-6 ${liked[currentShort.id] ? 'text-pink-500 fill-pink-500' : 'text-white'}`} />
-            </div>
-            <span className="text-white text-xs mt-1">{currentShort.likeCount}</span>
-          </button>
-          <button className="flex flex-col items-center">
-            <div className="w-10 h-10 rounded-full bg-black/20 backdrop-blur-lg flex items-center justify-center">
-              <MessageSquare className="h-6 w-6 text-white" />
-            </div>
-            <span className="text-white text-xs mt-1">{currentShort.commentCount}</span>
-          </button>
-          <button className="flex flex-col items-center">
-            <div className="w-10 h-10 rounded-full bg-black/20 backdrop-blur-lg flex items-center justify-center">
-              <Share2 className="h-6 w-6 text-white" />
-            </div>
-            <span className="text-white text-xs mt-1">{currentShort.views}</span>
-          </button>
-        </div>
-
-        <div className="absolute left-4 right-20 bottom-6 text-white">
-          <div className="flex items-center mb-3">
-            <div className="w-10 h-10 rounded-full bg-gray-600 overflow-hidden mr-3">
-              {currentShort.user_profile_image ? (
-                <img src={currentShort.user_profile_image} alt={currentShort.user_name} className="h-full w-full object-cover" />
+    <div
+      ref={containerRef}
+      className="min-h-screen bg-white overflow-y-scroll snap-y snap-mandatory mt-[-40px]"
+      style={{ scrollBehavior: "smooth" }}
+    >
+      {shorts.map((short, index) => (
+        <div
+          key={short.id}
+          className="snap-start flex items-start justify-center w-full h-screen py-4 overflow-hidden relative"
+        >
+          <div className="flex items-start justify-center space-x-4 w-full h-full bg-gray-100 rounded-2xl shadow-lg border border-gray-200 relative">
+            <div className="w-[360px] h-[90vh] bg-gray-900 relative rounded-2xl flex items-center justify-center transition-all duration-300">
+              {short.content.video ? (
+                <>
+                  <video
+                    ref={(el) => (videoRefs.current[index] = el)}
+                    className="h-full w-full object-cover rounded-2xl"
+                    loop
+                    playsInline
+                    muted={false}
+                    onClick={() => togglePlayPause(short.id, index)}
+                    onError={() => {
+                      if (isMounted.current) setPlaybackError("Failed to load video.");
+                    }}
+                  >
+                    <source src={short.content.video} type="video/mp4" />
+                  </video>
+                  {playbackError && index === currentIndex && (
+                    <div className="absolute top-0 left-0 w-full bg-red-500 text-white text-center p-2 rounded-t-2xl">
+                      {playbackError}
+                    </div>
+                  )}
+                  {/* Username and Description Overlay */}
+                  <div className="absolute bottom-0 left-0 right-0 text-white p-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent rounded-b-2xl">
+                    <div className="flex items-center mb-2">
+                      <div className="w-10 h-10 rounded-full overflow-hidden mr-3 border-2 border-white cursor-pointer">
+                        <img
+                          src={short.user.avatar || "/placeholder.svg"}
+                          alt={short.user.name}
+                          className="h-full w-full object-cover rounded-full"
+                          onError={(e) => (e.currentTarget.src = "/placeholder.svg")}
+                          draggable={false}
+                        />
+                      </div>
+                      {/* Clickable channel name */}
+                      <h3
+                        className="font-semibold text-base drop-shadow cursor-pointer hover:underline"
+                        onClick={() => navigate(`/channel/${encodeURIComponent(short.user.name)}`)}
+                      >
+                        @{short.user.name}
+                      </h3>
+                    </div>
+                    <p className="text-base font-medium drop-shadow line-clamp-3">
+                      {short.content.description}
+                    </p>
+                  </div>
+                </>
               ) : (
-                <User className="h-full w-full p-2" />
+                <div className="h-full w-full flex items-center justify-center text-white bg-gray-900 rounded-2xl">
+                  Video source not available
+                </div>
               )}
             </div>
-            <div>
-              <div className="flex items-center">
-                <h3 className="font-semibold text-sm">{currentShort.user_name}</h3>
-              </div>
-              <Button size="sm" className="h-7 mt-1 teal-button text-xs">Follow</Button>
+            {/* Right-side actions - now to the right of the video */}
+            <div className="flex flex-col items-center space-y-4 h-[90vh] justify-center ml-2">
+              <Button size="sm" className="h-8 bg-red-600 text-white text-sm font-semibold rounded-full px-4">
+                Subscribe
+              </Button>
+              <button onClick={() => toggleLike(short.id)} className="flex flex-col items-center">
+                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                  <Heart className={`h-6 w-6 ${liked[short.id] ? "text-red-500 fill-red-500" : "text-gray-600"}`} />
+                </div>
+                <span className="text-black text-xs font-semibold mt-1">{short.content.likes}</span>
+              </button>
+              <button onClick={() => toggleDislike(short.id)} className="flex flex-col items-center">
+                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                  <ThumbsDown className={`h-6 w-6 ${disliked[short.id] ? "text-blue-500 fill-blue-500" : "text-gray-600"}`} />
+                </div>
+                <span className="text-black text-xs font-semibold mt-1">Dislike</span>
+              </button>
+              <button className="flex flex-col items-center">
+                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                  <MessageSquare className="h-6 w-6 text-gray-600" />
+                </div>
+                <span className="text-black text-xs font-semibold mt-1">{short.content.comments}</span>
+              </button>
+              <button className="flex flex-col items-center">
+                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                  <Share2 className="h-6 w-6 text-gray-600" />
+                </div>
+                <span className="text-black text-xs font-semibold mt-1">{short.content.shares}</span>
+              </button>
             </div>
           </div>
-
-          <p className="text-sm mb-2">{currentShort.title}</p>
-
-          <div className="flex items-center text-xs bg-black/30 rounded-full px-3 py-1 w-fit">
-            <svg className="h-3 w-3 mr-1" viewBox="0 0 24 24" fill="none"><path d="M9 18V5l12 6.5L9 18z" fill="currentColor" /></svg>
-            Music Name
-          </div>
         </div>
-
-        <div className="absolute top-16 left-4 right-4 flex">
-          {shorts.map((_, index) => (
-            <div key={index} className={`h-1 flex-1 mx-0.5 rounded-full ${index === currentIndex ? 'bg-adtip-teal' : 'bg-gray-400/50'}`} />
-          ))}
-        </div>
-
-        <div className="absolute inset-0">
-          <div className="absolute left-0 top-0 bottom-0 w-1/3 h-full" onClick={handlePrevious} />
-          <div className="absolute right-0 top-0 bottom-0 w-1/3 h-full" onClick={handleNext} />
-        </div>
-      </div>
+      ))}
     </div>
   );
 };
