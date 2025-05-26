@@ -4,12 +4,9 @@ import { useAuth } from "../contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from "@/components/ui/input-otp";
+import { InputOTP } from "@/components/ui/input-otp";
 import { apiSendOtp, apiSendEmailOtp } from "../api";
+import { cn } from "@/lib/utils";
 
 const OTPVerification = () => {
   const [otp, setOtp] = useState("");
@@ -23,41 +20,28 @@ const OTPVerification = () => {
   const { verifyOTP, verifyEmailOTP } = useAuth();
 
   useEffect(() => {
-    const initializeVerification = () => {
-      // Check if we have required data
-      const storedMobile = localStorage.getItem("mobile_number");
-      const storedEmail = localStorage.getItem("email");
-      const tempUserId = localStorage.getItem("tempUserId");
-      
-      console.log("OTPVerification init:", { storedMobile, storedEmail, tempUserId });
+    const storedMobile = localStorage.getItem("mobile_number");
+    const storedEmail = localStorage.getItem("email");
+    const tempUserId = localStorage.getItem("tempUserId");
 
-      if (!tempUserId || (!storedMobile && !storedEmail)) {
-        console.warn("Missing required session data for OTP verification");
-        toast.error("Please login first");
-        navigate("/login");
-        return;
-      }
+    if (!tempUserId || (!storedMobile && !storedEmail)) {
+      toast.error("Please login first");
+      navigate("/login");
+      return;
+    }
 
-      if (storedMobile) {
-        setMobileNumber(storedMobile);
-        setVerificationType("phone");
-        console.log("Initialized phone verification for:", storedMobile);
-      } else if (storedEmail) {
-        setEmail(storedEmail);
-        setVerificationType("email");
-        console.log("Initialized email verification for:", storedEmail);
-      }
-    };
+    if (storedMobile) {
+      setMobileNumber(storedMobile);
+      setVerificationType("phone");
+    } else if (storedEmail) {
+      setEmail(storedEmail);
+      setVerificationType("email");
+    }
 
-    initializeVerification();
-
-    // Start countdown if it exists
     const storedCountdown = localStorage.getItem("otpCountdown");
     if (storedCountdown) {
       const timeLeft = parseInt(storedCountdown) - Math.floor(Date.now() / 1000);
-      if (timeLeft > 0) {
-        setCountdown(timeLeft);
-      }
+      if (timeLeft > 0) setCountdown(timeLeft);
     }
   }, [navigate]);
 
@@ -65,18 +49,10 @@ const OTPVerification = () => {
     let interval: NodeJS.Timeout;
     if (countdown > 0) {
       interval = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(interval);
-            return 0;
-          }
-          return prev - 1;
-        });
+        setCountdown((prev) => prev > 0 ? prev - 1 : 0);
       }, 1000);
+      return () => clearInterval(interval);
     }
-    return () => {
-      clearInterval(interval);
-    };
   }, [countdown]);
 
   const handleVerifyOTP = async () => {
@@ -88,61 +64,41 @@ const OTPVerification = () => {
     setLoading(true);
     try {
       const tempUserId = localStorage.getItem("tempUserId");
-      if (!tempUserId) {
-        throw new Error("Session expired. Please login again.");
-      }
+      if (!tempUserId) throw new Error("Session expired. Please login again.");
 
       let result;
       if (verificationType === "phone") {
-        const storedMobile = localStorage.getItem("mobile_number");
-        if (!storedMobile) {
-          throw new Error("Session expired. Please login again.");
-        }
-        result = await verifyOTP(storedMobile, otp, tempUserId);
+        result = await verifyOTP(mobileNumber, otp, tempUserId);
       } else {
-        const storedEmail = localStorage.getItem("email");
-        if (!storedEmail) {
-          throw new Error("Session expired. Please login again.");
-        }
-        result = await verifyEmailOTP(storedEmail, otp, tempUserId);
+        result = await verifyEmailOTP(email, otp, tempUserId);
       }
 
       if (result?.data?.success || result?.data?.message === "OTP verify successful.") {
-        if (!result.data.data || !Array.isArray(result.data.data) || result.data.data.length === 0) {
+        if (!result.data.data?.[0]) {
           throw new Error("Invalid server response: missing user data");
         }
 
-        const userData = result.data.data[0];
-        const { id, name, mobile_number, email, is_registered, isSaveUserDetails = 0 } = userData;
-        // Set user ID in localStorage for future use
+        const { id, is_registered, isSaveUserDetails = 0 } = result.data.data[0];
+        
+        // Clear session data
         localStorage.setItem("UserId", id.toString());
-
-        // Clean up session storage
         localStorage.removeItem("tempUserId");
         localStorage.removeItem("mobile_number");
         localStorage.removeItem("email");
         localStorage.removeItem("otpCountdown");
-
+        
         toast.success("OTP verified successfully");
 
-        // Handle navigation based on user status
+        // Navigate based on user state
         if (is_registered === 1) {
-          if (isSaveUserDetails === 0) {
-            console.log("User registered but details not saved, redirecting to complete profile...");
-            navigate("/complete-profile", { replace: true });
-          } else {
-            console.log("User registered with complete profile, redirecting to home...");
-            navigate("/home", { replace: true });
-          }
+          navigate(isSaveUserDetails === 0 ? "/complete-profile" : "/home", { replace: true });
         } else {
-          console.log("New user, redirecting to onboarding...");
           navigate("/onboarding", { replace: true });
         }
       } else {
         throw new Error(result?.data?.message || "Failed to verify OTP");
       }
     } catch (error) {
-      console.error("OTP verification error:", error);
       toast.error(error instanceof Error ? error.message : "Failed to verify OTP");
     } finally {
       setLoading(false);
@@ -157,12 +113,9 @@ const OTPVerification = () => {
 
     setResendLoading(true);
     try {
-      let response;
-      if (verificationType === "phone") {
-        response = await apiSendOtp(mobileNumber);
-      } else {
-        response = await apiSendEmailOtp(email);
-      }
+      const response = verificationType === "phone"
+        ? await apiSendOtp(mobileNumber)
+        : await apiSendEmailOtp(email);
 
       if (response?.data?.success || response?.data?.status === 200) {
         localStorage.setItem("otpCountdown", (Math.floor(Date.now() / 1000) + 30).toString());
@@ -172,7 +125,6 @@ const OTPVerification = () => {
         throw new Error(response?.data?.message || "Failed to resend OTP");
       }
     } catch (error) {
-      console.error("OTP resend error:", error);
       toast.error(error instanceof Error ? error.message : "Failed to resend OTP");
     } finally {
       setResendLoading(false);
@@ -180,89 +132,83 @@ const OTPVerification = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen p-6 bg-white">
-      <div className="mb-8">
+    <div className="min-h-screen bg-gradient-to-b from-white to-gray-50">
+      <div className="container max-w-md mx-auto px-4 py-8">
         <button
           onClick={() => navigate("/login")}
-          className="text-gray-500 flex items-center hover:text-gray-700 transition-colors"
+          className="mb-8 text-gray-600 hover:text-gray-800 transition-colors inline-flex items-center"
         >
-          <ArrowLeft size={20} className="mr-1" />
-          <span>Back</span>
+          <ArrowLeft size={20} className="mr-2" />
+          Back to Login
         </button>
-      </div>
 
-      <div className="flex-1 flex flex-col justify-center max-w-md mx-auto w-full">
-        <div className="flex justify-center mb-6">
-          <img src="/logo.png" alt="AdTip Logo" className="h-16 w-16" />
-        </div>
+        <div className="bg-white rounded-2xl shadow-lg p-8">
+          <div className="flex justify-center mb-6">
+            <img src="/logo.png" alt="AdTip Logo" className="h-16 w-16" />
+          </div>
 
-        <div>
-          <h1 className="text-2xl font-bold text-center text-gray-900">
-            Enter verification code
+          <h1 className="text-2xl font-bold text-center text-gray-900 mb-2">
+            Verify Your {verificationType === "phone" ? "Phone" : "Email"}
           </h1>
-          <p className="mt-2 text-center text-gray-600">
-            We've sent a 6-digit code to{" "}
-            {verificationType === "phone" ? mobileNumber : email}
+          
+          <p className="text-center text-gray-600 mb-8">
+            Enter the 6-digit code sent to{" "}
+            <span className="font-medium text-gray-900">
+              {verificationType === "phone" ? mobileNumber : email}
+            </span>
           </p>
-        </div>
 
-        <div className="mt-8 space-y-6">
-          <div className="flex justify-center">
+          <div className="space-y-6">
             <InputOTP
-              maxLength={6}
               value={otp}
-              onChange={(value) => setOtp(value)}
-              inputMode="numeric"
-              autoFocus
-              render={({ slots }) => (
-                <InputOTPGroup>
-                  {slots.map((slot, index) => (
-                    <InputOTPSlot key={index} index={index} {...slot} showChar />
-                  ))}
-                </InputOTPGroup>
-              )}
+              onChange={setOtp}
+              maxLength={6}
+              disabled={loading}
             />
-          </div>
 
-          <Button
-            onClick={handleVerifyOTP}
-            className="w-full bg-adtip-teal hover:bg-adtip-teal/90 text-white"
-            disabled={loading || otp.length !== 6}
-          >
-            {loading ? "Verifying..." : "Verify OTP"}
-          </Button>
-
-          <div className="text-center">
-            <button
-              onClick={handleResendOTP}
-              disabled={resendLoading || countdown > 0}
-              className="text-adtip-teal hover:text-adtip-teal/90 disabled:text-gray-400 disabled:cursor-not-allowed"
+            <Button
+              onClick={handleVerifyOTP}
+              className="w-full h-12 text-lg bg-adtip-teal hover:bg-adtip-teal/90 text-white transition-colors"
+              disabled={loading || otp.length !== 6}
             >
-              {resendLoading
-                ? "Sending..."
-                : countdown > 0
-                ? `Resend OTP in ${countdown}s`
-                : "Resend OTP"}
-            </button>
+              {loading ? (
+                <span className="inline-flex items-center">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Verifying...
+                </span>
+              ) : (
+                "Verify Code"
+              )}
+            </Button>
+
+            <div className="text-center">
+              <button
+                onClick={handleResendOTP}
+                disabled={resendLoading || countdown > 0}
+                className={cn(
+                  "text-adtip-teal hover:text-adtip-teal/90 transition-colors",
+                  "disabled:text-gray-400 disabled:cursor-not-allowed"
+                )}
+              >
+                {resendLoading
+                  ? "Sending..."
+                  : countdown > 0
+                  ? `Resend code in ${countdown}s`
+                  : "Resend code"}
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="mt-8 text-center text-sm text-gray-600">
+        <div className="mt-8 text-center text-sm text-gray-500">
           <p>By continuing, you agree to our</p>
-          <p>
-            <a
-              href="/terms"
-              className="text-adtip-teal hover:text-adtip-teal/90 transition-colors"
-            >
-              Terms of Service
-            </a>{" "}
-            and{" "}
-            <a
-              href="/privacy"
-              className="text-adtip-teal hover:text-adtip-teal/90 transition-colors"
-            >
-              Privacy Policy
-            </a>
+          <p className="mt-1">
+            <a href="/terms" className="text-adtip-teal hover:underline">Terms of Service</a>
+            {" "}&amp;{" "}
+            <a href="/privacy" className="text-adtip-teal hover:underline">Privacy Policy</a>
           </p>
         </div>
       </div>
