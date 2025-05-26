@@ -113,9 +113,14 @@ const PhoneLogin: React.FC = () => {
       });
       if (response.status === 200) {
         const userData = response.data.data[0];
+        // Store for OTPVerification
+        localStorage.setItem('mobile_number', phone);
+        localStorage.setItem('tempUserId', String(userData.id));
+        localStorage.setItem('otpCountdown', (Math.floor(Date.now() / 1000) + 30).toString());
         setUserId(userData.id);
         setTimer(40);
-        navigate('/verify-otp', { state: { phoneNumber: userData.mobile_number, userId: userData.id } });
+        // Redirect to OTP verification
+        navigate('/verify-otp');
       } else {
         alert(response.data.message || 'Failed to send OTP');
       }

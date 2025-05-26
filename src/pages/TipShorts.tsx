@@ -35,62 +35,44 @@ const TipShorts = () => {
 
   const fetchData = useCallback(async () => {
     if (!isAuthenticated || !user?.id || !user?.accessToken) {
+      setError("User session expired. Please login again.");
       navigate("/login");
       return;
     }
-
-    // Prevent multiple fetches
+    // Prevent multiple fetches per mount
     if (hasInitialized.current) return;
     hasInitialized.current = true;
-
     try {
       setLoading(true);
       setError(null);
-
-      // Concurrent fetch for both balance and shorts
       const [balanceResponse, shortsResponse] = await Promise.all([
         userAPI.getWalletBalance(user.id.toString()),
         contentAPI.getShorts(user.id.toString())
       ]);
-
-      // Handle wallet balance
       if (balanceResponse.data.status === 200) {
         setBalance(balanceResponse.data.availableBalance);
       }
-
-      // Handle shorts data
-      if (!shortsResponse.data) {
-        throw new Error("No response data received");
-      }
-
-      // Check if we have a valid data array, even if empty
-      if (!Array.isArray(shortsResponse.data.data)) {
-        console.warn("Invalid shorts data format:", shortsResponse.data);
+      // Defensive: shortsResponse.data.data must be an array
+      if (!shortsResponse.data || !Array.isArray(shortsResponse.data.data)) {
         setShorts([]);
+        setError("No shorts available at the moment.");
         return;
       }
-
-      // Filter valid shorts
       const validShorts = shortsResponse.data.data.filter(
-        (short: TipShort) => short && short.media_url && short.media_type === "video"
+        (short) => short && short.media_url && short.media_type === "video"
       );
-
-      // Set shorts even if empty array
       setShorts(validShorts);
-        
-      // Initialize liked state for valid shorts
-      const likedState: { [key: number]: boolean } = {};
-      validShorts.forEach((short: TipShort) => {
+      const likedState = {};
+      validShorts.forEach((short) => {
         likedState[short.id] = short.is_liked;
       });
       setLiked(likedState);
-
-    } catch (err: any) {
-      console.error("Error fetching data:", err);
-      // Only set error for actual errors, not successful responses
-      if (err.message !== "Shot fetch successfully") {
-        setError(err.message || "An error occurred while fetching data");
+      if (validShorts.length === 0) {
+        setError("No shorts available at the moment.");
       }
+    } catch (err) {
+      setError("Failed to load shorts. Please try again later.");
+      setShorts([]);
     } finally {
       setLoading(false);
     }
@@ -98,12 +80,11 @@ const TipShorts = () => {
 
   // Only fetch data once on mount
   useEffect(() => {
-    fetchData();
-    
-    // Cleanup function
+    if (!hasInitialized.current) {
+      fetchData();
+    }
     return () => {
       hasInitialized.current = false;
-      // Pause and cleanup any playing videos
       videoRefs.current.forEach(video => {
         if (video) {
           video.pause();
@@ -112,7 +93,7 @@ const TipShorts = () => {
         }
       });
     };
-  }, [fetchData]);
+  }, []); // Only run on mount/unmount
 
   // Handle video playback with better error handling
   useEffect(() => {
@@ -174,9 +155,17 @@ const TipShorts = () => {
 
   if (loading) return <div className="text-white h-screen flex items-center justify-center">Loading videos...</div>;
   if (error) return (
-    <div className="text-red-500 h-screen flex flex-col items-center justify-center">
-      <p>{error}</p>
-      <Button onClick={() => { fetchData(); }} className="mt-4">Retry</Button>
+    <div className="h-screen bg-gray-50 flex flex-col items-center justify-center text-center">
+      <div className="w-16 h-16 rounded-full bg-adtip-teal flex items-center justify-center mb-6">
+        <svg className="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+      </div>
+      <h1 className="text-2xl font-bold text-gray-900 mb-2">{error}</h1>
+      <Button onClick={() => { hasInitialized.current = false; fetchData(); }} className="mt-4">Retry</Button>
+      <Button onClick={() => navigate("/home")} className="bg-adtip-teal text-white hover:bg-adtip-teal/90 px-6 py-2 rounded-lg mb-2">Go to Home</Button>
+      <button onClick={() => navigate("/tiptube")} className="text-adtip-teal text-sm hover:underline">or explore TipTube</button>
     </div>
   );
   if (!shorts.length) return (
@@ -189,18 +178,9 @@ const TipShorts = () => {
       </div>
       <h1 className="text-2xl font-bold text-gray-900 mb-2">No Shorts Found</h1>
       <p className="text-gray-600 mb-6">It looks like there are no shorts available at the moment.</p>
-      <Button
-        onClick={() => navigate("/home")}
-        className="bg-adtip-teal text-white hover:bg-adtip-teal/90 px-6 py-2 rounded-lg mb-2"
-      >
-        Go to Home
-      </Button>
-      <button
-        onClick={() => navigate("/tiptube")}
-        className="text-adtip-teal text-sm hover:underline"
-      >
-        or explore TipTube
-      </button>
+      <Button onClick={() => { hasInitialized.current = false; fetchData(); }} className="mt-4">Retry</Button>
+      <Button onClick={() => navigate("/home")} className="bg-adtip-teal text-white hover:bg-adtip-teal/90 px-6 py-2 rounded-lg mb-2">Go to Home</Button>
+      <button onClick={() => navigate("/tiptube")} className="text-adtip-teal text-sm hover:underline">or explore TipTube</button>
     </div>
   );
 

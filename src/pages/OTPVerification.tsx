@@ -114,6 +114,8 @@ const OTPVerification = () => {
 
         const userData = result.data.data[0];
         const { id, name, mobile_number, email, is_registered, isSaveUserDetails = 0 } = userData;
+        // Set user ID in localStorage for future use
+        localStorage.setItem("UserId", id.toString());
 
         // Clean up session storage
         localStorage.removeItem("tempUserId");

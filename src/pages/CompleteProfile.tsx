@@ -245,14 +245,17 @@ const CompleteProfile = () => {
         pincode: formData.pincode,
         longitude: formData.longitude,
         latitude: formData.latitude,
-        languages: formData.language ? Number(formData.language) : 0,
-        interests: formData.interest ? Number(formData.interest) : 0,
+        languages: formData.language ? [Number(formData.language)] : [],
+        interests: formData.interest ? [Number(formData.interest)] : [],
         profile_image: "",
       };
       console.log("Saving personal details:", JSON.stringify(payload, null, 2));
       await apiSaveUserDetails(payload);
 
+      // Ensure user ID is set in localStorage and context
+      localStorage.setItem("UserId", userId.toString());
       updateUserProfile({
+        id: userId,
         name: formData.name,
         email: formData.email,
         dateOfBirth: formData.dateOfBirth,

@@ -11,23 +11,25 @@ export function usePhoneLoginController() {
   async function handleSendOtp() {
     try {
       const res = await apiSendOtp(phone);
-      if (res.status === 200 && res.data?.data?.id) {
+      let userId;
+      if (res.status === 200 && res.data?.data) {
+        if (Array.isArray(res.data.data) && res.data.data.length > 0) {
+          userId = res.data.data[0].id;
+        } else if (res.data.data.id) {
+          userId = res.data.data.id;
+        }
         alert(res.data?.message || 'OTP sent successfully');
-
-        const userId = res.data.data.id;
-
         setUser({
           id: userId,
           accessToken: null,
           phone,
-          isRegistered: false, // Default value
-          username: '', // Default value
-          bio: '', // Default value
-          wallet: 0, // Default value
-          isPremium: false, // Default value
-          referralEarnings: 0, // Default value
+          isRegistered: false,
+          username: '',
+          bio: '',
+          wallet: 0,
+          isPremium: false,
+          referralEarnings: 0,
         });
-
         navigate('/verify-otp');
       } else {
         throw new Error('Failed to send OTP');
