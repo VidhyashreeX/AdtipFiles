@@ -19,7 +19,7 @@ const categories = [
 ];
 
 // Mapping categories to interest IDs
-const categoryToInterestMap: { [key: string]: number } = {
+const categoryToInterestMap = {
   Health: 1,
   Finance: 2,
   Tech: 3,
@@ -32,91 +32,47 @@ const categoryToInterestMap: { [key: string]: number } = {
   Sports: 10,
 };
 
-const TipCall = () => {
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showCallDialog, setShowCallDialog] = useState(false);
-  const [selectedExpert, setSelectedExpert] = useState<any>(null);
-  const [callType, setCallType] = useState<"voice" | null>(null);
-  const [expertData, setExpertData] = useState<any[]>([]);
-  const [filteredExperts, setFilteredExperts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+const MAX_FETCH_RETRIES = 3;
 
-  const { user, isAuthenticated } = useAuth();
+interface Expert {
+  id: number;
+  name: string;
+  specialty: string;
+  description: string;
+  price: number;
+  rating: number;
+  ratingCount: number;
+  avatar: string;
+  is_available: boolean;
+  online_status: boolean;
+}
+
+// Using TypeScript's utility type to add properties to unknown User type
+interface UserData {
+  id?: string | number;
+  name?: string;
+  wallet?: number;
+  accessToken?: string;
+}
+
+export default function TipCall() {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const token = user?.accessToken || null;
-  useEffect(() => {
-    let didCancel = false;
-    const fetchExperts = async () => {
-      if (!isAuthenticated || !user?.id || !token) {
-        navigate("/login");
-        return;
-      }
-      setLoading(true);
-      try {
-        const interestId = selectedCategory ? [categoryToInterestMap[selectedCategory]] : [2];
-        const userId = user?.id ? String(user.id) : null;
-        const requestBody = {
-          id: 0,
-          page: page,
-          limit: 20,
-          language: [4],
-          interest: interestId,
-          user_id: userId,
-          search_by_name: searchQuery,
-          loggined_user_id: userId,
-          sortBy: {}
-        };
-        const res = await fetch(`${BASE_URL}/users`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(requestBody),
-        });
-        if (!res.ok) {
-          throw new Error(`Failed to fetch users: ${res.status}`);
-        }
-        const response = await res.json();
-        if (!didCancel) {
-          if (!response.status || !Array.isArray(response.data)) {
-            throw new Error(response.message || "Invalid response format");
-          }
-          const mappedExperts = response.data.map((user) => ({
-            id: user.id,
-            name: user.name || "Anonymous User",
-            specialty: user.interests?.length > 0 ? user.interests[0].name : "General",
-            description: `Available for consultation. ${user.online_status ? "Online now" : "Offline"}`,
-            price: 100,
-            rating: 4.5,
-            ratingCount: 10,
-            avatar: "/placeholder.svg",
-            is_available: user.is_available,
-            online_status: user.online_status,
-          }));
-          setExpertData(mappedExperts);
-          setFilteredExperts(mappedExperts);
-          setTotalPages(response.pagination && response.pagination.limit && response.pagination.totalRecords ? Math.ceil(response.pagination.totalRecords / response.pagination.limit) : 1);
-        }
-      } catch (error) {
-        if (!didCancel) {
-          toast({
-            title: "Failed to fetch experts",
-            description: "Please try again later.",
-            variant: "destructive",
-          });
-          console.error("Error fetching experts:", error);
-        }
-      } finally {
-        if (!didCancel) setLoading(false);
-      }
-    };
-    fetchExperts();    return () => { didCancel = true; };
-  }, [user, toast, page, selectedCategory, searchQuery, token, isAuthenticated, navigate]);
+  const { user, isAuthenticated } = useAuth();  const userData = user as UserData;
+  const token = userData?.accessToken || null;
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fetchRetryCount, setFetchRetryCount] = useState(0);
+  const [expertData, setExpertData] = useState<Expert[]>([]);
+  const [filteredExperts, setFilteredExperts] = useState<Expert[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [selectedExpert, setSelectedExpert] = useState<Expert | null>(null);
+  const [showCallDialog, setShowCallDialog] = useState(false);
+  const [callType, setCallType] = useState<"voice" | "video" | null>(null);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -129,14 +85,13 @@ const TipCall = () => {
     } else {
       setSelectedCategory(category);
       toast({
-        title: `${category} selected`,
-        description: `Showing experts in ${category}`,
+        description: `Showing experts in ${category}`
       });
     }
     setPage(1);
   };
 
-  const handleCallRequest = (expert: any) => {
+  const handleCallRequest = (expert: Expert) => {
     if (!isAuthenticated) {
       navigate("/login");
       return;
@@ -144,7 +99,6 @@ const TipCall = () => {
 
     if (!expert.is_available || !expert.online_status) {
       toast({
-        title: "Expert Unavailable",
         description: `${expert.name} is currently unavailable for calls.`,
         variant: "destructive",
       });
@@ -161,9 +115,8 @@ const TipCall = () => {
 
     const callPrice = selectedExpert.price;
 
-    if ((user?.wallet || 0) < callPrice) {
+    if ((userData?.wallet || 0) < callPrice) {
       toast({
-        title: "Insufficient balance",
         description: "Please add money to your wallet to continue",
         variant: "destructive",
       });
@@ -173,20 +126,17 @@ const TipCall = () => {
     }
 
     toast({
-      title: "Call initiated",
-      description: `Connecting to ${selectedExpert.name}...`,
+      description: `Connecting to ${selectedExpert.name}...`
     });
 
     setTimeout(() => {
       toast({
-        title: "Call connected",
-        description: `You're now connected with ${selectedExpert.name}. ₹${callPrice}/min will be charged.`,
+        description: `You're now connected with ${selectedExpert.name}. ₹${callPrice}/min will be charged.`
       });
 
       setTimeout(() => {
         toast({
-          title: "Call ended",
-          description: `Call duration: 1 minute. ₹${callPrice} has been deducted from your wallet.`,
+          description: `Call duration: 1 minute. ₹${callPrice} has been deducted from your wallet.`
         });
       }, 5000);
     }, 2000);
@@ -205,6 +155,127 @@ const TipCall = () => {
       setPage(page + 1);
     }
   };
+
+  useEffect(() => {
+    const abortController = new AbortController();
+    let didCancel = false;    const fetchExperts = async () => {
+      if (!isAuthenticated && !localStorage.getItem("UserLoggedIn")) {
+        navigate("/login");
+        return;
+      }
+
+      if (fetchRetryCount >= MAX_FETCH_RETRIES) {
+        setLoading(false);
+        setError("Failed to load experts after multiple attempts. Please try again later.");
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const interestId = selectedCategory ? [categoryToInterestMap[selectedCategory]] : [2];
+        const userId = userData?.id ? String(userData.id) : null;
+        const response = await fetch(`${BASE_URL}/users`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            id: 0,
+            page,
+            limit: 20,
+            language: [4],
+            interest: interestId,
+            user_id: userId,
+            search_by_name: searchQuery,
+            loggined_user_id: userId,
+            sortBy: {}
+          }),
+          signal: abortController.signal
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch users: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (didCancel) return;
+
+        if (!data.status || !Array.isArray(data.data)) {
+          setFetchRetryCount(prev => prev + 1);
+          throw new Error("Invalid response format");
+        }
+
+        const mappedExperts = data.data.map((user: any) => ({
+          id: user.id,
+          name: user.name || "Anonymous User",
+          specialty: user.interests?.length > 0 ? user.interests[0].name : "General",
+          description: `Available for consultation. ${user.online_status ? "Online now" : "Offline"}`,
+          price: 100,
+          rating: 4.5,
+          ratingCount: 10,
+          avatar: "/placeholder.svg",
+          is_available: user.is_available,
+          online_status: user.online_status,
+        }));
+
+        setExpertData(mappedExperts);
+        setFilteredExperts(mappedExperts);
+        setTotalPages(
+          data.pagination?.limit && data.pagination?.totalRecords
+            ? Math.ceil(data.pagination.totalRecords / data.pagination.limit)
+            : 1
+        );
+        setFetchRetryCount(0);
+        setError(null);
+
+      } catch (error) {
+        if (didCancel) return;
+
+        if (error instanceof Error) {
+          if (error.name === 'AbortError') {
+            return;
+          }
+          setError(error.message);
+        } else {
+          setError("An unexpected error occurred");
+        }
+
+        if (fetchRetryCount < MAX_FETCH_RETRIES) {
+          setFetchRetryCount(prev => prev + 1);
+        }
+
+        toast({
+          description: fetchRetryCount + 1 >= MAX_FETCH_RETRIES ? "Please try again later." : "Retrying...",
+          variant: "destructive",
+        });
+        console.error("Error fetching experts:", error);
+      } finally {
+        if (!didCancel) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchExperts();
+
+    return () => {
+      didCancel = true;
+      abortController.abort();
+    };  }, [
+    isAuthenticated,
+    userData?.id,
+    page,
+    searchQuery,
+    selectedCategory,
+    token,
+    fetchRetryCount,
+    navigate,    userData?.accessToken,
+    // Note: We don't need to re-run the effect when UserLoggedIn changes
+  ]);
 
   return (
     <div className="pb-20 md:pb-0 bg-gray-50">
@@ -234,8 +305,7 @@ const TipCall = () => {
                 </p>
                 <Button className="teal-button" onClick={() => {
                   toast({
-                    title: "Become an expert",
-                    description: "Complete your profile to become a TipCall expert",
+                    description: "Complete your profile to become a TipCall expert"
                   });
                 }}>
                   Become an Expert
@@ -278,7 +348,9 @@ const TipCall = () => {
             </div>
 
             {/* Expert Cards */}
-            {loading ? (
+            {error ? (
+              <p className="text-center text-red-500 font-semibold my-8">{error}</p>
+            ) : loading ? (
               <p className="text-center text-gray-500">Loading experts...</p>
             ) : filteredExperts.length === 0 ? (
               <p className="text-center text-gray-500">No experts found.</p>
@@ -369,6 +441,4 @@ const TipCall = () => {
       </Dialog>
     </div>
   );
-};
-
-export default TipCall;
+}
