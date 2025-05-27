@@ -15,9 +15,8 @@ const api = axios.create({
 // Intercept requests to add auth token
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('UserLoggedIn');
-  const user = localStorage.getItem('user');
-
-  if (token && user) {
+  // Don't check for user object, just rely on token
+  if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
@@ -30,10 +29,13 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
-      // Clear auth state if token is invalid
-      localStorage.removeItem('user');
-      localStorage.removeItem('UserLoggedIn');
-      window.location.href = '/login';
+      // Clear auth state only if token has expired
+      const token = localStorage.getItem('UserLoggedIn');
+      if (token) {
+        localStorage.removeItem('user');
+        localStorage.removeItem('UserLoggedIn');
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

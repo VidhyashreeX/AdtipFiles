@@ -42,6 +42,7 @@ interface UserData {
 interface AuthContextType {
   user: UserData | null;
   isAuthenticated: boolean;
+  authLoading: boolean;
   login: (phoneNumber: string) => Promise<any>;
   loginWithEmail: (email: string) => Promise<any>;
   verifyOTP: (phoneNumber: string, otp: string, id: string) => Promise<any>;
@@ -57,11 +58,54 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
 
   // Load user from localStorage on mount
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     const token = localStorage.getItem("UserLoggedIn");
+
+    // Fix: If user is not set but token exists, try to recover user from tempUserId or UserId
+    if (!storedUser && token) {
+      const userIdStr = localStorage.getItem("UserId") || localStorage.getItem("tempUserId");
+      if (userIdStr) {
+        const userId = Number(userIdStr);
+        if (!isNaN(userId)) {
+          // Set a minimal user object to keep session
+          setUser({ id: userId, accessToken: token } as any); // 'as any' to avoid type error for minimal user
+          setIsAuthenticated(true);
+          // Enhancement: Fetch full user profile and update state/localStorage
+          (async () => {
+            try {
+              // Use the API to fetch user profile
+              const res = await fetch(
+                `${import.meta.env.VITE_API_URL}/api/getuserbyid/${userId}`,
+                {
+                  headers: { Authorization: `Bearer ${token}` },
+                }
+              );
+              if (res.ok) {
+                const data = await res.json();
+                if (data?.data && Array.isArray(data.data) && data.data[0]) {
+                  const userData = data.data[0];
+                  // Compose a full user object (add accessToken)
+                  const fullUser = { ...userData, accessToken: token };
+                  setUser(fullUser);
+                  setIsAuthenticated(true);
+                  localStorage.setItem("user", JSON.stringify(fullUser));
+                }
+              }
+            } catch (err) {
+              // If fetch fails, keep minimal user, but do not log out
+              console.error("Failed to fetch full user profile after refresh", err);
+            } finally {
+              setAuthLoading(false);
+            }
+          })();
+          return;
+        }
+      }
+    }
 
     if (storedUser && token) {
       try {
@@ -80,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem("UserLoggedIn");
       }
     }
+    setAuthLoading(false);
   }, []);
 
   // Login function
@@ -296,6 +341,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = {
     user,
     isAuthenticated,
+    authLoading,
     login,
     loginWithEmail,
     verifyOTP,

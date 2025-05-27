@@ -87,7 +87,7 @@ const Profile = () => {
   const handleLogout = async () => {
     try {
       if (user?.id) {
-        // Call logout API
+        // Call logout API, but don't block on it
         await axios.post(
           `${import.meta.env.VITE_API_URL}/api/logout`,
           { id: user.id },
@@ -96,14 +96,25 @@ const Profile = () => {
               Authorization: `Bearer ${user.accessToken}`,
             },
           }
-        );
+        ).catch(() => {}); // Ignore API errors
       }
-      logout();
-      navigate("/login");
     } catch (error) {
-      console.error("Error during logout:", error);
-      // Still perform local logout even if API call fails
+      // Ignore API errors, always perform local logout
+    } finally {
+      // Always clear all localStorage keys related to auth
+      localStorage.removeItem("user");
+      localStorage.removeItem("UserLoggedIn");
+      localStorage.removeItem("UserId");
+      localStorage.removeItem("token");
+      localStorage.removeItem("name");
+      localStorage.removeItem("profileImage");
+      localStorage.removeItem("gender");
+      localStorage.removeItem("profession");
+      localStorage.removeItem("maritalStatus");
+      localStorage.removeItem("age");
+      // Call AuthContext logout to clear context state
       logout();
+      // Redirect to login
       navigate("/login");
     }
   };

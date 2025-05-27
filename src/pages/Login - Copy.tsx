@@ -23,18 +23,11 @@ const Login = () => {
       return;
     }
     setIsLoading(true);
-    // Set tempUserId and other required values before redirect
-    localStorage.removeItem("email");
-    localStorage.removeItem("mobile_number");
-    localStorage.removeItem("tempUserId");
-    localStorage.removeItem("otpCountdown");
-    localStorage.setItem("mobile_number", phoneNumber);
-    localStorage.setItem("tempUserId", "pending");
-    localStorage.setItem("otpCountdown", (Math.floor(Date.now() / 1000) + 30).toString());
-    navigate("/verify-otp");
     try {
       // Use the correct API integration for phone OTP
       const response = await login(phoneNumber);
+      console.log("Phone OTP API response:", response);
+
       // Accept both array and object for data
       let userData = null;
       if (response?.data?.data) {
@@ -44,10 +37,29 @@ const Login = () => {
           userData = response.data.data;
         }
       }
-      if (userData && userData.id) {
-        localStorage.setItem("tempUserId", userData.id.toString());
+      if (!userData || !userData.id) {
+        throw new Error("Missing user ID in response");
       }
+
+      // Clear existing data
+      localStorage.removeItem("email");
+      localStorage.removeItem("mobile_number");
+      localStorage.removeItem("tempUserId");
+      localStorage.removeItem("otpCountdown");
+
+      // Set new data
+      localStorage.setItem("mobile_number", phoneNumber);
+      localStorage.setItem("tempUserId", userData.id.toString());
+      localStorage.setItem("otpCountdown", (Math.floor(Date.now() / 1000) + 30).toString());
+
+      console.log("Stored login data:", {
+        mobile: phoneNumber,
+        tempUserId: userData.id,
+        countdown: Math.floor(Date.now() / 1000) + 30
+      });
+
       toast.success("OTP sent successfully");
+      navigate("/verify-otp");
     } catch (err: any) {
       // Show backend error message if available
       let errorMsg = err?.response?.data?.message || err.message || "Could not send OTP. Please try again.";
@@ -70,26 +82,39 @@ const Login = () => {
       return;
     }
     setIsLoading(true);
-    // Set tempUserId and other required values before redirect
-    localStorage.removeItem("email");
-    localStorage.removeItem("mobile_number");
-    localStorage.removeItem("tempUserId");
-    localStorage.removeItem("otpCountdown");
-    localStorage.setItem("email", email);
-    localStorage.setItem("tempUserId", "pending");
-    localStorage.setItem("otpCountdown", (Math.floor(Date.now() / 1000) + 30).toString());
-    navigate("/verify-otp");
     try {
       const response = await loginWithEmail(email);
+      console.log("Email OTP API response:", response);
+
       // Check for proper response format
-      let userData = null;
-      if (response?.data?.data && Array.isArray(response.data.data) && response.data.data.length > 0) {
-        userData = response.data.data[0];
+      if (!response?.data?.data || !Array.isArray(response.data.data) || response.data.data.length === 0) {
+        throw new Error("Invalid response format from server");
       }
-      if (userData && userData.id) {
-        localStorage.setItem("tempUserId", userData.id.toString());
+
+      const userData = response.data.data[0];
+      if (!userData.id) {
+        throw new Error("Missing user ID in response");
       }
+
+      // Clear existing data
+      localStorage.removeItem("email");
+      localStorage.removeItem("mobile_number");
+      localStorage.removeItem("tempUserId");
+      localStorage.removeItem("otpCountdown");
+
+      // Set new data
+      localStorage.setItem("email", email);
+      localStorage.setItem("tempUserId", userData.id.toString());
+      localStorage.setItem("otpCountdown", (Math.floor(Date.now() / 1000) + 30).toString());
+
+      console.log("Stored login data:", {
+        email,
+        tempUserId: userData.id,
+        countdown: Math.floor(Date.now() / 1000) + 30
+      });
+
       toast.success("OTP sent successfully");
+      navigate("/verify-otp");
     } catch (err: any) {
       console.error("Email login error:", err);
       let errorMsg = err?.message || "Could not send OTP. Please try again.";

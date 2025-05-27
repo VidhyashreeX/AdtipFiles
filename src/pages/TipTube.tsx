@@ -138,15 +138,20 @@ const TipTube = () => {
     }
     throw new Error("Unexpected error in fetchWithRetry");
   }, []);
-
   // Fetch data (videos, channel, analytics)
   const fetchData = useCallback(async () => {
-    if (!userId || !token || !hasMore) {
+    // Only show login prompt if there's no token at all
+    if (!localStorage.getItem("UserLoggedIn")) {
       setError("Authentication required. Please log in.");
       setShowLoginPrompt(true);
       setVideos([]);
       setChannel(null);
       setAnalytics(null);
+      return;
+    }
+    
+    // If we have a token but no user data yet, wait for auth context to load
+    if (!userId || !token || !hasMore) {
       return;
     }
 

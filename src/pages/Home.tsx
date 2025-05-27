@@ -362,93 +362,76 @@ const Home = () => {
                 {feedData.map((post) => (
                   <div
                     key={post.id}
-                    className="bg-white rounded-lg shadow-sm overflow-hidden cursor-pointer"
+                    className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden cursor-pointer max-w-[420px] mx-auto"
+                    style={{ marginBottom: 24 }}
                     onClick={() => handlePostClick(post.id)}
                   >
-                    <div className="flex items-center p-4">
+                    {/* Header */}
+                    <div className="flex items-center px-3 py-2">
                       <img
-                        src={
-                          post.user_profile_image ||
-                          "https://via.placeholder.com/40"
-                        }
+                        src={post.user_profile_image || "https://via.placeholder.com/40"}
                         alt={post.user_name || "User"}
-                        className="w-10 h-10 rounded-full object-cover"
+                        className="w-8 h-8 rounded-full object-cover border border-gray-300"
                       />
-                      <div className="ml-3">
-                        <div className="flex items-center">
-                          <h3 className="font-semibold">{post.user_name}</h3>
+                      <div className="ml-3 flex-1">
+                        <div className="flex items-center gap-1">
+                          <span className="font-semibold text-sm text-gray-900">{post.user_name}</span>
+                          {post.is_promoted ? (
+                            <span className="ml-1 text-xs text-adtip-teal font-medium">• Sponsored</span>
+                          ) : null}
                         </div>
-                        <p className="text-xs text-gray-500">
-                          {post.is_promoted ? "Sponsored" : "Posted recently"}
-                        </p>
+                        <span className="text-xs text-gray-400">{post.address}</span>
                       </div>
-                      <button className="ml-auto text-gray-500">•••</button>
+                      <button className="ml-auto text-gray-400 hover:text-gray-600 text-xl px-2">•••</button>
                     </div>
-
-                    <div className="relative">
+                    {/* Media */}
+                    <div className="relative bg-black">
                       {post.media_type === "video" && post.media_url ? (
-                        <div className="aspect-video bg-gray-200">
+                        <div className="aspect-[4/5] bg-gray-200">
                           <video
                             className="w-full h-full object-cover"
                             controls
                             preload="metadata"
-                            poster={
-                              post.thumbnail ||
-                              "https://via.placeholder.com/640x360"
-                            }
+                            poster={post.thumbnail || "https://via.placeholder.com/640x800"}
+                            style={{ borderRadius: 0 }}
                           >
                             <source src={post.media_url} type="video/mp4" />
                             Your browser does not support the video tag.
                           </video>
-                          <div className="absolute bottom-3 right-3 bg-black/60 text-white px-2 py-1 rounded text-xs">
+                          <div className="absolute bottom-2 right-2 bg-black/60 text-white px-2 py-0.5 rounded text-xs">
                             {post.duration || "00:00"}
                           </div>
                         </div>
                       ) : post.media_type === "image" && post.media_url ? (
-                        <img
-                          src={post.media_url}
-                          alt={post.title}
-                          className="w Zenith-full aspect-square object-cover"
-                        />
+                        <div className="aspect-square bg-gray-200">
+                          <img
+                            src={post.media_url}
+                            alt={post.title}
+                            className="w-full h-full object-cover"
+                            style={{ borderRadius: 0 }}
+                          />
+                        </div>
                       ) : (
                         <div className="aspect-square bg-gray-200 flex items-center justify-center text-gray-500">
                           No media available
                         </div>
                       )}
                     </div>
-
-                    <div className="p-4">
-                      <h4 className="font-semibold text-sm mb-1">{post.title}</h4>
-                      <p className="text-sm">{post.content}</p>
-
-                      <div className="flex items-center mt-4 text-sm text-gray-500">
-                        <div className="flex items-center mr-4">
-                          <svg
-                            className="w-4 h-4 mr-1"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-                          </svg>
-                          {post.likeCount}
+                    {/* Content */}
+                    <div className="px-3 pt-2 pb-3">
+                      <h4 className="font-medium text-sm mb-1 text-gray-900 line-clamp-2">{post.title}</h4>
+                      <p className="text-xs text-gray-700 mb-2 line-clamp-3">{post.content}</p>
+                      {/* Action bar */}
+                      <div className="flex items-center gap-6 text-gray-600 text-sm mt-2">
+                        <div className="flex items-center gap-1">
+                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                          <span className="text-xs">{post.likeCount}</span>
                         </div>
-                        <div className="flex items-center mr-4">
-                          <svg
-                            className="w-4 h-4 mr-1"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z" />
-                          </svg>
-                          {post.commentCount}
+                        <div className="flex items-center gap-1">
+                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z"/></svg>
+                          <span className="text-xs">{post.commentCount}</span>
                         </div>
-                        <div className="ml-auto text-xs">
-                          {post.views || 0} views
-                        </div>
+                        <div className="ml-auto text-xs text-gray-400">{post.views || 0} views</div>
                       </div>
                     </div>
                   </div>

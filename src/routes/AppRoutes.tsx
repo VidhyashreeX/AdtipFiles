@@ -21,12 +21,14 @@ import Home from "../pages/Home";
 import CompleteProfile from "../pages/CompleteProfile";
 
 const ProtectedRoute = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, authLoading } = useAuth();
+  if (authLoading) return <div>Loading...</div>;
   return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
 };
 
 const PublicRoute = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, authLoading } = useAuth();
+  if (authLoading) return <div>Loading...</div>;
   return !isAuthenticated ? <Outlet /> : <Navigate to="/home" replace />;
 };
 

@@ -48,10 +48,13 @@ const TipCall = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const token = user?.accessToken || null;
-
   useEffect(() => {
     let didCancel = false;
     const fetchExperts = async () => {
+      if (!isAuthenticated || !user?.id || !token) {
+        navigate("/login");
+        return;
+      }
       setLoading(true);
       try {
         const interestId = selectedCategory ? [categoryToInterestMap[selectedCategory]] : [2];
@@ -112,9 +115,8 @@ const TipCall = () => {
         if (!didCancel) setLoading(false);
       }
     };
-    fetchExperts();
-    return () => { didCancel = true; };
-  }, [user, toast, page, selectedCategory, searchQuery, token]);
+    fetchExperts();    return () => { didCancel = true; };
+  }, [user, toast, page, selectedCategory, searchQuery, token, isAuthenticated, navigate]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
