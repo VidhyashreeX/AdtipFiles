@@ -41,7 +41,7 @@ const Navbar = () => {
       if (!user?.id || !user?.accessToken) {
         throw new Error("User ID or access token missing");
       }
-      const response = await axios.get(`http://3.6.15.198:7082/api/getfunds/${user.id}`, {
+      const response = await axios.get(`https://api.adtip.in/api/getfunds/${user.id}`, {
         headers: { Authorization: `Bearer ${user.accessToken}` },
       });
       console.log("Wallet balance response:", response.data);
