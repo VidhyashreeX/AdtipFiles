@@ -23,10 +23,21 @@ const InputOTP = React.forwardRef<HTMLDivElement, InputOTPProps>(
     const inputRefs = React.useRef<(HTMLInputElement | null)[]>([])
 
     const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Backspace" && !value[index] && index > 0) {
-        inputRefs.current[index - 1]?.focus()
-        const newValue = value.slice(0, index - 1) + value.slice(index)
-        onChange(newValue)
+      if (e.key === "Backspace") {
+        if (value[index]) {
+          // If current box is not empty, clear it (first backspace)
+          const newValue = value.slice(0, index) + "" + value.slice(index + 1)
+          onChange(newValue)
+          // Prevent default so cursor doesn't move
+          e.preventDefault();
+        } else if (index > 0) {
+          // If current box is empty, move focus to previous and clear it (second backspace)
+          inputRefs.current[index - 1]?.focus()
+          // Clear the previous box
+          const newValue = value.slice(0, index - 1) + "" + value.slice(index)
+          onChange(newValue)
+          e.preventDefault();
+        }
       } else if (e.key === "ArrowLeft" && index > 0) {
         inputRefs.current[index - 1]?.focus()
       } else if (e.key === "ArrowRight" && index < maxLength - 1) {

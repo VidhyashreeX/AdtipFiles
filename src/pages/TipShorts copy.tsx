@@ -52,18 +52,19 @@ const TipShorts = () => {
   const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
     ? import.meta.env.VITE_API_URL
     : `${import.meta.env.VITE_API_URL}/api`;
+
   // --- Fetch shorts ---
   useEffect(() => {
+    if (!isAuthenticated && !localStorage.getItem("UserLoggedIn")) {
+      navigate("/login");
+      return;
+    }
     setLoading(true);
     setError(null);
     (async () => {
       try {
-        // Use public API if not authenticated, otherwise use personalized feed
-        const isPublic = !isAuthenticated && !localStorage.getItem("UserLoggedIn");
         const userId = localStorage.getItem("userId") || "50816";
-        const apiUrl = isPublic 
-          ? `${BASE_URL}/getpublicshots` 
-          : `${BASE_URL}/getshots/${userId}`;
+        const apiUrl = `${BASE_URL}/getshots/${userId}`;
         const res = await fetch(apiUrl);
         if (!res.ok) throw new Error(`Failed to load tip shorts: ${res.status}`);
         const data: ApiResponse<unknown[]> = await res.json();
@@ -166,28 +167,18 @@ const TipShorts = () => {
           const videoId = Number(entry.target.getAttribute("data-video-id"));
           const shortIndex = shorts.findIndex((s) => s.id === videoId);
 
-          if (entry.isIntersecting && entry.intersectionRatio >= 0.95) {
+          // Check if the short is fully in view (or mostly in view from the top)
+          // For 'snap-start', a threshold close to 1 is good to ensure it's the primary visible item.
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.95) { // Increased threshold for 'snap-start'
             setCurrentIndex(shortIndex);
-            const video = videoRefs.current.get(videoId);
-            if (video) {
-              // Try to play unmuted first
-              video.muted = false;
-              video.play().catch(() => {
-                // If unmuted play fails, try muted
-                video.muted = true;
-                setIsMuted((prev) => ({ ...prev, [videoId]: true }));
-                video.play().then(() => {
-                  setIsPlaying((prev) => ({ ...prev, [videoId]: true }));
-                }).catch(console.error);
-              });
-            }
+            playVideo(videoId);
             preloadNext(shortIndex);
           } else {
             pauseVideo(videoId);
           }
         });
       },
-      { root: shortsListRef.current, threshold: 0.95 }
+      { root: shortsListRef.current, threshold: 0.95 } // Observe relative to the scrollable list, higher threshold
     );
 
     // Initial observation for all shorts
@@ -198,36 +189,23 @@ const TipShorts = () => {
       }
     });
 
-    // Handle initial play for the first short
+    // Handle initial play for the first short after components mount
     const initialPlayCheck = () => {
       if (shorts[0] && videoRefs.current.get(shorts[0].id) && shortsListRef.current) {
-        const firstShortElement = shortContainerRefs.current.get(shorts[0].id);
+        const firstShortElement = shortContainerRefs.current.get(shorts[0].id); // Use shortContainerRefs
         if (firstShortElement) {
           const rect = firstShortElement.getBoundingClientRect();
           const listRect = shortsListRef.current.getBoundingClientRect();
 
-          if (Math.abs(rect.top - listRect.top) < 5) {
-            const video = videoRefs.current.get(shorts[0].id);
-            if (video) {
-              // Try to play unmuted first
-              video.muted = false;
-              video.play().catch(() => {
-                // If unmuted play fails, try muted
-                video.muted = true;
-                setIsMuted((prev) => ({ ...prev, [shorts[0].id]: true }));
-                video.play().then(() => {
-                  setIsPlaying((prev) => ({ ...prev, [shorts[0].id]: true }));
-                }).catch(console.error);
-              });
-            }
-            preloadNext(0);
+          // Check if the first short is at the top of the scrollable container
+          if (Math.abs(rect.top - listRect.top) < 5) { // Allowing a small tolerance for floating point
+             playVideo(shorts[0].id);
+             preloadNext(0);
           }
         }
       }
     };
-    
-    // Wait for a short delay to ensure everything is properly initialized
-    const timeoutId = setTimeout(initialPlayCheck, 500);
+    const timeoutId = setTimeout(initialPlayCheck, 200);
 
     return () => {
       if (observer.current) {
@@ -235,7 +213,7 @@ const TipShorts = () => {
       }
       clearTimeout(timeoutId);
     };
-  }, [shorts, pauseVideo, preloadNext]);
+  }, [shorts, playVideo, pauseVideo, preloadNext]);
 
 
 // --- Fullscreen Toggle ---
