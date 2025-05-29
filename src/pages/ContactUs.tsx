@@ -9,24 +9,12 @@ const ContactUs = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const handleCallSupport = () => {
-    window.location.href = "tel:+918148147172";
-  };
-
   const handleEmailSupport = () => {
     window.location.href = "mailto:support@adtip.in";
   };
 
   return (
     <div className="pb-20 md:pb-0 bg-white min-h-screen">
-      {/* Header */}
-      <div className="bg-white p-4 flex items-center justify-between border-b">
-        <button onClick={() => navigate(-1)} className="flex items-center">
-          <ArrowLeft className="h-6 w-6" />
-        </button>
-        <h1 className="text-lg font-semibold text-center flex-1">Contact Us</h1>
-        <div className="w-6"></div>
-      </div>
 
       <div className="max-w-md mx-auto p-4">
         {/* Hero section */}
@@ -40,23 +28,6 @@ const ContactUs = () => {
         {/* Contact Options */}
         <div className="space-y-4">
           {/* Call Us */}
-          <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-            <div className="flex items-center mb-3">
-              <div className="bg-teal-100 p-3 rounded-full mr-3">
-                <Phone className="h-5 w-5 text-teal-600" />
-              </div>
-              <div>
-                <h3 className="font-medium text-gray-800">Call Support</h3>
-                <p className="text-sm text-gray-600">Speak directly with our team</p>
-              </div>
-            </div>
-            <Button 
-              className="w-full bg-teal-600 hover:bg-teal-700"
-              onClick={handleCallSupport}
-            >
-              Call +91 8148147172
-            </Button>
-          </div>
 
           {/* Email Us */}
           <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">

@@ -151,7 +151,6 @@ const TipTube = () => {
     : `${import.meta.env.VITE_API_URL}/api`;
   const token = user?.accessToken || null;
   const userId = user?.id || null;
-  const videoPlayerRef = useRef<HTMLVideoElement | null>(null);
 
   // Transform API video data to match Video interface
   const transformVideoData = (apiVideo: any): Video => ({
@@ -226,57 +225,111 @@ const TipTube = () => {
     setCurrentVideo(null);
   };
 
-  // Keyboard controls for video player
-  useEffect(() => {
-    if (!currentVideo) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (document.activeElement && ["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
-      const video = videoPlayerRef.current;
-      if (!video) return;
-      if (e.code === "Space" || e.key === "k" || e.key === "K") {
-        e.preventDefault();
-        if (video.paused) video.play(); else video.pause();
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        video.currentTime = Math.min(video.duration, video.currentTime + 5);
-      } else if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        video.currentTime = Math.max(0, video.currentTime - 5);
-      } else if (e.key === "f" || e.key === "F") {
-        e.preventDefault();
-        if (document.fullscreenElement) {
-          document.exitFullscreen();
-        } else {
-          video.requestFullscreen?.();
-        }
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentVideo]);
-
   // --- UI ---
   return (
     <div ref={feedRef} className="h-screen overflow-y-auto px-4 py-6 bg-gray-100">
-      {/* If a video is selected, show YouTube-style layout */}
-      {currentVideo ? (
-        <div className="flex flex-col lg:flex-row gap-6 w-full max-w-screen-2xl mx-auto">
-          {/* Main Video Area */}
-          <div className="flex-1 min-w-0">
-            <div className="bg-black rounded-xl overflow-hidden shadow-lg">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        {videos.map(video => (
+          <div
+            key={video.id}
+            className="bg-white rounded-xl shadow hover:shadow-lg transition-all cursor-pointer flex flex-col"
+            onClick={() => {
+              setCurrentVideo(video);
+              setShowPlayer(true);
+            }}
+            onMouseEnter={() => {
+              setHoveredVideoId(video.id);
+              const ref = videoRefs.current[video.id];
+              if (ref) {
+                ref.currentTime = 0;
+                ref.play();
+              }
+            }}
+            onMouseLeave={() => {
+              setHoveredVideoId(null);
+              const ref = videoRefs.current[video.id];
+              if (ref) {
+                ref.pause();
+                ref.currentTime = 0;
+              }
+            }}
+          >
+            <div className="relative aspect-video bg-gray-200 rounded-t-xl overflow-hidden">
+              {/* Price badge if paid */}
+              {video.price && video.price > 0 && (
+                <span className="absolute top-2 right-2 bg-adtip-teal text-white text-xs px-3 py-1 rounded-full z-10 shadow">
+                  ₹{video.price}
+                </span>
+              )}
+              {/* Show video on hover, else show thumbnail */}
+              {hoveredVideoId === video.id && video.videoUrl ? (
+                <video
+                  ref={el => (videoRefs.current[video.id] = el)}
+                  src={video.videoUrl}
+                  poster={video.thumbnail}
+                  muted
+                  loop
+                  playsInline
+                  className="w-full h-full object-cover"
+                  style={{ background: 'black' }}
+                />
+              ) : (
+                <img
+                  src={video.thumbnail || "/placeholder.svg"}
+                  alt={video.title}
+                  className="w-full h-full object-cover"
+                />
+              )}
+              <span className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-0.5 rounded">
+                {formatDuration(video.duration)}
+              </span>
+            </div>
+            <div className="p-3 flex-1 flex flex-col">
+              <div className="flex items-center gap-3 mb-2">
+                <img src={video.avatar || "/placeholder.svg"} alt={video.creatorName} className="w-8 h-8 rounded-full" />
+                <div className="flex flex-col">
+                  <a
+                    href={`/channel/${video.channelId}`}
+                    className="font-semibold text-sm text-adtip-teal hover:underline line-clamp-1"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {video.creatorName}
+                  </a>
+                  <span className="text-xs text-gray-500">{video.views.toLocaleString()} views • {video.posted}</span>
+                </div>
+              </div>
+              <div className="font-medium text-gray-900 text-base line-clamp-2 mb-1">{video.title}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {loading && (
+        <div className="flex justify-center py-8">
+          <span className="text-adtip-teal font-medium">Loading...</span>
+        </div>
+      )}
+      {!loading && !hasMore && videos.length === 0 && (
+        <div className="text-center text-gray-500 py-12">No videos found.</div>
+      )}
+      {/* Video Player Modal */}
+      {showPlayer && currentVideo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-auto flex flex-col md:flex-row overflow-hidden">
+            {/* Video */}
+            <div className="flex-1 bg-black flex items-center justify-center">
               <video
-                ref={videoPlayerRef}
                 src={currentVideo.videoUrl}
                 poster={currentVideo.thumbnail}
                 controls
                 autoPlay
-                className="w-full aspect-video max-h-[70vh] object-contain bg-black"
-                style={{ background: 'black' }}
+                className="w-full h-full max-h-[70vh] object-contain bg-black"
               />
             </div>
-            <div className="mt-4">
-              <h2 className="text-xl font-bold text-gray-900 mb-2 line-clamp-2">{currentVideo.title}</h2>
-              <div className="flex items-center gap-3 mb-2">
+            {/* Info */}
+            <div className="w-full md:w-96 p-6 flex flex-col gap-4 bg-white">
+              <div className="font-bold text-lg text-gray-900 line-clamp-2">{currentVideo.title}</div>
+              <div className="flex items-center gap-3">
                 <img src={currentVideo.avatar || "/placeholder.svg"} alt={currentVideo.creatorName} className="w-10 h-10 rounded-full" />
                 <div className="flex flex-col">
                   <a
@@ -305,122 +358,10 @@ const TipTube = () => {
                   Share
                 </button>
               </div>
-              <button onClick={() => setCurrentVideo(null)} className="mt-4 px-4 py-2 rounded-full bg-gray-200 text-gray-700 font-medium hover:bg-gray-300">Back to Feed</button>
-            </div>
-          </div>
-          {/* Relevant Videos Sidebar */}
-          <div className="w-full lg:w-[380px] flex-shrink-0">
-            <div className="flex flex-col gap-3">
-              {videos.filter(v => v.id !== currentVideo.id).map((video, idx) => (
-                <div
-                  key={video.id}
-                  className="flex gap-3 bg-white rounded-lg shadow hover:shadow-md cursor-pointer overflow-hidden"
-                  onClick={() => setCurrentVideo(video)}
-                >
-                  <img
-                    src={video.thumbnail || "/placeholder.svg"}
-                    alt={video.title}
-                    className="w-36 h-20 object-cover flex-shrink-0"
-                  />
-                  <div className="flex flex-col justify-between py-2 pr-2 min-w-0 flex-1">
-                    <div className="font-semibold text-gray-900 text-sm line-clamp-2">{video.title}</div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <img src={video.avatar || "/placeholder.svg"} alt={video.creatorName} className="w-6 h-6 rounded-full" />
-                      <span className="text-xs text-gray-600 truncate">{video.creatorName}</span>
-                    </div>
-                    <span className="text-xs text-gray-500 mt-1">{video.views.toLocaleString()} views • {video.posted}</span>
-                  </div>
-                </div>
-              ))}
-              {loading && (
-                <div className="flex justify-center py-4 text-adtip-teal font-medium">Loading more...</div>
-              )}
+              <button onClick={closePlayer} className="mt-4 px-4 py-2 rounded-full bg-gray-200 text-gray-700 font-medium hover:bg-gray-300">Close</button>
             </div>
           </div>
         </div>
-      ) : (
-        // Default grid view
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {videos.map(video => (
-            <div
-              key={video.id}
-              className="bg-white rounded-xl shadow hover:shadow-lg transition-all cursor-pointer flex flex-col"
-              onClick={() => setCurrentVideo(video)}
-              onMouseEnter={() => {
-                setHoveredVideoId(video.id);
-                const ref = videoRefs.current[video.id];
-                if (ref) {
-                  ref.currentTime = 0;
-                  ref.play();
-                }
-              }}
-              onMouseLeave={() => {
-                setHoveredVideoId(null);
-                const ref = videoRefs.current[video.id];
-                if (ref) {
-                  ref.pause();
-                  ref.currentTime = 0;
-                }
-              }}
-            >
-              <div className="relative aspect-video bg-gray-200 rounded-t-xl overflow-hidden">
-                {/* Price badge if paid */}
-                {video.price && video.price > 0 && (
-                  <span className="absolute top-2 right-2 bg-adtip-teal text-white text-xs px-3 py-1 rounded-full z-10 shadow">
-                    ₹{video.price}
-                  </span>
-                )}
-                {/* Show video on hover, else show thumbnail */}
-                {hoveredVideoId === video.id && video.videoUrl ? (
-                  <video
-                    ref={el => (videoRefs.current[video.id] = el)}
-                    src={video.videoUrl}
-                    poster={video.thumbnail}
-                    muted
-                    loop
-                    playsInline
-                    className="w-full h-full object-cover"
-                    style={{ background: 'black' }}
-                  />
-                ) : (
-                  <img
-                    src={video.thumbnail || "/placeholder.svg"}
-                    alt={video.title}
-                    className="w-full h-full object-cover"
-                  />
-                )}
-                <span className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-0.5 rounded">
-                  {formatDuration(video.duration)}
-                </span>
-              </div>
-              <div className="p-3 flex-1 flex flex-col">
-                <div className="flex items-center gap-3 mb-2">
-                  <img src={video.avatar || "/placeholder.svg"} alt={video.creatorName} className="w-8 h-8 rounded-full" />
-                  <div className="flex flex-col">
-                    <a
-                      href={`/channel/${video.channelId}`}
-                      className="font-semibold text-sm text-adtip-teal hover:underline line-clamp-1"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {video.creatorName}
-                    </a>
-                    <span className="text-xs text-gray-500">{video.views.toLocaleString()} views • {video.posted}</span>
-                  </div>
-                </div>
-                <div className="font-medium text-gray-900 text-base line-clamp-2 mb-1">{video.title}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      {loading && !currentVideo && (
-        <div className="flex justify-center py-8">
-          <span className="text-adtip-teal font-medium">Loading...</span>
-        </div>
-      )}
-      {!loading && !hasMore && videos.length === 0 && (
-        <div className="text-center text-gray-500 py-12">No videos found.</div>
       )}
     </div>
   );

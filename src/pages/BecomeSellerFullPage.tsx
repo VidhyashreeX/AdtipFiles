@@ -321,6 +321,7 @@ const BecomeSeller: React.FC = () => {
     }
   };
 
+  // Remove phone field from the form UI and set it from localStorage on submit
   const getStepContent = () => {
     switch (sellerStep) {
       case 1:
@@ -332,8 +333,12 @@ const BecomeSeller: React.FC = () => {
             </p>
             <Form {...form}>
               <form
-                onSubmit={(e) => {
-                  console.log("Form submission triggered for Step 1");
+                onSubmit={async (e) => {
+                  // Before submit, set phone from localStorage
+                  const phone = localStorage.getItem("phone");
+                  if (phone) {
+                    form.setValue("phone", phone);
+                  }
                   form.handleSubmit(handleSubmit)(e);
                 }}
                 className="space-y-6"
@@ -357,19 +362,7 @@ const BecomeSeller: React.FC = () => {
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={form.control}
-                      name="phone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Mobile Number*</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter your mobile number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {/* Phone field removed from UI, now set from localStorage */}
                     <FormField
                       control={form.control}
                       name="password"
