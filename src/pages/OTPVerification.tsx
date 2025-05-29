@@ -193,12 +193,10 @@ const OTPVerification = () => {
           >
             <div className="space-y-6">
               <InputOTP
-                value={otp}
-                onChange={val => {
+                value={otp}                onChange={val => {
                   setOtp(val);
                   if (val.length === 6 && /^\d{6}$/.test(val) && !loading) {
-                    // Auto-trigger OTP verification
-                    setTimeout(() => handleVerifyOTP(), 0);
+                    handleVerifyOTP();
                   }
                 }}
                 maxLength={6}
