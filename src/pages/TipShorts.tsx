@@ -15,9 +15,10 @@ interface TipShort {
   content: {
     video: string;
     description: string;
-    likes: string;
+    likes: number;
     comments: number;
     shares: number;
+    thumbnail: string;
   };
   musicName: string;
 }
@@ -29,78 +30,129 @@ interface ApiResponse<T> {
 }
 
 const PRELOAD_COUNT = 2;
+const SHORTS_PAGE_SIZE = 8; // How many shorts to fetch per page
 const SHORT_ASPECT_RATIO = 9 / 16; // Standard phone portrait aspect ratio
 const MAX_SHORT_WIDTH = 420; // px, typical phone width for shorts
 const NAVBAR_HEIGHT = 72; // px, assumed navbar height for non-fullscreen state
 
 const TipShorts = () => {
   const [shorts, setShorts] = useState<TipShort[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState<{ [key: number]: boolean }>({});
   const [isMuted, setIsMuted] = useState<{ [key: number]: boolean }>({});
   const [liked, setLiked] = useState<{ [key: number]: boolean }>({});
+  const [isGlobalMuted, setIsGlobalMuted] = useState(() => {
+    const stored = localStorage.getItem('shortsGlobalMuted');
+    return stored ? JSON.parse(stored) : false;
+  });
+  const [isGlobalPlaying, setIsGlobalPlaying] = useState(() => {
+    const stored = localStorage.getItem('shortsGlobalPlaying');
+    return stored ? JSON.parse(stored) : true;
+  });
   const containerRef = useRef<HTMLDivElement>(null); // Main wrapper for the entire shorts section
   const shortsListRef = useRef<HTMLDivElement>(null); // The scrollable list of shorts
   const videoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
   const shortContainerRefs = useRef<Map<number, HTMLDivElement>>(new Map()); // Ref to individual short wrappers
-  const observer = useRef<IntersectionObserver | null>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loaderRef = useRef<HTMLDivElement>(null);
+  const loaderObserverRef = useRef<IntersectionObserver | null>(null);
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
     ? import.meta.env.VITE_API_URL
     : `${import.meta.env.VITE_API_URL}/api`;
+
   // --- Fetch shorts ---
-  useEffect(() => {
+  const fetchShorts = useCallback(async (pageNum: number) => {
     setLoading(true);
     setError(null);
-    (async () => {
-      try {
-        // Use public API if not authenticated, otherwise use personalized feed
-        const isPublic = !isAuthenticated && !localStorage.getItem("UserLoggedIn");
-        const userId = localStorage.getItem("userId") || "50816";
-        const apiUrl = isPublic 
-          ? `${BASE_URL}/getpublicshots` 
-          : `${BASE_URL}/getshots/${userId}`;
-        const res = await fetch(apiUrl);
-        if (!res.ok) throw new Error(`Failed to load tip shorts: ${res.status}`);
-        const data: ApiResponse<unknown[]> = await res.json();
-        const rawShorts = Array.isArray(data.data) ? data.data : [];
-        const normalized: TipShort[] = rawShorts
-          .map((short): TipShort | null => {
-            const s = short as any;
-            if (!s.video_link) return null;
-            return {
-              id: s.id,
-              user: {
-                name: s.channelName || "Unknown",
-                avatar: s.channel_profile || "/placeholder.svg",
-                isVerified: false,
-              },
-              content: {
-                video: s.video_link.startsWith("http")
-                  ? s.video_link
-                  : `${BASE_URL.replace(/\/api$/, "")}${s.video_link}`,
-                description: s.video_desciption || s.channelName || "No description",
-                likes: String(s.total_likes || 0),
-                comments: s.total_comments || 0,
-                shares: 0,
-              },
-              musicName: s.video_music || "Unknown",
-            };
-          })
-          .filter((s): s is TipShort => s !== null);
-        if (normalized.length === 0) throw new Error("No valid shorts found.");
-        setShorts(normalized);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [isAuthenticated, BASE_URL, navigate]);
+    try {
+      const isPublic = !isAuthenticated && !localStorage.getItem("UserLoggedIn");
+      const userId = localStorage.getItem("userId") || "50816";
+      let apiUrl = isPublic
+        ? `${BASE_URL}/getpublicshots`
+        : `${BASE_URL}/getshots/${userId}`;
+      // If API supports pagination, add ?page=pageNum&limit=SHORTS_PAGE_SIZE
+      // For now, fetch all and slice client-side
+      const res = await fetch(apiUrl);
+      if (!res.ok) throw new Error(`Failed to load tip shorts: ${res.status}`);
+      const data = await res.json();
+      const rawShorts = Array.isArray(data.data) ? data.data : [];
+      const normalized: TipShort[] = rawShorts.map((short): TipShort | null => {
+        const s = short as any;
+        if (!s.video_link) return null;
+        return {
+          id: s.id,
+          user: {
+            name: s.channelName || "Unknown",
+            avatar: s.channel_profile && s.channel_profile !== "null" ? s.channel_profile : "/placeholder.svg",
+            isVerified: false,
+          },
+          content: {
+            video: s.video_link,
+            description: s.video_description || s.name || "No description",
+            likes: Number(s.total_likes || 0),
+            comments: Number(s.total_comments || 0),
+            shares: 0,
+            thumbnail: s.video_Thumbnail || s.channel_profile || "/placeholder.svg",
+          },
+          musicName: s.name || "Unknown",
+        };
+      }).filter((s): s is TipShort => s !== null);
+      // Simulate pagination if API doesn't support it
+      const start = (pageNum - 1) * SHORTS_PAGE_SIZE;
+      const end = start + SHORTS_PAGE_SIZE;
+      const pageShorts = normalized.slice(start, end);
+      setShorts(prev => pageNum === 1 ? pageShorts : [...prev, ...pageShorts]);
+      // Only set hasMore to false if there are truly no more shorts to load
+      setHasMore(pageShorts.length > 0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  }, [isAuthenticated, BASE_URL]);
+
+  // --- Initial Fetch & Pagination ---
+  useEffect(() => {
+    fetchShorts(1);
+    setPage(1);
+  }, [fetchShorts]);
+
+  // --- Infinite Scroll Loader Observer ---
+  useEffect(() => {
+    if (!hasMore || loading) return;
+    if (loaderObserverRef.current) loaderObserverRef.current.disconnect();
+    loaderObserverRef.current = new window.IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading) {
+          fetchShorts(page + 1);
+          setPage(p => p + 1);
+        }
+      },
+      { root: shortsListRef.current, threshold: 0.8 }
+    );
+    if (loaderRef.current) loaderObserverRef.current.observe(loaderRef.current);
+    return () => loaderObserverRef.current?.disconnect();
+  }, [hasMore, loading, page, fetchShorts]);
+
+  // --- Preemptive Fetch: Fetch next set when user reaches 2nd last short ---
+  useEffect(() => {
+    if (
+      hasMore &&
+      !loading &&
+      shorts.length > 0 &&
+      currentIndex >= shorts.length - 2
+    ) {
+      fetchShorts(page + 1);
+      setPage(p => p + 1);
+    }
+  }, [currentIndex, shorts.length, hasMore, loading, page, fetchShorts]);
 
   // --- Video Play/Pause & Preloading Logic ---
   const playVideo = useCallback((id: number) => {
@@ -152,221 +204,112 @@ const TipShorts = () => {
     }
   }, [shorts]);
 
-  // --- IntersectionObserver for video play/pause ---
+  // --- Video Play/Pause/Scroll Snap Observer ---
   useEffect(() => {
     if (!shorts.length || !shortsListRef.current) return;
-
-    if (observer.current) {
-      observer.current.disconnect();
-    }
-
-    observer.current = new IntersectionObserver(
+    if (observerRef.current) observerRef.current.disconnect();
+    observerRef.current = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           const videoId = Number(entry.target.getAttribute("data-video-id"));
-          const shortIndex = shorts.findIndex((s) => s.id === videoId);
-
+          const idx = shorts.findIndex(s => s.id === videoId);
+          const video = videoRefs.current.get(videoId);
           if (entry.isIntersecting && entry.intersectionRatio >= 0.95) {
-            setCurrentIndex(shortIndex);
-            const video = videoRefs.current.get(videoId);
+            setCurrentIndex(idx);
+            // Apply global mute state always, but only play if isGlobalPlaying is true
             if (video) {
-              // Try to play unmuted first
-              video.muted = false;
-              video.play().catch(() => {
-                // If unmuted play fails, try muted
-                video.muted = true;
-                setIsMuted((prev) => ({ ...prev, [videoId]: true }));
-                video.play().then(() => {
-                  setIsPlaying((prev) => ({ ...prev, [videoId]: true }));
-                }).catch(console.error);
-              });
+              video.muted = isGlobalMuted;
+              setIsMuted(prev => ({ ...prev, [videoId]: isGlobalMuted }));
+              if (isGlobalPlaying) {
+                // Only play if not already playing
+                if (video.paused) {
+                  video.play().then(() => setIsPlaying(prev => ({ ...prev, [videoId]: true })))
+                    .catch(() => setIsPlaying(prev => ({ ...prev, [videoId]: false })));
+                } else {
+                  setIsPlaying(prev => ({ ...prev, [videoId]: true }));
+                }
+              } else {
+                video.pause();
+                setIsPlaying(prev => ({ ...prev, [videoId]: false }));
+              }
             }
-            preloadNext(shortIndex);
+            preloadNext(idx);
           } else {
-            pauseVideo(videoId);
+            if (video) {
+              video.pause();
+              setIsPlaying(prev => ({ ...prev, [videoId]: false }));
+            }
           }
         });
       },
       { root: shortsListRef.current, threshold: 0.95 }
     );
-
-    // Initial observation for all shorts
-    shorts.forEach((short) => {
+    shorts.forEach(short => {
       const video = videoRefs.current.get(short.id);
-      if (video) {
-        observer.current!.observe(video);
-      }
+      if (video) observerRef.current!.observe(video);
     });
+    return () => observerRef.current?.disconnect();
+  }, [shorts, isGlobalMuted, isGlobalPlaying, preloadNext]);
 
-    // Handle initial play for the first short
-    const initialPlayCheck = () => {
-      if (shorts[0] && videoRefs.current.get(shorts[0].id) && shortsListRef.current) {
-        const firstShortElement = shortContainerRefs.current.get(shorts[0].id);
-        if (firstShortElement) {
-          const rect = firstShortElement.getBoundingClientRect();
-          const listRect = shortsListRef.current.getBoundingClientRect();
-
-          if (Math.abs(rect.top - listRect.top) < 5) {
-            const video = videoRefs.current.get(shorts[0].id);
-            if (video) {
-              // Try to play unmuted first
-              video.muted = false;
-              video.play().catch(() => {
-                // If unmuted play fails, try muted
-                video.muted = true;
-                setIsMuted((prev) => ({ ...prev, [shorts[0].id]: true }));
-                video.play().then(() => {
-                  setIsPlaying((prev) => ({ ...prev, [shorts[0].id]: true }));
-                }).catch(console.error);
-              });
-            }
-            preloadNext(0);
-          }
-        }
-      }
-    };
-    
-    // Wait for a short delay to ensure everything is properly initialized
-    const timeoutId = setTimeout(initialPlayCheck, 500);
-
-    return () => {
-      if (observer.current) {
-        observer.current.disconnect();
-      }
-      clearTimeout(timeoutId);
-    };
-  }, [shorts, pauseVideo, preloadNext]);
-
-
-// --- Fullscreen Toggle ---
-const toggleFullscreen = () => {
-  const element = shortsListRef.current;
-  if (!element || !shorts[currentIndex]) return;
-
-  if (!document.fullscreenElement) {
-    // Entering fullscreen
-    const currentShortElement = shortContainerRefs.current.get(shorts[currentIndex].id);
-    if (currentShortElement) {
-      // Store the current index before entering fullscreen
-      localStorage.setItem('shortsCurrentIndex', currentIndex.toString());
-
-      // Store the current scroll position before entering fullscreen
-      const scrollTop = element.scrollTop;
-      localStorage.setItem('shortsScrollPosition', scrollTop.toString());
-
-      // Store the current mute state before entering fullscreen
-      const currentId = shorts[currentIndex].id;
-      const video = videoRefs.current.get(currentId);
-      if (video) {
-        localStorage.setItem('shortsMuteState', video.muted.toString());
-      }
-
-      // Only scroll if the current short is not already at the top
-      const rect = currentShortElement.getBoundingClientRect();
-      const listRect = element.getBoundingClientRect();
-      if (Math.abs(rect.top - listRect.top) > 5) {
-        currentShortElement.scrollIntoView({ behavior: 'instant', block: 'start' });
-      }      // Request fullscreen and ensure current index is saved after transition
-      const requestFs = async () => {
-        if (element.requestFullscreen) await element.requestFullscreen();
-        else if ((element as any).webkitRequestFullscreen) await (element as any).webkitRequestFullscreen();
-        else if ((element as any).msRequestFullscreen) await (element as any).msRequestFullscreen();
-        
-        // Re-sync current index after fullscreen transition
-        requestAnimationFrame(() => {
-          const currentShortElement = shortContainerRefs.current.get(shorts[currentIndex].id);
-          if (currentShortElement) {
-            currentShortElement.scrollIntoView({ behavior: 'instant', block: 'start' });
-          }
-        });
-      };
-      requestFs();
-    }
-  } else {
-    // Exiting fullscreen
-    if (document.exitFullscreen) document.exitFullscreen();
-    else if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen();
-    else if ((document as any).msExitFullscreen) (document as any).msExitFullscreen();
-  }
-};
-
-useEffect(() => {  const handler = () => {
-    setIsFullscreen(!!document.fullscreenElement);
-    if (!document.fullscreenElement && shortsListRef.current && shorts.length > 0) {
-      // Restore current index when exiting fullscreen
-      const savedIndex = localStorage.getItem('shortsCurrentIndex');
-      if (savedIndex !== null) {
-        const idx = parseInt(savedIndex, 10);
-        if (!isNaN(idx) && idx >= 0 && idx < shorts.length) {
-          setCurrentIndex(idx);
-          const currentShortElement = shortContainerRefs.current.get(shorts[idx].id);
-          if (currentShortElement) {
-            requestAnimationFrame(() => {
-              currentShortElement.scrollIntoView({ behavior: 'instant', block: 'start' });
-              // Ensure intersection observer picks up the change
-              observer.current?.disconnect();
-              observer.current?.observe(videoRefs.current.get(shorts[idx].id));
-            });
-          }
-          // Ensure the video plays in normal mode
-          const video = videoRefs.current.get(shorts[idx].id);
-          if (video) {
-            playVideo(shorts[idx].id);
-          }
-        }
-        localStorage.removeItem('shortsCurrentIndex');
-      }
-      // Restore scroll position when exiting fullscreen
+  // --- Fullscreen Toggle ---
+  const toggleFullscreen = () => {
+    const element = shortsListRef.current;
+    if (!element || !shorts[currentIndex]) return;
+    if (!document.fullscreenElement) {
+      // Entering fullscreen: always scroll to currentIndex
       const currentShortElement = shortContainerRefs.current.get(shorts[currentIndex].id);
       if (currentShortElement) {
-        // Ensure the current short is snapped to the top
         currentShortElement.scrollIntoView({ behavior: 'instant', block: 'start' });
-        // Optionally, restore exact scroll position if stored
-        const savedScrollPosition = localStorage.getItem('shortsScrollPosition');
-        if (savedScrollPosition) {
-          shortsListRef.current.scrollTop = parseFloat(savedScrollPosition);
-          localStorage.removeItem('shortsScrollPosition'); // Clean up
-        }
+        const requestFs = async () => {
+          if (element.requestFullscreen) await element.requestFullscreen();
+          else if ((element as any).webkitRequestFullscreen) await (element as any).webkitRequestFullscreen();
+          else if ((element as any).msRequestFullscreen) await (element as any).msRequestFullscreen();
+        };
+        requestFs();
       }
-      // Restore mute state and ensure the current video resumes playing
-      const currentId = shorts[currentIndex].id;
-      const video = videoRefs.current.get(currentId);
-      if (video) {
-        const savedMuteState = localStorage.getItem('shortsMuteState');
-        const shouldBeMuted = savedMuteState === 'true';
-        video.muted = shouldBeMuted;
-        setIsMuted((prev) => ({ ...prev, [currentId]: shouldBeMuted }));
-        localStorage.removeItem('shortsMuteState'); // Clean up
-      }
-      playVideo(currentId);
+    } else {
+      if (document.exitFullscreen) document.exitFullscreen();
+      else if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen();
+      else if ((document as any).msExitFullscreen) (document as any).msExitFullscreen();
     }
   };
 
-  document.addEventListener("fullscreenchange", handler);
-  document.addEventListener("webkitfullscreenchange", handler);
-  document.addEventListener("msfullscreenchange", handler);
-
-  // Keyboard shortcuts
-  const keyListener = (e: KeyboardEvent) => {
-    if (e.key === 'f' || e.key === 'F') {
-      e.preventDefault();
-      toggleFullscreen();
-    }
-    if (e.key === 'm' || e.key === 'M') {
-      e.preventDefault();
-      const currentId = shorts[currentIndex]?.id;
-      const video = videoRefs.current.get(currentId);
-      if (video) {
-        video.muted = !video.muted;
-        setIsMuted((prev) => ({ ...prev, [currentId]: video.muted }));
+  // --- Fullscreen State Listener ---
+  useEffect(() => {
+    const handler = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+      // On exiting fullscreen, always scroll to the currentIndex short
+      if (!document.fullscreenElement && shortsListRef.current && shorts.length > 0) {
+        const currentShortElement = shortContainerRefs.current.get(shorts[currentIndex]?.id);
+        if (currentShortElement) {
+          requestAnimationFrame(() => {
+            currentShortElement.scrollIntoView({ behavior: 'instant', block: 'start' });
+          });
+        }
       }
-    }
-    if (e.key === ' ' || e.code === 'Space') {
-      e.preventDefault();
+    };
+    document.addEventListener("fullscreenchange", handler);
+    document.addEventListener("webkitfullscreenchange", handler);
+    document.addEventListener("msfullscreenchange", handler);
+    return () => {
+      document.removeEventListener("fullscreenchange", handler);
+      document.removeEventListener("webkitfullscreenchange", handler);
+      document.removeEventListener("msfullscreenchange", handler);
+    };
+  }, [shorts, currentIndex]);
+
+  // --- Like/Dislike Toggles ---
+  const toggleLike = (id: number) => setLiked((prev) => ({ ...prev, [id]: !prev[id] }));
+
+  // --- Play/Pause and Mute Controls (Global) ---
+  const handlePlayPause = useCallback(() => {
+    setIsGlobalPlaying((prev) => {
+      const newState = !prev;
+      // Pause or play the current video
       const currentId = shorts[currentIndex]?.id;
       const video = videoRefs.current.get(currentId);
       if (video) {
-        if (video.paused) {
+        if (newState) {
           video.play();
           setIsPlaying((prev) => ({ ...prev, [currentId]: true }));
         } else {
@@ -374,60 +317,104 @@ useEffect(() => {  const handler = () => {
           setIsPlaying((prev) => ({ ...prev, [currentId]: false }));
         }
       }
-    }
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (currentIndex < shorts.length - 1) {
-        const nextIndex = currentIndex + 1;
-        setCurrentIndex(nextIndex);
-        setTimeout(() => {
-          const nextShortElement = shortContainerRefs.current.get(shorts[nextIndex]?.id);
-          if (nextShortElement) {
-            nextShortElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-          const nextVideo = videoRefs.current.get(shorts[nextIndex]?.id);
-          if (nextVideo) {
-            nextVideo.play();
-            setIsPlaying((prev) => ({ ...prev, [shorts[nextIndex].id]: true }));
-          }
-        }, 0);
+      return newState;
+    });
+  }, [shorts, currentIndex]);
+
+  const handleMute = useCallback(() => {
+    setIsGlobalMuted((prev) => {
+      const newState = !prev;
+      // Mute or unmute the current video
+      const currentId = shorts[currentIndex]?.id;
+      const video = videoRefs.current.get(currentId);
+      if (video) {
+        video.muted = newState;
+        setIsMuted((prev) => ({ ...prev, [currentId]: newState }));
       }
-    }
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (currentIndex > 0) {
-        const prevIndex = currentIndex - 1;
-        setCurrentIndex(prevIndex);
-        setTimeout(() => {
-          const prevShortElement = shortContainerRefs.current.get(shorts[prevIndex]?.id);
-          if (prevShortElement) {
-            prevShortElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-          const prevVideo = videoRefs.current.get(shorts[prevIndex]?.id);
-          if (prevVideo) {
-            prevVideo.play();
-            setIsPlaying((prev) => ({ ...prev, [shorts[prevIndex].id]: true }));
-          }
-        }, 0);
+      return newState;
+    });
+  }, [shorts, currentIndex]);
+
+  // --- Keyboard Shortcuts ---
+  useEffect(() => {
+    const keyListener = (e: KeyboardEvent) => {
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        toggleFullscreen();
       }
-    }
-  };
-  window.addEventListener('keydown', keyListener);
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        handleMute();
+      }
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        handlePlayPause();
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (currentIndex < shorts.length - 1) {
+          const nextIndex = currentIndex + 1;
+          setCurrentIndex(nextIndex);
+          setTimeout(() => {
+            const nextShortElement = shortContainerRefs.current.get(shorts[nextIndex]?.id);
+            if (nextShortElement) {
+              nextShortElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            const nextVideo = videoRefs.current.get(shorts[nextIndex]?.id);
+            if (nextVideo) {
+              if (isGlobalPlaying) {
+                nextVideo.play();
+                setIsPlaying(prev => ({ ...prev, [shorts[nextIndex].id]: true }));
+              } else {
+                nextVideo.pause();
+                setIsPlaying(prev => ({ ...prev, [shorts[nextIndex].id]: false }));
+              }
+              nextVideo.muted = isGlobalMuted;
+              setIsMuted(prev => ({ ...prev, [shorts[nextIndex].id]: isGlobalMuted }));
+            }
+          }, 0);
+        }
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (currentIndex > 0) {
+          const prevIndex = currentIndex - 1;
+          setCurrentIndex(prevIndex);
+          setTimeout(() => {
+            const prevShortElement = shortContainerRefs.current.get(shorts[prevIndex]?.id);
+            if (prevShortElement) {
+              prevShortElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            const prevVideo = videoRefs.current.get(shorts[prevIndex]?.id);
+            if (prevVideo) {
+              if (isGlobalPlaying) {
+                prevVideo.play();
+                setIsPlaying(prev => ({ ...prev, [shorts[prevIndex].id]: true }));
+              } else {
+                prevVideo.pause();
+                setIsPlaying(prev => ({ ...prev, [shorts[prevIndex].id]: false }));
+              }
+              prevVideo.muted = isGlobalMuted;
+              setIsMuted(prev => ({ ...prev, [shorts[prevIndex].id]: isGlobalMuted }));
+            }
+          }, 0);
+        }
+      }
+    };
+    window.addEventListener('keydown', keyListener);
+    return () => window.removeEventListener('keydown', keyListener);
+  }, [toggleFullscreen, shorts, currentIndex, handleMute, handlePlayPause, isGlobalMuted, isGlobalPlaying]);
 
-  return () => {
-    document.removeEventListener("fullscreenchange", handler);
-    document.removeEventListener("webkitfullscreenchange", handler);
-    document.removeEventListener("msfullscreenchange", handler);
-    window.removeEventListener('keydown', keyListener);
-  };
-}, [toggleFullscreen, shorts, currentIndex, playVideo]);
-
-
-  // --- Like/Dislike Toggles ---
-  const toggleLike = (id: number) => setLiked((prev) => ({ ...prev, [id]: !prev[id] }));
+  // --- Update localStorage when global mute/play changes ---
+  useEffect(() => {
+    localStorage.setItem('shortsGlobalMuted', JSON.stringify(isGlobalMuted));
+  }, [isGlobalMuted]);
+  useEffect(() => {
+    localStorage.setItem('shortsGlobalPlaying', JSON.stringify(isGlobalPlaying));
+  }, [isGlobalPlaying]);
 
   // --- Render Logic ---
-  if (loading) return <div className="flex items-center justify-center h-screen bg-white text-gray-800">Loading...</div>;
+  if (loading && shorts.length === 0) return <div className="flex items-center justify-center h-screen bg-white text-gray-800">Loading...</div>;
   if (error) return <div className="flex items-center justify-center h-screen bg-white text-red-500">{error}</div>;
 
   return (
@@ -445,14 +432,15 @@ useEffect(() => {  const handler = () => {
         ref={containerRef}
         className={cn(
           "relative flex flex-col items-center bg-white overflow-hidden",
-          isFullscreen ? "fixed inset-0 z-50 bg-black" : ""
+          isFullscreen ? "fixed inset-0 z-50 bg-black" : "",
+          "w-full h-full"
         )}
         style={{
           position: isFullscreen ? undefined : 'fixed',
           top: isFullscreen ? undefined : NAVBAR_HEIGHT,
-          left: isFullscreen ? undefined : 'var(--sidebar-width, 72px)', // adjust if your sidebar is a different width
+          left: isFullscreen ? undefined : 0,
           right: 0,
-          width: isFullscreen ? '100vw' : 'auto',
+          width: isFullscreen ? '100vw' : '100vw', // Always 100vw for mobile
           height: isFullscreen ? '100dvh' : `calc(100dvh - ${NAVBAR_HEIGHT}px)`,
           maxHeight: isFullscreen ? '100dvh' : `calc(100dvh - ${NAVBAR_HEIGHT}px)`,
           overflow: 'hidden',
@@ -468,28 +456,34 @@ useEffect(() => {  const handler = () => {
           ref={shortsListRef}
           className="w-full h-full flex flex-col items-center overflow-y-scroll snap-y snap-mandatory scrollbar-hide"
           style={{
-            // Removed paddingTop and paddingBottom to ensure exact top snapping
             overflowX: 'hidden',
             boxSizing: 'border-box',
+            width: '100vw', // Always 100vw for mobile
+            maxWidth: '100vw',
           }}
         >
           {shorts.map((short, idx) => (
             <div
               key={short.id}
-              ref={el => el && shortContainerRefs.current.set(short.id, el)} // Store ref for individual short container
+              ref={el => el && shortContainerRefs.current.set(short.id, el)}
               className={cn(
-                "snap-start flex-shrink-0 flex items-center justify-center w-full relative", // Changed to snap-start
+                "snap-start flex-shrink-0 flex items-center justify-center w-full relative",
                 idx === currentIndex ? "z-20" : "z-10"
               )}
               style={{
-                height: '100%', // Each short should take 100% height of the scrollable container
+                height: '100%',
                 maxHeight: '100%',
-                maxWidth: isFullscreen ? `calc(100dvh * ${SHORT_ASPECT_RATIO})` : `${MAX_SHORT_WIDTH}px`,
-                margin: 'auto', // Still center horizontally
+                width: '100vw', // Always 100vw for mobile
+                maxWidth: '100vw',
+                margin: 'auto',
                 position: "relative",
-                scrollSnapAlign: 'start', // Ensure snapping to the top
+                scrollSnapAlign: 'start',
                 scrollSnapStop: 'always',
                 background: 'transparent',
+              }}
+              onClick={e => {
+                if ((e.target as HTMLElement).closest('button')) return;
+                handlePlayPause();
               }}
             >
               {/* Video Box (the actual short content area) */}
@@ -516,70 +510,39 @@ useEffect(() => {  const handler = () => {
                   loop
                   playsInline
                   muted={isMuted[short.id] ?? true}
-                  poster={short.user.avatar}
+                  poster={short.content.thumbnail}
                   tabIndex={-1}
+                  controls={false}
+                  style={{ background: 'black' }}
                 >
                   <source src={short.content.video} type="video/mp4" />
                 </video>
-
-                {/* Video controls overlay (Play/Pause, Mute, Fullscreen) */}
+                {/* Custom Controls: Play/Pause (top left), Mute (top right), Fullscreen (bottom right) */}
                 {idx === currentIndex && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                       style={{
-                         maxWidth: isFullscreen ? `calc(100dvh * ${SHORT_ASPECT_RATIO})` : '100%',
-                         maxHeight: '100%',
-                         margin: 'auto',
-                         left: '0', right: '0',
-                       }}
-                  >
-                    {/* Play/Pause Overlay Icon */}
-                    {!isPlaying[short.id] && (
-                        <div className="absolute flex items-center justify-center w-full h-full bg-black/30 pointer-events-auto"
-                            onClick={() => {
-                                const video = videoRefs.current.get(short.id);
-                                if (video) {
-                                    video.play();
-                                    setIsPlaying((prev) => ({ ...prev, [short.id]: true }));
-                                }
-                            }}>
-                            <Play className="w-16 h-16 text-white opacity-80" />
-                        </div>
-                    )}
-                     {isPlaying[short.id] && (
-                        <div className="absolute flex items-center justify-center w-full h-full bg-transparent pointer-events-auto"
-                            onClick={() => {
-                                const video = videoRefs.current.get(short.id);
-                                if (video) {
-                                    video.pause();
-                                    setIsPlaying((prev) => ({ ...prev, [short.id]: false }));
-                                }
-                            }}>
-                        </div>
-                    )}
-
-                    {/* Mute/unmute button (Top Right) */}
+                  <>
+                    {/* Play/Pause Button (Top Left) */}
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const video = videoRefs.current.get(short.id);
-                        if (video) {
-                          video.muted = !video.muted;
-                          setIsMuted((prev) => ({ ...prev, [short.id]: video.muted }));
-                        }
-                      }}
-                      className="absolute top-4 right-4 bg-black/50 text-white p-2 rounded-full z-30 hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white pointer-events-auto"
-                      aria-label={isMuted[short.id] ? "Unmute" : "Mute"}
+                      onClick={handlePlayPause}
+                      className="absolute top-4 left-4 bg-black/50 text-white p-2 rounded-full z-30 hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white pointer-events-auto"
+                      aria-label={isGlobalPlaying ? "Pause" : "Play"}
                     >
-                      {isMuted[short.id] ? (
-                        <VolumeX className="w-6 h-6" />
+                      {isGlobalPlaying ? (
+                        <Pause className="w-6 h-6" />
                       ) : (
-                        <Volume2 className="w-6 h-6" />
+                        <Play className="w-6 h-6" />
                       )}
                     </button>
-
+                    {/* Mute/unmute button (Top Right) */}
+                    <button
+                      onClick={handleMute}
+                      className="absolute top-4 right-4 bg-black/50 text-white p-2 rounded-full z-30 hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white pointer-events-auto"
+                      aria-label={isGlobalMuted ? "Unmute" : "Mute"}
+                    >
+                      {isGlobalMuted ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
+                    </button>
                     {/* Fullscreen button (Bottom Right) */}
                     <button
-                      onClick={(e) => {
+                      onClick={e => {
                         e.stopPropagation();
                         toggleFullscreen();
                       }}
@@ -588,7 +551,7 @@ useEffect(() => {  const handler = () => {
                     >
                       {isFullscreen ? <Minimize2 className="w-6 h-6" /> : <Maximize2 className="w-6 h-6" />}
                     </button>
-                  </div>
+                  </>
                 )}
 
                 {/* Overlay UI (User Info, Description, Actions) */}
@@ -640,6 +603,12 @@ useEffect(() => {  const handler = () => {
               </div>
             </div>
           ))}
+          {/* Loader at the end for infinite scroll */}
+          {hasMore && (
+            <div ref={loaderRef} className="flex items-center justify-center w-full h-32 text-gray-500 text-lg animate-pulse">
+              Loading more shorts...
+            </div>
+          )}
         </div>
       </div>
     </>

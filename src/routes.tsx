@@ -41,182 +41,202 @@ import Cart from "./pages/marketplace/Cart";
 import MyOrders from "./pages/marketplace/MyOrders";
 import Favorites from "./pages/marketplace/Favorites";
 import CompleteProfile from "./pages/CompleteProfile";
+import PricingOffers from "./pages/PricingOffers";
+import ChoosePlan from "./pages/ChoosePlan";
+import RazorpayCheckout from "@/pages/RazorpayCheckout";
+import Wallet from "./components/Wallet";
 
 const router = createBrowserRouter([
-  {
-    path: "/",
-    element: <App />,
-    children: [
-      {
-        path: "",
-        element: <Index />,
-      },
-      {
-        path: "home",
-        element: <Home />,
-      },
-      {
-        path: "login",
-        element: <Login />,
-      },
-      {
-        path: "verify-otp",
-        element: <OTPVerification />,
-      },
-      {
-        path: "profile",
-        element: <Profile />,
-      },
-      {
-        path: "edit-profile",
-        element: <EditProfile />,
-      },
-      {
-        path: "tiptube",
-        element: <TipTube />,
-      },
-      {
-        path: "tipshort",
-        element: <TipShorts />,
-      },
-      {
-        path: "onboarding",
-        element: <Onboarding />,
-      },
-      {
-        path: "otp-verification",
-        element: <OTPVerification />,
-      },
-      {
-        path: "personal-details",
-        element: <PersonalDetails />,
-      },
-      {
-        path: "interests",
-        element: <Interests />,
-      },
-      {
-        path: "create-post",
-        element: <CreatePost />,
-      },
-      {
-        path: "tipcall",
-        element: <TipCall />,
-      },
-      {
-        path: "refer",
-        element: <Refer />,
-      },
-      {
-        path: "premium",
-        element: <Premium />,
-      },
-      {
-        path: "tip-shop",
-        element: <TipShop />,
-      },
-      {
-        path: "become-seller",
-        element: <BecomeSeller />,
-      },
-      {
-        path: "product/:id",
-        element: <ProductDetail />,
-      },
-      {
-        path: "list-products",
-        element: <ListProductsPage />,
-      },
-      {
-        path: "list-products/finish",
-        element: <ListProductFinish />,
-      },
-      {
-        path: "marketplace/add-product",
-        element: <AddProduct />,
-      },
-      {
-        path: "marketplace/add-service",
-        element: <AddService />,
-      },
-      {
-        path: "checkout",
-        element: <Checkout />,
-      },
-      {
-        path: "order-confirmation",
-        element: <OrderConfirmation />,
-      },
-      {
-        path: "become-seller-full",
-        element: <BecomeSellerFullPage />,
-      },
-      {
-        path: "premium-content",
-        element: <PremiumContent />,
-      },
-      {
-        path: "post-ads",
-        element: <PostAds />,
-      },
-      {
-        path: "analysis",
-        element: <Analysis />,
-      },
-      {
-        path: "contact-us",
-        element: <ContactUs />,
-      },
-      {
-        path: "settings",
-        element: <Settings />,
-      },
-      {
-        path: "terms",
-        element: <TermsAndConditions />,
-      },
-      {
-        path: "privacy",
-        element: <PrivacyPolicy />,
-      },
-      {
-        path: "ads-tracker",
-        element: <AdsTracker />,
-      },
-      {
-        path: "how-to-earn-creator",
-        element: <HowToEarnCreator />,
-      },
-      {
-        path: "how-to-earn-user",
-        element: <HowToEarnUser />,
-      },
-      {
-        path: "earn-opportunities",
-        element: <EarnOpportunities />,
-      },
-      {
-        path: "marketplace/cart",
-        element: <Cart />,
-      },
-      {
-        path: "marketplace/my-orders",
-        element: <MyOrders />,
-      },
-      {
-        path: "marketplace/favorites",
-        element: <Favorites />,
-      },
-      {
-        path: "complete-profile",
-        element: <CompleteProfile />,
-      },
-      {
-        path: "*",
-        element: <NotFound />,
-      },
-    ],
-  },
+	{
+		path: "/",
+		element: <App />,
+		children: [
+			{
+				path: "",
+				element: <Index />,
+			},
+			{
+				path: "home",
+				element: <Home />,
+			},
+			{
+				path: "login",
+				element: <Login />,
+			},
+			{
+				path: "verify-otp",
+				element: <OTPVerification />,
+			},
+			{
+				path: "profile",
+				element: <Profile />,
+			},
+			{
+				path: "edit-profile",
+				element: <EditProfile />,
+			},
+			{
+				path: "tiptube",
+				element: <TipTube />,
+			},
+			{
+				path: "tipshort",
+				element: <TipShorts />,
+			},
+			{
+				path: "onboarding",
+				element: <Onboarding />,
+			},
+			{
+				path: "otp-verification",
+				element: <OTPVerification />,
+			},
+			{
+				path: "personal-details",
+				element: <PersonalDetails />,
+			},
+			{
+				path: "interests",
+				element: <Interests />,
+			},
+			{
+				path: "create-post",
+				element: <CreatePost />,
+			},
+			{
+				path: "tipcall",
+				element: <TipCall />,
+			},
+			{
+				path: "refer",
+				element: <Refer />,
+			},
+			{
+				path: "premium",
+				element: <Premium />,
+			},
+			{
+				path: "tip-shop",
+				element: <TipShop />,
+			},
+			{
+				path: "become-seller",
+				element: <BecomeSeller />,
+			},
+			{
+				path: "product/:id",
+				element: <ProductDetail />,
+			},
+			{
+				path: "list-products",
+				element: <ListProductsPage />,
+			},
+			{
+				path: "list-products/finish",
+				element: <ListProductFinish />,
+			},
+			{
+				path: "marketplace/add-product",
+				element: <AddProduct />,
+			},
+			{
+				path: "marketplace/add-service",
+				element: <AddService />,
+			},
+			{
+				path: "checkout",
+				element: <Checkout />,
+			},
+			{
+				path: "order-confirmation",
+				element: <OrderConfirmation />,
+			},
+			{
+				path: "become-seller-full",
+				element: <BecomeSellerFullPage />,
+			},
+			{
+				path: "premium-content",
+				element: <PremiumContent />,
+			},
+			{
+				path: "post-ads",
+				element: <PostAds />,
+			},
+			{
+				path: "analysis",
+				element: <Analysis />,
+			},
+			{
+				path: "contact-us",
+				element: <ContactUs />,
+			},
+			{
+				path: "settings",
+				element: <Settings />,
+			},
+			{
+				path: "terms",
+				element: <TermsAndConditions />,
+			},
+			{
+				path: "privacy",
+			 element: <PrivacyPolicy />,
+			},
+			{
+				path: "ads-tracker",
+				element: <AdsTracker />,
+			},
+			{
+				path: "how-to-earn-creator",
+				element: <HowToEarnCreator />,
+			},
+			{
+				path: "how-to-earn-user",
+				element: <HowToEarnUser />,
+			},
+			{
+				path: "earn-opportunities",
+				element: <EarnOpportunities />,
+			},
+			{
+				path: "marketplace/cart",
+				element: <Cart />,
+			},
+			{
+				path: "marketplace/my-orders",
+				element: <MyOrders />,
+			},
+			{
+				path: "marketplace/favorites",
+				element: <Favorites />,
+			},
+			{
+				path: "complete-profile",
+				element: <CompleteProfile />,
+			},
+			{
+				path: "/pricingoffers",
+				element: <PricingOffers />,
+			},
+			{
+				path: "chooseplan",
+				element: <ChoosePlan />,
+			},
+			{
+				path: "/razorpay-checkout",
+				element: <RazorpayCheckout />,
+			},
+			{
+				path: "wallet",
+				element: <Wallet />,
+			},
+			{
+				path: "*",
+				element: <NotFound />,
+			},
+		],
+	},
 ]);
 
 export default router;

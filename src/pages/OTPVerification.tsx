@@ -58,6 +58,8 @@ const OTPVerification = () => {
   const handleVerifyOTP = async () => {
     // Accept any 6-digit string, including '000000', and block only if not exactly 6 digits or contains non-digits
     if (!otp || otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+      // Do not show error toast on auto-trigger, only on manual submit
+      if (document.activeElement?.tagName === 'INPUT') return;
       toast.error("Please enter a valid 6-digit OTP");
       return;
     }
@@ -195,21 +197,12 @@ const OTPVerification = () => {
                 onChange={val => {
                   setOtp(val);
                   if (val.length === 6 && /^\d{6}$/.test(val) && !loading) {
-                    handleVerifyOTP();
+                    // Auto-trigger OTP verification
+                    setTimeout(() => handleVerifyOTP(), 0);
                   }
                 }}
                 maxLength={6}
                 disabled={loading}
-                onKeyDown={e => {
-                  const target = e.target as HTMLInputElement;
-                  if (e.key === 'Backspace' && target.value === '') {
-                    const prev = target.previousElementSibling as HTMLInputElement | null;
-                    if (prev && prev.tagName === 'INPUT') {
-                      prev.focus();
-                      e.preventDefault();
-                    }
-                  }
-                }}
               />
 
               <Button

@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "../contexts/AuthContext";
 import VideoLoginPrompt from "../components/VideoLoginPrompt";
 import axios from "axios";
+import RandomAvatar, { getRandomAvatar } from "../components/RandomAvatar";
 
 // Define TypeScript interfaces
 interface User {
@@ -75,6 +76,76 @@ const popularCategories = [
   { name: "Tech", id: 20 },
   { name: "Travel", id: 21 },
 ];
+
+const bannerData = [
+  {
+    title: "Watch & Earn",
+    description: "Earn rewards by watching videos",
+    gradient: "from-[#7F7FD5] via-[#86A8E7] to-[#91EAE4]",
+    icon: "🎬",
+  },
+  {
+    title: "Play & Earn",
+    description: "Earn money by playing games",
+    gradient: "from-[#43e97b] via-[#38f9d7] to-[#38f9d7]",
+    icon: "🎮",
+  },
+  {
+    title: "Refer & Earn",
+    description: "Invite friends and earn bonuses",
+    gradient: "from-[#f7971e] via-[#ffd200] to-[#f7971e]",
+    icon: "🤝",
+  },
+];
+
+const BannerCarousel = ({ userId, isAuthenticated }: { userId: string | null, isAuthenticated: boolean }) => {
+  const [current, setCurrent] = useState(0);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      setCurrent((prev) => (prev + 1) % bannerData.length);
+    }, 4000);
+    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
+  }, [current]);
+
+  const handleEarnClick = () => {
+    if (isAuthenticated && userId) {
+      window.open(`https://wow.pubscale.com/?app_id=39604779&user_id=${userId}`, "_blank");
+    } else {
+      window.location.href = "/login";
+    }
+  };
+
+  return (
+    <div className="relative w-full max-w-2xl mx-auto mb-6">
+      <div
+        className={`rounded-2xl p-6 flex items-center justify-between shadow-lg bg-gradient-to-r ${bannerData[current].gradient} transition-all duration-700`}
+      >
+        <div>
+          <div className="text-3xl mb-2">{bannerData[current].icon}</div>
+          <h3 className="font-bold text-lg mb-1 text-white drop-shadow">{bannerData[current].title}</h3>
+          <p className="text-white/90 text-sm mb-3 drop-shadow">{bannerData[current].description}</p>
+          <button
+            onClick={handleEarnClick}
+            className="px-6 py-2 rounded-full font-bold text-white bg-gradient-to-r from-[#ff512f] to-[#dd2476] shadow-lg hover:scale-105 active:scale-95 transition-transform"
+          >
+            Earn
+          </button>
+        </div>
+      </div>
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2">
+        {bannerData.map((_, idx) => (
+          <span
+            key={idx}
+            className={`w-2 h-2 rounded-full ${idx === current ? "bg-white/90" : "bg-white/40"}`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
 
 const Home = () => {
   const [activeTab, setActiveTab] = useState<"for-you" | "following">("for-you");
@@ -263,45 +334,34 @@ const Home = () => {
 
   return (
     <div className="pb-20 md:pb-0 bg-gray-50">
-      {showLoginPrompt && (
-        <VideoLoginPrompt onClose={() => setShowLoginPrompt(false)} />
-      )}
-
-      {isAuthenticated && walletBalance !== null && (
-        <div className="bg-white sticky top-[60px] md:top-[57px] z-20 py-3 px-4 shadow-sm">
-          <div className="max-w-screen-md mx-auto flex items-center justify-between">
-            <span className="text-sm font-semibold text-gray-800">
-              Wallet Balance: ₹{walletBalance}
-            </span>
-            <Link to="/add-funds">
-              <Button variant="outline" size="sm" className="teal-button">
-                Add Funds
-              </Button>
-            </Link>
-          </div>
+      {/* Categories Bar - fixed below navbar, not scrollable, always visible */}
+      <div className="bg-white fixed left-0 right-0 z-30 pyhttps://play.google.com/store/apps/details?id=com.adtip.app.adtip_app&hl=en_IN-3 px-4 overflow-x-auto flex justify-center whitespace-nowrap gap-3 no-scrollbar shadow-sm border-b border-gray-100"
+        style={{ top: 'calc(var(--navbar-height, 56px) + 20px)' }}
+      >
+        <div className="flex gap-3">
+          {popularCategories.map((category) => (
+            <button
+              key={category.name}
+              onClick={() => {
+                setSelectedCategory(category.name);
+                setPage(1);
+              }}
+              className={`px-4 py-1.5 rounded-full text-sm transition-all ${
+                selectedCategory === category.name
+                  ? "bg-adtip-teal text-white"
+                  : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+              }`}
+            >
+              {category.name}
+            </button>
+          ))}
         </div>
-      )}
-
-      <div className="bg-white sticky top-[104px] md:top-[101px] z-10 py-3 px-4 overflow-x-auto flex whitespace-nowrap gap-3 no-scrollbar shadow-sm">
-        {popularCategories.map((category) => (
-          <button
-            key={category.name}
-            onClick={() => {
-              setSelectedCategory(category.name);
-              setPage(1);
-            }}
-            className={`px-4 py-1.5 rounded-full text-sm transition-all ${
-              selectedCategory === category.name
-                ? "bg-adtip-teal text-white"
-                : "bg-gray-100 text-gray-800 hover:bg-gray-200"
-            }`}
-          >
-            {category.name}
-          </button>
-        ))}
       </div>
 
-      <div className="max-w-screen-md mx-auto pt-4 px-4">
+      {/* Main scrollable content below fixed bars */}
+      <div className="max-w-screen-md mx-auto px-4"
+        style={{ paddingTop: 'calc(var(--navbar-height, 56px) + 48px)' }}
+      >
         <Tabs defaultValue="for-you" className="mb-6">
           <TabsList className="grid grid-cols-2 w-full">
             <TabsTrigger value="for-you" onClick={() => setActiveTab("for-you")}>
@@ -316,15 +376,8 @@ const Home = () => {
           </TabsList>
 
           <TabsContent value="for-you">
-            <div className="mb-6 bg-gradient-to-r from-adtip-teal to-[#13b799] rounded-lg p-4 text-white">
-              <h3 className="font-bold text-lg mb-1">Refer & Earn!</h3>
-              <p className="text-sm mb-3">
-                Get ₹3 for every successful referral and earn ₹30 for each premium upgrade
-              </p>
-              <Button variant="secondary" size="sm">
-                Share Now
-              </Button>
-            </div>
+            {/* Carousel Banner */}
+            <BannerCarousel userId={userId} isAuthenticated={isAuthenticated} />
 
             {loading && (
               <div className="text-center py-10">
@@ -368,11 +421,22 @@ const Home = () => {
                   >
                     {/* Header */}
                     <div className="flex items-center px-3 py-2">
-                      <img
-                        src={post.user_profile_image || "https://via.placeholder.com/40"}
-                        alt={post.user_name || "User"}
-                        className="w-8 h-8 rounded-full object-cover border border-gray-300"
-                      />
+                      {post.user_profile_image ? (
+                        <img
+                          src={post.user_profile_image}
+                          alt={post.user_name || "User"}
+                          className="w-8 h-8 rounded-full object-cover border border-gray-300"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = getRandomAvatar(post.user_id || post.user_name || post.id);
+                          }}
+                        />
+                      ) : (
+                        <RandomAvatar
+                          seed={post.user_id || post.user_name || post.id}
+                          alt={post.user_name || "User"}
+                          className="w-8 h-8 rounded-full object-cover border border-gray-300"
+                        />
+                      )}
                       <div className="ml-3 flex-1">
                         <div className="flex items-center gap-1">
                           <span className="font-semibold text-sm text-gray-900">{post.user_name}</span>
@@ -476,6 +540,51 @@ const Home = () => {
           </TabsContent>
         </Tabs>
       </div>
+      {/* Google Play Store Banner - fixed bottom right, desktop only */}
+      <div
+        className="hidden md:flex fixed z-40 bottom-6 right-6 items-center gap-0 select-none"
+        style={{ pointerEvents: 'auto' }}
+      >
+        <a
+          href="https://play.google.com/store/apps/details?id=com.adtip.app.adtip_app&hl=en_IN"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center group"
+          style={{ textDecoration: 'none' }}
+        >
+          <div
+            className="rounded-l-2xl pl-5 pr-4 py-3 flex items-center bg-gradient-to-r from-[#e0e7ef] via-[#d1f1e6] to-[#f7e7fa] shadow-lg border border-gray-200 hover:from-[#d1e7f7] hover:to-[#e7f7e7] transition-colors duration-300"
+            style={{ minWidth: 120 }}
+          >
+            <span className="font-semibold text-gray-700 text-base tracking-wide drop-shadow-sm mr-2">Install now</span>
+          </div>
+          <div
+            className="rounded-r-2xl bg-white p-2 pl-1 pr-3 flex items-center shadow-lg border-t border-b border-r border-gray-200 hover:bg-gray-50 transition-colors duration-300"
+          >
+            <img
+              src="/playstore.png"
+              alt="Google Play Store"
+              className="w-8 h-8 object-contain mr-1"
+              style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.08))' }}
+            />
+          </div>
+        </a>
+      </div>
+
+      {/* Google Play Store Logo - fixed bottom right, mobile only */}
+      <a
+        href="https://play.google.com/store/apps/details?id=com.adtip.app.adtip_app&hl=en_IN"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex md:hidden fixed z-40 right-5 items-center select-none"
+        style={{ pointerEvents: 'auto', bottom: '10%' }}
+      >
+        <img
+          src="/playstore.png"
+          alt="Google Play Store"
+          className="w-14 h-14 object-contain drop-shadow-lg rounded-2xl border border-gray-200 bg-white p-2"
+        />
+      </a>
     </div>
   );
 };

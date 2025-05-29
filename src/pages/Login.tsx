@@ -9,11 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Login = () => {
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("phone");
   const navigate = useNavigate();
-  const { login, loginWithEmail } = useAuth();
+  const { login } = useAuth();
 
   const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,46 +61,6 @@ const Login = () => {
     }
   };
 
-  const handleEmailSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!email || !email.includes('@')) {
-      toast.error("Please enter a valid email address");
-      return;
-    }
-    setIsLoading(true);
-    // Set tempUserId and other required values before redirect
-    localStorage.removeItem("email");
-    localStorage.removeItem("mobile_number");
-    localStorage.removeItem("tempUserId");
-    localStorage.removeItem("otpCountdown");
-    localStorage.setItem("email", email);
-    localStorage.setItem("tempUserId", "pending");
-    localStorage.setItem("otpCountdown", (Math.floor(Date.now() / 1000) + 30).toString());
-    navigate("/verify-otp");
-    try {
-      const response = await loginWithEmail(email);
-      // Check for proper response format
-      let userData = null;
-      if (response?.data?.data && Array.isArray(response.data.data) && response.data.data.length > 0) {
-        userData = response.data.data[0];
-      }
-      if (userData && userData.id) {
-        localStorage.setItem("tempUserId", userData.id.toString());
-      }
-      toast.success("OTP sent successfully");
-    } catch (err: any) {
-      console.error("Email login error:", err);
-      let errorMsg = err?.message || "Could not send OTP. Please try again.";
-      if (typeof errorMsg === 'object') {
-        errorMsg = errorMsg.sqlMessage || JSON.stringify(errorMsg);
-      }
-      toast.error(errorMsg);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="flex flex-col min-h-screen p-6 bg-white">
       <div className="mb-8">
@@ -128,9 +87,8 @@ const Login = () => {
         </p>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-8">
-            <TabsTrigger value="phone">Phone</TabsTrigger>
-            <TabsTrigger value="email">Email</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-1 mb-8">
+            <TabsTrigger value="phone">Phone Login</TabsTrigger>
           </TabsList>
 
           <TabsContent value="phone">
@@ -154,38 +112,7 @@ const Login = () => {
               </Button>
             </form>
           </TabsContent>
-
-          <TabsContent value="email">
-            <form onSubmit={handleEmailSubmit} className="space-y-6">
-              <div className="border border-gray-300 rounded-md overflow-hidden focus-within:border-adtip-teal focus-within:ring-1 focus-within:ring-adtip-teal">
-                <Input
-                  type="email"
-                  placeholder="Email address"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="flex-1 border-none focus-visible:ring-0"
-                />
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full bg-adtip-teal hover:bg-adtip-teal/90 text-white"
-                disabled={isLoading}
-              >
-                {isLoading ? "Sending OTP..." : "Send OTP"}
-              </Button>
-            </form>
-          </TabsContent>
         </Tabs>
-
-        <div className="relative my-8">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-300"></div>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-gray-500">Or continue with</span>
-          </div>
-        </div>
 
         <div className="mt-8 text-center text-sm text-gray-600">
           <p>By continuing, you agree to our</p>

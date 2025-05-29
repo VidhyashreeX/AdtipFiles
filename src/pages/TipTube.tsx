@@ -1,637 +1,370 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import VideoLoginPrompt from "../components/VideoLoginPrompt";
-import PaidVideoPrompt from "../components/PaidVideoPrompt";
-import { LoadingSpinner } from "../components/LoadingSpinner";
-import { Alert } from "../components/Alert";
 import { useNavigate } from "react-router-dom";
 
-const popularCategories = [
-  "All", "Tech", "Beauty", "Gaming", "Food", "Travel",
-  "Finance", "Fashion", "Music", "Sports", "Education"
+// Add icons for categories (use emoji or SVG for demo)
+const categories = [
+  { name: "All", icon: "🏠" },
+  { name: "Tech", icon: "💻" },
+  { name: "Beauty", icon: "💄" },
+  { name: "Gaming", icon: "🎮" },
+  { name: "Food", icon: "🍔" },
+  { name: "Travel", icon: "✈️" },
+  { name: "Finance", icon: "💰" },
+  { name: "Fashion", icon: "👗" },
+  { name: "Music", icon: "🎵" },
+  { name: "Sports", icon: "🏀" },
+  { name: "Education", icon: "📚" },
 ];
-
-// Mapping categories to category IDs
 const categoryToIdMap: { [key: string]: number } = {
-  All: 0,
-  Tech: 1,
-  Beauty: 2,
-  Gaming: 3,
-  Food: 4,
-  Travel: 5,
-  Finance: 6,
-  Fashion: 7,
-  Music: 8,
-  Sports: 9,
-  Education: 10,
+  All: 0, Tech: 1, Beauty: 2, Gaming: 3, Food: 4, Travel: 5, Finance: 6, Fashion: 7, Music: 8, Sports: 9, Education: 10,
 };
 
 interface Video {
   id: number;
-  title: string; // Mapped from `name`
-  thumbnail?: string; // Mapped from `video_Thumbnail`
-  videoUrl?: string; // Mapped from `video_link`
-  duration?: number; // Mapped from `play_duration` or `duration`
-  isPaid: boolean; // Mapped from `is_paid_promotional`
-  pricePerMinute?: number; // Mapped from `promotional_price`
-  views: number; // Mapped from `total_views`
-  posted: string; // Mapped from `createddate`
-  sponsored?: boolean; // Not provided, default to false
-  channelId: number; // Mapped from channel_id, channelId, or createdby
-  avatar?: string; // Mapped from `channel_profile`
-  creatorName: string; // Mapped from `channelName`
-  isVerified?: boolean; // Not provided, default to false
-  userId: number; // Mapped from `createdby`
-}
-
-interface Channel {
-  id: number;
-  name: string;
-  description?: string;
+  title: string;
+  thumbnail?: string;
+  videoUrl?: string;
+  duration?: number;
+  views: number;
+  posted: string;
+  channelId: number;
   avatar?: string;
+  creatorName: string;
+  isVerified?: boolean;
+  price?: number;
 }
 
-interface Analytics {
-  totalViews: number;
-  totalEarnings: number;
-  videoCount: number;
-}
+const formatDuration = (duration: number | string | undefined) => {
+  if (duration === undefined || duration === null) return "0:00";
+  const totalSeconds = typeof duration === 'string' ? parseInt(duration, 10) : duration;
+  if (isNaN(totalSeconds)) return "0:00";
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+};
 
-interface APIResponse<T> {
-  status: number;
-  message: string;
-  data: T;
-}
+// Sidebar menu definitions with SVG icons
+const mainMenu = [
+  {
+    key: "Home",
+    label: "Home",
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24"><path d="M3 10.5L12 4l9 6.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V10.5Z"/><path d="M9 22V12h6v10"/></svg>
+    ),
+  },
+  {
+    key: "TipTube",
+    label: "TipTube",
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24"><polygon points="6,4 20,12 6,20 6,4"/></svg>
+    ),
+  },
+  {
+    key: "TipShort",
+    label: "TipShort",
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+    ),
+  },
+  {
+    key: "TipCall",
+    label: "TipCall",
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24"><path d="M22 16.92V19a2 2 0 0 1-2.18 2A19.72 19.72 0 0 1 3 5.18 2 2 0 0 1 5 3h2.09a2 2 0 0 1 2 1.72c.13 1.13.37 2.23.72 3.28a2 2 0 0 1-.45 2.11l-1.27 1.27a16 16 0 0 0 6.29 6.29l1.27-1.27a2 2 0 0 1 2.11-.45c1.05.35 2.15.59 3.28.72A2 2 0 0 1 22 16.92z"/></svg>
+    ),
+  },
+];
 
-interface VideoAPIResponse extends APIResponse<Video[]> {
-  total_count?: number;
-  current_page?: number;
-}
-
-interface ChannelAPIResponse extends APIResponse<Channel> {}
-
-interface AnalyticsAPIResponse extends APIResponse<Analytics> {}
+const marketplaceMenu = [
+  {
+    key: "TipShop",
+    label: "Tip Shop",
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+    ),
+  },
+  {
+    key: "Analysis",
+    label: "Analysis",
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24"><path d="M4 19V7M9 19V3M15 19v-8M20 19v-4"/></svg>
+    ),
+  },
+  {
+    key: "Follow",
+    label: "Follow",
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a8.38 8.38 0 0 1 13 0"/></svg>
+    ),
+  },
+  {
+    key: "MyWallet",
+    label: "My Wallet",
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M2 11h20"/></svg>
+    ),
+  },
+  {
+    key: "BecomeSeller",
+    label: "Become Seller",
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/></svg>
+    ),
+  },
+  {
+    key: "PostAdvertisers",
+    label: "Post Advertisers",
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24"><path d="M3 11v2a1 1 0 0 0 1 1h3l3 3V7l-3 3H4a1 1 0 0 0-1 1z"/><path d="M13 16h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1h-3"/></svg>
+    ),
+  },
+  {
+    key: "PremiumContent",
+    label: "Premium Content",
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+    ),
+  },
+];
 
 const TipTube = () => {
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
-  const [showPaidVideoPrompt, setShowPaidVideoPrompt] = useState(false);
-  const [selectedVideo, setSelectedVideo] = useState<number | null>(null);
-  const [videoWatchCount, setVideoWatchCount] = useState(0);
   const [videos, setVideos] = useState<Video[]>([]);
-  const [channel, setChannel] = useState<Channel | null>(null);
-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [apiResponseData, setApiResponseData] = useState<unknown>(null);
-  const [playingVideoId, setPlayingVideoId] = useState<number | null>(null);
   const [offset, setOffset] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [showPremiumOverlay, setShowPremiumOverlay] = useState<number | null>(null);
-  const videoRefs = useRef<{ [key: number]: HTMLVideoElement | null }>({});
-  const { isAuthenticated, user } = useAuth();
+  const [showPlayer, setShowPlayer] = useState(false);
+  const [currentVideo, setCurrentVideo] = useState<Video | null>(null);
+  const [search, setSearch] = useState("");
+  const [hoveredVideoId, setHoveredVideoId] = useState<number | null>(null);
+  const videoRefs = useRef<{ [id: number]: HTMLVideoElement | null }>({});
+  const feedRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
   const navigate = useNavigate();
-
   const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
     ? import.meta.env.VITE_API_URL
     : `${import.meta.env.VITE_API_URL}/api`;
   const token = user?.accessToken || null;
   const userId = user?.id || null;
-  // Type guard for video array
-  const isVideoArray = (data: unknown): data is Video[] =>
-    Array.isArray(data) && data.every(item => typeof item === 'object' && 'id' in item && 'name' in item);
 
   // Transform API video data to match Video interface
-  const transformVideoData = (apiVideo: any): Video => ({    id: apiVideo.id || 0,
-    title: apiVideo.name || "", // API returns 'name' instead of 'title'
+  const transformVideoData = (apiVideo: any): Video => ({
+    id: apiVideo.id || 0,
+    title: apiVideo.name || "",
     thumbnail: apiVideo.video_Thumbnail !== "undefined" ? apiVideo.video_Thumbnail : undefined,
-    videoUrl: apiVideo.video_link, // API returns 'video_link' instead of 'video_url'
-    // Handle both possible duration field names and ensure proper number conversion
+    videoUrl: apiVideo.video_link,
     duration: parseInt(apiVideo.play_duration || apiVideo.duration || "0", 10),
-    isPaid: !!apiVideo.is_paid_promotional,
-    pricePerMinute: apiVideo.promotional_price || undefined,
     views: apiVideo.total_views || 0,
     posted: apiVideo.createddate || "Recently",
-    sponsored: false,
     avatar: apiVideo.channel_profile !== "null" ? apiVideo.channel_profile : undefined,
     creatorName: apiVideo.channelName || "Unknown Creator",
     isVerified: false,
-    userId: apiVideo.createdby || 0,
-    channelId: apiVideo.video_channel || apiVideo.channelId || apiVideo.createdby || 0
+    channelId: apiVideo.video_channel || apiVideo.channelId || apiVideo.createdby || 0,
+    price: apiVideo.price ? parseFloat(apiVideo.price) : undefined,
   });
 
-  const fetchWithRetry = useCallback(async (url: string, options: RequestInit, retries = 3): Promise<Response> => {
-    for (let i = 0; i < retries; i++) {
-      try {
-        const response = await fetch(url, options);
-        if (response.ok) return response;
-        
-        if (response.status === 401) {
-          setError("Authentication failed. Please log in again.");
-          setShowLoginPrompt(true);
-          throw new Error("Authentication failed");
-        }
-        
-        if (i === retries - 1) throw new Error(`Failed after ${retries} retries`);
-        
-        // Exponential backoff
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
-      } catch (err) {
-        if (i === retries - 1) throw err;
-      }
-    }
-    throw new Error("Unexpected error in fetchWithRetry");
-  }, []);  // Fetch data (videos, channel, analytics)
-  const fetchData = useCallback(async () => {
-    // If no more data to load, return early
-    if (!hasMore) return;
-
-    // Determine if we should use public or authenticated API
+  // Fetch videos (infinite scroll)
+  const fetchVideos = useCallback(async (reset = false) => {
+    setLoading(true);
     const usePublicApi = !localStorage.getItem("UserLoggedIn") || !userId || !token;
     const apiEndpoint = usePublicApi 
-      ? `${BASE_URL}/getpublicvideos/${categoryToIdMap[selectedCategory] || 0}/${offset}`
-      : `${BASE_URL}/getvideos/${userId}/${categoryToIdMap[selectedCategory] || 0}/${offset}`;
-
-    setLoading(true);
-    const abortController = new AbortController();
-    setError(null);
-
-    try {      console.log(`Fetching videos from: ${apiEndpoint}`);
-      const fetchOptions: RequestInit = {
+      ? `${BASE_URL}/getpublicvideos/${categoryToIdMap[selectedCategory] || 0}/${reset ? 1 : offset}`
+      : `${BASE_URL}/getvideos/${userId}/${categoryToIdMap[selectedCategory] || 0}/${reset ? 1 : offset}`;
+    try {
+      const res = await fetch(apiEndpoint, {
         method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          ...(usePublicApi ? {} : { Authorization: `Bearer ${token}` }),
-        },
-        signal: abortController.signal,
-      };
-
-      // Fetch videos using either public or authenticated endpoint
-      const videoRes = await fetchWithRetry(apiEndpoint, fetchOptions);
-
-      const videoData = await videoRes.json() as VideoAPIResponse;
-      
-      if (!videoData || !Array.isArray(videoData.data)) {
-        throw new Error("Invalid video data format received from server");
-      }
-
-      const videoList = videoData.data.map(transformVideoData);
-      console.log(`Processed ${videoList.length} videos`);
-      
-      setVideos(prev => (offset === 1 ? videoList : [...prev, ...videoList]));
-      setHasMore(videoList.length > 0);      // Only fetch channel and analytics data for authenticated users on first page
-      if (!usePublicApi && offset === 1) {
-        try {
-          const channelId = await fetchChannel(abortController);
-          if (channelId) {
-            await fetchAnalytics(abortController, channelId);
-          }
+        headers: { "Content-Type": "application/json", ...(usePublicApi ? {} : { Authorization: `Bearer ${token}` }) },
+      });
+      const data = await res.json();
+      const videoList = Array.isArray(data.data) ? data.data.map(transformVideoData) : [];
+      setVideos(prev => reset ? videoList : [...prev, ...videoList]);
+      setHasMore(videoList.length > 0);
         } catch (err) {
-          console.error("Error in channel/analytics fetch:", err);
-          // Don't rethrow - this is not critical for the main video display
-        }
-      }
-    } catch (err: any) {
-      if (err.name === "AbortError") return;
-      
-      console.error("Error in fetchData:", err);
-      const errorMessage = err.message === "Authentication failed"
-        ? "Authentication failed. Please log in again."
-        : "Failed to load content. Please try again.";
-      
-      setError(errorMessage);
-      if (err.message === "Authentication failed") {
-        setShowLoginPrompt(true);
-      }
-      
-      setVideos(prev => prev || []);
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
+  }, [selectedCategory, offset, BASE_URL, userId, token]);
 
-    return () => abortController.abort();
-  }, [userId, token, selectedCategory, offset, BASE_URL, hasMore]);
-
-  const fetchChannel = async (abortController: AbortController) => {
-    try {
-      console.log(`Fetching channel from: ${BASE_URL}/getchannelbyuserid/${userId}`);
-      const res = await fetchWithRetry(
-        `${BASE_URL}/getchannelbyuserid/${userId}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          signal: abortController.signal,
-        }
-      );
-
-      const channelData = (await res.json()) as ChannelAPIResponse;
-      
-      if (!channelData?.data?.id) {
-        console.log("No valid channel data found");
-        setChannel(null);
-        setAnalytics(null);
-        return null;
-      }
-      
-      setChannel(channelData.data);
-      return channelData.data.id;
-    } catch (err: any) {
-      console.error("Error fetching channel:", err);
-      setChannel(null);
-      setAnalytics(null);
-      return null;
-    }
-  };
-
-  const fetchAnalytics = async (abortController: AbortController, channelId: number) => {
-    if (!channelId) {
-      console.log("Skipping analytics fetch - no channel ID");
-      return;
-    }
-    
-    try {
-      console.log(`Fetching analytics from: ${BASE_URL}/analytics/${channelId}`);
-      const res = await fetchWithRetry(
-        `${BASE_URL}/analytics/${channelId}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          signal: abortController.signal,
-        }
-      );
-
-      const analyticsData = (await res.json()) as AnalyticsAPIResponse;
-      if (!analyticsData?.data) {
-        console.log("No valid analytics data found");
-        setAnalytics(null);
-        return;
-      }
-      
-      setAnalytics(analyticsData.data);
-    } catch (err: any) {
-      console.error("Error fetching analytics:", err);
-      setAnalytics(null);
-    }
-  };
-
-  const loadMore = () => setOffset(prev => prev + 1);
-
+  // Initial fetch and on category/search change
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    setOffset(1);
+    fetchVideos(true);
+  }, [selectedCategory, search]);
 
+  // Infinite scroll
   useEffect(() => {
-    if (!isAuthenticated && videoWatchCount >= 2) {
-      setShowLoginPrompt(true);
-    }
-  }, [videoWatchCount, isAuthenticated]);
-
-  const processVideoView = useCallback(() => {
-    if (!isAuthenticated) {
-      setVideoWatchCount(prev => {
-        const newCount = prev + 1;
-        if (newCount >= 2) {
-          setShowLoginPrompt(true);
-        }
-        return newCount;
-      });
-    }
-  }, [isAuthenticated]);
-
-  const handleVideoClick = useCallback((id: number) => {
-    const video = videos?.find(item => item.id === id);
-    if (!video) {
-      setError("Video not found");
-      return;
-    }
-
-    if (video.isPaid) {
-      setSelectedVideo(id);
-      setShowPaidVideoPrompt(true);
-      return;
-    }
-
-    // Stop currently playing video if exists
-    if (playingVideoId !== null && playingVideoId !== id) {
-      const currentVideo = videoRefs.current[playingVideoId];
-      if (currentVideo) {
-        currentVideo.pause();
+    const handleScroll = () => {
+      if (!feedRef.current || loading || !hasMore) return;
+      const { scrollTop, scrollHeight, clientHeight } = feedRef.current;
+      if (scrollHeight - scrollTop - clientHeight < 400) {
+        setOffset(prev => prev + 1);
       }
-    }
-
-    const videoElement = videoRefs.current[id];
-    if (!videoElement) {
-      setError("Video player not initialized");
-      return;
-    }
-
-    videoElement.play().catch(err => {
-      console.error("Error playing video:", err);
-      setError("Failed to play video. Please try again.");
-    });
-
-    setPlayingVideoId(id);
-    processVideoView();
-  }, [videos, playingVideoId, processVideoView]);
-
-  const handlePaidVideoContinue = useCallback(() => {
-    setShowPaidVideoPrompt(false);
-    const video = videos?.find(item => item.id === selectedVideo);
-    if (!video || !selectedVideo) {
-      setError("Video not found");
-      return;
-    }
-
-    const videoElement = videoRefs.current[selectedVideo];
-    if (!videoElement) {
-      setError("Video player not initialized");
-      return;
-    }
-
-    videoElement.play().catch(err => {
-      console.error("Error playing paid video:", err);
-      setError("Failed to play video. Please try again.");
-    });
-
-    setPlayingVideoId(selectedVideo);
-    processVideoView();
-  }, [videos, selectedVideo, processVideoView]);
-
-  // Cleanup function for video resources
-  useEffect(() => {
-    return () => {
-      // Pause all videos and clear refs when component unmounts
-      Object.values(videoRefs.current).forEach(video => {
-        if (video) {
-          video.pause();
-        }
-      });
-      videoRefs.current = {};
     };
-  }, []);
-  const formatDuration = (duration: number | string | undefined) => {
-    if (duration === undefined || duration === null) return "0:00";
-    
-    // Convert string duration to number if needed
-    const totalSeconds = typeof duration === 'string' ? parseInt(duration, 10) : duration;
-    
-    if (isNaN(totalSeconds)) return "0:00";
-    
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    }
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    const ref = feedRef.current;
+    if (ref) ref.addEventListener("scroll", handleScroll);
+    return () => { if (ref) ref.removeEventListener("scroll", handleScroll); };
+  }, [loading, hasMore]);
+
+  useEffect(() => {
+    if (offset > 1) fetchVideos();
+  }, [offset]);
+
+  // Video player modal logic
+  const openPlayer = (video: Video) => {
+    setCurrentVideo(video);
+    setShowPlayer(true);
+  };
+  const closePlayer = () => {
+    setShowPlayer(false);
+    setCurrentVideo(null);
   };
 
-  const handleChannelClick = (e: React.MouseEvent, channelId: number) => {
-    e.stopPropagation(); // Prevent video click handler from firing
-    navigate(`/channel/${channelId}`);
-  };
-  const VideoCreator = ({ video }: { video: Video }) => (
-    <button 
-      onClick={(e) => handleChannelClick(e, video.channelId)}
-      className="text-xs text-gray-600 hover:text-adtip-teal transition-colors text-left flex items-center gap-1"
-    >
-      <span>{video.creatorName}</span>
-      {video.isVerified && (
-        <svg className="w-3 h-3 text-adtip-teal" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-        </svg>
-      )}
-    </button>
-  );
-
-  const handleFullscreen = (vid: HTMLVideoElement) => {
-    if (vid.requestFullscreen) vid.requestFullscreen();
-    else if ((vid as any).webkitRequestFullscreen) (vid as any).webkitRequestFullscreen();
-  };
-
-  const TipTubeContent = () => (
-    <div className="pb-20 md:pb-0 bg-gray-50">
-      {showLoginPrompt && <VideoLoginPrompt onClose={() => setShowLoginPrompt(false)} />}
-      {showPaidVideoPrompt && selectedVideo !== null && (
-        <PaidVideoPrompt
-          onClose={() => setShowPaidVideoPrompt(false)}
-          onContinue={handlePaidVideoContinue}
-          pricePerMinute={videos?.find(v => v.id === selectedVideo)?.pricePerMinute || 0}
-          videoDuration={videos?.find(v => v.id === selectedVideo)?.duration || 0}
-          videoTitle={videos?.find(v => v.id === selectedVideo)?.title || ""}
-          creatorName={videos?.find(v => v.id === selectedVideo)?.creatorName || ""}
-        />
-      )}
-
-      {error && (
-        <Alert
-          variant="error"
-          message={error}
-          onClose={() => setError(null)}
-        />
-      )}
-      
-      <div className="bg-white sticky top-[60px] md:top-[57px] z-10 py-3 px-4 overflow-x-auto flex whitespace-nowrap gap-3 no-scrollbar shadow-sm">
-        {popularCategories.map((category) => (
-          <button
-            key={category}
+  // --- UI ---
+  return (
+    <div ref={feedRef} className="h-screen overflow-y-auto px-4 py-6 bg-gray-100">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        {videos.map(video => (
+          <div
+            key={video.id}
+            className="bg-white rounded-xl shadow hover:shadow-lg transition-all cursor-pointer flex flex-col"
             onClick={() => {
-              setSelectedCategory(category);
-              setOffset(1); // Reset offset when changing category
-              setVideos([]); // Clear videos to avoid stale data
+              setCurrentVideo(video);
+              setShowPlayer(true);
             }}
-            className={`px-4 py-1.5 rounded-full text-sm transition-all ${
-              selectedCategory === category
-                ? "bg-adtip-teal text-white"
-                : "bg-gray-100 text-gray-800 hover:bg-gray-200"
-            }`}
+            onMouseEnter={() => {
+              setHoveredVideoId(video.id);
+              const ref = videoRefs.current[video.id];
+              if (ref) {
+                ref.currentTime = 0;
+                ref.play();
+              }
+            }}
+            onMouseLeave={() => {
+              setHoveredVideoId(null);
+              const ref = videoRefs.current[video.id];
+              if (ref) {
+                ref.pause();
+                ref.currentTime = 0;
+              }
+            }}
           >
-            {category}
-          </button>
+            <div className="relative aspect-video bg-gray-200 rounded-t-xl overflow-hidden">
+              {/* Price badge if paid */}
+              {video.price && video.price > 0 && (
+                <span className="absolute top-2 right-2 bg-adtip-teal text-white text-xs px-3 py-1 rounded-full z-10 shadow">
+                  ₹{video.price}
+                </span>
+              )}
+              {/* Show video on hover, else show thumbnail */}
+              {hoveredVideoId === video.id && video.videoUrl ? (
+                <video
+                  ref={el => (videoRefs.current[video.id] = el)}
+                  src={video.videoUrl}
+                  poster={video.thumbnail}
+                  muted
+                  loop
+                  playsInline
+                  className="w-full h-full object-cover"
+                  style={{ background: 'black' }}
+                />
+              ) : (
+                <img
+                  src={video.thumbnail || "/placeholder.svg"}
+                  alt={video.title}
+                  className="w-full h-full object-cover"
+                />
+              )}
+              <span className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-0.5 rounded">
+                {formatDuration(video.duration)}
+              </span>
+            </div>
+            <div className="p-3 flex-1 flex flex-col">
+              <div className="flex items-center gap-3 mb-2">
+                <img src={video.avatar || "/placeholder.svg"} alt={video.creatorName} className="w-8 h-8 rounded-full" />
+                <div className="flex flex-col">
+                  <a
+                    href={`/channel/${video.channelId}`}
+                    className="font-semibold text-sm text-adtip-teal hover:underline line-clamp-1"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {video.creatorName}
+                  </a>
+                  <span className="text-xs text-gray-500">{video.views.toLocaleString()} views • {video.posted}</span>
+                </div>
+              </div>
+              <div className="font-medium text-gray-900 text-base line-clamp-2 mb-1">{video.title}</div>
+            </div>
+          </div>
         ))}
       </div>
-
-      <div className="max-w-screen-lg mx-auto pt-4 px-4">
-        {import.meta.env.MODE === 'development' && apiResponseData && !videos?.length && (
-          <div className="mb-6 bg-yellow-50 border border-yellow-200 text-yellow-700 p-4 rounded-lg">
-            <h3 className="font-bold text-md mb-1">API Response Debug:</h3>
-            <pre className="text-xs overflow-auto max-h-40">
-              {JSON.stringify(apiResponseData, null, 2)}
-            </pre>
-          </div>
-        )}
-
-        {channel && (
-          <div className="mb-6">
-            <div className="flex items-center gap-4">
-              <img src={channel.avatar || "/placeholder.svg"} alt="Channel" className="w-12 h-12 rounded-full" />
-              <div>
-                <h2 className="text-lg font-bold">{channel.name}</h2>
-                {channel.description && <p className="text-sm text-gray-600">{channel.description}</p>}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {analytics && (
-          <div className="mb-6 bg-white shadow-sm rounded-lg p-4">
-            <h3 className="text-md font-bold mb-2">Channel Analytics</h3>
-            <p className="text-sm">Total Views: {analytics.totalViews}</p>
-            <p className="text-sm">Total Earnings: ₹{analytics.totalEarnings}</p>
-            <p className="text-sm">Video Count: {analytics.videoCount}</p>
-          </div>
-        )}
-
-        <div className="mb-6 bg-gradient-to-r from-adtip-teal to-[#13b799] rounded-lg p-4 text-white">
-          <h3 className="font-bold text-lg mb-1">TipTube Videos</h3>
-          <p className="text-sm mb-1">Enjoy your favorite content from creators around the world!</p>
-        </div>        {/* Video Grid Layout */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {videos.map((vid) => (
-            <div
-              key={vid.id}
-              className="relative group bg-white rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300"              onMouseEnter={(e) => {
-                e.preventDefault();
-                const video = videoRefs.current[vid.id];
-                if (video && document.contains(video)) {
-                  const playPromise = async () => {
-                    try {
-                      video.muted = true;
-                      video.currentTime = 0;
-                      await video.play();
-                    } catch (err) {
-                      // Only log if it's not an abort error due to quick mouse movements
-                      if (err.name !== 'AbortError') {
-                        console.log('Preview play failed:', err);
-                      }
-                    }
-                  };
-                  playPromise();
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.preventDefault();
-                const video = videoRefs.current[vid.id];
-                if (video && document.contains(video)) {
-                  // Only attempt to pause if the video is actually playing
-                  if (!video.paused) {
-                    video.pause();
-                  }
-                  video.currentTime = 0;
-                  if (!document.fullscreenElement) {
-                    video.load(); // Reset to thumbnail only if not in fullscreen
-                  }
-                }
-              }}
-              onClick={(e) => {
-                e.preventDefault();
-                const video = videoRefs.current[vid.id];
-                if (video) {
-                  if (!video.paused) {
-                    video.pause();
-                  }
-                  handleFullscreen(video);
-                  // Ensure video plays after entering fullscreen
-                  video.play().catch((err) => console.log('Fullscreen play failed:', err));
-                }
-              }}
-            >
-              <div className="relative aspect-video bg-gray-100">
-                <video                  ref={el => {
-                    videoRefs.current[vid.id] = el;
-                    if (el && vid.isPaid && !user?.is_premium) {
-                      el.addEventListener('timeupdate', () => {
-                        if (el.currentTime >= 5) {
-                          el.pause();
-                          setShowPremiumOverlay(vid.id);
-                          // Keep video in fullscreen if it's currently fullscreen
-                          if (document.fullscreenElement === el) {
-                            // Do nothing, keep fullscreen
-                          } else {
-                            el.load(); // Reset to thumbnail only if not fullscreen
-                          }
-                        }
-                      });
-                    }
-                  }}
-                  src={vid.videoUrl}
-                  poster={vid.thumbnail}
-                  className="w-full h-full object-cover"
-                  preload="metadata"
-                  playsInline
-                />
-                <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 px-2 py-1 rounded text-white text-xs">
-                  {formatDuration(vid.duration)}
-                </div>
-                {vid.isPaid && vid.pricePerMinute && (
-                  <div className="absolute top-2 right-2 bg-adtip-teal px-2 py-1 rounded text-white text-xs font-medium">
-                    ₹{vid.pricePerMinute}/min
-                  </div>
-                )}                {showPremiumOverlay === vid.id && (
-                  <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center p-3"
-                       style={{ zIndex: 9999 }}>
-                    <div className="text-white text-center max-w-[85%]">
-                      <h3 className="font-semibold text-xs leading-snug mb-1">Unlock Premium Content</h3>
-                      <p className="text-[10px] text-gray-300 mb-2">Get unlimited access to all paid videos</p>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Exit fullscreen before navigating
-                        if (document.fullscreenElement) {
-                          document.exitFullscreen();
-                        }
-                        navigate('/premium');
-                      }}
-                      className="bg-adtip-teal hover:bg-[#13b799] text-white px-3 py-1 rounded-full font-medium text-[11px] transition-colors duration-200 flex items-center gap-1"
-                    >
-                      <span>Upgrade to Premium</span>
-                      <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div className="p-4">
-                <h3 className="text-sm font-medium line-clamp-2 mb-2">{vid.title}</h3>
-                <div className="flex flex-col gap-1">
-                  <VideoCreator video={vid} />
-                  <div className="text-xs text-gray-500">
-                    {vid.views.toLocaleString()} views
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
+      {loading && (
+        <div className="flex justify-center py-8">
+          <span className="text-adtip-teal font-medium">Loading...</span>
         </div>
-
-        {loading && (
-          <div className="flex justify-center py-8">
-            <LoadingSpinner />
+      )}
+      {!loading && !hasMore && videos.length === 0 && (
+        <div className="text-center text-gray-500 py-12">No videos found.</div>
+      )}
+      {/* Video Player Modal */}
+      {showPlayer && currentVideo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-auto flex flex-col md:flex-row overflow-hidden">
+            {/* Video */}
+            <div className="flex-1 bg-black flex items-center justify-center">
+              <video
+                src={currentVideo.videoUrl}
+                poster={currentVideo.thumbnail}
+                controls
+                autoPlay
+                className="w-full h-full max-h-[70vh] object-contain bg-black"
+              />
+            </div>
+            {/* Info */}
+            <div className="w-full md:w-96 p-6 flex flex-col gap-4 bg-white">
+              <div className="font-bold text-lg text-gray-900 line-clamp-2">{currentVideo.title}</div>
+              <div className="flex items-center gap-3">
+                <img src={currentVideo.avatar || "/placeholder.svg"} alt={currentVideo.creatorName} className="w-10 h-10 rounded-full" />
+                <div className="flex flex-col">
+                  <a
+                    href={`/channel/${currentVideo.channelId}`}
+                    className="font-semibold text-gray-900 hover:underline text-base line-clamp-1"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {currentVideo.creatorName}
+                  </a>
+                  <span className="text-xs text-gray-500">{currentVideo.views.toLocaleString()} views • {currentVideo.posted}</span>
+                </div>
+                <button className="ml-auto px-4 py-1.5 rounded-full bg-adtip-teal text-white font-medium text-sm">Subscribe</button>
+              </div>
+              <div className="flex gap-3 mt-2">
+                <button className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M14 9l-3 3m0 0l-3-3m3 3V4m0 16v-7" /></svg>
+                  Like
+                </button>
+                <button className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2V4m0 16v-7" /></svg>
+                  Dislike
+                </button>
+                <button className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 7.165 6 9.388 6 12v2.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                  Share
+                </button>
+              </div>
+              <button onClick={closePlayer} className="mt-4 px-4 py-2 rounded-full bg-gray-200 text-gray-700 font-medium hover:bg-gray-300">Close</button>
+            </div>
           </div>
-        )}
-
-        {hasMore && !loading && (
-          <button
-            onClick={loadMore}
-            className="w-full py-3 text-center text-sm text-gray-600 hover:text-adtip-teal transition-colors"
-          >
-            Load More
-          </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
-
-  return <TipTubeContent />;
 };
 
 export default TipTube;

@@ -8,6 +8,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { UserProvider } from "./UserContext";
 import { ShoppingProvider } from "./contexts/ShoppingContext";
 import AppLayout from "./AppLayout";
+import { SidebarProvider } from './contexts/SidebarContext';
 
 const queryClient = new QueryClient();
 
@@ -32,21 +33,17 @@ const App = () => {
       <AuthProvider>
         <UserProvider>
           <ShoppingProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Sonner />
-              {isAuthPage ? (
-                <div className="min-h-screen bg-background flex flex-col">
-                  <main className="flex-1">
-                    <Outlet />
-                  </main>
-                </div>
-              ) : (
-                <AppLayout>
+            <SidebarProvider>
+              <TooltipProvider>
+                {isAuthPage ? (
                   <Outlet />
-                </AppLayout>
-              )}
-            </TooltipProvider>
+                ) : (
+                  <AppLayout />
+                )}
+                <Toaster />
+                <Sonner />
+              </TooltipProvider>
+            </SidebarProvider>
           </ShoppingProvider>
         </UserProvider>
       </AuthProvider>

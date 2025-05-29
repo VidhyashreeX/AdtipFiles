@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -21,6 +20,8 @@ import {
   Line 
 } from "recharts";
 import { Users, ShoppingBag, UserCircle, Megaphone } from "lucide-react";
+import axios from "axios";
+import { useParams } from "react-router-dom";
 
 const generateMockData = (numPoints: number) => {
   const data = [];
@@ -39,7 +40,93 @@ const generateMockData = (numPoints: number) => {
 
 const chartData = generateMockData(12);
 
+const ChannelAnalyticsCard = ({ data }: { data: any }) => (
+  <div className="max-w-xl mx-auto bg-white rounded-2xl shadow-lg p-6 mt-8">
+    <div className="flex items-center gap-4 mb-6">
+      <img
+        src={data.channel_image}
+        alt={data.channel_name}
+        className="w-16 h-16 rounded-full object-cover border"
+      />
+      <div>
+        <h2 className="text-xl font-bold text-gray-900">{data.channel_name}</h2>
+        <p className="text-gray-500 text-sm">Channel Analytics</p>
+      </div>
+    </div>
+    <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="bg-gray-50 rounded-lg p-4 text-center">
+        <p className="text-gray-500 text-xs mb-1">Followers</p>
+        <p className="text-lg font-bold">{data.channel_followers}</p>
+      </div>
+      <div className="bg-gray-50 rounded-lg p-4 text-center">
+        <p className="text-gray-500 text-xs mb-1">Total Videos</p>
+        <p className="text-lg font-bold">{data.total_videos}</p>
+      </div>
+      <div className="bg-gray-50 rounded-lg p-4 text-center">
+        <p className="text-gray-500 text-xs mb-1">Total Views</p>
+        <p className="text-lg font-bold">{data.total_views}</p>
+      </div>
+      <div className="bg-gray-50 rounded-lg p-4 text-center">
+        <p className="text-gray-500 text-xs mb-1">Paid Video Earnings</p>
+        <p className="text-lg font-bold">₹{data.paid_video_earned}</p>
+      </div>
+      <div className="bg-gray-50 rounded-lg p-4 text-center">
+        <p className="text-gray-500 text-xs mb-1">Withdrawn</p>
+        <p className="text-lg font-bold">₹{data.withdrawn}</p>
+      </div>
+      <div className="bg-gray-50 rounded-lg p-4 text-center">
+        <p className="text-gray-500 text-xs mb-1">Available Balance</p>
+        <p className="text-lg font-bold">₹{data.available_balance}</p>
+      </div>
+      <div className="bg-gray-50 rounded-lg p-4 text-center">
+        <p className="text-gray-500 text-xs mb-1">Paid Views</p>
+        <p className="text-lg font-bold">{data.total_paid_views}</p>
+      </div>
+      <div className="bg-gray-50 rounded-lg p-4 text-center">
+        <p className="text-gray-500 text-xs mb-1">Normal Views</p>
+        <p className="text-lg font-bold">{data.total_normal_views}</p>
+      </div>
+    </div>
+  </div>
+);
+
+const ChannelAnalytics = () => {
+  const { channelId } = useParams();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<any>(null);
+
+  useEffect(() => {
+    if (!channelId) return;
+    setLoading(true);
+    setError(null);
+    axios
+      .get(`/analytics/${channelId}`)
+      .then((res) => {
+        if (res.data.status) {
+          setData(res.data.data);
+        } else {
+          setError(res.data.message || "Failed to fetch analytics");
+        }
+      })
+      .catch((err) => {
+        setError(err.response?.data?.message || err.message || "Error fetching analytics");
+      })
+      .finally(() => setLoading(false));
+  }, [channelId]);
+
+  if (loading) return <div className="text-center py-20 text-gray-500">Loading channel analytics...</div>;
+  if (error) return <div className="text-center py-20 text-red-500">{error}</div>;
+  if (!data) return null;
+  return <ChannelAnalyticsCard data={data} />;
+};
+
 const Analysis = () => {
+  const { channelId } = useParams();
+  if (channelId) {
+    return <ChannelAnalytics />;
+  }
+
   const [activeTab, setActiveTab] = useState("consumers");
 
   return (

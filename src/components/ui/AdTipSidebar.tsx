@@ -1,65 +1,73 @@
-
 import * as React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import {
-  Home,
-  Play,
-  Video,
-  Phone,
-  Users,
-  Settings,
-  PlusCircle,
-  Gift,
-  ArrowUpRight,
-  Crown,
-  MessageSquare,
-  FileText,
-  ShoppingCart,
-  BarChart3,
-  Wallet,
-  Store,
-  BadgeDollarSign,
-  Layout,
-  User,
-  Package,
-  Heart,
-  ShoppingBag,
+  Home, Play, Video, Phone, Users, Settings,
+  PlusCircle, Gift, MessageSquare, FileText,
+  ShoppingCart, BarChart3, Wallet, Store,
+  User, Package, Heart, BadgeDollarSign,
+  Layout, Crown
 } from "lucide-react";
-import {
-  Dialog,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import CreatePostDialog from "../CreatePostDialog";
+import { useSidebar } from "../../contexts/SidebarContext";
+import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
-  Sidebar as SidebarComponent,
-  SidebarContent,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarFooter,
-  SidebarSeparator,
-  SidebarGroupLabel,
-  useSidebar,
   SidebarGroup,
   SidebarGroupContent,
 } from "./sidebar-components";
-import { cn } from "@/lib/utils";
 
-// Define props for SidebarComponent to avoid type errors
-interface SidebarProps {
-  side?: "left" | "right";
-  collapsible?: "offcanvas" | "icon" | "none";
-  className?: string;
-  children: React.ReactNode;
+interface NavItem {
+  to: string;
+  label: string;
+  icon: JSX.Element;
+  subtitle?: string;
+  external?: boolean;
 }
 
 const AdTipSidebar = () => {
   const location = useLocation();
   const { user } = useAuth();
   const [isCreatePostOpen, setIsCreatePostOpen] = React.useState(false);
-  const { state } = useSidebar(); // Use the sidebar context to check expanded/collapsed state
+  const { isCollapsed, toggleSidebar, isMobile, openMobile, setOpenMobile } = useSidebar();
+  const sidebarRef = React.useRef<HTMLDivElement>(null);
+  const [isHovered, setIsHovered] = React.useState(false);
+
+  const isActive = (path: string) => {
+    return location.pathname === path;
+  };
+
+  // Close sidebar on route change in mobile mode
+  React.useEffect(() => {
+    // Only close if openMobile was already true before navigation
+    // Prevent auto-close right after opening
+    // Remove or comment out the auto-close logic below:
+    // if (isMobile && openMobile) {
+    //   setOpenMobile(false);
+    // }
+  }, [location.pathname, isMobile /*, openMobile, setOpenMobile*/]);
+
+  // Handle wheel events for scrolling
+  const handleWheel = React.useCallback((e: WheelEvent) => {
+    if (isHovered && sidebarRef.current) {
+      e.preventDefault();
+      sidebarRef.current.scrollTop += e.deltaY;
+    }
+  }, [isHovered]);
+
+  React.useEffect(() => {
+    const sidebar = sidebarRef.current;
+    if (sidebar) {
+      if (isHovered) {
+        sidebar.addEventListener('wheel', handleWheel, { passive: false });
+      }
+      return () => {
+        sidebar.removeEventListener('wheel', handleWheel);
+      };
+    }
+  }, [isHovered, handleWheel]);
 
   // Main navigation items
   const mainNavItems = [
@@ -92,162 +100,143 @@ const AdTipSidebar = () => {
     { to: "/terms", label: "Terms & Conditions", icon: <FileText className="h-5 w-5" /> },
   ];
 
-  return (
-    <SidebarComponent
-      side="left"
-      collapsible="icon"
-      className="bg-white border-r border-gray-200 w-[260px] md:w-[280px] shrink-0 transition-all duration-300 ease-in-out shadow-sm"
-    >
-      {/* Fixed Create Post Button */}
-      <div className="px-4 pt-4 pb-2 min-h-[48px] block bg-white z-10">
-        <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
-          <DialogTrigger asChild>
-            <Button
-              className={cn(
-                "flex items-center justify-center gap-2 rounded-lg shadow-md transition-all duration-200",
-                state === "expanded"
-                  ? "w-full bg-gradient-to-r from-adtip-teal to-teal-500 hover:from-adtip-teal/90 hover:to-teal-600 text-white py-3"
-                  : "w-8 h-8 bg-gradient-to-r from-adtip-teal to-teal-500 hover:from-adtip-teal/90 hover:to-teal-600 text-white p-0 mx-auto"
-              )}
-            >
+  // Main sidebar content
+  const sidebarContent = (
+    <div>
+      {/* Post button or icon */}
+      <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
+        <DialogTrigger asChild>
+          <Button
+            className={cn(
+              "mb-4 bg-adtip-teal hover:bg-adtip-teal/90",
+              isCollapsed && !isMobile
+                ? "mx-2 w-[48px] h-[40px] flex items-center justify-center p-0"
+                : "w-[calc(100%-32px)] mx-4 px-4 py-2"
+            )}
+          >
+            {isCollapsed && !isMobile ? (
               <PlusCircle className="h-5 w-5" />
-              {state === "expanded" && (
-                <span className="font-semibold text-sm">Create Post</span>
-              )}
-            </Button>
-          </DialogTrigger>
-          <CreatePostDialog onClose={() => setIsCreatePostOpen(false)} />
-        </Dialog>
-      </div>
+            ) : (
+              <>
+                <PlusCircle className="h-5 w-5 mr-2" />
+                Create Post
+              </>
+            )}
+          </Button>
+        </DialogTrigger>
+        <CreatePostDialog onClose={() => setIsCreatePostOpen(false)} />
+      </Dialog>
 
-      {/* Scrollable Navigation Area */}
-      <SidebarContent
-        className="overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 group-data-[collapsible=icon]:overflow-visible"
-        style={{ maxHeight: "calc(100vh - 4rem - 48px - 120px)" }} // Adjusted for heading bar (4rem), Create Post button (48px), and footer (120px)
-      >
-        {/* Main Navigation Group */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Main</SidebarGroupLabel>
+      {/* Navigation Groups */}
+      <div className="space-y-5"> {/* Increased vertical spacing */}
+        {/* Main Nav Group */}
+        <SidebarGroup label={isCollapsed && !isMobile ? "" : "Menu"}>
           <SidebarGroupContent>
-            <SidebarMenu className="gap-2">
-              {mainNavItems.map((item) => (
-                <SidebarMenuItem key={item.to}>
-                  <SidebarMenuButton
-                    asChild
-                    tooltip={item.label}
-                    isActive={location.pathname === item.to}
-                    className={`flex items-center justify-start pl-4 pr-2 py-2 gap-3 w-full text-left transition-all duration-150 ${
-                      location.pathname === item.to
-                        ? "bg-adtip-teal/10 text-adtip-teal font-semibold"
-                        : "text-gray-700 hover:bg-gray-100"
-                    }`}
-                  >
-                    <Link to={item.to} className="flex items-center gap-3 w-full">
-                      {item.icon}
-                      <span className="text-sm font-bold">{item.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        
-        <SidebarSeparator />
-
-        {/* E-Commerce Group */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Marketplace</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="gap-2">
-              {ecommerceItems.map((item) => (
-                <SidebarMenuItem key={item.to}>
-                  <SidebarMenuButton
-                    asChild
-                    tooltip={item.label}
-                    isActive={location.pathname === item.to}
-                    className={`flex items-center justify-start pl-4 pr-2 py-2 gap-3 w-full text-left transition-all duration-150 ${
-                      location.pathname === item.to
-                        ? "bg-adtip-teal/10 text-adtip-teal font-semibold"
-                        : "text-gray-700 hover:bg-gray-100"
-                    }`}
-                  >
-                    {item.external ? (
-                      <a
-                        href={item.to}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 w-full"
-                      >
-                        {item.icon}
-                        <span className="text-sm font-bold">{item.label}</span>
-                      </a>
-                    ) : (
-                      <Link to={item.to} className="flex items-center gap-3 w-full">
-                        {item.icon}
-                        <span className="text-sm font-bold">{item.label}</span>
-                      </Link>
-                    )}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
+            {mainNavItems.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                onClick={() => isMobile && setOpenMobile(false)}
+                className={cn(
+                  // Remove padding, make icon a bit smaller, more vertical spacing
+                  "flex items-center gap-3 rounded-lg px-0 py-3 text-gray-500 transition-all hover:text-gray-900",
+                  isCollapsed && !isMobile && "justify-center px-0",
+                  isActive(item.to) && "bg-gray-100 text-gray-900"
+                )}
+              >
+                {React.cloneElement(item.icon, { className: "h-6 w-6" })}
+                {(!isCollapsed || isMobile) && (
+                  <span className="text-sm font-medium">{item.label}</span>
+                )}
+              </Link>
+            ))}
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarSeparator />
+        {/* E-commerce Group */}
+        <SidebarGroup label={isCollapsed && !isMobile ? "" : "E-commerce"}>
+          <SidebarGroupContent>
+            {ecommerceItems.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                onClick={() => isMobile && setOpenMobile(false)}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-0 py-3 text-gray-500 transition-all hover:text-gray-900",
+                  isCollapsed && !isMobile && "justify-center px-0",
+                  isActive(item.to) && "bg-gray-100 text-gray-900"
+                )}
+              >
+                {React.cloneElement(item.icon, { className: "h-6 w-6" })}
+                {(!isCollapsed || isMobile) && (
+                  <span className="text-sm font-medium">{item.label}</span>
+                )}
+              </Link>
+            ))}
+          </SidebarGroupContent>
+        </SidebarGroup>
 
         {/* Support Group */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Support & Settings</SidebarGroupLabel>
+        <SidebarGroup label={isCollapsed && !isMobile ? "" : "Support"}>
           <SidebarGroupContent>
-            <SidebarMenu className="gap-2">
-              {supportItems.map((item) => (
-                <SidebarMenuItem key={item.to}>
-                  <SidebarMenuButton
-                    asChild
-                    tooltip={item.label}
-                    isActive={location.pathname === item.to}
-                    className={`flex items-center justify-start pl-4 pr-2 py-2 gap-3 w-full text-left transition-all duration-150 ${
-                      location.pathname === item.to
-                        ? "bg-adtip-teal/10 text-adtip-teal font-semibold"
-                        : "text-gray-700 hover:bg-gray-100"
-                    }`}
-                  >
-                    <Link to={item.to} className="flex items-center gap-3 w-full">
-                      {item.icon}
-                      <span className="text-sm font-bold">{item.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
+            {supportItems.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                onClick={() => isMobile && setOpenMobile(false)}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-0 py-3 text-gray-500 transition-all hover:text-gray-900",
+                  isCollapsed && !isMobile && "justify-center px-0",
+                  isActive(item.to) && "bg-gray-100 text-gray-900"
+                )}
+              >
+                {React.cloneElement(item.icon, { className: "h-6 w-6" })}
+                {(!isCollapsed || isMobile) && (
+                  <span className="text-sm font-medium">{item.label}</span>
+                )}
+              </Link>
+            ))}
           </SidebarGroupContent>
         </SidebarGroup>
-      </SidebarContent>
+      </div>
+    </div>
+  );
 
-      {/* Footer Profile - Outside Scrollable Area */}
-      <SidebarFooter className="mt-auto p-4 border-t border-gray-100">
-        <Link to="/profile" className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg transition-all duration-200">
-          {user?.profilePic ? (
-            <img
-              src={user.profilePic}
-              alt="Profile"
-              className="h-10 w-10 rounded-full object-cover"
-            />
-          ) : (
-            <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
-              <User className="h-6 w-6 text-gray-400" />
-            </div>
+  return (
+    <>
+      {/* Mobile backdrop - do not render aside in overlay, just sidebarContent */}
+      {isMobile && openMobile ? (
+        <div className="h-full overflow-y-auto">{sidebarContent}</div>
+      ) : (
+        <aside
+          ref={sidebarRef}
+          className={cn(
+            "fixed left-0 top-14 h-[calc(100vh-3.5rem)] flex-col overflow-y-auto border-r bg-white py-4 transition-all duration-300 z-50",
+            isMobile ? (
+              openMobile ? "translate-x-0 w-64 px-0" : "-translate-x-full w-64 px-0"
+            ) : (
+              isCollapsed ? "w-16 px-0" : "w-64 px-0"
+            )
           )}
-          <div className="flex flex-col">
-            <span className="font-semibold text-sm text-gray-700">{user?.name || "User"}</span>
-            <span className="text-xs text-gray-400">View profile</span>
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <style>{`
+            .adtip-sidebar::-webkit-scrollbar { display: none !important; }
+          `}</style>
+          <div className="adtip-sidebar h-full">
+            {sidebarContent}
           </div>
-        </Link>
-      </SidebarFooter>
-    </SidebarComponent>
+        </aside>
+      )}
+    </>
   );
 };
 
 export default AdTipSidebar;
+
+/* Add this to your global CSS if not already present:
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+*/

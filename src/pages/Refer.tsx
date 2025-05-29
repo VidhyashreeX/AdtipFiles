@@ -13,7 +13,11 @@ const Refer = () => {
   const [copied, setCopied] = useState(false);
   
   // Generate a referral code based on user ID or default
-  const referralCode = user?.id ? `ADTIP${user.id.substring(0, 6).toUpperCase()}` : "ADTIPNEW";
+  let referralCode = "ADTIPNEW";
+  if (user?.id) {
+    const idStr = typeof user.id === "string" ? user.id : String(user.id);
+    referralCode = `ADTIP${idStr.substring(0, 6).toUpperCase()}`;
+  }
   const referralLink = `https://adtip.app/r/${referralCode}`;
 
   // Total money earned from referrals (assuming it's part of the user data)
