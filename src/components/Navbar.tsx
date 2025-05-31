@@ -147,7 +147,7 @@ const Navbar = () => {
             )}
           </button>
           <Link
-            to="/wallet"
+            to={user ? "/wallet" : "/login"}
             className="flex items-center text-gray-700 hover:text-adtip-teal transition-colors bg-gray-50 border border-gray-200 rounded-full px-3 py-1 mr-1"
             style={{ minWidth: 70 }}
           >

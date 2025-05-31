@@ -19,6 +19,7 @@ import Interests from "../pages/Interests";
 import NotFound from "../pages/NotFound";
 import Home from "../pages/Home";
 import CompleteProfile from "../pages/CompleteProfile";
+import TipShorts from "../pages/TipShorts";
 
 const ProtectedRoute = () => {
   const { isAuthenticated, authLoading } = useAuth();
@@ -47,6 +48,7 @@ const AppRoutes = () => {
         <Route path="/complete-profile" element={<CompleteProfile />} />
         <Route path="/home" element={<Home />} />
         <Route path="/wallet" element={<Wallet />} />
+        <Route path="/tipshorts" element={<TipShorts />} />
         <Route path="/add-funds" element={<AddFunds />} />
         <Route path="/upgrade-premium" element={<UpgradePremium />} />
         <Route path="/upgrade-content-premium" element={<UpgradeContentPremium />} />

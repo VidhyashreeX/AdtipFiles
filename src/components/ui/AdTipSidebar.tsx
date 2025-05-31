@@ -18,6 +18,7 @@ import {
   SidebarGroup,
   SidebarGroupContent,
 } from "./sidebar-components";
+import postAdsLogo from '/logo.png'; // Use your Post Advertisers logo path here
 
 interface NavItem {
   to: string;
@@ -69,12 +70,28 @@ const AdTipSidebar = () => {
     }
   }, [isHovered, handleWheel]);
 
+  // Handler for Install to Earn
+  const handleInstallToEarn = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const userId = localStorage.getItem('userId') || '58422';
+    const url = `https://wow.pubscale.com/?app_id=39604779&user_id=${userId}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   // Main navigation items
   const mainNavItems = [
     { to: "/home", label: "Home", icon: <Home className="h-5 w-5" /> },
     { to: "/tiptube", label: "TipTube", icon: <Play className="h-5 w-5" /> },
-    { to: "/tipshort", label: "TipShort", icon: <Video className="h-5 w-5" /> },
+    { to: "/tipshort", label: "TipShorts", icon: <Video className="h-5 w-5" /> },
     { to: "/tipcall", label: "TipCall", icon: <Phone className="h-5 w-5" /> },
+    // Install to Earn menu item (no route, just action)
+    {
+      to: "#install-to-earn",
+      label: "Install to Earn",
+      icon: <BadgeDollarSign className="h-5 w-5" />,
+      onClick: handleInstallToEarn,
+      isInstallToEarn: true,
+    },
   ];
   
   // E-commerce items
@@ -82,10 +99,9 @@ const AdTipSidebar = () => {
     { to: "/tip-shop", label: "Tip Shop", icon: <ShoppingCart className="h-5 w-5" /> },
     { to: "/analysis", label: "Analysis", icon: <BarChart3 className="h-5 w-5" /> },
     { to: "/follow", label: "Follow", icon: <Users className="h-5 w-5" /> },
-    { to: "/wallet", label: "My Wallet", icon: <Wallet className="h-5 w-5" /> },
+    { to: user ? "/wallet" : "/login", label: "My Wallet", icon: <Wallet className="h-5 w-5" /> },
     { to: "/become-seller-full", label: "Become Seller", icon: <Store className="h-5 w-5" />, external: true },
     { to: "/post-ads", label: "Post Advertisers", icon: <BadgeDollarSign className="h-5 w-5" /> },
-    { to: "/premium-content", label: "Premium Content", icon: <Layout className="h-5 w-5" /> },
     { to: "/premium", label: "Premium Upgrade", icon: <Crown className="h-5 w-5" /> },
     { to: "/marketplace/my-orders", label: "My Orders", icon: <Package className="h-5 w-5" /> },
     { to: "/marketplace/cart", label: "Cart", icon: <ShoppingCart className="h-5 w-5" /> },
@@ -130,31 +146,55 @@ const AdTipSidebar = () => {
       {/* Navigation Groups */}
       <div className="space-y-5"> {/* Increased vertical spacing */}
         {/* Main Nav Group */}
-        <SidebarGroup label={isCollapsed && !isMobile ? "" : "Menu"}>
+        <SidebarGroup>
+          {!(isCollapsed && !isMobile) && (
+            <div className="px-2 py-1 text-xs font-medium text-sidebar-foreground/70">Menu</div>
+          )}
           <SidebarGroupContent>
-            {mainNavItems.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                onClick={() => isMobile && setOpenMobile(false)}
-                className={cn(
-                  // Remove padding, make icon a bit smaller, more vertical spacing
-                  "flex items-center gap-3 rounded-lg px-0 py-3 text-gray-500 transition-all hover:text-gray-900",
-                  isCollapsed && !isMobile && "justify-center px-0",
-                  isActive(item.to) && "bg-gray-100 text-gray-900"
-                )}
-              >
-                {React.cloneElement(item.icon, { className: "h-6 w-6" })}
-                {(!isCollapsed || isMobile) && (
-                  <span className="text-sm font-medium">{item.label}</span>
-                )}
-              </Link>
-            ))}
+            {mainNavItems.map((item) =>
+              item.isInstallToEarn ? (
+                <a
+                  key={item.label}
+                  href="#install-to-earn"
+                  onClick={item.onClick}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-0 py-3 text-gray-500 transition-all hover:text-gray-900 cursor-pointer",
+                    isCollapsed && !isMobile && "justify-center px-0"
+                  )}
+                  tabIndex={0}
+                  role="button"
+                >
+                  {item.icon}
+                  {(!isCollapsed || isMobile) && (
+                    <span className="text-sm font-medium">{item.label}</span>
+                  )}
+                </a>
+              ) : (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => isMobile && setOpenMobile(false)}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-0 py-3 text-gray-500 transition-all hover:text-gray-900",
+                    isCollapsed && !isMobile && "justify-center px-0",
+                    isActive(item.to) && "bg-gray-100 text-gray-900"
+                  )}
+                >
+                  {React.cloneElement(item.icon, { className: "h-6 w-6" })}
+                  {(!isCollapsed || isMobile) && (
+                    <span className="text-sm font-medium">{item.label}</span>
+                  )}
+                </Link>
+              )
+            )}
           </SidebarGroupContent>
         </SidebarGroup>
 
         {/* E-commerce Group */}
-        <SidebarGroup label={isCollapsed && !isMobile ? "" : "E-commerce"}>
+        <SidebarGroup>
+          {!(isCollapsed && !isMobile) && (
+            <div className="px-2 py-1 text-xs font-medium text-sidebar-foreground/70">E-commerce</div>
+          )}
           <SidebarGroupContent>
             {ecommerceItems.map((item) => (
               <Link
@@ -177,7 +217,10 @@ const AdTipSidebar = () => {
         </SidebarGroup>
 
         {/* Support Group */}
-        <SidebarGroup label={isCollapsed && !isMobile ? "" : "Support"}>
+        <SidebarGroup>
+          {!(isCollapsed && !isMobile) && (
+            <div className="px-2 py-1 text-xs font-medium text-sidebar-foreground/70">Support</div>
+          )}
           <SidebarGroupContent>
             {supportItems.map((item) => (
               <Link

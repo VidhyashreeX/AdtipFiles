@@ -98,7 +98,7 @@ const bannerData = [
   },
 ];
 
-const BannerCarousel = ({ userId, isAuthenticated }: { userId: string | null, isAuthenticated: boolean }) => {
+const BannerCarousel = ({ userId, isAuthenticated }: { userId: string | number | null, isAuthenticated: boolean }) => {
   const [current, setCurrent] = useState(0);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -109,7 +109,6 @@ const BannerCarousel = ({ userId, isAuthenticated }: { userId: string | null, is
     }, 4000);
     return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
   }, [current]);
-
   const handleEarnClick = () => {
     if (isAuthenticated && userId) {
       window.open(`https://wow.pubscale.com/?app_id=39604779&user_id=${userId}`, "_blank");
@@ -159,6 +158,9 @@ const Home = () => {
   const [page, setPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [walletBalance, setWalletBalance] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState<boolean>(true);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadingRef = useRef<HTMLDivElement | null>(null);
 
   const userId = user?.id || null;
   const token = user?.accessToken || null;
@@ -239,8 +241,8 @@ const Home = () => {
     fetchWalletBalance();
   }, [fetchWalletBalance]);
 
-  // Fetch posts
-  const fetchPosts = useCallback(async () => {
+  // Fetch posts with infinite scroll
+  const fetchPosts = useCallback(async (shouldAppend = false) => {
     // If not authenticated, fetch premium posts for guests
     if (!isAuthenticated) {
       setLoading(true);
@@ -250,18 +252,25 @@ const Home = () => {
         if (response.data.status && Array.isArray(response.data.data)) {
           setFeedData(response.data.data);
           setTotalPages(1); // No pagination for guest premium posts
+          setHasMore(false); // No infinite scroll for guests
         } else {
           setFeedData([]);
           setError("No premium posts available for guests.");
+          setHasMore(false);
         }
       } catch (err: any) {
         setFeedData([]);
         setError("Failed to load premium posts. Please try again later.");
+        setHasMore(false);
       } finally {
         setLoading(false);
       }
       return;
     }
+    
+    if (!shouldAppend && loading) return; // Prevent multiple simultaneous initial loads
+    if (shouldAppend && (!hasMore || loading)) return; // Don't fetch if no more data or already loading
+
     const abortController = new AbortController();
     try {
       setLoading(true);
@@ -270,7 +279,7 @@ const Home = () => {
       const categoryId = categoryObj ? categoryObj.id : 0;
       const payload = {
         category: categoryId,
-        page: String(page),
+        page: String(shouldAppend ? page : 1),
         limit: "5",
         loggined_user_id: userId ? String(userId) : "0",
       };
@@ -296,8 +305,25 @@ const Home = () => {
           title: post.title || "Untitled",
           content: post.content || "No content",
         }));
-        setFeedData(sanitizedPosts);
+        
+        if (shouldAppend) {
+          // Append new posts for infinite scroll
+          setFeedData(prevData => [...prevData, ...sanitizedPosts]);
+        } else {
+          // Replace all posts (when category changes)
+          setFeedData(sanitizedPosts);
+        }
+        
+        // Update pagination info
         setTotalPages(response.data.pagination.total_page);
+        setHasMore(page < response.data.pagination.total_page);
+        
+        // If we got posts and there are more pages, increment the page for next fetch
+        if (sanitizedPosts.length > 0 && page < response.data.pagination.total_page) {
+          setPage(prevPage => prevPage + 1);
+        } else {
+          setHasMore(false);
+        }
       } else {
         throw new Error(response.data.message || "Failed to fetch posts");
       }
@@ -308,15 +334,47 @@ const Home = () => {
           ? "Unable to connect to the server. Please check your internet connection."
           : err.response?.data?.message || err.message || "Failed to load posts"
       );
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
     return () => abortController.abort();
-  }, [isAuthenticated, userId, token, selectedCategory, page]);
+  }, [isAuthenticated, userId, token, selectedCategory, page, loading, hasMore]);
 
+  // Initial data load
   useEffect(() => {
-    fetchPosts();
-  }, [fetchPosts]);
+    // Reset state when category changes
+    setFeedData([]);
+    setPage(1);
+    setHasMore(true);
+    fetchPosts(false);
+  }, [selectedCategory, isAuthenticated]); // Only reload on category change or auth change
+
+  // Set up intersection observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // If the loading element is visible and we can load more
+        if (entries[0].isIntersecting && hasMore) {
+          fetchPosts(true); // Load more posts
+        }
+      },
+      { threshold: 0.5 } // Trigger when 50% of the loading element is visible
+    );
+    
+    observerRef.current = observer;
+    
+    // Observe the loading element if it exists
+    if (loadingRef.current) {
+      observer.observe(loadingRef.current);
+    }
+    
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [fetchPosts, hasMore]); // Re-setup observer when fetchPosts or hasMore changes
 
   // Check if user is viewing posts and prompt login
   useEffect(() => {
@@ -335,7 +393,7 @@ const Home = () => {
   return (
     <div className="pb-20 md:pb-0 bg-gray-50">
       {/* Categories Bar - fixed below navbar, not scrollable, always visible */}
-      <div className="bg-white fixed left-0 right-0 z-30 pyhttps://play.google.com/store/apps/details?id=com.adtip.app.adtip_app&hl=en_IN-3 px-4 overflow-x-auto flex justify-center whitespace-nowrap gap-3 no-scrollbar shadow-sm border-b border-gray-100"
+      <div className="bg-white fixed left-0 right-0 z-30 py-3 px-4 overflow-x-auto flex justify-center whitespace-nowrap gap-3 no-scrollbar shadow-sm border-b border-gray-100"
         style={{ top: 'calc(var(--navbar-height, 56px) + 20px)' }}
       >
         <div className="flex gap-3">
@@ -345,6 +403,8 @@ const Home = () => {
               onClick={() => {
                 setSelectedCategory(category.name);
                 setPage(1);
+                setFeedData([]);
+                setHasMore(true);
               }}
               className={`px-4 py-1.5 rounded-full text-sm transition-all ${
                 selectedCategory === category.name
@@ -379,16 +439,20 @@ const Home = () => {
             {/* Carousel Banner */}
             <BannerCarousel userId={userId} isAuthenticated={isAuthenticated} />
 
-            {loading && (
+            {loading && feedData.length === 0 && (
               <div className="text-center py-10">
                 <p className="text-gray-500">Loading posts...</p>
               </div>
             )}
 
-            {error && (
+            {error && feedData.length === 0 && (
               <div className="text-center py-10">
                 <p className="text-red-500">{error}</p>
-                <Button onClick={() => window.location.reload()} className="mt-4">
+                <Button onClick={() => {
+                  setPage(1);
+                  setHasMore(true);
+                  fetchPosts(false);
+                }} className="mt-4">
                   Retry
                 </Button>
               </div>
@@ -410,7 +474,7 @@ const Home = () => {
               </div>
             )}
 
-            {!loading && !error && feedData.length > 0 && (
+            {!error && feedData.length > 0 && (
               <div className="space-y-6">
                 {feedData.map((post) => (
                   <div
@@ -502,25 +566,21 @@ const Home = () => {
                 ))}
               </div>
             )}
+            
+            {/* Infinite scroll loading indicator */}
+            {isAuthenticated && hasMore && (
+              <div 
+                ref={loadingRef}
+                className="flex justify-center py-8"
+              >
+                {loading && <p className="text-gray-500">Loading more posts...</p>}
+                {!loading && <div className="h-8" />} {/* Invisible element for intersection observer */}
+              </div>
+            )}
 
-            {!loading && !error && feedData.length > 0 && (
-              <div className="flex justify-center gap-4 mt-6">
-                <Button
-                  onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-                  disabled={page === 1}
-                  className="teal-button"
-                >
-                  Previous
-                </Button>
-                <Button
-                  onClick={() =>
-                    setPage((prev) => Math.min(prev + 1, totalPages))
-                  }
-                  disabled={page === totalPages}
-                  className="teal-button"
-                >
-                  Next
-                </Button>
+            {isAuthenticated && !hasMore && feedData.length > 0 && (
+              <div className="text-center py-8">
+                <p className="text-gray-500">No more posts to load</p>
               </div>
             )}
           </TabsContent>
