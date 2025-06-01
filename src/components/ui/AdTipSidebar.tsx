@@ -71,12 +71,12 @@ const AdTipSidebar = () => {
   }, [isHovered, handleWheel]);
 
   // Handler for Install to Earn
-  const handleInstallToEarn = (e: React.MouseEvent) => {
+  /*const handleInstallToEarn = (e: React.MouseEvent) => {
     e.preventDefault();
     const userId = localStorage.getItem('userId') || '58422';
     const url = `https://wow.pubscale.com/?app_id=39604779&user_id=${userId}`;
     window.open(url, '_blank', 'noopener,noreferrer');
-  };
+  };*/
 
   // Main navigation items
   const mainNavItems = [
@@ -85,13 +85,13 @@ const AdTipSidebar = () => {
     { to: "/tipshort", label: "TipShorts", icon: <Video className="h-5 w-5" /> },
     { to: "/tipcall", label: "TipCall", icon: <Phone className="h-5 w-5" /> },
     // Install to Earn menu item (no route, just action)
-    {
+    /*{
       to: "#install-to-earn",
       label: "Install to Earn",
       icon: <BadgeDollarSign className="h-5 w-5" />,
       onClick: handleInstallToEarn,
       isInstallToEarn: true,
-    },
+    },*/
   ];
   
   // E-commerce items
@@ -152,7 +152,7 @@ const AdTipSidebar = () => {
           )}
           <SidebarGroupContent>
             {mainNavItems.map((item) =>
-              item.isInstallToEarn ? (
+              /*item.isInstallToEarn ? (
                 <a
                   key={item.label}
                   href="#install-to-earn"
@@ -169,7 +169,7 @@ const AdTipSidebar = () => {
                     <span className="text-sm font-medium">{item.label}</span>
                   )}
                 </a>
-              ) : (
+              )*/(
                 <Link
                   key={item.to}
                   to={item.to}

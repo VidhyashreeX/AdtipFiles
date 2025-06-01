@@ -98,7 +98,7 @@ const bannerData = [
   },
 ];
 
-const BannerCarousel = ({ userId, isAuthenticated }: { userId: string | number | null, isAuthenticated: boolean }) => {
+/*const BannerCarousel = ({ userId, isAuthenticated }: { userId: string | number | null, isAuthenticated: boolean }) => {
   const [current, setCurrent] = useState(0);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -144,7 +144,7 @@ const BannerCarousel = ({ userId, isAuthenticated }: { userId: string | number |
       </div>
     </div>
   );
-};
+};*/
 
 const Home = () => {
   const [activeTab, setActiveTab] = useState<"for-you" | "following">("for-you");
@@ -436,8 +436,8 @@ const Home = () => {
           </TabsList>
 
           <TabsContent value="for-you">
-            {/* Carousel Banner */}
-            <BannerCarousel userId={userId} isAuthenticated={isAuthenticated} />
+            {/* Carousel Banner 
+            <BannerCarousel userId={userId} isAuthenticated={isAuthenticated} /> */}
 
             {loading && feedData.length === 0 && (
               <div className="text-center py-10">
