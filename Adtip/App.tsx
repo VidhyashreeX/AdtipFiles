@@ -89,7 +89,8 @@ function App(): React.JSX.Element {
     );
   }
   return (
-    <SafeAreaProvider>
+  <SafeAreaProvider>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.white }}>
       <ThemeProvider>
         <AuthProvider>
           <NavigationContainer>
@@ -98,13 +99,15 @@ function App(): React.JSX.Element {
               {isAuthenticated ? (
                 <Stack.Screen name="Main" component={MainNavigator} />
               ) : (
-                <Stack.Screen name="Auth" component={AuthNavigator} />              )}
+                <Stack.Screen name="Auth" component={AuthNavigator} />
+              )}
             </Stack.Navigator>
           </NavigationContainer>
         </AuthProvider>
       </ThemeProvider>
-    </SafeAreaProvider>
-  );
+    </SafeAreaView>
+  </SafeAreaProvider>
+);
 }
 
 const styles = StyleSheet.create({

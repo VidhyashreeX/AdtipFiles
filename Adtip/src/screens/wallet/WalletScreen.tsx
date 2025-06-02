@@ -46,22 +46,22 @@ const WalletScreen = () => {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [offerwallLoading, setOfferwallLoading] = useState(false);
 
-  // Fetch wallet data
+    // Fetch wallet data
   const fetchWalletData = async () => {
     try {
       setIsLoading(true);
-      const response = await ApiService.get(ENDPOINTS.GET_WALLET_BALANCE);
-      
-      if (response && response.data) {
+      if (!user || !user.id) {
+        throw new Error('User not authenticated');
+      }
+      // Use the correct endpoint with user id
+      const endpoint = `/api/getfunds/${user.id}`;
+      const response = await ApiService.get(endpoint);
+      if (response && response.status === 200) {
         setBalance({
-          coins: response.data.coins || 0,
-          currency: response.data.currency || 'INR',
+          coins: parseFloat(response.availableBalance) || 0,
+          currency: 'INR',
           lastUpdated: new Date(),
         });
-        
-        if (response.data.transactions) {
-          setTransactions(response.data.transactions);
-        }
       }
     } catch (error) {
       console.error('Error fetching wallet data:', error);
