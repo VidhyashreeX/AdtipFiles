@@ -19,3 +19,32 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+// Add repositories configuration for all projects
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        
+        // Commented out PubScale integration - June 2, 2025
+        // Add repository for PubScale SDK
+        /* 
+        maven {
+            url "https://android-sdk.is.com/"
+        }
+        
+        // Try alternative repository for PubScale
+        maven {
+            url "https://dl.bintray.com/ironsource-mobile/android-sdk"
+        }
+        */
+        
+        // Maven Central as a fallback
+        maven {
+            url "https://repo1.maven.org/maven2/"
+        }
+        
+        // Fallback for JitPack packages
+        maven { url 'https://jitpack.io' }
+    }
+}

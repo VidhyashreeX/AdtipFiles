@@ -8,3 +8,9 @@
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
 # Add any project specific keep options here:
+-keep class com.pubscale.sdkone.offerwall.** {*;}
+-keep class com.pubscale.caterpillar.analytics.** {*;}
+#Supporting R8 full mode
+-keep,allowobfuscation,allowshrinking class kotlin.coroutines.Continuation
+-keep,allowobfuscation,allowshrinking interface retrofit2.Call
+-keep,allowobfuscation,allowshrinking class retrofit2.Response

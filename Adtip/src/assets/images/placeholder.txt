@@ -1,0 +1,2 @@
+// This is a placeholder file to create the directory structure.
+// The actual image files should be added separately.

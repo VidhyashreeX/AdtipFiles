@@ -1,131 +1,120 @@
 /**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
+ * Adtip App
+ * 
  * @format
  */
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
+import React, { useState, useEffect } from 'react';
+import { 
+  SafeAreaView, 
+  StatusBar, 
+  StyleSheet, 
   View,
+  ActivityIndicator
 } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+// Auth Context
+import { AuthProvider } from './src/contexts/AuthContext';
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+// Services
+// Commented out PubScale integration - June 2, 2025
+// import RewardService from './src/services/RewardService';
+// import PubScaleService from './src/services/PubScaleService';
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
+// Navigators
+import MainNavigator from './src/navigation/MainNavigator';
+import AuthNavigator from './src/navigation/AuthNavigator';
 
+// Theme
+import { ThemeProvider } from './src/contexts/ThemeContext';
+import { COLORS } from './src/constants/colors';
+
+// Stack type
+const Stack = createNativeStackNavigator();
+
+/**
+ * Main application component
+ */
 function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+  // State
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Check authentication state and initialize services when app loads  useEffect(() => {
+    const initApp = async () => {
+      try {
+        // Check auth status
+        const userToken = await AsyncStorage.getItem('accessToken');
+        const userId = await AsyncStorage.getItem('userId') || 'anonymous_user';
+        const isAuth = !!userToken;
+        setIsAuthenticated(isAuth);
+          // Commented out PubScale integration - June 2, 2025
+        // Initialize PubScale SDK with user ID
+        // await PubScaleService.initialize(userId);
+        
+        // Initialize reward service
+        // await RewardService.init();
+        
+        // Set up PubScale reward listener
+        // PubScaleService.setRewardListener((reward) => {
+        //   console.log('Reward received in App.tsx:', reward);
+        //   // You can call your backend API here to update the user's balance
+        // });
+      } catch (error) {
+        console.error("Error initializing app:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    initApp();
+      // Cleanup on unmount
+    return () => {
+      // Commented out PubScale integration - June 2, 2025
+      // PubScaleService.removeRewardListener();
+    };
+  }, []);
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
-  };
-
-  /*
-   * To keep the template simple and small we're adding padding to prevent view
-   * from rendering under the System UI.
-   * For bigger apps the recommendation is to use `react-native-safe-area-context`:
-   * https://github.com/AppAndFlow/react-native-safe-area-context
-   *
-   * You can read more about it here:
-   * https://github.com/react-native-community/discussions-and-proposals/discussions/827
-   */
-  const safePadding = '5%';
-
+  // Show loading indicator while checking auth status
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    );
+  }
   return (
-    <View style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        style={backgroundStyle}>
-        <View style={{paddingRight: safePadding}}>
-          <Header/>
-        </View>
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-            paddingHorizontal: safePadding,
-            paddingBottom: safePadding,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debugvivek">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </View>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <NavigationContainer>
+            <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+              {isAuthenticated ? (
+                <Stack.Screen name="Main" component={MainNavigator} />
+              ) : (
+                <Stack.Screen name="Auth" component={AuthNavigator} />              )}
+            </Stack.Navigator>
+          </NavigationContainer>
+        </AuthProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  container: {
+    flex: 1,
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+  }
 });
 
 export default App;

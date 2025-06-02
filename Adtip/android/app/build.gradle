@@ -107,9 +107,10 @@ android {
     }
 }
 
-dependencies {
-    // The version of react-native is set by the React Native Gradle Plugin
+dependencies {    // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    // Commented out PubScale integration - June 2, 2025
+    // implementation 'com.pubscale.sdkone:offerwall:1.0.10' // Using the version we know exists
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
@@ -117,3 +118,5 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")

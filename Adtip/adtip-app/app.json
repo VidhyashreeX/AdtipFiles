@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "scheme": "acme",
+    "userInterfaceStyle": "automatic",
+    "orientation": "default",
+    "web": {
+      "output": "static"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://n"
+        }
+      ],
+      "expo-font"
+    ],
+    "name": "Adtip",
+    "slug": "adtip-app",
+    "extra": {
+      "router": {
+        "origin": "https://n"
+      },
+      "eas": {
+        "projectId": "234280cc-a832-4f88-98c9-e814ed76f28f"
+      }
+    },
+    "android": {
+      "package": "com.vivekcse007.adtipapp"
+    }
+  }
+}
