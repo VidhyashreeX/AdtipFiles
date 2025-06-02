@@ -6,18 +6,18 @@ export const COLORS = {
   secondary: '#6b48ff',
   accent: '#00C853',
   background: '#f8fafc',
+  surface: '#ffffff',
+  card: '#ffffff',
   white: '#ffffff',
-  black: '#000000',
-  text: {
+  black: '#000000',  text: {
     primary: '#0f172a',
     secondary: '#374151',
     tertiary: '#6b7280',
     light: '#94a3b8',
   },
-  border: {
-    light: '#e5e7eb',
-    default: '#d1d5db',
-  },
+  textSecondary: '#374151',
+  border: '#d1d5db',
+  borderLight: '#e5e7eb',
   error: '#f43f5e',
   warning: '#FFF3CD',
   success: '#00C853',
@@ -39,21 +39,19 @@ export const COLORS = {
 /**
  * Returns theme-compatible colors based on dark mode status
  */
-export const getThemeColors = (isDarkMode: boolean) => {
-  if (isDarkMode) {
+export const getThemeColors = (isDarkMode: boolean) => {  if (isDarkMode) {
     return {
       ...COLORS,
       background: '#121212',
+      surface: '#1e1e1e',
+      card: '#2d2d2d',
       text: {
         primary: '#f8fafc',
         secondary: '#e2e8f0',
         tertiary: '#cbd5e1',
-        light: '#94a3b8',
-      },
-      border: {
-        light: '#334155',
-        default: '#475569',
-      },
+        light: '#94a3b8',      },
+      border: '#475569',
+      borderLight: '#334155',
     };
   }
   return COLORS;

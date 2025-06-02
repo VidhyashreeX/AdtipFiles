@@ -107,8 +107,7 @@ const WalletScreen = () => {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Header title="Wallet" showBackButton />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.text }]}>
+          <ActivityIndicator size="large" color={colors.primary} />          <Text style={[styles.loadingText, { color: colors.text.primary }]}>
             Loading wallet data...
           </Text>
         </View>
@@ -161,8 +160,7 @@ const WalletScreen = () => {
         </TouchableOpacity>
 
         {/* Transactions List */}
-        <View style={styles.transactionsContainer}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+        <View style={styles.transactionsContainer}>          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
             Transaction History
           </Text>
 
@@ -176,8 +174,7 @@ const WalletScreen = () => {
                 key={`transaction-${index}`}
                 style={[styles.transactionItem, { borderBottomColor: colors.border }]}
               >
-                <View style={styles.transactionDetails}>
-                  <Text style={[styles.transactionTitle, { color: colors.text }]}>
+                <View style={styles.transactionDetails}>                  <Text style={[styles.transactionTitle, { color: colors.text.primary }]}>
                     {transaction.description || 'Transaction'}
                   </Text>
                   <Text style={[styles.transactionDate, { color: colors.textSecondary }]}>

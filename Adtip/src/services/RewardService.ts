@@ -18,9 +18,11 @@ interface RewardedResult {
 /**
  * RewardService - Handles watch & earn and reward functionality
  */
-export default class RewardService {  /**
+export default class RewardService {
+  /**
    * Initialize the reward service
-   */  static async init() {
+   */
+  static async init() {
     try {
       // Get user ID from async storage
       const userId = await AsyncStorage.getItem('userId') || 'anonymous_user';
@@ -45,13 +47,13 @@ export default class RewardService {  /**
           currency: reward.currency,
           source: 'pubscale_offerwall'
         });
-        
-        // Call API to update user's balance
-        ApiService.post(ENDPOINTS.REWARDS.TRACK_REWARD, {
-          placementName: 'offerwall',
-          rewardAmount: reward.amount,
-          rewardType: reward.currency
-        }).then(() => {
+          // Call API to update user's balance
+        // Commented out PubScale integration - June 2, 2025
+        // ApiService.post(ENDPOINTS.TRACK_REWARD, {
+        //   placementName: 'offerwall',
+        //   rewardAmount: reward.amount,
+        //   rewardType: reward.currency
+        // }).then(() => {
           // Track successful reward submission
           AnalyticsService.trackOfferwallEvent('reward_tracked_success', {
             amount: reward.amount,
@@ -75,20 +77,18 @@ export default class RewardService {  /**
       console.error('Failed to initialize PubScale in RewardService:', error);
       return false;
     }
-  }
-  }
-  /**
+  }  /**
    * Show rewarded ad and give user reward on completion
    * @param placementName - The placement identifier (e.g. 'video_watch', 'daily_bonus')
    * @param rewardAmount - Amount of coins to reward
    * @param rewardType - Type of reward ('coins', 'points', etc.)
    * @returns Promise with reward result
-   */  static async showRewardedAd(
+   */
+  static async showRewardedAd(
     placementName: string,
     rewardAmount: number = 5,
     rewardType: string = 'coins'
-  ): Promise<RewardedResult> {
-    try {
+  ): Promise<RewardedResult> {    try {
       // Commented out PubScale integration - June 2, 2025
       /*
       // For offerwall placement, show the PubScale offerwall
@@ -122,6 +122,7 @@ export default class RewardService {  /**
       };
     }
   }
+
   /**
    * Show the PubScale offerwall
    * @returns Promise resolving when the offerwall is closed
@@ -159,32 +160,6 @@ export default class RewardService {  /**
       'The offerwall feature is currently disabled. Please check back later.'
     );
     return Promise.resolve();
-  }
-              .then(() => {
-                resolve({
-                  success: true,
-                  amount: rewardAmount,
-                  type: rewardType
-                });
-              })
-              .catch(err => {
-                console.error('Error tracking reward:', err);
-                reject(err);
-              });
-          } else {
-            resolve({
-              success: false,
-              amount: 0,
-              type: rewardType
-            });
-          }
-        },
-        onError: (error: string) => {
-          console.error('Rewarded ad error:', error);
-          reject(new Error(error));
-        }
-      });
-    });
   }
 
   /**
@@ -224,7 +199,7 @@ export default class RewardService {  /**
     try {
       const result = await this.showRewardedAd('daily_reward', 10);
       if (result.success) {
-        return { success: true, amount: result.amount };
+        return { success: true, amount: result.rewardAmount || 10 };
       }
       return { success: false, amount: 0 };
     } catch (error) {
@@ -247,9 +222,5 @@ export default class RewardService {  /**
   }
 }
 
-// Types for reward service
-export interface RewardedResult {
-  success: boolean;
-  amount: number;
-  type: string;
-}
+// Export types for reward service
+export type { RewardedResult };

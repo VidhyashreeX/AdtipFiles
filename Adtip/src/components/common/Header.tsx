@@ -89,8 +89,7 @@ const Header: React.FC<HeaderProps> = ({
               </TouchableOpacity>
             )}
             
-            {showWallet && (
-              <TouchableOpacity onPress={navigateToWallet} style={[styles.walletButton, { borderColor: colors.border.light }]}>
+            {showWallet && (              <TouchableOpacity onPress={navigateToWallet} style={[styles.walletButton, { borderColor: colors.borderLight }]}>
                 <Icon name="credit-card" size={16} color={colors.primary} style={styles.walletIcon} />
                 <Text style={[styles.walletAmount, { color: colors.text.primary }]}>${walletAmount}</Text>
               </TouchableOpacity>

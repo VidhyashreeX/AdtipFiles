@@ -42,8 +42,8 @@ const Stack = createNativeStackNavigator();
 function App(): React.JSX.Element {
   // State
   const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  // Check authentication state and initialize services when app loads  useEffect(() => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);  // Check authentication state and initialize services when app loads
+  useEffect(() => {
     const initApp = async () => {
       try {
         // Check auth status
@@ -51,7 +51,8 @@ function App(): React.JSX.Element {
         const userId = await AsyncStorage.getItem('userId') || 'anonymous_user';
         const isAuth = !!userToken;
         setIsAuthenticated(isAuth);
-          // Commented out PubScale integration - June 2, 2025
+        
+        // Commented out PubScale integration - June 2, 2025
         // Initialize PubScale SDK with user ID
         // await PubScaleService.initialize(userId);
         
@@ -71,7 +72,8 @@ function App(): React.JSX.Element {
     };
     
     initApp();
-      // Cleanup on unmount
+    
+    // Cleanup on unmount
     return () => {
       // Commented out PubScale integration - June 2, 2025
       // PubScaleService.removeRewardListener();

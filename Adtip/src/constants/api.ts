@@ -13,6 +13,9 @@ export const API_TIMEOUT = 30000;
 // export const PUBSCALE_BASE_URL = 'https://wow.pubscale.com';
 // export const PUBSCALE_APP_ID = '39604779';
 
+// Temporary fallback for commented PubScale integration
+export const PUBSCALE_APP_ID = '';
+
 // API Endpoints
 export const API_ENDPOINTS = {
   // Auth
@@ -62,11 +65,13 @@ export const API_ENDPOINTS = {
     GET_DETAILS: '/referral/details',
   },
   
-  // Payment  PAYMENT: {
+  // Payment
+  PAYMENT: {
     ADD_FUNDS: '/api/add-funds',
     WITHDRAW_FUNDS: '/api/withdraw-funds',
   },
-    // Analytics
+  
+  // Analytics
   ANALYTICS: {
     TRACK: '/api/track-analytics',
     // Commented out PubScale integration - June 2, 2025
@@ -78,4 +83,49 @@ export const API_ENDPOINTS = {
     // Commented out PubScale integration - June 2, 2025
     // TRACK_REWARD: '/api/track-reward',
   }
+};
+
+// Legacy flat endpoints structure for backward compatibility
+export const ENDPOINTS = {
+  // Auth endpoints
+  OTP_LOGIN: '/api/otplogin',
+  OTP_VERIFY: '/api/otpverify',
+  LOGOUT: '/api/logout',
+  SAVE_USER_DETAILS: '/api/saveuserdetails',
+  PING: '/api/ping',
+  
+  // Content endpoints
+  CREATE_POST: '/api/create-post',
+  GET_CATEGORIES: '/api/categories',
+  UPLOAD_VIDEO: '/api/upload-video',
+  UPLOAD_SHORT: '/api/upload-short',
+  
+  // Media endpoints
+  GET_VIDEO: '/api/video',
+  CHECK_LIKE: '/api/check-like',
+  CHECK_SUBSCRIBE: '/api/check-subscribe',
+  TRACK_VIEW: '/api/track-view',
+  EARN_REWARD: '/api/earn-reward',
+  LIKE_VIDEO: '/api/like-video',
+  UNLIKE_VIDEO: '/api/unlike-video',
+  SUBSCRIBE: '/api/subscribe',
+  UNSUBSCRIBE: '/api/unsubscribe',
+  GET_PUBLIC_SHOTS: '/api/public-shots',
+  
+  // Wallet endpoints
+  GET_WALLET_BALANCE: '/api/wallet/balance',
+    // Reward endpoints
+  TRACK_WATCH_TIME: '/api/track-watch-time',
+  GET_REWARD_BALANCE: '/api/reward/balance',
+  CHECK_DAILY_REWARD: '/api/daily-reward/check',
+  GET_REWARD_HISTORY: '/api/reward/history',
+  TRACK_REWARD: '/api/track-reward',
+  
+  // Analytics
+  TRACK_ANALYTICS: '/api/track-analytics',
+  
+  // Commented out PubScale integration - June 2, 2025
+  // REWARDS: {
+  //   TRACK_REWARD: '/api/track-reward',
+  // }
 };

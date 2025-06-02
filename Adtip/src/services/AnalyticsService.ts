@@ -15,7 +15,7 @@ const FLUSH_INTERVAL = 60000; // 1 minute
 class AnalyticsService {
   private eventQueue: AnalyticsEvent[] = [];
   private isQueueProcessing = false;
-  private processingInterval: NodeJS.Timeout | null = null;
+  private processingInterval: any = null;
 
   constructor() {
     this.initializeQueue();

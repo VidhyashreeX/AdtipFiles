@@ -1,32 +1,72 @@
 // src/services/PubScaleService.ts
-import { NativeModules, Platform, NativeEventEmitter, EmitterSubscription, NetInfo } from 'react-native';
+import { NativeModules, Platform, NativeEventEmitter, EmitterSubscription } from 'react-native';
+// Commented out PubScale integration - June 2, 2025  
+// import NetInfo from '@react-native-community/netinfo';
 import { PUBSCALE_APP_ID } from '../constants/api';
 import PubScaleFallbackService from './PubScaleFallbackService';
 import AnalyticsService from './AnalyticsService';
 
-// Check if the module is available
-const isNativeModuleAvailable = NativeModules.PubscaleOfferwall !== undefined;
+// Lazy getter for native module to avoid runtime errors
+let _pubscaleOfferwall: any = null;
+let _isNativeModuleAvailable: boolean | null = null;
+let _pubscaleEventEmitter: any = null;
 
-// Log whether the module is available for debugging
-console.log(`[PubScaleService] Native module available: ${isNativeModuleAvailable}`);
+const getPubscaleOfferwall = () => {
+  if (_pubscaleOfferwall !== null) {
+    return _pubscaleOfferwall;
+  }
 
-// Use the native module if available, otherwise use dummy implementations
-const PubscaleOfferwall = isNativeModuleAvailable ? NativeModules.PubscaleOfferwall : {
-  init: (_appId: string, onSuccess: Function) => {
-    console.log('[PubScaleService] Using fallback implementation');
-    // Call success immediately since we're using a fallback
-    onSuccess();
-  },
-  launch: (onClose: Function) => {
-    console.log('[PubScaleService] Using fallback implementation for launch');
-    // Call close immediately since we're using a fallback
-    onClose();
-  },
-  setUserId: () => {}
+  try {
+    // Check if React Native runtime is ready and NativeModules is available
+    if (typeof NativeModules === 'undefined' || !NativeModules) {
+      console.log('[PubScaleService] NativeModules not available, using fallback');
+      _isNativeModuleAvailable = false;
+    } else {
+      _isNativeModuleAvailable = NativeModules.PubscaleOfferwall !== undefined;
+      console.log(`[PubScaleService] Native module available: ${_isNativeModuleAvailable}`);
+    }
+  } catch (error) {
+    console.log('[PubScaleService] Error checking native module, using fallback:', error);
+    _isNativeModuleAvailable = false;
+  }
+  // Use the native module if available, otherwise use dummy implementations
+  _pubscaleOfferwall = _isNativeModuleAvailable ? NativeModules.PubscaleOfferwall : {
+    init: (_appId: string, onSuccess: () => void) => {
+      console.log('[PubScaleService] Using fallback implementation');
+      // Call success immediately since we're using a fallback
+      setTimeout(onSuccess, 100);
+    },
+    launch: (onClose: () => void) => {
+      console.log('[PubScaleService] Using fallback implementation for launch');
+      // Call close immediately since we're using a fallback
+      setTimeout(onClose, 100);
+    },
+    setUserId: () => {}
+  };
+
+  return _pubscaleOfferwall;
 };
 
-// Event emitter for reward callbacks
-const pubscaleEventEmitter = new NativeEventEmitter(PubscaleOfferwall);
+const getPubscaleEventEmitter = () => {
+  if (_pubscaleEventEmitter !== null) {
+    return _pubscaleEventEmitter;
+  }
+
+  try {
+    const pubscaleOfferwall = getPubscaleOfferwall();
+    _pubscaleEventEmitter = new NativeEventEmitter(pubscaleOfferwall);
+  } catch (error) {
+    console.log('[PubScaleService] Error creating event emitter, using dummy:', error);
+    // Create a dummy event emitter that doesn't do anything
+    _pubscaleEventEmitter = {
+      addListener: () => ({ remove: () => {} }),
+      removeAllListeners: () => {},
+      removeSubscription: () => {}
+    };
+  }
+
+  return _pubscaleEventEmitter;
+};
 
 interface PubScaleReward {
   amount: number;
@@ -64,10 +104,8 @@ class PubScaleService {
     // Clean up any existing subscription
     if (this.rewardSubscription) {
       this.rewardSubscription.remove();
-    }
-
-  // Setup reward listener
-    this.rewardSubscription = pubscaleEventEmitter.addListener('onReward', (reward) => {
+    }    // Setup reward listener
+    this.rewardSubscription = getPubscaleEventEmitter().addListener('onReward', (reward: any) => {
       console.log('Reward received:', reward);
       
       // Track reward received
@@ -87,27 +125,26 @@ class PubScaleService {
       if (Platform.OS === 'android') {
         try {
           // Initialize Android SDK
-          PubscaleOfferwall.init(PUBSCALE_APP_ID,            () => {
+          getPubscaleOfferwall().init(PUBSCALE_APP_ID,() => {
               // Success callback
               this.isInitialized = true;
               
               // Set the user ID after initialization
               if (userId) {
                 try {
-                  PubscaleOfferwall.setUserId(userId);
+                  getPubscaleOfferwall().setUserId(userId);
                   
                   // Track user ID set success
                   AnalyticsService.trackOfferwallEvent('user_id_set', {
                     userId,
                     success: true
-                  });
-                } catch (err) {
+                  });                } catch (err) {
                   console.error('Error setting user ID:', err);
                   // Track user ID set error
                   AnalyticsService.trackOfferwallEvent('user_id_set', {
                     userId,
                     success: false,
-                    error: err.message || 'Unknown error'
+                    error: err instanceof Error ? err.message : 'Unknown error'
                   });
                   // Don't reject, just log the error
                 }
@@ -145,13 +182,12 @@ class PubScaleService {
                 resolve();
               }
             }
-          );        } catch (err) {
-          console.error('Exception initializing PubScale:', err);
+          );        } catch (err) {          console.error('Exception initializing PubScale:', err);
           
           // Track initialization exception
           AnalyticsService.trackOfferwallEvent('sdk_initialization_exception', {
             userId,
-            error: err.message || 'Unknown error'
+            error: err instanceof Error ? err.message : 'Unknown error'
           });
           
           reject(err);
@@ -176,14 +212,13 @@ class PubScaleService {
     
     if (!this.isInitialized) {
       return this.initialize(this.userId || 'anonymous_user')
-        .then(() => this.showOfferwallInternal())
-        .catch((err) => {
+        .then(() => this.showOfferwallInternal())        .catch((err) => {
           console.error('Failed to initialize before showing offerwall:', err);
           
           // Track initialization error during show attempt
           AnalyticsService.trackOfferwallEvent('show_init_error', {
             userId: this.userId || 'anonymous_user',
-            error: err.message || 'Unknown error'
+            error: err instanceof Error ? err.message : 'Unknown error'
           });
           
           throw err;
@@ -211,15 +246,14 @@ class PubScaleService {
                 reject(new Error('No network connection available. Please connect to the internet and try again.'));
                 return;
               }
-              
-              // Track offerwall launch
+                // Track offerwall launch
               AnalyticsService.trackOfferwallEvent('launch', {
                 userId: this.userId || 'anonymous_user',
                 timestamp: Date.now()
               });
               
               // Launch the offerwall
-              PubscaleOfferwall.launch(
+              getPubscaleOfferwall().launch(
                 () => {
                   // On close callback - this happens immediately in our implementation
                   // since the PubScale SDK doesn't provide a close callback
@@ -258,12 +292,11 @@ class PubScaleService {
                 }
               );
             })
-            .catch(err => {
-              // Handle network check error
+            .catch(err => {              // Handle network check error
               console.error('Error checking network state:', err);
               
               // Try to launch anyway
-              PubscaleOfferwall.launch(
+              getPubscaleOfferwall().launch(
                 () => resolve(),
                 (error: string) => {
                   if (error) {
@@ -275,11 +308,10 @@ class PubScaleService {
               );
             });        } catch (err) {
           console.error('Exception showing PubScale offerwall:', err);
-          
-          // Track exception
+            // Track exception
           AnalyticsService.trackOfferwallEvent('launch_exception', {
             userId: this.userId || 'anonymous_user',
-            error: err.message || 'Unknown error'
+            error: err instanceof Error ? err.message : 'Unknown error'
           });
           
           reject(err);
@@ -299,23 +331,22 @@ class PubScaleService {
   /**
    * Helper method to check if network is available
    * @returns Promise that resolves to boolean indicating if network is connected
-   */
-  private async checkNetworkConnectivity(): Promise<boolean> {
+   */  private async checkNetworkConnectivity(): Promise<boolean> {
     try {
+      // Commented out PubScale integration - June 2, 2025
       // Check if NetInfo is available (it's a separate package in newer versions of React Native)
-      if (NetInfo && typeof NetInfo.fetch === 'function') {
-        const netInfo = await NetInfo.fetch();
-        return netInfo.isConnected || false;
-      }
+      // if (NetInfo && typeof NetInfo.fetch === 'function') {
+      //   const netInfo = await NetInfo.fetch();
+      //   return netInfo.isConnected || false;
+      // }
       
       // Fallback to assuming connectivity is available
       return true;
     } catch (err) {
       console.warn('Error checking network connectivity:', err);
       // Assume connectivity is available if we can't check
-      return true;
+            return true;
     }
-  }
   }
 
   /**

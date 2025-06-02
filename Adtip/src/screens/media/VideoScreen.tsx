@@ -17,7 +17,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import Video from 'react-native-video';
 import Orientation from 'react-native-orientation-locker';
-import { PubScale } from 'pubscale-sdk';
+//import { PubScale } from 'pubscale-sdk';
 
 // Components
 import Header from '../../components/common/Header';
@@ -229,8 +229,9 @@ const VideoScreen = () => {
     
     try {
       setWatchTimeTracked(true);
-      
-      if (video.isMonetized && !video.hasEarned) {
+        if (video.isMonetized && !video.hasEarned) {
+        // Commented out PubScale integration - June 2, 2025
+        /*
         // Show reward after 80% of video watched
         const reward = await PubScale.showRewardedAd({
           placement: 'video_watch_reward',
@@ -249,6 +250,13 @@ const VideoScreen = () => {
             }
           }
         });
+        */
+        
+        // Temporary: Show message that rewards are disabled
+        Alert.alert(
+          'Rewards Temporarily Disabled',
+          'Video rewards are currently being updated. Please check back later!'
+        );
       }
     } catch (error) {
       console.error('Error showing reward:', error);
