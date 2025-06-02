@@ -58,7 +58,7 @@ const LoginScreen = ({ navigation }) => {
     } catch (err) {
       // Handle error
       console.error('Login error:', err);
-      setError('Failed to send OTP. Please try again.');
+      setError('Failed to send the OTP. Please try again.');
     }
   };
   

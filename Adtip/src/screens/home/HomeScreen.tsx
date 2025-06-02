@@ -142,11 +142,9 @@ const HomeScreen: React.FC = () => {
 
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      if (result.status === 200 && result.data) {
-        setWalletAmount(result.data.wallet_amount || '0.00');
+      }      const result = await response.json();
+      if (result.status === 200) {
+        setWalletAmount(result.availableBalance || '0.00');
       }
     } catch (err) {
       console.error('Error fetching wallet amount:', err);
@@ -199,7 +197,9 @@ const HomeScreen: React.FC = () => {
       setLoading(prev => ({ ...prev, posts: true }));
       
       const token = await AsyncStorage.getItem('accessToken');
-      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.HOME.LIST_POSTS}`, {
+      if (!token || !user) return;  // Add user check
+
+      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.HOME.LIST_POSTS}?userId=${user.id}`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
