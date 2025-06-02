@@ -36,41 +36,33 @@ const WalletScreen = () => {
   const navigation = useNavigation();
 
   // State
-  const [balance, setBalance] = useState<WalletBalance>({
-    coins: 0,
-    currency: 'INR',
-    lastUpdated: new Date(),
-  });
+  const [balance, setBalance] = useState<string>('0.00');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [offerwallLoading, setOfferwallLoading] = useState(false);
 
-    // Fetch wallet data
+  // Fetch wallet data
   const fetchWalletData = async () => {
-    try {
-      setIsLoading(true);
-      if (!user || !user.id) {
-        throw new Error('User not authenticated');
-      }
-      // Use the correct endpoint with user id
-      const endpoint = `/api/getfunds/${user.id}`;
-      const response = await ApiService.get(endpoint);
-      if (response && response.status === 200) {
-        setBalance({
-          coins: parseFloat(response.availableBalance) || 0,
-          currency: 'INR',
-          lastUpdated: new Date(),
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching wallet data:', error);
-      Alert.alert('Error', 'Failed to load wallet data. Please try again.');
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+  try {
+    setIsLoading(true);
+    if (!user || !user.id) throw new Error('User not found');
+    const response = await fetch(`/api/getfunds/${user.id}`);
+    const data = await response.json();
+    if (data && data.availableBalance) {
+      setBalance(data.availableBalance);
+    } else {
+      setBalance('0.00');
     }
-  };
+  } catch (error) {
+    console.error('Error fetching wallet data:', error);
+    Alert.alert('Error', 'Failed to load wallet data. Please try again.');
+    setBalance('0.00');
+  } finally {
+    setIsLoading(false);
+    setIsRefreshing(false);
+  }
+};
 
   // Handle refresh
   const handleRefresh = () => {
@@ -133,13 +125,7 @@ const WalletScreen = () => {
         <View style={[styles.balanceCard, { backgroundColor: colors.card }]}>
           <Text style={styles.balanceLabel}>Current Balance</Text>
           <Text style={styles.balanceValue}>
-            {balance.coins} <Text style={styles.coinText}>Coins</Text>
-          </Text>
-          <Text style={styles.balanceInfo}>
-            1 Coin = 1 {balance.currency}
-          </Text>
-          <Text style={styles.lastUpdated}>
-            Last updated: {balance.lastUpdated.toLocaleString()}
+            ₹{balance}
           </Text>
         </View>
 
