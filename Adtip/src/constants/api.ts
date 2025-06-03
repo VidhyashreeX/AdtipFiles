@@ -3,7 +3,7 @@
  */
 
 // Base URL for API calls
-export const API_BASE_URL = 'http://3.6.15.198:7082';
+export const API_BASE_URL = 'https://api.adtip.in';
 
 // Timeout for API calls (in milliseconds)
 export const API_TIMEOUT = 30000;

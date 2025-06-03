@@ -274,11 +274,12 @@ export default class ApiService {
   }
 
   // ===== HOME PAGE SERVICES =====
-
   /**
    * Get wallet balance
    * @param userId - User ID
-   */  static async getWalletBalance(userId: string | number): Promise<WalletBalanceResponse> {
+   */  
+  static async getWalletBalance(userId: string | number): Promise<WalletBalanceResponse> {
+    // Ensure the userId is correctly formatted in the URL path
     return this.get<WalletBalanceResponse>(`${ApiEndpoints.HOME_ENDPOINTS.GET_WALLET_BALANCE}/${userId}`);
   }
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,25 +10,50 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Image,
+  PermissionsAndroid,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { launchImageLibrary } from 'react-native-image-picker';
 import * as ImagePicker from 'react-native-image-picker';
+import DatePicker from 'react-native-date-picker';
+import Geolocation from 'react-native-geolocation-service';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 // Hooks and contexts
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 
+// Types
+import { RootStackParamList } from '../../types/navigation';
+
+type UserDetailsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
 /**
  * User details form screen component (for first-time login)
  */
-const UserDetailsScreen = ({ navigation }) => {
+const UserDetailsScreen = () => {
   // Theme
   const { colors } = useTheme();
   
+  // Navigation
+  const navigation = useNavigation<UserDetailsScreenNavigationProp>();
+  
   // Auth context
   const { user, updateUserDetails, loading } = useAuth();
+
+  // Location state
+  const [location, setLocation] = useState({
+    latitude: '',
+    longitude: '',
+    address: ''
+  });
+  
+  // Date picker state
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -43,6 +68,56 @@ const UserDetailsScreen = ({ navigation }) => {
     maternal_status: user?.maternal_status || 'Single',
   });
   
+  // Request location permission and get current position
+  useEffect(() => {
+    const requestLocationPermission = async () => {
+      try {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          {
+            title: "Location Permission",
+            message: "This app needs access to your location",
+            buttonNeutral: "Ask Me Later",
+            buttonNegative: "Cancel",
+            buttonPositive: "OK"
+          }
+        );
+        
+        if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+          // Get current position
+          Geolocation.getCurrentPosition(
+            (position) => {
+              console.log('Got location', position);
+              setLocation({
+                latitude: position.coords.latitude.toString(),
+                longitude: position.coords.longitude.toString(),
+                address: 'Current Location' // You would use a geocoding service to get the actual address
+              });
+              
+              // Update form data with location
+              setFormData(prev => ({
+                ...prev,
+                latitude: position.coords.latitude.toString(),
+                longitude: position.coords.longitude.toString()
+              }));
+            },
+            (error) => {
+              console.error('Location error', error);
+              Alert.alert('Error', 'Failed to get your location. Please check your settings.');
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+          );
+        } else {
+          console.log('Location permission denied');
+        }
+      } catch (err) {
+        console.error('Permission request error:', err);
+      }
+    };
+
+    requestLocationPermission();
+  }, []);
+  
   // Validation state
   const [formErrors, setFormErrors] = useState({
     name: '',
@@ -52,18 +127,16 @@ const UserDetailsScreen = ({ navigation }) => {
     dob: '',
     profession: '',
   });
-  
-  // Form field change handler
+    // Form field change handler
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     
     // Clear error for this field
-    if (formErrors[field]) {
+    if (field in formErrors && formErrors[field as keyof typeof formErrors]) {
       setFormErrors((prev) => ({ ...prev, [field]: '' }));
     }
   };
-  
-  // Handle profile image selection
+    // Handle profile image selection
   const handleSelectProfileImage = async () => {
     try {
       const result = await launchImageLibrary({
@@ -80,12 +153,14 @@ const UserDetailsScreen = ({ navigation }) => {
       
       const selectedImage = result.assets[0];
       
-      // In a real app, you would upload this to your server
-      // For now, we just update the local state with the URI
-      setFormData((prev) => ({
-        ...prev,
-        profile_image: selectedImage.uri,
-      }));
+      if (selectedImage.uri) {
+        // In a real app, you would upload this to your server
+        // For now, we just update the local state with the URI
+        setFormData((prev) => ({
+          ...prev,
+          profile_image: selectedImage.uri || null,
+        }));
+      }
     } catch (err) {
       console.error('Image selection error:', err);
       Alert.alert('Error', 'Failed to select image. Please try again.');
@@ -144,8 +219,7 @@ const UserDetailsScreen = ({ navigation }) => {
     setFormErrors(errors);
     return isValid;
   };
-  
-  // Submit form handler
+    // Submit form handler
   const handleSubmit = async () => {
     // Validate form
     if (!validateForm()) {
@@ -153,10 +227,13 @@ const UserDetailsScreen = ({ navigation }) => {
     }
     
     try {
-      // Update user details
+      // Update user details with isSaveUserDetails set to 1
       await updateUserDetails({
         ...formData,
         is_first_time: 0,
+        isSaveUserDetails: 1,
+        latitude: location.latitude,
+        longitude: location.longitude
       });
       
       // Navigate to main app
@@ -216,7 +293,7 @@ const UserDetailsScreen = ({ navigation }) => {
               style={[
                 styles.input,
                 { 
-                  borderColor: formErrors.name ? colors.error : colors.border.default,
+                  borderColor: formErrors.name ? colors.error : colors.border,
                   color: colors.text.primary 
                 }
               ]}
@@ -239,7 +316,7 @@ const UserDetailsScreen = ({ navigation }) => {
               style={[
                 styles.input,
                 { 
-                  borderColor: formErrors.firstName ? colors.error : colors.border.default,
+                  borderColor: formErrors.firstName ? colors.error : colors.border,
                   color: colors.text.primary 
                 }
               ]}
@@ -262,7 +339,7 @@ const UserDetailsScreen = ({ navigation }) => {
               style={[
                 styles.input,
                 { 
-                  borderColor: formErrors.lastName ? colors.error : colors.border.default,
+                  borderColor: formErrors.lastName ? colors.error : colors.border,
                   color: colors.text.primary 
                 }
               ]}
@@ -285,7 +362,7 @@ const UserDetailsScreen = ({ navigation }) => {
               style={[
                 styles.input,
                 { 
-                  borderColor: formErrors.emailId ? colors.error : colors.border.default,
+                  borderColor: formErrors.emailId ? colors.error : colors.border,
                   color: colors.text.primary 
                 }
               ]}
@@ -310,10 +387,9 @@ const UserDetailsScreen = ({ navigation }) => {
               <TouchableOpacity
                 style={[
                   styles.optionButton,
-                  { 
-                    borderColor: formData.gender === 'Male' 
+                  {                    borderColor: formData.gender === 'Male' 
                       ? colors.primary 
-                      : colors.border.default,
+                      : colors.border,
                     backgroundColor: formData.gender === 'Male'
                       ? `${colors.primary}20`
                       : 'transparent'
@@ -338,10 +414,9 @@ const UserDetailsScreen = ({ navigation }) => {
               <TouchableOpacity
                 style={[
                   styles.optionButton,
-                  { 
-                    borderColor: formData.gender === 'Female' 
+                  {                    borderColor: formData.gender === 'Female' 
                       ? colors.primary 
-                      : colors.border.default,
+                      : colors.border,
                     backgroundColor: formData.gender === 'Female'
                       ? `${colors.primary}20`
                       : 'transparent'
@@ -366,10 +441,9 @@ const UserDetailsScreen = ({ navigation }) => {
               <TouchableOpacity
                 style={[
                   styles.optionButton,
-                  { 
-                    borderColor: formData.gender === 'Other' 
+                  {                    borderColor: formData.gender === 'Other' 
                       ? colors.primary 
-                      : colors.border.default,
+                      : colors.border,
                     backgroundColor: formData.gender === 'Other'
                       ? `${colors.primary}20`
                       : 'transparent'
@@ -397,23 +471,43 @@ const UserDetailsScreen = ({ navigation }) => {
           <View style={styles.formGroup}>
             <Text style={[styles.label, { color: colors.text.secondary }]}>
               Date of Birth
-            </Text>
-            <TextInput
+            </Text>            <TouchableOpacity
               style={[
                 styles.input,
-                { 
-                  borderColor: formErrors.dob ? colors.error : colors.border.default,
-                  color: colors.text.primary 
+                {
+                  borderColor: formErrors.dob ? colors.error : colors.border,
+                  height: 52,
+                  justifyContent: 'center',
+                  paddingHorizontal: 16,
                 }
               ]}
-              placeholder="DD/MM/YYYY"
-              placeholderTextColor={colors.text.light}
-              value={formData.dob}
-              onChangeText={(value) => handleChange('dob', value)}
-            />
+              onPress={() => setDatePickerOpen(true)}
+            >
+              <Text style={{ color: colors.text.primary }}>
+                {formData.dob ? formData.dob : 'DD/MM/YYYY'}
+              </Text>
+            </TouchableOpacity>
             {formErrors.dob ? (
               <Text style={styles.errorText}>{formErrors.dob}</Text>
             ) : null}
+            
+            {/* Date Picker */}
+            <DatePicker
+              modal
+              open={datePickerOpen}
+              date={selectedDate ? new Date(selectedDate) : new Date()}
+              mode="date"
+              onConfirm={(date) => {
+                setDatePickerOpen(false);
+                const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+                handleChange('dob', formattedDate);
+                setSelectedDate(date);
+              }}
+              onCancel={() => {
+                setDatePickerOpen(false);
+              }}
+              locale="en"
+            />
           </View>
           
           {/* Profession */}
@@ -425,7 +519,7 @@ const UserDetailsScreen = ({ navigation }) => {
               style={[
                 styles.input,
                 { 
-                  borderColor: formErrors.profession ? colors.error : colors.border.default,
+                  borderColor: formErrors.profession ? colors.error : colors.border,
                   color: colors.text.primary 
                 }
               ]}
@@ -448,10 +542,9 @@ const UserDetailsScreen = ({ navigation }) => {
               <TouchableOpacity
                 style={[
                   styles.optionButton,
-                  { 
-                    borderColor: formData.maternal_status === 'Single' 
+                  {                    borderColor: formData.maternal_status === 'Single' 
                       ? colors.primary 
-                      : colors.border.default,
+                      : colors.border,
                     backgroundColor: formData.maternal_status === 'Single'
                       ? `${colors.primary}20`
                       : 'transparent'
@@ -476,10 +569,9 @@ const UserDetailsScreen = ({ navigation }) => {
               <TouchableOpacity
                 style={[
                   styles.optionButton,
-                  { 
-                    borderColor: formData.maternal_status === 'Married' 
+                  {                    borderColor: formData.maternal_status === 'Married' 
                       ? colors.primary 
-                      : colors.border.default,
+                      : colors.border,
                     backgroundColor: formData.maternal_status === 'Married'
                       ? `${colors.primary}20`
                       : 'transparent'
