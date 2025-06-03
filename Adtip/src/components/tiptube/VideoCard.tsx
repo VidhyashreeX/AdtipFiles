@@ -53,13 +53,12 @@ const VideoCard: React.FC<VideoCardProps> = ({
           resizeMode="cover"
         />
         <View style={styles.durationContainer}>
-          <Text style={styles.duration}>{duration}</Text>
-        </View>
-        {isPremium && (
+          <Text style={styles.duration}>{String(duration)}</Text>
+        </View>        {isPremium ? (
           <View style={[styles.premiumBadge, { backgroundColor: colors.secondary }]}>
             <Text style={styles.premiumText}>Premium</Text>
           </View>
-        )}
+        ) : null}
       </View>
 
       <View style={styles.content}>
@@ -70,15 +69,14 @@ const VideoCard: React.FC<VideoCardProps> = ({
             <View style={[styles.userImagePlaceholder, { backgroundColor: colors.gray[200] }]} />
           )}
         </View>
-        <View style={styles.textContent}>
-          <Text style={[styles.title, { color: colors.text.primary }]} numberOfLines={2}>
-            {title}
+        <View style={styles.textContent}>          <Text style={[styles.title, { color: colors.text.primary }]} numberOfLines={2}>
+            {String(title)}
           </Text>
           <Text style={[styles.username, { color: colors.text.secondary }]}>
-            {username}
+            {String(username)}
           </Text>
           <Text style={[styles.metadata, { color: colors.text.tertiary }]}>
-            {formatViewCount(views)} views • {postedTime}
+            {formatViewCount(views)} views • {String(postedTime)}
           </Text>
         </View>
         <TouchableOpacity style={styles.optionsButton}>

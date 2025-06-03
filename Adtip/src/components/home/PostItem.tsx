@@ -58,7 +58,7 @@ const PostItem: React.FC<PostItemProps> = ({
               <View style={[styles.profileImagePlaceholder, { backgroundColor: colors.gray[200] }]} />
             )}
           </View>
-          <Text style={[styles.username, { color: colors.text.primary }]}>{username}</Text>
+          <Text style={[styles.username, { color: colors.text.primary }]}>{String(username)}</Text>
         </TouchableOpacity>
         <View style={styles.headerActions}>
           <TouchableOpacity onPress={() => onFollow(userId)}>
@@ -72,28 +72,24 @@ const PostItem: React.FC<PostItemProps> = ({
 
       <TouchableOpacity onPress={() => onPostPress(id)}>
         <View style={styles.postImageContainer}>
-          <Image source={{ uri: postImage }} style={styles.postImage} resizeMode="cover" />
-          {isPremium && (
+          <Image source={{ uri: postImage }} style={styles.postImage} resizeMode="cover" />          {isPremium ? (
             <View style={[styles.premiumBadge, { backgroundColor: colors.secondary }]}>
               <Text style={styles.premiumText}>Premium</Text>
             </View>
-          )}
-          {media_type === 'video' && (
+          ) : null}          {media_type === 'video' ? (
             <View style={styles.videoIcon}>
               <Icon name="play" size={28} color={colors.white} />
             </View>
-          )}
+          ) : null}
         </View>
       </TouchableOpacity>
 
       <View style={styles.actions}>
-        <View style={styles.primaryActions}>
-          <TouchableOpacity style={styles.actionButton} onPress={() => onLike(id)}>
+        <View style={styles.primaryActions}>          <TouchableOpacity style={styles.actionButton} onPress={() => onLike(id)}>
             <Icon 
               name={isLiked ? "heart" : "heart"} 
               size={24} 
               color={isLiked ? colors.error : colors.text.secondary} 
-              solid={isLiked}
             />
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton} onPress={() => onComment(id)}>
@@ -109,17 +105,15 @@ const PostItem: React.FC<PostItemProps> = ({
       </View>
 
       <View style={styles.content}>
-        <Text style={[styles.likesCount, { color: colors.text.primary }]}>{likes} likes</Text>
-        <View style={styles.captionContainer}>
-          <Text style={[styles.captionUsername, { color: colors.text.primary }]}>{username}</Text>
-          <Text style={[styles.caption, { color: colors.text.secondary }]}>{caption}</Text>
-        </View>
-        {comments > 0 && (
+        <Text style={[styles.likesCount, { color: colors.text.primary }]}>{String(likes)} likes</Text>
+        <View style={styles.captionContainer}>          <Text style={[styles.captionUsername, { color: colors.text.primary }]}>{String(username)}</Text>
+          <Text style={[styles.caption, { color: colors.text.secondary }]}>{String(caption)}</Text>
+        </View>        {comments > 0 ? (
           <TouchableOpacity onPress={() => onComment(id)}>
-            <Text style={[styles.viewComments, { color: colors.text.tertiary }]}>View all {comments} comments</Text>
+            <Text style={[styles.viewComments, { color: colors.text.tertiary }]}>View all {String(comments)} comments</Text>
           </TouchableOpacity>
-        )}
-        <Text style={[styles.timestamp, { color: colors.text.tertiary }]}>{timeAgo}</Text>
+        ) : null}
+        <Text style={[styles.timestamp, { color: colors.text.tertiary }]}>{String(timeAgo)}</Text>
       </View>
     </View>
   );

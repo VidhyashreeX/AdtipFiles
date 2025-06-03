@@ -47,10 +47,9 @@ const WalletBalance = ({
         ) : (
           <View style={styles.compactContent}>
             <Icon name="wallet" size={16} color={colors.primary} style={styles.icon} />
-            <Text style={[styles.compactBalance, { color: colors.text.primary }]}>₹{balance}</Text>
-            {isPremium && (
+            <Text style={[styles.compactBalance, { color: colors.text.primary }]}>₹{String(balance)}</Text>            {isPremium ? (
               <Icon name="star" size={12} color="#FFD700" style={styles.premiumIcon} />
-            )}
+            ) : null}
           </View>
         )}
       </TouchableOpacity>
@@ -69,19 +68,17 @@ const WalletBalance = ({
             <ActivityIndicator size="small" color={colors.primary} />
           ) : (
             <View style={styles.balanceContainer}>
-              <Text style={[styles.balance, { color: colors.text.primary }]}>₹{balance}</Text>
-              {isPremium && (
+              <Text style={[styles.balance, { color: colors.text.primary }]}>₹{String(balance)}</Text>              {isPremium ? (
                 <Icon name="star" size={16} color="#FFD700" style={styles.premiumIcon} />
-              )}
+              ) : null}
             </View>
           )}
         </View>
-        
-        {showRefresh && (
+          {showRefresh ? (
           <TouchableOpacity onPress={refreshWallet} style={styles.refreshButton}>
             <Icon name="refresh-cw" size={18} color={colors.primary} />
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
     </TouchableOpacity>
   );

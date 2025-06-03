@@ -31,7 +31,7 @@ const CategoryItem: React.FC<CategoryItemProps> = ({
           { color: selected ? colors.white : colors.text.secondary }
         ]}
       >
-        {name}
+        {name ? String(name) : ''}
       </Text>
     </TouchableOpacity>
   );

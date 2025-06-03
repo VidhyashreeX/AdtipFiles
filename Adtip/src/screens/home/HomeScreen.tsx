@@ -475,7 +475,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
             <StoryItem
               key={`${story.id}-${idx}`}
               imageUrl={story.imageUrl || undefined}
-              username={story.username || ''}
+              username={story.username ? String(story.username) : ''}
               onPress={() => onStoryPress(story.id)}
             />
           ))}
@@ -489,7 +489,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
     selectedCategory: string | null;
     onCategoryPress: (categoryId: string) => void;
   }
-
   const CategoriesRow: React.FC<CategoriesRowProps> = ({ categories, selectedCategory, onCategoryPress }) => {
     const scrollViewRef = useRef<ScrollView>(null);
     return (
@@ -504,7 +503,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
           {categories.map((category: Category, idx: number) => (
             <CategoryItem
               key={`${category.id}-${idx}`}
-              name={category.name}
+              name={category.name ? String(category.name) : ''}
               selected={selectedCategory === category.id}
               onPress={() => onCategoryPress(category.id)}
             />
@@ -638,14 +637,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
         </TouchableOpacity>
       </View>
     );
-  };
-  return (
+  };  return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>  
       <Header
         showLogo={true}
         showWallet={true}
         walletAmount={walletBalance ? walletBalance.toString() : undefined}
-      /><FlatList
+      />
+      <FlatList
         data={posts}
         renderItem={renderPostItem}
         keyExtractor={(item, index) => `post-${item.id}-${index}`}
