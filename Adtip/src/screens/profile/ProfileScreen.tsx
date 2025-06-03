@@ -34,7 +34,7 @@ const ProfileScreen: React.FC = () => {
   const route = useRoute();
   const { userId } = route.params as ProfileParams || {};
   const { colors } = useTheme();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, logout } = useAuth();
   const navigation = useNavigation();
   
   // State
@@ -202,6 +202,16 @@ const ProfileScreen: React.FC = () => {
     return Promise.resolve();
   };
   
+  // Handler for sign out
+  const handleSignOut = async () => {
+    try {
+      await logout();
+      // Navigation reset is now handled in AuthContext.logout, so nothing else is needed here.
+    } catch (err) {
+      console.error('Logout failed:', err);
+    }
+  };
+
   // Effects
   useEffect(() => {
     fetchUserData();
@@ -236,8 +246,7 @@ const ProfileScreen: React.FC = () => {
   }
   
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header 
+    <View style={[styles.container, { backgroundColor: colors.background }]}>      <Header 
         showBackButton={true} 
         title={isOwnProfile ? "My Profile" : "Profile"} 
         showNotifications={isOwnProfile}
@@ -506,6 +515,12 @@ const ProfileScreen: React.FC = () => {
             </View>
           </View>
         )}
+        
+        {isOwnProfile && (
+          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+            <Text style={styles.signOutButtonText}>Sign Out</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </View>
   );
@@ -705,6 +720,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     alignSelf: 'flex-start',
     marginTop: 12,
+  },
+  signOutButton: {
+    margin: 24,
+    padding: 14,
+    backgroundColor: '#ef4444',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  signOutButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 });
 

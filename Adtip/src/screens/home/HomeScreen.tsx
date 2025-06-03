@@ -4,7 +4,6 @@ import {
   View, 
   Text, 
   StyleSheet, 
-  ScrollView, 
   RefreshControl, 
   ActivityIndicator, 
   FlatList, 
@@ -396,32 +395,49 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
   // Render functions
   const renderStories = () => (
     <View style={styles.storiesSection}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.storiesContainer}>
-        <StoryItem isAddStory={true} onPress={handleCreatePost} />
-        {stories.map((story) => (
-          <StoryItem
-            key={story.id}
-            imageUrl={story.imageUrl || undefined}
-            username={story.username}
-            onPress={() => handleStoryPress(story.id)}
-          />
-        ))}
-      </ScrollView>
+      <FlatList
+        data={[{ type: 'add', key: 'add-story' }, ...stories.map((story, idx) => ({ ...story, type: 'story', key: `${story.id}-${idx}` }))]}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.storiesContainer}
+        renderItem={({ item }) => {
+          if (item.type === 'add') {
+            return <StoryItem isAddStory={true} onPress={handleCreatePost} key="add-story" />;
+          } else if (item.type === 'story') {
+            return (
+              <StoryItem
+                key={item.key}
+                imageUrl={(item as any).imageUrl || undefined}
+                username={(item as any).username}
+                onPress={() => handleStoryPress((item as any).id)}
+              />
+            );
+          } else {
+            return null;
+          }
+        }}
+        keyExtractor={item => item.key}
+      />
     </View>
   );
 
   const renderCategories = () => (
     <View style={styles.categoriesSection}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesContainer}>
-        {categories.map((category) => (
+      <FlatList
+        data={categories.map((category, idx) => ({ ...category, key: `${category.id}-${idx}` }))}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.categoriesContainer}
+        renderItem={({ item }) => (
           <CategoryItem
-            key={category.id}
-            name={category.name}
-            selected={selectedCategory === category.id}
-            onPress={() => handleCategoryPress(category.id)}
+            key={item.key}
+            name={item.name}
+            selected={selectedCategory === item.id}
+            onPress={() => handleCategoryPress(item.id)}
           />
-        ))}
-      </ScrollView>
+        )}
+        keyExtractor={item => item.key}
+      />
     </View>
   );
 
@@ -529,10 +545,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
       );
     }
 
-    return (      <FlatList
+    return (
+      <FlatList
         data={posts}
         renderItem={renderPostItem}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item, index) => `${item.id}-${index}`}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
         ListFooterComponent={renderFooter}
@@ -545,31 +562,42 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
     );
   };
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>      <Header
+    <View style={[styles.container, { backgroundColor: colors.background }]}>  
+      <Header
         showLogo={true}
         showWallet={true}
         walletAmount={walletBalance}
       />
-      
-      <View style={styles.scrollView}>
-        <ScrollView
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
-            />
-          }
-        >
-          {renderStories()}
-          {renderCategories()}
-          {renderEarnCards()}
-          <View style={styles.postsContainer}>
-            {renderPosts()}
-          </View>
-        </ScrollView>
-      </View>
+      <FlatList
+        data={posts}
+        renderItem={renderPostItem}
+        keyExtractor={(item, index) => `${item.id}-${index}`}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.3}
+        ListFooterComponent={renderFooter}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={5}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={Platform.OS === 'android'}
+        ListHeaderComponent={
+          <>
+            {renderStories()}
+            {renderCategories()}
+            {renderEarnCards()}
+          </>
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
+        ListEmptyComponent={renderPosts}
+        contentContainerStyle={styles.postsContainer}
+      />
     </View>
   );
 };

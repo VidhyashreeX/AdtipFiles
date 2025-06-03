@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL, ENDPOINTS } from '../constants/api';
 import ApiService from '../services/ApiService';
 import RewardService from '../services/RewardService';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 
 // Define user type
 export type User = {
@@ -105,6 +106,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasChannel, setHasChannel] = useState(false);
+  const navigation = useNavigation();
 
   // Load user from storage on mount
   useEffect(() => {
@@ -225,23 +227,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Call logout API
         await ApiService.post(ENDPOINTS.LOGOUT, { id: user.id });
       }
-      
-      // Clear storage and state regardless of API response
-      await AsyncStorage.removeItem('accessToken');
-      await AsyncStorage.removeItem('user');
-      
+      // Clear all async storage
+      await AsyncStorage.clear();
       setUser(null);
       setIsAuthenticated(false);
       setHasChannel(false);
+      // Redirect to onboarding/login screen
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Onboarding' }], // Change 'Onboarding' to your actual onboarding/login route name
+        })
+      );
     } catch (err) {
       console.error('Error during logout:', err);
       // Still clear storage and state on error
-      await AsyncStorage.removeItem('accessToken');
-      await AsyncStorage.removeItem('user');
-      
+      await AsyncStorage.clear();
       setUser(null);
       setIsAuthenticated(false);
       setHasChannel(false);
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Onboarding' }],
+        })
+      );
     } finally {
       setLoading(false);
     }
