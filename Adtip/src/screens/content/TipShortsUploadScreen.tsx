@@ -1,5 +1,5 @@
 // src/screens/content/TipShortsUploadScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -15,28 +15,28 @@ import {
   Platform,
   Dimensions,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import {useNavigation, useRoute, RouteProp} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { launchCamera } from 'react-native-image-picker';
+import {launchCamera} from 'react-native-image-picker';
 import * as Progress from 'react-native-progress';
-import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
+import {request, PERMISSIONS, RESULTS} from 'react-native-permissions';
 
 // Components
 import Header from '../../components/common/Header';
 
 // Context and services
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 import ApiService from '../../services/ApiService';
-import { ENDPOINTS } from '../../constants/api';
+import {ENDPOINTS} from '../../constants/api';
 
-const { width, height } = Dimensions.get('window');
 const RECORDING_MAX_DURATION = 60; // Max 60 seconds for shorts
 
+import { RootStackParamList } from '../../types/navigation';
+
 const TipShortsUploadScreen = () => {
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const navigation = useNavigation();
-  const route = useRoute();
+  const route = useRoute<RouteProp<RootStackParamList, 'TipShortsUploadScreen'>>();
 
   // State
   const [videoSource, setVideoSource] = useState<any>(null);
@@ -50,7 +50,7 @@ const TipShortsUploadScreen = () => {
   const [addEffect, setAddEffect] = useState(false);
   const [selectedMusic, setSelectedMusic] = useState<any>(null);
   const [selectedEffect, setSelectedEffect] = useState<any>(null);
-  
+
   // Check if there's a video from route params
   useEffect(() => {
     if (route.params?.videoSource) {
@@ -61,14 +61,16 @@ const TipShortsUploadScreen = () => {
   // Request camera and microphone permissions
   const requestPermissions = async () => {
     try {
-      const cameraPermission = Platform.OS === 'ios'
-        ? await request(PERMISSIONS.IOS.CAMERA)
-        : await request(PERMISSIONS.ANDROID.CAMERA);
-      
-      const microphonePermission = Platform.OS === 'ios'
-        ? await request(PERMISSIONS.IOS.MICROPHONE)
-        : await request(PERMISSIONS.ANDROID.RECORD_AUDIO);
-      
+      const cameraPermission =
+        Platform.OS === 'ios'
+          ? await request(PERMISSIONS.IOS.CAMERA)
+          : await request(PERMISSIONS.ANDROID.CAMERA);
+
+      const microphonePermission =
+        Platform.OS === 'ios'
+          ? await request(PERMISSIONS.IOS.MICROPHONE)
+          : await request(PERMISSIONS.ANDROID.RECORD_AUDIO);
+
       if (
         cameraPermission !== RESULTS.GRANTED ||
         microphonePermission !== RESULTS.GRANTED
@@ -76,11 +78,11 @@ const TipShortsUploadScreen = () => {
         Alert.alert(
           'Permission Required',
           'Camera and microphone permissions are required to record videos.',
-          [{ text: 'OK' }]
+          [{text: 'OK'}],
         );
         return false;
       }
-      
+
       return true;
     } catch (error) {
       console.error('Error requesting permissions:', error);
@@ -91,12 +93,14 @@ const TipShortsUploadScreen = () => {
   // Start recording video
   const startRecording = async () => {
     const hasPermissions = await requestPermissions();
-    if (!hasPermissions) return;
-    
+    if (!hasPermissions) {
+      return;
+    }
+
     try {
       setIsRecording(true);
       setRecordingDuration(0);
-      
+
       const durationTimer = setInterval(() => {
         setRecordingDuration(prev => {
           if (prev >= RECORDING_MAX_DURATION) {
@@ -107,7 +111,7 @@ const TipShortsUploadScreen = () => {
           return prev + 1;
         });
       }, 1000);
-      
+
       const result = await launchCamera({
         mediaType: 'video',
         durationLimit: RECORDING_MAX_DURATION,
@@ -115,19 +119,19 @@ const TipShortsUploadScreen = () => {
         presentationStyle: 'fullScreen',
         saveToPhotos: true,
       });
-      
+
       clearInterval(durationTimer);
       setIsRecording(false);
-      
+
       if (result.didCancel) {
         return;
       }
-      
+
       if (result.errorCode) {
         Alert.alert('Error', result.errorMessage || 'Failed to record video');
         return;
       }
-      
+
       if (result.assets && result.assets.length > 0) {
         const video = result.assets[0];
         setVideoSource({
@@ -163,16 +167,18 @@ const TipShortsUploadScreen = () => {
 
   // Open music selection
   const handleOpenMusicSelection = () => {
-    navigation.navigate('MusicSelector' as never, {
-      onSelect: (music: any) => setSelectedMusic(music)
-    } as never);
+    // @ts-ignore
+    navigation.navigate('MusicSelector', {
+      onSelect: (music: any) => setSelectedMusic(music),
+    });
   };
 
   // Open effects selection
   const handleOpenEffectsSelection = () => {
-    navigation.navigate('EffectsSelector' as never, {
-      onSelect: (effect: any) => setSelectedEffect(effect)
-    } as never);
+    // @ts-ignore
+    navigation.navigate('EffectsSelector', {
+      onSelect: (effect: any) => setSelectedEffect(effect),
+    });
   };
 
   // Publish short
@@ -181,61 +187,61 @@ const TipShortsUploadScreen = () => {
       Alert.alert('Missing Video', 'Please record a video first');
       return;
     }
-    
+
     try {
       setIsPublishing(true);
       setUploadProgress(0);
-      
+
       // Create form data
       const formData = new FormData();
       formData.append('caption', caption);
-      
+
       if (selectedMusic) {
         formData.append('music_id', selectedMusic.id);
       }
-      
+
       if (selectedEffect) {
         formData.append('effect_id', selectedEffect.id);
       }
-      
+
       // Append video
       formData.append('video', {
         uri: videoSource.uri,
         type: videoSource.type || 'video/mp4',
         name: videoSource.name || 'short.mp4',
       } as any);
-      
+
       // Upload video
-      const response = await ApiService.uploadFile(
+      await ApiService.uploadFile(
         ENDPOINTS.UPLOAD_SHORT,
         formData,
-        (progress) => {
+        progress => {
           setUploadProgress(progress / 100);
-        }
+        },
       );
-      
+
       // Processing after upload
       setIsPublishing(false);
       setIsProcessing(true);
-      
+
       // Simulate processing time
       setTimeout(() => {
         setIsProcessing(false);
-        
+
         Alert.alert(
           'Upload Successful',
           'Your short has been uploaded and will be available soon',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
+          [{text: 'OK', onPress: () => navigation.goBack()}],
         );
       }, 2000);
     } catch (error) {
       console.error('Error publishing short:', error);
       setIsPublishing(false);
       setIsProcessing(false);
-      
+
       Alert.alert(
         'Upload Failed',
-        'There was a problem uploading your short. Please try again.'
+        'There was a problem uploading your short. Please try again.',
       );
     }
   };
@@ -244,7 +250,8 @@ const TipShortsUploadScreen = () => {
   const renderContent = () => {
     if (!videoSource) {
       return (
-        <View style={[styles.recordingContainer, { backgroundColor: colors.black }]}>
+        <View
+          style={[styles.recordingContainer, {backgroundColor: colors.black}]}>
           {/* Camera placeholder */}
           <View style={styles.cameraPlaceholder}>
             <Icon name="video" size={40} color={colors.white} />
@@ -252,16 +259,18 @@ const TipShortsUploadScreen = () => {
               Press the button below to record a short
             </Text>
           </View>
-          
+
           {/* Recording controls */}
           <View style={styles.recordingControls}>
-            <TouchableOpacity 
-              style={[styles.recordButton, isRecording && styles.recordingActive]}
-              onPress={isRecording ? stopRecording : startRecording}
-            >
+            <TouchableOpacity
+              style={[
+                styles.recordButton,
+                isRecording && styles.recordingActive,
+              ]}
+              onPress={isRecording ? stopRecording : startRecording}>
               {isRecording && <View style={styles.recordingInner} />}
             </TouchableOpacity>
-            
+
             {isRecording && (
               <View style={styles.durationContainer}>
                 <Icon name="circle" color={colors.error} size={8} />
@@ -276,30 +285,33 @@ const TipShortsUploadScreen = () => {
         </View>
       );
     }
-    
+
     // Video preview UI
     return (
-      <ScrollView style={{ flex: 1 }}>
+      <ScrollView style={styles.flex1}>
         <View style={styles.previewContainer}>
           {/* Video thumbnail */}
           <View style={styles.videoPreview}>
             <Image
-              source={{ uri: videoSource.uri }}
+              source={{uri: videoSource.uri}}
               style={styles.previewImage}
               resizeMode="cover"
             />
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.playButton}
-              onPress={() => navigation.navigate('VideoPreview' as never, { uri: videoSource.uri } as never)}
-            >
+              onPress={() =>
+                // @ts-ignore
+                navigation.navigate('VideoPreview', {uri: videoSource.uri})
+              }>
               <Icon name="play" size={24} color={colors.white} />
             </TouchableOpacity>
           </View>
-          
+
           {/* Caption input */}
-          <View style={[styles.captionContainer, { backgroundColor: colors.card }]}>
+          <View
+            style={[styles.captionContainer, {backgroundColor: colors.card}]}>
             <TextInput
-              style={[styles.captionInput, { color: colors.text.primary }]}
+              style={[styles.captionInput, {color: colors.text.primary}]}
               placeholder="Write a caption..."
               placeholderTextColor={colors.text.tertiary}
               value={caption}
@@ -307,27 +319,30 @@ const TipShortsUploadScreen = () => {
               multiline
               maxLength={150}
             />
-            <Text style={[styles.captionCount, { color: colors.text.tertiary }]}>
+            <Text style={[styles.captionCount, {color: colors.text.tertiary}]}>
               {caption.length}/150
             </Text>
           </View>
-          
+
           {/* Options */}
-          <View style={[styles.optionsContainer, { backgroundColor: colors.card }]}>
+          <View
+            style={[styles.optionsContainer, {backgroundColor: colors.card}]}>
             <View style={styles.optionRow}>
               <View style={styles.optionInfo}>
                 <Icon name="music" size={20} color={colors.primary} />
-                <Text style={[styles.optionText, { color: colors.text.primary }]}>
+                <Text style={[styles.optionText, {color: colors.text.primary}]}>
                   Add Music
                 </Text>
               </View>
               <TouchableOpacity onPress={handleOpenMusicSelection}>
                 {selectedMusic ? (
-                  <Text style={{ color: colors.primary }}>{selectedMusic.title}</Text>
+                  <Text style={{color: colors.primary}}>
+                    {selectedMusic.title}
+                  </Text>
                 ) : (
                   <Switch
                     value={addMusic}
-                    onValueChange={(value) => {
+                    onValueChange={value => {
                       setAddMusic(value);
                       if (value) {
                         handleOpenMusicSelection();
@@ -335,27 +350,32 @@ const TipShortsUploadScreen = () => {
                         setSelectedMusic(null);
                       }
                     }}
-                    trackColor={{ false: colors.gray[300], true: colors.primary + '80' }}
+                    trackColor={{
+                      false: colors.gray[300],
+                      true: colors.primary + '80',
+                    }}
                     thumbColor={addMusic ? colors.primary : colors.gray[100]}
                   />
                 )}
               </TouchableOpacity>
             </View>
-            
+
             <View style={styles.optionRow}>
               <View style={styles.optionInfo}>
                 <Icon name="star" size={20} color={colors.primary} />
-                <Text style={[styles.optionText, { color: colors.text.primary }]}>
+                <Text style={[styles.optionText, {color: colors.text.primary}]}>
                   Add Effects
                 </Text>
               </View>
               <TouchableOpacity onPress={handleOpenEffectsSelection}>
                 {selectedEffect ? (
-                  <Text style={{ color: colors.primary }}>{selectedEffect.name}</Text>
+                  <Text style={{color: colors.primary}}>
+                    {selectedEffect.name}
+                  </Text>
                 ) : (
                   <Switch
                     value={addEffect}
-                    onValueChange={(value) => {
+                    onValueChange={value => {
                       setAddEffect(value);
                       if (value) {
                         handleOpenEffectsSelection();
@@ -363,34 +383,35 @@ const TipShortsUploadScreen = () => {
                         setSelectedEffect(null);
                       }
                     }}
-                    trackColor={{ false: colors.gray[300], true: colors.primary + '80' }}
+                    trackColor={{
+                      false: colors.gray[300],
+                      true: colors.primary + '80',
+                    }}
                     thumbColor={addEffect ? colors.primary : colors.gray[100]}
                   />
                 )}
               </TouchableOpacity>
             </View>
           </View>
-          
+
           {/* Action buttons */}
           <View style={styles.actionButtons}>
             <TouchableOpacity
-              style={[styles.resetButton, { backgroundColor: colors.gray[100] }]}
-              onPress={resetRecording}
-            >
-              <Text style={{ color: colors.text.secondary, fontWeight: '500' }}>
+              style={[styles.resetButton, {backgroundColor: colors.gray[100]}]}
+              onPress={resetRecording}>
+              <Text style={[{color: colors.text.secondary}, styles.semibold]}>
                 Reset
               </Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity
-              style={[styles.publishButton, { backgroundColor: colors.primary }]}
+              style={[styles.publishButton, {backgroundColor: colors.primary}]}
               onPress={handlePublish}
-              disabled={isPublishing || isProcessing}
-            >
+              disabled={isPublishing || isProcessing}>
               {isPublishing || isProcessing ? (
                 <ActivityIndicator color={colors.white} size="small" />
               ) : (
-                <Text style={{ color: colors.white, fontWeight: '500' }}>
+                <Text style={[{color: colors.white}, styles.semibold]}>
                   Publish
                 </Text>
               )}
@@ -402,29 +423,36 @@ const TipShortsUploadScreen = () => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: videoSource ? colors.background : colors.black }}>
+    <SafeAreaView
+      style={[styles.flex1, {backgroundColor: videoSource ? colors.background : colors.black}]}>
       <Header
         title="Create Short"
         leftComponent={
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Icon 
-              name="arrow-left" 
-              size={24} 
-              color={videoSource ? colors.text.primary : colors.white} 
+            <Icon
+              name="arrow-left"
+              size={24}
+              color={videoSource ? colors.text.primary : colors.white}
             />
           </TouchableOpacity>
         }
       />
-      
+
       {renderContent()}
-      
+
       {/* Upload loading overlay */}
       {(isPublishing || isProcessing) && (
-        <View style={[styles.loadingOverlay, { backgroundColor: colors.background + 'E6' }]}>
-          <View style={[styles.loadingContainer, { backgroundColor: colors.card }]}>
+        <View
+          style={[
+            styles.loadingOverlay,
+            {backgroundColor: colors.background + 'E6'},
+          ]}>
+          <View
+            style={[styles.loadingContainer, {backgroundColor: colors.card}]}>
             {isPublishing ? (
               <>
-                <Text style={[styles.loadingText, { color: colors.text.primary }]}>
+                <Text
+                  style={[styles.loadingText, {color: colors.text.primary}]}>
                   Uploading short...
                 </Text>
                 <Progress.Bar
@@ -436,14 +464,16 @@ const TipShortsUploadScreen = () => {
                   height={8}
                   style={styles.progressBar}
                 />
-                <Text style={[styles.percentText, { color: colors.text.secondary }]}>
+                <Text
+                  style={[styles.percentText, {color: colors.text.secondary}]}>
                   {Math.round(uploadProgress * 100)}%
                 </Text>
               </>
             ) : (
               <>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={[styles.loadingText, { color: colors.text.primary }]}>
+                <Text
+                  style={[styles.loadingText, {color: colors.text.primary}]}>
                   Processing short...
                 </Text>
               </>
@@ -514,7 +544,7 @@ const styles = StyleSheet.create({
   },
   videoPreview: {
     width: '100%',
-    height: height * 0.4,
+    height: Dimensions.get('window').height * 0.4,
     borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 16,
@@ -528,7 +558,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '50%',
     left: '50%',
-    transform: [{ translateX: -24 }, { translateY: -24 }],
+    transform: [{translateX: -24}, {translateY: -24}],
     width: 48,
     height: 48,
     borderRadius: 24,
@@ -613,6 +643,12 @@ const styles = StyleSheet.create({
   },
   percentText: {
     fontSize: 14,
+  },
+  flex1: {
+    flex: 1,
+  },
+  semibold: {
+    fontWeight: '500',
   },
 });
 

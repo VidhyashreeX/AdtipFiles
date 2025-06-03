@@ -1,5 +1,5 @@
 // src/screens/tiptube/TipTubeScreen.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, {useState, useEffect, useCallback, useMemo} from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,10 @@ import {
   TouchableOpacity,
   RefreshControl,
   Platform,
-  ScrollView
+  ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 
 // Components
@@ -23,7 +23,7 @@ import VideoCard from '../../components/tiptube/VideoCard';
 import ApiService from '../../services/ApiService';
 
 // Context
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 
 // Types
 interface TipTubeScreenProps {
@@ -51,121 +51,138 @@ interface CategoryMap {
   [key: string]: number;
 }
 
-const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
+const TipTubeScreen: React.FC<TipTubeScreenProps> = ({walletBalance}) => {
   // Hooks
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const navigation = useNavigation();
-  
+
   // State
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState({
     initial: true,
-    loadingMore: false
+    loadingMore: false,
   });
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [categories] = useState([
-    { id: 'all', name: 'All' },
-    { id: 'trending', name: 'Trending' },
-    { id: 'new', name: 'New' },
-    { id: 'popular', name: 'Popular' },
-    { id: 'following', name: 'Following' }
+    {id: 'all', name: 'All'},
+    {id: 'trending', name: 'Trending'},
+    {id: 'new', name: 'New'},
+    {id: 'popular', name: 'Popular'},
+    {id: 'following', name: 'Following'},
   ]);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMoreVideos, setHasMoreVideos] = useState(true);
 
-  // Category mapping for API
-  const categoryMap: CategoryMap = {
-    'all': 0,
-    'trending': 1,
-    'new': 2,
-    'popular': 3,
-    'following': 4
-  };  // Helper functions
-  const getFullUrl = (url?: string | null) => {
+  // Memoize categoryMap to avoid dependency issues
+  const categoryMap: CategoryMap = useMemo(
+    () => ({
+      all: 0,
+      trending: 1,
+      new: 2,
+      popular: 3,
+      following: 4,
+    }),
+    [],
+  ); // Helper functions
+  // Memoize getFullUrl to avoid useCallback dependency warning
+  const getFullUrl = useCallback((url?: string | null) => {
     if (!url || url === 'null' || url === 'undefined') {
       return null;
     }
     return url;
-  };  // API calls
-  const fetchVideos = async (categoryId = '0', page = 1, loadMore = false) => {
-    try {
-      // Try to get userId from multiple possible sources
-      let userId = await AsyncStorage.getItem('userId');
-      
-      // If userId is not found, try to get it from the user object in AsyncStorage
-      if (!userId) {
-        const userJson = await AsyncStorage.getItem('user');
-        if (userJson) {
-          const userData = JSON.parse(userJson);
-          userId = userData?.id?.toString();
+  }, []);
+
+  // API calls
+  // Fix: Memoize fetchVideos to avoid useCallback/useEffect dependency errors
+  const fetchVideos = useCallback(
+    async (categoryId = '0', page = 1, loadMore = false) => {
+      try {
+        // Try to get userId from multiple possible sources
+        let userId = await AsyncStorage.getItem('userId');
+
+        // If userId is not found, try to get it from the user object in AsyncStorage
+        if (!userId) {
+          const userJson = await AsyncStorage.getItem('user');
+          if (userJson) {
+            const userData = JSON.parse(userJson);
+            userId = userData?.id?.toString();
+          }
         }
-      }
-      
-      // Even if we don't have a userId, we'll try to fetch public videos
-      // Set a default userId or flag to indicate we want public videos
-      if (!userId) {
-        console.log('No user ID found, will attempt to fetch public videos');
-        // Using "0" as a fallback ID to get public/general videos
-        userId = "0";
-      }
 
-      if (loadMore) {
-        setLoading(prev => ({ ...prev, loadingMore: true }));
-      } else {
-        setLoading(prev => ({ ...prev, initial: true }));
-      }
-      
-      console.log(`Fetching videos for user ID: ${userId}, category: ${categoryId}, page: ${page}`);
+        // Even if we don't have a userId, we'll try to fetch public videos
+        // Set a default userId or flag to indicate we want public videos
+        if (!userId) {
+          console.log('No user ID found, will attempt to fetch public videos');
+          // Using "0" as a fallback ID to get public/general videos
+          userId = '0';
+        }
 
-      // Get videos using ApiService
-      const response = await ApiService.getVideos(userId, parseInt(categoryId, 10), page);
-
-      if (response?.data && Array.isArray(response.data)) {
-        const formattedVideos = response.data.map((video: any) => ({
-          ...video,
-          thumbnail_url: getFullUrl(video.thumbnail_url),
-          video_url: getFullUrl(video.video_url),
-          user_profile_image: getFullUrl(video.user_profile_image),
-          like_count: video.likes || 0,
-          comment_count: video.comments || 0,
-          view_count: video.views || 0,
-          is_premium: !!video.is_premium
-        }));
-        
-        // If loading more, append to existing videos
         if (loadMore) {
-          setVideos(prev => [...prev, ...formattedVideos]);
+          setLoading(prev => ({...prev, loadingMore: true}));
         } else {
-          setVideos(formattedVideos);
+          setLoading(prev => ({...prev, initial: true}));
         }
 
-        // Check if we have more videos to load (assuming 10 is the page size)
-        setHasMoreVideos(formattedVideos.length > 0);
-        setError(null);
-      } else {
-        if (!loadMore) {
-          // Only set empty videos if this is an initial load
-          setVideos([]);
-          setError('No videos available at the moment.');
+        console.log(
+          `Fetching videos for user ID: ${userId}, category: ${categoryId}, page: ${page}`,
+        );
+
+        // Get videos using ApiService
+        const response = await ApiService.getVideos(
+          userId,
+          parseInt(categoryId, 10),
+          page,
+        );
+
+        if (response?.data && Array.isArray(response.data)) {
+          const formattedVideos = response.data.map((video: any) => ({
+            ...video,
+            thumbnail_url: getFullUrl(video.thumbnail_url),
+            video_url: getFullUrl(video.video_url),
+            user_profile_image: getFullUrl(video.user_profile_image),
+            like_count: video.likes || 0,
+            comment_count: video.comments || 0,
+            view_count: video.views || 0,
+            is_premium: !!video.is_premium,
+          }));
+
+          // If loading more, append to existing videos
+          if (loadMore) {
+            setVideos(prev => [...prev, ...formattedVideos]);
+          } else {
+            setVideos(formattedVideos);
+          }
+
+          // Check if we have more videos to load (assuming 10 is the page size)
+          setHasMoreVideos(formattedVideos.length > 0);
+          setError(null);
+        } else {
+          if (!loadMore) {
+            // Only set empty videos if this is an initial load
+            setVideos([]);
+            setError('No videos available at the moment.');
+          }
+
+          setHasMoreVideos(false);
         }
-        
-        setHasMoreVideos(false);
+      } catch (err) {
+        console.error('Videos fetch error:', err);
+        if (!loadMore) {
+          setError('Failed to load videos. Please try again later.');
+        }
+      } finally {
+        if (loadMore) {
+          setLoading(prev => ({...prev, loadingMore: false}));
+        } else {
+          setLoading(prev => ({...prev, initial: false}));
+        }
+        setRefreshing(false);
       }
-    } catch (err) {
-      console.error('Videos fetch error:', err);
-      if (!loadMore) {
-        setError('Failed to load videos. Please try again later.');
-      }
-    } finally {
-      if (loadMore) {
-        setLoading(prev => ({ ...prev, loadingMore: false }));
-      } else {
-        setLoading(prev => ({ ...prev, initial: false }));      }
-      setRefreshing(false);
-    }
-  };
+    },
+    [getFullUrl],
+  );
 
   // Handlers
   const handleRefresh = () => {
@@ -175,20 +192,26 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
     fetchVideos(apiCategoryId, 1);
   };
   const handleCategoryPress = (categoryId: string) => {
-    if (categoryId === selectedCategory) return;
-    
+    if (categoryId === selectedCategory) {
+      return;
+    }
+
     setSelectedCategory(categoryId);
     setCurrentPage(1);
-    
+
     // Convert category name to API category ID
     const apiCategoryId = categoryMap[categoryId].toString();
-    console.log(`Switching to category: ${categoryId} (API ID: ${apiCategoryId})`);
-    
+    console.log(
+      `Switching to category: ${categoryId} (API ID: ${apiCategoryId})`,
+    );
+
     fetchVideos(apiCategoryId, 1);
   };
 
   const handleVideoPress = (videoId: number) => {
-    navigation.navigate('Video' as never, { videoId } as never);
+    // Fix navigation type error: use correct navigation type for navigate
+    // @ts-ignore
+    navigation.navigate('Video', {videoId});
   };
 
   const handleUploadPress = () => {
@@ -196,11 +219,13 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
   };
 
   const handleLoadMore = () => {
-    if (loading.loadingMore || !hasMoreVideos) return;
-    
+    if (loading.loadingMore || !hasMoreVideos) {
+      return;
+    }
+
     const nextPage = currentPage + 1;
     const apiCategoryId = categoryMap[selectedCategory].toString();
-    
+
     console.log(`Loading more videos, page ${nextPage}`);
     setCurrentPage(nextPage);
     fetchVideos(apiCategoryId, nextPage, true);
@@ -211,35 +236,35 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
     useCallback(() => {
       const apiCategoryId = categoryMap[selectedCategory].toString();
       fetchVideos(apiCategoryId, 1);
-    }, [])
+    }, [categoryMap, fetchVideos, selectedCategory]),
   );
 
   useEffect(() => {
     const apiCategoryId = categoryMap[selectedCategory].toString();
     fetchVideos(apiCategoryId, 1);
-  }, []);
+  }, [categoryMap, fetchVideos, selectedCategory]);
 
   // Render functions
   const renderCategories = () => (
     <View style={styles.categoryContainer}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {categories.map((category) => (
+        {categories.map(category => (
           <TouchableOpacity
             key={category.id}
             style={[
               styles.categoryItem,
-              selectedCategory === category.id ? 
-                { ...styles.selectedCategory, backgroundColor: colors.primary } : 
-                undefined
+              selectedCategory === category.id
+                ? {...styles.selectedCategory, backgroundColor: colors.primary}
+                : undefined,
             ]}
-            onPress={() => handleCategoryPress(category.id)}
-          >
-            <Text 
+            onPress={() => handleCategoryPress(category.id)}>
+            <Text
               style={[
-                styles.categoryText, 
-                selectedCategory === category.id ? { color: colors.white } : undefined
-              ]}
-            >
+                styles.categoryText,
+                selectedCategory === category.id
+                  ? {color: colors.white}
+                  : undefined,
+              ]}>
               {String(category.name)}
             </Text>
           </TouchableOpacity>
@@ -248,7 +273,7 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
     </View>
   );
 
-  const renderVideoItem = ({ item }: { item: Video }) => (
+  const renderVideoItem = ({item}: {item: Video}) => (
     <VideoCard
       id={item.id}
       title={String(item.title || '')}
@@ -266,14 +291,13 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
       <Icon name="video-off" size={50} color={colors.gray[400]} />
-      <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
+      <Text style={[styles.emptyText, {color: colors.text.secondary}]}>
         {String('No videos available')}
       </Text>
       <TouchableOpacity
-        style={[styles.uploadButton, { backgroundColor: colors.primary }]}
-        onPress={handleUploadPress}
-      >
-        <Text style={{ color: colors.white, fontWeight: '600' }}>
+        style={[styles.uploadButton, {backgroundColor: colors.primary}]}
+        onPress={handleUploadPress}>
+        <Text style={[{color: colors.white}, styles.uploadButtonText]}>
           {String('Upload Video')}
         </Text>
       </TouchableOpacity>
@@ -281,8 +305,10 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
   );
 
   const renderFooter = () => {
-    if (!loading.loadingMore) return null;
-    
+    if (!loading.loadingMore) {
+      return null;
+    }
+
     return (
       <View style={styles.footerLoader}>
         <ActivityIndicator size="small" color={colors.primary} />
@@ -291,7 +317,7 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
       <Header
         title="TipTube"
         showBackButton={false}
@@ -308,13 +334,11 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: colors.text.primary }]}>
+          <Text style={[styles.errorText, {color: colors.text.primary}]}>
             {String(error)}
           </Text>
           <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
-            <Text style={{ color: colors.primary }}>
-              {String('Retry')}
-            </Text>
+            <Text style={{color: colors.primary}}>{String('Retry')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -322,7 +346,11 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
           data={videos}
           renderItem={renderVideoItem}
           keyExtractor={(item, index) => `${item.id}-${index}`}
-          contentContainerStyle={videos.length === 0 ? styles.flatListEmptyContainer : styles.flatListContainer}
+          contentContainerStyle={
+            videos.length === 0
+              ? styles.flatListEmptyContainer
+              : styles.flatListContainer
+          }
           ListEmptyComponent={renderEmptyState}
           ListFooterComponent={renderFooter}
           refreshControl={
@@ -340,12 +368,12 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
           maxToRenderPerBatch={10}
           windowSize={10}
           updateCellsBatchingPeriod={50}
-        />      )}
+        />
+      )}
 
       <TouchableOpacity
-        style={[styles.floatingButton, { backgroundColor: colors.primary }]}
-        onPress={handleUploadPress}
-      >
+        style={[styles.floatingButton, {backgroundColor: colors.primary}]}
+        onPress={handleUploadPress}>
         <Icon name="upload" size={24} color={colors.white} />
       </TouchableOpacity>
     </View>
@@ -370,7 +398,7 @@ const styles = StyleSheet.create({
   },
   selectedCategory: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: {width: 0, height: 1},
     shadowOpacity: 0.1,
     shadowRadius: 1.5,
     elevation: 2,
@@ -418,6 +446,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginTop: 12,
   },
+  uploadButtonText: {
+    fontWeight: '600',
+  },
   flatListEmptyContainer: {
     flexGrow: 1,
   },
@@ -434,7 +465,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,

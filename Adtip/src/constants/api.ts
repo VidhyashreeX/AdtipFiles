@@ -26,63 +26,63 @@ export const API_ENDPOINTS = {
     SAVE_USER_DETAILS: '/api/saveuserdetails',
     PING: '/api/ping',
   },
-  
+
   // Home
   HOME: {
     LIST_POSTS: '/api/list-posts',
     GET_FUNDS: '/api/getfunds',
     CHECK_PREMIUM: '/api/check-premium',
   },
-  
+
   // Channels
   CHANNEL: {
     GET_BY_USER_ID: '/api/getchannelbyuserid',
     GET_ANALYTICS: '/api/analytics',
   },
-  
+
   // Videos
   VIDEOS: {
     GET_VIDEOS: '/api/getvideos',
     GET_SHOTS: '/api/getshots',
   },
-  
+
   // Users
   USERS: {
     GET_USERS: '/api/users',
     GET_ALL_USERS: '/api/allusers',
     FOLLOW: '/api/follow',
   },
-  
+
   // Profile
   PROFILE: {
     USER_PREMIUM_PLANS: '/api/user-premium-plans',
     CONTENT_PREMIUM_PLANS: '/api/content-premium-plans',
     USER_POSTS: '/users',
   },
-  
+
   // Referral
   REFERRAL: {
     GET_DETAILS: '/referral/details',
   },
-  
+
   // Payment
   PAYMENT: {
     ADD_FUNDS: '/api/add-funds',
     WITHDRAW_FUNDS: '/api/withdraw-funds',
   },
-  
+
   // Analytics
   ANALYTICS: {
     TRACK: '/api/track-analytics',
     // Commented out PubScale integration - June 2, 2025
     // PUBSCALE: '/api/track-pubscale',
   },
-  
+
   // Rewards
   REWARDS: {
     // Commented out PubScale integration - June 2, 2025
     // TRACK_REWARD: '/api/track-reward',
-  }
+  },
 };
 
 // Legacy flat endpoints structure for backward compatibility
@@ -93,13 +93,13 @@ export const ENDPOINTS = {
   LOGOUT: '/api/logout',
   SAVE_USER_DETAILS: '/api/saveuserdetails',
   PING: '/api/ping',
-  
+
   // Content endpoints
   CREATE_POST: '/api/create-post',
   GET_CATEGORIES: '/api/categories',
   UPLOAD_VIDEO: '/api/upload-video',
   UPLOAD_SHORT: '/api/upload-short',
-  
+
   // Media endpoints
   GET_VIDEO: '/api/video',
   CHECK_LIKE: '/api/check-like',
@@ -111,19 +111,19 @@ export const ENDPOINTS = {
   SUBSCRIBE: '/api/subscribe',
   UNSUBSCRIBE: '/api/unsubscribe',
   GET_PUBLIC_SHOTS: '/api/public-shots',
-  
+
   // Wallet endpoints
   GET_WALLET_BALANCE: '/api/wallet/balance',
-    // Reward endpoints
+  // Reward endpoints
   TRACK_WATCH_TIME: '/api/track-watch-time',
   GET_REWARD_BALANCE: '/api/reward/balance',
   CHECK_DAILY_REWARD: '/api/daily-reward/check',
   GET_REWARD_HISTORY: '/api/reward/history',
   TRACK_REWARD: '/api/track-reward',
-  
+
   // Analytics
   TRACK_ANALYTICS: '/api/track-analytics',
-  
+
   // Commented out PubScale integration - June 2, 2025
   // REWARDS: {
   //   TRACK_REWARD: '/api/track-reward',

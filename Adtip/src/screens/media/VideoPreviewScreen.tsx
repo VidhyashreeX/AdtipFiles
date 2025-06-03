@@ -1,36 +1,29 @@
 // src/screens/media/VideoPreviewScreen.tsx
-import React, { useState, useRef } from 'react';
+import React, {useState, useRef} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
   ActivityIndicator,
   StatusBar,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import {useNavigation, useRoute} from '@react-navigation/native';
 import Video from 'react-native-video';
 import Icon from 'react-native-vector-icons/Feather';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Orientation from 'react-native-orientation-locker';
 
-// Context
-import { useTheme } from '../../contexts/ThemeContext';
-
-const { width, height } = Dimensions.get('window');
-
 const VideoPreviewScreen = () => {
-  const { colors } = useTheme();
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
   const videoRef = useRef<any>(null);
-  
+
   // Get video URI from route params
   // @ts-ignore
-  const { uri } = route.params || {};
-  
+  const {uri} = route.params || {};
+
   // State
   const [isPlaying, setIsPlaying] = useState(true);
   const [isBuffering, setIsBuffering] = useState(true);
@@ -39,19 +32,19 @@ const VideoPreviewScreen = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  
+
   // Control timer ref
   const controlsTimerRef = useRef<any>(null);
 
   // Handle press on video to show/hide controls
   const handleVideoPress = () => {
     setShowControls(!showControls);
-    
+
     if (!showControls) {
       if (controlsTimerRef.current) {
         clearTimeout(controlsTimerRef.current);
       }
-      
+
       controlsTimerRef.current = setTimeout(() => {
         if (isPlaying) {
           setShowControls(false);
@@ -63,11 +56,11 @@ const VideoPreviewScreen = () => {
   // Toggle play/pause
   const togglePlayPause = () => {
     setIsPlaying(!isPlaying);
-    
+
     if (controlsTimerRef.current) {
       clearTimeout(controlsTimerRef.current);
     }
-    
+
     if (!isPlaying) {
       // When resuming playback, hide controls after delay
       controlsTimerRef.current = setTimeout(() => {
@@ -87,17 +80,17 @@ const VideoPreviewScreen = () => {
   };
 
   // Handle video progress
-  const handleProgress = ({ currentTime, seekableDuration }: any) => {
-    setCurrentTime(currentTime);
+  const handleProgress = ({currentTime: progressCurrentTime, seekableDuration}: any) => {
+    setCurrentTime(progressCurrentTime);
     if (seekableDuration) {
-      setProgress(currentTime / seekableDuration);
+      setProgress(progressCurrentTime / seekableDuration);
     }
   };
 
   // Handle video load
-  const handleLoad = ({ duration }: any) => {
+  const handleLoad = ({duration: loadDuration}: any) => {
     setIsBuffering(false);
-    setDuration(duration);
+    setDuration(loadDuration);
   };
 
   // Handle video end
@@ -131,36 +124,25 @@ const VideoPreviewScreen = () => {
     paddingRight: isFullscreen ? 0 : insets.right,
   };
 
-  // Seek to position
-  const handleSeek = (value: number) => {
-    const seekTime = value * duration;
-    if (videoRef.current) {
-      videoRef.current.seek(seekTime);
-    }
-    setProgress(value);
-    setCurrentTime(seekTime);
-  };
-
   return (
-    <View style={[styles.container, { backgroundColor: '#000' }, safeAreaStyle]}>
+    <View style={[styles.container, styles.containerBlack, safeAreaStyle]}>
       <StatusBar hidden={isFullscreen} />
-      
+
       <TouchableOpacity
         activeOpacity={1}
         style={styles.videoContainer}
-        onPress={handleVideoPress}
-      >
+        onPress={handleVideoPress}>
         {uri ? (
           <Video
             ref={videoRef}
-            source={{ uri }}
+            source={{uri}}
             style={styles.video}
             resizeMode="contain"
             onLoad={handleLoad}
             onProgress={handleProgress}
             onEnd={handleEnd}
             paused={!isPlaying}
-            onBuffer={({ isBuffering }) => setIsBuffering(isBuffering)}
+            onBuffer={({isBuffering: buffering}) => setIsBuffering(buffering)}
             repeat={false}
           />
         ) : (
@@ -169,29 +151,30 @@ const VideoPreviewScreen = () => {
             <Text style={styles.errorText}>Video not available</Text>
           </View>
         )}
-        
+
         {isBuffering && (
           <View style={styles.bufferingContainer}>
             <ActivityIndicator size="large" color="#fff" />
           </View>
         )}
-        
+
         {/* Video controls */}
         {showControls && (
           <View style={styles.controlsContainer}>
             {/* Top controls */}
             <View style={styles.topControls}>
-              <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+              <TouchableOpacity
+                onPress={handleClose}
+                style={styles.closeButton}>
                 <Icon name="arrow-left" size={24} color="#fff" />
               </TouchableOpacity>
             </View>
-            
+
             {/* Center controls */}
             <View style={styles.centerControls}>
               <TouchableOpacity
                 onPress={togglePlayPause}
-                style={styles.playPauseButton}
-              >
+                style={styles.playPauseButton}>
                 <Icon
                   name={isPlaying ? 'pause' : 'play'}
                   size={40}
@@ -199,7 +182,7 @@ const VideoPreviewScreen = () => {
                 />
               </TouchableOpacity>
             </View>
-            
+
             {/* Bottom controls */}
             <View style={styles.bottomControls}>
               {/* Progress bar */}
@@ -207,23 +190,22 @@ const VideoPreviewScreen = () => {
                 <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
                 <View style={styles.progressBarContainer}>
                   <View
-                    style={[styles.progressBar, { width: `${progress * 100}%` }]}
+                    style={[styles.progressBar, {width: `${progress * 100}%`}]}
                   />
                 </View>
                 <Text style={styles.timeText}>{formatTime(duration)}</Text>
               </View>
-              
+
               {/* Action buttons */}
               <View style={styles.actionsRow}>
                 <View style={styles.leftActions}>
                   {/* Empty for now, could add volume etc. */}
                 </View>
-                
+
                 <View style={styles.rightActions}>
                   <TouchableOpacity
                     onPress={toggleFullscreen}
-                    style={styles.actionButton}
-                  >
+                    style={styles.actionButton}>
                     <Icon
                       name={isFullscreen ? 'minimize' : 'maximize'}
                       size={20}
@@ -243,6 +225,9 @@ const VideoPreviewScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  containerBlack: {
+    backgroundColor: '#000',
   },
   videoContainer: {
     flex: 1,

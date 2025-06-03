@@ -1,8 +1,8 @@
 // src/components/home/EarnCard.tsx
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 
 interface EarnCardProps {
   title: string;
@@ -11,31 +11,38 @@ interface EarnCardProps {
   onPress: () => void;
 }
 
-const EarnCard: React.FC<EarnCardProps> = ({ 
-  title, 
-  description, 
-  iconName, 
-  onPress 
+const EarnCard: React.FC<EarnCardProps> = ({
+  title,
+  description,
+  iconName,
+  onPress,
 }) => {
-  const { colors } = useTheme();
-  
+  const {colors} = useTheme();
+
   return (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={[
-        styles.card, 
-        { 
+        styles.card,
+        {
           backgroundColor: colors.white,
-          shadowColor: colors.black 
-        }
-      ]} 
-      onPress={onPress}
-    >
+          shadowColor: colors.black,
+        },
+      ]}
+      onPress={onPress}>
       <View style={styles.contentContainer}>
         <View style={styles.textContainer}>
-          <Text style={[styles.title, { color: colors.text.primary }]}>{title}</Text>
-          <Text style={[styles.description, { color: colors.text.secondary }]}>{description}</Text>
+          <Text style={[styles.title, {color: colors.text.primary}]}>
+            {String(title)}
+          </Text>
+          <Text style={[styles.description, {color: colors.text.secondary}]}>
+            {String(description)}
+          </Text>
         </View>
-        <View style={[styles.iconContainer, { backgroundColor: colors.primary + '10' }]}>
+        <View
+          style={[
+            styles.iconContainer,
+            {backgroundColor: colors.primary + '10'},
+          ]}>
           <Icon name={iconName} size={24} color={colors.primary} />
         </View>
       </View>
@@ -48,7 +55,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: {width: 0, height: 1},
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,

@@ -1,5 +1,5 @@
 // src/screens/packages/CheckoutScreen.tsx
-import React, { useState } from 'react';
+import React, {useState} from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,9 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import {useNavigation, useRoute} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 
 interface PaymentMethod {
@@ -24,7 +24,7 @@ interface PaymentMethod {
 const CheckoutScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const [loading, setLoading] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<string>('card');
 
@@ -34,19 +34,19 @@ const CheckoutScreen: React.FC = () => {
   const totalPrice = routeParams?.totalPrice;
 
   const paymentMethods: PaymentMethod[] = [
-    { id: 'card', name: 'Credit/Debit Card', icon: 'credit-card' },
-    { id: 'paypal', name: 'PayPal', icon: 'smartphone' },
-    { id: 'apple', name: 'Apple Pay', icon: 'smartphone' },
-    { id: 'google', name: 'Google Pay', icon: 'smartphone' },
+    {id: 'card', name: 'Credit/Debit Card', icon: 'credit-card'},
+    {id: 'paypal', name: 'PayPal', icon: 'smartphone'},
+    {id: 'apple', name: 'Apple Pay', icon: 'smartphone'},
+    {id: 'google', name: 'Google Pay', icon: 'smartphone'},
   ];
 
   const handleCheckout = async () => {
     try {
       setLoading(true);
-      
+
       // Mock payment processing
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       Alert.alert(
         'Payment Successful!',
         `Your ${packageData?.name} plan has been activated.`,
@@ -55,37 +55,48 @@ const CheckoutScreen: React.FC = () => {
             text: 'OK',
             onPress: () => navigation.navigate('Main' as never),
           },
-        ]
+        ],
       );
     } catch (error) {
       console.error('Payment error:', error);
-      Alert.alert('Payment Failed', 'Please try again or use a different payment method.');
+      Alert.alert(
+        'Payment Failed',
+        'Please try again or use a different payment method.',
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  // Helper to get dynamic style for checkout button
+  function getCheckoutButtonStyle(baseStyle: any, color: string, isLoading: boolean) {
+    return [baseStyle, {backgroundColor: color, opacity: isLoading ? 0.7 : 1}];
+  }
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
       <Header title="Checkout" showBackButton />
-      
+
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Order Summary */}
-        <View style={[styles.section, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+        <View style={[styles.section, {backgroundColor: colors.surface}]}>
+          <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
             Order Summary
           </Text>
           <View style={styles.orderItem}>
-            <Text style={[styles.orderItemName, { color: colors.text.primary }]}>
+            <Text style={[styles.orderItemName, {color: colors.text.primary}]}>
               {packageData?.name} Plan - {billingData?.label}
             </Text>
-            <Text style={[styles.orderItemPrice, { color: colors.text.primary }]}>
+            <Text style={[styles.orderItemPrice, {color: colors.text.primary}]}>
               ${totalPrice?.toFixed(2)}
             </Text>
           </View>
-          <View style={[styles.totalRow, { borderTopColor: colors.border.light }]}>
-            <Text style={[styles.totalLabel, { color: colors.text.primary }]}>Total</Text>
-            <Text style={[styles.totalPrice, { color: colors.text.primary }]}>
+          <View
+            style={[styles.totalRow, {borderTopColor: colors.border}]}>
+            <Text style={[styles.totalLabel, {color: colors.text.primary}]}>
+              Total
+            </Text>
+            <Text style={[styles.totalPrice, {color: colors.text.primary}]}>
               ${totalPrice?.toFixed(2)}
             </Text>
           </View>
@@ -93,23 +104,33 @@ const CheckoutScreen: React.FC = () => {
 
         {/* Payment Method */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+          <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
             Payment Method
           </Text>
-          {paymentMethods.map((method) => (
+          {paymentMethods.map(method => (
             <TouchableOpacity
               key={method.id}
               style={[
                 styles.paymentMethod,
                 {
                   backgroundColor: colors.surface,
-                  borderColor: selectedPayment === method.id ? colors.primary : colors.border.light,
-                }
+                  borderColor:
+                    selectedPayment === method.id
+                      ? colors.primary
+                      : colors.border,
+                },
               ]}
-              onPress={() => setSelectedPayment(method.id)}
-            >
-              <Icon name={method.icon} size={20} color={colors.text.secondary} />
-              <Text style={[styles.paymentMethodName, { color: colors.text.primary }]}>
+              onPress={() => setSelectedPayment(method.id)}>
+              <Icon
+                name={method.icon}
+                size={20}
+                color={colors.text.secondary}
+              />
+              <Text
+                style={[
+                  styles.paymentMethodName,
+                  {color: colors.text.primary},
+                ]}>
                 {method.name}
               </Text>
               {selectedPayment === method.id && (
@@ -122,31 +143,59 @@ const CheckoutScreen: React.FC = () => {
         {/* Payment Form */}
         {selectedPayment === 'card' && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+            <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
               Card Information
             </Text>
             <TextInput
-              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border.light, color: colors.text.primary }]}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  color: colors.text.primary,
+                },
+              ]}
               placeholder="Card Number"
               placeholderTextColor={colors.text.tertiary}
               keyboardType="numeric"
             />
             <View style={styles.cardRow}>
               <TextInput
-                style={[styles.halfInput, { backgroundColor: colors.surface, borderColor: colors.border.light, color: colors.text.primary }]}
+                style={[
+                  styles.halfInput,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    color: colors.text.primary,
+                  },
+                ]}
                 placeholder="MM/YY"
                 placeholderTextColor={colors.text.tertiary}
                 keyboardType="numeric"
               />
               <TextInput
-                style={[styles.halfInput, { backgroundColor: colors.surface, borderColor: colors.border.light, color: colors.text.primary }]}
+                style={[
+                  styles.halfInput,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    color: colors.text.primary,
+                  },
+                ]}
                 placeholder="CVC"
                 placeholderTextColor={colors.text.tertiary}
                 keyboardType="numeric"
               />
             </View>
             <TextInput
-              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border.light, color: colors.text.primary }]}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  color: colors.text.primary,
+                },
+              ]}
               placeholder="Cardholder Name"
               placeholderTextColor={colors.text.tertiary}
             />
@@ -155,30 +204,24 @@ const CheckoutScreen: React.FC = () => {
 
         {/* Terms */}
         <View style={styles.termsSection}>
-          <Text style={[styles.termsText, { color: colors.text.tertiary }]}>
-            By completing this purchase, you agree to our Terms of Service and Privacy Policy.
-            Your subscription will automatically renew unless cancelled.
+          <Text style={[styles.termsText, {color: colors.text.tertiary}]}>
+            By completing this purchase, you agree to our Terms of Service and
+            Privacy Policy. Your subscription will automatically renew unless
+            cancelled.
           </Text>
         </View>
       </ScrollView>
 
       {/* Checkout Button */}
-      <View style={[styles.bottomContainer, { backgroundColor: colors.surface }]}>
+      <View style={[styles.bottomContainer, {backgroundColor: colors.surface}]}>
         <TouchableOpacity
-          style={[
-            styles.checkoutButton,
-            {
-              backgroundColor: colors.primary,
-              opacity: loading ? 0.7 : 1,
-            }
-          ]}
+          style={getCheckoutButtonStyle(styles.checkoutButton, colors.primary, loading)}
           onPress={handleCheckout}
-          disabled={loading}
-        >
+          disabled={loading}>
           {loading ? (
             <ActivityIndicator size="small" color={colors.white} />
           ) : (
-            <Text style={[styles.checkoutButtonText, { color: colors.white }]}>
+            <Text style={[styles.checkoutButtonText, {color: colors.white}]}>
               Complete Purchase - ${totalPrice?.toFixed(2)}
             </Text>
           )}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, {useState} from 'react';
 import {
   View,
   Text,
@@ -9,30 +9,29 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
   Keyboard,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {SafeAreaView} from 'react-native-safe-area-context';
 
 // Hooks and contexts
-import { useAuth } from '../../contexts/AuthContext';
-import { useTheme } from '../../contexts/ThemeContext';
+import {useAuth} from '../../contexts/AuthContext';
+import {useTheme} from '../../contexts/ThemeContext';
 
 /**
  * Login screen component
  */
-const LoginScreen = ({ navigation }) => {
+const LoginScreen = ({navigation}: {navigation: any}) => {
   // Theme
-  const { colors } = useTheme();
-  
+  const {colors} = useTheme();
+
   // Auth context
-  const { login, loading } = useAuth();
-  
+  const {login, loading} = useAuth();
+
   // Local state
   const [mobileNumber, setMobileNumber] = useState('');
-  const [countryCode, setCountryCode] = useState('+91');
+  const [countryCode] = useState('+91'); // Remove setCountryCode since it's unused
   const [error, setError] = useState<string | null>(null);
-  
+
   // Handle login
   const handleLogin = async () => {
     // Validate mobile number
@@ -40,15 +39,15 @@ const LoginScreen = ({ navigation }) => {
       setError('Please enter a valid 10-digit mobile number');
       return;
     }
-    
+
     // Clear error and dismiss keyboard
     setError(null);
     Keyboard.dismiss();
-    
+
     try {
       // Request OTP
       const otpResponse = await login(mobileNumber);
-      
+
       // Navigate to OTP verification screen
       navigation.navigate('OTP', {
         mobileNumber,
@@ -61,34 +60,37 @@ const LoginScreen = ({ navigation }) => {
       setError('Failed to send the OTP. Please try again.');
     }
   };
-  
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, {backgroundColor: colors.background}]}>
       <KeyboardAvoidingView
         style={styles.contentContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
-      >
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}>
         {/* App logo */}
         <Image
           source={require('../../assets/images/logo.png')}
           style={styles.logo}
           resizeMode="contain"
         />
-        
+
         {/* Title and subtitle */}
-        <Text style={[styles.title, { color: colors.text.primary }]}>Welcome to Adtip</Text>
-        <Text style={[styles.subtitle, { color: colors.text.tertiary }]}>
+        <Text style={[styles.title, {color: colors.text.primary}]}>
+          Welcome to Adtip
+        </Text>
+        <Text style={[styles.subtitle, {color: colors.text.tertiary}]}>
           Please enter your mobile number to continue
         </Text>
-        
+
         {/* Mobile number input */}
-        <View style={[styles.inputContainer, { borderColor: colors.border.default }]}>
-          <Text style={[styles.countryCode, { color: colors.text.primary }]}>
+        <View
+          style={[styles.inputContainer, {borderColor: colors.border}]}>
+          <Text style={[styles.countryCode, {color: colors.text.primary}]}>
             {countryCode}
           </Text>
           <TextInput
-            style={[styles.input, { color: colors.text.primary }]}
+            style={[styles.input, {color: colors.text.primary}]}
             placeholder="Enter mobile number"
             placeholderTextColor={colors.text.light}
             keyboardType="phone-pad"
@@ -98,43 +100,44 @@ const LoginScreen = ({ navigation }) => {
             autoFocus
           />
         </View>
-        
+
         {/* Error message */}
-        {error && (
-          <Text style={styles.errorText}>{error}</Text>
-        )}
-        
+        {error && <Text style={styles.errorText}>{error}</Text>}
+
         {/* Login button */}
         <TouchableOpacity
           style={[
             styles.loginButton,
-            { backgroundColor: colors.primary },
-            (!mobileNumber || mobileNumber.length < 10 || loading) && styles.disabledButton,
+            {backgroundColor: colors.primary},
+            (!mobileNumber || mobileNumber.length < 10 || loading) &&
+              styles.disabledButton,
           ]}
           onPress={handleLogin}
-          disabled={!mobileNumber || mobileNumber.length < 10 || loading}
-        >
+          disabled={!mobileNumber || mobileNumber.length < 10 || loading}>
           {loading ? (
             <ActivityIndicator color="#ffffff" />
           ) : (
             <Text style={styles.loginButtonText}>Get OTP</Text>
           )}
         </TouchableOpacity>
-        
+
         {/* Terms and conditions */}
         <View style={styles.termsContainer}>
-          <Text style={[styles.termsText, { color: colors.text.tertiary }]}>
+          <Text style={[styles.termsText, {color: colors.text.tertiary}]}>
             By continuing, you agree to our
           </Text>
           <View style={styles.termsLinksContainer}>
             <TouchableOpacity>
-              <Text style={[styles.termsLink, { color: colors.primary }]}>
+              <Text style={[styles.termsLink, {color: colors.primary}]}>
                 Terms of Service
               </Text>
             </TouchableOpacity>
-            <Text style={[styles.termsText, { color: colors.text.tertiary }]}> and </Text>
+            <Text style={[styles.termsText, {color: colors.text.tertiary}]}>
+              {' '}
+              and{' '}
+            </Text>
             <TouchableOpacity>
-              <Text style={[styles.termsLink, { color: colors.primary }]}>
+              <Text style={[styles.termsLink, {color: colors.primary}]}>
                 Privacy Policy
               </Text>
             </TouchableOpacity>

@@ -10,45 +10,56 @@ class WalletService {
    * Get the current wallet balance for a user
    * @param userId - The user ID
    * @returns Promise with wallet balance as string
-   */  
+   */
   static async getWalletBalance(userId: string | number): Promise<string> {
     try {
       console.log(`WalletService: Fetching balance for user ID: ${userId}`);
 
       // Ensure userId is properly formatted to avoid API errors
-      const formattedUserId = userId.toString().trim();      // Check for token and log authentication status
+      const formattedUserId = userId.toString().trim(); // Check for token and log authentication status
       let token = await AsyncStorage.getItem('accessToken');
       if (!token) {
         token = await AsyncStorage.getItem('@auth_token'); // Fallback to old key format
       }
       console.log('WalletService: Auth token available:', !!token);
-      
+
       if (!token) {
-        console.warn('WalletService: No auth token found in storage, API call may fail');
+        console.warn(
+          'WalletService: No auth token found in storage, API call may fail',
+        );
       }
-      
+
       // Make API call with properly formatted userId
       const response = await ApiService.getWalletBalance(formattedUserId);
       console.log('WalletService: API response:', JSON.stringify(response));
-      
+
       // Store the balance in AsyncStorage for quick access
       // The API returns { status: 200, message: "Fetched latest balance successfully.", availableBalance: "204.59" }
       // In this specific API, availableBalance is directly on the response object, not in a data property
       if (response && response.availableBalance) {
-        await AsyncStorage.setItem('@wallet_balance', response.availableBalance);
+        await AsyncStorage.setItem(
+          '@wallet_balance',
+          response.availableBalance,
+        );
         return response.availableBalance;
       }
-      
+
       // If no valid response, try to get from cache
-      const cachedBalance = await AsyncStorage.getItem('@wallet_balance') || '0.00';
-      return cachedBalance;    } catch (error: any) {
+      const cachedBalance =
+        (await AsyncStorage.getItem('@wallet_balance')) || '0.00';
+      return cachedBalance;
+    } catch (error: any) {
       console.error('Error getting wallet balance:', error);
-      
+
       // Log more detailed error info to help with debugging
       if (error.response) {
         // The request was made and the server responded with a status code
         // that falls out of the range of 2xx
-        console.error('API error response:', error.response.status, error.response.data);
+        console.error(
+          'API error response:',
+          error.response.status,
+          error.response.data,
+        );
       } else if (error.request) {
         // The request was made but no response was received
         console.error('API no response error. Network issue?');
@@ -56,25 +67,11 @@ class WalletService {
         // Something happened in setting up the request that triggered an Error
         console.error('API request setup error:', error.message);
       }
-      
-      // Return cached balance if available, or default to '0.00'
-      const cachedBalance = await AsyncStorage.getItem('@wallet_balance') || '0.00';
-      return cachedBalance;
-    }
-  }
 
-  /**
-   * Get transaction history for a user
-   * @param userId - The user ID
-   * @returns Promise with transactions array
-   */
-  static async getTransactionHistory(userId: string | number): Promise<any[]> {
-    try {
-      const passbook = await ApiService.getAdPassbook(userId);
-      return passbook?.data || [];
-    } catch (error) {
-      console.error('Error getting transaction history:', error);
-      return [];
+      // Return cached balance if available, or default to '0.00'
+      const cachedBalance =
+        (await AsyncStorage.getItem('@wallet_balance')) || '0.00';
+      return cachedBalance;
     }
   }
 
@@ -105,13 +102,26 @@ class WalletService {
   }> {
     try {
       const premiumData = await ApiService.checkPremium(userId);
-      
       return {
         isPremium: !premiumData.is_premium_expired,
         planId: premiumData.plan_id,
         endTime: premiumData.end_time,
       };
     } catch (error) {
+      // Only log error if it's not a 'no active premium plan' type error
+      if (
+        error instanceof Error &&
+        error.message &&
+        error.message.toLowerCase().includes('no active premium plan')
+      ) {
+        // Silently treat as not premium
+        return {
+          isPremium: false,
+          planId: null,
+          endTime: null,
+        };
+      }
+      // Log and return not premium for all other errors
       console.error('Error checking premium status:', error);
       return {
         isPremium: false,

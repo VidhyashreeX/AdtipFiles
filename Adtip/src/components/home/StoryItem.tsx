@@ -1,8 +1,8 @@
 // src/components/home/StoryItem.tsx
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import {View, Text, StyleSheet, TouchableOpacity, Image} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 
 interface StoryItemProps {
   isAddStory?: boolean;
@@ -11,13 +11,13 @@ interface StoryItemProps {
   onPress?: () => void;
 }
 
-const StoryItem: React.FC<StoryItemProps> = ({ 
-  isAddStory = false, 
-  imageUrl, 
-  username, 
-  onPress 
+const StoryItem: React.FC<StoryItemProps> = ({
+  isAddStory = false,
+  imageUrl,
+  username,
+  onPress,
 }) => {
-  const { colors } = useTheme();
+  const {colors} = useTheme();
 
   const handlePress = () => {
     if (onPress) {
@@ -27,25 +27,37 @@ const StoryItem: React.FC<StoryItemProps> = ({
 
   return (
     <TouchableOpacity style={styles.container} onPress={handlePress}>
-      <View style={[
-        styles.storyCircle, 
-        isAddStory && [styles.addStoryCircle, { borderColor: colors.primary, backgroundColor: colors.primary + '10' }],
-        { borderColor: colors.borderLight || '#EEEEEE' }
-      ]}>
+      <View
+        style={[
+          styles.storyCircle,
+          isAddStory && [
+            styles.addStoryCircle,
+            {
+              borderColor: colors.primary,
+              backgroundColor: colors.primary + '10',
+            },
+          ],
+          {borderColor: colors.borderLight || '#EEEEEE'},
+        ]}>
         {isAddStory ? (
           <Icon name="plus" color={colors.primary} size={24} />
         ) : (
           <View style={styles.storyImageContainer}>
             {imageUrl ? (
-              <Image source={{ uri: imageUrl }} style={styles.storyImage} />
+              <Image source={{uri: imageUrl}} style={styles.storyImage} />
             ) : (
-              <View style={[styles.placeholderImage, { backgroundColor: colors.gray[100] }]} />
+              <View
+                style={[
+                  styles.placeholderImage,
+                  {backgroundColor: colors.gray[100]},
+                ]}
+              />
             )}
           </View>
         )}
       </View>
-      <Text style={[styles.username, { color: colors.text.secondary }]}>
-        {isAddStory ? 'Add Story' : (username ? String(username) : '')}
+      <Text style={[styles.username, {color: colors.text.secondary}]}>
+        {isAddStory ? 'Add Story' : username ? String(username) : ''}
       </Text>
     </TouchableOpacity>
   );

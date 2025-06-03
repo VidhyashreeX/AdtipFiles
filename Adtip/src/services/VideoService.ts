@@ -1,5 +1,3 @@
-// src/services/VideoService.ts
-import { Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 
 // Constants
@@ -45,7 +43,7 @@ export default class VideoService {
         toFile: localFilePath,
         background: true,
         discretionary: true,
-        progress: (res) => {
+        progress: res => {
           const progressPercent = (res.bytesWritten / res.contentLength) * 100;
           console.log(`Downloading ${Math.round(progressPercent)}%`);
         },
@@ -112,7 +110,7 @@ export default class VideoService {
       // Remove the cache directory and recreate it
       await RNFS.unlink(VIDEO_CACHE_DIR);
       await RNFS.mkdir(VIDEO_CACHE_DIR);
-      
+
       console.log('Video cache cleared successfully');
     } catch (error) {
       console.error('Error clearing video cache:', error);
@@ -129,13 +127,13 @@ export default class VideoService {
 
       let totalSize = 0;
       const files = await RNFS.readdir(VIDEO_CACHE_DIR);
-      
+
       for (const file of files) {
         const filePath = `${VIDEO_CACHE_DIR}/${file}`;
         const stat = await RNFS.stat(filePath);
         totalSize += stat.size;
       }
-      
+
       return totalSize;
     } catch (error) {
       console.error('Error getting video cache size:', error);
@@ -153,22 +151,24 @@ export default class VideoService {
     const urlObj = new URL(url);
     const pathParts = urlObj.pathname.split('/');
     const filenameWithParams = pathParts[pathParts.length - 1];
-    
+
     // Strip query parameters if they exist
     const filename = filenameWithParams.split('?')[0];
-    
+
     // If we couldn't extract a filename, generate a hash
     if (!filename || filename === '') {
       // Simple hash function
       let hash = 0;
       for (let i = 0; i < url.length; i++) {
         const char = url.charCodeAt(i);
+        // eslint-disable-next-line no-bitwise
         hash = (hash << 5) - hash + char;
+        // eslint-disable-next-line no-bitwise
         hash = hash & hash; // Convert to 32bit integer
       }
       return `video-${Math.abs(hash)}.mp4`;
     }
-    
+
     return filename;
   }
 }

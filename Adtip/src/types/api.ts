@@ -123,6 +123,8 @@ export interface Post {
   pay_per_view?: string;
   total_pay?: string;
   platform_fee?: string;
+  created_at: string; // Make created_at required and always a string
+  is_premium?: boolean;
 }
 
 export interface PostListResponse {

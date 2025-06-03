@@ -32,13 +32,13 @@ The `useWallet` hook provides a React-friendly way to access wallet data:
 import useWallet from '../hooks/useWallet';
 
 const MyComponent = () => {
-  const { 
-    balance,        // Current wallet balance
-    transactions,   // Transactions history
-    isLoading,      // Loading state
-    isRefreshing,   // Refreshing state
-    isPremium,      // Premium status
-    refreshWallet   // Function to refresh wallet data
+  const {
+    balance, // Current wallet balance
+    transactions, // Transactions history
+    isLoading, // Loading state
+    isRefreshing, // Refreshing state
+    isPremium, // Premium status
+    refreshWallet, // Function to refresh wallet data
   } = useWallet();
 
   // Your component code here
@@ -74,15 +74,15 @@ import WalletBalance from '../components/wallet/WalletBalance';
 
 ```tsx
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import {View, StyleSheet} from 'react-native';
 import Header from '../components/common/Header';
 import WalletBalance from '../components/wallet/WalletBalance';
 
 const MyScreen = () => {
   return (
     <View style={styles.container}>
-      <Header 
-        title="My Screen" 
+      <Header
+        title="My Screen"
         showBackButton
         rightComponent={<WalletBalance compact />}
       />
@@ -102,12 +102,12 @@ const styles = StyleSheet.create({
 
 ```tsx
 import React from 'react';
-import { View, Text } from 'react-native';
+import {View, Text} from 'react-native';
 import useWallet from '../hooks/useWallet';
 
 const PremiumFeature = () => {
-  const { isPremium } = useWallet();
-  
+  const {isPremium} = useWallet();
+
   return (
     <View>
       {isPremium ? (

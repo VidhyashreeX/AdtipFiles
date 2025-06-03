@@ -1,8 +1,8 @@
 // src/components/tipshop/ProductCard.tsx
 import React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import {View, Text, StyleSheet, Image, TouchableOpacity} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 
 interface Product {
   id: number;
@@ -26,47 +26,52 @@ interface ProductCardProps {
   onPress: () => void;
 }
 
-const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
-  const { colors } = useTheme();
+const ProductCard: React.FC<ProductCardProps> = ({product, onPress}) => {
+  const {colors} = useTheme();
 
   return (
     <TouchableOpacity
-      style={[styles.container, { backgroundColor: colors.white }]}
-      onPress={onPress}
-    >
+      style={[styles.container, {backgroundColor: colors.white}]}
+      onPress={onPress}>
       <View style={styles.imageContainer}>
         <Image
-          source={{ uri: product.images[0] }}
+          source={{uri: product.images[0]}}
           style={styles.image}
           resizeMode="cover"
         />
         {product.discounted_price && (
-          <View style={[styles.discountBadge, { backgroundColor: colors.error }]}>
+          <View style={[styles.discountBadge, {backgroundColor: colors.error}]}>
             <Text style={styles.discountText}>
-              {Math.round(((product.price - product.discounted_price) / product.price) * 100)}% OFF
+              {Math.round(
+                ((product.price - product.discounted_price) / product.price) *
+                  100,
+              )}
+              % OFF
             </Text>
           </View>
         )}
       </View>
 
       <View style={styles.content}>
-        <Text style={[styles.name, { color: colors.text.primary }]} numberOfLines={2}>
+        <Text
+          style={[styles.name, {color: colors.text.primary}]}
+          numberOfLines={2}>
           {product.name}
         </Text>
 
         <View style={styles.ratingContainer}>
           <Icon name="star" size={12} color="#FFD700" solid={true} />
-          <Text style={[styles.rating, { color: colors.text.secondary }]}>
+          <Text style={[styles.rating, {color: colors.text.secondary}]}>
             {product.rating.toFixed(1)} ({product.reviews_count})
           </Text>
         </View>
 
         <View style={styles.priceContainer}>
-          <Text style={[styles.price, { color: colors.text.primary }]}>
+          <Text style={[styles.price, {color: colors.text.primary}]}>
             ${product.discounted_price || product.price}
           </Text>
           {product.discounted_price && (
-            <Text style={[styles.originalPrice, { color: colors.text.tertiary }]}>
+            <Text style={[styles.originalPrice, {color: colors.text.tertiary}]}>
               ${product.price}
             </Text>
           )}
@@ -84,7 +89,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: {width: 0, height: 1},
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,

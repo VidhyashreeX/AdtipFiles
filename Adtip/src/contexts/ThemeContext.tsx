@@ -1,6 +1,6 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
-import { useColorScheme } from 'react-native';
-import { getThemeColors, COLORS } from '../constants/colors';
+import React, {createContext, useState, useContext, useEffect} from 'react';
+import {useColorScheme} from 'react-native';
+import {getThemeColors, COLORS} from '../constants/colors';
 
 type ThemeContextType = {
   isDarkMode: boolean;
@@ -18,7 +18,9 @@ const ThemeContext = createContext<ThemeContextType>({
 
 export const useTheme = () => useContext(ThemeContext);
 
-export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const ThemeProvider: React.FC<{children: React.ReactNode}> = ({
+  children,
+}) => {
   // Get device color scheme
   const deviceColorScheme = useColorScheme();
   const [isDarkMode, setIsDarkMode] = useState(deviceColorScheme === 'dark');
@@ -48,8 +50,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         colors,
         toggleTheme,
         setDarkMode,
-      }}
-    >
+      }}>
       {children}
     </ThemeContext.Provider>
   );

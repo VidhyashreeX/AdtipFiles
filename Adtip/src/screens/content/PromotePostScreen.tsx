@@ -1,18 +1,17 @@
 // src/screens/content/PromotePostScreen.tsx
-import React, { useState } from 'react';
+import React, {useState} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import {useNavigation, useRoute} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 
 interface PromotionPackage {
@@ -29,7 +28,7 @@ interface PromotionPackage {
 const PromotePostScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const [loading, setLoading] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<string>('');
   const [targetAudience, setTargetAudience] = useState('');
@@ -49,7 +48,7 @@ const PromotePostScreen: React.FC = () => {
         'Promoted for 3 days',
         'Reach up to 1,000 users',
         'Basic targeting',
-        'Performance analytics'
+        'Performance analytics',
       ],
     },
     {
@@ -64,7 +63,7 @@ const PromotePostScreen: React.FC = () => {
         'Reach up to 5,000 users',
         'Advanced targeting',
         'Detailed analytics',
-        'Priority placement'
+        'Priority placement',
       ],
       popular: true,
     },
@@ -81,7 +80,7 @@ const PromotePostScreen: React.FC = () => {
         'Premium targeting',
         'Comprehensive analytics',
         'Top priority placement',
-        'Cross-platform promotion'
+        'Cross-platform promotion',
       ],
     },
   ];
@@ -122,12 +121,14 @@ const PromotePostScreen: React.FC = () => {
 
     try {
       setLoading(true);
-      
+
       // Mock promotion setup
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const selectedPkg = promotionPackages.find(pkg => pkg.id === selectedPackage);
-      
+
+      const selectedPkg = promotionPackages.find(
+        pkg => pkg.id === selectedPackage,
+      );
+
       Alert.alert(
         'Promotion Started!',
         `Your post is now being promoted with the ${selectedPkg?.name} package. You'll start seeing results within the next few hours.`,
@@ -140,7 +141,7 @@ const PromotePostScreen: React.FC = () => {
             text: 'OK',
             onPress: () => navigation.goBack(),
           },
-        ]
+        ],
       );
     } catch (error) {
       console.error('Error starting promotion:', error);
@@ -157,21 +158,29 @@ const PromotePostScreen: React.FC = () => {
     return num.toString();
   };
 
+  // For promote button style
+  const promoteButtonBg = selectedPackage ? colors.primary : colors.border;
+  const promoteButtonOpacity = loading ? 0.7 : 1;
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
       <Header title="Promote Post" showBackButton />
-      
+
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Post Preview */}
         {postData && (
-          <View style={[styles.postPreview, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.previewTitle, { color: colors.text.primary }]}>
+          <View style={[styles.postPreview, {backgroundColor: colors.surface}]}>
+            <Text style={[styles.previewTitle, {color: colors.text.primary}]}>
               Promoting Post
             </Text>
-            <Text style={[styles.postTitle, { color: colors.text.primary }]} numberOfLines={2}>
+            <Text
+              style={[styles.postTitle, {color: colors.text.primary}]}
+              numberOfLines={2}>
               {postData.title || 'Your Post'}
             </Text>
-            <Text style={[styles.postDescription, { color: colors.text.secondary }]} numberOfLines={3}>
+            <Text
+              style={[styles.postDescription, {color: colors.text.secondary}]}
+              numberOfLines={3}>
               {postData.description || 'Post description will be shown here...'}
             </Text>
           </View>
@@ -179,102 +188,130 @@ const PromotePostScreen: React.FC = () => {
 
         {/* Promotion Packages */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+          <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
             Choose Promotion Package
           </Text>
-          {promotionPackages.map((pkg) => (
-            <TouchableOpacity
-              key={pkg.id}
-              style={[
-                styles.packageCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: selectedPackage === pkg.id ? colors.primary : colors.border.light,
-                  borderWidth: selectedPackage === pkg.id ? 2 : 1,
-                }
-              ]}
-              onPress={() => setSelectedPackage(pkg.id)}
-            >
-              {pkg.popular && (
-                <View style={[styles.popularBadge, { backgroundColor: colors.primary }]}>
-                  <Text style={[styles.popularBadgeText, { color: colors.white }]}>
-                    Most Popular
-                  </Text>
-                </View>
-              )}
-              
-              <View style={styles.packageHeader}>
-                <Text style={[styles.packageName, { color: colors.text.primary }]}>
-                  {pkg.name}
-                </Text>
-                <Text style={[styles.packagePrice, { color: colors.primary }]}>
-                  ${pkg.price}
-                </Text>
-              </View>
-              
-              <Text style={[styles.packageDescription, { color: colors.text.secondary }]}>
-                {pkg.description}
-              </Text>
-              
-              <View style={styles.packageStats}>
-                <View style={styles.statItem}>
-                  <Icon name="clock" size={16} color={colors.text.secondary} />
-                  <Text style={[styles.statText, { color: colors.text.secondary }]}>
-                    {pkg.duration} days
-                  </Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Icon name="users" size={16} color={colors.text.secondary} />
-                  <Text style={[styles.statText, { color: colors.text.secondary }]}>
-                    Up to {formatNumber(pkg.estimatedReach)} reach
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={styles.featuresList}>
-                {pkg.features.map((feature, index) => (
-                  <View key={index} style={styles.featureItem}>
-                    <Icon name="check" size={14} color={colors.success} />
-                    <Text style={[styles.featureText, { color: colors.text.secondary }]}>
-                      {feature}
+          {promotionPackages.map(pkg => {
+            const isSelected = selectedPackage === pkg.id;
+            const borderWidth = isSelected ? 2 : 1; // Ensure always a number
+            return (
+              <TouchableOpacity
+                key={pkg.id}
+                style={[
+                  styles.packageCard,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: isSelected ? colors.primary : colors.border,
+                    borderWidth, // always a number
+                  },
+                ]}
+                onPress={() => setSelectedPackage(pkg.id)}>
+                {pkg.popular && (
+                  <View
+                    style={[
+                      styles.popularBadge,
+                      {backgroundColor: colors.primary},
+                    ]}>
+                    <Text
+                      style={[styles.popularBadgeText, {color: colors.white}]}>
+                      Most Popular
                     </Text>
                   </View>
-                ))}
-              </View>
-              
-              {selectedPackage === pkg.id && (
-                <View style={styles.selectedIndicator}>
-                  <Icon name="check-circle" size={24} color={colors.primary} />
+                )}
+
+                <View style={styles.packageHeader}>
+                  <Text
+                    style={[styles.packageName, {color: colors.text.primary}]}>
+                    {pkg.name}
+                  </Text>
+                  <Text style={[styles.packagePrice, {color: colors.primary}]}>
+                    ${pkg.price}
+                  </Text>
                 </View>
-              )}
-            </TouchableOpacity>
-          ))}
+
+                <Text
+                  style={[
+                    styles.packageDescription,
+                    {color: colors.text.secondary},
+                  ]}>
+                  {pkg.description}
+                </Text>
+
+                <View style={styles.packageStats}>
+                  <View style={styles.statItem}>
+                    <Icon name="clock" size={16} color={colors.text.secondary} />
+                    <Text
+                      style={[styles.statText, {color: colors.text.secondary}]}>
+                      {pkg.duration} days
+                    </Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Icon name="users" size={16} color={colors.text.secondary} />
+                    <Text
+                      style={[styles.statText, {color: colors.text.secondary}]}>
+                      Up to {formatNumber(pkg.estimatedReach)} reach
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.featuresList}>
+                  {pkg.features.map((feature, index) => (
+                    <View key={index} style={styles.featureItem}>
+                      <Icon name="check" size={14} color={colors.success} />
+                      <Text
+                        style={[
+                          styles.featureText,
+                          {color: colors.text.secondary},
+                        ]}>
+                        {feature}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+
+                {selectedPackage === pkg.id && (
+                  <View style={styles.selectedIndicator}>
+                    <Icon name="check-circle" size={24} color={colors.primary} />
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {/* Target Audience */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+          <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
             Target Audience
           </Text>
           <View style={styles.optionsGrid}>
-            {audienceOptions.map((audience) => (
+            {audienceOptions.map(audience => (
               <TouchableOpacity
                 key={audience}
                 style={[
                   styles.optionButton,
                   {
-                    backgroundColor: targetAudience === audience ? colors.primary : colors.surface,
-                    borderColor: targetAudience === audience ? colors.primary : colors.border.light,
-                  }
+                    backgroundColor:
+                      targetAudience === audience
+                        ? colors.primary
+                        : colors.surface,
+                    borderColor:
+                      targetAudience === audience
+                        ? colors.primary
+                        : colors.border,
+                  },
                 ]}
-                onPress={() => setTargetAudience(audience)}
-              >
-                <Text style={[
-                  styles.optionText,
-                  {
-                    color: targetAudience === audience ? colors.white : colors.text.primary,
-                  }
-                ]}>
+                onPress={() => setTargetAudience(audience)}>
+                <Text
+                  style={[
+                    styles.optionText,
+                    {
+                      color:
+                        targetAudience === audience
+                          ? colors.white
+                          : colors.text.primary,
+                    },
+                  ]}>
                   {audience}
                 </Text>
               </TouchableOpacity>
@@ -284,28 +321,35 @@ const PromotePostScreen: React.FC = () => {
 
         {/* Promotion Goal */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+          <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
             Promotion Goal
           </Text>
           <View style={styles.optionsGrid}>
-            {goalOptions.map((goal) => (
+            {goalOptions.map(goal => (
               <TouchableOpacity
                 key={goal}
                 style={[
                   styles.optionButton,
                   {
-                    backgroundColor: promotionGoal === goal ? colors.primary : colors.surface,
-                    borderColor: promotionGoal === goal ? colors.primary : colors.border.light,
-                  }
+                    backgroundColor:
+                      promotionGoal === goal ? colors.primary : colors.surface,
+                    borderColor:
+                      promotionGoal === goal
+                        ? colors.primary
+                        : colors.border,
+                  },
                 ]}
-                onPress={() => setPromotionGoal(goal)}
-              >
-                <Text style={[
-                  styles.optionText,
-                  {
-                    color: promotionGoal === goal ? colors.white : colors.text.primary,
-                  }
-                ]}>
+                onPress={() => setPromotionGoal(goal)}>
+                <Text
+                  style={[
+                    styles.optionText,
+                    {
+                      color:
+                        promotionGoal === goal
+                          ? colors.white
+                          : colors.text.primary,
+                    },
+                  ]}>
                   {goal}
                 </Text>
               </TouchableOpacity>
@@ -315,44 +359,45 @@ const PromotePostScreen: React.FC = () => {
 
         {/* Terms */}
         <View style={styles.termsSection}>
-          <Text style={[styles.termsText, { color: colors.text.tertiary }]}>
-            • Promotion results may vary based on content quality and audience engagement
+          <Text style={[styles.termsText, {color: colors.text.tertiary}]}>
+            • Promotion results may vary based on content quality and audience
+            engagement
           </Text>
-          <Text style={[styles.termsText, { color: colors.text.tertiary }]}>
+          <Text style={[styles.termsText, {color: colors.text.tertiary}]}>
             • Analytics will be available during and after the promotion period
           </Text>
-          <Text style={[styles.termsText, { color: colors.text.tertiary }]}>
+          <Text style={[styles.termsText, {color: colors.text.tertiary}]}>
             • Refunds are not available once promotion has started
           </Text>
         </View>
       </ScrollView>
 
       {/* Promote Button */}
-      <View style={[styles.bottomContainer, { backgroundColor: colors.surface }]}>
+      <View style={[styles.bottomContainer, {backgroundColor: colors.surface}]}>
         <TouchableOpacity
           style={[
             styles.promoteButton,
             {
-              backgroundColor: selectedPackage ? colors.primary : colors.border.light,
-              opacity: loading ? 0.7 : 1,
-            }
+              backgroundColor: promoteButtonBg,
+              opacity: promoteButtonOpacity, // always a number
+            },
           ]}
           onPress={handlePromote}
-          disabled={!selectedPackage || loading}
-        >
+          disabled={!selectedPackage || loading}>
           {loading ? (
             <ActivityIndicator size="small" color={colors.white} />
           ) : (
-            <Text style={[
-              styles.promoteButtonText,
-              {
-                color: selectedPackage ? colors.white : colors.text.tertiary,
-              }
-            ]}>
+            <Text
+              style={[
+                styles.promoteButtonText,
+                {
+                  color: selectedPackage ? colors.white : colors.text.tertiary,
+                },
+              ]}>
               Start Promotion
-              {selectedPackage && promotionPackages.find(p => p.id === selectedPackage) && 
-                ` - $${promotionPackages.find(p => p.id === selectedPackage)?.price}`
-              }
+              {selectedPackage &&
+                promotionPackages.find(p => p.id === selectedPackage) &&
+                ` - $${promotionPackages.find(p => p.id === selectedPackage)?.price}`}
             </Text>
           )}
         </TouchableOpacity>

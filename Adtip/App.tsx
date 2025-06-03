@@ -1,25 +1,25 @@
 /**
  * Adtip App
- * 
+ *
  * @format
  */
 
-import React, { useState, useEffect } from 'react';
-import { 
-  SafeAreaView, 
-  StatusBar, 
-  StyleSheet, 
+import React, {useState, useEffect} from 'react';
+import {
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
   View,
-  ActivityIndicator
+  ActivityIndicator,
 } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import {NavigationContainer} from '@react-navigation/native';
+import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import {SafeAreaProvider} from 'react-native-safe-area-context';
 
 // Contexts
-import { AuthProvider } from './src/contexts/AuthContext';
-import { WalletProvider } from './src/contexts/WalletContext';
+import {AuthProvider} from './src/contexts/AuthContext';
+import {WalletProvider} from './src/contexts/WalletContext';
 
 // Services
 // Commented out PubScale integration - June 2, 2025
@@ -29,11 +29,11 @@ import { WalletProvider } from './src/contexts/WalletContext';
 // Navigators
 import MainNavigator from './src/navigation/MainNavigator';
 import AuthNavigator from './src/navigation/AuthNavigator';
-import { navigationRef } from './src/navigation/NavigationService';
+import {navigationRef} from './src/navigation/NavigationService';
 
 // Theme
-import { ThemeProvider } from './src/contexts/ThemeContext';
-import { COLORS } from './src/constants/colors';
+import {ThemeProvider} from './src/contexts/ThemeContext';
+import {COLORS} from './src/constants/colors';
 
 // Stack type
 const Stack = createNativeStackNavigator();
@@ -44,37 +44,36 @@ const Stack = createNativeStackNavigator();
 function App(): React.JSX.Element {
   // State
   const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);  // Check authentication state and initialize services when app loads
+  const [isAuthenticated, setIsAuthenticated] = useState(false); // Check authentication state and initialize services when app loads
   useEffect(() => {
     const initApp = async () => {
       try {
         // Check auth status
         const userToken = await AsyncStorage.getItem('accessToken');
-        const userId = await AsyncStorage.getItem('userId') || 'anonymous_user';
         const isAuth = !!userToken;
         setIsAuthenticated(isAuth);
-        
+
         // Commented out PubScale integration - June 2, 2025
         // Initialize PubScale SDK with user ID
         // await PubScaleService.initialize(userId);
-        
+
         // Initialize reward service
         // await RewardService.init();
-        
+
         // Set up PubScale reward listener
         // PubScaleService.setRewardListener((reward) => {
         //   console.log('Reward received in App.tsx:', reward);
         //   // You can call your backend API here to update the user's balance
         // });
       } catch (error) {
-        console.error("Error initializing app:", error);
+        console.error('Error initializing app:', error);
       } finally {
         setIsLoading(false);
       }
     };
-    
+
     initApp();
-    
+
     // Cleanup on unmount
     return () => {
       // Commented out PubScale integration - June 2, 2025
@@ -89,39 +88,45 @@ function App(): React.JSX.Element {
         <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
-  }  return (
-  <SafeAreaProvider>
-    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.white }}>
-      <ThemeProvider>
-        <AuthProvider>
-          <WalletProvider>
-            <NavigationContainer ref={navigationRef}>
-              <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
-              <Stack.Navigator screenOptions={{ headerShown: false }}>
-                {isAuthenticated ? (
-                <Stack.Screen name="Main" component={MainNavigator} />
-              ) : (
-                <Stack.Screen name="Auth" component={AuthNavigator} />              )}
-              </Stack.Navigator>
-            </NavigationContainer>
-          </WalletProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </SafeAreaView>
-  </SafeAreaProvider>
-);
+  }
+  return (
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.container}>
+        <ThemeProvider>
+          <AuthProvider>
+            <WalletProvider>
+              <NavigationContainer ref={navigationRef}>
+                <StatusBar
+                  backgroundColor={COLORS.primary}
+                  barStyle="light-content"
+                />
+                <Stack.Navigator screenOptions={{headerShown: false}}>
+                  {isAuthenticated ? (
+                    <Stack.Screen name="Main" component={MainNavigator} />
+                  ) : (
+                    <Stack.Screen name="Auth" component={AuthNavigator} />
+                  )}
+                </Stack.Navigator>
+              </NavigationContainer>
+            </WalletProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </SafeAreaView>
+    </SafeAreaProvider>
+  );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: COLORS.white,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: COLORS.white,
-  }
+  },
 });
 
 export default App;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 
 interface EarningItem {
@@ -30,7 +30,7 @@ interface EarningsStats {
 }
 
 const EarningsScreen: React.FC = () => {
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const [earnings, setEarnings] = useState<EarningItem[]>([]);
   const [stats, setStats] = useState<EarningsStats>({
     totalEarnings: 0,
@@ -53,7 +53,7 @@ const EarningsScreen: React.FC = () => {
         {
           id: '1',
           type: 'ad_view',
-          amount: 0.50,
+          amount: 0.5,
           description: 'Watched rewarded ad',
           timestamp: new Date(Date.now() - 1000 * 60 * 30),
           status: 'completed',
@@ -61,7 +61,7 @@ const EarningsScreen: React.FC = () => {
         {
           id: '2',
           type: 'content_tip',
-          amount: 2.00,
+          amount: 2.0,
           description: 'Tip received on video',
           timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
           status: 'completed',
@@ -69,7 +69,7 @@ const EarningsScreen: React.FC = () => {
         {
           id: '3',
           type: 'referral',
-          amount: 5.00,
+          amount: 5.0,
           description: 'Referral bonus',
           timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24),
           status: 'pending',
@@ -85,7 +85,7 @@ const EarningsScreen: React.FC = () => {
         {
           id: '5',
           type: 'bonus',
-          amount: 1.00,
+          amount: 1.0,
           description: 'Daily login bonus',
           timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3),
           status: 'completed',
@@ -96,8 +96,8 @@ const EarningsScreen: React.FC = () => {
         totalEarnings: 25.75,
         thisMonth: 8.75,
         thisWeek: 3.75,
-        today: 0.50,
-        pendingEarnings: 5.00,
+        today: 0.5,
+        pendingEarnings: 5.0,
       };
 
       setEarnings(mockEarnings);
@@ -157,8 +157,10 @@ const EarningsScreen: React.FC = () => {
 
   const formatTimestamp = (timestamp: Date) => {
     const now = new Date();
-    const diffInSeconds = Math.floor((now.getTime() - timestamp.getTime()) / 1000);
-    
+    const diffInSeconds = Math.floor(
+      (now.getTime() - timestamp.getTime()) / 1000,
+    );
+
     if (diffInSeconds < 60) {
       return 'Just now';
     } else if (diffInSeconds < 3600) {
@@ -174,59 +176,75 @@ const EarningsScreen: React.FC = () => {
   };
 
   const renderStatCard = (title: string, amount: number, icon: string) => (
-    <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-      <View style={[styles.statIconContainer, { backgroundColor: colors.primary + '20' }]}>
+    <View style={[styles.statCard, {backgroundColor: colors.surface}]}>
+      <View
+        style={[
+          styles.statIconContainer,
+          {backgroundColor: colors.primary + '20'},
+        ]}>
         <Icon name={icon} size={20} color={colors.primary} />
       </View>
-      <Text style={[styles.statAmount, { color: colors.text.primary }]}>
+      <Text style={[styles.statAmount, {color: colors.text.primary}]}>
         ${amount.toFixed(2)}
       </Text>
-      <Text style={[styles.statTitle, { color: colors.text.secondary }]}>
+      <Text style={[styles.statTitle, {color: colors.text.secondary}]}>
         {title}
       </Text>
     </View>
   );
 
-  const renderEarningItem = ({ item }: { item: EarningItem }) => (
-    <View style={[styles.earningItem, { borderBottomColor: colors.border.light }]}>
-      <View style={[styles.earningIconContainer, { backgroundColor: getTypeColor(item.type) + '20' }]}>
-        <Icon 
-          name={getTypeIcon(item.type)} 
-          size={20} 
+  const renderEarningItem = ({item}: {item: EarningItem}) => (
+    <View
+      style={[styles.earningItem, {borderBottomColor: colors.border.light}]}>
+      <View
+        style={[
+          styles.earningIconContainer,
+          {backgroundColor: getTypeColor(item.type) + '20'},
+        ]}>
+        <Icon
+          name={getTypeIcon(item.type)}
+          size={20}
           color={getTypeColor(item.type)}
         />
       </View>
-      
+
       <View style={styles.earningContent}>
-        <Text style={[styles.earningDescription, { color: colors.text.primary }]}>
+        <Text style={[styles.earningDescription, {color: colors.text.primary}]}>
           {item.description}
         </Text>
         <View style={styles.earningMeta}>
-          <Text style={[styles.earningTimestamp, { color: colors.text.tertiary }]}>
+          <Text
+            style={[styles.earningTimestamp, {color: colors.text.tertiary}]}>
             {formatTimestamp(item.timestamp)}
           </Text>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+          <View
+            style={[
+              styles.statusBadge,
+              {backgroundColor: getStatusColor(item.status) + '20'},
+            ]}>
+            <Text
+              style={[styles.statusText, {color: getStatusColor(item.status)}]}>
               {item.status}
             </Text>
           </View>
         </View>
       </View>
-      
-      <Text style={[styles.earningAmount, { color: colors.primary }]}>
+
+      <Text style={[styles.earningAmount, {color: colors.primary}]}>
         +${item.amount.toFixed(2)}
       </Text>
     </View>
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, {backgroundColor: colors.background}]}>
       <Header title="Earnings" showBackButton />
-      
+
       <FlatList
         data={earnings}
         renderItem={renderEarningItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={item => item.id}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -239,7 +257,11 @@ const EarningsScreen: React.FC = () => {
             {/* Stats Cards */}
             <View style={styles.statsContainer}>
               <View style={styles.statsRow}>
-                {renderStatCard('Total Earnings', stats.totalEarnings, 'dollar-sign')}
+                {renderStatCard(
+                  'Total Earnings',
+                  stats.totalEarnings,
+                  'dollar-sign',
+                )}
                 {renderStatCard('This Month', stats.thisMonth, 'calendar')}
               </View>
               <View style={styles.statsRow}>
@@ -250,14 +272,23 @@ const EarningsScreen: React.FC = () => {
 
             {/* Pending Earnings */}
             {stats.pendingEarnings > 0 && (
-              <View style={[styles.pendingContainer, { backgroundColor: colors.surface }]}>
+              <View
+                style={[
+                  styles.pendingContainer,
+                  {backgroundColor: colors.surface},
+                ]}>
                 <View style={styles.pendingContent}>
                   <Icon name="clock" size={20} color="#FFEAA7" />
-                  <Text style={[styles.pendingText, { color: colors.text.primary }]}>
+                  <Text
+                    style={[styles.pendingText, {color: colors.text.primary}]}>
                     ${stats.pendingEarnings.toFixed(2)} pending
                   </Text>
                 </View>
-                <Text style={[styles.pendingSubtext, { color: colors.text.secondary }]}>
+                <Text
+                  style={[
+                    styles.pendingSubtext,
+                    {color: colors.text.secondary},
+                  ]}>
                   Will be processed within 24-48 hours
                 </Text>
               </View>
@@ -265,11 +296,11 @@ const EarningsScreen: React.FC = () => {
 
             {/* Earnings History Header */}
             <View style={styles.historyHeader}>
-              <Text style={[styles.historyTitle, { color: colors.text.primary }]}>
+              <Text style={[styles.historyTitle, {color: colors.text.primary}]}>
                 Recent Earnings
               </Text>
               <TouchableOpacity>
-                <Text style={[styles.viewAllText, { color: colors.primary }]}>
+                <Text style={[styles.viewAllText, {color: colors.primary}]}>
                   View All
                 </Text>
               </TouchableOpacity>
@@ -280,10 +311,11 @@ const EarningsScreen: React.FC = () => {
           !isLoading ? (
             <View style={styles.emptyContainer}>
               <Icon name="dollar-sign" size={48} color={colors.text.tertiary} />
-              <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
+              <Text style={[styles.emptyText, {color: colors.text.secondary}]}>
                 No earnings yet
               </Text>
-              <Text style={[styles.emptySubtext, { color: colors.text.tertiary }]}>
+              <Text
+                style={[styles.emptySubtext, {color: colors.text.tertiary}]}>
                 Start watching ads and creating content to earn money
               </Text>
             </View>

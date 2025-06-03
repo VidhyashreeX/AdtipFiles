@@ -1,8 +1,8 @@
 // src/components/home/PostItem.tsx
 import React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import {View, Text, StyleSheet, Image, TouchableOpacity} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 
 interface PostItemProps {
   id: number;
@@ -43,40 +43,63 @@ const PostItem: React.FC<PostItemProps> = ({
   onUserPress,
   onFollow,
   isLiked = false,
-  userId
+  userId,
 }) => {
-  const { colors } = useTheme();
+  const {colors} = useTheme();
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.white }]}>
+    <View style={[styles.container, {backgroundColor: colors.white}]}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.userInfo} onPress={() => onUserPress(userId)}>
+        <TouchableOpacity
+          style={styles.userInfo}
+          onPress={() => onUserPress(userId)}>
           <View style={styles.profileImageContainer}>
             {profileImage ? (
-              <Image source={{ uri: profileImage }} style={styles.profileImage} />
+              <Image source={{uri: profileImage}} style={styles.profileImage} />
             ) : (
-              <View style={[styles.profileImagePlaceholder, { backgroundColor: colors.gray[200] }]} />
+              <View
+                style={[
+                  styles.profileImagePlaceholder,
+                  {backgroundColor: colors.gray[200]},
+                ]}
+              />
             )}
           </View>
-          <Text style={[styles.username, { color: colors.text.primary }]}>{String(username)}</Text>
+          <Text style={[styles.username, {color: colors.text.primary}]}>
+            {String(username)}
+          </Text>
         </TouchableOpacity>
         <View style={styles.headerActions}>
           <TouchableOpacity onPress={() => onFollow(userId)}>
-            <Text style={[styles.followButton, { color: colors.primary }]}>Follow</Text>
+            <Text style={[styles.followButton, {color: colors.primary}]}>
+              Follow
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity>
-            <Text style={[styles.moreOptions, { color: colors.text.primary }]}>•••</Text>
+            <Text style={[styles.moreOptions, {color: colors.text.primary}]}>
+              •••
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
 
       <TouchableOpacity onPress={() => onPostPress(id)}>
         <View style={styles.postImageContainer}>
-          <Image source={{ uri: postImage }} style={styles.postImage} resizeMode="cover" />          {isPremium ? (
-            <View style={[styles.premiumBadge, { backgroundColor: colors.secondary }]}>
+          <Image
+            source={{uri: postImage}}
+            style={styles.postImage}
+            resizeMode="cover"
+          />{' '}
+          {isPremium ? (
+            <View
+              style={[
+                styles.premiumBadge,
+                {backgroundColor: colors.secondary},
+              ]}>
               <Text style={styles.premiumText}>Premium</Text>
             </View>
-          ) : null}          {media_type === 'video' ? (
+          ) : null}{' '}
+          {media_type === 'video' ? (
             <View style={styles.videoIcon}>
               <Icon name="play" size={28} color={colors.white} />
             </View>
@@ -85,17 +108,29 @@ const PostItem: React.FC<PostItemProps> = ({
       </TouchableOpacity>
 
       <View style={styles.actions}>
-        <View style={styles.primaryActions}>          <TouchableOpacity style={styles.actionButton} onPress={() => onLike(id)}>
-            <Icon 
-              name={isLiked ? "heart" : "heart"} 
-              size={24} 
-              color={isLiked ? colors.error : colors.text.secondary} 
+        <View style={styles.primaryActions}>
+          {' '}
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => onLike(id)}>
+            <Icon
+              name={isLiked ? 'heart' : 'heart'}
+              size={24}
+              color={isLiked ? colors.error : colors.text.secondary}
             />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={() => onComment(id)}>
-            <Icon name="message-circle" size={24} color={colors.text.secondary} />
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => onComment(id)}>
+            <Icon
+              name="message-circle"
+              size={24}
+              color={colors.text.secondary}
+            />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={() => onShare(id)}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => onShare(id)}>
             <Icon name="share-2" size={24} color={colors.text.secondary} />
           </TouchableOpacity>
         </View>
@@ -105,15 +140,28 @@ const PostItem: React.FC<PostItemProps> = ({
       </View>
 
       <View style={styles.content}>
-        <Text style={[styles.likesCount, { color: colors.text.primary }]}>{String(likes)} likes</Text>
-        <View style={styles.captionContainer}>          <Text style={[styles.captionUsername, { color: colors.text.primary }]}>{String(username)}</Text>
-          <Text style={[styles.caption, { color: colors.text.secondary }]}>{String(caption)}</Text>
-        </View>        {comments > 0 ? (
+        <Text style={[styles.likesCount, {color: colors.text.primary}]}>
+          {String(likes)} likes
+        </Text>
+        <View style={styles.captionContainer}>
+          {' '}
+          <Text style={[styles.captionUsername, {color: colors.text.primary}]}>
+            {String(username)}
+          </Text>
+          <Text style={[styles.caption, {color: colors.text.secondary}]}>
+            {String(caption)}
+          </Text>
+        </View>{' '}
+        {comments > 0 ? (
           <TouchableOpacity onPress={() => onComment(id)}>
-            <Text style={[styles.viewComments, { color: colors.text.tertiary }]}>View all {String(comments)} comments</Text>
+            <Text style={[styles.viewComments, {color: colors.text.tertiary}]}>
+              View all {String(comments)} comments
+            </Text>
           </TouchableOpacity>
         ) : null}
-        <Text style={[styles.timestamp, { color: colors.text.tertiary }]}>{String(timeAgo)}</Text>
+        <Text style={[styles.timestamp, {color: colors.text.tertiary}]}>
+          {String(timeAgo)}
+        </Text>
       </View>
     </View>
   );
@@ -166,7 +214,7 @@ const styles = StyleSheet.create({
   moreOptions: {
     fontSize: 16,
     fontWeight: 'bold',
-    transform: [{ rotate: '90deg' }],
+    transform: [{rotate: '90deg'}],
   },
   postImageContainer: {
     width: '100%',

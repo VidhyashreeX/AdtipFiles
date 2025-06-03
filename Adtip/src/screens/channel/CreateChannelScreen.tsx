@@ -1,5 +1,5 @@
 // src/screens/channel/CreateChannelScreen.tsx
-import React, { useState } from 'react';
+import React, {useState} from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,10 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import {useNavigation} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import { launchImageLibrary } from 'react-native-image-picker';
-import { useTheme } from '../../contexts/ThemeContext';
+import {launchImageLibrary} from 'react-native-image-picker';
+import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 
 interface ChannelForm {
@@ -28,7 +28,7 @@ interface ChannelForm {
 
 const CreateChannelScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<ChannelForm>({
     name: '',
@@ -53,7 +53,7 @@ const CreateChannelScreen: React.FC = () => {
   ];
 
   const updateForm = (field: keyof ChannelForm, value: string) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+    setForm(prev => ({...prev, [field]: value}));
   };
 
   const pickImage = (type: 'avatar' | 'banner') => {
@@ -64,7 +64,7 @@ const CreateChannelScreen: React.FC = () => {
       maxWidth: type === 'banner' ? 800 : 300,
     };
 
-    launchImageLibrary(options, (response) => {
+    launchImageLibrary(options, response => {
       if (response.didCancel || response.errorMessage) {
         return;
       }
@@ -72,9 +72,9 @@ const CreateChannelScreen: React.FC = () => {
       if (response.assets && response.assets[0]) {
         const imageUri = response.assets[0].uri;
         if (type === 'avatar') {
-          setForm(prev => ({ ...prev, avatarUri: imageUri }));
+          setForm(prev => ({...prev, avatarUri: imageUri}));
         } else {
-          setForm(prev => ({ ...prev, bannerUri: imageUri }));
+          setForm(prev => ({...prev, bannerUri: imageUri}));
         }
       }
     });
@@ -101,24 +101,22 @@ const CreateChannelScreen: React.FC = () => {
   };
 
   const handleCreateChannel = async () => {
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      return;
+    }
 
     try {
       setLoading(true);
-      
+
       // Mock API call - replace with actual channel creation logic
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      Alert.alert(
-        'Success',
-        'Channel created successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack(),
-          },
-        ]
-      );
+
+      Alert.alert('Success', 'Channel created successfully!', [
+        {
+          text: 'OK',
+          onPress: () => navigation.goBack(),
+        },
+      ]);
     } catch (error) {
       console.error('Error creating channel:', error);
       Alert.alert('Error', 'Failed to create channel. Please try again.');
@@ -127,29 +125,38 @@ const CreateChannelScreen: React.FC = () => {
     }
   };
 
+  // Helper to get dynamic style for create button
+  function getCreateButtonStyle(baseStyle: any, color: string, isLoading: boolean) {
+    return [baseStyle, {backgroundColor: color, opacity: isLoading ? 0.7 : 1}];
+  }
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
       <Header title="Create Channel" showBackButton />
-      
+
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Banner Upload */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+          <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
             Channel Banner
           </Text>
           <TouchableOpacity
-            style={[styles.bannerUpload, { borderColor: colors.border.light }]}
-            onPress={() => pickImage('banner')}
-          >
+            style={[styles.bannerUpload, {borderColor: colors.border}]}
+            onPress={() => pickImage('banner')}>
             {form.bannerUri ? (
-              <Image source={{ uri: form.bannerUri }} style={styles.bannerPreview} />
+              <Image
+                source={{uri: form.bannerUri}}
+                style={styles.bannerPreview}
+              />
             ) : (
               <View style={styles.uploadPlaceholder}>
                 <Icon name="camera" size={32} color={colors.text.secondary} />
-                <Text style={[styles.uploadText, { color: colors.text.secondary }]}>
+                <Text
+                  style={[styles.uploadText, {color: colors.text.secondary}]}>
                   Upload Banner
                 </Text>
-                <Text style={[styles.uploadSubtext, { color: colors.text.tertiary }]}>
+                <Text
+                  style={[styles.uploadSubtext, {color: colors.text.tertiary}]}>
                   Recommended: 800x400px
                 </Text>
               </View>
@@ -159,29 +166,31 @@ const CreateChannelScreen: React.FC = () => {
 
         {/* Avatar Upload */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+          <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
             Channel Avatar
           </Text>
           <TouchableOpacity
-            style={[styles.avatarUpload, { borderColor: colors.border.light }]}
-            onPress={() => pickImage('avatar')}
-          >
+            style={[styles.avatarUpload, {borderColor: colors.border}]}
+            onPress={() => pickImage('avatar')}>
             {form.avatarUri ? (
-              <Image source={{ uri: form.avatarUri }} style={styles.avatarPreview} />
+              <Image
+                source={{uri: form.avatarUri}}
+                style={styles.avatarPreview}
+              />
             ) : (
               <View style={styles.avatarPlaceholder}>
                 <Icon name="user" size={32} color={colors.text.secondary} />
               </View>
             )}
           </TouchableOpacity>
-          <Text style={[styles.helpText, { color: colors.text.tertiary }]}>
+          <Text style={[styles.helpText, {color: colors.text.tertiary}]}>
             Recommended: 300x300px
           </Text>
         </View>
 
         {/* Channel Name */}
         <View style={styles.section}>
-          <Text style={[styles.label, { color: colors.text.primary }]}>
+          <Text style={[styles.label, {color: colors.text.primary}]}>
             Channel Name *
           </Text>
           <TextInput
@@ -189,52 +198,61 @@ const CreateChannelScreen: React.FC = () => {
               styles.input,
               {
                 backgroundColor: colors.surface,
-                borderColor: colors.border.light,
+                borderColor: colors.border,
                 color: colors.text.primary,
-              }
+              },
             ]}
             placeholder="Enter channel name"
             placeholderTextColor={colors.text.tertiary}
             value={form.name}
-            onChangeText={(text) => updateForm('name', text)}
+            onChangeText={text => updateForm('name', text)}
             maxLength={50}
           />
-          <Text style={[styles.charCount, { color: colors.text.tertiary }]}>
+          <Text style={[styles.charCount, {color: colors.text.tertiary}]}>
             {form.name.length}/50
           </Text>
         </View>
 
         {/* Username */}
         <View style={styles.section}>
-          <Text style={[styles.label, { color: colors.text.primary }]}>
+          <Text style={[styles.label, {color: colors.text.primary}]}>
             Username *
           </Text>
-          <View style={[
-            styles.usernameContainer,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border.light,
-            }
-          ]}>
-            <Text style={[styles.usernamePrefix, { color: colors.text.secondary }]}>@</Text>
+          <View
+            style={[
+              styles.usernameContainer,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}>
+            <Text
+              style={[styles.usernamePrefix, {color: colors.text.secondary}]}>
+              @
+            </Text>
             <TextInput
-              style={[styles.usernameInput, { color: colors.text.primary }]}
+              style={[styles.usernameInput, {color: colors.text.primary}]}
               placeholder="username"
               placeholderTextColor={colors.text.tertiary}
               value={form.username}
-              onChangeText={(text) => updateForm('username', text.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+              onChangeText={text =>
+                updateForm(
+                  'username',
+                  text.toLowerCase().replace(/[^a-z0-9_]/g, ''),
+                )
+              }
               maxLength={30}
               autoCapitalize="none"
             />
           </View>
-          <Text style={[styles.helpText, { color: colors.text.tertiary }]}>
+          <Text style={[styles.helpText, {color: colors.text.tertiary}]}>
             Only lowercase letters, numbers, and underscores allowed
           </Text>
         </View>
 
         {/* Description */}
         <View style={styles.section}>
-          <Text style={[styles.label, { color: colors.text.primary }]}>
+          <Text style={[styles.label, {color: colors.text.primary}]}>
             Description *
           </Text>
           <TextInput
@@ -242,49 +260,56 @@ const CreateChannelScreen: React.FC = () => {
               styles.textArea,
               {
                 backgroundColor: colors.surface,
-                borderColor: colors.border.light,
+                borderColor: colors.border,
                 color: colors.text.primary,
-              }
+              },
             ]}
             placeholder="Describe your channel..."
             placeholderTextColor={colors.text.tertiary}
             value={form.description}
-            onChangeText={(text) => updateForm('description', text)}
+            onChangeText={text => updateForm('description', text)}
             multiline
             numberOfLines={4}
             maxLength={200}
           />
-          <Text style={[styles.charCount, { color: colors.text.tertiary }]}>
+          <Text style={[styles.charCount, {color: colors.text.tertiary}]}>
             {form.description.length}/200
           </Text>
         </View>
 
         {/* Category */}
         <View style={styles.section}>
-          <Text style={[styles.label, { color: colors.text.primary }]}>
+          <Text style={[styles.label, {color: colors.text.primary}]}>
             Category *
           </Text>
           <View style={styles.categoryGrid}>
-            {categories.map((category) => (
+            {categories.map(category => (
               <TouchableOpacity
                 key={category}
                 style={[
                   styles.categoryItem,
                   {
-                    backgroundColor: form.category === category ? colors.primary : colors.surface,
-                    borderColor: form.category === category ? colors.primary : colors.border.light,
-                  }
+                    backgroundColor:
+                      form.category === category
+                        ? colors.primary
+                        : colors.surface,
+                    borderColor:
+                      form.category === category
+                        ? colors.primary
+                        : colors.border,
+                  },
                 ]}
-                onPress={() => updateForm('category', category)}
-              >
+                onPress={() => updateForm('category', category)}>
                 <Text
                   style={[
                     styles.categoryText,
                     {
-                      color: form.category === category ? colors.white : colors.text.primary,
-                    }
-                  ]}
-                >
+                      color:
+                        form.category === category
+                          ? colors.white
+                          : colors.text.primary,
+                    },
+                  ]}>
                   {category}
                 </Text>
               </TouchableOpacity>
@@ -294,20 +319,13 @@ const CreateChannelScreen: React.FC = () => {
 
         {/* Create Button */}
         <TouchableOpacity
-          style={[
-            styles.createButton,
-            {
-              backgroundColor: colors.primary,
-              opacity: loading ? 0.7 : 1,
-            }
-          ]}
+          style={getCreateButtonStyle(styles.createButton, colors.primary, loading)}
           onPress={handleCreateChannel}
-          disabled={loading}
-        >
+          disabled={loading}>
           {loading ? (
             <ActivityIndicator size="small" color={colors.white} />
           ) : (
-            <Text style={[styles.createButtonText, { color: colors.white }]}>
+            <Text style={[styles.createButtonText, {color: colors.white}]}>
               Create Channel
             </Text>
           )}

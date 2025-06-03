@@ -1,5 +1,5 @@
 // src/screens/tipshop/TipShopScreen.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -9,20 +9,17 @@ import {
   Image,
   FlatList,
   ActivityIndicator,
-  RefreshControl
+  RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import {useNavigation, useFocusEffect} from '@react-navigation/native';
 
 // Components
 import Header from '../../components/common/Header';
 import ProductCard from '../../components/tipshop/ProductCard';
 
 // Context
-import { useTheme } from '../../contexts/ThemeContext';
-
-// Constants & Types
-import { API_BASE_URL } from '../../constants/api';
+import {useTheme} from '../../contexts/ThemeContext';
 
 interface Category {
   id: string;
@@ -49,7 +46,7 @@ interface Product {
 
 const TipShopScreen: React.FC = () => {
   // Hooks
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const navigation = useNavigation();
 
   // State
@@ -63,12 +60,12 @@ const TipShopScreen: React.FC = () => {
 
   // Mock categories
   const categories: Category[] = [
-    { id: 'fashion', name: 'Fashion', icon: 'shopping-bag' },
-    { id: 'electronics', name: 'Electronics', icon: 'smartphone' },
-    { id: 'beauty', name: 'Beauty', icon: 'star' },
-    { id: 'home', name: 'Home', icon: 'home' },
-    { id: 'sports', name: 'Sports', icon: 'activity' },
-    { id: 'toys', name: 'Toys', icon: 'gift' },
+    {id: 'fashion', name: 'Fashion', icon: 'shopping-bag'},
+    {id: 'electronics', name: 'Electronics', icon: 'smartphone'},
+    {id: 'beauty', name: 'Beauty', icon: 'star'},
+    {id: 'home', name: 'Home', icon: 'home'},
+    {id: 'sports', name: 'Sports', icon: 'activity'},
+    {id: 'toys', name: 'Toys', icon: 'gift'},
   ];
 
   // Mock fetch products
@@ -81,26 +78,31 @@ const TipShopScreen: React.FC = () => {
       'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f',
       'https://images.unsplash.com/photo-1572635196237-14b3f281503f',
       'https://images.unsplash.com/photo-1552346154-21d32810aba3',
-      'https://images.unsplash.com/photo-1560343090-f0409e92791a'
+      'https://images.unsplash.com/photo-1560343090-f0409e92791a',
     ];
 
     // Generate mock products
     const generateProducts = (count: number): Product[] => {
-      return Array.from({ length: count }, (_, i) => ({
+      return Array.from({length: count}, (_, i) => ({
         id: i + 1,
         name: `Product ${i + 1}`,
-        description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed euismod, diam quis aliquam ultricies.',
+        description:
+          'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed euismod, diam quis aliquam ultricies.',
         price: Math.floor(Math.random() * 300) + 20,
-        discounted_price: Math.random() > 0.5 ? Math.floor(Math.random() * 200) + 10 : null,
+        discounted_price:
+          Math.random() > 0.5 ? Math.floor(Math.random() * 200) + 10 : null,
         images: [sampleImages[i % sampleImages.length]],
         rating: 3 + Math.random() * 2,
         reviews_count: Math.floor(Math.random() * 500),
         seller: {
           id: i + 1,
           name: `Seller ${i + 1}`,
-          image: Math.random() > 0.3 ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde' : null
+          image:
+            Math.random() > 0.3
+              ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde'
+              : null,
         },
-        is_featured: Math.random() > 0.7
+        is_featured: Math.random() > 0.7,
       }));
     };
 
@@ -108,11 +110,11 @@ const TipShopScreen: React.FC = () => {
     setTimeout(() => {
       try {
         const mockProducts = generateProducts(20);
-        
+
         setFeaturedProducts(mockProducts.filter(p => p.is_featured));
         setNewArrivals(mockProducts.slice(0, 5));
         setPopularProducts(mockProducts.slice(5, 10));
-        
+
         setError(null);
       } catch (err) {
         console.error('Error fetching products:', err);
@@ -137,24 +139,27 @@ const TipShopScreen: React.FC = () => {
 
   const handleProductPress = (productId: number) => {
     // Navigate to product detail
-    navigation.navigate('ProductDetail' as never, { productId } as never);
+    // @ts-ignore
+    navigation.navigate('ProductDetail', {productId});
   };
 
   const handleSeeAllPress = (section: string) => {
     // Navigate to product listing with filter
-    navigation.navigate('ProductListing' as never, { section } as never);
+    // @ts-ignore
+    navigation.navigate('ProductListing', {section});
   };
 
   const handleSearchPress = () => {
     // Navigate to search screen
-    navigation.navigate('Search' as never, { source: 'shop' } as never);
+    // @ts-ignore
+    navigation.navigate('Search', {source: 'shop'});
   };
 
   // Effects
   useFocusEffect(
     useCallback(() => {
       fetchProducts();
-    }, [])
+    }, []),
   );
 
   useEffect(() => {
@@ -162,51 +167,47 @@ const TipShopScreen: React.FC = () => {
   }, []);
 
   // Render functions
-  const renderCategoryItem = ({ item }: { item: Category }) => (
+  const renderCategoryItem = ({item}: {item: Category}) => (
     <TouchableOpacity
-      style={[
-        styles.categoryItem,
-        activeCategory === item.id && [styles.activeCategoryItem, { backgroundColor: colors.primary }]
-      ]}
-      onPress={() => handleCategoryPress(item.id)}
-    >
-      <View style={[
-        styles.categoryIcon,
-        { backgroundColor: activeCategory === item.id ? colors.white : colors.primary + '15' }
-      ]}>
+      style={getCategoryItemStyle(item.id)}
+      onPress={() => handleCategoryPress(item.id)}>
+      <View style={getCategoryIconStyle(item.id)}>
         <Icon
           name={item.icon}
           size={20}
           color={activeCategory === item.id ? colors.primary : colors.primary}
         />
       </View>
-      <Text style={[
-        styles.categoryName,
-        { color: activeCategory === item.id ? colors.white : colors.text.primary }
-      ]}>
-        {item.name}
-      </Text>
+      <Text style={getCategoryNameStyle(item.id)}>{item.name}</Text>
     </TouchableOpacity>
   );
 
   const renderSectionHeader = (title: string, onSeeAllPress: () => void) => (
     <View style={styles.sectionHeader}>
-      <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{title}</Text>
+      <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
+        {title}
+      </Text>
       <TouchableOpacity onPress={onSeeAllPress}>
-        <Text style={[styles.seeAllText, { color: colors.primary }]}>See All</Text>
+        <Text style={[styles.seeAllText, {color: colors.primary}]}>
+          See All
+        </Text>
       </TouchableOpacity>
     </View>
   );
 
-  const renderHorizontalProducts = (products: Product[], title: string, section: string) => (
+  const renderHorizontalProducts = (
+    products: Product[],
+    title: string,
+    section: string,
+  ) => (
     <View style={styles.productsSection}>
       {renderSectionHeader(title, () => handleSeeAllPress(section))}
       <FlatList
         data={products}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={item => item.id.toString()}
         horizontal
         showsHorizontalScrollIndicator={false}
-        renderItem={({ item }) => (
+        renderItem={({item}) => (
           <ProductCard
             product={item}
             onPress={() => handleProductPress(item.id)}
@@ -215,7 +216,9 @@ const TipShopScreen: React.FC = () => {
         contentContainerStyle={styles.horizontalListContent}
         ListEmptyComponent={
           <View style={styles.emptyListContainer}>
-            <Text style={{ color: colors.text.secondary }}>No products available</Text>
+            <Text style={{color: colors.text.secondary}}>
+              No products available
+            </Text>
           </View>
         }
       />
@@ -223,28 +226,32 @@ const TipShopScreen: React.FC = () => {
   );
 
   const renderFeaturedProducts = () => {
-    if (featuredProducts.length === 0) return null;
-    
+    if (featuredProducts.length === 0) {
+      return null;
+    }
+
     return (
       <View style={styles.featuredSection}>
         <ScrollView
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
-          style={styles.featuredScrollView}
-        >
-          {featuredProducts.map((product) => (
+          style={styles.featuredScrollView}>
+          {featuredProducts.map(product => (
             <TouchableOpacity
               key={`featured-${product.id}`}
               style={styles.featuredItem}
-              onPress={() => handleProductPress(product.id)}
-            >
+              onPress={() => handleProductPress(product.id)}>
               <Image
-                source={{ uri: product.images[0] }}
+                source={{uri: product.images[0]}}
                 style={styles.featuredImage}
                 resizeMode="cover"
               />
-              <View style={[styles.featuredOverlay, { backgroundColor: 'rgba(0,0,0,0.4)' }]}>
+              <View
+                style={[
+                  styles.featuredOverlay,
+                  styles.featuredOverlayBg, // new style for backgroundColor
+                ]}>
                 <View style={styles.featuredContent}>
                   <Text style={styles.featuredTitle}>{product.name}</Text>
                   <View style={styles.featuredPriceContainer}>
@@ -252,13 +259,17 @@ const TipShopScreen: React.FC = () => {
                       ${product.discounted_price || product.price}
                     </Text>
                     {product.discounted_price && (
-                      <Text style={styles.featuredOriginalPrice}>${product.price}</Text>
+                      <Text style={styles.featuredOriginalPrice}>
+                        ${product.price}
+                      </Text>
                     )}
                   </View>
                   <TouchableOpacity
-                    style={[styles.featuredButton, { backgroundColor: colors.primary }]}
-                    onPress={() => handleProductPress(product.id)}
-                  >
+                    style={[
+                      styles.featuredButton,
+                      {backgroundColor: colors.primary},
+                    ]}
+                    onPress={() => handleProductPress(product.id)}>
                     <Text style={styles.featuredButtonText}>Shop Now</Text>
                   </TouchableOpacity>
                 </View>
@@ -270,21 +281,39 @@ const TipShopScreen: React.FC = () => {
     );
   };
 
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header
-        title="TipShop"
-        showBackButton={false}
-        showLogo={false}
-      />
+  // For category item dynamic styles
+  const getCategoryItemStyle = (itemId: string) => [
+    styles.categoryItem,
+    activeCategory === itemId && [
+      styles.activeCategoryItem,
+      {backgroundColor: colors.primary},
+    ],
+  ];
+  const getCategoryIconStyle = (itemId: string) => [
+    styles.categoryIcon,
+    {
+      backgroundColor:
+        activeCategory === itemId ? colors.white : colors.primary + '15',
+    },
+  ];
+  const getCategoryNameStyle = (itemId: string) => [
+    styles.categoryName,
+    {
+      color:
+        activeCategory === itemId ? colors.white : colors.text.primary,
+    },
+  ];
 
-      <View style={[styles.searchBar, { backgroundColor: colors.gray[100] }]}>
-        <TouchableOpacity 
-          style={styles.searchBarInner} 
-          onPress={handleSearchPress}
-        >
+  return (
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
+      <Header title="TipShop" showBackButton={false} showLogo={false} />
+
+      <View style={[styles.searchBar, {backgroundColor: colors.gray[100]}]}>
+        <TouchableOpacity
+          style={styles.searchBarInner}
+          onPress={handleSearchPress}>
           <Icon name="search" size={18} color={colors.text.tertiary} />
-          <Text style={[styles.searchText, { color: colors.text.tertiary }]}>
+          <Text style={[styles.searchText, {color: colors.text.tertiary}]}>
             Search products...
           </Text>
         </TouchableOpacity>
@@ -296,9 +325,11 @@ const TipShopScreen: React.FC = () => {
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: colors.text.primary }]}>{error}</Text>
+          <Text style={[styles.errorText, {color: colors.text.primary}]}>
+            {error}
+          </Text>
           <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
-            <Text style={{ color: colors.primary }}>Retry</Text>
+            <Text style={{color: colors.primary}}>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -310,13 +341,12 @@ const TipShopScreen: React.FC = () => {
               colors={[colors.primary]}
               tintColor={colors.primary}
             />
-          }
-        >
+          }>
           <View style={styles.categoriesContainer}>
             <FlatList
               data={categories}
               renderItem={renderCategoryItem}
-              keyExtractor={(item) => item.id}
+              keyExtractor={item => item.id}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.categoriesList}
@@ -324,10 +354,18 @@ const TipShopScreen: React.FC = () => {
           </View>
 
           {renderFeaturedProducts()}
-          
-          {renderHorizontalProducts(newArrivals, 'New Arrivals', 'new-arrivals')}
-          
-          {renderHorizontalProducts(popularProducts, 'Popular Products', 'popular')}
+
+          {renderHorizontalProducts(
+            newArrivals,
+            'New Arrivals',
+            'new-arrivals',
+          )}
+
+          {renderHorizontalProducts(
+            popularProducts,
+            'Popular Products',
+            'popular',
+          )}
         </ScrollView>
       )}
     </View>
@@ -372,7 +410,7 @@ const styles = StyleSheet.create({
   },
   activeCategoryItem: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 3,
@@ -410,6 +448,9 @@ const styles = StyleSheet.create({
   featuredOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',
+  },
+  featuredOverlayBg: {
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   featuredContent: {
     padding: 16,

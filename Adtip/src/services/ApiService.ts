@@ -1,6 +1,6 @@
 // src/services/ApiService.ts
-import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
-import { API_BASE_URL } from '../constants/api';
+import axios, {AxiosRequestConfig, AxiosResponse} from 'axios';
+import {API_BASE_URL} from '../constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ApiEndpoints from '../constants/apiEndpoints';
 import {
@@ -18,8 +18,6 @@ import {
   UserListRequest,
   UserListResponse,
   ReferralDetailsResponse,
-  Post,
-  User
 } from '../types/api';
 
 // Create axios instance with default configuration
@@ -28,12 +26,13 @@ const apiClient = axios.create({
   timeout: 30000, // 30 seconds timeout
   headers: {
     'Content-Type': 'application/json',
-    'Accept': 'application/json',
+    Accept: 'application/json',
   },
 });
 
 // Add request interceptor to add auth token to every request
-apiClient.interceptors.request.use(  async (config) => {
+apiClient.interceptors.request.use(
+  async config => {
     try {
       // Check both token storage keys - the app uses 'accessToken', but our service was checking '@auth_token'
       let token = await AsyncStorage.getItem('accessToken');
@@ -51,15 +50,15 @@ apiClient.interceptors.request.use(  async (config) => {
     }
     return config;
   },
-  (error) => {
+  error => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // Add response interceptor for error handling
 apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  response => response,
+  error => {
     // Handle common errors here
     if (error.response) {
       // Server responded with an error
@@ -67,7 +66,7 @@ apiClient.interceptors.response.use(
         // Unauthorized - token expired or invalid
         // Could handle logout or token refresh here
       }
-      
+
       if (error.response.status === 429) {
         // Rate limited
         console.warn('API rate limit exceeded. Please try again later.');
@@ -76,9 +75,9 @@ apiClient.interceptors.response.use(
       // Request made but no response received
       console.error('Network error. Please check your connection.');
     }
-    
+
     return Promise.reject(error);
-  }
+  },
 );
 
 /**
@@ -92,14 +91,14 @@ export default class ApiService {
    * @param config - Additional axios config
    */
   static async get<T = any>(
-    url: string, 
-    params?: any, 
-    config?: AxiosRequestConfig
+    url: string,
+    params?: any,
+    config?: AxiosRequestConfig,
   ): Promise<T> {
     try {
-      const response: AxiosResponse<T> = await apiClient.get(url, { 
-        params, 
-        ...config 
+      const response: AxiosResponse<T> = await apiClient.get(url, {
+        params,
+        ...config,
       });
       return response.data;
     } catch (error) {
@@ -114,12 +113,16 @@ export default class ApiService {
    * @param config - Additional axios config
    */
   static async post<T = any>(
-    url: string, 
-    data?: any, 
-    config?: AxiosRequestConfig
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
   ): Promise<T> {
     try {
-      const response: AxiosResponse<T> = await apiClient.post(url, data, config);
+      const response: AxiosResponse<T> = await apiClient.post(
+        url,
+        data,
+        config,
+      );
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -133,9 +136,9 @@ export default class ApiService {
    * @param config - Additional axios config
    */
   static async put<T = any>(
-    url: string, 
-    data?: any, 
-    config?: AxiosRequestConfig
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
   ): Promise<T> {
     try {
       const response: AxiosResponse<T> = await apiClient.put(url, data, config);
@@ -152,12 +155,16 @@ export default class ApiService {
    * @param config - Additional axios config
    */
   static async patch<T = any>(
-    url: string, 
-    data?: any, 
-    config?: AxiosRequestConfig
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
   ): Promise<T> {
     try {
-      const response: AxiosResponse<T> = await apiClient.patch(url, data, config);
+      const response: AxiosResponse<T> = await apiClient.patch(
+        url,
+        data,
+        config,
+      );
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -170,8 +177,8 @@ export default class ApiService {
    * @param config - Additional axios config
    */
   static async delete<T = any>(
-    url: string, 
-    config?: AxiosRequestConfig
+    url: string,
+    config?: AxiosRequestConfig,
   ): Promise<T> {
     try {
       const response: AxiosResponse<T> = await apiClient.delete(url, config);
@@ -192,17 +199,17 @@ export default class ApiService {
     url: string,
     formData: FormData,
     onProgress?: (percentage: number) => void,
-    config?: AxiosRequestConfig
+    config?: AxiosRequestConfig,
   ): Promise<T> {
     try {
       const response: AxiosResponse<T> = await apiClient.post(url, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-        onUploadProgress: (progressEvent) => {
+        onUploadProgress: progressEvent => {
           if (onProgress && progressEvent.total) {
             const percentage = Math.round(
-              (progressEvent.loaded * 100) / progressEvent.total
+              (progressEvent.loaded * 100) / progressEvent.total,
             );
             onProgress(percentage);
           }
@@ -233,24 +240,30 @@ export default class ApiService {
    * Send OTP for login
    * @param data - Request data containing mobile number and user type
    */
-  static async sendLoginOtp(data: OtpLoginRequest): Promise<ApiResponse<OtpLoginResponse[]>> {
-    return this.post<ApiResponse<OtpLoginResponse[]>>(ApiEndpoints.AUTH_ENDPOINTS.OTP_LOGIN, data);
+  static async sendLoginOtp(
+    data: OtpLoginRequest,
+  ): Promise<ApiResponse<OtpLoginResponse[]>> {
+    return this.post<ApiResponse<OtpLoginResponse[]>>(
+      ApiEndpoints.AUTH_ENDPOINTS.OTP_LOGIN,
+      data,
+    );
   }
 
   /**
    * Verify OTP
    * @param data - Request data containing mobile number, OTP, and ID
-   */  static async verifyOtp(data: OtpVerifyRequest): Promise<ApiResponse<OtpVerifyResponse[]> & { accessToken: string }> {
-    const response = await this.post<ApiResponse<OtpVerifyResponse[]> & { accessToken: string }>(
-      ApiEndpoints.AUTH_ENDPOINTS.OTP_VERIFY, 
-      data
-    );
-    
+   */ static async verifyOtp(
+    data: OtpVerifyRequest,
+  ): Promise<ApiResponse<OtpVerifyResponse[]> & {accessToken: string}> {
+    const response = await this.post<
+      ApiResponse<OtpVerifyResponse[]> & {accessToken: string}
+    >(ApiEndpoints.AUTH_ENDPOINTS.OTP_VERIFY, data);
+
     // Store the token for future requests
     if (response.accessToken) {
       await AsyncStorage.setItem('accessToken', response.accessToken);
     }
-    
+
     return response;
   }
 
@@ -259,7 +272,7 @@ export default class ApiService {
    * @param userId - User ID
    */
   static async logout(userId: string): Promise<any> {
-    const data: LogoutRequest = { id: userId };
+    const data: LogoutRequest = {id: userId};
     return this.post(ApiEndpoints.AUTH_ENDPOINTS.LOGOUT, data);
   }
 
@@ -267,8 +280,13 @@ export default class ApiService {
    * Save or update user details
    * @param data - User details data
    */
-  static async saveUserDetails(data: UserDetailsRequest): Promise<ApiResponse<OtpVerifyResponse[]>> {
-    return this.post<ApiResponse<OtpVerifyResponse[]>>(ApiEndpoints.AUTH_ENDPOINTS.SAVE_USER_DETAILS, data);
+  static async saveUserDetails(
+    data: UserDetailsRequest,
+  ): Promise<ApiResponse<OtpVerifyResponse[]>> {
+    return this.post<ApiResponse<OtpVerifyResponse[]>>(
+      ApiEndpoints.AUTH_ENDPOINTS.SAVE_USER_DETAILS,
+      data,
+    );
   }
 
   /**
@@ -278,34 +296,40 @@ export default class ApiService {
     return this.get(ApiEndpoints.AUTH_ENDPOINTS.PING);
   }
   // ===== HOME PAGE SERVICES =====
-  
+
   /**
    * Get wallet balance
    * @param userId - User ID
    */
-  static async getWalletBalance(userId: string | number): Promise<WalletBalanceResponse> {
+  static async getWalletBalance(
+    userId: string | number,
+  ): Promise<WalletBalanceResponse> {
     try {
       // Add logging to debug the API call
       console.log(`Fetching wallet balance for user ID: ${userId}`);
-      console.log(`Using endpoint: ${ApiEndpoints.HOME_ENDPOINTS.GET_WALLET_BALANCE}/${userId}`);
-        
+      console.log(
+        `Using endpoint: ${ApiEndpoints.HOME_ENDPOINTS.GET_WALLET_BALANCE}/${userId}`,
+      );
+
       // Make sure userId is properly formatted
       const formattedUserId = userId.toString().trim();
-      
+
       // Get the token to check if it's available
       let token = await AsyncStorage.getItem('accessToken');
       if (!token) {
         token = await AsyncStorage.getItem('@auth_token'); // Fallback to old key format
       }
       console.log('Auth token available:', !!token);
-      
+
       if (!token) {
         console.warn('No authentication token found. API request might fail.');
       }
-      
+
       // Make the API call
       console.log('Making API request to get wallet balance...');
-      const response = await this.get<WalletBalanceResponse>(`${ApiEndpoints.HOME_ENDPOINTS.GET_WALLET_BALANCE}/${formattedUserId}`);
+      const response = await this.get<WalletBalanceResponse>(
+        `${ApiEndpoints.HOME_ENDPOINTS.GET_WALLET_BALANCE}/${formattedUserId}`,
+      );
       console.log('Wallet balance API response:', JSON.stringify(response));
       return response;
     } catch (error) {
@@ -314,7 +338,7 @@ export default class ApiService {
       return {
         status: 0,
         message: 'Failed to fetch wallet balance',
-        availableBalance: '0.00'
+        availableBalance: '0.00',
       };
     }
   }
@@ -324,15 +348,22 @@ export default class ApiService {
    * @param data - Request data containing category, page, limit, and logged-in user ID
    */
   static async listPosts(data: PostListRequest): Promise<PostListResponse> {
-    return this.post<PostListResponse>(ApiEndpoints.HOME_ENDPOINTS.LIST_POSTS, data);
+    return this.post<PostListResponse>(
+      ApiEndpoints.HOME_ENDPOINTS.LIST_POSTS,
+      data,
+    );
   }
 
   /**
    * Check if user has premium subscription
    * @param userId - User ID
    */
-  static async checkPremium(userId: string | number): Promise<PremiumCheckResponse> {
-    return this.get<PremiumCheckResponse>(`${ApiEndpoints.HOME_ENDPOINTS.CHECK_PREMIUM}/${userId}`);
+  static async checkPremium(
+    userId: string | number,
+  ): Promise<PremiumCheckResponse> {
+    return this.get<PremiumCheckResponse>(
+      `${ApiEndpoints.HOME_ENDPOINTS.CHECK_PREMIUM}/${userId}`,
+    );
   }
 
   /**
@@ -348,7 +379,9 @@ export default class ApiService {
    * @param userId - User ID
    */
   static async getChannelByUserId(userId: string | number): Promise<any> {
-    return this.get(`${ApiEndpoints.HOME_ENDPOINTS.GET_CHANNEL_BY_USER_ID}/${userId}`);
+    return this.get(
+      `${ApiEndpoints.HOME_ENDPOINTS.GET_CHANNEL_BY_USER_ID}/${userId}`,
+    );
   }
 
   // ===== TIP-TUBE SERVICES =====
@@ -359,8 +392,14 @@ export default class ApiService {
    * @param categoryId - Category ID (0 for all categories)
    * @param offset - Page offset
    */
-  static async getVideos(userId: string | number, categoryId: number, offset: number): Promise<any> {
-    return this.get(`${ApiEndpoints.TIP_TUBE_ENDPOINTS.GET_VIDEOS}/${userId}/${categoryId}/${offset}`);
+  static async getVideos(
+    userId: string | number,
+    categoryId: number,
+    offset: number,
+  ): Promise<any> {
+    return this.get(
+      `${ApiEndpoints.TIP_TUBE_ENDPOINTS.GET_VIDEOS}/${userId}/${categoryId}/${offset}`,
+    );
   }
 
   /**
@@ -368,7 +407,9 @@ export default class ApiService {
    * @param channelId - Channel ID
    */
   static async getChannelAnalytics(channelId: string | number): Promise<any> {
-    return this.get(`${ApiEndpoints.TIP_TUBE_ENDPOINTS.GET_ANALYTICS}/${channelId}`);
+    return this.get(
+      `${ApiEndpoints.TIP_TUBE_ENDPOINTS.GET_ANALYTICS}/${channelId}`,
+    );
   }
 
   // ===== TIP-SHORTS SERVICES =====
@@ -378,7 +419,9 @@ export default class ApiService {
    * @param userId - User ID
    */
   static async getShorts(userId: string | number): Promise<any> {
-    return this.get(`${ApiEndpoints.TIP_SHORTS_ENDPOINTS.GET_SHORTS}/${userId}`);
+    return this.get(
+      `${ApiEndpoints.TIP_SHORTS_ENDPOINTS.GET_SHORTS}/${userId}`,
+    );
   }
 
   // ===== TIP-CALLS SERVICES =====
@@ -388,7 +431,10 @@ export default class ApiService {
    * @param data - Request data for filtering users
    */
   static async getUsers(data: UserListRequest): Promise<UserListResponse> {
-    return this.post<UserListResponse>(ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_USERS, data);
+    return this.post<UserListResponse>(
+      ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_USERS,
+      data,
+    );
   }
 
   /**
@@ -396,7 +442,10 @@ export default class ApiService {
    * @param data - Request data for filtering all users
    */
   static async getAllUsers(data: UserListRequest): Promise<UserListResponse> {
-    return this.post<UserListResponse>(ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_ALL_USERS, data);
+    return this.post<UserListResponse>(
+      ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_ALL_USERS,
+      data,
+    );
   }
 
   // ===== PROFILE SERVICES =====
@@ -406,7 +455,9 @@ export default class ApiService {
    * @param userId - User ID
    */
   static async getUserPremiumPlans(userId: string | number): Promise<any> {
-    return this.get(`${ApiEndpoints.PROFILE_ENDPOINTS.USER_PREMIUM_PLANS}/${userId}`);
+    return this.get(
+      `${ApiEndpoints.PROFILE_ENDPOINTS.USER_PREMIUM_PLANS}/${userId}`,
+    );
   }
 
   /**
@@ -414,7 +465,9 @@ export default class ApiService {
    * @param userId - User ID
    */
   static async getContentPremiumPlans(userId: string | number): Promise<any> {
-    return this.get(`${ApiEndpoints.PROFILE_ENDPOINTS.CONTENT_PREMIUM_PLANS}/${userId}`);
+    return this.get(
+      `${ApiEndpoints.PROFILE_ENDPOINTS.CONTENT_PREMIUM_PLANS}/${userId}`,
+    );
   }
 
   /**
@@ -422,7 +475,9 @@ export default class ApiService {
    * @param userId - User ID
    */
   static async getUserPosts(userId: string | number): Promise<any> {
-    return this.get(`${ApiEndpoints.PROFILE_ENDPOINTS.USER_POSTS}/${userId}/posts`);
+    return this.get(
+      `${ApiEndpoints.PROFILE_ENDPOINTS.USER_POSTS}/${userId}/posts`,
+    );
   }
 
   /**
@@ -430,7 +485,9 @@ export default class ApiService {
    * @param userId - User ID
    */
   static async getUserFollowings(userId: string | number): Promise<any> {
-    return this.get(`${ApiEndpoints.PROFILE_ENDPOINTS.GET_FOLLOWING}/${userId}`);
+    return this.get(
+      `${ApiEndpoints.PROFILE_ENDPOINTS.GET_FOLLOWING}/${userId}`,
+    );
   }
 
   /**
@@ -438,7 +495,9 @@ export default class ApiService {
    * @param userId - User ID
    */
   static async getUserFollowers(userId: string | number): Promise<any> {
-    return this.get(`${ApiEndpoints.PROFILE_ENDPOINTS.GET_FOLLOWERS}/${userId}`);
+    return this.get(
+      `${ApiEndpoints.PROFILE_ENDPOINTS.GET_FOLLOWERS}/${userId}`,
+    );
   }
 
   // ===== REFERRAL SERVICES =====
@@ -447,7 +506,11 @@ export default class ApiService {
    * Get referral details
    * @param userId - User ID
    */
-  static async getReferralDetails(userId: string | number): Promise<ReferralDetailsResponse> {
-    return this.get<ReferralDetailsResponse>(`${ApiEndpoints.REFERRAL_ENDPOINTS.GET_REFERRAL_DETAILS}/${userId}`);
+  static async getReferralDetails(
+    userId: string | number,
+  ): Promise<ReferralDetailsResponse> {
+    return this.get<ReferralDetailsResponse>(
+      `${ApiEndpoints.REFERRAL_ENDPOINTS.GET_REFERRAL_DETAILS}/${userId}`,
+    );
   }
 }

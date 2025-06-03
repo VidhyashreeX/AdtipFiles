@@ -1,16 +1,15 @@
 // src/screens/packages/ChoosePackagesScreen.tsx
-import React, { useState } from 'react';
+import React, {useState} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import {useNavigation, useRoute} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 
 interface BillingPeriod {
@@ -24,7 +23,7 @@ interface BillingPeriod {
 const ChoosePackagesScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const [selectedBilling, setSelectedBilling] = useState<string>('monthly');
 
   const packageData = (route.params as any)?.package;
@@ -63,22 +62,34 @@ const ChoosePackagesScreen: React.FC = () => {
   };
 
   const handleContinue = () => {
-    const selectedBillingPeriod = billingPeriods.find(b => b.id === selectedBilling);
-    const totalPrice = calculatePrice(packageData.price, selectedBillingPeriod!);
-    
-    navigation.navigate('Checkout' as never, {
+    const selectedBillingPeriod = billingPeriods.find(
+      b => b.id === selectedBilling,
+    );
+    const totalPrice = calculatePrice(
+      packageData.price,
+      selectedBillingPeriod!,
+    );
+
+    // @ts-ignore
+    navigation.navigate('Checkout', {
       package: packageData,
       billing: selectedBillingPeriod,
       totalPrice,
-    } as never);
+    });
   };
+
+  const getBillingOptionStyle = (isSelected: boolean) => ({
+    backgroundColor: colors.surface,
+    borderColor: isSelected ? colors.primary : colors.border,
+    borderWidth: isSelected ? 2 : 1, // always a number
+  });
 
   if (!packageData) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, {backgroundColor: colors.background}]}>
         <Header title="Package Options" showBackButton />
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: colors.text.secondary }]}>
+          <Text style={[styles.errorText, {color: colors.text.secondary}]}>
             Package information not found
           </Text>
         </View>
@@ -87,33 +98,39 @@ const ChoosePackagesScreen: React.FC = () => {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
       <Header title="Package Options" showBackButton />
-      
+
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Package Summary */}
-        <View style={[styles.packageSummary, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.packageName, { color: colors.text.primary }]}>
+        <View
+          style={[styles.packageSummary, {backgroundColor: colors.surface}]}>
+          <Text style={[styles.packageName, {color: colors.text.primary}]}>
             {packageData.name} Plan
           </Text>
-          <Text style={[styles.packageDescription, { color: colors.text.secondary }]}>
+          <Text
+            style={[styles.packageDescription, {color: colors.text.secondary}]}>
             {packageData.description}
           </Text>
         </View>
 
         {/* Billing Options */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+          <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
             Choose Billing Period
           </Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.text.secondary }]}>
+          <Text
+            style={[styles.sectionSubtitle, {color: colors.text.secondary}]}>
             Save more with longer commitments
           </Text>
 
           <View style={styles.billingOptions}>
-            {billingPeriods.map((billing) => {
+            {billingPeriods.map(billing => {
               const totalPrice = calculatePrice(packageData.price, billing);
-              const monthlyPrice = calculateMonthlyPrice(totalPrice, billing.months);
+              const monthlyPrice = calculateMonthlyPrice(
+                totalPrice,
+                billing.months,
+              );
               const isSelected = selectedBilling === billing.id;
 
               return (
@@ -121,29 +138,41 @@ const ChoosePackagesScreen: React.FC = () => {
                   key={billing.id}
                   style={[
                     styles.billingOption,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: isSelected ? colors.primary : colors.border.light,
-                      borderWidth: isSelected ? 2 : 1,
-                    }
+                    getBillingOptionStyle(isSelected),
                   ]}
-                  onPress={() => setSelectedBilling(billing.id)}
-                >
+                  onPress={() => setSelectedBilling(billing.id)}>
                   {billing.popular && (
-                    <View style={[styles.popularBadge, { backgroundColor: colors.primary }]}>
-                      <Text style={[styles.popularBadgeText, { color: colors.white }]}>
+                    <View
+                      style={[
+                        styles.popularBadge,
+                        {backgroundColor: colors.primary},
+                      ]}>
+                      <Text
+                        style={[
+                          styles.popularBadgeText,
+                          {color: colors.white},
+                        ]}>
                         Most Popular
                       </Text>
                     </View>
                   )}
 
                   <View style={styles.billingHeader}>
-                    <Text style={[styles.billingLabel, { color: colors.text.primary }]}>
+                    <Text
+                      style={[
+                        styles.billingLabel,
+                        {color: colors.text.primary},
+                      ]}>
                       {billing.label}
                     </Text>
                     {billing.discount && (
-                      <View style={[styles.discountBadge, { backgroundColor: colors.success }]}>
-                        <Text style={[styles.discountText, { color: colors.white }]}>
+                      <View
+                        style={[
+                          styles.discountBadge,
+                          {backgroundColor: colors.success},
+                        ]}>
+                        <Text
+                          style={[styles.discountText, {color: colors.white}]}>
                           Save {billing.discount}%
                         </Text>
                       </View>
@@ -151,21 +180,34 @@ const ChoosePackagesScreen: React.FC = () => {
                   </View>
 
                   <View style={styles.priceInfo}>
-                    <Text style={[styles.totalPrice, { color: colors.text.primary }]}>
+                    <Text
+                      style={[styles.totalPrice, {color: colors.text.primary}]}>
                       ${totalPrice.toFixed(2)}
                     </Text>
-                    <Text style={[styles.periodText, { color: colors.text.secondary }]}>
+                    <Text
+                      style={[
+                        styles.periodText,
+                        {color: colors.text.secondary},
+                      ]}>
                       for {billing.months} month{billing.months > 1 ? 's' : ''}
                     </Text>
                   </View>
 
-                  <Text style={[styles.monthlyEquivalent, { color: colors.text.tertiary }]}>
+                  <Text
+                    style={[
+                      styles.monthlyEquivalent,
+                      {color: colors.text.tertiary},
+                    ]}>
                     ${monthlyPrice.toFixed(2)}/month
                   </Text>
 
                   {isSelected && (
                     <View style={styles.selectedIcon}>
-                      <Icon name="check-circle" size={24} color={colors.primary} />
+                      <Icon
+                        name="check-circle"
+                        size={24}
+                        color={colors.primary}
+                      />
                     </View>
                   )}
                 </TouchableOpacity>
@@ -176,13 +218,19 @@ const ChoosePackagesScreen: React.FC = () => {
 
         {/* Features Reminder */}
         <View style={styles.featuresSection}>
-          <Text style={[styles.featuresTitle, { color: colors.text.primary }]}>
+          <Text style={[styles.featuresTitle, {color: colors.text.primary}]}>
             What's included:
           </Text>
           {packageData.features.map((feature: string, index: number) => (
             <View key={index} style={styles.featureItem}>
-              <Icon name="check" size={16} color={colors.success} style={styles.checkIcon} />
-              <Text style={[styles.featureText, { color: colors.text.secondary }]}>
+              <Icon
+                name="check"
+                size={16}
+                color={colors.success}
+                style={styles.checkIcon}
+              />
+              <Text
+                style={[styles.featureText, {color: colors.text.secondary}]}>
                 {feature}
               </Text>
             </View>
@@ -191,25 +239,24 @@ const ChoosePackagesScreen: React.FC = () => {
 
         {/* Terms */}
         <View style={styles.termsSection}>
-          <Text style={[styles.termsText, { color: colors.text.tertiary }]}>
+          <Text style={[styles.termsText, {color: colors.text.tertiary}]}>
             • You can cancel or change your plan at any time
           </Text>
-          <Text style={[styles.termsText, { color: colors.text.tertiary }]}>
+          <Text style={[styles.termsText, {color: colors.text.tertiary}]}>
             • Refunds available within 14 days of purchase
           </Text>
-          <Text style={[styles.termsText, { color: colors.text.tertiary }]}>
+          <Text style={[styles.termsText, {color: colors.text.tertiary}]}>
             • All plans include 24/7 customer support
           </Text>
         </View>
       </ScrollView>
 
       {/* Continue Button */}
-      <View style={[styles.bottomContainer, { backgroundColor: colors.surface }]}>
+      <View style={[styles.bottomContainer, {backgroundColor: colors.surface}]}>
         <TouchableOpacity
-          style={[styles.continueButton, { backgroundColor: colors.primary }]}
-          onPress={handleContinue}
-        >
-          <Text style={[styles.continueButtonText, { color: colors.white }]}>
+          style={[styles.continueButton, {backgroundColor: colors.primary}]}
+          onPress={handleContinue}>
+          <Text style={[styles.continueButtonText, {color: colors.white}]}>
             Continue to Payment
           </Text>
         </TouchableOpacity>

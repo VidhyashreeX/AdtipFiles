@@ -1,5 +1,5 @@
 // src/screens/wallet/WalletScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, {useState} from 'react';
 import {
   View,
   Text,
@@ -10,36 +10,31 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 
 // Components
 import Header from '../../components/common/Header';
 
 // Context and services
-import { useTheme } from '../../contexts/ThemeContext';
-import { useAuth } from '../../contexts/AuthContext';
+import {useTheme} from '../../contexts/ThemeContext';
 import RewardService from '../../services/RewardService';
 import useWallet from '../../hooks/useWallet';
 
 const WalletScreen = () => {
-  const { colors } = useTheme();
-  const { user } = useAuth();
-  const navigation = useNavigation();
-  
+  const {colors} = useTheme();
   // Use our wallet hook instead of managing state manually
-  const { balance, transactions, isLoading, isRefreshing, refreshWallet } = useWallet();
+  const {balance, isLoading, isRefreshing, refreshWallet} = useWallet();
   const [offerwallLoading, setOfferwallLoading] = useState(false);
 
   // Show offerwall to earn coins
   const handleShowOfferwall = async () => {
     try {
       setOfferwallLoading(true);
-      
+
       // Commented out PubScale integration - June 2, 2025
       // Show the PubScale offerwall
       await RewardService.showOfferwall();
-      
+
       // Refresh wallet data after offerwall closes
       refreshWallet();
     } catch (error) {
@@ -53,11 +48,11 @@ const WalletScreen = () => {
   // Render loading state
   if (isLoading && !isRefreshing) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, {backgroundColor: colors.background}]}>
         <Header title="Wallet" showBackButton />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.text.primary }]}>
+          <Text style={[styles.loadingText, {color: colors.text.primary}]}>
             Loading wallet data...
           </Text>
         </View>
@@ -66,7 +61,7 @@ const WalletScreen = () => {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
       <Header title="Wallet" showBackButton />
 
       <ScrollView
@@ -77,72 +72,33 @@ const WalletScreen = () => {
             onRefresh={refreshWallet}
             colors={[colors.primary]}
           />
-        }
-      >
+        }>
         {/* Balance Card */}
-        <View style={[styles.balanceCard, { backgroundColor: colors.card }]}>
+        <View style={[styles.balanceCard, {backgroundColor: colors.card}]}>
           <Text style={styles.balanceLabel}>Current Balance</Text>
-          <Text style={styles.balanceValue}>
-            ₹{balance}
-          </Text>
+          <Text style={styles.balanceValue}>₹{balance}</Text>
         </View>
 
         {/* Earn More Coins Button */}
         <TouchableOpacity
-          style={[styles.earnButton, { backgroundColor: colors.primary }]}
+          style={[styles.earnButton, {backgroundColor: colors.primary}]}
           onPress={handleShowOfferwall}
-          disabled={offerwallLoading}
-        >
+          disabled={offerwallLoading}>
           {offerwallLoading ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
             <>
-              <Icon name="gift" size={20} color="#FFFFFF" style={styles.buttonIcon} />
+              <Icon
+                name="gift"
+                size={20}
+                color="#FFFFFF"
+                style={styles.buttonIcon}
+              />
               <Text style={styles.earnButtonText}>Earn More Coins</Text>
             </>
           )}
         </TouchableOpacity>
-
-        {/* Transactions List */}
-        <View style={styles.transactionsContainer}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
-            Transaction History
-          </Text>
-
-          {transactions.length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              No transactions to display
-            </Text>
-          ) : (
-            transactions.map((transaction, index) => (
-              <View
-                key={`transaction-${index}`}
-                style={[styles.transactionItem, { borderBottomColor: colors.border }]}
-              >
-                <View style={styles.transactionDetails}>
-                  <Text style={[styles.transactionTitle, { color: colors.text.primary }]}>
-                    {transaction.description || 'Transaction'}
-                  </Text>
-                  <Text style={[styles.transactionDate, { color: colors.textSecondary }]}>
-                    {new Date(transaction.date).toLocaleDateString()}
-                  </Text>
-                </View>
-                <Text
-                  style={[
-                    styles.transactionAmount,
-                    {
-                      color:
-                        transaction.type === 'credit' ? colors.success : colors.error,
-                    },
-                  ]}
-                >
-                  {transaction.type === 'credit' ? '+' : '-'}
-                  {transaction.amount} Coins
-                </Text>
-              </View>
-            ))
-          )}
-        </View>
+        {/* Removed Transactions List and related UI */}
       </ScrollView>
     </View>
   );
@@ -207,41 +163,6 @@ const styles = StyleSheet.create({
   },
   earnButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  transactionsContainer: {
-    marginVertical: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  emptyText: {
-    textAlign: 'center',
-    fontSize: 16,
-    padding: 20,
-  },
-  transactionItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
-  transactionDetails: {
-    flex: 1,
-  },
-  transactionTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  transactionDate: {
-    fontSize: 12,
-  },
-  transactionAmount: {
     fontSize: 16,
     fontWeight: '600',
   },

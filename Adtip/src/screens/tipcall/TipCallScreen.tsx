@@ -1,5 +1,5 @@
 // src/screens/tipcall/TipCallScreen.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -8,21 +8,21 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Image
+  Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Components
 import Header from '../../components/common/Header';
 
 // Context
-import { useTheme } from '../../contexts/ThemeContext';
-import { useAuth } from '../../contexts/AuthContext';
+import {useTheme} from '../../contexts/ThemeContext';
+import {useAuth} from '../../contexts/AuthContext';
 
 // Constants
-import { API_BASE_URL, API_ENDPOINTS } from '../../constants/api';
+import {API_BASE_URL, API_ENDPOINTS} from '../../constants/api';
 
 // Types
 interface TipCallScreenProps {
@@ -41,19 +41,19 @@ interface TipCallUser {
   is_available: boolean;
 }
 
-const TipCallScreen: React.FC<TipCallScreenProps> = ({ walletBalance }) => {
+const TipCallScreen: React.FC<TipCallScreenProps> = ({walletBalance}) => {
   // Hooks
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const navigation = useNavigation();
-  const { user } = useAuth();
-  
+  const {user} = useAuth();
+
   // State
   const [activeTab, setActiveTab] = useState<'available' | 'all'>('available');
   const [users, setUsers] = useState<TipCallUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Helper functions
   const getFullImageUrl = (url?: string | null) => {
     if (!url || url === 'null' || url === 'undefined') {
@@ -64,28 +64,47 @@ const TipCallScreen: React.FC<TipCallScreenProps> = ({ walletBalance }) => {
     }
     return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
   };
-  
+
+  // Helper to get dynamic style for call button
+  function getCallButtonStyle(
+    baseStyle: any,
+    isAvailable: boolean,
+    color: string,
+    gray: string,
+  ) {
+    return [
+      baseStyle,
+      {
+        backgroundColor: isAvailable ? color : gray,
+        opacity: isAvailable ? 1 : 0.7,
+      },
+    ];
+  }
+
   // API calls
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
-      
+
       const token = await AsyncStorage.getItem('accessToken');
-      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.USERS.GET_ALL_USERS}`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+      const response = await fetch(
+        `${API_BASE_URL}${API_ENDPOINTS.USERS.GET_ALL_USERS}`,
+        {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
 
       const result = await response.json();
-      
+
       if (result?.data && Array.isArray(result.data)) {
         // Transform the data into the format we need
         const callingUsers = result.data
@@ -97,11 +116,17 @@ const TipCallScreen: React.FC<TipCallScreenProps> = ({ walletBalance }) => {
             is_online: u.online_status === true || u.online_status === 1,
             rating: 4 + Math.random(), // Random rating between 4 and 5
             calling_rate: (Math.floor(Math.random() * 10) + 5).toString(), // Random rate between $5-$15
-            expertise: ['Fashion', 'Lifestyle', 'Technology'].slice(0, Math.floor(Math.random() * 3) + 1),
-            tags: ['Friendly', 'Expert', 'Fast Responder'].slice(0, Math.floor(Math.random() * 3) + 1),
-            is_available: u.is_available === true || u.is_available === 1
+            expertise: ['Fashion', 'Lifestyle', 'Technology'].slice(
+              0,
+              Math.floor(Math.random() * 3) + 1,
+            ),
+            tags: ['Friendly', 'Expert', 'Fast Responder'].slice(
+              0,
+              Math.floor(Math.random() * 3) + 1,
+            ),
+            is_available: u.is_available === true || u.is_available === 1,
           }));
-          
+
         setUsers(callingUsers);
         setError(null);
       } else {
@@ -115,169 +140,200 @@ const TipCallScreen: React.FC<TipCallScreenProps> = ({ walletBalance }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  };
-  
+  }, [user]);
+
   // Handlers
   const handleRefresh = () => {
     setRefreshing(true);
     fetchUsers();
   };
-  
+
   const handleCallUser = (userId: number) => {
     // Navigate to call screen
-    navigation.navigate('Call' as never, { userId } as never);
+    // @ts-ignore
+    navigation.navigate('Call', {userId});
   };
-  
+
   const handleUserProfile = (userId: number) => {
     // Navigate to user profile
-    navigation.navigate('Profile' as never, { userId } as never);
+    // @ts-ignore
+    navigation.navigate('Profile', {userId});
   };
-  
+
   const handleTabChange = (tab: 'available' | 'all') => {
     setActiveTab(tab);
   };
-  
+
   // Effects
   useFocusEffect(
     useCallback(() => {
       fetchUsers();
-    }, [])
+    }, [fetchUsers]),
   );
 
   useEffect(() => {
     fetchUsers();
-  }, []);
-  
+  }, [fetchUsers]);
+
   // Filter users based on active tab
-  const filteredUsers = activeTab === 'available'
-    ? users.filter(user => user.is_available)
-    : users;
-  
+  const filteredUsers =
+    activeTab === 'available' ? users.filter(u => u.is_available) : users;
+
   // Render functions
-  const renderUserItem = ({ item }: { item: TipCallUser }) => (
-    <TouchableOpacity 
-      style={[styles.userCard, { backgroundColor: colors.white }]}
-      onPress={() => handleUserProfile(item.id)}
-    >
+  const renderUserItem = ({item}: {item: TipCallUser}) => (
+    <TouchableOpacity
+      style={[styles.userCard, {backgroundColor: colors.white}]}
+      onPress={() => handleUserProfile(item.id)}>
       <View style={styles.userHeader}>
         <View style={styles.userInfo}>
           <View style={styles.avatarContainer}>
             {item.profile_image ? (
-              <Image source={{ uri: item.profile_image }} style={styles.avatar} />
+              <Image source={{uri: item.profile_image}} style={styles.avatar} />
             ) : (
-              <View style={[styles.avatarPlaceholder, { backgroundColor: colors.gray[200] }]} />
+              <View
+                style={[
+                  styles.avatarPlaceholder,
+                  {backgroundColor: colors.gray[200]},
+                ]}
+              />
             )}
-            <View style={[
-              styles.statusIndicator, 
-              { backgroundColor: item.is_online ? colors.success : colors.gray[400] }
-            ]} />
+            <View
+              style={[
+                styles.statusIndicator,
+                {
+                  backgroundColor: item.is_online
+                    ? colors.success
+                    : colors.gray[400],
+                },
+              ]}
+            />
           </View>
           <View style={styles.userDetails}>
-            <Text style={[styles.userName, { color: colors.text.primary }]}>{item.name}</Text>
+            <Text style={[styles.userName, {color: colors.text.primary}]}>
+              {item.name}
+            </Text>
             <View style={styles.ratingContainer}>
               <Icon name="star" size={14} color="#FFD700" />
-              <Text style={[styles.ratingText, { color: colors.text.secondary }]}>
+              <Text style={[styles.ratingText, {color: colors.text.secondary}]}>
                 {item.rating.toFixed(1)}
               </Text>
             </View>
-            <Text style={[styles.rate, { color: colors.primary }]}>${item.calling_rate}/min</Text>
+            <Text style={[styles.rate, {color: colors.primary}]}>
+              ${item.calling_rate}/min
+            </Text>
           </View>
         </View>
-        
-        <TouchableOpacity 
-          style={[
-            styles.callButton, 
-            { 
-              backgroundColor: item.is_available ? colors.primary : colors.gray[300],
-              opacity: item.is_available ? 1 : 0.7
-            }
-          ]}
+
+        <TouchableOpacity
+          style={getCallButtonStyle(
+            styles.callButton,
+            item.is_available,
+            colors.primary,
+            colors.gray[300],
+          )}
           onPress={() => handleCallUser(item.id)}
-          disabled={!item.is_available}
-        >
+          disabled={!item.is_available}>
           <Icon name="phone" size={18} color={colors.white} />
           <Text style={styles.callButtonText}>
             {item.is_available ? 'Call Now' : 'Unavailable'}
           </Text>
         </TouchableOpacity>
       </View>
-      
+
       <View style={styles.tagsContainer}>
         {item.expertise.map((tag, index) => (
-          <View 
-            key={`expertise-${index}`} 
-            style={[styles.tag, { backgroundColor: colors.primary + '20' }]}
-          >
-            <Text style={[styles.tagText, { color: colors.primary }]}>{tag}</Text>
+          <View
+            key={`expertise-${index}`}
+            style={[styles.tag, {backgroundColor: colors.primary + '20'}]}>
+            <Text style={[styles.tagText, {color: colors.primary}]}>{tag}</Text>
           </View>
         ))}
         {item.tags.map((tag, index) => (
-          <View 
-            key={`tag-${index}`} 
-            style={[styles.tag, { backgroundColor: colors.gray[100] }]}
-          >
-            <Text style={[styles.tagText, { color: colors.text.secondary }]}>{tag}</Text>
+          <View
+            key={`tag-${index}`}
+            style={[styles.tag, {backgroundColor: colors.gray[100]}]}>
+            <Text style={[styles.tagText, {color: colors.text.secondary}]}>
+              {tag}
+            </Text>
           </View>
         ))}
       </View>
     </TouchableOpacity>
   );
-  
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>      <Header
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
+      {' '}
+      <Header
         title="TipCall"
         showBackButton={false}
         showLogo={false}
         showWallet={true}
         walletAmount={walletBalance}
       />
-        <View style={[styles.tabContainer, { borderBottomColor: colors.borderLight }]}>
-        <TouchableOpacity 
+      <View
+        style={[styles.tabContainer, {borderBottomColor: colors.borderLight}]}>
+        <TouchableOpacity
           style={[
-            styles.tab, 
-            activeTab === 'available' && [styles.activeTab, { borderBottomColor: colors.primary }]
+            styles.tab,
+            activeTab === 'available' && [
+              styles.activeTab,
+              {borderBottomColor: colors.primary},
+            ],
           ]}
-          onPress={() => handleTabChange('available')}
-        >
-          <Text style={[
-            styles.tabText,
-            { color: activeTab === 'available' ? colors.primary : colors.text.secondary }
-          ]}>
+          onPress={() => handleTabChange('available')}>
+          <Text
+            style={[
+              styles.tabText,
+              {
+                color:
+                  activeTab === 'available'
+                    ? colors.primary
+                    : colors.text.secondary,
+              },
+            ]}>
             Available Now
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[
-            styles.tab, 
-            activeTab === 'all' && [styles.activeTab, { borderBottomColor: colors.primary }]
+            styles.tab,
+            activeTab === 'all' && [
+              styles.activeTab,
+              {borderBottomColor: colors.primary},
+            ],
           ]}
-          onPress={() => handleTabChange('all')}
-        >
-          <Text style={[
-            styles.tabText,
-            { color: activeTab === 'all' ? colors.primary : colors.text.secondary }
-          ]}>
+          onPress={() => handleTabChange('all')}>
+          <Text
+            style={[
+              styles.tabText,
+              {
+                color:
+                  activeTab === 'all' ? colors.primary : colors.text.secondary,
+              },
+            ]}>
             All Experts
           </Text>
         </TouchableOpacity>
       </View>
-      
       {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: colors.text.primary }]}>{error}</Text>
+          <Text style={[styles.errorText, {color: colors.text.primary}]}>
+            {error}
+          </Text>
           <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
-            <Text style={{ color: colors.primary }}>Retry</Text>
+            <Text style={{color: colors.primary}}>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <FlatList
           data={filteredUsers}
           renderItem={renderUserItem}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={item => item.id.toString()}
           contentContainerStyle={styles.listContainer}
           refreshControl={
             <RefreshControl
@@ -290,11 +346,10 @@ const TipCallScreen: React.FC<TipCallScreenProps> = ({ walletBalance }) => {
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Icon name="phone-off" size={50} color={colors.gray[400]} />
-              <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
-                {activeTab === 'available' 
-                  ? 'No experts are available right now' 
-                  : 'No experts found'
-                }
+              <Text style={[styles.emptyText, {color: colors.text.secondary}]}>
+                {activeTab === 'available'
+                  ? 'No experts are available right now'
+                  : 'No experts found'}
               </Text>
             </View>
           }
@@ -332,7 +387,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,

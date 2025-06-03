@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 
 interface ReferralStats {
@@ -32,7 +32,7 @@ interface ReferralActivity {
 }
 
 const ReferralScreen: React.FC = () => {
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const [stats, setStats] = useState<ReferralStats>({
     totalReferrals: 0,
     totalEarnings: 0,
@@ -41,7 +41,6 @@ const ReferralScreen: React.FC = () => {
     thisMonthEarnings: 0,
   });
   const [activities, setActivities] = useState<ReferralActivity[]>([]);
-  const [referralCode, setReferralCode] = useState('ADTIP123');
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -53,10 +52,10 @@ const ReferralScreen: React.FC = () => {
     setTimeout(() => {
       const mockStats: ReferralStats = {
         totalReferrals: 12,
-        totalEarnings: 45.50,
-        pendingEarnings: 8.00,
+        totalEarnings: 45.5,
+        pendingEarnings: 8.0,
         thisMonthReferrals: 3,
-        thisMonthEarnings: 12.50,
+        thisMonthEarnings: 12.5,
       };
 
       const mockActivities: ReferralActivity[] = [
@@ -64,7 +63,7 @@ const ReferralScreen: React.FC = () => {
           id: '1',
           userName: 'John Doe',
           action: 'joined',
-          earnings: 2.00,
+          earnings: 2.0,
           timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
           status: 'completed',
         },
@@ -72,7 +71,7 @@ const ReferralScreen: React.FC = () => {
           id: '2',
           userName: 'Sarah Smith',
           action: 'first_purchase',
-          earnings: 5.00,
+          earnings: 5.0,
           timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24),
           status: 'pending',
         },
@@ -80,7 +79,7 @@ const ReferralScreen: React.FC = () => {
           id: '3',
           userName: 'Mike Johnson',
           action: 'monthly_active',
-          earnings: 3.00,
+          earnings: 3.0,
           timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2),
           status: 'completed',
         },
@@ -88,7 +87,7 @@ const ReferralScreen: React.FC = () => {
           id: '4',
           userName: 'Emma Wilson',
           action: 'joined',
-          earnings: 2.00,
+          earnings: 2.0,
           timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3),
           status: 'completed',
         },
@@ -102,9 +101,9 @@ const ReferralScreen: React.FC = () => {
 
   const handleShare = async () => {
     try {
-      const shareUrl = `https://adtip.app/invite/${referralCode}`;
-      const message = `Join me on Adtip and earn money watching videos and creating content! Use my referral code: ${referralCode}\n\n${shareUrl}`;
-      
+      const shareUrl = 'https://adtip.app/invite/ADTIP123';
+      const message = `Join me on Adtip and earn money watching videos and creating content! Use my referral code: ADTIP123\n\n${shareUrl}`;
+
       await Share.share({
         message,
         url: shareUrl,
@@ -116,12 +115,12 @@ const ReferralScreen: React.FC = () => {
   };
 
   const copyReferralCode = () => {
-    Clipboard.setString(referralCode);
+    Clipboard.setString('ADTIP123');
     Alert.alert('Copied!', 'Referral code copied to clipboard');
   };
 
   const copyReferralLink = () => {
-    const shareUrl = `https://adtip.app/invite/${referralCode}`;
+    const shareUrl = 'https://adtip.app/invite/ADTIP123';
     Clipboard.setString(shareUrl);
     Alert.alert('Copied!', 'Referral link copied to clipboard');
   };
@@ -154,8 +153,10 @@ const ReferralScreen: React.FC = () => {
 
   const formatTimestamp = (timestamp: Date) => {
     const now = new Date();
-    const diffInSeconds = Math.floor((now.getTime() - timestamp.getTime()) / 1000);
-    
+    const diffInSeconds = Math.floor(
+      (now.getTime() - timestamp.getTime()) / 1000,
+    );
+
     if (diffInSeconds < 60) {
       return 'Just now';
     } else if (diffInSeconds < 3600) {
@@ -171,55 +172,55 @@ const ReferralScreen: React.FC = () => {
   };
 
   const renderStatCard = (title: string, value: string, subtitle?: string) => (
-    <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-      <Text style={[styles.statValue, { color: colors.primary }]}>
-        {value}
-      </Text>
-      <Text style={[styles.statTitle, { color: colors.text.primary }]}>
+    <View style={[styles.statCard, {backgroundColor: colors.surface}]}>
+      <Text style={[styles.statValue, {color: colors.primary}]}>{value}</Text>
+      <Text style={[styles.statTitle, {color: colors.text.primary}]}>
         {title}
       </Text>
       {subtitle && (
-        <Text style={[styles.statSubtitle, { color: colors.text.secondary }]}>
+        <Text style={[styles.statSubtitle, {color: colors.text.secondary}]}>
           {subtitle}
         </Text>
       )}
     </View>
   );
 
-  const renderActivity = ({ item }: { item: ReferralActivity }) => (
-    <View style={[styles.activityItem, { borderBottomColor: colors.border.light }]}>
-      <View style={[styles.activityIconContainer, { backgroundColor: colors.primary + '20' }]}>
-        <Icon 
-          name={getActionIcon(item.action)} 
-          size={20} 
+  const renderActivity = ({item}: {item: ReferralActivity}) => (
+    <View
+      style={[styles.activityItem, {borderBottomColor: colors.border}]}>
+      <View
+        style={[
+          styles.activityIconContainer,
+          {backgroundColor: colors.primary + '20'},
+        ]}>
+        <Icon
+          name={getActionIcon(item.action)}
+          size={20}
           color={colors.primary}
         />
       </View>
-      
+
       <View style={styles.activityContent}>
-        <Text style={[styles.activityUser, { color: colors.text.primary }]}>
+        <Text style={[styles.activityUser, {color: colors.text.primary}]}>
           {item.userName}
         </Text>
-        <Text style={[styles.activityDescription, { color: colors.text.secondary }]}>
+        <Text
+          style={[styles.activityDescription, {color: colors.text.secondary}]}>
           {getActionDescription(item.action)}
         </Text>
-        <Text style={[styles.activityTimestamp, { color: colors.text.tertiary }]}>
+        <Text style={[styles.activityTimestamp, {color: colors.text.tertiary}]}>
           {formatTimestamp(item.timestamp)}
         </Text>
       </View>
-      
+
       <View style={styles.activityEarnings}>
-        <Text style={[styles.earningsAmount, { color: colors.primary }]}>
+        <Text style={[styles.earningsAmount, {color: colors.primary}]}>
           +${item.earnings.toFixed(2)}
         </Text>
-        <View style={[
-          styles.statusBadge, 
-          { backgroundColor: item.status === 'completed' ? '#96CEB4' : '#FFEAA7' }
-        ]}>
-          <Text style={[
-            styles.statusText, 
-            { color: item.status === 'completed' ? '#2D7D32' : '#F57F17' }
-          ]}>
+        <View
+          style={getActivityStatusBadgeStyle(styles.statusBadge, item.status)}>
+          <Text
+            style={getActivityStatusTextStyle(styles.statusText, item.status)}>
             {item.status}
           </Text>
         </View>
@@ -227,87 +228,145 @@ const ReferralScreen: React.FC = () => {
     </View>
   );
 
+  // Helper to get dynamic style for activity status badge
+  function getActivityStatusBadgeStyle(baseStyle: any, status: string) {
+    return [
+      baseStyle,
+      {backgroundColor: status === 'completed' ? '#96CEB4' : '#FFEAA7'},
+    ];
+  }
+
+  // Helper to get dynamic style for activity status text
+  function getActivityStatusTextStyle(baseStyle: any, status: string) {
+    return [
+      baseStyle,
+      {color: status === 'completed' ? '#2D7D32' : '#F57F17'},
+    ];
+  }
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, {backgroundColor: colors.background}]}>
       <Header title="Referrals" showBackButton />
-      
+
       <FlatList
         data={activities}
         renderItem={renderActivity}
-        keyExtractor={(item) => item.id}
+        keyExtractor={item => item.id}
         ListHeaderComponent={
           <View>
             {/* Stats */}
             <View style={styles.statsContainer}>
               <View style={styles.statsRow}>
-                {renderStatCard('Total Referrals', stats.totalReferrals.toString())}
-                {renderStatCard('Total Earnings', `$${stats.totalEarnings.toFixed(2)}`)}
+                {renderStatCard(
+                  'Total Referrals',
+                  stats.totalReferrals.toString(),
+                )}
+                {renderStatCard(
+                  'Total Earnings',
+                  `$${stats.totalEarnings.toFixed(2)}`,
+                )}
               </View>
               <View style={styles.statsRow}>
-                {renderStatCard('This Month', stats.thisMonthReferrals.toString(), 'referrals')}
-                {renderStatCard('Month Earnings', `$${stats.thisMonthEarnings.toFixed(2)}`)}
+                {renderStatCard(
+                  'This Month',
+                  stats.thisMonthReferrals.toString(),
+                  'referrals',
+                )}
+                {renderStatCard(
+                  'Month Earnings',
+                  `$${stats.thisMonthEarnings.toFixed(2)}`,
+                )}
               </View>
             </View>
 
             {/* Pending Earnings */}
             {stats.pendingEarnings > 0 && (
-              <View style={[styles.pendingContainer, { backgroundColor: colors.surface }]}>
+              <View
+                style={[
+                  styles.pendingContainer,
+                  {backgroundColor: colors.surface},
+                ]}>
                 <View style={styles.pendingContent}>
                   <Icon name="clock" size={20} color="#FFEAA7" />
-                  <Text style={[styles.pendingText, { color: colors.text.primary }]}>
+                  <Text
+                    style={[styles.pendingText, {color: colors.text.primary}]}>
                     ${stats.pendingEarnings.toFixed(2)} pending
                   </Text>
                 </View>
-                <Text style={[styles.pendingSubtext, { color: colors.text.secondary }]}>
+                <Text
+                  style={[
+                    styles.pendingSubtext,
+                    {color: colors.text.secondary},
+                  ]}>
                   Will be processed within 24-48 hours
                 </Text>
               </View>
             )}
 
             {/* Referral Code Section */}
-            <View style={[styles.referralSection, { backgroundColor: colors.surface }]}>
+            <View
+              style={[
+                styles.referralSection,
+                {backgroundColor: colors.surface},
+              ]}>
               <View style={styles.referralHeader}>
                 <Icon name="gift" size={24} color={colors.primary} />
-                <Text style={[styles.referralTitle, { color: colors.text.primary }]}>
+                <Text
+                  style={[styles.referralTitle, {color: colors.text.primary}]}>
                   Invite Friends & Earn
                 </Text>
               </View>
-              
-              <Text style={[styles.referralDescription, { color: colors.text.secondary }]}>
-                Share your referral code and earn $2 for each friend who joins, plus 10% of their earnings!
+
+              <Text
+                style={[
+                  styles.referralDescription,
+                  {color: colors.text.secondary},
+                ]}>
+                Share your referral code and earn $2 for each friend who joins,
+                plus 10% of their earnings!
               </Text>
 
-              <View style={[styles.codeContainer, { backgroundColor: colors.background }]}>
-                <Text style={[styles.codeLabel, { color: colors.text.secondary }]}>
+              <View
+                style={[
+                  styles.codeContainer,
+                  {backgroundColor: colors.background},
+                ]}>
+                <Text
+                  style={[styles.codeLabel, {color: colors.text.secondary}]}>
                   Your Referral Code
                 </Text>
                 <View style={styles.codeRow}>
-                  <Text style={[styles.codeText, { color: colors.primary }]}>
-                    {referralCode}
+                  <Text style={[styles.codeText, {color: colors.primary}]}>
+                    ADTIP123
                   </Text>
-                  <TouchableOpacity onPress={copyReferralCode} style={styles.copyButton}>
+                  <TouchableOpacity
+                    onPress={copyReferralCode}
+                    style={styles.copyButton}>
                     <Icon name="copy" size={16} color={colors.primary} />
                   </TouchableOpacity>
                 </View>
               </View>
 
               <View style={styles.actionButtons}>
-                <TouchableOpacity 
-                  style={[styles.shareButton, { backgroundColor: colors.primary }]}
-                  onPress={handleShare}
-                >
+                <TouchableOpacity
+                  style={[
+                    styles.shareButton,
+                    {backgroundColor: colors.primary},
+                  ]}
+                  onPress={handleShare}>
                   <Icon name="share-2" size={18} color={colors.white} />
-                  <Text style={[styles.shareButtonText, { color: colors.white }]}>
+                  <Text style={[styles.shareButtonText, {color: colors.white}]}>
                     Share Code
                   </Text>
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.linkButton, { borderColor: colors.primary }]}
-                  onPress={copyReferralLink}
-                >
+
+                <TouchableOpacity
+                  style={[styles.linkButton, {borderColor: colors.primary}]}
+                  onPress={copyReferralLink}>
                   <Icon name="link" size={18} color={colors.primary} />
-                  <Text style={[styles.linkButtonText, { color: colors.primary }]}>
+                  <Text
+                    style={[styles.linkButtonText, {color: colors.primary}]}>
                     Copy Link
                   </Text>
                 </TouchableOpacity>
@@ -316,7 +375,8 @@ const ReferralScreen: React.FC = () => {
 
             {/* Activity Header */}
             <View style={styles.activityHeader}>
-              <Text style={[styles.activityTitle, { color: colors.text.primary }]}>
+              <Text
+                style={[styles.activityTitle, {color: colors.text.primary}]}>
                 Referral Activity
               </Text>
             </View>
@@ -326,10 +386,11 @@ const ReferralScreen: React.FC = () => {
           !isLoading && activities.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Icon name="users" size={48} color={colors.text.tertiary} />
-              <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
+              <Text style={[styles.emptyText, {color: colors.text.secondary}]}>
                 No referral activity yet
               </Text>
-              <Text style={[styles.emptySubtext, { color: colors.text.tertiary }]}>
+              <Text
+                style={[styles.emptySubtext, {color: colors.text.tertiary}]}>
                 Share your referral code to start earning
               </Text>
             </View>

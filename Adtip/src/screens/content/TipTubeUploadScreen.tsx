@@ -1,5 +1,5 @@
 // src/screens/content/TipTubeUploadScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -15,27 +15,37 @@ import {
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import {useNavigation, useRoute, RouteProp} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import ImagePicker from 'react-native-image-crop-picker';
 import * as Progress from 'react-native-progress';
-import { launchImageLibrary } from 'react-native-image-picker';
-import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
+import {launchImageLibrary} from 'react-native-image-picker';
+import {check, request, PERMISSIONS, RESULTS} from 'react-native-permissions';
 
 // Components
 import Header from '../../components/common/Header';
 import CategoryChip from '../../components/common/CategoryChip';
 
 // Context and services
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 import ApiService from '../../services/ApiService';
-import { ENDPOINTS } from '../../constants/api';
+import {ENDPOINTS} from '../../constants/api';
+
+// Define the expected route parameters
+type TipTubeUploadScreenParams = {
+  videoSource?: {
+    uri: string;
+    type?: string;
+    name?: string;
+    size?: number;
+  };
+};
 
 const TipTubeUploadScreen = () => {
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const navigation = useNavigation();
-  const route = useRoute();
-  
+  const route = useRoute<RouteProp<{params: TipTubeUploadScreenParams}, 'params'>>();
+
   // State variables
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -53,7 +63,7 @@ const TipTubeUploadScreen = () => {
   useEffect(() => {
     if (route.params?.videoSource) {
       setVideoSource(route.params.videoSource);
-      
+
       // Generate thumbnail from video if possible
       if (Platform.OS === 'ios') {
         // iOS-specific thumbnail generation would go here
@@ -67,21 +77,26 @@ const TipTubeUploadScreen = () => {
   const pickVideo = async () => {
     try {
       // Check permissions first
-      const permissionStatus = Platform.OS === 'ios' 
-        ? await check(PERMISSIONS.IOS.PHOTO_LIBRARY)
-        : await check(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
-        
+      const permissionStatus =
+        Platform.OS === 'ios'
+          ? await check(PERMISSIONS.IOS.PHOTO_LIBRARY)
+          : await check(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
+
       if (permissionStatus !== RESULTS.GRANTED) {
-        const requestResult = Platform.OS === 'ios'
-          ? await request(PERMISSIONS.IOS.PHOTO_LIBRARY)
-          : await request(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
-          
+        const requestResult =
+          Platform.OS === 'ios'
+            ? await request(PERMISSIONS.IOS.PHOTO_LIBRARY)
+            : await request(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
+
         if (requestResult !== RESULTS.GRANTED) {
-          Alert.alert('Permission Denied', 'You need to grant permission to access your media library');
+          Alert.alert(
+            'Permission Denied',
+            'You need to grant permission to access your media library',
+          );
           return;
         }
       }
-      
+
       // Launch media library
       const result = await launchImageLibrary({
         mediaType: 'video',
@@ -90,32 +105,36 @@ const TipTubeUploadScreen = () => {
         maxHeight: 1080,
         maxWidth: 1920,
       });
-      
+
       if (result.didCancel) {
         return;
       }
-      
+
       if (result.errorCode) {
         setError(`Error picking video: ${result.errorMessage}`);
         return;
       }
-      
+
       if (result.assets && result.assets.length > 0) {
         const video = result.assets[0];
-        
+
         // Check video duration and size
-        if (video.fileSize && video.fileSize > 100 * 1024 * 1024) { // 100 MB limit
-          Alert.alert('File Too Large', 'Please select a video smaller than 100 MB');
+        if (video.fileSize && video.fileSize > 100 * 1024 * 1024) {
+          // 100 MB limit
+          Alert.alert(
+            'File Too Large',
+            'Please select a video smaller than 100 MB',
+          );
           return;
         }
-        
+
         setVideoSource({
           uri: video.uri,
           type: video.type,
           name: video.fileName,
           size: video.fileSize,
         });
-        
+
         // Navigate to preview if needed
         // navigation.navigate('VideoPreview', { videoSource: video });
       }
@@ -136,7 +155,8 @@ const TipTubeUploadScreen = () => {
         compressImageQuality: 0.8,
       }).then(image => {
         setThumbnail({
-          uri: Platform.OS === 'ios' ? image.sourceURL || image.path : image.path,
+          uri:
+            Platform.OS === 'ios' ? image.sourceURL || image.path : image.path,
           type: image.mime,
           name: image.path.split('/').pop(),
         });
@@ -148,10 +168,11 @@ const TipTubeUploadScreen = () => {
 
   // Handle select category
   const handleSelectCategory = () => {
-    navigation.navigate('SelectCategory' as never, {
+    // @ts-ignore
+    navigation.navigate('SelectCategory', {
       onSelect: (category: any) => setSelectedCategory(category),
       selectedCategory,
-    } as never);
+    });
   };
 
   // Handle upload
@@ -161,35 +182,35 @@ const TipTubeUploadScreen = () => {
       Alert.alert('Missing Information', 'Please enter a title for your video');
       return;
     }
-    
+
     if (!videoSource) {
       Alert.alert('Missing Video', 'Please select a video to upload');
       return;
     }
-    
+
     try {
       setIsUploading(true);
       setUploadProgress(0);
       setError('');
-      
+
       // Create form data
       const formData = new FormData();
       formData.append('title', title);
       formData.append('description', description);
       formData.append('isPublic', isPublic ? '1' : '0');
       formData.append('isMonetized', isMonetized ? '1' : '0');
-      
+
       if (selectedCategory) {
         formData.append('categoryId', selectedCategory.id);
       }
-      
+
       // Append video file
       formData.append('video', {
         uri: videoSource.uri,
         type: videoSource.type || 'video/mp4',
         name: videoSource.name || 'video.mp4',
       } as any);
-      
+
       // Append thumbnail if selected
       if (thumbnail) {
         formData.append('thumbnail', {
@@ -198,33 +219,36 @@ const TipTubeUploadScreen = () => {
           name: thumbnail.name,
         } as any);
       }
-      
+
       // Upload video
-      const response = await ApiService.uploadFile(
+      await ApiService.uploadFile(
         ENDPOINTS.UPLOAD_VIDEO,
         formData,
-        (progress) => {
+        progress => {
           setUploadProgress(progress / 100);
-        }
+        },
       );
-      
+
       setIsUploading(false);
       setProcessingVideo(true);
-      
+
       // Check processing status
       setTimeout(() => {
         setProcessingVideo(false);
         Alert.alert(
           'Upload Successful',
           'Your video has been uploaded and will be available once processing is complete',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
+          [{text: 'OK', onPress: () => navigation.goBack()}],
         );
       }, 2000);
-    } catch (error) {
+    } catch (e) {
       setIsUploading(false);
       setProcessingVideo(false);
-      console.error('Error uploading video:', error);
-      Alert.alert('Upload Failed', 'There was a problem uploading your video. Please try again.');
+      console.error('Error uploading video:', e);
+      Alert.alert(
+        'Upload Failed',
+        'There was a problem uploading your video. Please try again.',
+      );
     }
   };
 
@@ -233,49 +257,55 @@ const TipTubeUploadScreen = () => {
     if (!videoSource) {
       return (
         <TouchableOpacity
-          style={[styles.uploadContainer, { borderColor: colors.border }]}
-          onPress={pickVideo}
-        >
+          style={[styles.uploadContainer, {borderColor: colors.border}]}
+          onPress={pickVideo}>
           <Icon name="video" size={40} color={colors.primary} />
-          <Text style={[styles.uploadText, { color: colors.text.secondary }]}>
+          <Text style={[styles.uploadText, {color: colors.text.secondary}]}>
             Select Video
           </Text>
         </TouchableOpacity>
       );
     }
-    
+
     return (
       <View style={styles.videoPreviewContainer}>
         {thumbnail ? (
-          <Image source={{ uri: thumbnail.uri }} style={styles.thumbnailPreview} />
+          <Image
+            source={{uri: thumbnail.uri}}
+            style={styles.thumbnailPreview}
+          />
         ) : (
-          <View style={[styles.videoPlaceholder, { backgroundColor: colors.gray[200] }]}>
+          <View
+            style={[
+              styles.videoPlaceholder,
+              {backgroundColor: colors.gray[200]},
+            ]}>
             <Icon name="video" size={40} color={colors.gray[400]} />
           </View>
         )}
-        
+
         <View style={styles.videoInfoContainer}>
-          <Text style={[styles.videoName, { color: colors.text.primary }]} numberOfLines={1}>
+          <Text
+            style={[styles.videoName, {color: colors.text.primary}]}
+            numberOfLines={1}>
             {videoSource.name || 'Selected Video'}
           </Text>
           {videoSource.size && (
-            <Text style={[styles.videoSize, { color: colors.text.tertiary }]}>
+            <Text style={[styles.videoSize, {color: colors.text.tertiary}]}>
               {(videoSource.size / (1024 * 1024)).toFixed(2)} MB
             </Text>
           )}
         </View>
-        
+
         <View style={styles.videoActionButtons}>
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: colors.gray[100] }]}
-            onPress={pickThumbnail}
-          >
+            style={[styles.actionButton, {backgroundColor: colors.gray[100]}]}
+            onPress={pickThumbnail}>
             <Icon name="image" size={20} color={colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: colors.gray[100] }]}
-            onPress={pickVideo}
-          >
+            style={[styles.actionButton, {backgroundColor: colors.gray[100]}]}
+            onPress={pickVideo}>
             <Icon name="refresh-cw" size={20} color={colors.primary} />
           </TouchableOpacity>
         </View>
@@ -283,8 +313,11 @@ const TipTubeUploadScreen = () => {
     );
   };
 
+  const uploadButtonOpacity =
+    isUploading || processingVideo || !videoSource || !title.trim() ? 0.5 : 1;
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView style={styles.safeArea}>
       <Header
         title="Upload Video"
         leftComponent={
@@ -293,35 +326,48 @@ const TipTubeUploadScreen = () => {
           </TouchableOpacity>
         }
         rightComponent={
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={handleUpload}
-            disabled={isUploading || processingVideo || !videoSource || !title.trim()}
-            style={{ opacity: (isUploading || processingVideo || !videoSource || !title.trim()) ? 0.5 : 1 }}
+            disabled={
+              isUploading || processingVideo || !videoSource || !title.trim()
+            }
+            style={[styles.uploadButton, {opacity: uploadButtonOpacity}]}
           >
-            <Text style={{ color: colors.primary, fontWeight: '600' }}>Upload</Text>
+            <Text style={[styles.uploadButtonText, {color: colors.primary}]}>
+              Upload
+            </Text>
           </TouchableOpacity>
         }
       />
-
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
       >
-        <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 30 }}>
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={styles.scrollContentContainer}
+        >
           {/* Video upload section */}
           {renderVideoSection()}
-          
+
           {error ? (
-            <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+            <Text style={[styles.errorText, {color: colors.error}]}>
+              {error}
+            </Text>
           ) : null}
 
           {/* Form fields */}
           <View style={styles.formContainer}>
             <View style={styles.inputContainer}>
-              <Text style={[styles.inputLabel, { color: colors.text.secondary }]}>Title *</Text>
+              <Text style={[styles.inputLabel, {color: colors.text.secondary}]}>
+                Title *
+              </Text>
               <TextInput
-                style={[styles.input, { color: colors.text.primary, borderColor: colors.border }]}
+                style={[
+                  styles.input,
+                  {color: colors.text.primary, borderColor: colors.border},
+                ]}
                 value={title}
                 onChangeText={setTitle}
                 maxLength={100}
@@ -329,14 +375,16 @@ const TipTubeUploadScreen = () => {
                 placeholderTextColor={colors.text.tertiary}
               />
             </View>
-            
+
             <View style={styles.inputContainer}>
-              <Text style={[styles.inputLabel, { color: colors.text.secondary }]}>Description</Text>
+              <Text style={[styles.inputLabel, {color: colors.text.secondary}]}>
+                Description
+              </Text>
               <TextInput
                 style={[
                   styles.input,
                   styles.textArea,
-                  { color: colors.text.primary, borderColor: colors.border }
+                  {color: colors.text.primary, borderColor: colors.border},
                 ]}
                 value={description}
                 onChangeText={setDescription}
@@ -347,54 +395,82 @@ const TipTubeUploadScreen = () => {
                 textAlignVertical="top"
               />
             </View>
-            
+
             {/* Category selection */}
             <View style={styles.inputContainer}>
-              <Text style={[styles.inputLabel, { color: colors.text.secondary }]}>Category</Text>
+              <Text style={[styles.inputLabel, {color: colors.text.secondary}]}>
+                Category
+              </Text>
               <TouchableOpacity
-                style={[styles.categoryButton, { borderColor: colors.border }]}
-                onPress={handleSelectCategory}
-              >
+                style={[styles.categoryButton, {borderColor: colors.border}]}
+                onPress={handleSelectCategory}>
                 {selectedCategory ? (
-                  <CategoryChip
-                    category={selectedCategory}
-                    selected={true}
-                  />
+                  <CategoryChip category={selectedCategory} selected={true} />
                 ) : (
-                  <Text style={{ color: colors.text.tertiary }}>Select category</Text>
+                  <Text style={{color: colors.text.tertiary}}>
+                    Select category
+                  </Text>
                 )}
-                <Icon name="chevron-right" size={20} color={colors.text.tertiary} />
+                <Icon
+                  name="chevron-right"
+                  size={20}
+                  color={colors.text.tertiary}
+                />
               </TouchableOpacity>
             </View>
-            
+
             {/* Visibility toggle */}
             <View style={styles.toggleContainer}>
               <View style={styles.toggleInfo}>
-                <Text style={[styles.toggleLabel, { color: colors.text.primary }]}>Public</Text>
-                <Text style={[styles.toggleDescription, { color: colors.text.tertiary }]}>
-                  {isPublic ? 'Everyone can see this video' : 'Only you can see this video'}
+                <Text
+                  style={[styles.toggleLabel, {color: colors.text.primary}]}>
+                  Public
+                </Text>
+                <Text
+                  style={[
+                    styles.toggleDescription,
+                    {color: colors.text.tertiary},
+                  ]}>
+                  {isPublic
+                    ? 'Everyone can see this video'
+                    : 'Only you can see this video'}
                 </Text>
               </View>
               <Switch
                 value={isPublic}
                 onValueChange={setIsPublic}
-                trackColor={{ false: colors.gray[300], true: colors.primary + '80' }}
+                trackColor={{
+                  false: colors.gray[300],
+                  true: colors.primary + '80',
+                }}
                 thumbColor={isPublic ? colors.primary : colors.gray[100]}
               />
             </View>
-            
+
             {/* Monetization toggle */}
             <View style={styles.toggleContainer}>
               <View style={styles.toggleInfo}>
-                <Text style={[styles.toggleLabel, { color: colors.text.primary }]}>Monetize</Text>
-                <Text style={[styles.toggleDescription, { color: colors.text.tertiary }]}>
-                  {isMonetized ? 'Earn money from this video' : 'No monetization for this video'}
+                <Text
+                  style={[styles.toggleLabel, {color: colors.text.primary}]}>
+                  Monetize
+                </Text>
+                <Text
+                  style={[
+                    styles.toggleDescription,
+                    {color: colors.text.tertiary},
+                  ]}>
+                  {isMonetized
+                    ? 'Earn money from this video'
+                    : 'No monetization for this video'}
                 </Text>
               </View>
               <Switch
                 value={isMonetized}
                 onValueChange={setIsMonetized}
-                trackColor={{ false: colors.gray[300], true: colors.primary + '80' }}
+                trackColor={{
+                  false: colors.gray[300],
+                  true: colors.primary + '80',
+                }}
                 thumbColor={isMonetized ? colors.primary : colors.gray[100]}
               />
             </View>
@@ -404,11 +480,17 @@ const TipTubeUploadScreen = () => {
 
       {/* Upload loading overlay */}
       {(isUploading || processingVideo) && (
-        <View style={[styles.loadingOverlay, { backgroundColor: colors.background + 'E6' }]}>
-          <View style={[styles.loadingContainer, { backgroundColor: colors.card }]}>
+        <View
+          style={[
+            styles.loadingOverlay,
+            {backgroundColor: colors.background + 'E6'},
+          ]}>
+          <View
+            style={[styles.loadingContainer, {backgroundColor: colors.card}]}>
             {isUploading ? (
               <>
-                <Text style={[styles.loadingText, { color: colors.text.primary }]}>
+                <Text
+                  style={[styles.loadingText, {color: colors.text.primary}]}>
                   Uploading video...
                 </Text>
                 <Progress.Bar
@@ -420,14 +502,16 @@ const TipTubeUploadScreen = () => {
                   height={8}
                   style={styles.progressBar}
                 />
-                <Text style={[styles.percentText, { color: colors.text.secondary }]}>
+                <Text
+                  style={[styles.percentText, {color: colors.text.secondary}]}>
                   {Math.round(uploadProgress * 100)}%
                 </Text>
               </>
             ) : (
               <>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={[styles.loadingText, { color: colors.text.primary }]}>
+                <Text
+                  style={[styles.loadingText, {color: colors.text.primary}]}>
                   Processing video...
                 </Text>
               </>
@@ -440,6 +524,13 @@ const TipTubeUploadScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  flex1: {
+    flex: 1,
+  },
   container: {
     flex: 1,
     padding: 16,
@@ -577,6 +668,15 @@ const styles = StyleSheet.create({
   },
   percentText: {
     fontSize: 14,
+  },
+  scrollContentContainer: {
+    paddingBottom: 30,
+  },
+  uploadButton: {
+    // Only opacity is dynamic
+  },
+  uploadButtonText: {
+    fontWeight: '600',
   },
 });
 

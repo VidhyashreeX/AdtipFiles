@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, {useState} from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 
 interface SettingItem {
@@ -25,7 +25,7 @@ interface SettingItem {
 }
 
 const SettingsScreen: React.FC = () => {
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const [settings, setSettings] = useState({
     pushNotifications: true,
     emailNotifications: false,
@@ -36,25 +36,21 @@ const SettingsScreen: React.FC = () => {
   });
 
   const updateSetting = (key: string, value: boolean) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
+    setSettings(prev => ({...prev, [key]: value}));
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: () => {
-            // Handle logout
-            console.log('User logged out');
-          },
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: () => {
+          // Handle logout
+          console.log('User logged out');
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleDeleteAccount = () => {
@@ -62,15 +58,18 @@ const SettingsScreen: React.FC = () => {
       'Delete Account',
       'This action cannot be undone. All your data will be permanently deleted.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        {text: 'Cancel', style: 'cancel'},
         {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            Alert.alert('Account Deletion', 'Please contact support to delete your account.');
+            Alert.alert(
+              'Account Deletion',
+              'Please contact support to delete your account.',
+            );
           },
         },
-      ]
+      ],
     );
   };
 
@@ -85,7 +84,8 @@ const SettingsScreen: React.FC = () => {
           type: 'toggle',
           icon: 'bell',
           value: settings.pushNotifications,
-          onToggle: (value: boolean) => updateSetting('pushNotifications', value),
+          onToggle: (value: boolean) =>
+            updateSetting('pushNotifications', value),
         },
         {
           id: 'email',
@@ -94,7 +94,8 @@ const SettingsScreen: React.FC = () => {
           type: 'toggle',
           icon: 'mail',
           value: settings.emailNotifications,
-          onToggle: (value: boolean) => updateSetting('emailNotifications', value),
+          onToggle: (value: boolean) =>
+            updateSetting('emailNotifications', value),
         },
       ] as SettingItem[],
     },
@@ -211,77 +212,93 @@ const SettingsScreen: React.FC = () => {
     },
   ];
 
-  const renderSettingItem = (item: SettingItem, isLast: boolean = false) => (
-    <TouchableOpacity
-      key={item.id}
-      style={[
-        styles.settingItem,
-        { borderBottomColor: colors.border.light },
-        isLast && styles.lastItem
-      ]}
-      onPress={item.onPress}
-      disabled={item.type === 'toggle'}
-    >
-      <View style={styles.settingContent}>
-        <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
-          <Icon 
-            name={item.icon} 
-            size={20} 
-            color={item.id === 'delete' ? '#FF6B6B' : colors.text.secondary}
-          />
-        </View>
-        
-        <View style={styles.textContainer}>
-          <Text style={[
-            styles.settingTitle, 
-            { color: item.id === 'delete' ? '#FF6B6B' : colors.text.primary }
-          ]}>
-            {item.title}
-          </Text>
-          {item.subtitle && (
-            <Text style={[styles.settingSubtitle, { color: colors.text.secondary }]}>
-              {item.subtitle}
-            </Text>
-          )}
-        </View>
-        
-        <View style={styles.actionContainer}>
-          {item.type === 'toggle' && item.onToggle && (
-            <Switch
-              value={item.value || false}
-              onValueChange={item.onToggle}
-              trackColor={{ false: colors.border.light, true: colors.primary + '40' }}
-              thumbColor={item.value ? colors.primary : colors.text.secondary}
+  const renderSettingItem = (item: SettingItem, isLast: boolean = false) => {
+    const titleColor = item.id === 'delete' ? '#FF6B6B' : colors.text.primary;
+    return (
+      <TouchableOpacity
+        key={item.id}
+        style={[
+          styles.settingItem,
+          {borderBottomColor: colors.border},
+          isLast && styles.lastItem,
+        ]}
+        onPress={item.onPress}
+        disabled={item.type === 'toggle'}>
+        <View style={styles.settingContent}>
+          <View style={[styles.iconContainer, {backgroundColor: colors.surface}]}>
+            <Icon
+              name={item.icon}
+              size={20}
+              color={item.id === 'delete' ? '#FF6B6B' : colors.text.secondary}
             />
-          )}
-          {item.type === 'navigation' && (
-            <Icon name="chevron-right" size={20} color={colors.text.secondary} />
-          )}
+          </View>
+
+          <View style={styles.textContainer}>
+            <Text
+              style={[
+                styles.settingTitle,
+                {color: titleColor},
+              ]}>
+              {item.title}
+            </Text>
+            {item.subtitle && (
+              <Text
+                style={[styles.settingSubtitle, {color: colors.text.secondary}]}>
+                {item.subtitle}
+              </Text>
+            )}
+          </View>
+
+          <View style={styles.actionContainer}>
+            {item.type === 'toggle' && item.onToggle && (
+              <Switch
+                value={item.value || false}
+                onValueChange={item.onToggle}
+                trackColor={{
+                  false: colors.border,
+                  true: colors.primary + '40',
+                }}
+                thumbColor={item.value ? colors.primary : colors.text.secondary}
+              />
+            )}
+            {item.type === 'navigation' && (
+              <Icon
+                name="chevron-right"
+                size={20}
+                color={colors.text.secondary}
+              />
+            )}
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, {backgroundColor: colors.background}]}>
       <Header title="Settings" showBackButton />
-      
+
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {settingSections.map((section, sectionIndex) => (
+        {settingSections.map(section => (
           <View key={section.title} style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text.secondary }]}>
+            <Text style={[styles.sectionTitle, {color: colors.text.secondary}]}>
               {section.title}
             </Text>
-            <View style={[styles.sectionContent, { backgroundColor: colors.surface }]}>
-              {section.items.map((item, itemIndex) => 
-                renderSettingItem(item, itemIndex === section.items.length - 1)
+            <View
+              style={[
+                styles.sectionContent,
+                {backgroundColor: colors.surface},
+              ]}>
+              {section.items.map((item, itemIndex) =>
+                renderSettingItem(item, itemIndex === section.items.length - 1),
               )}
             </View>
           </View>
         ))}
-        
+
         <View style={styles.footer}>
-          <Text style={[styles.version, { color: colors.text.tertiary }]}>
+          <Text style={[styles.version, {color: colors.text.tertiary}]}>
             Version 1.0.0
           </Text>
         </View>

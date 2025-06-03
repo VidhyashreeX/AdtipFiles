@@ -1,5 +1,5 @@
 // src/screens/content/CreatePostScreen.tsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, {useState, useRef, useEffect} from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,9 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import {useNavigation} from '@react-navigation/native';
+import type {NavigationProp} from '@react-navigation/native';
+import type {RootStackParamList} from '../../types/navigation';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import ImagePicker from 'react-native-image-crop-picker';
@@ -24,13 +26,13 @@ import Header from '../../components/common/Header';
 import CategoryChip from '../../components/common/CategoryChip';
 
 // Context and services
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 import ApiService from '../../services/ApiService';
-import { ENDPOINTS } from '../../constants/api';
+import {ENDPOINTS} from '../../constants/api';
 
 const CreatePostScreen = () => {
-  const { colors } = useTheme();
-  const navigation = useNavigation();
+  const {colors} = useTheme();
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const [content, setContent] = useState('');
   const [images, setImages] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
@@ -45,7 +47,7 @@ const CreatePostScreen = () => {
         textInputRef.current.focus();
       }
     }, 300);
-    
+
     return () => clearTimeout(timer);
   }, []);
 
@@ -60,24 +62,24 @@ const CreatePostScreen = () => {
       mediaType: 'photo',
       maxFiles: 5 - images.length,
     })
-      .then((selectedImages) => {
+      .then(selectedImages => {
         // Limit to 5 images total
         if (images.length + selectedImages.length > 5) {
           Alert.alert('Limit Exceeded', 'You can upload maximum 5 images');
           return;
         }
-        
-        const newImages = selectedImages.map((img) => ({
+
+        const newImages = selectedImages.map(img => ({
           uri: Platform.OS === 'ios' ? img.sourceURL || img.path : img.path,
           type: img.mime,
           name: img.path.split('/').pop(),
           width: img.width,
           height: img.height,
         }));
-        
+
         setImages([...images, ...newImages]);
       })
-      .catch((err) => {
+      .catch(err => {
         if (err.code !== 'E_PICKER_CANCELLED') {
           Alert.alert('Error', 'Failed to pick image');
           console.error(err);
@@ -93,23 +95,24 @@ const CreatePostScreen = () => {
       cropping: false,
       compressImageQuality: 0.8,
     })
-      .then((image) => {
+      .then(image => {
         if (images.length >= 5) {
           Alert.alert('Limit Exceeded', 'You can upload maximum 5 images');
           return;
         }
-        
+
         const newImage = {
-          uri: Platform.OS === 'ios' ? image.sourceURL || image.path : image.path,
+          uri:
+            Platform.OS === 'ios' ? image.sourceURL || image.path : image.path,
           type: image.mime,
           name: image.path.split('/').pop(),
           width: image.width,
           height: image.height,
         };
-        
+
         setImages([...images, newImage]);
       })
-      .catch((err) => {
+      .catch(err => {
         if (err.code !== 'E_PICKER_CANCELLED') {
           Alert.alert('Error', 'Failed to take photo');
           console.error(err);
@@ -126,10 +129,11 @@ const CreatePostScreen = () => {
 
   // Handle select category
   const handleSelectCategory = () => {
-    navigation.navigate('SelectCategory' as never, {
+    // @ts-ignore
+    navigation.navigate('SelectCategory', {
       onSelect: (category: any) => setSelectedCategory(category),
       selectedCategory,
-    } as never);
+    });
   };
 
   // Handle publish post
@@ -142,16 +146,16 @@ const CreatePostScreen = () => {
 
     try {
       setIsLoading(true);
-      
+
       // Create form data
       const formData = new FormData();
       formData.append('content', content);
       formData.append('isPublic', isPublic ? '1' : '0');
-      
+
       if (selectedCategory) {
         formData.append('categoryId', selectedCategory.id);
       }
-      
+
       // Add images
       images.forEach((img, index) => {
         formData.append(`images[${index}]`, {
@@ -160,24 +164,22 @@ const CreatePostScreen = () => {
           name: img.name,
         } as any);
       });
-      
+
       // Upload post
-      const response = await ApiService.uploadFile(
+      await ApiService.uploadFile(
         ENDPOINTS.CREATE_POST,
         formData,
-        (progress) => {
+        progress => {
           console.log('Upload progress:', progress);
-        }
+        },
       );
-      
+
       setIsLoading(false);
-      
+
       // Show success message
-      Alert.alert(
-        'Success',
-        'Your post has been published!',
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
-      );
+      Alert.alert('Success', 'Your post has been published!', [
+        {text: 'OK', onPress: () => navigation.goBack()},
+      ]);
     } catch (error) {
       setIsLoading(false);
       Alert.alert('Error', 'Failed to publish your post. Please try again.');
@@ -185,8 +187,11 @@ const CreatePostScreen = () => {
     }
   };
 
+  const isDisabled = isLoading || (!content.trim() && images.length === 0);
+  const publishOpacity = isDisabled ? 0.5 : 1;
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView style={[{backgroundColor: colors.background}, styles.container]}>
       <Header
         title="Create Post"
         leftComponent={
@@ -195,30 +200,30 @@ const CreatePostScreen = () => {
           </TouchableOpacity>
         }
         rightComponent={
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={handlePublish}
-            disabled={isLoading || (!content.trim() && images.length === 0)}
-            style={{ opacity: isLoading || (!content.trim() && images.length === 0) ? 0.5 : 1 }}
-          >
+            disabled={isDisabled}
+            style={{ opacity: publishOpacity }}>
             {isLoading ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : (
-              <Text style={{ color: colors.primary, fontWeight: '600' }}>Publish</Text>
+              <Text style={[{color: colors.primary}, styles.publishText]}>
+                Publish
+              </Text>
             )}
           </TouchableOpacity>
         }
       />
 
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
-      >
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}>
         <ScrollView style={styles.container}>
           <View style={styles.editorContainer}>
             <TextInput
               ref={textInputRef}
-              style={[styles.contentInput, { color: colors.text.primary }]}
+              style={[styles.contentInput, {color: colors.text.primary}]}
               multiline
               placeholder="What's on your mind?"
               placeholderTextColor={colors.text.tertiary}
@@ -226,17 +231,22 @@ const CreatePostScreen = () => {
               onChangeText={setContent}
               maxLength={2000}
             />
-            
+
             {/* Image preview section */}
             {images.length > 0 && (
               <View style={styles.imagePreviewContainer}>
                 {images.map((img, index) => (
                   <View key={index} style={styles.imageWrapper}>
-                    <Image source={{ uri: img.uri }} style={styles.imagePreview} />
+                    <Image
+                      source={{uri: img.uri}}
+                      style={styles.imagePreview}
+                    />
                     <TouchableOpacity
-                      style={[styles.removeImageBtn, { backgroundColor: colors.error }]}
-                      onPress={() => handleRemoveImage(index)}
-                    >
+                      style={[
+                        styles.removeImageBtn,
+                        {backgroundColor: colors.error},
+                      ]}
+                      onPress={() => handleRemoveImage(index)}>
                       <Icon name="x" size={12} color={colors.white} />
                     </TouchableOpacity>
                   </View>
@@ -259,28 +269,35 @@ const CreatePostScreen = () => {
             )}
 
             {/* Character count */}
-            <Text style={[styles.charCount, { color: colors.text.tertiary }]}>
+            <Text style={[styles.charCount, {color: colors.text.tertiary}]}>
               {content.length}/2000
             </Text>
           </View>
         </ScrollView>
 
         {/* Bottom action bar */}
-        <View style={[styles.actionBar, { backgroundColor: colors.card }]}>
-          <TouchableOpacity style={styles.actionButton} onPress={handlePickImage}>
+        <View style={[styles.actionBar, {backgroundColor: colors.card}]}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handlePickImage}>
             <Icon name="image" size={22} color={colors.primary} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionButton} onPress={handleTakePhoto}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleTakePhoto}>
             <Icon name="camera" size={22} color={colors.primary} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionButton} onPress={handleSelectCategory}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleSelectCategory}>
             <Icon name="tag" size={22} color={colors.primary} />
           </TouchableOpacity>
 
           <View style={styles.visibilitySwitchWrapper}>
-            <Text style={[styles.visibilityText, { color: colors.text.secondary }]}>
+            <Text
+              style={[styles.visibilityText, {color: colors.text.secondary}]}>
               {isPublic ? 'Public' : 'Private'}
             </Text>
             <TouchableOpacity onPress={() => setIsPublic(!isPublic)}>
@@ -365,6 +382,9 @@ const styles = StyleSheet.create({
   visibilityText: {
     marginRight: 8,
     fontSize: 14,
+  },
+  publishText: {
+    fontWeight: 'bold',
   },
 });
 

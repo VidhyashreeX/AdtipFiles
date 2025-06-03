@@ -1,6 +1,13 @@
 // src/contexts/WalletContext.tsx
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useAuth } from './AuthContext';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+  useCallback, // Added useCallback
+} from 'react';
+import {useAuth} from './AuthContext';
 import WalletService from '../services/WalletService';
 
 interface WalletContextType {
@@ -25,23 +32,25 @@ interface WalletProviderProps {
   children: ReactNode;
 }
 
-export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
+export const WalletProvider: React.FC<WalletProviderProps> = ({children}) => {
   const [balance, setBalance] = useState<string>('0.00');
   const [isPremium, setIsPremium] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const { user } = useAuth();
+  const {user} = useAuth();
 
   // Function to fetch wallet balance
-  const refreshBalance = async () => {
+  const refreshBalance = useCallback(async () => {
     try {
-      if (!user || !user.id) return;
-      
+      if (!user || !user.id) {
+        return;
+      }
+
       setIsLoading(true);
-      
+
       // Get wallet balance
       const walletBalance = await WalletService.getWalletBalance(user.id);
       setBalance(walletBalance);
-      
+
       // Check premium status (if needed)
       const premiumStatus = await WalletService.checkPremiumStatus(user.id);
       setIsPremium(premiumStatus.isPremium);
@@ -50,14 +59,12 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
 
   // Load wallet balance when user changes
   useEffect(() => {
-    if (user && user.id) {
-      refreshBalance();
-    }
-  }, [user]);
+    refreshBalance();
+  }, [refreshBalance]);
 
   return (
     <WalletContext.Provider
@@ -66,8 +73,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         isPremium,
         refreshBalance,
         isLoading,
-      }}
-    >
+      }}>
       {children}
     </WalletContext.Provider>
   );

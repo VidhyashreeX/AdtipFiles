@@ -1,8 +1,8 @@
 // src/components/tiptube/VideoCard.tsx
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import React, {useState} from 'react';
+import {View, Text, StyleSheet, Image, TouchableOpacity} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 import Video from 'react-native-video';
 
 interface VideoCardProps {
@@ -31,11 +31,11 @@ const VideoCard: React.FC<VideoCardProps> = ({
   isPremium = false,
   price,
   videoUrl,
-  onPress
+  onPress,
 }) => {
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const [isHovering, setIsHovering] = useState(false);
-  
+
   // Format view count (e.g., 1.2k, 3.4M)
   const formatViewCount = (count: number): string => {
     if (count >= 1000000) {
@@ -48,17 +48,16 @@ const VideoCard: React.FC<VideoCardProps> = ({
   };
 
   return (
-    <TouchableOpacity 
-      style={[styles.container, { backgroundColor: colors.white }]} 
+    <TouchableOpacity
+      style={[styles.container, {backgroundColor: colors.white}]}
       onPress={onPress}
       onPressIn={() => setIsHovering(true)}
       onPressOut={() => setIsHovering(false)}
-      activeOpacity={0.9}
-    >
+      activeOpacity={0.9}>
       <View style={styles.thumbnailContainer}>
         {isHovering && videoUrl ? (
-          <Video 
-            source={{ uri: videoUrl }} 
+          <Video
+            source={{uri: videoUrl}}
             style={styles.thumbnail}
             resizeMode="cover"
             muted={true}
@@ -67,31 +66,46 @@ const VideoCard: React.FC<VideoCardProps> = ({
             paused={false}
           />
         ) : (
-          <Image 
-            source={{ uri: thumbnailUrl || 'https://via.placeholder.com/320x180?text=No+Thumbnail' }} 
+          <Image
+            source={{
+              uri:
+                thumbnailUrl ||
+                'https://via.placeholder.com/320x180?text=No+Thumbnail',
+            }}
             style={styles.thumbnail}
             resizeMode="cover"
           />
         )}
-        
         <View style={styles.durationContainer}>
           <Text style={styles.duration}>{String(duration)}</Text>
         </View>
-        
         {isPremium && (
-          <View style={[styles.premiumBadge, { backgroundColor: colors.secondary }]}>
-            <Icon name="star" size={10} color={colors.white} style={styles.badgeIcon} />
+          <View
+            style={[styles.premiumBadge, {backgroundColor: colors.secondary}]}>
+            <Icon
+              name="star"
+              size={10}
+              color={colors.white}
+              style={styles.badgeIcon}
+            />
             <Text style={styles.premiumText}>Premium</Text>
           </View>
         )}
-        
+        {/* Removed the offending whitespace here */}
         {price && price > 0 && (
-          <View style={[styles.priceBadge, { 
-            backgroundColor: colors.success,
-            top: isPremium ? 40 : 8
-          }]}>
-            <Icon name="dollar-sign" size={10} color={colors.white} style={styles.badgeIcon} />
-            <Text style={styles.priceText}>${price.toFixed(2)}</Text>
+          <View
+            style={[
+              styles.priceBadge,
+              {backgroundColor: colors.success},
+              isPremium ? styles.priceBadgePremium : styles.priceBadgeRegular,
+            ]}>
+            <Icon
+              name="dollar-sign"
+              size={10}
+              color={colors.white}
+              style={styles.badgeIcon}
+            />
+            <Text style={styles.priceText}>{`$${String(price?.toFixed(2))}`}</Text>
           </View>
         )}
       </View>
@@ -99,24 +113,31 @@ const VideoCard: React.FC<VideoCardProps> = ({
       <View style={styles.content}>
         <View style={styles.userImageContainer}>
           {userImageUrl ? (
-            <Image source={{ uri: userImageUrl }} style={styles.userImage} />
+            <Image source={{uri: userImageUrl}} style={styles.userImage} />
           ) : (
-            <View style={[styles.userImagePlaceholder, { backgroundColor: colors.gray[200] }]} />
+            <View
+              style={[
+                styles.userImagePlaceholder,
+                {backgroundColor: colors.gray[200]},
+              ]}
+            />
           )}
         </View>
-        
+
         <View style={styles.textContent}>
-          <Text style={[styles.title, { color: colors.text.primary }]} numberOfLines={2}>
+          <Text
+            style={[styles.title, {color: colors.text.primary}]}
+            numberOfLines={2}>
             {String(title)}
           </Text>
-          <Text style={[styles.username, { color: colors.text.secondary }]}>
+          <Text style={[styles.username, {color: colors.text.secondary}]}>
             {String(username)}
           </Text>
-          <Text style={[styles.metadata, { color: colors.text.tertiary }]}>
-            {formatViewCount(views)} views • {String(postedTime)}
+          <Text style={[styles.metadata, {color: colors.text.tertiary}]}>
+            {`${formatViewCount(views)} views  ${String(postedTime)}`}
           </Text>
         </View>
-        
+
         <TouchableOpacity style={styles.optionsButton}>
           <Icon name="more-vertical" size={18} color={colors.text.secondary} />
         </TouchableOpacity>
@@ -132,7 +153,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     elevation: 1,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: {width: 0, height: 1},
     shadowOpacity: 0.1,
     shadowRadius: 1,
   },
@@ -189,6 +210,12 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
     fontSize: 12,
+  },
+  priceBadgePremium: {
+    top: 40,
+  },
+  priceBadgeRegular: {
+    top: 8,
   },
   content: {
     flexDirection: 'row',

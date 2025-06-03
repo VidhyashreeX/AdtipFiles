@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, {useState, useRef} from 'react';
 import {
   View,
   Text,
@@ -9,26 +9,30 @@ import {
   TouchableOpacity,
   Animated,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../types/navigation';
 
 // Theme
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 
 // Constants
-const { width } = Dimensions.get('window');
+const {width} = Dimensions.get('window');
 
 // Onboarding data
 const onboardingData = [
   {
     id: '1',
     title: 'Create & Share Content',
-    description: 'Make a channel, upload videos and images that people will love',
+    description:
+      'Make a channel, upload videos and images that people will love',
     image: require('../../assets/images/onboarding-1.png'),
   },
   {
     id: '2',
     title: 'Earn from your content',
-    description: 'Get rewarded for your quality content with our fair monetization system',
+    description:
+      'Get rewarded for your quality content with our fair monetization system',
     image: require('../../assets/images/onboarding-2.png'),
   },
   {
@@ -39,20 +43,58 @@ const onboardingData = [
   },
 ];
 
+// Move Dots outside of OnboardingScreen to avoid nested component warning and fix variable shadowing
+interface DotsProps {
+  scrollX: Animated.Value;
+  onboardingSlides: any[];
+  slideWidth: number;
+  styles: any;
+}
+const Dots: React.FC<DotsProps> = ({scrollX, onboardingSlides, slideWidth, styles}) => (
+  <View style={styles.dotsContainer}>
+    {onboardingSlides.map((_, index) => {
+      const inputRange = [
+        (index - 1) * slideWidth,
+        index * slideWidth,
+        (index + 1) * slideWidth,
+      ];
+
+      const dotWidth = scrollX.interpolate({
+        inputRange,
+        outputRange: [8, 20, 8],
+        extrapolate: 'clamp',
+      });
+
+      const opacity = scrollX.interpolate({
+        inputRange,
+        outputRange: [0.3, 1, 0.3],
+        extrapolate: 'clamp',
+      });
+
+      return (
+        <Animated.View
+          key={index.toString()}
+          style={[styles.dot, {width: dotWidth, opacity}]}
+        />
+      );
+    })}
+  </View>
+);
+
 /**
  * Onboarding screen component
  */
-const OnboardingScreen = ({ navigation }) => {
+const OnboardingScreen = ({navigation}: {navigation: NativeStackNavigationProp<RootStackParamList, 'Onboarding'>}) => {
   // Theme
-  const { colors } = useTheme();
-  
+  const {colors} = useTheme();
+
   // Local state
   const [currentIndex, setCurrentIndex] = useState(0);
-  
+
   // Animation refs
   const scrollX = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<FlatList>(null);
-  
+
   // Handle next slide
   const goToNextSlide = () => {
     if (currentIndex < onboardingData.length - 1) {
@@ -65,81 +107,37 @@ const OnboardingScreen = ({ navigation }) => {
       navigation.replace('Login');
     }
   };
-  
+
   // Handle skip
   const handleSkip = () => {
     navigation.replace('Login');
   };
-  
-  // Render dot indicators
-  const Dots = () => {
-    return (
-      <View style={styles.dotsContainer}>
-        {onboardingData.map((_, index) => {
-          const inputRange = [
-            (index - 1) * width,
-            index * width,
-            (index + 1) * width,
-          ];
-          
-          const dotWidth = scrollX.interpolate({
-            inputRange,
-            outputRange: [8, 20, 8],
-            extrapolate: 'clamp',
-          });
-          
-          const opacity = scrollX.interpolate({
-            inputRange,
-            outputRange: [0.3, 1, 0.3],
-            extrapolate: 'clamp',
-          });
-          
-          return (
-            <Animated.View
-              key={index.toString()}
-              style={[
-                styles.dot,
-                {
-                  width: dotWidth,
-                  backgroundColor: colors.primary,
-                  opacity,
-                },
-              ]}
-            />
-          );
-        })}
-      </View>
-    );
-  };
-  
+
   // Render onboarding item
-  const renderItem = ({ item }) => {
+  const renderItem = ({item}: {item: typeof onboardingData[0]}) => {
     return (
       <View style={styles.slide}>
-        <Image
-          source={item.image}
-          style={styles.image}
-          resizeMode="contain"
-        />
-        <Text style={[styles.title, { color: colors.text.primary }]}>
+        <Image source={item.image} style={styles.image} resizeMode="contain" />
+        <Text style={[styles.title, {color: colors.text.primary}]}>
           {item.title}
         </Text>
-        <Text style={[styles.description, { color: colors.text.tertiary }]}>
+        <Text style={[styles.description, {color: colors.text.tertiary}]}>
           {item.description}
         </Text>
       </View>
     );
   };
-  
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, {backgroundColor: colors.background}]}>
       {/* Skip button */}
       <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
-        <Text style={[styles.skipText, { color: colors.text.tertiary }]}>
+        <Text style={[styles.skipText, {color: colors.text.tertiary}]}>
           Skip
         </Text>
       </TouchableOpacity>
-      
+
       {/* Onboarding slides */}
       <FlatList
         ref={flatListRef}
@@ -148,27 +146,31 @@ const OnboardingScreen = ({ navigation }) => {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item.id}
+        keyExtractor={item => item.id}
         onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-          { useNativeDriver: false }
+          [{nativeEvent: {contentOffset: {x: scrollX}}}],
+          {useNativeDriver: false},
         )}
-        onMomentumScrollEnd={(event) => {
+        onMomentumScrollEnd={event => {
           const newIndex = Math.floor(
-            event.nativeEvent.contentOffset.x / width
+            event.nativeEvent.contentOffset.x / width,
           );
           setCurrentIndex(newIndex);
         }}
       />
-      
+
       {/* Dots indicator */}
-      <Dots />
-      
+      <Dots
+        scrollX={scrollX}
+        onboardingSlides={onboardingData}
+        slideWidth={width}
+        styles={styles}
+      />
+
       {/* Next/Get Started button */}
       <TouchableOpacity
-        style={[styles.nextButton, { backgroundColor: colors.primary }]}
-        onPress={goToNextSlide}
-      >
+        style={[styles.nextButton, {backgroundColor: colors.primary}]}
+        onPress={goToNextSlide}>
         <Text style={styles.nextButtonText}>
           {currentIndex === onboardingData.length - 1 ? 'Get Started' : 'Next'}
         </Text>

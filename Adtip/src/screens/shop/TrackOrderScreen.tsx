@@ -1,5 +1,5 @@
 // src/screens/shop/TrackOrderScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,9 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import {useRoute} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 
 interface OrderStatus {
@@ -45,23 +45,19 @@ interface OrderInfo {
 }
 
 const TrackOrderScreen: React.FC = () => {
-  const navigation = useNavigation();
   const route = useRoute();
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const [loading, setLoading] = useState(true);
   const [orderInfo, setOrderInfo] = useState<OrderInfo | null>(null);
   const [orderStatuses, setOrderStatuses] = useState<OrderStatus[]>([]);
 
   const orderId = (route.params as any)?.orderId || 'AD123456789';
 
-  useEffect(() => {
-    loadOrderDetails();
-  }, [orderId]);
-
-  const loadOrderDetails = async () => {
+  // Fix: Move loadOrderDetails above useEffect and wrap in useCallback
+  const loadOrderDetails = useCallback(async () => {
     try {
       setLoading(true);
-      
+
       // Mock order data
       const mockOrderInfo: OrderInfo = {
         orderId,
@@ -70,8 +66,8 @@ const TrackOrderScreen: React.FC = () => {
         estimatedDelivery: '2024-06-02',
         trackingNumber: 'TRK789456123',
         items: [
-          { name: 'Adtip Premium T-Shirt', quantity: 2, price: 29.99 },
-          { name: 'Adtip Sticker Pack', quantity: 1, price: 9.99 },
+          {name: 'Adtip Premium T-Shirt', quantity: 2, price: 29.99},
+          {name: 'Adtip Sticker Pack', quantity: 1, price: 9.99},
         ],
         shippingAddress: {
           name: 'John Doe',
@@ -134,7 +130,11 @@ const TrackOrderScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [orderId]);
+
+  useEffect(() => {
+    loadOrderDetails();
+  }, [loadOrderDetails]);
 
   const getStatusIcon = (status: OrderStatus) => {
     if (status.completed) {
@@ -158,7 +158,7 @@ const TrackOrderScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, {backgroundColor: colors.background}]}>
         <Header title="Track Order" showBackButton />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -169,10 +169,10 @@ const TrackOrderScreen: React.FC = () => {
 
   if (!orderInfo) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, {backgroundColor: colors.background}]}>
         <Header title="Track Order" showBackButton />
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: colors.text.secondary }]}>
+          <Text style={[styles.errorText, {color: colors.text.secondary}]}>
             Order not found
           </Text>
         </View>
@@ -181,24 +181,25 @@ const TrackOrderScreen: React.FC = () => {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
       <Header title="Track Order" showBackButton />
-      
+
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Order Header */}
-        <View style={[styles.orderHeader, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.orderId, { color: colors.text.primary }]}>
+        <View style={[styles.orderHeader, {backgroundColor: colors.surface}]}>
+          <Text style={[styles.orderId, {color: colors.text.primary}]}>
             Order #{orderInfo.orderId}
           </Text>
-          <Text style={[styles.orderDate, { color: colors.text.secondary }]}>
+          <Text style={[styles.orderDate, {color: colors.text.secondary}]}>
             Placed on {new Date(orderInfo.orderDate).toLocaleDateString()}
           </Text>
           {orderInfo.trackingNumber && (
             <View style={styles.trackingContainer}>
-              <Text style={[styles.trackingLabel, { color: colors.text.secondary }]}>
+              <Text
+                style={[styles.trackingLabel, {color: colors.text.secondary}]}>
                 Tracking Number:
               </Text>
-              <Text style={[styles.trackingNumber, { color: colors.primary }]}>
+              <Text style={[styles.trackingNumber, {color: colors.primary}]}>
                 {orderInfo.trackingNumber}
               </Text>
             </View>
@@ -206,21 +207,25 @@ const TrackOrderScreen: React.FC = () => {
         </View>
 
         {/* Delivery Estimate */}
-        <View style={[styles.deliveryEstimate, { backgroundColor: colors.primary + '10' }]}>
+        <View
+          style={[
+            styles.deliveryEstimate,
+            {backgroundColor: colors.primary + '10'},
+          ]}>
           <Icon name="truck" size={24} color={colors.primary} />
           <View style={styles.deliveryInfo}>
-            <Text style={[styles.deliveryTitle, { color: colors.text.primary }]}>
+            <Text style={[styles.deliveryTitle, {color: colors.text.primary}]}>
               Estimated Delivery
             </Text>
-            <Text style={[styles.deliveryDate, { color: colors.primary }]}>
+            <Text style={[styles.deliveryDate, {color: colors.primary}]}>
               {new Date(orderInfo.estimatedDelivery).toLocaleDateString()}
             </Text>
           </View>
         </View>
 
         {/* Order Status Timeline */}
-        <View style={[styles.section, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+        <View style={[styles.section, {backgroundColor: colors.surface}]}>
+          <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
             Order Status
           </Text>
           <View style={styles.timeline}>
@@ -230,9 +235,8 @@ const TrackOrderScreen: React.FC = () => {
                   <View
                     style={[
                       styles.timelineIcon,
-                      { backgroundColor: getStatusColor(status) + '20' }
-                    ]}
-                  >
+                      {backgroundColor: getStatusColor(status) + '20'},
+                    ]}>
                     <Icon
                       name={getStatusIcon(status)}
                       size={16}
@@ -240,14 +244,26 @@ const TrackOrderScreen: React.FC = () => {
                     />
                   </View>
                   <View style={styles.timelineText}>
-                    <Text style={[styles.statusTitle, { color: colors.text.primary }]}>
+                    <Text
+                      style={[
+                        styles.statusTitle,
+                        {color: colors.text.primary},
+                      ]}>
                       {status.title}
                     </Text>
-                    <Text style={[styles.statusDescription, { color: colors.text.secondary }]}>
+                    <Text
+                      style={[
+                        styles.statusDescription,
+                        {color: colors.text.secondary},
+                      ]}>
                       {status.description}
                     </Text>
                     {status.timestamp && (
-                      <Text style={[styles.statusTimestamp, { color: colors.text.tertiary }]}>
+                      <Text
+                        style={[
+                          styles.statusTimestamp,
+                          {color: colors.text.tertiary},
+                        ]}>
                         {status.timestamp}
                       </Text>
                     )}
@@ -260,8 +276,8 @@ const TrackOrderScreen: React.FC = () => {
                       {
                         backgroundColor: status.completed
                           ? colors.success
-                          : colors.border.light
-                      }
+                          : colors.border.light,
+                      },
                     ]}
                   />
                 )}
@@ -271,50 +287,58 @@ const TrackOrderScreen: React.FC = () => {
         </View>
 
         {/* Order Items */}
-        <View style={[styles.section, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+        <View style={[styles.section, {backgroundColor: colors.surface}]}>
+          <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
             Order Items
           </Text>
           {orderInfo.items.map((item, index) => (
-            <View key={index} style={[styles.orderItem, { borderBottomColor: colors.border.light }]}>
+            <View
+              key={index}
+              style={[
+                styles.orderItem,
+                {borderBottomColor: colors.border.light},
+              ]}>
               <View style={styles.itemInfo}>
-                <Text style={[styles.itemName, { color: colors.text.primary }]}>
+                <Text style={[styles.itemName, {color: colors.text.primary}]}>
                   {item.name}
                 </Text>
-                <Text style={[styles.itemQuantity, { color: colors.text.secondary }]}>
+                <Text
+                  style={[styles.itemQuantity, {color: colors.text.secondary}]}>
                   Quantity: {item.quantity}
                 </Text>
               </View>
-              <Text style={[styles.itemPrice, { color: colors.text.primary }]}>
+              <Text style={[styles.itemPrice, {color: colors.text.primary}]}>
                 ${(item.price * item.quantity).toFixed(2)}
               </Text>
             </View>
           ))}
-          <View style={[styles.totalRow, { borderTopColor: colors.border.light }]}>
-            <Text style={[styles.totalLabel, { color: colors.text.primary }]}>
+          <View
+            style={[styles.totalRow, {borderTopColor: colors.border.light}]}>
+            <Text style={[styles.totalLabel, {color: colors.text.primary}]}>
               Total
             </Text>
-            <Text style={[styles.totalAmount, { color: colors.text.primary }]}>
+            <Text style={[styles.totalAmount, {color: colors.text.primary}]}>
               ${orderInfo.totalAmount.toFixed(2)}
             </Text>
           </View>
         </View>
 
         {/* Shipping Address */}
-        <View style={[styles.section, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+        <View style={[styles.section, {backgroundColor: colors.surface}]}>
+          <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
             Shipping Address
           </Text>
-          <Text style={[styles.addressName, { color: colors.text.primary }]}>
+          <Text style={[styles.addressName, {color: colors.text.primary}]}>
             {orderInfo.shippingAddress.name}
           </Text>
-          <Text style={[styles.addressLine, { color: colors.text.secondary }]}>
+          <Text style={[styles.addressLine, {color: colors.text.secondary}]}>
             {orderInfo.shippingAddress.address}
           </Text>
-          <Text style={[styles.addressLine, { color: colors.text.secondary }]}>
-            {orderInfo.shippingAddress.city}, {orderInfo.shippingAddress.zipCode}
+          <Text style={[styles.addressLine, {color: colors.text.secondary}]}>
+            {orderInfo.shippingAddress.city},{' '}
+            {orderInfo.shippingAddress.zipCode}
           </Text>
-          <Text style={[styles.addressLine, { color: colors.text.secondary }]}>
+          <Text style={[styles.addressLine, {color: colors.text.secondary}]}>
             {orderInfo.shippingAddress.country}
           </Text>
         </View>
@@ -322,26 +346,36 @@ const TrackOrderScreen: React.FC = () => {
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
           <TouchableOpacity
-            style={[styles.actionButton, styles.secondaryButton, { borderColor: colors.border.light }]}
+            style={[
+              styles.actionButton,
+              styles.secondaryButton,
+              {borderColor: colors.border.light},
+            ]}
             onPress={() => {
-              Alert.alert('Contact Support', 'How can we help you with this order?');
-            }}
-          >
+              Alert.alert(
+                'Contact Support',
+                'How can we help you with this order?',
+              );
+            }}>
             <Icon name="help-circle" size={18} color={colors.text.primary} />
-            <Text style={[styles.actionButtonText, { color: colors.text.primary }]}>
+            <Text
+              style={[styles.actionButtonText, {color: colors.text.primary}]}>
               Contact Support
             </Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
-            style={[styles.actionButton, styles.primaryButton, { backgroundColor: colors.primary }]}
+            style={[
+              styles.actionButton,
+              styles.primaryButton,
+              {backgroundColor: colors.primary},
+            ]}
             onPress={() => {
               // Handle reorder
               Alert.alert('Reorder', 'Would you like to reorder these items?');
-            }}
-          >
+            }}>
             <Icon name="refresh-cw" size={18} color={colors.white} />
-            <Text style={[styles.actionButtonText, { color: colors.white }]}>
+            <Text style={[styles.actionButtonText, {color: colors.white}]}>
               Reorder
             </Text>
           </TouchableOpacity>

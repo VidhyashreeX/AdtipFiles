@@ -1,9 +1,14 @@
 // src/components/common/PubScaleOfferwallButton.tsx
 // Commented out PubScale integration - June 2, 2025
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, Alert } from 'react-native';
-import { useAuth } from '../../contexts/AuthContext';
-import { useTheme } from '../../contexts/ThemeContext';
+import {
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
+import {useTheme} from '../../contexts/ThemeContext';
 // import RewardService from '../../services/RewardService';
 
 interface PubScaleOfferwallButtonProps {
@@ -17,7 +22,7 @@ const PubScaleOfferwallButton: React.FC<PubScaleOfferwallButtonProps> = ({
   onPress,
   style,
 }) => {
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const [isLoading, setIsLoading] = React.useState(false);
   const handleShowOfferwall = async () => {
     if (onPress) {
@@ -28,11 +33,11 @@ const PubScaleOfferwallButton: React.FC<PubScaleOfferwallButtonProps> = ({
     try {
       // Commented out PubScale integration - June 2, 2025
       // await RewardService.showOfferwall();
-      
+
       // Show temporary message while PubScale is disabled
       Alert.alert(
         'Feature Disabled',
-        'The offerwall feature is currently disabled. Please check back later.'
+        'The offerwall feature is currently disabled. Please check back later.',
       );
     } catch (error) {
       console.error('Error showing offerwall:', error);
@@ -43,14 +48,9 @@ const PubScaleOfferwallButton: React.FC<PubScaleOfferwallButtonProps> = ({
 
   return (
     <TouchableOpacity
-      style={[
-        styles.button,
-        { backgroundColor: colors.primary },
-        style,
-      ]}
+      style={[styles.button, {backgroundColor: colors.primary}, style]}
       onPress={handleShowOfferwall}
-      disabled={isLoading}
-    >
+      disabled={isLoading}>
       {isLoading ? (
         <ActivityIndicator size="small" color="#FFFFFF" />
       ) : (

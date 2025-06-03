@@ -1,5 +1,5 @@
 // src/screens/content/SelectCategoryScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import {useNavigation, useRoute} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 
 // Components
@@ -18,9 +18,9 @@ import Header from '../../components/common/Header';
 import CategoryChip from '../../components/common/CategoryChip';
 
 // Context and services
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 import ApiService from '../../services/ApiService';
-import { ENDPOINTS } from '../../constants/api';
+import {ENDPOINTS} from '../../constants/api';
 
 interface Category {
   id: string;
@@ -29,19 +29,21 @@ interface Category {
 }
 
 const SelectCategoryScreen = () => {
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const navigation = useNavigation();
   const route = useRoute();
-  
+
   // @ts-ignore
-  const { onSelect, selectedCategory } = route.params || {};
-  
+  const {onSelect, selectedCategory} = route.params || {};
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [filteredCategories, setFilteredCategories] = useState<Category[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selected, setSelected] = useState<Category | null>(selectedCategory || null);
+  const [selected, setSelected] = useState<Category | null>(
+    selectedCategory || null,
+  );
 
   // Fetch categories
   useEffect(() => {
@@ -53,8 +55,8 @@ const SelectCategoryScreen = () => {
     if (searchQuery.trim() === '') {
       setFilteredCategories(categories);
     } else {
-      const filtered = categories.filter((category) =>
-        category.name.toLowerCase().includes(searchQuery.toLowerCase())
+      const filtered = categories.filter(category =>
+        category.name.toLowerCase().includes(searchQuery.toLowerCase()),
       );
       setFilteredCategories(filtered);
     }
@@ -67,8 +69,8 @@ const SelectCategoryScreen = () => {
       setCategories(response.data);
       setFilteredCategories(response.data);
       setLoading(false);
-    } catch (error) {
-      console.error('Error fetching categories:', error);
+    } catch (err) {
+      console.error('Error fetching categories:', err);
       setError('Failed to load categories');
       setLoading(false);
     }
@@ -82,27 +84,23 @@ const SelectCategoryScreen = () => {
     }
   };
 
-  const renderItem = ({ item }: { item: Category }) => {
+  const renderItem = ({item}: {item: Category}) => {
     const isSelected = selected?.id === item.id;
-    
     return (
       <TouchableOpacity
         style={[
           styles.categoryItem,
-          { backgroundColor: isSelected ? colors.gray[100] : 'transparent' },
+          isSelected && styles.categoryItemSelected,
         ]}
-        onPress={() => handleSelectCategory(item)}
-      >
+        onPress={() => handleSelectCategory(item)}>
         <CategoryChip category={item} selected={isSelected} />
-        {isSelected && (
-          <Icon name="check" size={20} color={colors.primary} />
-        )}
+        {isSelected && <Icon name="check" size={20} color={colors.primary} />}
       </TouchableOpacity>
     );
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView style={[styles.safeArea, {backgroundColor: colors.background}]}> {/* flex: 1 moved to StyleSheet */}
       <Header
         title="Select Category"
         leftComponent={
@@ -111,13 +109,13 @@ const SelectCategoryScreen = () => {
           </TouchableOpacity>
         }
       />
-
       <View style={styles.container}>
         {/* Search box */}
-        <View style={[styles.searchContainer, { backgroundColor: colors.gray[100] }]}>
+        <View
+          style={[styles.searchContainer, {backgroundColor: colors.gray[100]}]}>
           <Icon name="search" size={20} color={colors.text.tertiary} />
           <TextInput
-            style={[styles.searchInput, { color: colors.text.primary }]}
+            style={[styles.searchInput, {color: colors.text.primary}]}
             placeholder="Search categories"
             placeholderTextColor={colors.text.tertiary}
             value={searchQuery}
@@ -137,24 +135,26 @@ const SelectCategoryScreen = () => {
           </View>
         ) : error ? (
           <View style={styles.errorContainer}>
-            <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+            <Text style={[styles.errorText, {color: colors.error}]}>
+              {error}
+            </Text>
             <TouchableOpacity
-              style={[styles.retryButton, { backgroundColor: colors.primary }]}
-              onPress={fetchCategories}
-            >
-              <Text style={{ color: colors.white }}>Retry</Text>
+              style={[styles.retryButton, {backgroundColor: colors.primary}]}
+              onPress={fetchCategories}>
+              <Text style={{color: colors.white}}>Retry</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <FlatList
             data={filteredCategories}
             renderItem={renderItem}
-            keyExtractor={(item) => item.id.toString()}
+            keyExtractor={item => item.id.toString()}
             contentContainerStyle={styles.listContainer}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
+                <Text
+                  style={[styles.emptyText, {color: colors.text.secondary}]}>
                   {searchQuery.length > 0
                     ? 'No matching categories found'
                     : 'No categories available'}
@@ -169,6 +169,9 @@ const SelectCategoryScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
   container: {
     flex: 1,
     padding: 16,
@@ -196,6 +199,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 8,
     marginBottom: 8,
+    backgroundColor: 'transparent',
+  },
+  categoryItemSelected: {
+    backgroundColor: '#f3f4f6', // fallback, will be overridden inline with colors.gray[100]
   },
   loadingContainer: {
     flex: 1,

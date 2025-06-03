@@ -1,22 +1,18 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, TouchableOpacity, Platform } from 'react-native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { BlurView } from '@react-native-community/blur';
+import React, {useState} from 'react';
+import {StyleSheet, View, TouchableOpacity, Platform} from 'react-native';
+import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import {BlurView} from '@react-native-community/blur';
 import Icon from 'react-native-vector-icons/Feather';
-import { useNavigation } from '@react-navigation/native';
 
-// Import screens
 import HomeScreen from '../screens/home/HomeScreen';
 import TipTubeScreen from '../screens/tiptube/TipTubeScreen';
 import TipCallScreen from '../screens/tipcall/TipCallScreen';
-import TipShopScreen from '../screens/tipshop/TipShopScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import CreateContentModal from '../screens/content/CreateContentModal';
 
 // Import theme and contexts
-import { useTheme } from '../contexts/ThemeContext';
-import { useWallet } from '../contexts/WalletContext';
-import { withWalletBalance } from '../components/hoc/withWalletBalance';
+import {useTheme} from '../contexts/ThemeContext';
+import {withWalletBalance} from '../components/hoc/withWalletBalance';
 
 // Create tab navigator
 const Tab = createBottomTabNavigator();
@@ -25,8 +21,7 @@ const Tab = createBottomTabNavigator();
  * Custom tab bar button for the create content action
  */
 const CreateContentButton = () => {
-  const { colors } = useTheme();
-  const navigation = useNavigation();
+  const {colors} = useTheme();
   const [modalVisible, setModalVisible] = useState(false);
 
   const handlePress = () => {
@@ -42,34 +37,62 @@ const CreateContentButton = () => {
       <TouchableOpacity
         activeOpacity={0.8}
         onPress={handlePress}
-        style={[styles.createButton, { backgroundColor: colors.primary }]}
-      >
+        style={[styles.createButton, {backgroundColor: colors.primary}]}>
         <Icon name="plus" color={colors.white} size={24} />
       </TouchableOpacity>
-      
+
       {modalVisible && (
-        <CreateContentModal 
-          visible={modalVisible} 
-          onClose={handleCloseModal} 
-        />
+        <CreateContentModal visible={modalVisible} onClose={handleCloseModal} />
       )}
     </>
   );
 };
 
+// Move tabBarIcon and tabBarButton components outside TabNavigator to avoid defining them during render
+const HomeTabBarIcon = ({color, size}: {color: string; size: number}) => (
+  <Icon name="home" color={color} size={size} />
+);
+const TipTubeTabBarIcon = ({color, size}: {color: string; size: number}) => (
+  <Icon name="video" color={color} size={size} />
+);
+const TipCallTabBarIcon = ({color, size}: {color: string; size: number}) => (
+  <Icon name="phone" color={color} size={size} />
+);
+const ProfileTabBarIcon = ({color, size}: {color: string; size: number}) => (
+  <Icon name="user" color={color} size={size} />
+);
+const CreateContentTabBarButton = (props: any) => <CreateContentButton {...props} />;
+
+// Move tabBarBackground components outside TabNavigator to avoid unstable nested components
+const BlurTabBarBackground = () => (
+  <BlurView
+    blurType="light"
+    blurAmount={10}
+    style={StyleSheet.absoluteFill}
+  />
+);
+const ANDROID_TAB_BAR_BG_COLOR = '#FFFFFFF0';
+const AndroidTabBarBackground = () => (
+  <View
+    style={[
+      StyleSheet.absoluteFill,
+      styles.androidTabBarBackground,
+    ]}
+  />
+);
+
 /**
  * Bottom tab navigator component
  */
 const TabNavigator = () => {
-  const { colors } = useTheme();
-  const { balance } = useWallet();
-  
+  const {colors} = useTheme();
+
   // Wrap screen components with wallet balance
   const EnhancedHomeScreen = withWalletBalance(HomeScreen);
   const EnhancedTipTubeScreen = withWalletBalance(TipTubeScreen);
   const EnhancedTipCallScreen = withWalletBalance(TipCallScreen);
   const EnhancedProfileScreen = withWalletBalance(ProfileScreen);
-  
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -84,46 +107,33 @@ const TabNavigator = () => {
           backgroundColor: 'transparent',
           marginBottom: 16,
         },
-        tabBarBackground: () => (
-          Platform.OS === 'ios' ? (
-            <BlurView
-              blurType="light"
-              blurAmount={10}
-              style={StyleSheet.absoluteFill}
-            />
-          ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.white + 'F0' }]} />
-          )
-        ),
-      }}
-    >
+        tabBarBackground: Platform.OS === 'ios'
+          ? BlurTabBarBackground
+          : AndroidTabBarBackground,
+      }}>
       <Tab.Screen
         name="Home"
         component={EnhancedHomeScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
-            <Icon name="home" color={color} size={size} />
-          ),
+          tabBarIcon: HomeTabBarIcon,
         }}
       />
       <Tab.Screen
         name="TipTube"
         component={EnhancedTipTubeScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
-            <Icon name="video" color={color} size={size} />
-          ),
+          tabBarIcon: TipTubeTabBarIcon,
         }}
       />
       <Tab.Screen
         name="CreateContent"
         component={HomeScreen} // This is a dummy component, we're using custom tab bar button
         options={{
-          tabBarButton: () => <CreateContentButton />,
+          tabBarButton: CreateContentTabBarButton,
           tabBarLabel: '',
         }}
         listeners={{
-          tabPress: (e) => {
+          tabPress: e => {
             // Prevent default action
             e.preventDefault();
           },
@@ -133,18 +143,14 @@ const TabNavigator = () => {
         name="TipCall"
         component={EnhancedTipCallScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
-            <Icon name="phone" color={color} size={size} />
-          ),
+          tabBarIcon: TipCallTabBarIcon,
         }}
       />
       <Tab.Screen
         name="Profile"
         component={EnhancedProfileScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
-            <Icon name="user" color={color} size={size} />
-          ),
+          tabBarIcon: ProfileTabBarIcon,
         }}
       />
     </Tab.Navigator>
@@ -160,12 +166,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 25,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.2,
     shadowRadius: 3,
     elevation: 5,
     position: 'relative',
     zIndex: 10,
+  },
+  androidTabBarBackground: {
+    backgroundColor: ANDROID_TAB_BAR_BG_COLOR,
   },
 });
 

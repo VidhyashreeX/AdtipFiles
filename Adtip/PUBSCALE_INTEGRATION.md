@@ -13,10 +13,12 @@ PubScale Offerwall SDK allows users to earn rewards by completing offers, watchi
 ### Android Setup
 
 1. The native module files are located at:
+
    - `android/app/src/main/java/com/adtip/PubscaleOfferwallSdkModule.java`
    - `android/app/src/main/java/com/adtip/PubscaleOfferwallSdkPackage.java`
 
 2. The PubScale SDK dependency is added in `android/app/build.gradle`
+
    ```groovy
    implementation 'com.pubscale.sdkone:offerwall:1.0.10'
    ```
@@ -29,21 +31,25 @@ PubScale Offerwall SDK allows users to earn rewards by completing offers, watchi
 ### JavaScript/TypeScript Integration
 
 1. PubScale Service:
+
    - Located at `src/services/PubScaleService.ts`
    - Provides a wrapper around the native PubScale SDK
    - Handles initialization, showing the offerwall, and reward callbacks
 
 2. Reward Service Integration:
+
    - Located at `src/services/RewardService.ts`
    - Uses PubScaleService to show offerwalls and handle rewards
    - Includes methods for tracking rewards in the backend
 
 3. App Initialization:
+
    - PubScale is initialized in `App.tsx` during app startup
    - Uses the app ID `39604779` from the PubScale dashboard
    - Sets up reward listener to handle reward events
 
 4. Analytics Integration:
+
    - Located at `src/services/AnalyticsService.ts`
    - Tracks offerwall events, reward completions, and errors
    - Provides insights into user interaction with offerwalls
@@ -64,7 +70,7 @@ PubScale is automatically initialized during app startup with the user ID. This 
 await PubScaleService.initialize(userId);
 
 // Set up PubScale reward listener
-PubScaleService.setRewardListener((reward) => {
+PubScaleService.setRewardListener(reward => {
   console.log('Reward received:', reward);
   // Handle reward
 });
@@ -102,20 +108,20 @@ import PubScaleOfferwallButton from '../components/common/PubScaleOfferwallButto
 Rewards are automatically tracked when received. The reward listener in App.tsx handles all incoming rewards and can be customized to update the user's balance or trigger other actions:
 
 ```typescript
-PubScaleService.setRewardListener((reward) => {
+PubScaleService.setRewardListener(reward => {
   console.log('Reward received:', reward);
-  
+
   // Update user's balance via API
   ApiService.post(ENDPOINTS.REWARDS.TRACK_REWARD, {
     placementName: 'offerwall',
     rewardAmount: reward.amount,
-    rewardType: reward.currency
+    rewardType: reward.currency,
   });
-  
+
   // Track the reward in analytics
   AnalyticsService.trackOfferwallEvent('reward_received', {
     amount: reward.amount,
-    currency: reward.currency
+    currency: reward.currency,
   });
 });
 ```
@@ -169,11 +175,13 @@ To test the fallback implementation:
 ### Common Issues
 
 1. **Offerwall Not Showing**
+
    - Check network connectivity
    - Verify the app ID is correct
    - Ensure the user ID is properly set
 
 2. **No Rewards Received**
+
    - Check the event listener is properly set up
    - Verify the reward callback is correctly implemented
    - Check the API endpoint for tracking rewards

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 
 interface Notification {
@@ -23,7 +23,7 @@ interface Notification {
 }
 
 const NotificationScreen: React.FC = () => {
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -76,7 +76,7 @@ const NotificationScreen: React.FC = () => {
           isRead: true,
         },
       ];
-      
+
       setNotifications(mockNotifications);
       setIsLoading(false);
     }, 1000);
@@ -118,8 +118,10 @@ const NotificationScreen: React.FC = () => {
 
   const formatTimestamp = (timestamp: Date) => {
     const now = new Date();
-    const diffInSeconds = Math.floor((now.getTime() - timestamp.getTime()) / 1000);
-    
+    const diffInSeconds = Math.floor(
+      (now.getTime() - timestamp.getTime()) / 1000,
+    );
+
     if (diffInSeconds < 60) {
       return 'Just now';
     } else if (diffInSeconds < 3600) {
@@ -138,15 +140,15 @@ const NotificationScreen: React.FC = () => {
     setNotifications(prev =>
       prev.map(notification =>
         notification.id === notificationId
-          ? { ...notification, isRead: true }
-          : notification
-      )
+          ? {...notification, isRead: true}
+          : notification,
+      ),
     );
   };
 
   const markAllAsRead = () => {
     setNotifications(prev =>
-      prev.map(notification => ({ ...notification, isRead: true }))
+      prev.map(notification => ({...notification, isRead: true})),
     );
   };
 
@@ -155,17 +157,17 @@ const NotificationScreen: React.FC = () => {
       'Delete Notification',
       'Are you sure you want to delete this notification?',
       [
-        { text: 'Cancel', style: 'cancel' },
+        {text: 'Cancel', style: 'cancel'},
         {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
             setNotifications(prev =>
-              prev.filter(notification => notification.id !== notificationId)
+              prev.filter(notification => notification.id !== notificationId),
             );
           },
         },
-      ]
+      ],
     );
   };
 
@@ -173,7 +175,7 @@ const NotificationScreen: React.FC = () => {
     if (!notification.isRead) {
       markAsRead(notification.id);
     }
-    
+
     // Handle navigation based on notification type
     if (notification.actionUrl) {
       // Navigate to specific screen
@@ -181,38 +183,55 @@ const NotificationScreen: React.FC = () => {
     }
   };
 
-  const renderNotification = ({ item }: { item: Notification }) => (
+  // Helper to get dynamic style for notification item
+  function getNotificationItemStyle(
+    baseStyle: any,
+    isRead: boolean,
+    surface: string,
+    border: string,
+  ) {
+    return [
+      baseStyle,
+      {backgroundColor: isRead ? 'transparent' : surface, borderBottomColor: border},
+    ];
+  }
+
+  const renderNotification = ({item}: {item: Notification}) => (
     <TouchableOpacity
-      style={[
+      style={getNotificationItemStyle(
         styles.notificationItem,
-        { backgroundColor: item.isRead ? 'transparent' : colors.surface },
-        { borderBottomColor: colors.border.light }
-      ]}
+        item.isRead,
+        colors.surface,
+        colors.border,
+      )}
       onPress={() => handleNotificationPress(item)}
-      onLongPress={() => deleteNotification(item.id)}
-    >
-      <View style={[styles.iconContainer, { backgroundColor: getTypeColor(item.type) + '20' }]}>
-        <Icon 
-          name={getTypeIcon(item.type)} 
-          size={20} 
+      onLongPress={() => deleteNotification(item.id)}>
+      <View
+        style={[
+          styles.iconContainer,
+          {backgroundColor: getTypeColor(item.type) + '20'},
+        ]}>
+        <Icon
+          name={getTypeIcon(item.type)}
+          size={20}
           color={getTypeColor(item.type)}
         />
       </View>
-      
+
       <View style={styles.contentContainer}>
-        <Text style={[styles.title, { color: colors.text.primary }]}>
+        <Text style={[styles.title, {color: colors.text.primary}]}>
           {item.title}
         </Text>
-        <Text style={[styles.message, { color: colors.text.secondary }]}>
+        <Text style={[styles.message, {color: colors.text.secondary}]}>
           {item.message}
         </Text>
-        <Text style={[styles.timestamp, { color: colors.text.tertiary }]}>
+        <Text style={[styles.timestamp, {color: colors.text.tertiary}]}>
           {formatTimestamp(item.timestamp)}
         </Text>
       </View>
-      
+
       {!item.isRead && (
-        <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
+        <View style={[styles.unreadDot, {backgroundColor: colors.primary}]} />
       )}
     </TouchableOpacity>
   );
@@ -220,32 +239,40 @@ const NotificationScreen: React.FC = () => {
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header 
-        title="Notifications" 
+    <SafeAreaView
+      style={[styles.container, {backgroundColor: colors.background}]}>
+      <Header
+        title="Notifications"
         showBackButton
         rightComponent={
           unreadCount > 0 ? (
-            <TouchableOpacity onPress={markAllAsRead} style={styles.markAllButton}>
-              <Text style={[styles.markAllText, { color: colors.primary }]}>
+            <TouchableOpacity
+              onPress={markAllAsRead}
+              style={styles.markAllButton}>
+              <Text style={[styles.markAllText, {color: colors.primary}]}>
                 Mark all read
               </Text>
             </TouchableOpacity>
           ) : null
         }
       />
-      
+
       {unreadCount > 0 && (
-        <View style={[styles.unreadBanner, { backgroundColor: colors.primary + '10' }]}>
-          <Text style={[styles.unreadBannerText, { color: colors.primary }]}>
-            You have {unreadCount} unread notification{unreadCount !== 1 ? 's' : ''}
+        <View
+          style={[
+            styles.unreadBanner,
+            {backgroundColor: colors.primary + '10'},
+          ]}>
+          <Text style={[styles.unreadBannerText, {color: colors.primary}]}>
+            You have {unreadCount} unread notification
+            {unreadCount !== 1 ? 's' : ''}
           </Text>
         </View>
       )}
 
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
+          <Text style={[styles.loadingText, {color: colors.text.secondary}]}>
             Loading notifications...
           </Text>
         </View>
@@ -253,17 +280,17 @@ const NotificationScreen: React.FC = () => {
         <FlatList
           data={notifications}
           renderItem={renderNotification}
-          keyExtractor={(item) => item.id}
+          keyExtractor={item => item.id}
           style={styles.notificationsList}
           showsVerticalScrollIndicator={false}
         />
       ) : (
         <View style={styles.emptyContainer}>
           <Icon name="bell" size={48} color={colors.text.tertiary} />
-          <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
+          <Text style={[styles.emptyText, {color: colors.text.secondary}]}>
             No notifications yet
           </Text>
-          <Text style={[styles.emptySubtext, { color: colors.text.tertiary }]}>
+          <Text style={[styles.emptySubtext, {color: colors.text.tertiary}]}>
             You'll see notifications here when you get likes, comments, and more
           </Text>
         </View>

@@ -1,5 +1,4 @@
-// src/screens/tiptube/TipTubeScreen.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,116 +8,150 @@ import {
   TouchableOpacity,
   RefreshControl,
   Platform,
-  ScrollView
+  ScrollView,
+  Dimensions, // For responsive layout
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
+import Video from 'react-native-video'; // Assuming you have react-native-video installed
+import FastImage from '@d11/react-native-fast-image'; // For better image loading
 
 // Components
-import Header from '../../components/common/Header';
-import VideoCard from '../../components/tiptube/VideoCard';
+import Header from '../../components/common/Header'; // Re-use existing header
 
 // Services
-import ApiService from '../../services/ApiService';
+import ApiService from '../../services/ApiService'; // Re-use existing ApiService
 
 // Context
-import { useTheme } from '../../contexts/ThemeContext';
+import { useTheme } from '../../contexts/ThemeContext'; // Re-use existing ThemeContext
 
 // Types
 interface TipTubeScreenProps {
   walletBalance?: string; // Optional wallet balance coming from HOC
 }
 
-interface Video {
+interface VideoData {
   id: number;
   title: string;
-  description: string;
-  thumbnail_url: string | null;
-  video_url: string | null;
-  user_id: number;
-  user_name: string;
-  user_profile_image: string | null;
-  view_count: number;
-  like_count: number;
-  comment_count: number;
-  duration: string;
-  created_at: string;
-  is_premium: boolean;
+  thumbnail?: string; // Changed from thumbnail_url for consistency with web
+  videoUrl?: string; // Changed from video_url for consistency with web
+  duration?: number; // Changed from string to number for consistency with web (seconds)
+  views: number; // Changed from view_count
+  posted: string; // Changed from created_at
+  channelId: number; // Changed from user_id for consistency with web
+  avatar?: string; // Changed from user_profile_image for consistency with web
+  creatorName: string; // Changed from user_name for consistency with web
+  isVerified?: boolean; // New, from web
+  price?: number; // New, from web
 }
 
-interface CategoryMap {
-  [key: string]: number;
-}
+// Mimic web's category structure
+const categories = [
+  { name: "All", icon: "🏠" },
+  { name: "Tech", icon: "💻" },
+  { name: "Beauty", icon: "💄" },
+  { name: "Gaming", icon: "🎮" },
+  { name: "Food", icon: "🍔" },
+  { name: "Travel", icon: "✈️" },
+  { name: "Finance", icon: "💰" },
+  { name: "Fashion", icon: "👗" },
+  { name: "Music", icon: "🎵" },
+  { name: "Sports", icon: "🏀" },
+  { name: "Education", icon: "📚" },
+];
+
+const categoryToIdMap: { [key: string]: number } = {
+  All: 0, Tech: 1, Beauty: 2, Gaming: 3, Food: 4, Travel: 5, Finance: 6, Fashion: 7, Music: 8, Sports: 9, Education: 10,
+};
+
+// Format duration utility, same as web
+const formatDuration = (duration: number | string | undefined) => {
+  if (duration === undefined || duration === null) return "0:00";
+  const totalSeconds = typeof duration === 'string' ? parseInt(duration, 10) : duration;
+  if (isNaN(totalSeconds)) return "0:00";
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+};
+
+const { width } = Dimensions.get('window');
+const isTablet = width >= 768; // Simple check for tablet-like layout
 
 const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
   // Hooks
   const { colors } = useTheme();
   const navigation = useNavigation();
-  
+
   // State
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [loading, setLoading] = useState({
-    initial: true,
-    loadingMore: false
-  });
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [videos, setVideos] = useState<VideoData[]>([]);
+  const [offset, setOffset] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false); // Combined initial and loadingMore
+  const [currentVideo, setCurrentVideo] = useState<VideoData | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [categories] = useState([
-    { id: 'all', name: 'All' },
-    { id: 'trending', name: 'Trending' },
-    { id: 'new', name: 'New' },
-    { id: 'popular', name: 'Popular' },
-    { id: 'following', name: 'Following' }
-  ]);
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [hasMoreVideos, setHasMoreVideos] = useState(true);
 
-  // Category mapping for API
-  const categoryMap: CategoryMap = {
-    'all': 0,
-    'trending': 1,
-    'new': 2,
-    'popular': 3,
-    'following': 4
-  };
-  // Helper functions
-  const getFullUrl = (url?: string | null) => {
-    if (!url || url === 'null' || url === 'undefined') {
-      // Return a placeholder image instead of null
+  // Removed search state as it's not present in web UI provided
+
+  const videoRefs = useRef<{ [id: number]: Video | null }>({}); // Using react-native-video ref
+  const feedRef = useRef<FlatList | null>(null); // For scroll events
+
+  const BASE_URL = ApiService.BASE_URL; // Use ApiService's base URL
+
+  // Helper function to get full URLs, adapted from original RN code
+  const getFullUrl = useCallback((url: string | null | undefined) => {
+    if (!url || url === 'null' || url === 'undefined' || url.trim() === '') {
       return 'https://via.placeholder.com/320x180?text=No+Preview';
     }
-    
-    // If it's already a complete URL, return it
     if (url.startsWith('http')) {
       return url;
     }
-    
-    // Handle different types of relative paths
-    
     // For video files, use theadtip.in domain
     if (url.includes('.mp4') || url.includes('/videos/')) {
       return `https://theadtip.in${url.startsWith('/') ? '' : '/'}${url}`;
     }
-    
     // For thumbnails and images, use the regular api.adtip.in domain
-    if (url.includes('/uploads/') || url.includes('/images/') || 
-        url.includes('/thumbnails/') || url.includes('/profiles/')) {
+    if (
+      url.includes('/uploads/') ||
+      url.includes('/images/') ||
+      url.includes('/thumbnails/') ||
+      url.includes('/profiles/')
+    ) {
       return `https://api.adtip.in${url.startsWith('/') ? '' : '/'}${url}`;
     }
-    
     // For other resources, default to the main domain
     return `https://adtip.in${url.startsWith('/') ? '' : '/'}${url}`;
-  };
-  
-  // API calls
-  const fetchVideos = async (categoryId = '0', page = 1, loadMore = false) => {
+  }, []);
+
+  // Transform API video data to match VideoData interface (like web's transformVideoData)
+  const transformVideoData = useCallback((apiVideo: any): VideoData => ({
+    id: apiVideo.id || 0,
+    title: apiVideo.name || apiVideo.title || "Untitled Video",
+    thumbnail: getFullUrl(apiVideo.video_Thumbnail || apiVideo.thumbnail_url),
+    videoUrl: getFullUrl(apiVideo.video_link || apiVideo.video_url),
+    duration: parseInt(apiVideo.play_duration || apiVideo.duration || "0", 10),
+    views: apiVideo.total_views || apiVideo.view_count || 0,
+    posted: apiVideo.createddate || apiVideo.created_at || "Recently",
+    avatar: getFullUrl(apiVideo.channel_profile || apiVideo.user_profile_image),
+    creatorName: apiVideo.channelName || apiVideo.user_name || "Unknown Creator",
+    isVerified: !!apiVideo.is_verified, // Assume a boolean field
+    channelId: apiVideo.video_channel || apiVideo.channelId || apiVideo.createdby || apiVideo.user_id || 0,
+    price: apiVideo.price ? parseFloat(apiVideo.price) : undefined,
+  }), [getFullUrl]);
+
+
+  // Fetch videos (infinite scroll logic, adapted from web)
+  const fetchVideos = useCallback(async (reset = false) => {
+    setLoading(true);
+    setError(null);
     try {
-      // Try to get userId from multiple possible sources
       let userId = await AsyncStorage.getItem('userId');
-      
-      // If userId is not found, try to get it from the user object in AsyncStorage
       if (!userId) {
         const userJson = await AsyncStorage.getItem('user');
         if (userJson) {
@@ -126,163 +159,121 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
           userId = userData?.id?.toString();
         }
       }
-      
-      // Even if we don't have a userId, we'll try to fetch public videos
       if (!userId) {
-        console.log('No user ID found, will attempt to fetch public videos');
-        // Using '0' as a fallback ID to get public/general videos
-        userId = '0';
+        userId = '0'; // Fallback for public videos if no user is logged in
       }
 
-      if (loadMore) {
-        setLoading(prev => ({ ...prev, loadingMore: true }));
-      } else {
-        setLoading(prev => ({ ...prev, initial: true }));
-      }
-      
-      console.log(`Fetching videos: category=${categoryId}, page=${page}, userId=${userId}`);
-      
-      // Get videos using ApiService
-      const response = await ApiService.getVideos(userId, parseInt(categoryId, 10), page);
-      
-      // Debug log the raw response
-      console.log('Raw API response:', JSON.stringify(response).substring(0, 500) + '...');
-      
+      const currentOffset = reset ? 1 : offset;
+      const apiCategoryId = categoryToIdMap[selectedCategory] || 0;
+
+      console.log(`Fetching videos: UserID=${userId}, CategoryID=${apiCategoryId}, Offset=${currentOffset}`);
+
+      const response = await ApiService.getVideos(
+        userId,
+        apiCategoryId,
+        currentOffset,
+      );
+
+      console.log('Raw API response (truncated):', JSON.stringify(response).substring(0, 500));
+
       if (response?.data && Array.isArray(response.data)) {
-        // Log the first item to debug
-        if (response.data.length > 0) {
-          console.log('First video item:', JSON.stringify(response.data[0]));
-        }
-        
-        const formattedVideos = response.data.map((video: any) => {
-          // Log any problematic items
-          if (!video.thumbnail_url && !video.video_url) {
-            console.log('Video missing media URLs:', video.id);
-          }
-          
-          return {
-            ...video,
-            thumbnail_url: getFullUrl(video.thumbnail_url || video.video_thumbnail), // Try alternate property
-            video_url: getFullUrl(video.video_url || video.video_link), // Try alternate property
-            user_profile_image: getFullUrl(video.user_profile_image || video.channel_profile),
-            like_count: video.likes || video.like_count || 0,
-            comment_count: video.comments || video.comment_count || 0,
-            view_count: video.views || video.view_count || 0,
-            is_premium: !!video.is_premium,
-            title: video.title || video.name || 'Untitled Video', // Try alternate property
-            user_name: video.user_name || video.channelName || 'Unknown Creator',
-            duration: video.duration || '0:00'
-          };
-        });
-        
-        // If loading more, append to existing videos
-        if (loadMore) {
-          setVideos(prev => [...prev, ...formattedVideos]);
-        } else {
-          setVideos(formattedVideos);
-        }
+        const videoList = response.data.map(transformVideoData);
+        // Filter out videos with invalid URLs to avoid player errors
+        const filteredVideoList = videoList.filter(v => v.videoUrl && v.videoUrl !== getFullUrl(''));
 
-        // Check if we have more videos to load (assuming 10 is the page size)
-        setHasMoreVideos(formattedVideos.length > 0);
-        setError(null);
+        setVideos(prev => reset ? filteredVideoList : [...prev, ...filteredVideoList]);
+        setHasMore(filteredVideoList.length > 0); // Assuming API returns 10 items per page if more exist
       } else {
-        if (!loadMore) {
-          // Only set empty videos if this is an initial load
-          setVideos([]);
+        setVideos(reset ? [] : videos); // Keep existing videos if not a reset
+        setHasMore(false);
+        if (reset) { // Only show error for initial load or full refresh if no data
           setError('No videos available at the moment.');
         }
-        
-        setHasMoreVideos(false);
       }
     } catch (err) {
       console.error('Videos fetch error:', err);
-      if (!loadMore) {
+      setHasMore(false);
+      if (reset) {
         setError('Failed to load videos. Please try again later.');
       }
     } finally {
-      if (loadMore) {
-        setLoading(prev => ({ ...prev, loadingMore: false }));
-      } else {
-        setLoading(prev => ({ ...prev, initial: false }));
-      }
+      setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [selectedCategory, offset, transformVideoData, videos]); // Added videos to dependency array for setVideos(videos)
 
-  // Handlers
-  const handleRefresh = () => {
-    setRefreshing(true);
-    setCurrentPage(1);
-    const apiCategoryId = categoryMap[selectedCategory].toString();
-    fetchVideos(apiCategoryId, 1);
-  };
-    const handleCategoryPress = (categoryId: string) => {
-    if (categoryId === selectedCategory) {
-      return;
-    }
-    
-    setSelectedCategory(categoryId);
-    setCurrentPage(1);
-    
-    // Convert category name to API category ID
-    const apiCategoryId = categoryMap[categoryId].toString();
-    console.log(`Switching to category: ${categoryId} (API ID: ${apiCategoryId})`);
-    
-    fetchVideos(apiCategoryId, 1);
-  };  const handleVideoPress = (videoId: number) => {
-    // @ts-ignore - Navigation typing issues
-    navigation.navigate('Video', { videoId });
-  };
-
-  const handleUploadPress = () => {
-    navigation.navigate('TipTubeUpload' as never);
-  };
-
-  const handleLoadMore = () => {
-    if (loading.loadingMore || !hasMoreVideos) return;
-    
-    const nextPage = currentPage + 1;
-    const apiCategoryId = categoryMap[selectedCategory].toString();
-    
-    console.log(`Loading more videos, page ${nextPage}`);
-    setCurrentPage(nextPage);
-    fetchVideos(apiCategoryId, nextPage, true);
-  };
-
-  // Effects  useFocusEffect(
+  // Initial fetch and on category change
+  useFocusEffect(
     useCallback(() => {
-      const apiCategoryId = categoryMap[selectedCategory].toString();
-      fetchVideos(apiCategoryId, 1);
-    }, [categoryMap, selectedCategory, fetchVideos])
+      setOffset(1);
+      fetchVideos(true);
+    }, [selectedCategory, fetchVideos])
   );
 
+  // Load more on offset change
   useEffect(() => {
-    const apiCategoryId = categoryMap[selectedCategory].toString();
-    fetchVideos(apiCategoryId, 1);
+    if (offset > 1) {
+      fetchVideos();
+    }
+  }, [offset, fetchVideos]);
+
+
+  // Infinite scroll (onEndReached for FlatList)
+  const handleLoadMore = useCallback(() => {
+    if (!loading && hasMore) {
+      setOffset(prev => prev + 1);
+    }
+  }, [loading, hasMore]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    setOffset(1);
+    fetchVideos(true);
+  }, [fetchVideos]);
+
+  const handleVideoPress = useCallback((video: VideoData) => {
+    setCurrentVideo(video);
   }, []);
+
+  const handleCategoryPress = useCallback((categoryName: string) => {
+    if (categoryName === selectedCategory) return;
+    setSelectedCategory(categoryName);
+    setOffset(1); // Reset offset on category change
+    // fetchVideos will be called by useFocusEffect due to selectedCategory change
+  }, [selectedCategory]);
+
+  const handleUploadPress = () => {
+    navigation.navigate('TipTubeUpload' as never); // Still navigate to upload screen
+  };
 
   // Render functions
   const renderCategories = () => (
     <View style={styles.categoryContainer}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {categories.map((category) => (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
+        {categories.map(category => (
           <TouchableOpacity
-            key={category.id}
+            key={category.name}
             style={[
               styles.categoryItem,
-              selectedCategory === category.id ? 
-                { ...styles.selectedCategory, backgroundColor: colors.primary } : 
-                undefined
+              selectedCategory === category.name
+                ? { backgroundColor: colors.primary }
+                : { backgroundColor: colors.card },
             ]}
-            onPress={() => handleCategoryPress(category.id)}
-          >
-            <Text 
+            onPress={() => handleCategoryPress(category.name)}>
+            <Text style={[
+              styles.categoryIcon,
+              selectedCategory === category.name ? { color: colors.white } : { color: colors.text.secondary }
+            ]}>
+              {category.icon}
+            </Text>
+            <Text
               style={[
-                styles.categoryText, 
-                selectedCategory === category.id ? { color: colors.white } : undefined
-              ]}
-            >
-              {String(category.name)}
+                styles.categoryText,
+                selectedCategory === category.name
+                  ? { color: colors.white }
+                  : { color: colors.text.primary },
+              ]}>
+              {category.name}
             </Text>
           </TouchableOpacity>
         ))}
@@ -290,47 +281,113 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
     </View>
   );
 
-  const renderVideoItem = ({ item }: { item: Video }) => (
-    <VideoCard
-      id={item.id}
-      title={String(item.title || item.description || 'Untitled Video')}
-      thumbnailUrl={item.thumbnail_url || 'https://via.placeholder.com/320x180?text=Video'}
-      duration={String(item.duration || '0:00')}
-      username={String(item.user_name || 'User')}
-      userImageUrl={item.user_profile_image || 'https://via.placeholder.com/40x40?text=User'}
-      views={item.view_count || 0}
-      postedTime={String(item.created_at ? new Date(item.created_at).toLocaleDateString() : new Date().toLocaleDateString())}
-      isPremium={item.is_premium}
-      onPress={() => handleVideoPress(item.id)}
-    />
+  const renderGridVideoItem = ({ item }: { item: VideoData }) => (
+    <TouchableOpacity
+      key={item.id}
+      style={[styles.videoCard, { backgroundColor: colors.card }]}
+      onPress={() => handleVideoPress(item)}
+    >
+      <View style={styles.thumbnailContainer}>
+        {/* Placeholder for video preview on hover (not directly implementable in RN) */}
+        <FastImage
+          source={{ uri: item.thumbnail || 'https://via.placeholder.com/320x180?text=Video' }}
+          style={styles.thumbnail}
+          resizeMode={FastImage.resizeMode.cover}
+        />
+        {item.price && item.price > 0 && (
+          <View style={[styles.priceBadge, { backgroundColor: colors.primary }]}>
+            <Text style={styles.priceText}>₹{item.price}</Text>
+          </View>
+        )}
+        <View style={styles.durationOverlay}>
+          <Text style={styles.durationText}>
+            {formatDuration(item.duration)}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.videoDetails}>
+        <View style={styles.channelInfo}>
+          <FastImage
+            source={{ uri: item.avatar || 'https://via.placeholder.com/40x40?text=User' }}
+            style={styles.channelAvatar}
+            resizeMode={FastImage.resizeMode.cover}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.channelName, { color: colors.primary }]} numberOfLines={1}>
+              {item.creatorName}
+            </Text>
+            <Text style={[styles.videoStats, { color: colors.text.secondary }]}>
+              {item.views.toLocaleString()} views • {item.posted}
+            </Text>
+          </View>
+        </View>
+        <Text style={[styles.videoTitle, { color: colors.text.primary }]} numberOfLines={2}>
+          {item.title}
+        </Text>
+      </View>
+    </TouchableOpacity>
   );
+
+  const renderRelatedVideoItem = ({ item }: { item: VideoData }) => (
+    <TouchableOpacity
+      key={item.id}
+      style={[styles.relatedVideoCard, { backgroundColor: colors.card }]}
+      onPress={() => handleVideoPress(item)}
+    >
+      <FastImage
+        source={{ uri: item.thumbnail || 'https://via.placeholder.com/120x68?text=Video' }}
+        style={styles.relatedThumbnail}
+        resizeMode={FastImage.resizeMode.cover}
+      />
+      <View style={styles.relatedVideoDetails}>
+        <Text style={[styles.relatedVideoTitle, { color: colors.text.primary }]} numberOfLines={2}>
+          {item.title}
+        </Text>
+        <View style={styles.relatedChannelInfo}>
+          <FastImage
+            source={{ uri: item.avatar || 'https://via.placeholder.com/24x24?text=User' }}
+            style={styles.relatedChannelAvatar}
+            resizeMode={FastImage.resizeMode.cover}
+          />
+          <Text style={[styles.relatedChannelName, { color: colors.text.secondary }]} numberOfLines={1}>
+            {item.creatorName}
+          </Text>
+        </View>
+        <Text style={[styles.relatedVideoStats, { color: colors.text.secondary }]}>
+          {item.views.toLocaleString()} views • {item.posted}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
       <Icon name="video-off" size={50} color={colors.gray[400]} />
       <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
-        {String('No videos available')}
+        No videos available
       </Text>
       <TouchableOpacity
         style={[styles.uploadButton, { backgroundColor: colors.primary }]}
-        onPress={handleUploadPress}
-      >
-        <Text style={{ color: colors.white, fontWeight: '600' }}>
-          {String('Upload Video')}
+        onPress={handleUploadPress}>
+        <Text style={[{ color: colors.white }, styles.buttonText]}>
+          Upload Video
         </Text>
       </TouchableOpacity>
     </View>
   );
 
   const renderFooter = () => {
-    if (!loading.loadingMore) return null;
-    
+    if (!loading || !hasMore) {
+      return null;
+    }
     return (
       <View style={styles.footerLoader}>
         <ActivityIndicator size="small" color={colors.primary} />
       </View>
     );
   };
+
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -344,53 +401,137 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
 
       {renderCategories()}
 
-      {loading.initial && !refreshing ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      ) : error ? (
-        <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: colors.text.primary }]}>
-            {String(error)}
-          </Text>
-          <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
-            <Text style={{ color: colors.primary }}>
-              {String('Retry')}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <FlatList
-          data={videos}
-          renderItem={renderVideoItem}
-          keyExtractor={(item, index) => `${item.id}-${index}`}
-          contentContainerStyle={videos.length === 0 ? styles.flatListEmptyContainer : styles.flatListContainer}
-          ListEmptyComponent={renderEmptyState}
-          ListFooterComponent={renderFooter}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
+      {currentVideo ? (
+        // Main Video Player Layout
+        <ScrollView style={styles.playerLayoutScroll} contentContainerStyle={styles.playerLayoutContent}>
+          <View style={styles.mainVideoPlayerContainer}>
+            <View style={[styles.videoPlayerWrapper, { backgroundColor: colors.black }]}>
+              {currentVideo.videoUrl ? (
+                <Video
+                  source={{ uri: currentVideo.videoUrl }}
+                  style={styles.mainVideoPlayer}
+                  controls={true}
+                  autoplay={true}
+                  paused={false}
+                  resizeMode="contain"
+                  poster={currentVideo.thumbnail}
+                  posterResizeMode="cover"
+                  onError={(e) => console.log('Video error:', e)}
+                />
+              ) : (
+                <View style={styles.videoErrorContainer}>
+                  <Text style={[styles.videoErrorText, { color: colors.white }]}>Video not available</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.videoInfoContainer}>
+              <Text style={[styles.currentVideoTitle, { color: colors.text.primary }]}>{currentVideo.title}</Text>
+              <View style={styles.channelRow}>
+                <FastImage source={{ uri: currentVideo.avatar || 'https://via.placeholder.com/40x40?text=User' }} style={styles.channelAvatarLarge} />
+                <View style={styles.channelDetails}>
+                  <TouchableOpacity onPress={() => navigation.navigate('Channel' as never, { channelId: currentVideo.channelId })}>
+                    <Text style={[styles.currentCreatorName, { color: colors.text.primary }]}>{currentVideo.creatorName}</Text>
+                  </TouchableOpacity>
+                  <Text style={[styles.currentVideoStats, { color: colors.text.secondary }]}>
+                    {currentVideo.views.toLocaleString()} views • {currentVideo.posted}
+                  </Text>
+                </View>
+                <TouchableOpacity style={[styles.subscribeButton, { backgroundColor: colors.primary }]}>
+                  <Text style={[styles.subscribeButtonText, { color: colors.white }]}>Subscribe</Text>
+                </TouchableOpacity>
+              </View>
+              {/* Dummy interaction buttons (Like, Dislike, Share) - no functionality here */}
+              <View style={styles.interactionButtons}>
+                <TouchableOpacity style={[styles.interactionButton, { backgroundColor: colors.card }]}>
+                  <Icon name="thumbs-up" size={18} color={colors.text.primary} />
+                  <Text style={[styles.interactionButtonText, { color: colors.text.primary }]}>Like</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.interactionButton, { backgroundColor: colors.card }]}>
+                  <Icon name="thumbs-down" size={18} color={colors.text.primary} />
+                  <Text style={[styles.interactionButtonText, { color: colors.text.primary }]}>Dislike</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.interactionButton, { backgroundColor: colors.card }]}>
+                  <Icon name="share-2" size={18} color={colors.text.primary} />
+                  <Text style={[styles.interactionButtonText, { color: colors.text.primary }]}>Share</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                onPress={() => setCurrentVideo(null)}
+                style={[styles.backToFeedButton, { backgroundColor: colors.border }]}
+              >
+                <Text style={[styles.backToFeedButtonText, { color: colors.text.primary }]}>Back to Feed</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Related Videos Sidebar/List */}
+          <View style={styles.relatedVideosContainer}>
+            <Text style={[styles.relatedVideosHeader, { color: colors.text.primary }]}>Up Next</Text>
+            <FlatList
+              data={videos.filter(v => v.id !== currentVideo.id)}
+              renderItem={renderRelatedVideoItem}
+              keyExtractor={item => `${item.id}-related`}
+              scrollEnabled={false} // Nested FlatList within ScrollView
+              ListFooterComponent={loading && hasMore ? <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 10 }} /> : null}
             />
-          }
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.3}
-          removeClippedSubviews={Platform.OS === 'android'}
-          initialNumToRender={5}
-          maxToRenderPerBatch={10}
-          windowSize={10}
-          updateCellsBatchingPeriod={50}
-        />
+          </View>
+        </ScrollView>
+      ) : (
+        // Default Grid View
+        loading && offset === 1 && !refreshing ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={[styles.errorText, { color: colors.text.primary }]}>
+              {error}
+            </Text>
+            <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
+              <Text style={{ color: colors.primary }}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <FlatList
+            ref={feedRef}
+            data={videos}
+            renderItem={renderGridVideoItem}
+            keyExtractor={item => `${item.id}`}
+            numColumns={isTablet ? 3 : 2} // 2 columns for phone, 3 for tablet
+            contentContainerStyle={
+              videos.length === 0
+                ? styles.flatListEmptyContainer
+                : styles.flatListContainer
+            }
+            ListEmptyComponent={!loading && renderEmptyState}
+            ListFooterComponent={renderFooter}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
+              />
+            }
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.3}
+            removeClippedSubviews={Platform.OS === 'android'}
+            initialNumToRender={5}
+            maxToRenderPerBatch={10}
+            windowSize={10}
+            updateCellsBatchingPeriod={50}
+          />
+        )
       )}
 
-      <TouchableOpacity
-        style={[styles.floatingButton, { backgroundColor: colors.primary }]}
-        onPress={handleUploadPress}
-      >
-        <Icon name="upload" size={24} color={colors.white} />
-      </TouchableOpacity>
+      {/* Floating Upload Button */}
+      {!currentVideo && ( // Only show when not in video player view
+        <TouchableOpacity
+          style={[styles.floatingButton, { backgroundColor: colors.primary }]}
+          onPress={handleUploadPress}>
+          <Icon name="upload" size={24} color={colors.white} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -398,30 +539,6 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  categoryContainer: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
-  },
-  categoryItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginHorizontal: 6,
-    backgroundColor: '#f1f5f9',
-  },
-  selectedCategory: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1.5,
-    elevation: 2,
-  },
-  categoryText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#4b5563',
   },
   loadingContainer: {
     flex: 1,
@@ -435,56 +552,339 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   errorText: {
-    marginBottom: 12,
+    fontSize: 16,
     textAlign: 'center',
+    marginBottom: 10,
   },
   retryButton: {
     paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    paddingHorizontal: 15,
+    borderRadius: 5,
     borderWidth: 1,
-    borderColor: '#EEEEEE',
+    borderColor: '#007bff', // Example border color, replace with theme color
+  },
+  categoryContainer: {
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e0e0e0', // Replace with theme color
+    backgroundColor: '#ffffff', // Replace with theme color
+    marginBottom: 10,
+  },
+  categoryScroll: {
+    paddingHorizontal: 15,
+  },
+  categoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 20,
+    marginRight: 10,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.20,
+    shadowRadius: 1.41,
+    elevation: 2,
+  },
+  categoryIcon: {
+    fontSize: 16,
+    marginRight: 5,
+  },
+  categoryText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  flatListContainer: {
+    paddingHorizontal: 10,
+    paddingBottom: 20, // Add padding for floating button
+  },
+  flatListEmptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoCard: {
+    flex: 1,
+    margin: 5,
+    borderRadius: 8,
+    overflow: 'hidden',
+    maxWidth: (width / (isTablet ? 3 : 2)) - 10, // Adjust width based on columns
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.23,
+    shadowRadius: 2.62,
+    elevation: 4,
+  },
+  thumbnailContainer: {
+    aspectRatio: 16 / 9,
+    width: '100%',
+    backgroundColor: '#ccc',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  thumbnail: {
+    width: '100%',
+    height: '100%',
+  },
+  priceBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 15,
+    zIndex: 10,
+  },
+  priceText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  durationOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  durationText: {
+    color: 'white',
+    fontSize: 10,
+  },
+  videoDetails: {
+    padding: 10,
+  },
+  channelInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  channelAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 8,
+  },
+  channelName: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    flexShrink: 1, // Allow text to shrink
+  },
+  videoStats: {
+    fontSize: 11,
+  },
+  videoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 20,
+    marginBottom: 5,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 100,
+    padding: 20,
   },
   emptyText: {
     fontSize: 16,
-    marginVertical: 12,
+    marginTop: 10,
+    marginBottom: 20,
   },
   uploadButton: {
     paddingVertical: 10,
     paddingHorizontal: 20,
-    borderRadius: 20,
-    marginTop: 12,
+    borderRadius: 25,
   },
-  flatListEmptyContainer: {
-    flexGrow: 1,
+  buttonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
   },
-  flatListContainer: {
-    paddingBottom: 80, // Add padding to avoid floating button overlap
+  footerLoader: {
+    paddingVertical: 20,
+    alignItems: 'center',
   },
   floatingButton: {
     position: 'absolute',
     bottom: 20,
     right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.29,
+    shadowRadius: 4.65,
+    elevation: 7,
   },
-  footerLoader: {
-    paddingVertical: 20,
+
+  // Styles for the video player layout
+  playerLayoutScroll: {
+    flex: 1,
+  },
+  playerLayoutContent: {
+    flexGrow: 1,
+    flexDirection: isTablet ? 'row' : 'column',
+    padding: isTablet ? 15 : 0,
+  },
+  mainVideoPlayerContainer: {
+    flex: isTablet ? 2 : 1, // Main video takes more space on tablet
+    marginRight: isTablet ? 15 : 0,
+    marginBottom: isTablet ? 0 : 15,
+  },
+  videoPlayerWrapper: {
+    width: '100%',
+    aspectRatio: 16 / 9, // Standard video aspect ratio
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 10,
+    justifyContent: 'center',
     alignItems: 'center',
+  },
+  mainVideoPlayer: {
+    width: '100%',
+    height: '100%',
+  },
+  videoErrorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoErrorText: {
+    fontSize: 16,
+  },
+  videoInfoContainer: {
+    padding: 10,
+  },
+  currentVideoTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  channelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  channelAvatarLarge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  channelDetails: {
+    flex: 1,
+  },
+  currentCreatorName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  currentVideoStats: {
+    fontSize: 12,
+  },
+  subscribeButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  subscribeButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  interactionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 15,
+  },
+  interactionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  interactionButtonText: {
+    marginLeft: 5,
+    fontWeight: '600',
+  },
+  backToFeedButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    marginTop: 10,
+  },
+  backToFeedButtonText: {
+    fontWeight: '600',
+  },
+  relatedVideosContainer: {
+    flex: isTablet ? 1 : 0, // Related videos take less space on tablet
+    padding: 10,
+  },
+  relatedVideosHeader: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
+  relatedVideoCard: {
+    flexDirection: 'row',
+    marginBottom: 10,
+    borderRadius: 8,
+    overflow: 'hidden',
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.18,
+    shadowRadius: 1.00,
+    elevation: 1,
+  },
+  relatedThumbnail: {
+    width: 120, // Fixed width for related videos
+    height: 68, // Fixed height for related videos (16:9 aspect for 120 width)
+    backgroundColor: '#ccc',
+  },
+  relatedVideoDetails: {
+    flex: 1,
+    padding: 8,
+    justifyContent: 'space-between',
+  },
+  relatedVideoTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  relatedChannelInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  relatedChannelAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 6,
+  },
+  relatedChannelName: {
+    fontSize: 11,
+    flexShrink: 1,
+  },
+  relatedVideoStats: {
+    fontSize: 10,
   },
 });
 

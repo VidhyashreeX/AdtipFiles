@@ -1,5 +1,5 @@
 // src/screens/media/ShortsScreen.tsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, {useState, useRef, useEffect} from 'react';
 import {
   View,
   Text,
@@ -9,18 +9,18 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   SafeAreaView,
+  Share,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import {useNavigation} from '@react-navigation/native';
 import Video from 'react-native-video';
 import Icon from 'react-native-vector-icons/Feather';
 
 // Components and services
-import { useTheme } from '../../contexts/ThemeContext';
-import { useAuth } from '../../contexts/AuthContext';
+import {useTheme} from '../../contexts/ThemeContext';
 import ApiService from '../../services/ApiService';
-import { ENDPOINTS } from '../../constants/api';
+import {ENDPOINTS} from '../../constants/api';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const {width: SCREEN_WIDTH, height: SCREEN_HEIGHT} = Dimensions.get('window');
 
 interface ShortVideo {
   id: string;
@@ -64,11 +64,20 @@ interface PublicShot {
   total_channel_followers: number;
 }
 
+// Move ShortsListEmptyComponent above ShortsScreen and pass as a reference, not as an inline function
+const ShortsListEmptyComponent = ({height}: {height: number}) => {
+  return (
+    <View style={[styles.emptyContainer, {height}]}>
+      <Icon name="film" size={48} color="#FFF" />
+      <Text style={styles.emptyText}>No shorts available</Text>
+    </View>
+  );
+};
+
 const ShortsScreen = () => {
-  const { colors } = useTheme();
-  const { user } = useAuth();
+  const {colors} = useTheme();
   const navigation = useNavigation();
-  
+
   // State variables
   const [activeIndex, setActiveIndex] = useState(0);
   const [shorts, setShorts] = useState<ShortVideo[]>([]);
@@ -77,7 +86,7 @@ const ShortsScreen = () => {
   const flatListRef = useRef<FlatList>(null);
 
   // Handle viewable items changed for video playback control
-  const handleViewableItemsChanged = useRef(({ viewableItems }: any) => {
+  const handleViewableItemsChanged = useRef(({viewableItems}: any) => {
     if (viewableItems.length > 0) {
       const index = viewableItems[0].index;
       if (index !== activeIndex) {
@@ -99,49 +108,54 @@ const ShortsScreen = () => {
       setError(null);
 
       const response = await ApiService.get(ENDPOINTS.GET_PUBLIC_SHOTS);
-      
+
       if (!response || !response.data) {
         throw new Error('Failed to load shorts data');
       }
-      
-      const publicShots = Array.isArray(response.data) 
-        ? response.data 
-        : response.data.status === 200 && response.data.data 
-          ? response.data.data 
+
+      const publicShots = Array.isArray(response.data)
+        ? response.data
+        : response.data.status === 200 && response.data.data
+          ? response.data.data
           : [];
 
-      const mappedShorts: ShortVideo[] = publicShots.map((shot: PublicShot) => ({
-        id: shot.id?.toString() || 'unknown',
-        title: shot.name || 'Untitled Short',
-        thumbnail: shot.video_Thumbnail && shot.video_Thumbnail !== 'undefined' 
-          ? shot.video_Thumbnail 
-          : 'https://via.placeholder.com/150',
-        channel: {
-          id: shot.channelId?.toString() || 'unknown',
-          name: shot.channelName || 'Unknown Channel',
-          avatar: shot.channel_profile && shot.channel_profile !== 'null' 
-            ? shot.channel_profile 
-            : 'https://via.placeholder.com/36',
-          verified: false,
-          subscribers: shot.total_channel_followers || 0,
-        },
-        views: shot.total_views || 0,
-        likes: shot.total_likes || 0,
-        duration: shot.play_duration || '0:00',
-        createdAt: shot.createddate || new Date().toISOString(),
-        category: shot.category_id?.toString() || '1',
-        isPaidPromotional: shot.is_paid_promotional === 1,
-        postedAt: shot.createddate || new Date().toISOString(),
-        description: shot.video_description && shot.video_description !== 'undefined' 
-          ? shot.video_description 
-          : 'No description available',
-        videoUrl: shot.video_link || '',
-        comments: shot.total_comments || 0,
-      }));
+      const mappedShorts: ShortVideo[] = publicShots.map(
+        (shot: PublicShot) => ({
+          id: shot.id?.toString() || 'unknown',
+          title: shot.name || 'Untitled Short',
+          thumbnail:
+            shot.video_Thumbnail && shot.video_Thumbnail !== 'undefined'
+              ? shot.video_Thumbnail
+              : 'https://via.placeholder.com/150',
+          channel: {
+            id: shot.channelId?.toString() || 'unknown',
+            name: shot.channelName || 'Unknown Channel',
+            avatar:
+              shot.channel_profile && shot.channel_profile !== 'null'
+                ? shot.channel_profile
+                : 'https://via.placeholder.com/36',
+            verified: false,
+            subscribers: shot.total_channel_followers || 0,
+          },
+          views: shot.total_views || 0,
+          likes: shot.total_likes || 0,
+          duration: shot.play_duration || '0:00',
+          createdAt: shot.createddate || new Date().toISOString(),
+          category: shot.category_id?.toString() || '1',
+          isPaidPromotional: shot.is_paid_promotional === 1,
+          postedAt: shot.createddate || new Date().toISOString(),
+          description:
+            shot.video_description && shot.video_description !== 'undefined'
+              ? shot.video_description
+              : 'No description available',
+          videoUrl: shot.video_link || '',
+          comments: shot.total_comments || 0,
+        }),
+      );
 
       setShorts(mappedShorts);
-    } catch (error) {
-      console.error('Error fetching shorts:', error);
+    } catch (fetchError) {
+      console.error('Error fetching shorts:', fetchError);
       setError('Failed to load shorts. Please try again.');
     } finally {
       setLoading(false);
@@ -156,112 +170,8 @@ const ShortsScreen = () => {
     navigation.goBack();
   };
 
-  // Individual short video card component
-  const ShortCard = ({ item, isActive }: { item: ShortVideo, isActive: boolean }) => {
-    const videoRef = useRef<Video>(null);
-    const [isPlaying, setIsPlaying] = useState(true);
-    const [liked, setLiked] = useState(false);
-    
-    useEffect(() => {
-      // Control video playback based on visibility
-      if (isActive && !isPlaying) {
-        setIsPlaying(true);
-      } else if (!isActive && isPlaying) {
-        setIsPlaying(false);
-      }
-    }, [isActive, isPlaying]);
-
-    const togglePlayPause = () => {
-      setIsPlaying(!isPlaying);
-    };
-
-    const handleLike = () => {
-      setLiked(!liked);
-      // Here you would call an API to update likes
-    };
-
-    const navigateToChannel = () => {
-      navigation.navigate('Channel', { channelId: item.channel.id });
-    };
-
-    const handleShare = async () => {
-      try {
-        // Simple share implementation
-        // In a real app, you would generate a sharable link
-        const shareUrl = `https://adtip.in/shorts/${item.id}`;
-        
-        await Share.share({
-          message: `Check out this short: ${item.description} ${shareUrl}`,
-        });
-      } catch (error) {
-        console.error('Error sharing video:', error);
-      }
-    };
-
-    return (
-      <View style={[styles.shortCardContainer, { height: SCREEN_HEIGHT }]}>
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={togglePlayPause}
-          style={styles.videoContainer}
-        >
-          <Video
-            ref={videoRef}
-            source={{ uri: item.videoUrl }}
-            style={styles.video}
-            resizeMode="cover"
-            poster={item.thumbnail || undefined}
-            posterResizeMode="cover"
-            repeat
-            paused={!isPlaying || !isActive}
-            muted={false}
-            volume={1.0}
-          />
-          
-          {!isPlaying && (
-            <View style={styles.pauseOverlay}>
-              <Icon name="play" size={50} color="#FFFFFF" />
-            </View>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.overlay}>
-          <View style={styles.bottomContent}>
-            <TouchableOpacity onPress={navigateToChannel} style={styles.channelInfo}>
-              <Text style={styles.channelName}>{item.channel.name}</Text>
-            </TouchableOpacity>
-            <Text style={styles.description} numberOfLines={2} ellipsizeMode="tail">
-              {item.description}
-            </Text>
-          </View>
-
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
-              <Icon
-                name="heart"
-                size={28}
-                color={liked ? '#24d05a' : '#FFF'}
-              />
-              <Text style={styles.actionText}>{item.likes}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.actionButton}>
-              <Icon name="message-circle" size={28} color="#FFF" />
-              <Text style={styles.actionText}>{item.comments}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
-              <Icon name="share-2" size={28} color="#FFF" />
-              <Text style={styles.actionText}>Share</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
       <SafeAreaView style={styles.header}>
         <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
           <Icon name="arrow-left" size={24} color="#FFF" />
@@ -273,13 +183,17 @@ const ShortsScreen = () => {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.text }]}>Loading shorts...</Text>
+          <Text style={[styles.loadingText, {color: colors.text.primary}]}>
+            Loading shorts...
+          </Text>
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
-          <Icon name="alert-circle" size={48} color={colors.error} />
-          <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-          <TouchableOpacity onPress={fetchShorts} style={[styles.retryButton, { backgroundColor: colors.primary }]}>
+          <Icon name="alert-circle" size={48} color="#FFF" />
+          <Text style={[styles.errorText, {color: colors.error}]}>{error}</Text>
+          <TouchableOpacity
+            onPress={fetchShorts}
+            style={[styles.retryButton, {backgroundColor: colors.primary}]}>
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
@@ -287,9 +201,9 @@ const ShortsScreen = () => {
         <FlatList
           ref={flatListRef}
           data={shorts}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item, index }) => (
-            <ShortCard item={item} isActive={index === activeIndex} />
+          keyExtractor={item => item.id}
+          renderItem={({item, index}) => (
+            <ShortCard item={item} isActive={index === activeIndex} navigation={navigation} cardHeight={SCREEN_HEIGHT} styles={styles} />
           )}
           pagingEnabled
           showsVerticalScrollIndicator={false}
@@ -298,12 +212,7 @@ const ShortsScreen = () => {
           snapToInterval={SCREEN_HEIGHT}
           snapToAlignment="start"
           decelerationRate="fast"
-          ListEmptyComponent={() => (
-            <View style={styles.emptyContainer}>
-              <Icon name="film" size={48} color="#FFF" />
-              <Text style={styles.emptyText}>No shorts available</Text>
-            </View>
-          )}
+          ListEmptyComponent={<ShortsListEmptyComponent height={SCREEN_HEIGHT} />}
           getItemLayout={(data, index) => ({
             length: SCREEN_HEIGHT,
             offset: SCREEN_HEIGHT * index,
@@ -315,6 +224,92 @@ const ShortsScreen = () => {
           scrollEventThrottle={16}
         />
       )}
+    </View>
+  );
+};
+
+// Move ShortCard outside of ShortsScreen to avoid nested component warning
+const ShortCard = ({
+  item,
+  isActive,
+  navigation,
+  cardHeight,
+  styles,
+}: any) => {
+  const videoRef = React.useRef<any>(null);
+  const [isPlaying, setIsPlaying] = React.useState(true);
+  const [liked, setLiked] = React.useState(false);
+  React.useEffect(() => {
+    if (isActive && !isPlaying) {setIsPlaying(true);}
+    else if (!isActive && isPlaying) {setIsPlaying(false);}
+  }, [isActive, isPlaying]);
+  const togglePlayPause = () => setIsPlaying(!isPlaying);
+  const handleLike = () => setLiked(!liked);
+  const navigateToChannel = () => (navigation as any).navigate('Channel', {channelId: item.channel.id});
+  const handleShare = async () => {
+    try {
+      const shareUrl = `https://adtip.in/shorts/${item.id}`;
+      await Share.share({message: `Check out this short: ${item.description} ${shareUrl}`});
+    } catch (shareError) {console.error('Error sharing video:', shareError);}
+  };
+  return (
+    <View style={[styles.shortCardContainer, {height: cardHeight}]}>
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={togglePlayPause}
+        style={styles.videoContainer}>
+        <Video
+          ref={videoRef}
+          source={{uri: item.videoUrl}}
+          style={styles.video}
+          resizeMode="cover"
+          poster={item.thumbnail || undefined}
+          posterResizeMode="cover"
+          repeat
+          paused={!isPlaying || !isActive}
+          muted={false}
+          volume={1.0}
+        />
+
+        {!isPlaying && (
+          <View style={styles.pauseOverlay}>
+            <Icon name="play" size={50} color="#FFFFFF" />
+          </View>
+        )}
+      </TouchableOpacity>
+
+      <View style={styles.overlay}>
+        <View style={styles.bottomContent}>
+          <TouchableOpacity
+            onPress={navigateToChannel}
+            style={styles.channelInfo}>
+            <Text style={styles.channelName}>{item.channel.name}</Text>
+          </TouchableOpacity>
+          <Text
+            style={styles.description}
+            numberOfLines={2}
+            ellipsizeMode="tail">
+            {item.description}
+          </Text>
+        </View>
+
+        <View style={styles.actions}>
+          <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
+            <Icon name="heart" size={28} color={liked ? '#24d05a' : '#FFF'} />
+            <Text style={styles.actionText}>{item.likes}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.actionButton}>
+            <Icon name="message-circle" size={28} color="#FFF" />
+            <Text style={styles.actionText}>{item.comments}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
+            <Icon name="share-2" size={28} color="#FFF" />
+            <Text style={styles.actionText}>Share</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
   );
 };
@@ -345,7 +340,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFF',
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 1, height: 1 },
+    textShadowOffset: {width: 1, height: 1},
     textShadowRadius: 3,
   },
   placeholder: {
@@ -440,14 +435,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 1, height: 1 },
+    textShadowOffset: {width: 1, height: 1},
     textShadowRadius: 3,
   },
   description: {
     color: '#FFF',
     fontSize: 14,
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 1, height: 1 },
+    textShadowOffset: {width: 1, height: 1},
     textShadowRadius: 3,
   },
   actions: {
@@ -465,7 +460,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 1, height: 1 },
+    textShadowOffset: {width: 1, height: 1},
     textShadowRadius: 3,
   },
 });

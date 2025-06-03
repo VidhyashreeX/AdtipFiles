@@ -1,5 +1,5 @@
 // src/screens/packages/PackagesScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,9 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import {useNavigation} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme } from '../../contexts/ThemeContext';
+import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 
 interface Package {
@@ -28,7 +28,7 @@ interface Package {
 
 const PackagesScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { colors } = useTheme();
+  const {colors} = useTheme();
   const [loading, setLoading] = useState(true);
   const [packages, setPackages] = useState<Package[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
@@ -40,7 +40,7 @@ const PackagesScreen: React.FC = () => {
   const loadPackages = async () => {
     try {
       setLoading(true);
-      
+
       // Mock packages data - replace with actual API call
       const mockPackages: Package[] = [
         {
@@ -52,7 +52,7 @@ const PackagesScreen: React.FC = () => {
             'Upload up to 10 videos per month',
             'Basic analytics',
             'Community support',
-            'Standard video quality'
+            'Standard video quality',
           ],
           duration: 'monthly',
           popular: false,
@@ -70,7 +70,7 @@ const PackagesScreen: React.FC = () => {
             'Priority support',
             'HD video quality',
             'Custom thumbnails',
-            'Live streaming'
+            'Live streaming',
           ],
           duration: 'monthly',
           popular: true,
@@ -89,12 +89,12 @@ const PackagesScreen: React.FC = () => {
             'Custom branding',
             'Live streaming',
             'Advanced monetization tools',
-            'API access'
+            'API access',
           ],
           duration: 'monthly',
           popular: false,
           recommended: false,
-        }
+        },
       ];
 
       setPackages(mockPackages);
@@ -117,50 +117,77 @@ const PackagesScreen: React.FC = () => {
     }
 
     const selectedPkg = packages.find(pkg => pkg.id === selectedPackage);
-    navigation.navigate('ChoosePackages' as never, { package: selectedPkg } as never);
+    // Use @ts-ignore to bypass the 'as never' error for navigation
+    // @ts-ignore
+    navigation.navigate('ChoosePackages', {package: selectedPkg});
   };
+
+  // Helper to get dynamic style for package card
+  function getPackageCardStyle(
+    baseStyle: any,
+    isSelected: boolean,
+    color: string,
+    border: string,
+  ) {
+    return [
+      baseStyle,
+      {
+        borderWidth: isSelected ? 2 : 1,
+        borderColor: isSelected ? color : border,
+      },
+    ];
+  }
 
   const renderPackageCard = (pkg: Package) => (
     <TouchableOpacity
       key={pkg.id}
-      style={[
+      style={getPackageCardStyle(
         styles.packageCard,
-        {
-          backgroundColor: colors.surface,
-          borderColor: selectedPackage === pkg.id ? colors.primary : colors.border.light,
-          borderWidth: selectedPackage === pkg.id ? 2 : 1,
-        }
-      ]}
-      onPress={() => handleSelectPackage(pkg.id)}
-    >
+        selectedPackage === pkg.id,
+        colors.primary,
+        colors.border,
+      )}
+      onPress={() => handleSelectPackage(pkg.id)}>
       {/* Package Header */}
       <View style={styles.packageHeader}>
         {pkg.popular && (
-          <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-            <Text style={[styles.badgeText, { color: colors.white }]}>Most Popular</Text>
+          <View style={[styles.badge, {backgroundColor: colors.primary}]}>
+            <Text style={[styles.badgeText, {color: colors.white}]}>
+              Most Popular
+            </Text>
           </View>
         )}
         {pkg.recommended && (
-          <View style={[styles.badge, styles.recommendedBadge, { backgroundColor: colors.success }]}>
-            <Text style={[styles.badgeText, { color: colors.white }]}>Recommended</Text>
+          <View
+            style={[
+              styles.badge,
+              styles.recommendedBadge,
+              {backgroundColor: colors.success},
+            ]}>
+            <Text style={[styles.badgeText, {color: colors.white}]}>
+              Recommended
+            </Text>
           </View>
         )}
-        
-        <Text style={[styles.packageName, { color: colors.text.primary }]}>{pkg.name}</Text>
-        <Text style={[styles.packageDescription, { color: colors.text.secondary }]}>
+
+        <Text style={[styles.packageName, {color: colors.text.primary}]}>
+          {pkg.name}
+        </Text>
+        <Text
+          style={[styles.packageDescription, {color: colors.text.secondary}]}>
           {pkg.description}
         </Text>
-        
+
         <View style={styles.priceContainer}>
-          <Text style={[styles.price, { color: colors.text.primary }]}>
+          <Text style={[styles.price, {color: colors.text.primary}]}>
             ${pkg.price}
           </Text>
           {pkg.originalPrice && (
-            <Text style={[styles.originalPrice, { color: colors.text.tertiary }]}>
+            <Text style={[styles.originalPrice, {color: colors.text.tertiary}]}>
               ${pkg.originalPrice}
             </Text>
           )}
-          <Text style={[styles.duration, { color: colors.text.secondary }]}>
+          <Text style={[styles.duration, {color: colors.text.secondary}]}>
             /{pkg.duration}
           </Text>
         </View>
@@ -170,8 +197,13 @@ const PackagesScreen: React.FC = () => {
       <View style={styles.featuresContainer}>
         {pkg.features.map((feature, index) => (
           <View key={index} style={styles.featureItem}>
-            <Icon name="check" size={16} color={colors.success} style={styles.checkIcon} />
-            <Text style={[styles.featureText, { color: colors.text.secondary }]}>
+            <Icon
+              name="check"
+              size={16}
+              color={colors.success}
+              style={styles.checkIcon}
+            />
+            <Text style={[styles.featureText, {color: colors.text.secondary}]}>
               {feature}
             </Text>
           </View>
@@ -189,7 +221,7 @@ const PackagesScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, {backgroundColor: colors.background}]}>
         <Header title="Choose Package" showBackButton />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -199,15 +231,15 @@ const PackagesScreen: React.FC = () => {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
       <Header title="Choose Package" showBackButton />
-      
+
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.headerSection}>
-          <Text style={[styles.title, { color: colors.text.primary }]}>
+          <Text style={[styles.title, {color: colors.text.primary}]}>
             Choose Your Plan
           </Text>
-          <Text style={[styles.subtitle, { color: colors.text.secondary }]}>
+          <Text style={[styles.subtitle, {color: colors.text.secondary}]}>
             Select the package that best fits your content creation needs
           </Text>
         </View>
@@ -217,31 +249,38 @@ const PackagesScreen: React.FC = () => {
         </View>
 
         <View style={styles.comparisonNote}>
-          <Text style={[styles.comparisonText, { color: colors.text.tertiary }]}>
-            All plans include basic features and can be upgraded or downgraded at any time
+          <Text style={[styles.comparisonText, {color: colors.text.tertiary}]}>
+            All plans include basic features and can be upgraded or downgraded
+            at any time
           </Text>
         </View>
       </ScrollView>
 
       {/* Continue Button */}
-      <View style={[styles.bottomContainer, { backgroundColor: colors.surface }]}>
+      <View style={[styles.bottomContainer, {backgroundColor: colors.surface}]}>
         <TouchableOpacity
           style={[
             styles.continueButton,
             {
-              backgroundColor: selectedPackage ? colors.primary : colors.border.light,
-            }
+              backgroundColor: selectedPackage
+                ? colors.primary
+                : colors.border,
+            },
           ]}
           onPress={handleContinue}
-          disabled={!selectedPackage}
-        >
-          <Text style={[
-            styles.continueButtonText,
-            {
-              color: selectedPackage ? colors.white : colors.text.tertiary,
-            }
-          ]}>
-            Continue with {selectedPackage ? packages.find(p => p.id === selectedPackage)?.name : 'Selected'} Plan
+          disabled={!selectedPackage}>
+          <Text
+            style={[
+              styles.continueButtonText,
+              {
+                color: selectedPackage ? colors.white : colors.text.tertiary,
+              },
+            ]}>
+            Continue with{' '}
+            {selectedPackage
+              ? packages.find(p => p.id === selectedPackage)?.name
+              : 'Selected'}{' '}
+            Plan
           </Text>
         </TouchableOpacity>
       </View>

@@ -1,5 +1,5 @@
 // src/screens/media/VideoScreen.tsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, {useState, useRef, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
   Share,
   Alert,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import {useNavigation, useRoute} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import Video from 'react-native-video';
 import Orientation from 'react-native-orientation-locker';
@@ -24,13 +24,13 @@ import Header from '../../components/common/Header';
 import CategoryChip from '../../components/common/CategoryChip';
 
 // Context and services
-import { useTheme } from '../../contexts/ThemeContext';
-import { useAuth } from '../../contexts/AuthContext';
+import {useTheme} from '../../contexts/ThemeContext';
+import {useAuth} from '../../contexts/AuthContext';
 import ApiService from '../../services/ApiService';
 import VideoService from '../../services/VideoService';
-import { ENDPOINTS } from '../../constants/api';
+import {ENDPOINTS} from '../../constants/api';
 
-const { width } = Dimensions.get('window');
+const {width} = Dimensions.get('window');
 
 interface VideoProps {
   id: string;
@@ -58,16 +58,16 @@ interface VideoProps {
 }
 
 const VideoScreen = () => {
-  const { colors } = useTheme();
-  const { user } = useAuth();
+  const {colors} = useTheme();
+  const {user} = useAuth();
   const navigation = useNavigation();
   const route = useRoute();
   const videoRef = useRef<any>(null);
-  
+
   // Get video from route params
   // @ts-ignore
   const videoId = route.params?.videoId;
-  
+
   // State variables
   const [video, setVideo] = useState<VideoProps | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,24 +78,77 @@ const VideoScreen = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
-  const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [isBuffering, setIsBuffering] = useState(true);
   const [liked, setLiked] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
   const [rewardShown, setRewardShown] = useState(false);
-  const [rewardAmount, setRewardAmount] = useState(0);
   const [watchTimeTracked, setWatchTimeTracked] = useState(false);
   const [localVideoPath, setLocalVideoPath] = useState<string | null>(null);
-  
+
   // Control timer
   const controlsTimer = useRef<any>(null);
-  
+
   // Fetch video data
+  const fetchVideoDetails = useCallback(async () => {
+    if (!videoId) {
+      setError('Video ID is missing');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await ApiService.get(
+        `${ENDPOINTS.GET_VIDEO}/${videoId}`,
+      );
+      setVideo(response.data);
+
+      // Check if user has already liked the video
+      if (user) {
+        const likeResponse = await ApiService.get(
+          `${ENDPOINTS.CHECK_LIKE}/${videoId}`,
+        );
+        setLiked(likeResponse.data.liked);
+
+        // Check if user has already subscribed to the channel
+        const subscribeResponse = await ApiService.get(
+          `${ENDPOINTS.CHECK_SUBSCRIBE}/${response.data.user.id}`,
+        );
+        setSubscribed(subscribeResponse.data.subscribed);
+
+        // Check if user has already earned from this video
+        if (response.data.isMonetized) {
+          setRewardShown(response.data.hasEarned);
+        }
+      }
+
+      // Track video view
+      ApiService.post(`${ENDPOINTS.TRACK_VIEW}/${videoId}`);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching video:', err);
+      setError('Failed to load video');
+      setLoading(false);
+    }
+  }, [videoId, user]);
+
+  // Cache video for better playback
+  const cacheVideo = useCallback(async () => {
+    try {
+      if (video?.videoUrl) {
+        const cachedPath = await VideoService.cacheVideo(video.videoUrl);
+        setLocalVideoPath(cachedPath);
+      }
+    } catch (err) {
+      console.error('Error caching video:', err);
+    }
+  }, [video]);
+
   useEffect(() => {
     fetchVideoDetails();
-  }, [videoId]);
-  
+  }, [videoId, fetchVideoDetails]);
+
   // Handle orientation changes
   useEffect(() => {
     if (isFullscreen) {
@@ -103,26 +156,26 @@ const VideoScreen = () => {
     } else {
       Orientation.lockToPortrait();
     }
-    
+
     return () => {
       Orientation.lockToPortrait();
     };
   }, [isFullscreen]);
-  
+
   // Handle controls visibility
   useEffect(() => {
     if (showControls) {
       if (controlsTimer.current) {
         clearTimeout(controlsTimer.current);
       }
-      
+
       controlsTimer.current = setTimeout(() => {
         if (!paused) {
           setShowControls(false);
         }
       }, 3000);
     }
-    
+
     return () => {
       if (controlsTimer.current) {
         clearTimeout(controlsTimer.current);
@@ -130,62 +183,11 @@ const VideoScreen = () => {
     };
   }, [showControls, paused]);
 
-  // Cache video for better playback
   useEffect(() => {
     if (video?.videoUrl) {
       cacheVideo();
     }
-  }, [video]);
-
-  const cacheVideo = async () => {
-    try {
-      if (video?.videoUrl) {
-        const cachedPath = await VideoService.cacheVideo(video.videoUrl);
-        setLocalVideoPath(cachedPath);
-      }
-    } catch (error) {
-      console.error('Error caching video:', error);
-    }
-  };
-
-  const fetchVideoDetails = async () => {
-    if (!videoId) {
-      setError('Video ID is missing');
-      setLoading(false);
-      return;
-    }
-    
-    try {
-      setLoading(true);
-      const response = await ApiService.get(`${ENDPOINTS.GET_VIDEO}/${videoId}`);
-      setVideo(response.data);
-      
-      // Check if user has already liked the video
-      if (user) {
-        const likeResponse = await ApiService.get(`${ENDPOINTS.CHECK_LIKE}/${videoId}`);
-        setLiked(likeResponse.data.liked);
-        
-        // Check if user has already subscribed to the channel
-        const subscribeResponse = await ApiService.get(
-          `${ENDPOINTS.CHECK_SUBSCRIBE}/${response.data.user.id}`
-        );
-        setSubscribed(subscribeResponse.data.subscribed);
-        
-        // Check if user has already earned from this video
-        if (response.data.isMonetized) {
-          setRewardShown(response.data.hasEarned);
-        }
-      }
-      
-      // Track video view
-      ApiService.post(`${ENDPOINTS.TRACK_VIEW}/${videoId}`);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching video:', error);
-      setError('Failed to load video');
-      setLoading(false);
-    }
-  };
+  }, [video, cacheVideo]);
 
   const handleTogglePlay = () => {
     setPaused(!paused);
@@ -202,7 +204,7 @@ const VideoScreen = () => {
   const handleProgress = (data: any) => {
     setProgress(data.currentTime / data.seekableDuration);
     setCurrentTime(data.currentTime);
-    
+
     // Track watch time for monetization
     if (video?.isMonetized && !watchTimeTracked && !video.hasEarned) {
       // If user has watched 75% of the video, track for reward
@@ -225,11 +227,13 @@ const VideoScreen = () => {
   };
 
   const trackWatchTime = async () => {
-    if (!video || watchTimeTracked) return;
-    
+    if (!video || watchTimeTracked) {
+      return;
+    }
+
     try {
       setWatchTimeTracked(true);
-        if (video.isMonetized && !video.hasEarned) {
+      if (video.isMonetized && !video.hasEarned) {
         // Commented out PubScale integration - June 2, 2025
         /*
         // Show reward after 80% of video watched
@@ -241,7 +245,7 @@ const VideoScreen = () => {
               ApiService.post(`${ENDPOINTS.EARN_REWARD}/${video.id}`);
               setRewardShown(true);
               setRewardAmount(5); // Example reward amount
-              
+
               // Show reward notification
               Alert.alert(
                 'Reward Earned!',
@@ -251,15 +255,15 @@ const VideoScreen = () => {
           }
         });
         */
-        
+
         // Temporary: Show message that rewards are disabled
         Alert.alert(
           'Rewards Temporarily Disabled',
-          'Video rewards are currently being updated. Please check back later!'
+          'Video rewards are currently being updated. Please check back later!',
         );
       }
-    } catch (error) {
-      console.error('Error showing reward:', error);
+    } catch (err) {
+      console.error('Error showing reward:', err);
     }
   };
 
@@ -268,75 +272,75 @@ const VideoScreen = () => {
       Alert.alert('Sign In Required', 'Please sign in to like this video');
       return;
     }
-    
+
     try {
-      const endpoint = liked ? 
-        `${ENDPOINTS.UNLIKE_VIDEO}/${video?.id}` : 
-        `${ENDPOINTS.LIKE_VIDEO}/${video?.id}`;
-        
+      const endpoint = liked
+        ? `${ENDPOINTS.UNLIKE_VIDEO}/${video?.id}`
+        : `${ENDPOINTS.LIKE_VIDEO}/${video?.id}`;
+
       await ApiService.post(endpoint);
-      
+
       setLiked(!liked);
       if (video) {
         setVideo({
           ...video,
-          likes: liked ? video.likes - 1 : video.likes + 1
+          likes: liked ? video.likes - 1 : video.likes + 1,
         });
       }
-    } catch (error) {
-      console.error('Error liking video:', error);
+    } catch (err) {
+      console.error('Error liking video:', err);
     }
   };
 
   const handleSubscribe = async () => {
     if (!user) {
-      Alert.alert('Sign In Required', 'Please sign in to subscribe to this channel');
+      Alert.alert(
+        'Sign In Required',
+        'Please sign in to subscribe to this channel',
+      );
       return;
     }
-    
-    if (!video || !video.user) return;
-    
+
+    if (!video || !video.user) {
+      return;
+    }
+
     try {
-      const endpoint = subscribed ?
-        `${ENDPOINTS.UNSUBSCRIBE}/${video.user.id}` :
-        `${ENDPOINTS.SUBSCRIBE}/${video.user.id}`;
-        
+      const endpoint = subscribed
+        ? `${ENDPOINTS.UNSUBSCRIBE}/${video.user.id}`
+        : `${ENDPOINTS.SUBSCRIBE}/${video.user.id}`;
+
       await ApiService.post(endpoint);
-      
+
       setSubscribed(!subscribed);
       if (video) {
         setVideo({
           ...video,
           user: {
             ...video.user,
-            followers: subscribed ? video.user.followers - 1 : video.user.followers + 1
-          }
+            followers: subscribed
+              ? video.user.followers - 1
+              : video.user.followers + 1,
+          },
         });
       }
-    } catch (error) {
-      console.error('Error subscribing:', error);
+    } catch (err) {
+      console.error('Error subscribing:', err);
     }
   };
 
   const handleShare = async () => {
-    if (!video) return;
-    
+    if (!video) {
+      return;
+    }
+
     try {
-      const result = await Share.share({
+      await Share.share({
         message: `Check out this video "${video.title}" on Adtip: https://adtip.app/video/${video.id}`,
       });
-    } catch (error) {
-      console.error('Error sharing:', error);
+    } catch (err) {
+      console.error('Error sharing:', err);
     }
-  };
-
-  const handleSeek = (value: number) => {
-    const seekTime = value * duration;
-    if (videoRef.current) {
-      videoRef.current.seek(seekTime);
-    }
-    setProgress(value);
-    setCurrentTime(seekTime);
   };
 
   // Format time (seconds) to mm:ss
@@ -348,7 +352,8 @@ const VideoScreen = () => {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView
+        style={[styles.container, {backgroundColor: colors.background}]}>
         <Header
           title="Video"
           leftComponent={
@@ -359,7 +364,7 @@ const VideoScreen = () => {
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
+          <Text style={[styles.loadingText, {color: colors.text.secondary}]}>
             Loading video...
           </Text>
         </View>
@@ -369,7 +374,8 @@ const VideoScreen = () => {
 
   if (error || !video) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView
+        style={[styles.container, {backgroundColor: colors.background}]}>
         <Header
           title="Video"
           leftComponent={
@@ -380,30 +386,31 @@ const VideoScreen = () => {
         />
         <View style={styles.errorContainer}>
           <Icon name="alert-triangle" size={48} color={colors.error} />
-          <Text style={[styles.errorText, { color: colors.text.primary }]}>
+          <Text style={[styles.errorText, {color: colors.text.primary}]}>
             {error || 'Video not found'}
           </Text>
-          <TouchableOpacity 
-            style={[styles.retryButton, { backgroundColor: colors.primary }]}
-            onPress={fetchVideoDetails}
-          >
-            <Text style={{ color: colors.white }}>Retry</Text>
+          <TouchableOpacity
+            style={[styles.retryButton, {backgroundColor: colors.primary}]}
+            onPress={fetchVideoDetails}>
+            <Text style={{color: colors.white}}>Retry</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
+  const containerStyles = [
+    styles.container,
+    isFullscreen ? styles.fullscreenContainer : { backgroundColor: colors.background },
+  ];
+
+  const videoContainerStyles = [
+    styles.videoContainer,
+    isFullscreen ? styles.fullscreenVideo : { height: (width * 9) / 16 },
+  ];
+
   return (
-    <SafeAreaView 
-      style={[
-        styles.container, 
-        { 
-          backgroundColor: isFullscreen ? '#000' : colors.background,
-          paddingTop: isFullscreen ? 0 : undefined,
-        }
-      ]}
-    >
+    <SafeAreaView style={containerStyles}>
       {!isFullscreen && (
         <Header
           title={video.title}
@@ -414,32 +421,27 @@ const VideoScreen = () => {
           }
         />
       )}
-      
-      <TouchableOpacity 
-        activeOpacity={1} 
+
+      <TouchableOpacity
+        activeOpacity={1}
         onPress={handleScreenTouch}
-        style={[
-          styles.videoContainer,
-          { height: isFullscreen ? '100%' : width * 9 / 16 }
-        ]}
-      >
+        style={videoContainerStyles}>
         <Video
           ref={videoRef}
-          source={{ uri: localVideoPath || video.videoUrl }}
+          source={{uri: localVideoPath || video.videoUrl}}
           style={styles.videoPlayer}
           resizeMode="contain"
           paused={paused}
           onProgress={handleProgress}
           onLoad={handleLoad}
           onEnd={handleEnd}
-          onBuffer={({isBuffering}) => setIsBuffering(isBuffering)}
-          volume={volume}
+          onBuffer={({ isBuffering: buffering }) => setIsBuffering(buffering)}
           muted={muted}
           repeat={false}
           playInBackground={false}
           playWhenInactive={false}
         />
-        
+
         {/* Video controls */}
         {showControls && (
           <View style={styles.controls}>
@@ -451,45 +453,47 @@ const VideoScreen = () => {
                 </TouchableOpacity>
               )}
             </View>
-            
+
             {/* Center controls */}
             <View style={styles.centerControls}>
               <TouchableOpacity
                 style={styles.playPauseButton}
-                onPress={handleTogglePlay}
-              >
-                <Icon 
-                  name={paused ? 'play' : 'pause'} 
-                  size={40} 
-                  color={colors.white} 
+                onPress={handleTogglePlay}>
+                <Icon
+                  name={paused ? 'play' : 'pause'}
+                  size={40}
+                  color={colors.white}
                 />
               </TouchableOpacity>
             </View>
-            
+
             {/* Bottom controls */}
             <View style={styles.bottomControls}>
               <View style={styles.timeControls}>
                 <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
                 <View style={styles.progressContainer}>
-                  <View 
+                  <View
                     style={[
-                      styles.progressBar, 
-                      { 
+                      styles.progressBar,
+                      {
                         width: `${progress * 100}%`,
                         backgroundColor: colors.primary,
-                      }
-                    ]} 
+                      },
+                    ]}
                   />
                   <View
                     style={[
                       styles.seekThumb,
-                      { left: `${progress * 100}%`, backgroundColor: colors.primary }
+                      {
+                        left: `${progress * 100}%`,
+                        backgroundColor: colors.primary,
+                      },
                     ]}
                   />
                 </View>
                 <Text style={styles.timeText}>{formatTime(duration)}</Text>
               </View>
-              
+
               <View style={styles.actionControls}>
                 <TouchableOpacity onPress={() => setMuted(!muted)}>
                   <Icon
@@ -498,7 +502,7 @@ const VideoScreen = () => {
                     color={colors.white}
                   />
                 </TouchableOpacity>
-                
+
                 <TouchableOpacity onPress={handleToggleFullscreen}>
                   <Icon
                     name={isFullscreen ? 'minimize' : 'maximize'}
@@ -510,7 +514,7 @@ const VideoScreen = () => {
             </View>
           </View>
         )}
-        
+
         {/* Buffering indicator */}
         {isBuffering && (
           <View style={styles.bufferingContainer}>
@@ -523,109 +527,110 @@ const VideoScreen = () => {
         <ScrollView style={styles.content}>
           {/* Video information */}
           <View style={styles.videoInfo}>
-            <Text style={[styles.videoTitle, { color: colors.text.primary }]}>
+            <Text style={[styles.videoTitle, {color: colors.text.primary}]}>
               {video.title}
             </Text>
-            
+
             <View style={styles.videoStats}>
-              <Text style={[styles.statsText, { color: colors.text.secondary }]}>
-                {video.views.toLocaleString()} views • {new Date(video.createdAt).toLocaleDateString()}
+              <Text style={[styles.statsText, {color: colors.text.secondary}]}>
+                {video.views.toLocaleString()} views •{' '}
+                {new Date(video.createdAt).toLocaleDateString()}
               </Text>
-              
+
               {video.category && (
-                <CategoryChip
-                  category={video.category}
-                  small
-                />
+                <CategoryChip category={video.category} small />
               )}
             </View>
-            
+
             {/* Action buttons */}
             <View style={styles.actionButtons}>
-              <TouchableOpacity 
-                style={styles.actionButton} 
-                onPress={handleLikeVideo}
-              >
-                <Icon 
-                  name={liked ? 'thumbs-up' : 'thumbs-up'} 
-                  size={20} 
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleLikeVideo}>
+                <Icon
+                  name={liked ? 'thumbs-up' : 'thumbs-up'}
+                  size={20}
                   color={liked ? colors.primary : colors.text.secondary}
-                  solid={liked}
                 />
-                <Text 
+                <Text
                   style={[
-                    styles.actionText, 
-                    { 
-                      color: liked ? colors.primary : colors.text.secondary,
-                      fontWeight: liked ? '600' : '400',
-                    }
-                  ]}
-                >
+                    styles.actionText,
+                    liked && styles.likedActionText,
+                    { color: liked ? colors.primary : colors.text.secondary },
+                  ]}>
                   {video.likes.toLocaleString()}
                 </Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
+
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleShare}>
                 <Icon name="share-2" size={20} color={colors.text.secondary} />
-                <Text style={[styles.actionText, { color: colors.text.secondary }]}>
+                <Text
+                  style={[styles.actionText, {color: colors.text.secondary}]}>
                   Share
                 </Text>
               </TouchableOpacity>
-              
+
               {rewardShown && (
                 <View style={styles.rewardContainer}>
                   <Icon name="dollar-sign" size={16} color={colors.success} />
-                  <Text style={[styles.rewardText, { color: colors.success }]}>
-                    {rewardAmount} coins earned
+                  <Text style={[styles.rewardText, {color: colors.success}]}>
+                    {rewardShown ? 'Coins earned' : ''}
                   </Text>
                 </View>
               )}
             </View>
           </View>
-          
+
           {/* Channel information */}
-          <View style={[styles.channelContainer, { borderColor: colors.border }]}>
+          <View style={[styles.channelContainer, {borderColor: colors.border}]}>
             <View style={styles.channelInfo}>
               <Image
-                source={{ uri: video.user.avatarUrl }}
+                source={{uri: video.user.avatarUrl}}
                 style={styles.channelImage}
               />
               <View style={styles.channelText}>
-                <Text style={[styles.channelName, { color: colors.text.primary }]}>
+                <Text
+                  style={[styles.channelName, {color: colors.text.primary}]}>
                   {video.user.name}
                 </Text>
-                <Text style={[styles.subscriberCount, { color: colors.text.secondary }]}>
+                <Text
+                  style={[
+                    styles.subscriberCount,
+                    {color: colors.text.secondary},
+                  ]}>
                   {video.user.followers.toLocaleString()} followers
                 </Text>
               </View>
             </View>
-            
+
             <TouchableOpacity
               style={[
                 styles.subscribeButton,
-                { 
-                  backgroundColor: subscribed ? 'transparent' : colors.primary,
-                  borderWidth: subscribed ? 1 : 0,
-                  borderColor: colors.border,
-                }
+                subscribed ? styles.subscribedButton : styles.notSubscribedButton,
+                !subscribed && {backgroundColor: colors.primary},
+                {borderColor: colors.border},
               ]}
-              onPress={handleSubscribe}
-            >
-              <Text 
+              onPress={handleSubscribe}>
+              <Text
                 style={[
-                  styles.subscribeText, 
-                  { color: subscribed ? colors.text.primary : colors.white }
-                ]}
-              >
+                  styles.subscribeText,
+                  {color: subscribed ? colors.text.primary : colors.white},
+                ]}>
                 {subscribed ? 'Subscribed' : 'Subscribe'}
               </Text>
             </TouchableOpacity>
           </View>
-          
+
           {/* Video description */}
           {video.description ? (
             <View style={styles.descriptionContainer}>
-              <Text style={[styles.descriptionText, { color: colors.text.secondary }]}>
+              <Text
+                style={[
+                  styles.descriptionText,
+                  {color: colors.text.secondary},
+                ]}>
                 {video.description}
               </Text>
             </View>
@@ -779,6 +784,9 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     fontSize: 14,
   },
+  likedActionText: {
+    fontWeight: '600',
+  },
   rewardContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -826,6 +834,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 20,
   },
+  subscribedButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+  },
+  notSubscribedButton: {
+    // backgroundColor will be set to colors.primary in component
+    borderWidth: 0,
+  },
   subscribeText: {
     fontSize: 14,
     fontWeight: '600',
@@ -836,6 +852,13 @@ const styles = StyleSheet.create({
   descriptionText: {
     fontSize: 14,
     lineHeight: 22,
+  },
+  fullscreenContainer: {
+    backgroundColor: '#000',
+    paddingTop: 0,
+  },
+  fullscreenVideo: {
+    height: '100%',
   },
 });
 
