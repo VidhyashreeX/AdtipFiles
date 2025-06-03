@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Components
 import Header from '../../components/common/Header';
@@ -20,55 +19,18 @@ import Header from '../../components/common/Header';
 // Context and services
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import ApiService from '../../services/ApiService';
 import RewardService from '../../services/RewardService';
-import { ENDPOINTS } from '../../constants/api';
-
-interface WalletBalance {
-  coins: number;
-  currency: string;
-  lastUpdated: Date;
-}
+import useWallet from '../../hooks/useWallet';
 
 const WalletScreen = () => {
   const { colors } = useTheme();
   const { user } = useAuth();
   const navigation = useNavigation();
-
-  // State
-  const [balance, setBalance] = useState<string>('0.00');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [transactions, setTransactions] = useState<any[]>([]);
+  
+  // Use our wallet hook instead of managing state manually
+  const { balance, transactions, isLoading, isRefreshing, refreshWallet } = useWallet();
   const [offerwallLoading, setOfferwallLoading] = useState(false);
 
-  // Fetch wallet data
-  const fetchWalletData = async () => {
-  try {
-    setIsLoading(true);
-    if (!user || !user.id) throw new Error('User not found');
-    const response = await fetch(`/api/getfunds/${user.id}`);
-    const data = await response.json();
-    if (data && data.availableBalance) {
-      setBalance(data.availableBalance);
-    } else {
-      setBalance('0.00');
-    }
-  } catch (error) {
-    console.error('Error fetching wallet data:', error);
-    Alert.alert('Error', 'Failed to load wallet data. Please try again.');
-    setBalance('0.00');
-  } finally {
-    setIsLoading(false);
-    setIsRefreshing(false);
-  }
-};
-
-  // Handle refresh
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    fetchWalletData();
-  };
   // Show offerwall to earn coins
   const handleShowOfferwall = async () => {
     try {
@@ -79,7 +41,7 @@ const WalletScreen = () => {
       await RewardService.showOfferwall();
       
       // Refresh wallet data after offerwall closes
-      fetchWalletData();
+      refreshWallet();
     } catch (error) {
       console.error('Error showing offerwall:', error);
       Alert.alert('Error', 'Failed to open offerwall. Please try again later.');
@@ -88,18 +50,14 @@ const WalletScreen = () => {
     }
   };
 
-  // Load data on component mount
-  useEffect(() => {
-    fetchWalletData();
-  }, []);
-
   // Render loading state
   if (isLoading && !isRefreshing) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Header title="Wallet" showBackButton />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />          <Text style={[styles.loadingText, { color: colors.text.primary }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text.primary }]}>
             Loading wallet data...
           </Text>
         </View>
@@ -116,7 +74,7 @@ const WalletScreen = () => {
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
-            onRefresh={handleRefresh}
+            onRefresh={refreshWallet}
             colors={[colors.primary]}
           />
         }
@@ -146,7 +104,8 @@ const WalletScreen = () => {
         </TouchableOpacity>
 
         {/* Transactions List */}
-        <View style={styles.transactionsContainer}>          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+        <View style={styles.transactionsContainer}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
             Transaction History
           </Text>
 
@@ -160,7 +119,8 @@ const WalletScreen = () => {
                 key={`transaction-${index}`}
                 style={[styles.transactionItem, { borderBottomColor: colors.border }]}
               >
-                <View style={styles.transactionDetails}>                  <Text style={[styles.transactionTitle, { color: colors.text.primary }]}>
+                <View style={styles.transactionDetails}>
+                  <Text style={[styles.transactionTitle, { color: colors.text.primary }]}>
                     {transaction.description || 'Transaction'}
                   </Text>
                   <Text style={[styles.transactionDate, { color: colors.textSecondary }]}>
