@@ -37,6 +37,10 @@ import { API_BASE_URL, API_ENDPOINTS } from '../../constants/api';
 // Types
 import { NavigationProps } from '../../types/navigation';
 
+interface HomeScreenProps {
+  walletBalance?: string; // Optional wallet balance coming from HOC
+}
+
 interface Story {
   id: string;
   username: string;
@@ -71,7 +75,7 @@ interface Pagination {
   total_count: number;
 }
 
-const HomeScreen: React.FC = () => {
+const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
   // Hooks
   const { colors } = useTheme();
   const { user } = useAuth();
@@ -541,11 +545,10 @@ const HomeScreen: React.FC = () => {
     );
   };
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header
+    <View style={[styles.container, { backgroundColor: colors.background }]}>      <Header
         showLogo={true}
         showWallet={true}
-        walletAmount={walletAmount}
+        walletAmount={walletBalance}
       />
       
       <View style={styles.scrollView}>

@@ -26,6 +26,10 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { API_BASE_URL, API_ENDPOINTS } from '../../constants/api';
 
 // Types
+interface TipTubeScreenProps {
+  walletBalance?: string; // Optional wallet balance coming from HOC
+}
+
 interface Video {
   id: number;
   title: string;
@@ -43,7 +47,7 @@ interface Video {
   is_premium: boolean;
 }
 
-const TipTubeScreen: React.FC = () => {
+const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
   // Hooks
   const { colors } = useTheme();
   const navigation = useNavigation();
@@ -210,11 +214,12 @@ const TipTubeScreen: React.FC = () => {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header
+    <View style={[styles.container, { backgroundColor: colors.background }]}>      <Header
         title="TipTube"
         showBackButton={false}
         showLogo={false}
+        showWallet={true}
+        walletAmount={walletBalance}
       />
 
       {renderCategories()}

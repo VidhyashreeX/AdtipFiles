@@ -25,6 +25,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { API_BASE_URL, API_ENDPOINTS } from '../../constants/api';
 
 // Types
+interface TipCallScreenProps {
+  walletBalance?: string; // Optional wallet balance coming from HOC
+}
+
 interface TipCallUser {
   id: number;
   name: string;
@@ -37,7 +41,7 @@ interface TipCallUser {
   is_available: boolean;
 }
 
-const TipCallScreen: React.FC = () => {
+const TipCallScreen: React.FC<TipCallScreenProps> = ({ walletBalance }) => {
   // Hooks
   const { colors } = useTheme();
   const navigation = useNavigation();
@@ -220,14 +224,14 @@ const TipCallScreen: React.FC = () => {
   );
   
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header
+    <View style={[styles.container, { backgroundColor: colors.background }]}>      <Header
         title="TipCall"
         showBackButton={false}
         showLogo={false}
+        showWallet={true}
+        walletAmount={walletBalance}
       />
-      
-      <View style={[styles.tabContainer, { borderBottomColor: colors.border.light }]}>
+        <View style={[styles.tabContainer, { borderBottomColor: colors.borderLight }]}>
         <TouchableOpacity 
           style={[
             styles.tab, 

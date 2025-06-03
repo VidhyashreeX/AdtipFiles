@@ -4,6 +4,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 // Import navigators
 import TabNavigator from './TabNavigator';
 
+// Import the withWalletBalance HOC
+import { withWalletBalance } from '../components/hoc/withWalletBalance';
+
 // Import screens
 import CreatePostScreen from '../screens/content/CreatePostScreen';
 import SelectCategoryScreen from '../screens/content/SelectCategoryScreen';
@@ -35,6 +38,31 @@ const Stack = createNativeStackNavigator();
  * Main application stack navigator (when user is authenticated)
  */
 const MainNavigator = () => {
+  // Wrap all individual screens with the wallet balance HOC
+  const EnhancedCreatePostScreen = withWalletBalance(CreatePostScreen);
+  const EnhancedSelectCategoryScreen = withWalletBalance(SelectCategoryScreen);
+  const EnhancedTipTubeUploadScreen = withWalletBalance(TipTubeUploadScreen);
+  const EnhancedTipShortsUploadScreen = withWalletBalance(TipShortsUploadScreen);
+  const EnhancedPromotePostScreen = withWalletBalance(PromotePostScreen);
+  const EnhancedVideoPreviewScreen = withWalletBalance(VideoPreviewScreen);
+  const EnhancedVideoScreen = withWalletBalance(VideoScreen);
+  const EnhancedShortsScreen = withWalletBalance(ShortsScreen);
+  const EnhancedChannelScreen = withWalletBalance(ChannelScreen);
+  const EnhancedCreateChannelScreen = withWalletBalance(CreateChannelScreen);
+  const EnhancedPackagesScreen = withWalletBalance(PackagesScreen);
+  const EnhancedChoosePackagesScreen = withWalletBalance(ChoosePackagesScreen);
+  const EnhancedCheckoutScreen = withWalletBalance(CheckoutScreen);
+  const EnhancedAnalyticsScreen = withWalletBalance(AnalyticsScreen);
+  const EnhancedProfileScreen = withWalletBalance(ProfileScreen);
+  const EnhancedTrackOrderScreen = withWalletBalance(TrackOrderScreen);
+  const EnhancedSearchScreen = withWalletBalance(SearchScreen);
+  const EnhancedNotificationScreen = withWalletBalance(NotificationScreen);
+  const EnhancedSettingsScreen = withWalletBalance(SettingsScreen);
+  const EnhancedEarningsScreen = withWalletBalance(EarningsScreen);
+  const EnhancedReferralScreen = withWalletBalance(ReferralScreen);
+  
+  // Note: We don't wrap WalletScreen because it already has its own direct wallet balance implementation
+  
   return (
     <Stack.Navigator
       screenOptions={{
@@ -43,38 +71,33 @@ const MainNavigator = () => {
       }}
     >
       <Stack.Screen name="TabHome" component={TabNavigator} />
-      
       {/* Content creation */}
-      <Stack.Screen name="CreatePost" component={CreatePostScreen} />
-      <Stack.Screen name="SelectCategory" component={SelectCategoryScreen} />
-      <Stack.Screen name="TipTubeUpload" component={TipTubeUploadScreen} />
-      <Stack.Screen name="TipShortsUpload" component={TipShortsUploadScreen} />
-      <Stack.Screen name="PromotePost" component={PromotePostScreen} />
-      
+      <Stack.Screen name="CreatePost" component={EnhancedCreatePostScreen} />
+      <Stack.Screen name="SelectCategory" component={EnhancedSelectCategoryScreen} />
+      <Stack.Screen name="TipTubeUpload" component={EnhancedTipTubeUploadScreen} />
+      <Stack.Screen name="TipShortsUpload" component={EnhancedTipShortsUploadScreen} />
+      <Stack.Screen name="PromotePost" component={EnhancedPromotePostScreen} />
       {/* Media viewing */}
-      <Stack.Screen name="VideoPreview" component={VideoPreviewScreen} />
-      <Stack.Screen name="Video" component={VideoScreen} />
-      <Stack.Screen name="Shorts" component={ShortsScreen} />
-      
+      <Stack.Screen name="VideoPreview" component={EnhancedVideoPreviewScreen} />
+      <Stack.Screen name="Video" component={EnhancedVideoScreen} />
+      <Stack.Screen name="Shorts" component={EnhancedShortsScreen} />
       {/* Channel */}
-      <Stack.Screen name="Channel" component={ChannelScreen} />
-      <Stack.Screen name="CreateChannel" component={CreateChannelScreen} />
-      
+      <Stack.Screen name="Channel" component={EnhancedChannelScreen} />
+      <Stack.Screen name="CreateChannel" component={EnhancedCreateChannelScreen} />
       {/* Packages and checkout */}
-      <Stack.Screen name="Packages" component={PackagesScreen} />
-      <Stack.Screen name="ChoosePackages" component={ChoosePackagesScreen} />
-      <Stack.Screen name="Checkout" component={CheckoutScreen} />
-      
+      <Stack.Screen name="Packages" component={EnhancedPackagesScreen} />
+      <Stack.Screen name="ChoosePackages" component={EnhancedChoosePackagesScreen} />
+      <Stack.Screen name="Checkout" component={EnhancedCheckoutScreen} />
       {/* Other screens */}
-      <Stack.Screen name="Analytics" component={AnalyticsScreen} />
-      <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="Analytics" component={EnhancedAnalyticsScreen} />
+      <Stack.Screen name="Profile" component={EnhancedProfileScreen} />
       <Stack.Screen name="Wallet" component={WalletScreen} />
-      <Stack.Screen name="TrackOrder" component={TrackOrderScreen} />
-      <Stack.Screen name="Search" component={SearchScreen} />
-      <Stack.Screen name="Notifications" component={NotificationScreen} />
-      <Stack.Screen name="Settings" component={SettingsScreen} />
-      <Stack.Screen name="Earnings" component={EarningsScreen} />
-      <Stack.Screen name="Referral" component={ReferralScreen} />
+      <Stack.Screen name="TrackOrder" component={EnhancedTrackOrderScreen} />
+      <Stack.Screen name="Search" component={EnhancedSearchScreen} />
+      <Stack.Screen name="Notifications" component={EnhancedNotificationScreen} />
+      <Stack.Screen name="Settings" component={EnhancedSettingsScreen} />
+      <Stack.Screen name="Earnings" component={EnhancedEarningsScreen} />
+      <Stack.Screen name="Referral" component={EnhancedReferralScreen} />
     </Stack.Navigator>
   );
 };

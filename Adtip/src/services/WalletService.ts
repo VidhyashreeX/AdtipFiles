@@ -10,8 +10,26 @@ class WalletService {
    * Get the current wallet balance for a user
    * @param userId - The user ID
    * @returns Promise with wallet balance as string
-   */  static async getWalletBalance(userId: string | number): Promise<string> {    try {
-      const response = await ApiService.getWalletBalance(userId);
+   */  
+  static async getWalletBalance(userId: string | number): Promise<string> {
+    try {
+      console.log(`WalletService: Fetching balance for user ID: ${userId}`);
+
+      // Ensure userId is properly formatted to avoid API errors
+      const formattedUserId = userId.toString().trim();      // Check for token and log authentication status
+      let token = await AsyncStorage.getItem('accessToken');
+      if (!token) {
+        token = await AsyncStorage.getItem('@auth_token'); // Fallback to old key format
+      }
+      console.log('WalletService: Auth token available:', !!token);
+      
+      if (!token) {
+        console.warn('WalletService: No auth token found in storage, API call may fail');
+      }
+      
+      // Make API call with properly formatted userId
+      const response = await ApiService.getWalletBalance(formattedUserId);
+      console.log('WalletService: API response:', JSON.stringify(response));
       
       // Store the balance in AsyncStorage for quick access
       // The API returns { status: 200, message: "Fetched latest balance successfully.", availableBalance: "204.59" }
@@ -23,9 +41,21 @@ class WalletService {
       
       // If no valid response, try to get from cache
       const cachedBalance = await AsyncStorage.getItem('@wallet_balance') || '0.00';
-      return cachedBalance;
-    } catch (error) {
+      return cachedBalance;    } catch (error: any) {
       console.error('Error getting wallet balance:', error);
+      
+      // Log more detailed error info to help with debugging
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error('API error response:', error.response.status, error.response.data);
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.error('API no response error. Network issue?');
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        console.error('API request setup error:', error.message);
+      }
       
       // Return cached balance if available, or default to '0.00'
       const cachedBalance = await AsyncStorage.getItem('@wallet_balance') || '0.00';

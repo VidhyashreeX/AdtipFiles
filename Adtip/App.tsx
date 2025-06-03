@@ -17,8 +17,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-// Auth Context
+// Contexts
 import { AuthProvider } from './src/contexts/AuthContext';
+import { WalletProvider } from './src/contexts/WalletContext';
 
 // Services
 // Commented out PubScale integration - June 2, 2025
@@ -87,22 +88,22 @@ function App(): React.JSX.Element {
         <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
-  }
-  return (
+  }  return (
   <SafeAreaProvider>
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.white }}>
       <ThemeProvider>
         <AuthProvider>
-          <NavigationContainer>
-            <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
-            <Stack.Navigator screenOptions={{ headerShown: false }}>
-              {isAuthenticated ? (
+          <WalletProvider>
+            <NavigationContainer>
+              <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
+              <Stack.Navigator screenOptions={{ headerShown: false }}>
+                {isAuthenticated ? (
                 <Stack.Screen name="Main" component={MainNavigator} />
               ) : (
-                <Stack.Screen name="Auth" component={AuthNavigator} />
-              )}
-            </Stack.Navigator>
-          </NavigationContainer>
+                <Stack.Screen name="Auth" component={AuthNavigator} />              )}
+              </Stack.Navigator>
+            </NavigationContainer>
+          </WalletProvider>
         </AuthProvider>
       </ThemeProvider>
     </SafeAreaView>

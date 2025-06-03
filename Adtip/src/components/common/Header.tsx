@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useWallet } from '../../contexts/WalletContext';
 
 interface HeaderProps {
   title?: string;
@@ -23,13 +24,17 @@ const Header: React.FC<HeaderProps> = ({
   showLogo = true,
   showWallet = true,
   showNotifications = true,
-  walletAmount = "0.00",
+  walletAmount,
   leftComponent,
   rightComponent,
   centerComponent,
 }) => {
   const navigation = useNavigation();
   const { colors } = useTheme();
+  const { balance } = useWallet();
+  
+  // Use the wallet balance from context if no walletAmount is explicitly provided
+  const displayAmount = walletAmount || balance || "0.00";
 
   const handleBackPress = () => {
     navigation.goBack();
@@ -88,10 +93,10 @@ const Header: React.FC<HeaderProps> = ({
                 <View style={[styles.notificationBadge, { backgroundColor: colors.primary }]} />
               </TouchableOpacity>
             )}
-            
-            {showWallet && (              <TouchableOpacity onPress={navigateToWallet} style={[styles.walletButton, { borderColor: colors.borderLight }]}>
+              {showWallet && (              
+              <TouchableOpacity onPress={navigateToWallet} style={[styles.walletButton, { borderColor: colors.borderLight }]}>
                 <Icon name="credit-card" size={16} color={colors.primary} style={styles.walletIcon} />
-                <Text style={[styles.walletAmount, { color: colors.text.primary }]}>${walletAmount}</Text>
+                <Text style={[styles.walletAmount, { color: colors.text.primary }]}>₹{displayAmount}</Text>
               </TouchableOpacity>
             )}
           </>

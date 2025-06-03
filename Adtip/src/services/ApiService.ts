@@ -33,12 +33,18 @@ const apiClient = axios.create({
 });
 
 // Add request interceptor to add auth token to every request
-apiClient.interceptors.request.use(
-  async (config) => {
+apiClient.interceptors.request.use(  async (config) => {
     try {
-      const token = await AsyncStorage.getItem('@auth_token');
+      // Check both token storage keys - the app uses 'accessToken', but our service was checking '@auth_token'
+      let token = await AsyncStorage.getItem('accessToken');
+      if (!token) {
+        token = await AsyncStorage.getItem('@auth_token'); // Fallback to old key format
+      }
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+        console.log('Authorization header added to request');
+      } else {
+        console.warn('No auth token found in storage');
       }
     } catch (error) {
       console.error('Error getting auth token:', error);
@@ -234,8 +240,7 @@ export default class ApiService {
   /**
    * Verify OTP
    * @param data - Request data containing mobile number, OTP, and ID
-   */
-  static async verifyOtp(data: OtpVerifyRequest): Promise<ApiResponse<OtpVerifyResponse[]> & { accessToken: string }> {
+   */  static async verifyOtp(data: OtpVerifyRequest): Promise<ApiResponse<OtpVerifyResponse[]> & { accessToken: string }> {
     const response = await this.post<ApiResponse<OtpVerifyResponse[]> & { accessToken: string }>(
       ApiEndpoints.AUTH_ENDPOINTS.OTP_VERIFY, 
       data
@@ -243,7 +248,7 @@ export default class ApiService {
     
     // Store the token for future requests
     if (response.accessToken) {
-      await AsyncStorage.setItem('@auth_token', response.accessToken);
+      await AsyncStorage.setItem('accessToken', response.accessToken);
     }
     
     return response;
@@ -272,15 +277,46 @@ export default class ApiService {
   static async ping(): Promise<any> {
     return this.get(ApiEndpoints.AUTH_ENDPOINTS.PING);
   }
-
   // ===== HOME PAGE SERVICES =====
+  
   /**
    * Get wallet balance
    * @param userId - User ID
-   */  
+   */
   static async getWalletBalance(userId: string | number): Promise<WalletBalanceResponse> {
-    // Ensure the userId is correctly formatted in the URL path
-    return this.get<WalletBalanceResponse>(`${ApiEndpoints.HOME_ENDPOINTS.GET_WALLET_BALANCE}/${userId}`);
+    try {
+      // Add logging to debug the API call
+      console.log(`Fetching wallet balance for user ID: ${userId}`);
+      console.log(`Using endpoint: ${ApiEndpoints.HOME_ENDPOINTS.GET_WALLET_BALANCE}/${userId}`);
+        
+      // Make sure userId is properly formatted
+      const formattedUserId = userId.toString().trim();
+      
+      // Get the token to check if it's available
+      let token = await AsyncStorage.getItem('accessToken');
+      if (!token) {
+        token = await AsyncStorage.getItem('@auth_token'); // Fallback to old key format
+      }
+      console.log('Auth token available:', !!token);
+      
+      if (!token) {
+        console.warn('No authentication token found. API request might fail.');
+      }
+      
+      // Make the API call
+      console.log('Making API request to get wallet balance...');
+      const response = await this.get<WalletBalanceResponse>(`${ApiEndpoints.HOME_ENDPOINTS.GET_WALLET_BALANCE}/${formattedUserId}`);
+      console.log('Wallet balance API response:', JSON.stringify(response));
+      return response;
+    } catch (error) {
+      console.error('Error in getWalletBalance:', error);
+      // Return a default response to prevent app crashes
+      return {
+        status: 0,
+        message: 'Failed to fetch wallet balance',
+        availableBalance: '0.00'
+      };
+    }
   }
 
   /**

@@ -13,8 +13,10 @@ import TipShopScreen from '../screens/tipshop/TipShopScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import CreateContentModal from '../screens/content/CreateContentModal';
 
-// Import theme
+// Import theme and contexts
 import { useTheme } from '../contexts/ThemeContext';
+import { useWallet } from '../contexts/WalletContext';
+import { withWalletBalance } from '../components/hoc/withWalletBalance';
 
 // Create tab navigator
 const Tab = createBottomTabNavigator();
@@ -60,6 +62,13 @@ const CreateContentButton = () => {
  */
 const TabNavigator = () => {
   const { colors } = useTheme();
+  const { balance } = useWallet();
+  
+  // Wrap screen components with wallet balance
+  const EnhancedHomeScreen = withWalletBalance(HomeScreen);
+  const EnhancedTipTubeScreen = withWalletBalance(TipTubeScreen);
+  const EnhancedTipCallScreen = withWalletBalance(TipCallScreen);
+  const EnhancedProfileScreen = withWalletBalance(ProfileScreen);
   
   return (
     <Tab.Navigator
@@ -90,24 +99,22 @@ const TabNavigator = () => {
     >
       <Tab.Screen
         name="Home"
-        component={HomeScreen}
+        component={EnhancedHomeScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Icon name="home" color={color} size={size} />
           ),
         }}
       />
-      
       <Tab.Screen
         name="TipTube"
-        component={TipTubeScreen}
+        component={EnhancedTipTubeScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Icon name="video" color={color} size={size} />
           ),
         }}
       />
-      
       <Tab.Screen
         name="CreateContent"
         component={HomeScreen} // This is a dummy component, we're using custom tab bar button
@@ -122,20 +129,18 @@ const TabNavigator = () => {
           },
         }}
       />
-      
       <Tab.Screen
         name="TipCall"
-        component={TipCallScreen}
+        component={EnhancedTipCallScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Icon name="phone" color={color} size={size} />
           ),
         }}
       />
-      
       <Tab.Screen
         name="Profile"
-        component={ProfileScreen}
+        component={EnhancedProfileScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Icon name="user" color={color} size={size} />
