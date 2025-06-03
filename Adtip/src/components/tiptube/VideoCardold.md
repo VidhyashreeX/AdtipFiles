@@ -1,6 +1,6 @@
 // src/components/tiptube/VideoCard.tsx
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Pressable } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../contexts/ThemeContext';
 import Video from 'react-native-video';
@@ -86,10 +86,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
         )}
         
         {price && price > 0 && (
-          <View style={[styles.priceBadge, { 
-            backgroundColor: colors.success,
-            top: isPremium ? 40 : 8
-          }]}>
+          <View style={[styles.priceBadge, { backgroundColor: colors.success }]}>
             <Icon name="dollar-sign" size={10} color={colors.white} style={styles.badgeIcon} />
             <Text style={styles.priceText}>${price.toFixed(2)}</Text>
           </View>
@@ -178,6 +175,7 @@ const styles = StyleSheet.create({
   },
   priceBadge: {
     position: 'absolute',
+    top: isPremium => isPremium ? 40 : 8,
     right: 8,
     flexDirection: 'row',
     alignItems: 'center',
