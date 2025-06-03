@@ -26,11 +26,10 @@ const StoryItem: React.FC<StoryItemProps> = ({
   };
 
   return (
-    <TouchableOpacity style={styles.container} onPress={handlePress}>
-      <View style={[
+    <TouchableOpacity style={styles.container} onPress={handlePress}>      <View style={[
         styles.storyCircle, 
         isAddStory && [styles.addStoryCircle, { borderColor: colors.primary, backgroundColor: colors.primary + '10' }],
-        { borderColor: colors.border.light }
+        { borderColor: colors.borderLight || '#EEEEEE' }
       ]}>
         {isAddStory ? (
           <Icon name="plus" color={colors.primary} size={24} />
@@ -43,9 +42,8 @@ const StoryItem: React.FC<StoryItemProps> = ({
             )}
           </View>
         )}
-      </View>
-      <Text style={[styles.username, { color: colors.text.secondary }]}>
-        {isAddStory ? 'Add Story' : username}
+      </View>      <Text style={[styles.username, { color: colors.text.secondary }]}>
+        {isAddStory ? 'Add Story' : username || ''}
       </Text>
     </TouchableOpacity>
   );

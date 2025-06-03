@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL, ENDPOINTS } from '../constants/api';
 import ApiService from '../services/ApiService';
 import RewardService from '../services/RewardService';
-import { useNavigation, CommonActions } from '@react-navigation/native';
+import { navigationRef } from '../navigation/NavigationService';
 
 // Define user type
 export type User = {
@@ -106,7 +106,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasChannel, setHasChannel] = useState(false);
-  const navigation = useNavigation();
 
   // Load user from storage on mount
   useEffect(() => {
@@ -232,13 +231,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setIsAuthenticated(false);
       setHasChannel(false);
-      // Redirect to onboarding/login screen
-      navigation.dispatch(
-        CommonActions.reset({
+      // Redirect to onboarding/login screen using navigationRef
+      if (navigationRef.isReady()) {
+        navigationRef.reset({
           index: 0,
-          routes: [{ name: 'Onboarding' }], // Change 'Onboarding' to your actual onboarding/login route name
-        })
-      );
+          routes: [{ name: 'Onboarding' }],
+        });
+      }
     } catch (err) {
       console.error('Error during logout:', err);
       // Still clear storage and state on error
@@ -246,12 +245,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setIsAuthenticated(false);
       setHasChannel(false);
-      navigation.dispatch(
-        CommonActions.reset({
+      if (navigationRef.isReady()) {
+        navigationRef.reset({
           index: 0,
           routes: [{ name: 'Onboarding' }],
-        })
-      );
+        });
+      }
     } finally {
       setLoading(false);
     }

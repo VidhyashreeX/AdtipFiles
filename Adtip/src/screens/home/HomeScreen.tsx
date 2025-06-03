@@ -1,5 +1,5 @@
 // src/screens/home/HomeScreen.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -9,7 +9,10 @@ import {
   FlatList, 
   TouchableOpacity,
   Linking,
-  Platform
+  Platform,
+  ScrollView,
+  NativeSyntheticEvent,
+  NativeScrollEvent
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -56,7 +59,7 @@ interface Post {
   user_id: number;
   title: string;
   content: string;
-  media_url: string;
+  media_url: string | null;  // Updated to allow null
   media_type: string;
   user_name: string;
   user_profile_image: string | null;
@@ -159,8 +162,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
       const cachedBalance = await AsyncStorage.getItem('@wallet_balance') || '0.00';
       setWalletAmount(cachedBalance);
     }
-  };
-  const fetchStories = async () => {
+  };  const fetchStories = async () => {
     try {
       setLoading(prev => ({ ...prev, stories: true }));
       
@@ -168,7 +170,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
       if (posts.length > 0) {
         const storyUsers = posts
           .slice(0, 5)
-          .map((post, index) => ({
+          .map((post: Post, index: number) => ({
             id: `story-${index}`,
             username: post.user_name || 'User',
             imageUrl: getFullImageUrl(post.user_profile_image),
@@ -215,46 +217,76 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
     }
   };  const fetchPosts = async (page = 1, loadMore = false) => {
     try {
+      // Guard conditions: prevent unnecessary API calls
+      if ((loadMore && pagination.current_page >= pagination.total_page) || 
+          (loadMore && loading.loadingMore) ||
+          (!loadMore && loading.posts) ||
+          !user) {
+        console.log(`Skipping fetch: ${loadMore ? 'loadMore' : 'initial'} at page ${page}`);
+        return;
+      }
+      
+      // Update loading state before API call
       if (loadMore) {
         setLoading(prev => ({ ...prev, loadingMore: true }));
       } else {
         setLoading(prev => ({ ...prev, posts: true }));
+        setError(null); // Clear any previous errors when doing a fresh fetch
       }
-      
-      if (!user) return;
-        // Use ApiService.listPosts to make the POST request with proper parameters
+            
+      // Prepare request data with proper types
       const requestData = {
         category: selectedCategory ? parseInt(selectedCategory) : 0,
         page: page,
-        limit: 10,
+        limit: 10, // Consistent page size
         loggined_user_id: Number(user.id) // Convert string ID to number to match API type
       };
       
+      console.log(`Fetching posts: page ${page}, loadMore: ${loadMore}, category: ${requestData.category}`);
       const result = await ApiService.listPosts(requestData);
-      
-      if (result?.data && Array.isArray(result.data)) {
-        const formattedPosts = result.data.map((post: any) => ({
-          ...post,
-          user_profile_image: getFullImageUrl(post.user_profile_image),
-          media_url: getFullImageUrl(post.media_url),
-          // Use API's likeCount and commentCount directly
-          likeCount: post.likeCount || 0,
-          commentCount: post.commentCount || 0,
-          is_premium: !!post.is_premium,
-          // Add a created_at field if it doesn't exist
-          created_at: post.created_at || new Date().toISOString()
-        }));
-        
-        // Update pagination info
+        if (result?.data && Array.isArray(result.data)) {
+        // TypeScript cast to ensure we're handling the right data structure
+        const formattedPosts = result.data.map((rawPost: any) => ({
+          id: rawPost.id,
+          user_id: rawPost.user_id,
+          title: rawPost.title || '',
+          content: rawPost.content || '',
+          media_url: getFullImageUrl(rawPost.media_url),
+          media_type: rawPost.media_type || 'image',
+          user_name: rawPost.user_name || 'User',
+          user_profile_image: getFullImageUrl(rawPost.user_profile_image),
+          likeCount: rawPost.likeCount || rawPost.like_count || 0,
+          commentCount: rawPost.commentCount || rawPost.comment_count || 0,
+          is_promoted: rawPost.is_promoted || 0,
+          created_at: rawPost.created_at || new Date().toISOString(),
+          is_premium: !!rawPost.is_premium,
+          is_liked: !!rawPost.is_liked
+        }));        // Update pagination info
         if (result.pagination) {
           setPagination(result.pagination);
+        } else {
+          // If no pagination info, update the current page at least
+          if (loadMore) {
+            setPagination(prev => ({
+              ...prev,
+              current_page: page
+            }));
+          }
         }
         
         // Append or replace posts based on loadMore flag
-        setPosts(prevPosts => 
-          loadMore ? [...prevPosts, ...formattedPosts] : formattedPosts
-        );
-          // Pre-populate liked posts state
+        // Make sure we're not adding duplicate posts by checking IDs
+        if (loadMore) {
+          setPosts(prevPosts => {
+            const existingIds = new Set(prevPosts.map(post => post.id));
+            const newPosts = formattedPosts.filter(post => !existingIds.has(post.id));
+            return [...prevPosts, ...newPosts];
+          });
+        } else {
+          setPosts(formattedPosts);
+        }
+        
+        // Pre-populate liked posts state
         const newLikedPosts: {[key: number]: boolean} = {};
         formattedPosts.forEach((post: Post) => {
           if (post.is_liked) {
@@ -287,10 +319,24 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
     await fetchWalletAmount();
     setRefreshing(false);
   };
-
   const handleLoadMore = () => {
-    if (loading.loadingMore) return; // Prevent multiple simultaneous requests
-    if (pagination.current_page < pagination.total_page) {
+    // Prevent multiple simultaneous requests or unnecessary requests
+    if (loading.loadingMore || loading.posts || refreshing) return;
+    
+    // Don't load more if we're already at the last page
+    if (pagination.current_page >= pagination.total_page) {
+      console.log("Already at the last page");
+      return;
+    }
+    
+    // Don't load if we have no posts or are in an error state
+    if (posts.length === 0 || error) {
+      return;
+    }
+    
+    // Only trigger if we have posts already (to avoid double fetching on empty state)
+    if (posts.length > 0) {
+      console.log("Loading more posts, page:", pagination.current_page + 1);
       fetchPosts(pagination.current_page + 1, true);
     }
   };
@@ -364,81 +410,125 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
   const handleCreatePost = () => {
     // Navigate to create post screen
     navigation.navigate('CreatePost');
+  };  const handleCategoryPress = (categoryId: string) => {
+    const newCategory = categoryId === selectedCategory ? null : categoryId;
+    setSelectedCategory(newCategory);
+    
+    // Reset pagination and reload posts with the new category filter
+    setPagination({ current_page: 1, total_page: 1, total_count: 0 });
+    setPosts([]); // Clear posts to show loading state
+    
+    // The fetch will be triggered by the useEffect that depends on selectedCategory
   };
-  const handleCategoryPress = (categoryId: string) => {
-    setSelectedCategory(categoryId === selectedCategory ? null : categoryId);
-    // TODO: Implement category filtering
-    // Reset pagination and fetch posts with selected category
-    // setPagination({ current_page: 1, total_page: 1, total_count: 0 });
-    // fetchPosts(1, false, categoryId);
-  };
-
   // Effects
   useFocusEffect(
     useCallback(() => {
-      fetchWalletAmount();
-      fetchPosts(1, false);
-    }, [])
+      const fetchInitialData = async () => {
+        await fetchWalletAmount();
+        await fetchPosts(1, false);
+      };
+      
+      fetchInitialData();
+      
+      // Cleanup function to handle component unmounting
+      return () => {
+        // Cancel any pending requests if needed
+      };
+    }, [user?.id, selectedCategory]) // Re-run when user or selected category changes
   );
 
   useEffect(() => {
     if (posts.length > 0) {
       fetchStories();
     }
-  }, [posts]);
+  }, [posts.length]); // Only run when posts.length changes, not on every post change
 
+  // Initial data fetch on component mount
   useEffect(() => {
-    fetchWalletAmount();
-    fetchPosts(1, false);
+    const initializeData = async () => {
+      await fetchWalletAmount();
+      await fetchPosts(1, false);
+    };
+    
+    initializeData();
   }, []);
+
+  // Custom scrollable components with useNativeDriver for better performance
+  interface StoriesRowProps {
+    stories: Story[];
+    onStoryPress: (storyId: string) => void;
+    onAddStoryPress: () => void;
+  }
+    const StoriesRow: React.FC<StoriesRowProps> = ({ stories, onStoryPress, onAddStoryPress }) => {
+    const scrollViewRef = useRef<ScrollView>(null);
+    return (
+      <View style={styles.storiesSection}>
+        <ScrollView
+          ref={scrollViewRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.storiesContainer}
+          contentContainerStyle={{ paddingRight: 16 }}
+        >
+          <StoryItem isAddStory={true} onPress={onAddStoryPress} key="add-story" />
+          {stories.map((story: Story, idx: number) => (
+            <StoryItem
+              key={`${story.id}-${idx}`}
+              imageUrl={story.imageUrl || undefined}
+              username={story.username || ''}
+              onPress={() => onStoryPress(story.id)}
+            />
+          ))}
+        </ScrollView>
+      </View>
+    );
+  };
+
+  interface CategoriesRowProps {
+    categories: Category[];
+    selectedCategory: string | null;
+    onCategoryPress: (categoryId: string) => void;
+  }
+
+  const CategoriesRow: React.FC<CategoriesRowProps> = ({ categories, selectedCategory, onCategoryPress }) => {
+    const scrollViewRef = useRef<ScrollView>(null);
+    return (
+      <View style={styles.categoriesSection}>
+        <ScrollView
+          ref={scrollViewRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoriesContainer}
+          contentContainerStyle={{ paddingRight: 8 }}
+        >
+          {categories.map((category: Category, idx: number) => (
+            <CategoryItem
+              key={`${category.id}-${idx}`}
+              name={category.name}
+              selected={selectedCategory === category.id}
+              onPress={() => onCategoryPress(category.id)}
+            />
+          ))}
+        </ScrollView>
+      </View>
+    );
+  };
 
   // Render functions
   const renderStories = () => (
-    <View style={styles.storiesSection}>
-      <FlatList
-        data={[{ type: 'add', key: 'add-story' }, ...stories.map((story, idx) => ({ ...story, type: 'story', key: `${story.id}-${idx}` }))]}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.storiesContainer}
-        renderItem={({ item }) => {
-          if (item.type === 'add') {
-            return <StoryItem isAddStory={true} onPress={handleCreatePost} key="add-story" />;
-          } else if (item.type === 'story') {
-            return (
-              <StoryItem
-                key={item.key}
-                imageUrl={(item as any).imageUrl || undefined}
-                username={(item as any).username}
-                onPress={() => handleStoryPress((item as any).id)}
-              />
-            );
-          } else {
-            return null;
-          }
-        }}
-        keyExtractor={item => item.key}
-      />
-    </View>
+    <StoriesRow
+      stories={stories}
+      onStoryPress={handleStoryPress}
+      onAddStoryPress={handleCreatePost}
+    />
   );
 
   const renderCategories = () => (
-    <View style={styles.categoriesSection}>
-      <FlatList
-        data={categories.map((category, idx) => ({ ...category, key: `${category.id}-${idx}` }))}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoriesContainer}
-        renderItem={({ item }) => (
-          <CategoryItem
-            key={item.key}
-            name={item.name}
-            selected={selectedCategory === item.id}
-            onPress={() => handleCategoryPress(item.id)}
-          />
-        )}
-        keyExtractor={item => item.key}
-      />
-    </View>
+    <CategoriesRow
+      categories={categories}
+      selectedCategory={selectedCategory}
+      onCategoryPress={handleCategoryPress}
+    />
   );
 
   const renderEarnCards = () => (
@@ -457,13 +547,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
       />
     </View>
   );
-
   const renderPost = ({ item }: { item: Post }) => (
     <PostItem
       id={item.id}
       username={item.user_name}
       profileImage={item.user_profile_image}
-      postImage={item.media_url}
+      postImage={item.media_url || ''}  // Provide empty string when null
       caption={item.content}
       likes={item.likeCount}
       comments={item.commentCount}
@@ -488,14 +577,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
         <ActivityIndicator size="small" color={colors.primary} />
       </View>
     );
-  };
-  // Render a single post item
+  };  // Render a single post item
   const renderPostItem = ({ item }: { item: Post }) => (
     <PostItem
       id={item.id}
       username={item.user_name}
-      profileImage={item.user_profile_image}
-      postImage={item.media_url}
+      profileImage={item.user_profile_image || ''}  // Provide empty string when null
+      postImage={item.media_url || ''}  // Provide empty string when null
       caption={item.content}
       likes={item.likeCount}
       comments={item.commentCount}
@@ -513,16 +601,25 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
     />
   );
 
-  const renderPosts = () => {
-    if (loading.posts && !refreshing && posts.length === 0) {
+  // Render header content for FlatList
+  const renderListHeader = () => (
+    <>
+      {renderStories()}
+      {renderCategories()}
+      {renderEarnCards()}
+    </>
+  );
+
+  // Render empty/error/loading state for FlatList
+  const renderListEmpty = () => {
+    if (loading.posts && !refreshing) {
       return (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       );
     }
-
-    if (error && posts.length === 0) {
+    if (error) {
       return (
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: colors.text.primary }]}>{error}</Text>
@@ -532,33 +629,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
         </View>
       );
     }
-
-    if (posts.length === 0 && !loading.posts) {
-      return (
-        <View style={styles.emptyContainer}>
-          <Icon name="inbox" size={50} color={colors.gray[400]} />
-          <Text style={[styles.emptyText, { color: colors.text.secondary }]}>No posts yet</Text>
-          <TouchableOpacity style={[styles.createPostButton, { backgroundColor: colors.primary }]} onPress={handleCreatePost}>
-            <Text style={{ color: colors.white, fontWeight: '600' }}>Create Post</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-
     return (
-      <FlatList
-        data={posts}
-        renderItem={renderPostItem}
-        keyExtractor={(item, index) => `${item.id}-${index}`}
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.3}
-        ListFooterComponent={renderFooter}
-        showsVerticalScrollIndicator={false}
-        initialNumToRender={5}
-        maxToRenderPerBatch={10}
-        updateCellsBatchingPeriod={50}
-        removeClippedSubviews={Platform.OS === 'android'}
-      />
+      <View style={styles.emptyContainer}>
+        <Icon name="inbox" size={50} color={colors.gray[400]} />
+        <Text style={[styles.emptyText, { color: colors.text.secondary }]}>No posts yet</Text>
+        <TouchableOpacity style={[styles.createPostButton, { backgroundColor: colors.primary }]} onPress={handleCreatePost}>
+          <Text style={{ color: colors.white, fontWeight: '600' }}>Create Post</Text>
+        </TouchableOpacity>
+      </View>
     );
   };
   return (
@@ -566,27 +644,21 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
       <Header
         showLogo={true}
         showWallet={true}
-        walletAmount={walletBalance}
-      />
-      <FlatList
+        walletAmount={walletBalance ? walletBalance.toString() : undefined}
+      /><FlatList
         data={posts}
         renderItem={renderPostItem}
-        keyExtractor={(item, index) => `${item.id}-${index}`}
+        keyExtractor={(item, index) => `post-${item.id}-${index}`}
         onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.3}
+        onEndReachedThreshold={0.4}  // Trigger at 40% from the end
         ListFooterComponent={renderFooter}
         showsVerticalScrollIndicator={false}
         initialNumToRender={5}
         maxToRenderPerBatch={10}
+        windowSize={21}
         updateCellsBatchingPeriod={50}
         removeClippedSubviews={Platform.OS === 'android'}
-        ListHeaderComponent={
-          <>
-            {renderStories()}
-            {renderCategories()}
-            {renderEarnCards()}
-          </>
-        }
+        ListHeaderComponent={renderListHeader}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -595,8 +667,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ walletBalance }) => {
             tintColor={colors.primary}
           />
         }
-        ListEmptyComponent={renderPosts}
-        contentContainerStyle={styles.postsContainer}
+        ListEmptyComponent={renderListEmpty}
+        contentContainerStyle={styles.postsContainerStyle}
+        maintainVisibleContentPosition={{ 
+          minIndexForVisible: 0,
+          autoscrollToTopThreshold: 10
+        }}
+        onScrollBeginDrag={() => {
+          // Reset any error state on user scroll
+          if (error) setError(null);
+        }}
+        onMomentumScrollBegin={() => {
+          // Reset loading state when user starts scrolling
+          if (loading.loadingMore) {
+            setLoading(prev => ({ ...prev, loadingMore: false }));
+          }
+        }}
       />
     </View>
   );
@@ -629,7 +715,11 @@ const styles = StyleSheet.create({
   },
   postsContainer: {
     paddingTop: 8,
-    flex: 1,
+    // flex: 1, // Removed flex:1 as it restricts scrolling
+  },
+  postsContainerStyle: {
+    paddingTop: 8,
+    paddingBottom: 16, // Added padding at the bottom for better UX
   },
   loadingContainer: {
     padding: 20,

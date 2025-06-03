@@ -29,12 +29,12 @@ const Header: React.FC<HeaderProps> = ({
   rightComponent,
   centerComponent,
 }) => {
-  const navigation = useNavigation();
-  const { colors } = useTheme();
+  const navigation = useNavigation();  const { colors } = useTheme();
   const { balance } = useWallet();
   
   // Use the wallet balance from context if no walletAmount is explicitly provided
-  const displayAmount = walletAmount || balance || "0.00";
+  // Ensure it's a string to avoid the "Text strings must be rendered within a <Text> component" warning
+  const displayAmount = (walletAmount || balance || "0.00").toString();
 
   const handleBackPress = () => {
     navigation.goBack();
@@ -92,11 +92,12 @@ const Header: React.FC<HeaderProps> = ({
                 <Icon name="bell" size={22} color={colors.text.secondary} />
                 <View style={[styles.notificationBadge, { backgroundColor: colors.primary }]} />
               </TouchableOpacity>
-            )}
-              {showWallet && (              
+            )}              {showWallet && (              
               <TouchableOpacity onPress={navigateToWallet} style={[styles.walletButton, { borderColor: colors.borderLight }]}>
                 <Icon name="credit-card" size={16} color={colors.primary} style={styles.walletIcon} />
-                <Text style={[styles.walletAmount, { color: colors.text.primary }]}>₹{displayAmount}</Text>
+                <Text style={[styles.walletAmount, { color: colors.text.primary }]}>
+                  ₹{displayAmount || '0.00'}
+                </Text>
               </TouchableOpacity>
             )}
           </>

@@ -29,6 +29,7 @@ import { WalletProvider } from './src/contexts/WalletContext';
 // Navigators
 import MainNavigator from './src/navigation/MainNavigator';
 import AuthNavigator from './src/navigation/AuthNavigator';
+import { navigationRef } from './src/navigation/NavigationService';
 
 // Theme
 import { ThemeProvider } from './src/contexts/ThemeContext';
@@ -94,7 +95,7 @@ function App(): React.JSX.Element {
       <ThemeProvider>
         <AuthProvider>
           <WalletProvider>
-            <NavigationContainer>
+            <NavigationContainer ref={navigationRef}>
               <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
               <Stack.Navigator screenOptions={{ headerShown: false }}>
                 {isAuthenticated ? (
