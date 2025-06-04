@@ -12,7 +12,7 @@ interface HeaderProps {
   showLogo?: boolean;
   showWallet?: boolean;
   showNotifications?: boolean;
-  walletAmount?: string; // This prop can override the context balance
+  walletAmount?: string;
   leftComponent?: React.ReactNode;
   rightComponent?: React.ReactNode;
   centerComponent?: React.ReactNode;
@@ -24,48 +24,45 @@ const Header: React.FC<HeaderProps> = ({
   showLogo = true,
   showWallet = true,
   showNotifications = true,
-  walletAmount, // Prop for overriding wallet balance
+  walletAmount,
   leftComponent,
   rightComponent,
   centerComponent,
 }) => {
   const navigation = useNavigation();
   const {colors} = useTheme();
-  const {balance} = useWallet(); // Get balance from WalletContext
+  const {balance} = useWallet();
 
-  // Use the walletAmount prop if provided, otherwise use balance from context, default to '0.00'
-  // Ensure the value is always a string before rendering in <Text>
-  const displayAmount = (walletAmount ?? balance ?? '0.00').toString();
+  // Use the wallet balance from context if no walletAmount is explicitly provided
+  // Ensure it's a string to avoid the "Text strings must be rendered within a <Text> component" warning
+  const displayAmount = (walletAmount || balance || '0.00').toString();
 
   const handleBackPress = () => {
     navigation.goBack();
   };
 
   const navigateToWallet = () => {
-    navigation.navigate('Wallet' as never); // Type assertion for navigation
+    navigation.navigate('Wallet' as never);
   };
 
   const navigateToNotifications = () => {
-    navigation.navigate('Notifications' as never); // Type assertion for navigation
+    navigation.navigate('Notifications' as never);
   };
 
   const navigateToSearch = () => {
-    navigation.navigate('Search' as never); // Type assertion for navigation
+    navigation.navigate('Search' as never);
   };
 
   return (
-    <View style={[styles.container, {backgroundColor: colors.background, borderBottomColor: colors.border}]}>
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
       <View style={styles.leftSection}>
         {leftComponent ? (
-          // If a custom left component is provided, render it directly
           leftComponent
         ) : showBackButton ? (
-          // Otherwise, show a back button if enabled
           <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
             <Icon name="arrow-left" size={24} color={colors.text.primary} />
           </TouchableOpacity>
-        ) : null}
-        {/* Only show logo if not using a custom center component and showLogo is true */}
+        ) : null}{' '}
         {showLogo && !centerComponent && (
           <View style={styles.logoContainer}>
             <Text style={[styles.logoText, {color: colors.primary}]}>
@@ -73,14 +70,11 @@ const Header: React.FC<HeaderProps> = ({
             </Text>
           </View>
         )}
-        {/* Only show title if not using a custom center component and title is provided */}
         {title && !centerComponent && (
-          <Text style={[styles.title, {color: colors.text.primary}]} numberOfLines={1} ellipsizeMode="tail">
-            {/* Ensure title is converted to string for Text component */}
-            {String(title)}
+          <Text style={[styles.title, {color: colors.text.primary}]}>
+            {title}
           </Text>
         )}
-        {/* Render custom center component if provided */}
         {centerComponent && (
           <View style={styles.centerComponent}>{centerComponent}</View>
         )}
@@ -88,10 +82,8 @@ const Header: React.FC<HeaderProps> = ({
 
       <View style={styles.rightSection}>
         {rightComponent ? (
-          // If a custom right component is provided, render it directly
           rightComponent
         ) : (
-          // Otherwise, show default right icons/wallet if no custom component
           <>
             <TouchableOpacity
               onPress={navigateToSearch}
@@ -103,7 +95,6 @@ const Header: React.FC<HeaderProps> = ({
                 onPress={navigateToNotifications}
                 style={styles.iconButton}>
                 <Icon name="bell" size={22} color={colors.text.secondary} />
-                {/* Notification badge, ensure it's not holding raw text */}
                 <View
                   style={[
                     styles.notificationBadge,
@@ -111,14 +102,13 @@ const Header: React.FC<HeaderProps> = ({
                   ]}
                 />
               </TouchableOpacity>
-            )}
+            )}{' '}
             {showWallet && (
               <TouchableOpacity
                 onPress={navigateToWallet}
                 style={[
                   styles.walletButton,
-                  // Use colors.border for consistency
-                  {borderColor: colors.border},
+                  {borderColor: colors.borderLight},
                 ]}>
                 <Icon
                   name="credit-card"
@@ -127,12 +117,8 @@ const Header: React.FC<HeaderProps> = ({
                   style={styles.walletIcon}
                 />
                 <Text
-                  style={[styles.walletAmount, {color: colors.text.primary}]}
-                  numberOfLines={1} // Added to handle long amounts gracefully
-                  ellipsizeMode="tail" // Added for consistency with title
-                >
-                  {/* Ensure displayAmount is prefixed with currency and converted to string */}
-                  {`₹${displayAmount}`}
+                  style={[styles.walletAmount, {color: colors.text.primary}]}>
+                  ₹{displayAmount || '0.00'}
                 </Text>
               </TouchableOpacity>
             )}
@@ -151,15 +137,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    // The borderBottomColor will now come from `colors.border` passed inline
+    borderBottomColor: '#EEEEEE',
   },
   leftSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    minWidth: '20%', // Added to give some consistent width
+    minWidth: '20%',
   },
   centerComponent: {
-    flex: 1, // Allows center component to take available space
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -167,22 +153,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    minWidth: '20%', // Added to give some consistent width
+    minWidth: '20%',
   },
   backButton: {
     marginRight: 16,
-    padding: 4, // Added a little padding for easier touch
   },
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  // logoImage: { // Removed as it's not used
-  //   width: 30,
-  //   height: 30,
-  //   borderRadius: 15,
-  //   marginRight: 8,
-  // },
+  logoImage: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    marginRight: 8,
+  },
   logoText: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -190,8 +175,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginLeft: 8, // Added a small margin for separation from back button/logo
-    flexShrink: 1, // Allows text to shrink if it's too long
   },
   iconButton: {
     padding: 8,

@@ -183,27 +183,13 @@ const NotificationScreen: React.FC = () => {
     }
   };
 
-  // Helper to get dynamic style for notification item
-  function getNotificationItemStyle(
-    baseStyle: any,
-    isRead: boolean,
-    surface: string,
-    border: string,
-  ) {
-    return [
-      baseStyle,
-      {backgroundColor: isRead ? 'transparent' : surface, borderBottomColor: border},
-    ];
-  }
-
   const renderNotification = ({item}: {item: Notification}) => (
     <TouchableOpacity
-      style={getNotificationItemStyle(
+      style={[
         styles.notificationItem,
-        item.isRead,
-        colors.surface,
-        colors.border,
-      )}
+        {backgroundColor: item.isRead ? 'transparent' : colors.surface},
+        {borderBottomColor: colors.border.light},
+      ]}
       onPress={() => handleNotificationPress(item)}
       onLongPress={() => deleteNotification(item.id)}>
       <View

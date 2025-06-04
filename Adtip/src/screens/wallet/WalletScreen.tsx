@@ -23,7 +23,8 @@ import useWallet from '../../hooks/useWallet';
 const WalletScreen = () => {
   const {colors} = useTheme();
   // Use our wallet hook instead of managing state manually
-  const {balance, isLoading, isRefreshing, refreshWallet} = useWallet();
+  const {balance, transactions, isLoading, isRefreshing, refreshWallet} =
+    useWallet();
   const [offerwallLoading, setOfferwallLoading] = useState(false);
 
   // Show offerwall to earn coins
@@ -98,7 +99,58 @@ const WalletScreen = () => {
             </>
           )}
         </TouchableOpacity>
-        {/* Removed Transactions List and related UI */}
+
+        {/* Transactions List */}
+        <View style={styles.transactionsContainer}>
+          <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
+            Transaction History
+          </Text>
+
+          {transactions.length === 0 ? (
+            <Text style={[styles.emptyText, {color: colors.textSecondary}]}>
+              No transactions to display
+            </Text>
+          ) : (
+            transactions.map((transaction, index) => (
+              <View
+                key={`transaction-${index}`}
+                style={[
+                  styles.transactionItem,
+                  {borderBottomColor: colors.border},
+                ]}>
+                <View style={styles.transactionDetails}>
+                  <Text
+                    style={[
+                      styles.transactionTitle,
+                      {color: colors.text.primary},
+                    ]}>
+                    {transaction.description || 'Transaction'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.transactionDate,
+                      {color: colors.textSecondary},
+                    ]}>
+                    {new Date(transaction.date).toLocaleDateString()}
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.transactionAmount,
+                    {
+                      color:
+                        transaction.type === 'credit'
+                          ? colors.success
+                          : colors.error,
+                    },
+                  ]}>
+                  {transaction.type === 'credit' ? '+' : '-'}
+                  {transaction.amount} Coins
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -163,6 +215,41 @@ const styles = StyleSheet.create({
   },
   earnButtonText: {
     color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  transactionsContainer: {
+    marginVertical: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  emptyText: {
+    textAlign: 'center',
+    fontSize: 16,
+    padding: 20,
+  },
+  transactionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  transactionDetails: {
+    flex: 1,
+  },
+  transactionTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  transactionDate: {
+    fontSize: 12,
+  },
+  transactionAmount: {
     fontSize: 16,
     fontWeight: '600',
   },

@@ -32,10 +32,10 @@ const EarnCard: React.FC<EarnCardProps> = ({
       <View style={styles.contentContainer}>
         <View style={styles.textContainer}>
           <Text style={[styles.title, {color: colors.text.primary}]}>
-            {String(title)}
+            {title}
           </Text>
           <Text style={[styles.description, {color: colors.text.secondary}]}>
-            {String(description)}
+            {description}
           </Text>
         </View>
         <View

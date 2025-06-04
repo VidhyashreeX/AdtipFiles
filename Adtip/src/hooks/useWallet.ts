@@ -2,12 +2,14 @@
 import {useState, useEffect, useCallback} from 'react';
 import {useAuth} from '../contexts/AuthContext';
 import {useWallet as useWalletContext} from '../contexts/WalletContext';
+import WalletService from '../services/WalletService';
 
 /**
  * React hook for accessing wallet data
  * @returns Wallet data and methods
  */
 export const useWallet = () => {
+  const [transactions, setTransactions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const {user} = useAuth();
@@ -27,13 +29,17 @@ export const useWallet = () => {
 
       // First refresh the balance using the wallet context
       await refreshBalance();
+
+      // Get transaction history - still handled by this hook
+      const history = await WalletService.getTransactionHistory(user.id);
+      setTransactions(history);
     } catch (error) {
       console.error('Error in useWallet hook:', error);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [user, refreshBalance]);
+  }, [user, refreshBalance]); // Added refreshBalance here
 
   // Function to refresh wallet data
   const refreshWallet = () => {
@@ -49,6 +55,7 @@ export const useWallet = () => {
 
   return {
     balance,
+    transactions,
     isLoading,
     isRefreshing,
     refreshWallet,

@@ -187,7 +187,7 @@ const ReferralScreen: React.FC = () => {
 
   const renderActivity = ({item}: {item: ReferralActivity}) => (
     <View
-      style={[styles.activityItem, {borderBottomColor: colors.border}]}>
+      style={[styles.activityItem, {borderBottomColor: colors.border.light}]}>
       <View
         style={[
           styles.activityIconContainer,
@@ -218,31 +218,24 @@ const ReferralScreen: React.FC = () => {
           +${item.earnings.toFixed(2)}
         </Text>
         <View
-          style={getActivityStatusBadgeStyle(styles.statusBadge, item.status)}>
+          style={[
+            styles.statusBadge,
+            {
+              backgroundColor:
+                item.status === 'completed' ? '#96CEB4' : '#FFEAA7',
+            },
+          ]}>
           <Text
-            style={getActivityStatusTextStyle(styles.statusText, item.status)}>
+            style={[
+              styles.statusText,
+              {color: item.status === 'completed' ? '#2D7D32' : '#F57F17'},
+            ]}>
             {item.status}
           </Text>
         </View>
       </View>
     </View>
   );
-
-  // Helper to get dynamic style for activity status badge
-  function getActivityStatusBadgeStyle(baseStyle: any, status: string) {
-    return [
-      baseStyle,
-      {backgroundColor: status === 'completed' ? '#96CEB4' : '#FFEAA7'},
-    ];
-  }
-
-  // Helper to get dynamic style for activity status text
-  function getActivityStatusTextStyle(baseStyle: any, status: string) {
-    return [
-      baseStyle,
-      {color: status === 'completed' ? '#2D7D32' : '#F57F17'},
-    ];
-  }
 
   return (
     <SafeAreaView

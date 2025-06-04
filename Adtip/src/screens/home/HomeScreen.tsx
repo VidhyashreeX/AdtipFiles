@@ -168,11 +168,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
     {id: '6', name: 'Fashion'},
     {id: '7', name: 'Business'},
     {id: '8', name: 'Sports'},
-  ]);
-  const [loading, setLoading] = useState({
+  ]);  const [loading, setLoading] = useState({
     stories: true,
     categories: false,
-    posts: true,
+    posts: false, // Changed from true to false so fetchPosts will run on initial render
     loadingMore: false,
   });
   const [error, setError] = useState<string | null>(null);

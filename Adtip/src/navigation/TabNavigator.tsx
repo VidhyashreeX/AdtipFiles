@@ -48,39 +48,6 @@ const CreateContentButton = () => {
   );
 };
 
-// Move tabBarIcon and tabBarButton components outside TabNavigator to avoid defining them during render
-const HomeTabBarIcon = ({color, size}: {color: string; size: number}) => (
-  <Icon name="home" color={color} size={size} />
-);
-const TipTubeTabBarIcon = ({color, size}: {color: string; size: number}) => (
-  <Icon name="video" color={color} size={size} />
-);
-const TipCallTabBarIcon = ({color, size}: {color: string; size: number}) => (
-  <Icon name="phone" color={color} size={size} />
-);
-const ProfileTabBarIcon = ({color, size}: {color: string; size: number}) => (
-  <Icon name="user" color={color} size={size} />
-);
-const CreateContentTabBarButton = (props: any) => <CreateContentButton {...props} />;
-
-// Move tabBarBackground components outside TabNavigator to avoid unstable nested components
-const BlurTabBarBackground = () => (
-  <BlurView
-    blurType="light"
-    blurAmount={10}
-    style={StyleSheet.absoluteFill}
-  />
-);
-const ANDROID_TAB_BAR_BG_COLOR = '#FFFFFFF0';
-const AndroidTabBarBackground = () => (
-  <View
-    style={[
-      StyleSheet.absoluteFill,
-      styles.androidTabBarBackground,
-    ]}
-  />
-);
-
 /**
  * Bottom tab navigator component
  */
@@ -107,29 +74,45 @@ const TabNavigator = () => {
           backgroundColor: 'transparent',
           marginBottom: 16,
         },
-        tabBarBackground: Platform.OS === 'ios'
-          ? BlurTabBarBackground
-          : AndroidTabBarBackground,
+        tabBarBackground: () =>
+          Platform.OS === 'ios' ? (
+            <BlurView
+              blurType="light"
+              blurAmount={10}
+              style={StyleSheet.absoluteFill}
+            />
+          ) : (
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                {backgroundColor: colors.white + 'F0'},
+              ]}
+            />
+          ),
       }}>
       <Tab.Screen
         name="Home"
         component={EnhancedHomeScreen}
         options={{
-          tabBarIcon: HomeTabBarIcon,
+          tabBarIcon: ({color, size}) => (
+            <Icon name="home" color={color} size={size} />
+          ),
         }}
       />
       <Tab.Screen
         name="TipTube"
         component={EnhancedTipTubeScreen}
         options={{
-          tabBarIcon: TipTubeTabBarIcon,
+          tabBarIcon: ({color, size}) => (
+            <Icon name="video" color={color} size={size} />
+          ),
         }}
       />
       <Tab.Screen
         name="CreateContent"
         component={HomeScreen} // This is a dummy component, we're using custom tab bar button
         options={{
-          tabBarButton: CreateContentTabBarButton,
+          tabBarButton: () => <CreateContentButton />,
           tabBarLabel: '',
         }}
         listeners={{
@@ -143,14 +126,18 @@ const TabNavigator = () => {
         name="TipCall"
         component={EnhancedTipCallScreen}
         options={{
-          tabBarIcon: TipCallTabBarIcon,
+          tabBarIcon: ({color, size}) => (
+            <Icon name="phone" color={color} size={size} />
+          ),
         }}
       />
       <Tab.Screen
         name="Profile"
         component={EnhancedProfileScreen}
         options={{
-          tabBarIcon: ProfileTabBarIcon,
+          tabBarIcon: ({color, size}) => (
+            <Icon name="user" color={color} size={size} />
+          ),
         }}
       />
     </Tab.Navigator>
@@ -172,9 +159,6 @@ const styles = StyleSheet.create({
     elevation: 5,
     position: 'relative',
     zIndex: 10,
-  },
-  androidTabBarBackground: {
-    backgroundColor: ANDROID_TAB_BAR_BG_COLOR,
   },
 });
 

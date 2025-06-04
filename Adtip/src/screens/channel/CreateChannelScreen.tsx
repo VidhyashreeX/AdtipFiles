@@ -125,11 +125,6 @@ const CreateChannelScreen: React.FC = () => {
     }
   };
 
-  // Helper to get dynamic style for create button
-  function getCreateButtonStyle(baseStyle: any, color: string, isLoading: boolean) {
-    return [baseStyle, {backgroundColor: color, opacity: isLoading ? 0.7 : 1}];
-  }
-
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
       <Header title="Create Channel" showBackButton />
@@ -141,7 +136,7 @@ const CreateChannelScreen: React.FC = () => {
             Channel Banner
           </Text>
           <TouchableOpacity
-            style={[styles.bannerUpload, {borderColor: colors.border}]}
+            style={[styles.bannerUpload, {borderColor: colors.border.light}]}
             onPress={() => pickImage('banner')}>
             {form.bannerUri ? (
               <Image
@@ -170,7 +165,7 @@ const CreateChannelScreen: React.FC = () => {
             Channel Avatar
           </Text>
           <TouchableOpacity
-            style={[styles.avatarUpload, {borderColor: colors.border}]}
+            style={[styles.avatarUpload, {borderColor: colors.border.light}]}
             onPress={() => pickImage('avatar')}>
             {form.avatarUri ? (
               <Image
@@ -198,7 +193,7 @@ const CreateChannelScreen: React.FC = () => {
               styles.input,
               {
                 backgroundColor: colors.surface,
-                borderColor: colors.border,
+                borderColor: colors.border.light,
                 color: colors.text.primary,
               },
             ]}
@@ -223,7 +218,7 @@ const CreateChannelScreen: React.FC = () => {
               styles.usernameContainer,
               {
                 backgroundColor: colors.surface,
-                borderColor: colors.border,
+                borderColor: colors.border.light,
               },
             ]}>
             <Text
@@ -260,7 +255,7 @@ const CreateChannelScreen: React.FC = () => {
               styles.textArea,
               {
                 backgroundColor: colors.surface,
-                borderColor: colors.border,
+                borderColor: colors.border.light,
                 color: colors.text.primary,
               },
             ]}
@@ -296,7 +291,7 @@ const CreateChannelScreen: React.FC = () => {
                     borderColor:
                       form.category === category
                         ? colors.primary
-                        : colors.border,
+                        : colors.border.light,
                   },
                 ]}
                 onPress={() => updateForm('category', category)}>
@@ -319,7 +314,13 @@ const CreateChannelScreen: React.FC = () => {
 
         {/* Create Button */}
         <TouchableOpacity
-          style={getCreateButtonStyle(styles.createButton, colors.primary, loading)}
+          style={[
+            styles.createButton,
+            {
+              backgroundColor: colors.primary,
+              opacity: loading ? 0.7 : 1,
+            },
+          ]}
           onPress={handleCreateChannel}
           disabled={loading}>
           {loading ? (

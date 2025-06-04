@@ -3,7 +3,6 @@ import {NavigationProp} from '@react-navigation/native';
 
 export type RootStackParamList = {
   // Auth screens
-  Onboarding: undefined;
   Login: undefined;
   OtpVerification: {mobileNumber: string; id: number};
   UserDetails: undefined;

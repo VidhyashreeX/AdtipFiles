@@ -90,8 +90,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
             />
             <Text style={styles.premiumText}>Premium</Text>
           </View>
-        )}
-        {/* Removed the offending whitespace here */}
+        )}{' '}
         {price && price > 0 && (
           <View
             style={[
@@ -105,7 +104,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
               color={colors.white}
               style={styles.badgeIcon}
             />
-            <Text style={styles.priceText}>{`$${String(price?.toFixed(2))}`}</Text>
+            <Text style={styles.priceText}>${price.toFixed(2)}</Text>
           </View>
         )}
       </View>
@@ -134,7 +133,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
             {String(username)}
           </Text>
           <Text style={[styles.metadata, {color: colors.text.tertiary}]}>
-            {`${formatViewCount(views)} views  ${String(postedTime)}`}
+            {formatViewCount(views)} views • {String(postedTime)}
           </Text>
         </View>
 

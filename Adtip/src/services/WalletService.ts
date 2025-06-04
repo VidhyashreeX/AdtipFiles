@@ -76,6 +76,21 @@ class WalletService {
   }
 
   /**
+   * Get transaction history for a user
+   * @param userId - The user ID
+   * @returns Promise with transactions array
+   */
+  static async getTransactionHistory(userId: string | number): Promise<any[]> {
+    try {
+      const passbook = await ApiService.getAdPassbook(userId);
+      return passbook?.data || [];
+    } catch (error) {
+      console.error('Error getting transaction history:', error);
+      return [];
+    }
+  }
+
+  /**
    * Get user's channel data
    * @param userId - The user ID
    * @returns Promise with channel data
@@ -102,26 +117,13 @@ class WalletService {
   }> {
     try {
       const premiumData = await ApiService.checkPremium(userId);
+
       return {
         isPremium: !premiumData.is_premium_expired,
         planId: premiumData.plan_id,
         endTime: premiumData.end_time,
       };
     } catch (error) {
-      // Only log error if it's not a 'no active premium plan' type error
-      if (
-        error instanceof Error &&
-        error.message &&
-        error.message.toLowerCase().includes('no active premium plan')
-      ) {
-        // Silently treat as not premium
-        return {
-          isPremium: false,
-          planId: null,
-          endTime: null,
-        };
-      }
-      // Log and return not premium for all other errors
       console.error('Error checking premium status:', error);
       return {
         isPremium: false,

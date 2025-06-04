@@ -117,36 +117,24 @@ const PackagesScreen: React.FC = () => {
     }
 
     const selectedPkg = packages.find(pkg => pkg.id === selectedPackage);
-    // Use @ts-ignore to bypass the 'as never' error for navigation
-    // @ts-ignore
-    navigation.navigate('ChoosePackages', {package: selectedPkg});
+    navigation.navigate(
+      'ChoosePackages' as never,
+      {package: selectedPkg} as never,
+    );
   };
-
-  // Helper to get dynamic style for package card
-  function getPackageCardStyle(
-    baseStyle: any,
-    isSelected: boolean,
-    color: string,
-    border: string,
-  ) {
-    return [
-      baseStyle,
-      {
-        borderWidth: isSelected ? 2 : 1,
-        borderColor: isSelected ? color : border,
-      },
-    ];
-  }
 
   const renderPackageCard = (pkg: Package) => (
     <TouchableOpacity
       key={pkg.id}
-      style={getPackageCardStyle(
+      style={[
         styles.packageCard,
-        selectedPackage === pkg.id,
-        colors.primary,
-        colors.border,
-      )}
+        {
+          backgroundColor: colors.surface,
+          borderColor:
+            selectedPackage === pkg.id ? colors.primary : colors.border.light,
+          borderWidth: selectedPackage === pkg.id ? 2 : 1,
+        },
+      ]}
       onPress={() => handleSelectPackage(pkg.id)}>
       {/* Package Header */}
       <View style={styles.packageHeader}>
@@ -264,7 +252,7 @@ const PackagesScreen: React.FC = () => {
             {
               backgroundColor: selectedPackage
                 ? colors.primary
-                : colors.border,
+                : colors.border.light,
             },
           ]}
           onPress={handleContinue}

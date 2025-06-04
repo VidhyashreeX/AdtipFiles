@@ -28,28 +28,6 @@ interface AnalyticsData {
   }[];
 }
 
-const StatCard = ({
-  title,
-  value,
-  icon,
-  color,
-  colors,
-}: {
-  title: string;
-  value: string;
-  icon: string;
-  color: string;
-  colors: any;
-}) => (
-  <View style={[styles.statCard, {backgroundColor: colors.surface}]}>
-    <View style={[styles.statIcon, {backgroundColor: color + '20'}]}>
-      <Icon name={icon} size={20} color={color} />
-    </View>
-    <Text style={[styles.statValue, {color}]}>{value}</Text>
-    <Text style={[styles.statTitle, {color: colors.text.primary}]}>{title}</Text>
-  </View>
-);
-
 const AnalyticsScreen: React.FC = () => {
   const {colors} = useTheme();
   const [loading, setLoading] = useState(true);
@@ -108,6 +86,30 @@ const AnalyticsScreen: React.FC = () => {
     return num.toString();
   };
 
+  const StatCard = ({
+    title,
+    value,
+    icon,
+    color,
+  }: {
+    title: string;
+    value: string;
+    icon: string;
+    color: string;
+  }) => (
+    <View style={[styles.statCard, {backgroundColor: colors.surface}]}>
+      <View style={[styles.statIcon, {backgroundColor: color + '20'}]}>
+        <Icon name={icon} size={20} color={color} />
+      </View>
+      <Text style={[styles.statTitle, {color: colors.text.secondary}]}>
+        {title}
+      </Text>
+      <Text style={[styles.statValue, {color: colors.text.primary}]}>
+        {value}
+      </Text>
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={[styles.container, {backgroundColor: colors.background}]}>
@@ -156,27 +158,30 @@ const AnalyticsScreen: React.FC = () => {
         </View>
 
         {/* Stats Overview */}
-        <View style={styles.statsRow}>
+        <View style={styles.statsGrid}>
           <StatCard
             title="Total Views"
             value={formatNumber(analytics?.totalViews || 0)}
             icon="eye"
             color={colors.primary}
-            colors={colors}
           />
           <StatCard
             title="Total Earnings"
             value={`$${analytics?.totalEarnings.toFixed(2) || '0.00'}`}
             icon="dollar-sign"
-            color="#24d05a"
-            colors={colors}
+            color="#00C851"
           />
           <StatCard
-            title="Total Videos"
-            value={formatNumber(analytics?.totalVideos || 0)}
+            title="Videos"
+            value={analytics?.totalVideos.toString() || '0'}
             icon="video"
-            color="#4ECDC4"
-            colors={colors}
+            color="#FF4444"
+          />
+          <StatCard
+            title="Avg. View Time"
+            value={analytics?.avgViewTime || '0:00'}
+            icon="clock"
+            color="#FF8800"
           />
         </View>
 
@@ -210,7 +215,7 @@ const AnalyticsScreen: React.FC = () => {
               key={index}
               style={[
                 styles.statRow,
-                {borderBottomColor: colors.border},
+                {borderBottomColor: colors.border.light},
               ]}>
               <Text style={[styles.statDate, {color: colors.text.secondary}]}>
                 {new Date(stat.date).toLocaleDateString()}
@@ -273,14 +278,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  statsRow: {
+  statsGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 12,
     marginBottom: 20,
   },
   statCard: {
-    flex: 1,
-    marginRight: 12,
+    width: '48%',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',

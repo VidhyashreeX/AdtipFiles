@@ -68,11 +68,6 @@ const CheckoutScreen: React.FC = () => {
     }
   };
 
-  // Helper to get dynamic style for checkout button
-  function getCheckoutButtonStyle(baseStyle: any, color: string, isLoading: boolean) {
-    return [baseStyle, {backgroundColor: color, opacity: isLoading ? 0.7 : 1}];
-  }
-
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
       <Header title="Checkout" showBackButton />
@@ -92,7 +87,7 @@ const CheckoutScreen: React.FC = () => {
             </Text>
           </View>
           <View
-            style={[styles.totalRow, {borderTopColor: colors.border}]}>
+            style={[styles.totalRow, {borderTopColor: colors.border.light}]}>
             <Text style={[styles.totalLabel, {color: colors.text.primary}]}>
               Total
             </Text>
@@ -117,7 +112,7 @@ const CheckoutScreen: React.FC = () => {
                   borderColor:
                     selectedPayment === method.id
                       ? colors.primary
-                      : colors.border,
+                      : colors.border.light,
                 },
               ]}
               onPress={() => setSelectedPayment(method.id)}>
@@ -151,7 +146,7 @@ const CheckoutScreen: React.FC = () => {
                 styles.input,
                 {
                   backgroundColor: colors.surface,
-                  borderColor: colors.border,
+                  borderColor: colors.border.light,
                   color: colors.text.primary,
                 },
               ]}
@@ -165,7 +160,7 @@ const CheckoutScreen: React.FC = () => {
                   styles.halfInput,
                   {
                     backgroundColor: colors.surface,
-                    borderColor: colors.border,
+                    borderColor: colors.border.light,
                     color: colors.text.primary,
                   },
                 ]}
@@ -178,7 +173,7 @@ const CheckoutScreen: React.FC = () => {
                   styles.halfInput,
                   {
                     backgroundColor: colors.surface,
-                    borderColor: colors.border,
+                    borderColor: colors.border.light,
                     color: colors.text.primary,
                   },
                 ]}
@@ -192,7 +187,7 @@ const CheckoutScreen: React.FC = () => {
                 styles.input,
                 {
                   backgroundColor: colors.surface,
-                  borderColor: colors.border,
+                  borderColor: colors.border.light,
                   color: colors.text.primary,
                 },
               ]}
@@ -215,7 +210,13 @@ const CheckoutScreen: React.FC = () => {
       {/* Checkout Button */}
       <View style={[styles.bottomContainer, {backgroundColor: colors.surface}]}>
         <TouchableOpacity
-          style={getCheckoutButtonStyle(styles.checkoutButton, colors.primary, loading)}
+          style={[
+            styles.checkoutButton,
+            {
+              backgroundColor: colors.primary,
+              opacity: loading ? 0.7 : 1,
+            },
+          ]}
           onPress={handleCheckout}
           disabled={loading}>
           {loading ? (

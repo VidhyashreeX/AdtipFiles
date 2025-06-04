@@ -64,16 +64,6 @@ interface PublicShot {
   total_channel_followers: number;
 }
 
-// Move ShortsListEmptyComponent above ShortsScreen and pass as a reference, not as an inline function
-const ShortsListEmptyComponent = ({height}: {height: number}) => {
-  return (
-    <View style={[styles.emptyContainer, {height}]}>
-      <Icon name="film" size={48} color="#FFF" />
-      <Text style={styles.emptyText}>No shorts available</Text>
-    </View>
-  );
-};
-
 const ShortsScreen = () => {
   const {colors} = useTheme();
   const navigation = useNavigation();
@@ -170,6 +160,116 @@ const ShortsScreen = () => {
     navigation.goBack();
   };
 
+  // Individual short video card component
+  const ShortCard = ({
+    item,
+    isActive,
+  }: {
+    item: ShortVideo;
+    isActive: boolean;
+  }) => {
+    const videoRef = useRef<any>(null);
+    const [isPlaying, setIsPlaying] = useState(true);
+    const [liked, setLiked] = useState(false);
+
+    useEffect(() => {
+      // Control video playback based on visibility
+      if (isActive && !isPlaying) {
+        setIsPlaying(true);
+      } else if (!isActive && isPlaying) {
+        setIsPlaying(false);
+      }
+    }, [isActive, isPlaying]);
+
+    const togglePlayPause = () => {
+      setIsPlaying(!isPlaying);
+    };
+
+    const handleLike = () => {
+      setLiked(!liked);
+      // Here you would call an API to update likes
+    };
+
+    const navigateToChannel = () => {
+      (navigation as any).navigate('Channel', {channelId: item.channel.id});
+    };
+
+    const handleShare = async () => {
+      try {
+        // Simple share implementation
+        // In a real app, you would generate a sharable link
+        const shareUrl = `https://adtip.in/shorts/${item.id}`;
+
+        await Share.share({
+          message: `Check out this short: ${item.description} ${shareUrl}`,
+        });
+      } catch (shareError) {
+        console.error('Error sharing video:', shareError);
+      }
+    };
+
+    return (
+      <View style={[styles.shortCardContainer, {height: SCREEN_HEIGHT}]}>
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={togglePlayPause}
+          style={styles.videoContainer}>
+          <Video
+            ref={videoRef}
+            source={{uri: item.videoUrl}}
+            style={styles.video}
+            resizeMode="cover"
+            poster={item.thumbnail || undefined}
+            posterResizeMode="cover"
+            repeat
+            paused={!isPlaying || !isActive}
+            muted={false}
+            volume={1.0}
+          />
+
+          {!isPlaying && (
+            <View style={styles.pauseOverlay}>
+              <Icon name="play" size={50} color="#FFFFFF" />
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.overlay}>
+          <View style={styles.bottomContent}>
+            <TouchableOpacity
+              onPress={navigateToChannel}
+              style={styles.channelInfo}>
+              <Text style={styles.channelName}>{item.channel.name}</Text>
+            </TouchableOpacity>
+            <Text
+              style={styles.description}
+              numberOfLines={2}
+              ellipsizeMode="tail">
+              {item.description}
+            </Text>
+          </View>
+
+          <View style={styles.actions}>
+            <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
+              <Icon name="heart" size={28} color={liked ? '#24d05a' : '#FFF'} />
+              <Text style={styles.actionText}>{item.likes}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionButton}>
+              <Icon name="message-circle" size={28} color="#FFF" />
+              <Text style={styles.actionText}>{item.comments}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
+              <Icon name="share-2" size={28} color="#FFF" />
+              <Text style={styles.actionText}>Share</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
       <SafeAreaView style={styles.header}>
@@ -203,7 +303,7 @@ const ShortsScreen = () => {
           data={shorts}
           keyExtractor={item => item.id}
           renderItem={({item, index}) => (
-            <ShortCard item={item} isActive={index === activeIndex} navigation={navigation} cardHeight={SCREEN_HEIGHT} styles={styles} />
+            <ShortCard item={item} isActive={index === activeIndex} />
           )}
           pagingEnabled
           showsVerticalScrollIndicator={false}
@@ -212,7 +312,12 @@ const ShortsScreen = () => {
           snapToInterval={SCREEN_HEIGHT}
           snapToAlignment="start"
           decelerationRate="fast"
-          ListEmptyComponent={<ShortsListEmptyComponent height={SCREEN_HEIGHT} />}
+          ListEmptyComponent={() => (
+            <View style={styles.emptyContainer}>
+              <Icon name="film" size={48} color="#FFF" />
+              <Text style={styles.emptyText}>No shorts available</Text>
+            </View>
+          )}
           getItemLayout={(data, index) => ({
             length: SCREEN_HEIGHT,
             offset: SCREEN_HEIGHT * index,
@@ -224,92 +329,6 @@ const ShortsScreen = () => {
           scrollEventThrottle={16}
         />
       )}
-    </View>
-  );
-};
-
-// Move ShortCard outside of ShortsScreen to avoid nested component warning
-const ShortCard = ({
-  item,
-  isActive,
-  navigation,
-  cardHeight,
-  styles,
-}: any) => {
-  const videoRef = React.useRef<any>(null);
-  const [isPlaying, setIsPlaying] = React.useState(true);
-  const [liked, setLiked] = React.useState(false);
-  React.useEffect(() => {
-    if (isActive && !isPlaying) {setIsPlaying(true);}
-    else if (!isActive && isPlaying) {setIsPlaying(false);}
-  }, [isActive, isPlaying]);
-  const togglePlayPause = () => setIsPlaying(!isPlaying);
-  const handleLike = () => setLiked(!liked);
-  const navigateToChannel = () => (navigation as any).navigate('Channel', {channelId: item.channel.id});
-  const handleShare = async () => {
-    try {
-      const shareUrl = `https://adtip.in/shorts/${item.id}`;
-      await Share.share({message: `Check out this short: ${item.description} ${shareUrl}`});
-    } catch (shareError) {console.error('Error sharing video:', shareError);}
-  };
-  return (
-    <View style={[styles.shortCardContainer, {height: cardHeight}]}>
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={togglePlayPause}
-        style={styles.videoContainer}>
-        <Video
-          ref={videoRef}
-          source={{uri: item.videoUrl}}
-          style={styles.video}
-          resizeMode="cover"
-          poster={item.thumbnail || undefined}
-          posterResizeMode="cover"
-          repeat
-          paused={!isPlaying || !isActive}
-          muted={false}
-          volume={1.0}
-        />
-
-        {!isPlaying && (
-          <View style={styles.pauseOverlay}>
-            <Icon name="play" size={50} color="#FFFFFF" />
-          </View>
-        )}
-      </TouchableOpacity>
-
-      <View style={styles.overlay}>
-        <View style={styles.bottomContent}>
-          <TouchableOpacity
-            onPress={navigateToChannel}
-            style={styles.channelInfo}>
-            <Text style={styles.channelName}>{item.channel.name}</Text>
-          </TouchableOpacity>
-          <Text
-            style={styles.description}
-            numberOfLines={2}
-            ellipsizeMode="tail">
-            {item.description}
-          </Text>
-        </View>
-
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
-            <Icon name="heart" size={28} color={liked ? '#24d05a' : '#FFF'} />
-            <Text style={styles.actionText}>{item.likes}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.actionButton}>
-            <Icon name="message-circle" size={28} color="#FFF" />
-            <Text style={styles.actionText}>{item.comments}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
-            <Icon name="share-2" size={28} color="#FFF" />
-            <Text style={styles.actionText}>Share</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
     </View>
   );
 };

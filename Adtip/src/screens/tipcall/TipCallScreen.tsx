@@ -65,22 +65,6 @@ const TipCallScreen: React.FC<TipCallScreenProps> = ({walletBalance}) => {
     return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
-  // Helper to get dynamic style for call button
-  function getCallButtonStyle(
-    baseStyle: any,
-    isAvailable: boolean,
-    color: string,
-    gray: string,
-  ) {
-    return [
-      baseStyle,
-      {
-        backgroundColor: isAvailable ? color : gray,
-        opacity: isAvailable ? 1 : 0.7,
-      },
-    ];
-  }
-
   // API calls
   const fetchUsers = useCallback(async () => {
     try {
@@ -225,12 +209,15 @@ const TipCallScreen: React.FC<TipCallScreenProps> = ({walletBalance}) => {
         </View>
 
         <TouchableOpacity
-          style={getCallButtonStyle(
+          style={[
             styles.callButton,
-            item.is_available,
-            colors.primary,
-            colors.gray[300],
-          )}
+            {
+              backgroundColor: item.is_available
+                ? colors.primary
+                : colors.gray[300],
+              opacity: item.is_available ? 1 : 0.7, // always a number
+            },
+          ]}
           onPress={() => handleCallUser(item.id)}
           disabled={!item.is_available}>
           <Icon name="phone" size={18} color={colors.white} />

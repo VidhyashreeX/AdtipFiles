@@ -10,8 +10,6 @@ import {
   Animated,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../../types/navigation';
 
 // Theme
 import {useTheme} from '../../contexts/ThemeContext';
@@ -43,48 +41,10 @@ const onboardingData = [
   },
 ];
 
-// Move Dots outside of OnboardingScreen to avoid nested component warning and fix variable shadowing
-interface DotsProps {
-  scrollX: Animated.Value;
-  onboardingSlides: any[];
-  slideWidth: number;
-  styles: any;
-}
-const Dots: React.FC<DotsProps> = ({scrollX, onboardingSlides, slideWidth, styles}) => (
-  <View style={styles.dotsContainer}>
-    {onboardingSlides.map((_, index) => {
-      const inputRange = [
-        (index - 1) * slideWidth,
-        index * slideWidth,
-        (index + 1) * slideWidth,
-      ];
-
-      const dotWidth = scrollX.interpolate({
-        inputRange,
-        outputRange: [8, 20, 8],
-        extrapolate: 'clamp',
-      });
-
-      const opacity = scrollX.interpolate({
-        inputRange,
-        outputRange: [0.3, 1, 0.3],
-        extrapolate: 'clamp',
-      });
-
-      return (
-        <Animated.View
-          key={index.toString()}
-          style={[styles.dot, {width: dotWidth, opacity}]}
-        />
-      );
-    })}
-  </View>
-);
-
 /**
  * Onboarding screen component
  */
-const OnboardingScreen = ({navigation}: {navigation: NativeStackNavigationProp<RootStackParamList, 'Onboarding'>}) => {
+const OnboardingScreen = ({navigation}) => {
   // Theme
   const {colors} = useTheme();
 
@@ -113,8 +73,49 @@ const OnboardingScreen = ({navigation}: {navigation: NativeStackNavigationProp<R
     navigation.replace('Login');
   };
 
+  // Render dot indicators
+  const Dots = () => {
+    return (
+      <View style={styles.dotsContainer}>
+        {onboardingData.map((_, index) => {
+          const inputRange = [
+            (index - 1) * width,
+            index * width,
+            (index + 1) * width,
+          ];
+
+          const dotWidth = scrollX.interpolate({
+            inputRange,
+            outputRange: [8, 20, 8],
+            extrapolate: 'clamp',
+          });
+
+          const opacity = scrollX.interpolate({
+            inputRange,
+            outputRange: [0.3, 1, 0.3],
+            extrapolate: 'clamp',
+          });
+
+          return (
+            <Animated.View
+              key={index.toString()}
+              style={[
+                styles.dot,
+                {
+                  width: dotWidth,
+                  backgroundColor: colors.primary,
+                  opacity,
+                },
+              ]}
+            />
+          );
+        })}
+      </View>
+    );
+  };
+
   // Render onboarding item
-  const renderItem = ({item}: {item: typeof onboardingData[0]}) => {
+  const renderItem = ({item}) => {
     return (
       <View style={styles.slide}>
         <Image source={item.image} style={styles.image} resizeMode="contain" />
@@ -160,12 +161,7 @@ const OnboardingScreen = ({navigation}: {navigation: NativeStackNavigationProp<R
       />
 
       {/* Dots indicator */}
-      <Dots
-        scrollX={scrollX}
-        onboardingSlides={onboardingData}
-        slideWidth={width}
-        styles={styles}
-      />
+      <Dots />
 
       {/* Next/Get Started button */}
       <TouchableOpacity
