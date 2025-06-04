@@ -12,7 +12,7 @@ import {
   Dimensions, // For responsive layout
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import Video from 'react-native-video'; // Assuming you have react-native-video installed
 import FastImage from '@d11/react-native-fast-image'; // For better image loading
@@ -48,17 +48,17 @@ interface VideoData {
 
 // Mimic web's category structure
 const categories = [
-  { name: "All", icon: "🏠" },
-  { name: "Tech", icon: "💻" },
-  { name: "Beauty", icon: "💄" },
-  { name: "Gaming", icon: "🎮" },
-  { name: "Food", icon: "🍔" },
-  { name: "Travel", icon: "✈️" },
-  { name: "Finance", icon: "💰" },
-  { name: "Fashion", icon: "👗" },
-  { name: "Music", icon: "🎵" },
-  { name: "Sports", icon: "🏀" },
-  { name: "Education", icon: "📚" },
+  { name: 'All', icon: '🏠' },
+  { name: 'Tech', icon: '💻' },
+  { name: 'Beauty', icon: '💄' },
+  { name: 'Gaming', icon: '🎮' },
+  { name: 'Food', icon: '🍔' },
+  { name: 'Travel', icon: '✈️' },
+  { name: 'Finance', icon: '💰' },
+  { name: 'Fashion', icon: '👗' },
+  { name: 'Music', icon: '🎵' },
+  { name: 'Sports', icon: '🏀' },
+  { name: 'Education', icon: '📚' },
 ];
 
 const categoryToIdMap: { [key: string]: number } = {
@@ -67,9 +67,9 @@ const categoryToIdMap: { [key: string]: number } = {
 
 // Format duration utility, same as web
 const formatDuration = (duration: number | string | undefined) => {
-  if (duration === undefined || duration === null) return "0:00";
+  if (duration === undefined || duration === null) { return '0:00'; }
   const totalSeconds = typeof duration === 'string' ? parseInt(duration, 10) : duration;
-  if (isNaN(totalSeconds)) return "0:00";
+  if (isNaN(totalSeconds)) { return '0:00'; }
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
@@ -88,7 +88,7 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
   const navigation = useNavigation();
 
   // State
-  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedCategory, setSelectedCategory] = useState('All');
   const [videos, setVideos] = useState<VideoData[]>([]);
   const [offset, setOffset] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -99,10 +99,7 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
 
   // Removed search state as it's not present in web UI provided
 
-  const videoRefs = useRef<{ [id: number]: Video | null }>({}); // Using react-native-video ref
   const feedRef = useRef<FlatList | null>(null); // For scroll events
-
-  const BASE_URL = ApiService.BASE_URL; // Use ApiService's base URL
 
   // Helper function to get full URLs, adapted from original RN code
   const getFullUrl = useCallback((url: string | null | undefined) => {
@@ -132,14 +129,14 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
   // Transform API video data to match VideoData interface (like web's transformVideoData)
   const transformVideoData = useCallback((apiVideo: any): VideoData => ({
     id: apiVideo.id || 0,
-    title: apiVideo.name || apiVideo.title || "Untitled Video",
+    title: apiVideo.name || apiVideo.title || 'Untitled Video',
     thumbnail: getFullUrl(apiVideo.video_Thumbnail || apiVideo.thumbnail_url),
     videoUrl: getFullUrl(apiVideo.video_link || apiVideo.video_url),
-    duration: parseInt(apiVideo.play_duration || apiVideo.duration || "0", 10),
+    duration: parseInt(apiVideo.play_duration || apiVideo.duration || '0', 10),
     views: apiVideo.total_views || apiVideo.view_count || 0,
-    posted: apiVideo.createddate || apiVideo.created_at || "Recently",
+    posted: apiVideo.createddate || apiVideo.created_at || 'Recently',
     avatar: getFullUrl(apiVideo.channel_profile || apiVideo.user_profile_image),
-    creatorName: apiVideo.channelName || apiVideo.user_name || "Unknown Creator",
+    creatorName: apiVideo.channelName || apiVideo.user_name || 'Unknown Creator',
     isVerified: !!apiVideo.is_verified, // Assume a boolean field
     channelId: apiVideo.video_channel || apiVideo.channelId || apiVideo.createdby || apiVideo.user_id || 0,
     price: apiVideo.price ? parseFloat(apiVideo.price) : undefined,
@@ -178,10 +175,12 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
 
       if (response?.data && Array.isArray(response.data)) {
         const videoList = response.data.map(transformVideoData);
-        // Filter out videos with invalid URLs to avoid player errors
-        const filteredVideoList = videoList.filter(v => v.videoUrl && v.videoUrl !== getFullUrl(''));
+        // Filter out videos with invalid URLs and duplicate IDs to avoid player/key errors
+        const filteredVideoList = videoList
+          .filter((v: VideoData) => v.videoUrl && v.videoUrl !== getFullUrl(''))
+          .filter((v: VideoData, idx: number, arr: VideoData[]) => arr.findIndex((x: VideoData) => x.id === v.id) === idx); // Remove duplicate IDs
 
-        setVideos(prev => reset ? filteredVideoList : [...prev, ...filteredVideoList]);
+        setVideos(prev => reset ? filteredVideoList : [...prev, ...filteredVideoList.filter((v: VideoData) => !prev.some((p: VideoData) => p.id === v.id))]);
         setHasMore(filteredVideoList.length > 0); // Assuming API returns 10 items per page if more exist
       } else {
         setVideos(reset ? [] : videos); // Keep existing videos if not a reset
@@ -200,15 +199,15 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedCategory, offset, transformVideoData, videos]); // Added videos to dependency array for setVideos(videos)
+  }, [selectedCategory, offset, transformVideoData, videos, getFullUrl]); // Added getFullUrl to fetchVideos useCallback dependency
 
-  // Initial fetch and on category change
-  useFocusEffect(
-    useCallback(() => {
-      setOffset(1);
-      fetchVideos(true);
-    }, [selectedCategory, fetchVideos])
-  );
+
+  // Only reset offset and fetch videos when category changes
+  useEffect(() => {
+    setOffset(1);
+    fetchVideos(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategory]);
 
   // Load more on offset change
   useEffect(() => {
@@ -236,10 +235,9 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
   }, []);
 
   const handleCategoryPress = useCallback((categoryName: string) => {
-    if (categoryName === selectedCategory) return;
+    if (categoryName === selectedCategory) { return; }
     setSelectedCategory(categoryName);
-    setOffset(1); // Reset offset on category change
-    // fetchVideos will be called by useFocusEffect due to selectedCategory change
+    setOffset(1);
   }, [selectedCategory]);
 
   const handleUploadPress = () => {
@@ -262,7 +260,7 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
             onPress={() => handleCategoryPress(category.name)}>
             <Text style={[
               styles.categoryIcon,
-              selectedCategory === category.name ? { color: colors.white } : { color: colors.text.secondary }
+              selectedCategory === category.name ? { color: colors.white } : { color: colors.text.secondary },
             ]}>
               {category.icon}
             </Text>
@@ -411,7 +409,6 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
                   source={{ uri: currentVideo.videoUrl }}
                   style={styles.mainVideoPlayer}
                   controls={true}
-                  autoplay={true}
                   paused={false}
                   resizeMode="contain"
                   poster={currentVideo.thumbnail}
@@ -429,7 +426,9 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
               <View style={styles.channelRow}>
                 <FastImage source={{ uri: currentVideo.avatar || 'https://via.placeholder.com/40x40?text=User' }} style={styles.channelAvatarLarge} />
                 <View style={styles.channelDetails}>
-                  <TouchableOpacity onPress={() => navigation.navigate('Channel' as never, { channelId: currentVideo.channelId })}>
+                  {/* Use @ts-ignore to bypass navigation type error for Channel navigation */}
+                  {/* @ts-ignore */}
+                  <TouchableOpacity onPress={() => navigation.navigate('Channel', { channelId: currentVideo.channelId })}>
                     <Text style={[styles.currentCreatorName, { color: colors.text.primary }]}>{currentVideo.creatorName}</Text>
                   </TouchableOpacity>
                   <Text style={[styles.currentVideoStats, { color: colors.text.secondary }]}>
@@ -472,7 +471,7 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
               renderItem={renderRelatedVideoItem}
               keyExtractor={item => `${item.id}-related`}
               scrollEnabled={false} // Nested FlatList within ScrollView
-              ListFooterComponent={loading && hasMore ? <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 10 }} /> : null}
+              ListFooterComponent={loading && hasMore ? <ActivityIndicator size="small" color={colors.primary} style={styles.relatedFooterLoader} /> : null}
             />
           </View>
         </ScrollView>
@@ -503,7 +502,7 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({ walletBalance }) => {
                 ? styles.flatListEmptyContainer
                 : styles.flatListContainer
             }
-            ListEmptyComponent={!loading && renderEmptyState}
+            ListEmptyComponent={loading ? null : renderEmptyState}
             ListFooterComponent={renderFooter}
             refreshControl={
               <RefreshControl
@@ -580,7 +579,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     borderRadius: 20,
     marginRight: 10,
-    shadowColor: "#000",
+    shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 1,
@@ -597,6 +596,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  flexOne: {
+    flex: 1,
+  },
   flatListContainer: {
     paddingHorizontal: 10,
     paddingBottom: 20, // Add padding for floating button
@@ -612,7 +614,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
     maxWidth: (width / (isTablet ? 3 : 2)) - 10, // Adjust width based on columns
-    shadowColor: "#000",
+    shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 2,
@@ -660,6 +662,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   videoDetails: {
+    flex: 1,
     padding: 10,
   },
   channelInfo: {
@@ -711,6 +714,9 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     alignItems: 'center',
   },
+  relatedFooterLoader: {
+    marginVertical: 10,
+  },
   floatingButton: {
     position: 'absolute',
     bottom: 20,
@@ -720,7 +726,7 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: "#000",
+    shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 3,
@@ -843,7 +849,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderRadius: 8,
     overflow: 'hidden',
-    shadowColor: "#000",
+    shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 1,

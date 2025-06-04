@@ -1,5 +1,5 @@
 // src/screens/home/HomeScreen.tsx
-import React, {useState, useEffect, useCallback} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,10 @@ import {
   RefreshControl,
   ActivityIndicator,
   FlatList,
-  TouchableOpacity,
   Platform,
   ScrollView,
 } from 'react-native';
-import {useNavigation, useFocusEffect} from '@react-navigation/native';
+import {useNavigation} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 
@@ -444,20 +443,21 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
     // The fetch will be triggered by the useEffect that depends on selectedCategory
   };
   // Effects
-  useFocusEffect(
-    useCallback(() => {
-      const fetchInitialData = async () => {
-        await fetchWalletAmount();
-        await fetchPosts(1, false);
-      };
-      fetchInitialData();
-      return () => {
-        // Cancel any pending requests if needed
-      };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id, selectedCategoryState]), // Only depend on user and selectedCategoryState
-  );
+  // Remove useFocusEffect for posts/wallet fetch, use useEffect for initial load and category change
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+    // Fetch wallet and posts on mount or when user/category changes
+    const fetchInitialData = async () => {
+      await fetchWalletAmount();
+      await fetchPosts(1, false);
+    };
+    fetchInitialData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, selectedCategoryState]);
 
+  // Only fetch stories after posts are loaded
   useEffect(() => {
     if (posts.length > 0) {
       fetchStories();
