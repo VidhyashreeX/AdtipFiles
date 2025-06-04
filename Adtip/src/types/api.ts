@@ -85,6 +85,43 @@ export interface UserDetailsRequest {
   referal_code: string;
 }
 
+// Agora Call types
+export interface AgoraCallRequest {
+  callerId: string | number;
+  receiverId: string | number;
+  action: 'start' | 'end' | 'missed-video-call' | 'missed-audio-call';
+  callType: 'video-call' | 'audio-call';
+  callId?: number;
+}
+
+export interface AgoraTokenRequest {
+  channelName: string;
+  uid: number;
+}
+
+export interface AgoraTokenResponse {
+  token: string;
+  channelName: string;
+  uid: number;
+}
+
+export interface FcmTokenRequest {
+  userId: string | number;
+  fcmToken: string;
+}
+
+export interface MissedCallsResponse {
+  calls: Array<{
+    id: number;
+    caller_id: number;
+    receiver_id: number;
+    call_type: string;
+    created_at: string;
+    caller_name?: string;
+    caller_image?: string;
+  }>;
+}
+
 // Home page types
 export interface WalletBalanceResponse {
   status: number;

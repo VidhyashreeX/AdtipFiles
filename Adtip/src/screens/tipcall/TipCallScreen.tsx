@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback} from 'react';
+import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {
   View,
   Text,
@@ -8,25 +8,29 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Platform,
+  PermissionsAndroid,
 } from 'react-native';
 import {
   Search,
-  Wallet,
-  User as UserIcon,
   Phone,
   Video,
 } from 'lucide-react-native';
+import Header from '../../components/common/Header';
 import {
   createAgoraRtcEngine,
   ChannelProfileType,
   ClientRoleType,
-  RtcConnection,
   IRtcEngine,
+  RtcConnection,
+  VideoCanvas,
+  RenderModeType,
 } from 'react-native-agora';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useAuth} from '../../contexts/AuthContext';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import ApiService from '../../services/ApiService';
 
 // Define navigation stack param list
 type RootStackParamList = {
@@ -38,7 +42,7 @@ type RootStackParamList = {
 // Define navigation prop type
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-// Define interfaces for API response and data
+// Define interfaces for API response and data (keeping your existing interfaces)
 interface Language {
   id: string;
   name: string;
@@ -90,7 +94,7 @@ interface ApiResponse {
 }
 
 const APP_ID = 'ef5fbd2647c64582a64db9e47b9f9335';
-const BASE_URL = 'https://api.adtip.in';
+// const BASE_URL = 'https://api.adtip.in'; // Not directly used in this component after ApiService integration
 
 // Constants for filters
 const LANGUAGES: Language[] = [
@@ -116,40 +120,27 @@ const CATEGORIES: Category[] = [
   {id: '4', name: 'Prepare for UPSC'},
 ];
 
-// Retrieve token from AsyncStorage
-const getAuthToken = async () => {
+// Fetch Agora token from server using ApiService
+const fetchAgoraToken = async (channelName: string, uid: number): Promise<string> => {
   try {
-    const token = await AsyncStorage.getItem('accessToken');
-    return token || '';
-  } catch (error) {
-    console.error('Error retrieving auth token:', error);
-    return '';
-  }
-};
-
-// Fetch Agora token from server
-const fetchAgoraToken = async (channelName: string, uid: number) => {
-  try {
-    const response = await fetch(`${BASE_URL}/api/agora/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${await getAuthToken()}`,
-      },
-      body: JSON.stringify({channelName, uid}),
+    console.log(`Fetching Agora token for channel: ${channelName}, uid: ${uid}`);
+    const response = await ApiService.getAgoraToken({
+      channelName,
+      uid,
     });
-    const result = await response.json();
-    if (result.status) {
-      return result.data.token;
+
+    if (response.status && response.data?.token) {
+      console.log('Successfully received Agora token');
+      return response.data.token;
     }
-    throw new Error(result.message || 'Failed to fetch token');
+    throw new Error(response.message || 'Failed to fetch token');
   } catch (error) {
     console.error('Error fetching Agora token:', error);
-    throw error;
+    throw new Error('Failed to get Agora token');
   }
 };
 
-// Notify recipient of incoming call
+// Notify recipient of incoming call using ApiService
 const notifyRecipient = async (
   recipientId: number,
   channelId: string,
@@ -161,92 +152,132 @@ const notifyRecipient = async (
     return;
   }
   try {
-    const token = await getAuthToken();
-    await fetch(`${BASE_URL}/api/call/notify`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        recipientId,
-        channelId,
-        callType,
-        callerId: parseInt(userId, 10),
-      }),
+    await ApiService.handleCall({
+      callerId: userId,
+      receiverId: recipientId.toString(),
+      action: 'start',
+      callType: callType === 'video' ? 'video-call' : 'audio-call',
     });
+    console.log(`${callType} call notification sent to recipient ID ${recipientId}`);
   } catch (error) {
     console.error('Error notifying recipient:', error);
   }
 };
 
-// Define event handler types based on Agora documentation
-interface RtcEngineEventHandlers {
-  onUserJoined: (connection: RtcConnection, remoteUid: number) => void;
-  onUserOffline: (connection: RtcConnection, remoteUid: number) => void;
-  onError: (err: number, msg: string) => void;
-  onJoinChannelSuccess: (connection: RtcConnection, elapsed: number) => void;
-}
-
 interface MeetingViewProps {
   meetingId: string;
   engine: IRtcEngine;
   onEndCall: () => void;
+  isCaller: boolean; // Indicates if the current user initiated the call
+  callType: 'voice' | 'video';
+  localUid: number;
 }
 
 const MeetingView: React.FC<MeetingViewProps> = ({
   meetingId,
   engine,
   onEndCall,
+  isCaller,
+  callType,
+  localUid,
 }) => {
   const [remoteUsers, setRemoteUsers] = useState<number[]>([]);
+  const {user} = useAuth();
+  const remoteVideoCanvas = useRef<View>(null);
+  const localVideoCanvas = useRef<View>(null);
 
   useEffect(() => {
     if (!engine) return;
 
-    const timeoutId = setTimeout(() => {
-      if (remoteUsers.length === 0) {
-        Alert.alert(
-          'No Response',
-          'No one has joined the call. Would you like to end the call?',
-          [
-            {text: 'Wait', style: 'cancel'},
-            {text: 'End Call', onPress: onEndCall},
-          ],
-        );
-      }
-    }, 30000);
+    // Handle no response after 30 seconds for the caller
+    let timeoutId: NodeJS.Timeout | null = null;
+    if (isCaller) {
+      timeoutId = setTimeout(() => {
+        if (remoteUsers.length === 0) {
+          // Get the contact ID from the meeting ID
+          const contactIdMatch = meetingId.match(/_([\d]+)_/);
+          const contactId = contactIdMatch ? contactIdMatch[1] : null;
 
-    const eventHandlers: RtcEngineEventHandlers = {
-      onUserJoined: (connection: RtcConnection, remoteUid: number) => {
-        console.log(`User ${remoteUid} joined channel ${connection.channelId}`);
-        setRemoteUsers(prev => [...new Set([...prev, remoteUid])]);
-      },
-      onUserOffline: (connection: RtcConnection, remoteUid: number) => {
-        console.log(`User ${remoteUid} left channel ${connection.channelId}`);
-        setRemoteUsers(prev => prev.filter(uid => uid !== remoteUid));
-      },
-      onError: (err: number, msg: string) => {
-        console.error('Agora Error:', err, msg);
-        Alert.alert('Call Error', `Error code: ${err}, ${msg}`);
-      },
-      onJoinChannelSuccess: () => {},
+          if (contactId && user?.id) {
+            // Send missed call notification
+            ApiService.handleCall({
+              callerId: user.id,
+              receiverId: contactId,
+              action: callType === 'video' ? 'missed-video-call' : 'missed-audio-call',
+              callType: callType === 'video' ? 'video-call' : 'audio-call',
+            }).catch(err => console.error('Error sending missed call notification:', err));
+          }
+
+          Alert.alert(
+            'No Response',
+            'No one has joined the call. Would you like to end the call?',
+            [
+              {text: 'Wait', style: 'cancel'},
+              {text: 'End Call', onPress: onEndCall},
+            ],
+          );
+        }
+      }, 30000);
+    }
+
+    const onUserJoined = (connection: RtcConnection, remoteUid: number) => {
+      console.log(`User ${remoteUid} joined channel ${connection.channelId}`);
+      setRemoteUsers(prev => [...new Set([...prev, remoteUid])]);
+      if (callType === 'video') {
+        engine.setupRemoteVideo({
+          uid: remoteUid,
+          view: remoteVideoCanvas.current,
+          renderMode: RenderModeType.RenderModeHidden,
+        });
+      }
     };
 
-    engine.addListener('onUserJoined', eventHandlers.onUserJoined);
-    engine.addListener('onUserOffline', eventHandlers.onUserOffline);
-    engine.addListener('onError', eventHandlers.onError);
+    const onUserOffline = (connection: RtcConnection, remoteUid: number) => {
+      console.log(`User ${remoteUid} left channel ${connection.channelId}`);
+      setRemoteUsers(prev => prev.filter(uid => uid !== remoteUid));
+      if (remoteUsers.length === 1 && remoteUsers[0] === remoteUid) {
+        // If the only other user leaves, end the call
+        onEndCall();
+      }
+    };
+
+    const onError = (err: number, msg: string) => {
+      console.error('Agora Error:', err, msg);
+      Alert.alert('Call Error', `Error code: ${err}, ${msg}`);
+      onEndCall(); // End call on critical error
+    };
+
+    engine.addListener('onUserJoined', onUserJoined);
+    engine.addListener('onUserOffline', onUserOffline);
+    engine.addListener('onError', onError);
+
+    // Setup local video view if it's a video call
+    if (callType === 'video') {
+      engine.setupLocalVideo({
+        view: localVideoCanvas.current,
+        renderMode: RenderModeType.RenderModeHidden,
+      });
+    }
 
     return () => {
-      clearTimeout(timeoutId);
-      engine.removeListener('onUserJoined', eventHandlers.onUserJoined);
-      engine.removeListener('onUserOffline', eventHandlers.onUserOffline);
-      engine.removeListener('onError', eventHandlers.onError);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      engine.removeListener('onUserJoined', onUserJoined);
+      engine.removeListener('onUserOffline', onUserOffline);
+      engine.removeListener('onError', onError);
     };
-  }, [engine, remoteUsers, onEndCall]);
+  }, [engine, remoteUsers, onEndCall, isCaller, meetingId, user, callType]);
 
   return (
     <View style={styles.callOverlay}>
+      {callType === 'video' && (
+        <>
+          <VideoCanvas style={styles.remoteVideo} ref={remoteVideoCanvas} zOrderMediaOverlay={true} />
+          <VideoCanvas style={styles.localVideo} ref={localVideoCanvas} zOrderMediaOverlay={true} />
+        </>
+      )}
+
       <Text style={styles.callStatus}>In Call: {meetingId}</Text>
       <Text style={styles.callStatus}>
         {remoteUsers.length > 0
@@ -275,11 +306,38 @@ const TipCallScreen: React.FC = () => {
   const [totalRecords, setTotalRecords] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isCaller, setIsCaller] = useState<boolean>(false); // Track if the current user initiated the call
+  const [currentCallType, setCurrentCallType] = useState<'voice' | 'video'>('voice');
+  const localUid = useRef<number>(0); // Store the local user ID for Agora
 
   const redirectToLogin = () => {
     Alert.alert('Authentication Required', 'Please log in to continue.', [
       {text: 'OK', onPress: () => navigation.navigate('Login')},
     ]);
+  };
+
+  // Request permissions for audio and video
+  const requestPermissions = async (callType: 'voice' | 'video') => {
+    if (Platform.OS === 'android') {
+      const permissions = [
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        ...(callType === 'video' ? [PermissionsAndroid.PERMISSIONS.CAMERA] : []),
+      ];
+      try {
+        const granted = await PermissionsAndroid.requestMultiple(permissions);
+        const allGranted = permissions.every(
+          perm => granted[perm] === PermissionsAndroid.results.GRANTED,
+        );
+        if (!allGranted) {
+          Alert.alert('Permissions Required', 'Audio and Camera permissions are needed for calls.');
+          return false;
+        }
+      } catch (err) {
+        console.warn(err);
+        return false;
+      }
+    }
+    return true;
   };
 
   const fetchUsers = useCallback(
@@ -293,16 +351,7 @@ const TipCallScreen: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const token = await getAuthToken();
-      if (!token) {
-        setError('Authentication required. Please log in.');
-        setLoading(false);
-        redirectToLogin();
-        return;
-      }
-
       try {
-        const endpoint = `${BASE_URL}/api/users`;
         const payload = {
           id: 0,
           page: pageNum,
@@ -317,41 +366,18 @@ const TipCallScreen: React.FC = () => {
           sortBy: {},
         };
 
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        });
+        const response = await ApiService.getUsers(payload);
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(
-            `HTTP error! status: ${response.status}, message: ${errorText}`,
-          );
-        }
-
-        const result: ApiResponse = await response.json();
-        if (result.status) {
-          setContacts(prev =>
-            append ? [...prev, ...result.data] : result.data,
-          );
-          setTotalRecords(result.pagination.totalRecords);
-          setPage(result.pagination.page);
-        } else {
-          throw new Error(
-            result.error || result.message || 'Failed to fetch users',
-          );
-        }
+        setContacts(prev =>
+          append ? [...prev, ...response.data] : response.data,
+        );
+        setTotalRecords(response.pagination.totalRecords);
+        setPage(response.pagination.page);
       } catch (error: any) {
         console.error('Error fetching users:', error.message);
-        if (error.message.includes('Failed to authenticate token')) {
-          setError('Invalid or expired session. Please log in again.');
+        setError(`Failed to load users: ${error.message}`);
+        if (error.message.includes('unauthorized')) {
           redirectToLogin();
-        } else {
-          setError(`Failed to load users: ${error.message}`);
         }
       } finally {
         setLoading(false);
@@ -372,39 +398,40 @@ const TipCallScreen: React.FC = () => {
   useEffect(() => {
     const initAgora = async () => {
       try {
+        if (!APP_ID) {
+          Alert.alert('Error', 'Agora APP_ID is not configured.');
+          return;
+        }
+
         const engine = createAgoraRtcEngine();
         await engine.initialize({appId: APP_ID});
-        await engine.enableAudio();
-        await engine.setChannelProfile(
-          ChannelProfileType.ChannelProfileCommunication,
-        );
-        await engine.setClientRole(ClientRoleType.ClientRoleBroadcaster);
 
-        const eventHandlers: RtcEngineEventHandlers = {
-          onJoinChannelSuccess: (
-            connection: RtcConnection,
-            elapsed: number,
-          ) => {
-            console.log(
-              `Joined channel ${connection.channelId} in ${elapsed}ms`,
-            );
-            setInCall(true);
-          },
-          onError: (err: number, msg: string) => {
-            console.error('Agora Error:', err, msg);
-            Alert.alert('Call Error', `Error code: ${err}, ${msg}`);
-            setInCall(false);
-            setMeetingId('');
-          },
-          onUserJoined: () => {},
-          onUserOffline: () => {},
+        // Set channel profile to communication for one-to-one calls
+        await engine.setChannelProfile(ChannelProfileType.ChannelProfileCommunication);
+        await engine.setClientRole(ClientRoleType.ClientRoleBroadcaster); // Broadcaster role for calling
+
+        // Agora event handlers
+        const onJoinChannelSuccess = (
+          connection: RtcConnection,
+          elapsed: number,
+        ) => {
+          console.log(
+            `Joined channel ${connection.channelId} in ${elapsed}ms`,
+          );
+          setInCall(true);
         };
 
-        engine.addListener(
-          'onJoinChannelSuccess',
-          eventHandlers.onJoinChannelSuccess,
-        );
-        engine.addListener('onError', eventHandlers.onError);
+        const onError = (err: number, msg: string) => {
+          console.error('Agora Engine Error:', err, msg);
+          Alert.alert('Call Error', `Engine Error code: ${err}, ${msg}`);
+          setInCall(false);
+          setMeetingId('');
+          setIsCaller(false);
+          setCurrentCallType('voice'); // Reset call type on error
+        };
+
+        engine.addListener('onJoinChannelSuccess', onJoinChannelSuccess);
+        engine.addListener('onError', onError);
 
         setRtcEngine(engine);
       } catch (error) {
@@ -416,9 +443,15 @@ const TipCallScreen: React.FC = () => {
     initAgora();
 
     return () => {
+      // Clean up Agora engine when component unmounts
       if (rtcEngine) {
-        rtcEngine.leaveChannel();
-        rtcEngine.release();
+        try {
+          rtcEngine.leaveChannel();
+          rtcEngine.release();
+          console.log('Agora engine released.');
+        } catch (e) {
+          console.error('Error releasing Agora engine:', e);
+        }
       }
     };
   }, []);
@@ -432,17 +465,41 @@ const TipCallScreen: React.FC = () => {
       Alert.alert('Error', 'You are already in a call.');
       return;
     }
+    if (!user?.id) {
+      Alert.alert('Error', 'User not authenticated.');
+      redirectToLogin();
+      return;
+    }
+
+    const hasPermissions = await requestPermissions('voice');
+    if (!hasPermissions) return;
 
     try {
-      const newMeetingId = `voice_${contactId}_${Date.now()}`;
-      const token = await fetchAgoraToken(newMeetingId, 0);
+      // Ensure audio is enabled and video is disabled for voice call
+      await rtcEngine.enableAudio();
       await rtcEngine.disableVideo();
-      await rtcEngine.joinChannel(token, newMeetingId, '', 0);
+
+      const newMeetingId = `voice_${user.id}_${contactId}_${Date.now()}`; // Unique channel for each call, include caller and recipient ID
+      const uid = Math.floor(Math.random() * 100000); // Generate a random UID for the caller
+      localUid.current = uid;
+      const token = await fetchAgoraToken(newMeetingId, uid);
+
+      // Join the channel
+      await rtcEngine.joinChannel(token, newMeetingId, '', uid);
+
       setMeetingId(newMeetingId);
-      await notifyRecipient(contactId, newMeetingId, 'voice', user?.id);
+      setIsCaller(true);
+      setCurrentCallType('voice');
+      await notifyRecipient(contactId, newMeetingId, 'voice', user.id);
+
+      console.log(`Voice call started with contact ID ${contactId}`);
     } catch (error: any) {
       console.error('Error starting voice call:', error);
       Alert.alert('Error', `Failed to start voice call: ${error.message}`);
+      setInCall(false); // Ensure call state is reset on error
+      setMeetingId('');
+      setIsCaller(false);
+      setCurrentCallType('voice');
     }
   };
 
@@ -455,26 +512,77 @@ const TipCallScreen: React.FC = () => {
       Alert.alert('Error', 'You are already in a call.');
       return;
     }
+    if (!user?.id) {
+      Alert.alert('Error', 'User not authenticated.');
+      redirectToLogin();
+      return;
+    }
+
+    const hasPermissions = await requestPermissions('video');
+    if (!hasPermissions) return;
 
     try {
-      const newMeetingId = `video_${contactId}_${Date.now()}`;
-      const token = await fetchAgoraToken(newMeetingId, 0);
+      // Enable video for video call
       await rtcEngine.enableVideo();
-      await rtcEngine.joinChannel(token, newMeetingId, '', 0);
+      await rtcEngine.startPreview(); // Start local video preview
+
+      const newMeetingId = `video_${user.id}_${contactId}_${Date.now()}`; // Unique channel, include caller and recipient ID
+      const uid = Math.floor(Math.random() * 100000); // Generate a random UID for the caller
+      localUid.current = uid;
+      const token = await fetchAgoraToken(newMeetingId, uid);
+
+      // Join the channel
+      await rtcEngine.joinChannel(token, newMeetingId, '', uid);
+
       setMeetingId(newMeetingId);
-      await notifyRecipient(contactId, newMeetingId, 'video', user?.id);
+      setIsCaller(true);
+      setCurrentCallType('video');
+      await notifyRecipient(contactId, newMeetingId, 'video', user.id);
+
+      console.log(`Video call started with contact ID ${contactId}`);
     } catch (error: any) {
       console.error('Error starting video call:', error);
       Alert.alert('Error', `Failed to start video call: ${error.message}`);
+      setInCall(false); // Ensure call state is reset on error
+      setMeetingId('');
+      setIsCaller(false);
+      setCurrentCallType('voice');
     }
   };
 
   const endCall = async () => {
     if (rtcEngine) {
       try {
+        // Get the contact ID from the meeting ID (format: 'type_callerId_contactId_timestamp')
+        const parts = meetingId.split('_');
+        const isVideo = parts[0] === 'video';
+        const callerIdFromMeetingId = parts[1];
+        const recipientIdFromMeetingId = parts[2];
+
+        // Determine which ID is the recipient based on whether current user is caller
+        const recipientId = isCaller ? recipientIdFromMeetingId : callerIdFromMeetingId;
+        const callerId = isCaller ? user?.id : callerIdFromMeetingId;
+
+        // Leave the channel
+        await rtcEngine.stopPreview(); // Stop local video preview
         await rtcEngine.leaveChannel();
         setInCall(false);
+
+        // Notify the API that the call has ended
+        if (recipientId && callerId) {
+          await ApiService.handleCall({
+            callerId: callerId,
+            receiverId: recipientId,
+            action: 'end',
+            callType: isVideo ? 'video-call' : 'audio-call',
+            callId: parseInt(parts[3] || '0', 10), // Use timestamp as call ID
+          });
+          console.log(`Call with ${recipientId} ended`);
+        }
+
         setMeetingId('');
+        setIsCaller(false);
+        setCurrentCallType('voice'); // Reset call type after call ends
       } catch (error) {
         console.error('Error leaving call:', error);
         Alert.alert('Error', 'Failed to end call.');
@@ -482,7 +590,41 @@ const TipCallScreen: React.FC = () => {
     }
   };
 
-  if (loading && !contacts.length) {
+  const updateFcmToken = async (fcmToken: string) => {
+    if (!user?.id) return;
+
+    try {
+      await ApiService.updateFcmToken({
+        userId: user.id,
+        fcmToken: fcmToken
+      });
+      console.log('FCM token updated successfully');
+    } catch (error) {
+      console.error('Error updating FCM token:', error);
+    }
+  };
+
+  const fetchMissedCalls = async () => {
+    if (!user?.id) return;
+
+    try {
+      const response = await ApiService.getMissedCalls(user.id);
+      if (response.status && response.data) {
+        console.log('Missed calls:', response.data.calls);
+        // You could set state and display them in the UI
+      }
+    } catch (error) {
+      console.error('Error fetching missed calls:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchMissedCalls();
+    }
+  }, [user]);
+
+  if (loading && !contacts.length && !inCall) {
     return (
       <View style={[styles.container, {backgroundColor: '#f8fafc'}]}>
         <View style={styles.loadingContainer}>
@@ -495,28 +637,12 @@ const TipCallScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.logoContainer}>
-          <View style={styles.logo}>
-            <UserIcon size={18} color="white" />
-          </View>
-          <Text style={styles.title}>Tip Call</Text>
-          <View style={styles.toggle}>
-            <View style={styles.toggleButton} />
-          </View>
-        </View>
-        <View style={styles.headerActions}>
-          <View style={styles.walletChip}>
-            <Wallet size={16} color="#24d05a" />
-            <Text style={styles.walletAmount}>₹ 204.79</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.profileButton}
-            onPress={() => navigation.navigate('Profile')}>
-            <UserIcon size={20} color="#374151" />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <Header
+        title="Tip Call"
+        showBackButton={false}
+        showLogo={true}
+        showWallet={true}
+      />
 
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
@@ -642,12 +768,14 @@ const TipCallScreen: React.FC = () => {
             <View style={styles.callButtons}>
               <TouchableOpacity
                 style={styles.callButton}
-                onPress={() => startVoiceCall(contact.id)}>
+                onPress={() => startVoiceCall(contact.id)}
+                disabled={inCall}>
                 <Phone size={20} color="white" />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.callButton}
-                onPress={() => startVideoCall(contact.id)}>
+                onPress={() => startVideoCall(contact.id)}
+                disabled={inCall}>
                 <Video size={20} color="white" />
               </TouchableOpacity>
             </View>
@@ -661,11 +789,14 @@ const TipCallScreen: React.FC = () => {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {inCall && (
+      {inCall && rtcEngine && (
         <MeetingView
           meetingId={meetingId}
-          engine={rtcEngine!}
+          engine={rtcEngine}
           onEndCall={endCall}
+          isCaller={isCaller}
+          callType={currentCallType}
+          localUid={localUid.current}
         />
       )}
     </View>
@@ -885,6 +1016,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1000, // Ensure the call overlay is on top
   },
   callStatus: {
     fontSize: 20,
@@ -896,6 +1028,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 10,
+    marginTop: 20,
   },
   endCallText: {
     color: 'white',
@@ -935,6 +1068,26 @@ const styles = StyleSheet.create({
   },
   categoryItemTextUnselected: {
     color: '#374151',
+  },
+  // Styles for video streams
+  localVideo: {
+    width: 100,
+    height: 150,
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 1,
+    backgroundColor: 'black',
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderColor: '#24d05a',
+    borderWidth: 2,
+  },
+  remoteVideo: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'black',
   },
 });
 

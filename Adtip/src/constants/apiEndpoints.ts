@@ -35,6 +35,10 @@ export const TIP_SHORTS_ENDPOINTS = {
 export const TIP_CALLS_ENDPOINTS = {
   GET_USERS: '/api/users',
   GET_ALL_USERS: '/api/allusers',
+  CALL: '/api/call',
+  GET_AGORA_TOKEN: '/api/get-agora-token',
+  MISSED_CALLS: '/api/missed-calls', // + '/:userId'
+  UPDATE_FCM_TOKEN: '/api/update-fcm-token',
 };
 
 // Profile endpoints

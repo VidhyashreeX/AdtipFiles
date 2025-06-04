@@ -18,6 +18,11 @@ import {
   UserListRequest,
   UserListResponse,
   ReferralDetailsResponse,
+  AgoraTokenRequest,
+  AgoraTokenResponse,
+  AgoraCallRequest,
+  FcmTokenRequest,
+  MissedCallsResponse,
 } from '../types/api';
 
 // Create axios instance with default configuration
@@ -30,7 +35,7 @@ const apiClient = axios.create({
   },
 });
 
-// Add request interceptor to add auth token to every request
+// Endpoints that don't require // Add request interceptor to add auth token to every request
 apiClient.interceptors.request.use(
   async config => {
     try {
@@ -46,7 +51,7 @@ apiClient.interceptors.request.use(
         console.warn('No auth token found in storage');
       }
     } catch (error) {
-      console.error('Error getting auth token:', error);
+      console.error('Error adding auth token:', error);
     }
     return config;
   },
@@ -448,55 +453,56 @@ export default class ApiService {
     );
   }
 
-  // ===== PROFILE SERVICES =====
+  // ===== AGORA API SERVICES =====
 
   /**
-   * Get user premium plans
-   * @param userId - User ID
+   * Get Agora token for a channel
+   * @param data - Request data containing channel name and uid
    */
-  static async getUserPremiumPlans(userId: string | number): Promise<any> {
-    return this.get(
-      `${ApiEndpoints.PROFILE_ENDPOINTS.USER_PREMIUM_PLANS}/${userId}`,
+  static async getAgoraToken(
+    data: AgoraTokenRequest,
+  ): Promise<ApiResponse<AgoraTokenResponse>> {
+    return this.post<ApiResponse<AgoraTokenResponse>>(
+      ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_AGORA_TOKEN,
+      data,
     );
   }
 
   /**
-   * Get content premium plans
-   * @param userId - User ID
+   * Handle call actions (start, end, missed)
+   * @param data - Call action data
    */
-  static async getContentPremiumPlans(userId: string | number): Promise<any> {
-    return this.get(
-      `${ApiEndpoints.PROFILE_ENDPOINTS.CONTENT_PREMIUM_PLANS}/${userId}`,
+  static async handleCall(
+    data: AgoraCallRequest,
+  ): Promise<ApiResponse<any>> {
+    return this.post<ApiResponse<any>>(
+      ApiEndpoints.TIP_CALLS_ENDPOINTS.CALL,
+      data,
     );
   }
 
   /**
-   * Get user posts
-   * @param userId - User ID
+   * Update FCM token for push notifications
+   * @param data - FCM token data containing user ID and token
    */
-  static async getUserPosts(userId: string | number): Promise<any> {
-    return this.get(
-      `${ApiEndpoints.PROFILE_ENDPOINTS.USER_POSTS}/${userId}/posts`,
+  static async updateFcmToken(
+    data: FcmTokenRequest,
+  ): Promise<ApiResponse<any>> {
+    return this.post<ApiResponse<any>>(
+      ApiEndpoints.TIP_CALLS_ENDPOINTS.UPDATE_FCM_TOKEN,
+      data,
     );
   }
 
   /**
-   * Get user followings
+   * Get missed calls for a user
    * @param userId - User ID
    */
-  static async getUserFollowings(userId: string | number): Promise<any> {
-    return this.get(
-      `${ApiEndpoints.PROFILE_ENDPOINTS.GET_FOLLOWING}/${userId}`,
-    );
-  }
-
-  /**
-   * Get user followers
-   * @param userId - User ID
-   */
-  static async getUserFollowers(userId: string | number): Promise<any> {
-    return this.get(
-      `${ApiEndpoints.PROFILE_ENDPOINTS.GET_FOLLOWERS}/${userId}`,
+  static async getMissedCalls(
+    userId: string | number,
+  ): Promise<ApiResponse<MissedCallsResponse>> {
+    return this.get<ApiResponse<MissedCallsResponse>>(
+      `${ApiEndpoints.TIP_CALLS_ENDPOINTS.MISSED_CALLS}/${userId}`,
     );
   }
 
