@@ -3,498 +3,671 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
-  Image,
   TextInput,
   ScrollView,
-  Modal,
-  Alert, // For toasts
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/Feather'; // Using Feather as per existing imports
-import {useNavigation, useFocusEffect} from '@react-navigation/native';
-
-// Components
-import Header from '../../components/common/Header';
-import ApiService from '../../services/ApiService'; // Assuming ApiService is set up
-
-// Context
-import {useTheme} from '../../contexts/ThemeContext';
+import {
+  Search,
+  Wallet,
+  User as UserIcon,
+  Phone,
+  Video,
+} from 'lucide-react-native';
+import {
+  createAgoraRtcEngine,
+  ChannelProfileType,
+  ClientRoleType,
+  RtcConnection,
+  IRtcEngine,
+} from 'react-native-agora';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useAuth} from '../../contexts/AuthContext';
+import {useNavigation} from '@react-navigation/native';
+import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 
-// Constants (assuming API_ENDPOINTS.USERS.FILTER_EXPERTS or similar exists, or we use /users directly)
-// For now, let's assume the endpoint is just '/users' for POST as per web
-const EXPERTS_ENDPOINT = '/users'; // Or replace with API_ENDPOINTS.USERS.FILTER_EXPERTS if available
+// Define navigation stack param list
+type RootStackParamList = {
+  TipCall: undefined;
+  Login: undefined;
+  Profile: undefined;
+};
 
-// Types
-interface TipCallScreenProps {
-  walletBalance?: string;
+// Define navigation prop type
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+// Define interfaces for API response and data
+interface Language {
+  id: string;
+  name: string;
 }
 
-interface Expert {
+interface Category {
+  id: string;
+  name: string;
+}
+
+interface Interest {
   id: number;
   name: string;
-  specialty: string; // Derived from interests
-  description: string;
-  price: number; // Assuming a fixed price or from API
-  rating: number;
-  ratingCount: number;
-  avatar: string | null; // Profile image
+  isPrimary: boolean;
+}
+
+interface Contact {
+  id: number;
+  name?: string | null;
+  emailId?: string | null;
   is_available: boolean;
+  dnd: boolean;
+  updated_date: string;
+  last_active: string | null;
+  languages: Language[];
+  interests: Interest[];
+  product_count: number;
+  post_count: number;
+  is_following: number;
+  following_count: number;
+  followers_count: number;
+  is_blocked: boolean;
+  social_links: string[];
+  is_active: boolean;
+  last_seen: string;
   online_status: boolean;
 }
 
-// Web version categories and mapping
-const categories = [
-  "Health", "Finance", "Tech", "Business", "Education",
-  "Lifestyle", "Career", "Arts", "Legal", "Sports"
+interface ApiResponse {
+  status: boolean;
+  message: string;
+  error?: string;
+  data: Contact[];
+  pagination: {
+    page: number;
+    limit: number;
+    totalRecords: number;
+  };
+}
+
+const APP_ID = 'ef5fbd2647c64582a64db9e47b9f9335';
+const BASE_URL = 'https://api.adtip.in';
+
+// Constants for filters
+const LANGUAGES: Language[] = [
+  {id: '1', name: 'All'},
+  {id: '2', name: 'Hindi'},
+  {id: '3', name: 'Bengali'},
+  {id: '4', name: 'Marathi'},
+  {id: '5', name: 'Telugu'},
 ];
 
-const categoryToInterestMap: {[key: string]: number} = {
-  Health: 1,
-  Finance: 2,
-  Tech: 3,
-  Business: 4,
-  Education: 5,
-  Lifestyle: 6,
-  Career: 7,
-  Arts: 8,
-  Legal: 9,
-  Sports: 10,
+const TABS: Language[] = [
+  {id: '1', name: 'All'},
+  {id: '2', name: 'Hindi'},
+  {id: '3', name: 'Bengali'},
+  {id: '4', name: 'Marathi'},
+  {id: '5', name: 'Telugu'},
+];
+
+const CATEGORIES: Category[] = [
+  {id: '1', name: 'All'},
+  {id: '2', name: 'Look for jobs'},
+  {id: '3', name: 'Prepare for govt job'},
+  {id: '4', name: 'Prepare for UPSC'},
+];
+
+// Retrieve token from AsyncStorage
+const getAuthToken = async () => {
+  try {
+    const token = await AsyncStorage.getItem('accessToken');
+    return token || '';
+  } catch (error) {
+    console.error('Error retrieving auth token:', error);
+    return '';
+  }
 };
 
-const MAX_FETCH_RETRIES = 3;
-const ITEMS_PER_PAGE = 10; // Or as per your API limit
+// Fetch Agora token from server
+const fetchAgoraToken = async (channelName: string, uid: number) => {
+  try {
+    const response = await fetch(`${BASE_URL}/api/agora/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${await getAuthToken()}`,
+      },
+      body: JSON.stringify({channelName, uid}),
+    });
+    const result = await response.json();
+    if (result.status) {
+      return result.data.token;
+    }
+    throw new Error(result.message || 'Failed to fetch token');
+  } catch (error) {
+    console.error('Error fetching Agora token:', error);
+    throw error;
+  }
+};
 
-const TipCallScreen: React.FC<TipCallScreenProps> = ({walletBalance}) => {
-  const {colors} = useTheme();
-  const navigation = useNavigation();
-  const {user, isAuthenticated} = useAuth();
+// Notify recipient of incoming call
+const notifyRecipient = async (
+  recipientId: number,
+  channelId: string,
+  callType: 'voice' | 'video',
+  userId: string | undefined,
+) => {
+  if (!userId) {
+    console.warn('No authenticated user for notification');
+    return;
+  }
+  try {
+    const token = await getAuthToken();
+    await fetch(`${BASE_URL}/api/call/notify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        recipientId,
+        channelId,
+        callType,
+        callerId: parseInt(userId, 10),
+      }),
+    });
+  } catch (error) {
+    console.error('Error notifying recipient:', error);
+  }
+};
 
-  const [loading, setLoading] = useState(false);
+// Define event handler types based on Agora documentation
+interface RtcEngineEventHandlers {
+  onUserJoined: (connection: RtcConnection, remoteUid: number) => void;
+  onUserOffline: (connection: RtcConnection, remoteUid: number) => void;
+  onError: (err: number, msg: string) => void;
+  onJoinChannelSuccess: (connection: RtcConnection, elapsed: number) => void;
+}
+
+interface MeetingViewProps {
+  meetingId: string;
+  engine: IRtcEngine;
+  onEndCall: () => void;
+}
+
+const MeetingView: React.FC<MeetingViewProps> = ({
+  meetingId,
+  engine,
+  onEndCall,
+}) => {
+  const [remoteUsers, setRemoteUsers] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (!engine) return;
+
+    const timeoutId = setTimeout(() => {
+      if (remoteUsers.length === 0) {
+        Alert.alert(
+          'No Response',
+          'No one has joined the call. Would you like to end the call?',
+          [
+            {text: 'Wait', style: 'cancel'},
+            {text: 'End Call', onPress: onEndCall},
+          ],
+        );
+      }
+    }, 30000);
+
+    const eventHandlers: RtcEngineEventHandlers = {
+      onUserJoined: (connection: RtcConnection, remoteUid: number) => {
+        console.log(`User ${remoteUid} joined channel ${connection.channelId}`);
+        setRemoteUsers(prev => [...new Set([...prev, remoteUid])]);
+      },
+      onUserOffline: (connection: RtcConnection, remoteUid: number) => {
+        console.log(`User ${remoteUid} left channel ${connection.channelId}`);
+        setRemoteUsers(prev => prev.filter(uid => uid !== remoteUid));
+      },
+      onError: (err: number, msg: string) => {
+        console.error('Agora Error:', err, msg);
+        Alert.alert('Call Error', `Error code: ${err}, ${msg}`);
+      },
+      onJoinChannelSuccess: () => {},
+    };
+
+    engine.addListener('onUserJoined', eventHandlers.onUserJoined);
+    engine.addListener('onUserOffline', eventHandlers.onUserOffline);
+    engine.addListener('onError', eventHandlers.onError);
+
+    return () => {
+      clearTimeout(timeoutId);
+      engine.removeListener('onUserJoined', eventHandlers.onUserJoined);
+      engine.removeListener('onUserOffline', eventHandlers.onUserOffline);
+      engine.removeListener('onError', eventHandlers.onError);
+    };
+  }, [engine, remoteUsers, onEndCall]);
+
+  return (
+    <View style={styles.callOverlay}>
+      <Text style={styles.callStatus}>In Call: {meetingId}</Text>
+      <Text style={styles.callStatus}>
+        {remoteUsers.length > 0
+          ? `${remoteUsers.length} user(s) connected`
+          : 'Waiting for others...'}
+      </Text>
+      <TouchableOpacity style={styles.endCallButton} onPress={onEndCall}>
+        <Text style={styles.endCallText}>End Call</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const TipCallScreen: React.FC = () => {
+  const {user} = useAuth();
+  const navigation = useNavigation<NavigationProp>();
+  const [selectedCategory, setSelectedCategory] = useState<string>('1');
+  const [selectedLanguage, setSelectedLanguage] = useState<string>('1');
+  const [selectedTab, setSelectedTab] = useState<string>('1');
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [inCall, setInCall] = useState<boolean>(false);
+  const [meetingId, setMeetingId] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [rtcEngine, setRtcEngine] = useState<IRtcEngine | null>(null);
+  const [page, setPage] = useState<number>(1);
+  const [totalRecords, setTotalRecords] = useState<number>(0);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [fetchRetryCount, setFetchRetryCount] = useState(0);
-  
-  const [expertData, setExpertData] = useState<Expert[]>([]);
-  // const [filteredExperts, setFilteredExperts] = useState<Expert[]>([]); // expertData will be the filtered list
 
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null); // Store category name
-  const [searchQuery, setSearchQuery] = useState("");
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  
-  const [selectedExpert, setSelectedExpert] = useState<Expert | null>(null);
-  const [showCallDialog, setShowCallDialog] = useState(false);
-  // const [callType, setCallType] = useState<"voice" | "video" | null>(null); // Assuming voice call for now
-
-  const [refreshing, setRefreshing] = useState(false); // For pull-to-refresh
-
-  // Helper to get full image URL (adapted from your existing code)
-  const getFullImageUrl = (url?: string | null): string | null => {
-    if (!url || url === 'null' || url === 'undefined' || url.includes('placeholder.svg')) {
-      // Return a local placeholder or null if you have one, or a remote placeholder
-      return 'https://via.placeholder.com/100'; // Placeholder
-    }
-    if (url.startsWith('http')) {
-      return url;
-    }
-    // Assuming API_BASE_URL is accessible or configured in ApiService
-    // This might need adjustment based on how ApiService constructs URLs or if you have a global const
-    const BASE_URL_FOR_IMAGES = ApiService.defaults.baseURL?.replace('/api', '') || ''; // Example
-    return `${BASE_URL_FOR_IMAGES}${url.startsWith('/') ? '' : '/'}${url}`;
+  const redirectToLogin = () => {
+    Alert.alert('Authentication Required', 'Please log in to continue.', [
+      {text: 'OK', onPress: () => navigation.navigate('Login')},
+    ]);
   };
 
+  const fetchUsers = useCallback(
+    async (pageNum: number = 1, append: boolean = false) => {
+      if (!user || !user.id) {
+        setError('Authentication required. Please log in.');
+        redirectToLogin();
+        return;
+      }
 
-  const fetchExperts = useCallback(async (isRefresh = false) => {
-    if (!isAuthenticated) {
-      // @ts-ignore
-      navigation.navigate("Login"); // Adjust screen name if different
+      setLoading(true);
+      setError(null);
+
+      const token = await getAuthToken();
+      if (!token) {
+        setError('Authentication required. Please log in.');
+        setLoading(false);
+        redirectToLogin();
+        return;
+      }
+
+      try {
+        const endpoint = `${BASE_URL}/api/users`;
+        const payload = {
+          id: 0,
+          page: pageNum,
+          limit: 20,
+          language:
+            selectedLanguage === '1' ? [] : [parseInt(selectedLanguage, 10)],
+          interest:
+            selectedCategory === '1' ? [] : [parseInt(selectedCategory, 10)],
+          user_id: null,
+          search_by_name: searchQuery || '',
+          loggined_user_id: parseInt(user.id, 10),
+          sortBy: {},
+        };
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(
+            `HTTP error! status: ${response.status}, message: ${errorText}`,
+          );
+        }
+
+        const result: ApiResponse = await response.json();
+        if (result.status) {
+          setContacts(prev =>
+            append ? [...prev, ...result.data] : result.data,
+          );
+          setTotalRecords(result.pagination.totalRecords);
+          setPage(result.pagination.page);
+        } else {
+          throw new Error(
+            result.error || result.message || 'Failed to fetch users',
+          );
+        }
+      } catch (error: any) {
+        console.error('Error fetching users:', error.message);
+        if (error.message.includes('Failed to authenticate token')) {
+          setError('Invalid or expired session. Please log in again.');
+          redirectToLogin();
+        } else {
+          setError(`Failed to load users: ${error.message}`);
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [selectedCategory, selectedLanguage, searchQuery, user, navigation],
+  );
+
+  useEffect(() => {
+    fetchUsers(1, false);
+  }, [fetchUsers]);
+
+  const loadMoreUsers = () => {
+    if (loading || contacts.length >= totalRecords) return;
+    fetchUsers(page + 1, true);
+  };
+
+  useEffect(() => {
+    const initAgora = async () => {
+      try {
+        const engine = createAgoraRtcEngine();
+        await engine.initialize({appId: APP_ID});
+        await engine.enableAudio();
+        await engine.setChannelProfile(
+          ChannelProfileType.ChannelProfileCommunication,
+        );
+        await engine.setClientRole(ClientRoleType.ClientRoleBroadcaster);
+
+        const eventHandlers: RtcEngineEventHandlers = {
+          onJoinChannelSuccess: (
+            connection: RtcConnection,
+            elapsed: number,
+          ) => {
+            console.log(
+              `Joined channel ${connection.channelId} in ${elapsed}ms`,
+            );
+            setInCall(true);
+          },
+          onError: (err: number, msg: string) => {
+            console.error('Agora Error:', err, msg);
+            Alert.alert('Call Error', `Error code: ${err}, ${msg}`);
+            setInCall(false);
+            setMeetingId('');
+          },
+          onUserJoined: () => {},
+          onUserOffline: () => {},
+        };
+
+        engine.addListener(
+          'onJoinChannelSuccess',
+          eventHandlers.onJoinChannelSuccess,
+        );
+        engine.addListener('onError', eventHandlers.onError);
+
+        setRtcEngine(engine);
+      } catch (error) {
+        console.error('Error initializing Agora:', error);
+        Alert.alert('Error', 'Failed to initialize call engine.');
+      }
+    };
+
+    initAgora();
+
+    return () => {
+      if (rtcEngine) {
+        rtcEngine.leaveChannel();
+        rtcEngine.release();
+      }
+    };
+  }, []);
+
+  const startVoiceCall = async (contactId: number) => {
+    if (!rtcEngine) {
+      Alert.alert('Error', 'Call engine not initialized.');
       return;
     }
-
-    if (fetchRetryCount >= MAX_FETCH_RETRIES && !isRefresh) {
-      setLoading(false);
-      setError("Failed to load experts after multiple attempts. Please try again later.");
+    if (inCall) {
+      Alert.alert('Error', 'You are already in a call.');
       return;
     }
-
-    setLoading(true);
-    if(!isRefresh) setError(null);
-
 
     try {
-      const interestIds = selectedCategory ? [categoryToInterestMap[selectedCategory]] : undefined; // API might expect undefined or empty array
-      const userIdString = user?.id ? String(user.id) : null;
-
-      const requestBody = {
-        // id: 0, // This was in web, might not be needed or different for your API
-        page,
-        limit: ITEMS_PER_PAGE,
-        // language: [4], // From web, adjust if needed
-        ...(interestIds && { interest: interestIds }), // Send interest only if a category is selected
-        ...(userIdString && { user_id: userIdString, loggined_user_id: userIdString }), // Send user_id if available
-        ...(searchQuery && { search_by_name: searchQuery }),
-        // sortBy: {} // From web, adjust if needed
-      };
-      
-      // console.log("Fetching experts with body:", JSON.stringify(requestBody, null, 2));
-
-      const response = await ApiService.post<any>(EXPERTS_ENDPOINT, requestBody);
-      // console.log("API Response:", JSON.stringify(response, null, 2));
-
-
-      if (!response || !response.status || !Array.isArray(response.data)) {
-        setFetchRetryCount(prev => prev + 1);
-        throw new Error(response?.message || "Invalid response format from API");
-      }
-      
-      const mappedExperts: Expert[] = response.data.map((apiUser: any) => ({
-        id: apiUser.id,
-        name: apiUser.name || `${apiUser.firstName || ''} ${apiUser.lastName || ''}`.trim() || "Anonymous User",
-        specialty: apiUser.interests?.length > 0 ? apiUser.interests.map((i:any)=>i.name).join(', ') : (apiUser.expertises?.length > 0 ? apiUser.expertises.map((e:any)=>e.name).join(', ') : "General"),
-        description: apiUser.bio || `Available for consultation. ${apiUser.online_status ? "Online now" : "Offline"}`,
-        price: parseFloat(apiUser.calling_rate) || 100, // Use actual calling_rate or default
-        rating: parseFloat(apiUser.rating?.toFixed(1)) || 4.5,
-        ratingCount: parseInt(apiUser.rating_count) || 10,
-        avatar: getFullImageUrl(apiUser.profile_image || apiUser.avatar),
-        is_available: apiUser.is_available === true || apiUser.is_available === 1,
-        online_status: apiUser.online_status === true || apiUser.online_status === 1,
-      })).filter((exp: Expert) => exp.id !== user?.id); // Filter out self
-
-      setExpertData(mappedExperts);
-      setTotalPages(
-        response.pagination?.limit && response.pagination?.totalRecords
-          ? Math.ceil(response.pagination.totalRecords / response.pagination.limit)
-          : Math.ceil(mappedExperts.length / ITEMS_PER_PAGE) || 1 // Fallback if pagination not in response
-      );
-      setFetchRetryCount(0); // Reset on success
-      if(!isRefresh) setError(null);
-
+      const newMeetingId = `voice_${contactId}_${Date.now()}`;
+      const token = await fetchAgoraToken(newMeetingId, 0);
+      await rtcEngine.disableVideo();
+      await rtcEngine.joinChannel(token, newMeetingId, '', 0);
+      setMeetingId(newMeetingId);
+      await notifyRecipient(contactId, newMeetingId, 'voice', user?.id);
     } catch (error: any) {
-      console.error("Error fetching experts:", error);
-      if (fetchRetryCount < MAX_FETCH_RETRIES && !isRefresh) {
-        setFetchRetryCount(prev => prev + 1);
-        // Optionally, retry automatically after a delay
+      console.error('Error starting voice call:', error);
+      Alert.alert('Error', `Failed to start voice call: ${error.message}`);
+    }
+  };
+
+  const startVideoCall = async (contactId: number) => {
+    if (!rtcEngine) {
+      Alert.alert('Error', 'Call engine not initialized.');
+      return;
+    }
+    if (inCall) {
+      Alert.alert('Error', 'You are already in a call.');
+      return;
+    }
+
+    try {
+      const newMeetingId = `video_${contactId}_${Date.now()}`;
+      const token = await fetchAgoraToken(newMeetingId, 0);
+      await rtcEngine.enableVideo();
+      await rtcEngine.joinChannel(token, newMeetingId, '', 0);
+      setMeetingId(newMeetingId);
+      await notifyRecipient(contactId, newMeetingId, 'video', user?.id);
+    } catch (error: any) {
+      console.error('Error starting video call:', error);
+      Alert.alert('Error', `Failed to start video call: ${error.message}`);
+    }
+  };
+
+  const endCall = async () => {
+    if (rtcEngine) {
+      try {
+        await rtcEngine.leaveChannel();
+        setInCall(false);
+        setMeetingId('');
+      } catch (error) {
+        console.error('Error leaving call:', error);
+        Alert.alert('Error', 'Failed to end call.');
       }
-      const errorMessage = error?.response?.data?.message || error?.message || "An unexpected error occurred";
-      if(!isRefresh) setError(errorMessage);
-      Alert.alert("Error", fetchRetryCount + 1 >= MAX_FETCH_RETRIES && !isRefresh ? "Failed to load. Please try again later." : "Retrying...");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [isAuthenticated, user?.id, page, searchQuery, selectedCategory, fetchRetryCount, navigation]);
-
-
-  useEffect(() => {
-    fetchExperts();
-  }, [page]); // Fetch when page changes
-
-  useEffect(() => {
-    // Reset page to 1 and fetch when search or category changes
-    setPage(1); 
-    fetchExperts();
-  }, [searchQuery, selectedCategory]);
-
-
-  useFocusEffect(
-    useCallback(() => {
-      // This will run when the screen comes into focus
-      setFetchRetryCount(0); // Reset retries on focus
-      fetchExperts();
-    }, []) // Keep dependencies minimal for focus effect, primary fetch is manual or via other useEffects
-  );
-
-
-  const handleSearchChange = (text: string) => {
-    setSearchQuery(text);
-    // Debounce could be added here
-  };
-
-  const handleCategorySelect = (categoryName: string) => {
-    if (selectedCategory === categoryName) {
-      setSelectedCategory(null); // Deselect
-    } else {
-      setSelectedCategory(categoryName);
-      Alert.alert("Category Selected", `Showing experts in ${categoryName}`);
     }
   };
 
-  const handleCallRequest = (expert: Expert) => {
-    if (!isAuthenticated) {
-      // @ts-ignore
-      navigation.navigate("Login"); // Adjust screen name
-      return;
-    }
-
-    if (!expert.is_available || !expert.online_status) {
-      Alert.alert("Unavailable", `${expert.name} is currently unavailable for calls.`);
-      return;
-    }
-    setSelectedExpert(expert);
-    setShowCallDialog(true);
-  };
-
-  const initiateCall = () => {
-    if (!selectedExpert) return;
-
-    const callPrice = selectedExpert.price;
-    // Assuming user wallet balance is available via `user.wallet` or `walletBalance` prop
-    const currentUserWallet = user?.wallet || parseFloat(walletBalance || "0");
-
-    if (currentUserWallet < callPrice) {
-      Alert.alert("Insufficient Balance", "Please add money to your wallet to continue.", [
-        { text: "Cancel" },
-        // @ts-ignore
-        { text: "Go to Wallet", onPress: () => navigation.navigate("Wallet") } // Adjust screen name
-      ]);
-      setShowCallDialog(false);
-      return;
-    }
-
-    Alert.alert("Connecting", `Connecting to ${selectedExpert.name}...`);
-    // Simulate call connection and deduction
-    setTimeout(() => {
-      Alert.alert("Connected", `You're now connected with ${selectedExpert.name}. ₹${callPrice}/min will be charged.`);
-      // Navigate to actual call screen or start call service
-      // For now, just closing dialog
-      // @ts-ignore
-      navigation.navigate('CallScreen', { // Or your actual call screen
-        userId: selectedExpert.id,
-        userName: selectedExpert.name,
-        userAvatar: selectedExpert.avatar,
-        callRate: selectedExpert.price,
-      });
-
-    }, 2000);
-    setShowCallDialog(false);
-  };
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    setPage(1); // Reset to first page on refresh
-    setFetchRetryCount(0); // Reset retries
-    fetchExperts(true); // Pass true for isRefresh
-  };
-
-  const renderExpertCard = ({item}: {item: Expert}) => (
-    <TouchableOpacity 
-        style={[styles.expertCard, {backgroundColor: colors.card}]}
-        // @ts-ignore
-        onPress={() => navigation.navigate('ExpertProfile', { expertId: item.id })} // Navigate to expert profile
-    >
-      <View style={styles.cardHeader}>
-        {item.avatar ? (
-          <Image source={{uri: item.avatar}} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatar, styles.avatarPlaceholder, {backgroundColor: colors.border}]}>
-            <Icon name="user" size={24} color={colors.text.secondary} />
-          </View>
-        )}
-        <View style={styles.headerTextContainer}>
-          <Text style={[styles.expertName, {color: colors.text.primary}]} numberOfLines={1}>{item.name}</Text>
-          <Text style={[styles.expertSpecialty, {color: colors.text.secondary}]} numberOfLines={1}>{item.specialty}</Text>
-        </View>
-         <View style={[styles.statusIndicator, {backgroundColor: item.online_status ? colors.success : colors.gray[400]}]} />
-      </View>
-      <Text style={[styles.expertDescription, {color: colors.text.secondary}]} numberOfLines={2}>
-        {item.description}
-      </Text>
-      <View style={styles.cardRow}>
-        <View style={styles.ratingContainer}>
-          <Icon name="star" size={16} color="#FFD700" />
-          <Text style={[styles.ratingText, {color: colors.text.secondary}]}>
-            {item.rating.toFixed(1)} ({item.ratingCount})
-          </Text>
-        </View>
-        <Text style={[styles.expertPrice, {color: colors.primary}]}>
-          ₹{item.price}/min
-        </Text>
-      </View>
-      <TouchableOpacity
-        style={[
-          styles.callButton,
-          {backgroundColor: (item.is_available && item.online_status) ? colors.primary : colors.gray[300]},
-        ]}
-        onPress={() => handleCallRequest(item)}
-        disabled={!item.is_available || !item.online_status}>
-        <Icon name="phone" size={16} color={colors.white} />
-        <Text style={styles.callButtonText}>
-          {(item.is_available && item.online_status) ? 'Request Call' : 'Unavailable'}
-        </Text>
-      </TouchableOpacity>
-    </TouchableOpacity>
-  );
-
-  const renderCategoryBadge = (categoryName: string) => (
-    <TouchableOpacity
-      key={categoryName}
-      style={[
-        styles.categoryBadge,
-        {borderColor: colors.primary},
-        selectedCategory === categoryName ? {backgroundColor: colors.primary} : {backgroundColor: colors.background},
-      ]}
-      onPress={() => handleCategorySelect(categoryName)}>
-      <Text
-        style={[
-          styles.categoryBadgeText,
-          selectedCategory === categoryName ? {color: colors.white} : {color: colors.primary},
-        ]}>
-        {categoryName}
-      </Text>
-    </TouchableOpacity>
-  );
-
-  if (loading && page === 1 && !refreshing && expertData.length === 0) {
+  if (loading && !contacts.length) {
     return (
-      <View style={[styles.container, styles.centerContent, {backgroundColor: colors.background}]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{color: colors.text.secondary, marginTop: 10}}>Loading Experts...</Text>
+      <View style={[styles.container, {backgroundColor: '#f8fafc'}]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#24d05a" />
+          <Text style={styles.loadingText}>Loading contacts...</Text>
+        </View>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, {backgroundColor: colors.backgroundMuted || colors.gray[50]}]}>
-      <Header
-        title="TipCall"
-        showBackButton={false} // Or true if needed
-        showLogo={true}
-        showWallet={true}
-        walletAmount={walletBalance}
-      />
-      
-      {/* Search Bar */}
-      <View style={[styles.searchBarContainer, {backgroundColor: colors.card}]}>
-        <Icon name="search" size={20} color={colors.text.disabled} style={styles.searchIcon} />
-        <TextInput
-          style={[styles.searchInput, {color: colors.text.primary, borderColor: colors.border}]}
-          placeholder="Search for experts..."
-          placeholderTextColor={colors.text.disabled}
-          value={searchQuery}
-          onChangeText={handleSearchChange}
-          returnKeyType="search"
-          onSubmitEditing={() => { setPage(1); fetchExperts(); }}
-        />
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <View style={styles.logoContainer}>
+          <View style={styles.logo}>
+            <UserIcon size={18} color="white" />
+          </View>
+          <Text style={styles.title}>Tip Call</Text>
+          <View style={styles.toggle}>
+            <View style={styles.toggleButton} />
+          </View>
+        </View>
+        <View style={styles.headerActions}>
+          <View style={styles.walletChip}>
+            <Wallet size={16} color="#24d05a" />
+            <Text style={styles.walletAmount}>₹ 204.79</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.profileButton}
+            onPress={() => navigation.navigate('Profile')}>
+            <UserIcon size={20} color="#374151" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Talk to Earn Banner */}
-      <ScrollView 
-        contentContainerStyle={styles.mainScrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary}/>}
-      >
-        <View style={[styles.bannerContainer, {backgroundColor: colors.card}]}>
-            <View style={styles.bannerTextContent}>
-                <Text style={[styles.bannerTitle, {color: colors.text.primary}]}>Talk to Earn</Text>
-                <Text style={[styles.bannerDescription, {color: colors.text.secondary}]}>
-                Share your expertise through one-on-one calls and get paid.
-                </Text>
-                <TouchableOpacity 
-                    style={[styles.bannerButton, {backgroundColor: colors.primary}]}
-                    onPress={() => Alert.alert("Become an Expert", "Profile completion required to become a TipCall expert.")}
-                >
-                <Text style={styles.bannerButtonText}>Become an Expert</Text>
-                </TouchableOpacity>
-            </View>
-            <Image 
-                source={{uri: 'https://via.placeholder.com/150x100?text=AdTip+Banner'}} // Replace with your actual banner image
-                style={styles.bannerImage}
-                resizeMode="contain"
-            />
-        </View>
-
-        {/* Categories */}
-        <View style={styles.categoriesSection}>
-          <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>Categories</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoriesScroll}>
-            {categories.map(renderCategoryBadge)}
-          </ScrollView>
-        </View>
-
-        {/* Experts List */}
-        {error && !loading && expertData.length === 0 ? (
-          <View style={styles.centerContent}>
-            <Icon name="alert-circle" size={40} color={colors.error} />
-            <Text style={[styles.errorText, {color: colors.error}]}>{error}</Text>
-            <TouchableOpacity onPress={handleRefresh} style={[styles.retryButton, {borderColor: colors.primary}]}>
-                <Text style={{color: colors.primary}}>Try Again</Text>
-            </TouchableOpacity>
-          </View>
-        ) : !loading && expertData.length === 0 && !error ? (
-          <View style={styles.centerContent}>
-            <Icon name="users" size={40} color={colors.text.disabled} />
-            <Text style={[styles.emptyListText, {color: colors.text.secondary}]}>No experts found. Try a different search or category.</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={expertData}
-            renderItem={renderExpertCard}
-            keyExtractor={(item) => item.id.toString()}
-            contentContainerStyle={styles.listContentContainer}
-            // Removed RefreshControl from here, added to outer ScrollView
-            // ListFooterComponent={loading && page > 1 ? <ActivityIndicator size="small" color={colors.primary} style={{marginVertical: 20}} /> : null}
-            // onEndReached={handleLoadMore} // If using infinite scroll instead of pagination buttons
-            // onEndReachedThreshold={0.5}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Search size={18} color="#9ca3af" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search user"
+            placeholderTextColor="#9ca3af"
+            value={searchQuery}
+            onChangeText={text => setSearchQuery(text)}
           />
-        )}
+        </View>
+      </View>
 
-        {/* Pagination Controls */}
-        {expertData.length > 0 && totalPages > 1 && (
-          <View style={styles.paginationContainer}>
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            onPress={() => fetchUsers(1, false)}
+            style={styles.retryButton}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <View style={styles.filtersContainer}>
+        <Text style={styles.filterTitle}>Categories</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filtersScroll}>
+          {CATEGORIES.map(category => (
             <TouchableOpacity
-              onPress={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1 || loading}
-              style={[styles.paginationButton, {opacity: (page === 1 || loading) ? 0.5 : 1}]}>
-              <Icon name="chevron-left" size={20} color={colors.primary} />
-              <Text style={[styles.paginationButtonText, {color: colors.primary}]}>Prev</Text>
+              key={category.id}
+              style={[
+                styles.categoryItem,
+                selectedCategory === category.id
+                  ? styles.categoryItemSelected
+                  : styles.categoryItemUnselected,
+              ]}
+              onPress={() => setSelectedCategory(category.id)}>
+              <Text
+                style={[
+                  styles.categoryItemText,
+                  selectedCategory === category.id
+                    ? styles.categoryItemTextSelected
+                    : styles.categoryItemTextUnselected,
+                ]}>
+                {category.name}
+              </Text>
             </TouchableOpacity>
-            <Text style={[styles.paginationText, {color: colors.text.secondary}]}>
-              Page {page} of {totalPages}
+          ))}
+        </ScrollView>
+
+        <Text style={styles.filterTitle}>Languages</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filtersScroll}>
+          {LANGUAGES.map(language => (
+            <TouchableOpacity
+              key={language.id}
+              style={[
+                styles.categoryItem,
+                selectedLanguage === language.id
+                  ? styles.categoryItemSelected
+                  : styles.categoryItemUnselected,
+              ]}
+              onPress={() => setSelectedLanguage(language.id)}>
+              <Text
+                style={[
+                  styles.categoryItemText,
+                  selectedLanguage === language.id
+                    ? styles.categoryItemTextSelected
+                    : styles.categoryItemTextUnselected,
+                ]}>
+                {language.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      <View style={styles.tabsContainer}>
+        {TABS.map(tab => (
+          <TouchableOpacity
+            key={tab.id}
+            style={[styles.tab, selectedTab === tab.id && styles.selectedTab]}
+            onPress={() => setSelectedTab(tab.id)}>
+            <Text
+              style={[
+                styles.tabText,
+                selectedTab === tab.id && styles.selectedTabText,
+              ]}>
+              {tab.name}
             </Text>
-            <TouchableOpacity
-              onPress={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages || loading}
-              style={[styles.paginationButton, {opacity: (page === totalPages || loading) ? 0.5 : 1}]}>
-              <Text style={[styles.paginationButtonText, {color: colors.primary}]}>Next</Text>
-              <Icon name="chevron-right" size={20} color={colors.primary} />
-            </TouchableOpacity>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <ScrollView
+        style={styles.contactsContainer}
+        onScroll={({nativeEvent}) => {
+          if (
+            nativeEvent.contentOffset.y +
+              nativeEvent.layoutMeasurement.height >=
+            nativeEvent.contentSize.height - 20
+          ) {
+            loadMoreUsers();
+          }
+        }}
+        scrollEventThrottle={400}>
+        {contacts.map(contact => (
+          <View key={contact.id} style={styles.contactItem}>
+            <View style={styles.contactInfo}>
+              <Text style={styles.contactName}>
+                {contact.name || 'Unknown'}
+              </Text>
+              <Text style={styles.contactStatus}>
+                {contact.online_status ? 'available now' : contact.last_seen}
+              </Text>
+            </View>
+            <View style={styles.callButtons}>
+              <TouchableOpacity
+                style={styles.callButton}
+                onPress={() => startVoiceCall(contact.id)}>
+                <Phone size={20} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.callButton}
+                onPress={() => startVideoCall(contact.id)}>
+                <Video size={20} color="white" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))}
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading...</Text>
           </View>
         )}
+        <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* Call Dialog Modal */}
-      <Modal
-        transparent={true}
-        visible={showCallDialog}
-        animationType="slide"
-        onRequestClose={() => setShowCallDialog(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, {backgroundColor: colors.card}]}>
-            <Text style={[styles.modalTitle, {color: colors.text.primary}]}>Request a Voice Call</Text>
-            {selectedExpert && (
-              <>
-                <Text style={[styles.modalExpertName, {color: colors.text.primary}]}>{selectedExpert.name}</Text>
-                <Text style={[styles.modalExpertSpecialty, {color: colors.text.secondary}]}>{selectedExpert.specialty}</Text>
-                <Text style={[styles.modalExpertPrice, {color: colors.primary}]}>Rate: ₹{selectedExpert.price}/min</Text>
-              </>
-            )}
-            <View style={styles.modalButtonContainer}>
-              <TouchableOpacity
-                style={[styles.modalButton, {backgroundColor: colors.gray[200]}]}
-                onPress={() => setShowCallDialog(false)}>
-                <Text style={[styles.modalButtonText, {color: colors.text.primary}]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, {backgroundColor: colors.primary}]}
-                onPress={initiateCall}>
-                <Text style={[styles.modalButtonText, {color: colors.white}]}>Start Call</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {inCall && (
+        <MeetingView
+          meetingId={meetingId}
+          engine={rtcEngine!}
+          onEndCall={endCall}
+        />
+      )}
     </View>
   );
 };
@@ -502,306 +675,267 @@ const TipCallScreen: React.FC<TipCallScreenProps> = ({walletBalance}) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f8fafc',
   },
-  mainScrollContent: {
-    paddingBottom: 20,
-  },
-  centerContent: {
-    flex: 1,
-    justifyContent: 'center',
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-  },
-  searchBarContainer: {
+    paddingTop: 48,
+    paddingBottom: 12,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    // borderColor will be set by theme colors.card
+    backgroundColor: 'white',
+  },
+  logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  logo: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#24d05a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#24d05a',
+    marginRight: 12,
+  },
+  toggle: {
+    width: 40,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#24d05a',
+    padding: 2,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  toggleButton: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'white',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  walletChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ecfdf5',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    marginRight: 12,
+  },
+  walletAmount: {
+    marginLeft: 4,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#24d05a',
+  },
+  profileButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'white',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   searchIcon: {
     marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    height: 40,
-    paddingHorizontal: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    fontSize: 16,
+    fontSize: 14,
+    color: '#374151',
+    padding: 0,
   },
-  bannerContainer: {
+  errorContainer: {
+    padding: 16,
+    backgroundColor: '#fee2e2',
+    borderRadius: 8,
     marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  bannerTextContent: {
-    flex: 1,
-    marginRight: 10,
-  },
-  bannerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  bannerDescription: {
-    fontSize: 13,
-    marginBottom: 12,
-    lineHeight: 18,
-  },
-  bannerButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-  },
-  bannerButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  bannerImage: {
-    width: 100,
-    height: 80,
-    borderRadius: 8,
-  },
-  categoriesSection: {
-    marginTop: 20,
-    paddingHorizontal: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
-  categoriesScroll: {
-    paddingVertical: 4,
-  },
-  categoryBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginRight: 10,
-  },
-  categoryBadgeText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  listContentContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 10, // Add some padding if search/categories are sticky
-  },
-  expertCard: {
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 12,
-  },
-  avatarPlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTextContainer: {
-    flex: 1,
-  },
-  expertName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  expertSpecialty: {
-    fontSize: 13,
-  },
-  statusIndicator: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginLeft: 8,
-  },
-  expertDescription: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 10,
-  },
-  cardRow: {
+    marginVertical: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ratingText: {
-    fontSize: 13,
-    marginLeft: 5,
-  },
-  expertPrice: {
-    fontSize: 15,
-    fontWeight: 'bold',
-  },
-  callButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  callButtonText: {
-    color: 'white',
-    marginLeft: 8,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  paginationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderTopWidth: 1,
-    // borderColor will be set by theme
-  },
-  paginationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  paginationButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginHorizontal: 4,
-  },
-  paginationText: {
-    fontSize: 14,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    width: '85%',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  modalExpertName: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  modalExpertSpecialty: {
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  modalExpertPrice: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-  modalButtonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginHorizontal: 5,
-  },
-  modalButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
   },
   errorText: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginVertical: 10,
+    color: '#dc2626',
+    fontSize: 14,
   },
   retryButton: {
-      paddingVertical: 10,
-      paddingHorizontal: 20,
-      borderRadius: 20,
-      borderWidth: 1,
-      marginTop: 10,
+    backgroundColor: '#dc2626',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
   },
-  emptyListText: {
+  retryButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  filtersContainer: {
+    paddingVertical: 12,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  filterTitle: {
     fontSize: 16,
-    textAlign: 'center',
-    marginTop: 10,
+    fontWeight: '600',
+    color: '#374151',
+    paddingHorizontal: 16,
+    marginBottom: 8,
   },
-  // Add other styles from the web version, translated
+  filtersScroll: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectedTab: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#24d05a',
+  },
+  tabText: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  selectedTabText: {
+    color: '#24d05a',
+    fontWeight: '600',
+  },
+  contactsContainer: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
+  contactItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  contactInfo: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+  contactName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 4,
+  },
+  contactStatus: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  callButtons: {
+    flexDirection: 'row',
+    marginLeft: 16,
+  },
+  callButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#24d05a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  callOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  callStatus: {
+    fontSize: 20,
+    color: 'white',
+    marginBottom: 20,
+  },
+  endCallButton: {
+    backgroundColor: '#ff0000',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+  },
+  endCallText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#374151',
+    marginTop: 12,
+  },
+  bottomPadding: {
+    height: 80,
+  },
+  categoryItem: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    marginRight: 8,
+  },
+  categoryItemSelected: {
+    backgroundColor: '#24d05a',
+  },
+  categoryItemUnselected: {
+    backgroundColor: '#f1f5f9',
+  },
+  categoryItemText: {
+    fontWeight: '600',
+  },
+  categoryItemTextSelected: {
+    color: 'white',
+  },
+  categoryItemTextUnselected: {
+    color: '#374151',
+  },
 });
-
-// Apply theme colors to styles that need it, e.g., borders
-// This is a simplified approach. For full dynamic theming, styles might need to be created inside the component
-// or by using a theming library.
-const getThemedStyles = (colors: any) => StyleSheet.create({
-    ...styles, // Spread existing static styles
-    searchBarContainer: {
-        ...styles.searchBarContainer,
-        backgroundColor: colors.card,
-        borderBottomColor: colors.border,
-    },
-    searchInput: {
-        ...styles.searchInput,
-        color: colors.text.primary,
-        borderColor: colors.border,
-        backgroundColor: colors.inputBackground || colors.background, // Assuming inputBackground in theme
-    },
-    bannerContainer: {
-        ...styles.bannerContainer,
-        backgroundColor: colors.card,
-    },
-    expertCard: {
-        ...styles.expertCard,
-        backgroundColor: colors.card,
-    },
-    paginationContainer: {
-        ...styles.paginationContainer,
-        borderTopColor: colors.border,
-    },
-    modalContent: {
-        ...styles.modalContent,
-        backgroundColor: colors.card,
-    },
-    // ... any other styles that need dynamic theme colors
-});
-
 
 export default TipCallScreen;
