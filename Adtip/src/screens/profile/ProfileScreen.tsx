@@ -257,7 +257,6 @@ const ProfileScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
-      {' '}
       <Header
         showBackButton={true}
         title={isOwnProfile ? 'My Profile' : 'Profile'}

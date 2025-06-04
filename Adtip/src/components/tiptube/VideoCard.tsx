@@ -90,7 +90,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
             />
             <Text style={styles.premiumText}>Premium</Text>
           </View>
-        )}{' '}
+        )}
         {price && price > 0 && (
           <View
             style={[

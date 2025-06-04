@@ -62,18 +62,14 @@ const Header: React.FC<HeaderProps> = ({
           <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
             <Icon name="arrow-left" size={24} color={colors.text.primary} />
           </TouchableOpacity>
-        ) : null}{' '}
+        ) : null}
         {showLogo && !centerComponent && (
           <View style={styles.logoContainer}>
-            <Text style={[styles.logoText, {color: colors.primary}]}>
-              Adtip
-            </Text>
+            <Text style={[styles.logoText, {color: colors.primary}]}>Adtip</Text>
           </View>
         )}
         {title && !centerComponent && (
-          <Text style={[styles.title, {color: colors.text.primary}]}>
-            {title}
-          </Text>
+          <Text style={[styles.title, {color: colors.text.primary}]}>{title}</Text>
         )}
         {centerComponent && (
           <View style={styles.centerComponent}>{centerComponent}</View>
@@ -102,7 +98,7 @@ const Header: React.FC<HeaderProps> = ({
                   ]}
                 />
               </TouchableOpacity>
-            )}{' '}
+            )}
             {showWallet && (
               <TouchableOpacity
                 onPress={navigateToWallet}
@@ -117,7 +113,8 @@ const Header: React.FC<HeaderProps> = ({
                   style={styles.walletIcon}
                 />
                 <Text
-                  style={[styles.walletAmount, {color: colors.text.primary}]}>
+                  style={[styles.walletAmount, {color: colors.text.primary}]}
+                >
                   ₹{displayAmount || '0.00'}
                 </Text>
               </TouchableOpacity>

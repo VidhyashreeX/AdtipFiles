@@ -250,7 +250,6 @@ const TipCallScreen: React.FC<TipCallScreenProps> = ({walletBalance}) => {
 
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
-      {' '}
       <Header
         title="TipCall"
         showBackButton={false}

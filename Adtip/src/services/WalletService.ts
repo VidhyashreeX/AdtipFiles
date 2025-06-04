@@ -117,19 +117,29 @@ class WalletService {
   }> {
     try {
       const premiumData = await ApiService.checkPremium(userId);
-
       return {
-        isPremium: !premiumData.is_premium_expired,
-        planId: premiumData.plan_id,
-        endTime: premiumData.end_time,
+        isPremium: premiumData && !premiumData.is_premium_expired,
+        planId: premiumData?.plan_id || null,
+        endTime: premiumData?.end_time || null,
       };
-    } catch (error) {
-      console.error('Error checking premium status:', error);
-      return {
-        isPremium: false,
-        planId: null,
-        endTime: null,
-      };
+    } catch (error: any) {
+      if (error instanceof Error && error.message === 'No active premium plan') {
+        // This is an expected scenario (user does not have a premium plan).
+        // Return the standard non-premium status without logging an error.
+        return {
+          isPremium: false,
+          planId: null,
+          endTime: null,
+        };
+      } else {
+        // For any other unexpected errors, log them.
+        console.error('Error checking premium status:', error);
+        return {
+          isPremium: false,
+          planId: null,
+          endTime: null,
+        };
+      }
     }
   }
 }

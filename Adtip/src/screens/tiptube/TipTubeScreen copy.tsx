@@ -1,5 +1,5 @@
-// src/screens/tiptube/TipTubeScreen.tsx
-import React, {useState, useEffect, useCallback, useMemo} from 'react';
+/*// src/screens/tiptube/TipTubeScreen.tsx
+import React, {useState, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -74,9 +74,8 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({walletBalance}) => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMoreVideos, setHasMoreVideos] = useState(true);
-
-  // Memoize categoryMap to avoid dependency issues
-  const categoryMap: CategoryMap = useMemo(
+  // Category mapping for API
+  const categoryMap = React.useMemo<CategoryMap>(
     () => ({
       all: 0,
       trending: 1,
@@ -85,17 +84,40 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({walletBalance}) => {
       following: 4,
     }),
     [],
-  ); // Helper functions
-  // Memoize getFullUrl to avoid useCallback dependency warning
-  const getFullUrl = useCallback((url?: string | null) => {
+  );
+  // Helper functions
+  const getFullUrl = useCallback((url: string) => {
     if (!url || url === 'null' || url === 'undefined') {
-      return null;
+      // Return a placeholder image instead of null
+      return 'https://via.placeholder.com/320x180?text=No+Preview';
     }
-    return url;
-  }, []);
 
+    // If it's already a complete URL, return it
+    if (url.startsWith('http')) {
+      return url;
+    }
+
+    // Handle different types of relative paths
+
+    // For video files, use theadtip.in domain
+    if (url.includes('.mp4') || url.includes('/videos/')) {
+      return `https://theadtip.in${url.startsWith('/') ? '' : '/'}${url}`;
+    }
+
+    // For thumbnails and images, use the regular api.adtip.in domain
+    if (
+      url.includes('/uploads/') ||
+      url.includes('/images/') ||
+      url.includes('/thumbnails/') ||
+      url.includes('/profiles/')
+    ) {
+      return `https://api.adtip.in${url.startsWith('/') ? '' : '/'}${url}`;
+    }
+
+    // For other resources, default to the main domain
+    return `https://adtip.in${url.startsWith('/') ? '' : '/'}${url}`;
+  }, []);
   // API calls
-  // Fix: Memoize fetchVideos to avoid useCallback/useEffect dependency errors
   const fetchVideos = useCallback(
     async (categoryId = '0', page = 1, loadMore = false) => {
       try {
@@ -112,10 +134,9 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({walletBalance}) => {
         }
 
         // Even if we don't have a userId, we'll try to fetch public videos
-        // Set a default userId or flag to indicate we want public videos
         if (!userId) {
           console.log('No user ID found, will attempt to fetch public videos');
-          // Using "0" as a fallback ID to get public/general videos
+          // Using '0' as a fallback ID to get public/general videos
           userId = '0';
         }
 
@@ -126,7 +147,7 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({walletBalance}) => {
         }
 
         console.log(
-          `Fetching videos for user ID: ${userId}, category: ${categoryId}, page: ${page}`,
+          `Fetching videos: category=${categoryId}, page=${page}, userId=${userId}`,
         );
 
         // Get videos using ApiService
@@ -136,17 +157,43 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({walletBalance}) => {
           page,
         );
 
+        // Debug log the raw response
+        console.log(
+          'Raw API response:',
+          JSON.stringify(response).substring(0, 500) + '...',
+        );
+
         if (response?.data && Array.isArray(response.data)) {
-          const formattedVideos = response.data.map((video: any) => ({
-            ...video,
-            thumbnail_url: getFullUrl(video.thumbnail_url),
-            video_url: getFullUrl(video.video_url),
-            user_profile_image: getFullUrl(video.user_profile_image),
-            like_count: video.likes || 0,
-            comment_count: video.comments || 0,
-            view_count: video.views || 0,
-            is_premium: !!video.is_premium,
-          }));
+          // Log the first item to debug
+          if (response.data.length > 0) {
+            console.log('First video item:', JSON.stringify(response.data[0]));
+          }
+
+          const formattedVideos = response.data.map((video: any) => {
+            // Log any problematic items
+            if (!video.thumbnail_url && !video.video_url) {
+              console.log('Video missing media URLs:', video.id);
+            }
+
+            return {
+              ...video,
+              thumbnail_url: getFullUrl(
+                video.thumbnail_url || video.video_thumbnail,
+              ), // Try alternate property
+              video_url: getFullUrl(video.video_url || video.video_link), // Try alternate property
+              user_profile_image: getFullUrl(
+                video.user_profile_image || video.channel_profile,
+              ),
+              like_count: video.likes || video.like_count || 0,
+              comment_count: video.comments || video.comment_count || 0,
+              view_count: video.views || video.view_count || 0,
+              is_premium: !!video.is_premium,
+              title: video.title || video.name || 'Untitled Video', // Try alternate property
+              user_name:
+                video.user_name || video.channelName || 'Unknown Creator',
+              duration: video.duration || '0:00',
+            };
+          });
 
           // If loading more, append to existing videos
           if (loadMore) {
@@ -207,17 +254,14 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({walletBalance}) => {
 
     fetchVideos(apiCategoryId, 1);
   };
-
   const handleVideoPress = (videoId: number) => {
-    // Fix navigation type error: use correct navigation type for navigate
-    // @ts-ignore
+    // @ts-ignore - Navigation typing issues
     navigation.navigate('Video', {videoId});
   };
 
   const handleUploadPress = () => {
     navigation.navigate('TipTubeUpload' as never);
   };
-
   const handleLoadMore = () => {
     if (loading.loadingMore || !hasMoreVideos) {
       return;
@@ -230,19 +274,17 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({walletBalance}) => {
     setCurrentPage(nextPage);
     fetchVideos(apiCategoryId, nextPage, true);
   };
-
   // Effects
   useFocusEffect(
     useCallback(() => {
       const apiCategoryId = categoryMap[selectedCategory].toString();
       fetchVideos(apiCategoryId, 1);
-    }, [categoryMap, fetchVideos, selectedCategory]),
+    }, [categoryMap, selectedCategory, fetchVideos]),
   );
-
   useEffect(() => {
     const apiCategoryId = categoryMap[selectedCategory].toString();
     fetchVideos(apiCategoryId, 1);
-  }, [categoryMap, fetchVideos, selectedCategory]);
+  }, [categoryMap, selectedCategory, fetchVideos]);
 
   // Render functions
   const renderCategories = () => (
@@ -276,13 +318,21 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({walletBalance}) => {
   const renderVideoItem = ({item}: {item: Video}) => (
     <VideoCard
       id={item.id}
-      title={String(item.title || '')}
-      thumbnailUrl={item.thumbnail_url || ''}
+      title={String(item.title || item.description || 'Untitled Video')}
+      thumbnailUrl={
+        item.thumbnail_url || 'https://via.placeholder.com/320x180?text=Video'
+      }
       duration={String(item.duration || '0:00')}
       username={String(item.user_name || 'User')}
-      userImageUrl={item.user_profile_image || undefined}
+      userImageUrl={
+        item.user_profile_image || 'https://via.placeholder.com/40x40?text=User'
+      }
       views={item.view_count || 0}
-      postedTime={String(new Date(item.created_at).toLocaleDateString())}
+      postedTime={String(
+        item.created_at
+          ? new Date(item.created_at).toLocaleDateString()
+          : new Date().toLocaleDateString(),
+      )}
       isPremium={item.is_premium}
       onPress={() => handleVideoPress(item.id)}
     />
@@ -297,13 +347,12 @@ const TipTubeScreen: React.FC<TipTubeScreenProps> = ({walletBalance}) => {
       <TouchableOpacity
         style={[styles.uploadButton, {backgroundColor: colors.primary}]}
         onPress={handleUploadPress}>
-        <Text style={[{color: colors.white}, styles.uploadButtonText]}>
+        <Text style={[{color: colors.white}, styles.buttonText]}>
           {String('Upload Video')}
         </Text>
       </TouchableOpacity>
     </View>
   );
-
   const renderFooter = () => {
     if (!loading.loadingMore) {
       return null;
@@ -446,9 +495,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginTop: 12,
   },
-  uploadButtonText: {
-    fontWeight: '600',
-  },
   flatListEmptyContainer: {
     flexGrow: 1,
   },
@@ -473,6 +519,9 @@ const styles = StyleSheet.create({
   footerLoader: {
     paddingVertical: 20,
     alignItems: 'center',
+  },
+  buttonText: {
+    fontWeight: '600',
   },
 });
 

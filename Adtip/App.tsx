@@ -84,49 +84,59 @@ function App(): React.JSX.Element {
   // Show loading indicator while checking auth status
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </View>
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </SafeAreaView>
+      </SafeAreaProvider>
     );
   }
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={styles.container}>
-        <ThemeProvider>
-          <AuthProvider>
-            <WalletProvider>
-              <NavigationContainer ref={navigationRef}>
-                <StatusBar
-                  backgroundColor={COLORS.primary}
-                  barStyle="light-content"
-                />
-                <Stack.Navigator screenOptions={{headerShown: false}}>
-                  {isAuthenticated ? (
-                    <Stack.Screen name="Main" component={MainNavigator} />
-                  ) : (
-                    <Stack.Screen name="Auth" component={AuthNavigator} />
-                  )}
-                </Stack.Navigator>
-              </NavigationContainer>
-            </WalletProvider>
-          </AuthProvider>
-        </ThemeProvider>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.appContentContainer}>
+          <ThemeProvider>
+            <AuthProvider>
+              <WalletProvider>
+                <NavigationContainer ref={navigationRef}>
+                  <StatusBar
+                    backgroundColor={COLORS.primary}
+                    barStyle="light-content"
+                  />
+                  <Stack.Navigator screenOptions={{headerShown: false}}>
+                    {isAuthenticated ? (
+                      <Stack.Screen name="Main" component={MainNavigator} />
+                    ) : (
+                      <Stack.Screen name="Auth" component={AuthNavigator} />
+                    )}
+                  </Stack.Navigator>
+                </NavigationContainer>
+              </WalletProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </View>
       </SafeAreaView>
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.primary, // Or a neutral color if status bar and app bg differ
   },
-  loadingContainer: {
+  appContentContainer: { // Replaces the role of the old 'styles.container' for the main app
+    flex: 1,
+    backgroundColor: COLORS.white, // App's main background color
+  },
+  loadingContainer: { // For the loading screen's SafeAreaView
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: COLORS.white,
   },
+  // The original 'container' style is removed as 'appContentContainer' and 'safeArea' cover its roles.
+  // If 'container' was used elsewhere, it might need to be kept or refactored.
 });
 
 export default App;

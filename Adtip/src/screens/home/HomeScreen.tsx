@@ -512,9 +512,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
   const renderPostItem = ({item}: {item: Post}) => (
     <PostItem
       id={item.id}
-      username={item.user_name}
-      profileImage={item.user_profile_image || ''} // Provide empty string when null
-      postImage={item.media_url || ''} // Provide empty string when null
+      username={item.user_name}      profileImage={item.user_profile_image}
+      postImage={item.media_url}
       caption={item.content}
       likes={item.likeCount}
       comments={item.commentCount}
