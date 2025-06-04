@@ -94,7 +94,6 @@ interface ApiResponse {
 }
 
 const APP_ID = 'ef5fbd2647c64582a64db9e47b9f9335';
-// const BASE_URL = 'https://api.adtip.in'; // Not directly used in this component after ApiService integration
 
 // Constants for filters
 const LANGUAGES: Language[] = [
@@ -224,11 +223,16 @@ const MeetingView: React.FC<MeetingViewProps> = ({
       console.log(`User ${remoteUid} joined channel ${connection.channelId}`);
       setRemoteUsers(prev => [...new Set([...prev, remoteUid])]);
       if (callType === 'video') {
-        engine.setupRemoteVideo({
-          uid: remoteUid,
-          view: remoteVideoCanvas.current,
-          renderMode: RenderModeType.RenderModeHidden,
-        });
+        // Ensure remote video canvas view is ready before setting up
+        if (remoteVideoCanvas.current) {
+          engine.setupRemoteVideo({
+            uid: remoteUid,
+            view: remoteVideoCanvas.current,
+            renderMode: RenderModeType.RenderModeHidden,
+          });
+        } else {
+          console.warn('Remote video canvas ref is null, cannot set up remote video.');
+        }
       }
     };
 
@@ -253,10 +257,14 @@ const MeetingView: React.FC<MeetingViewProps> = ({
 
     // Setup local video view if it's a video call
     if (callType === 'video') {
-      engine.setupLocalVideo({
-        view: localVideoCanvas.current,
-        renderMode: RenderModeType.RenderModeHidden,
-      });
+      if (localVideoCanvas.current) {
+        engine.setupLocalVideo({
+          view: localVideoCanvas.current,
+          renderMode: RenderModeType.RenderModeHidden,
+        });
+      } else {
+        console.warn('Local video canvas ref is null, cannot set up local video.');
+      }
     }
 
     return () => {
@@ -267,13 +275,15 @@ const MeetingView: React.FC<MeetingViewProps> = ({
       engine.removeListener('onUserOffline', onUserOffline);
       engine.removeListener('onError', onError);
     };
-  }, [engine, remoteUsers, onEndCall, isCaller, meetingId, user, callType]);
+  }, [engine, remoteUsers, onEndCall, isCaller, meetingId, user, callType]); // Added callType to dependencies
 
   return (
     <View style={styles.callOverlay}>
       {callType === 'video' && (
         <>
+          {/* Main video feed for the remote user */}
           <VideoCanvas style={styles.remoteVideo} ref={remoteVideoCanvas} zOrderMediaOverlay={true} />
+          {/* Small overlay for the local user's video */}
           <VideoCanvas style={styles.localVideo} ref={localVideoCanvas} zOrderMediaOverlay={true} />
         </>
       )}
@@ -293,7 +303,7 @@ const MeetingView: React.FC<MeetingViewProps> = ({
 
 const TipCallScreen: React.FC = () => {
   const {user} = useAuth();
-  const navigation = useNavigation<NavigationProp>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>(); // Corrected navigation prop type
   const [selectedCategory, setSelectedCategory] = useState<string>('1');
   const [selectedLanguage, setSelectedLanguage] = useState<string>('1');
   const [selectedTab, setSelectedTab] = useState<string>('1');
@@ -310,35 +320,44 @@ const TipCallScreen: React.FC = () => {
   const [currentCallType, setCurrentCallType] = useState<'voice' | 'video'>('voice');
   const localUid = useRef<number>(0); // Store the local user ID for Agora
 
-  const redirectToLogin = () => {
+  const redirectToLogin = useCallback(() => {
     Alert.alert('Authentication Required', 'Please log in to continue.', [
       {text: 'OK', onPress: () => navigation.navigate('Login')},
     ]);
-  };
+  }, [navigation]); // Added navigation to dependencies
 
   // Request permissions for audio and video
-  const requestPermissions = async (callType: 'voice' | 'video') => {
-    if (Platform.OS === 'android') {
-      const permissions = [
-        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-        ...(callType === 'video' ? [PermissionsAndroid.PERMISSIONS.CAMERA] : []),
-      ];
-      try {
-        const granted = await PermissionsAndroid.requestMultiple(permissions);
-        const allGranted = permissions.every(
-          perm => granted[perm] === PermissionsAndroid.results.GRANTED,
-        );
-        if (!allGranted) {
-          Alert.alert('Permissions Required', 'Audio and Camera permissions are needed for calls.');
+  // Wrapped in useCallback for stability
+  const requestPermissions = useCallback(
+    async (callType: 'voice' | 'video') => {
+      if (Platform.OS === 'android') {
+        const permissions = [
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+          ...(callType === 'video' ? [PermissionsAndroid.PERMISSIONS.CAMERA] : []),
+        ];
+        try {
+          // Use a timeout or ensure UI is ready before calling requestMultiple
+          // A brief delay can sometimes help, though not a guaranteed fix for all race conditions
+          // await new Promise(resolve => setTimeout(resolve, 100)); // Optional: small delay
+
+          const granted = await PermissionsAndroid.requestMultiple(permissions);
+          const allGranted = permissions.every(
+            perm => granted[perm] === PermissionsAndroid.results.GRANTED,
+          );
+          if (!allGranted) {
+            Alert.alert('Permissions Required', 'Audio and Camera permissions are needed for calls.');
+            return false;
+          }
+        } catch (err) {
+          console.warn('PermissionsAndroid Error:', err);
+          Alert.alert('Permission Error', 'Failed to request permissions. Please check app settings.');
           return false;
         }
-      } catch (err) {
-        console.warn(err);
-        return false;
       }
-    }
-    return true;
-  };
+      return true;
+    },
+    [], // No dependencies, as this function itself doesn't depend on props/state
+  );
 
   const fetchUsers = useCallback(
     async (pageNum: number = 1, append: boolean = false) => {
@@ -383,17 +402,17 @@ const TipCallScreen: React.FC = () => {
         setLoading(false);
       }
     },
-    [selectedCategory, selectedLanguage, searchQuery, user, navigation],
+    [selectedCategory, selectedLanguage, searchQuery, user, redirectToLogin], // Added redirectToLogin to dependencies
   );
 
   useEffect(() => {
     fetchUsers(1, false);
   }, [fetchUsers]);
 
-  const loadMoreUsers = () => {
+  const loadMoreUsers = useCallback(() => { // Wrapped in useCallback
     if (loading || contacts.length >= totalRecords) return;
     fetchUsers(page + 1, true);
-  };
+  }, [loading, contacts.length, totalRecords, page, fetchUsers]); // Added all dependencies
 
   useEffect(() => {
     const initAgora = async () => {
@@ -406,11 +425,9 @@ const TipCallScreen: React.FC = () => {
         const engine = createAgoraRtcEngine();
         await engine.initialize({appId: APP_ID});
 
-        // Set channel profile to communication for one-to-one calls
         await engine.setChannelProfile(ChannelProfileType.ChannelProfileCommunication);
-        await engine.setClientRole(ClientRoleType.ClientRoleBroadcaster); // Broadcaster role for calling
+        await engine.setClientRole(ClientRoleType.ClientRoleBroadcaster);
 
-        // Agora event handlers
         const onJoinChannelSuccess = (
           connection: RtcConnection,
           elapsed: number,
@@ -427,7 +444,7 @@ const TipCallScreen: React.FC = () => {
           setInCall(false);
           setMeetingId('');
           setIsCaller(false);
-          setCurrentCallType('voice'); // Reset call type on error
+          setCurrentCallType('voice');
         };
 
         engine.addListener('onJoinChannelSuccess', onJoinChannelSuccess);
@@ -443,9 +460,10 @@ const TipCallScreen: React.FC = () => {
     initAgora();
 
     return () => {
-      // Clean up Agora engine when component unmounts
       if (rtcEngine) {
         try {
+          // Remove listeners before leaving and releasing
+          rtcEngine.removeAllListeners(); // Good practice to remove all listeners
           rtcEngine.leaveChannel();
           rtcEngine.release();
           console.log('Agora engine released.');
@@ -454,9 +472,9 @@ const TipCallScreen: React.FC = () => {
         }
       }
     };
-  }, []);
+  }, [rtcEngine]); // rtcEngine as dependency ensures cleanup happens when engine is set
 
-  const startVoiceCall = async (contactId: number) => {
+  const startVoiceCall = useCallback(async (contactId: number) => {
     if (!rtcEngine) {
       Alert.alert('Error', 'Call engine not initialized.');
       return;
@@ -475,16 +493,14 @@ const TipCallScreen: React.FC = () => {
     if (!hasPermissions) return;
 
     try {
-      // Ensure audio is enabled and video is disabled for voice call
       await rtcEngine.enableAudio();
       await rtcEngine.disableVideo();
 
-      const newMeetingId = `voice_${user.id}_${contactId}_${Date.now()}`; // Unique channel for each call, include caller and recipient ID
-      const uid = Math.floor(Math.random() * 100000); // Generate a random UID for the caller
+      const newMeetingId = `voice_${user.id}_${contactId}_${Date.now()}`;
+      const uid = Math.floor(Math.random() * 100000) + 1; // UIDs should be > 0
       localUid.current = uid;
       const token = await fetchAgoraToken(newMeetingId, uid);
 
-      // Join the channel
       await rtcEngine.joinChannel(token, newMeetingId, '', uid);
 
       setMeetingId(newMeetingId);
@@ -496,14 +512,14 @@ const TipCallScreen: React.FC = () => {
     } catch (error: any) {
       console.error('Error starting voice call:', error);
       Alert.alert('Error', `Failed to start voice call: ${error.message}`);
-      setInCall(false); // Ensure call state is reset on error
+      setInCall(false);
       setMeetingId('');
       setIsCaller(false);
       setCurrentCallType('voice');
     }
-  };
+  }, [rtcEngine, inCall, user, redirectToLogin, requestPermissions]); // Added all dependencies
 
-  const startVideoCall = async (contactId: number) => {
+  const startVideoCall = useCallback(async (contactId: number) => {
     if (!rtcEngine) {
       Alert.alert('Error', 'Call engine not initialized.');
       return;
@@ -522,16 +538,14 @@ const TipCallScreen: React.FC = () => {
     if (!hasPermissions) return;
 
     try {
-      // Enable video for video call
       await rtcEngine.enableVideo();
-      await rtcEngine.startPreview(); // Start local video preview
+      await rtcEngine.startPreview();
 
-      const newMeetingId = `video_${user.id}_${contactId}_${Date.now()}`; // Unique channel, include caller and recipient ID
-      const uid = Math.floor(Math.random() * 100000); // Generate a random UID for the caller
+      const newMeetingId = `video_${user.id}_${contactId}_${Date.now()}`;
+      const uid = Math.floor(Math.random() * 100000) + 1; // UIDs should be > 0
       localUid.current = uid;
       const token = await fetchAgoraToken(newMeetingId, uid);
 
-      // Join the channel
       await rtcEngine.joinChannel(token, newMeetingId, '', uid);
 
       setMeetingId(newMeetingId);
@@ -543,52 +557,51 @@ const TipCallScreen: React.FC = () => {
     } catch (error: any) {
       console.error('Error starting video call:', error);
       Alert.alert('Error', `Failed to start video call: ${error.message}`);
-      setInCall(false); // Ensure call state is reset on error
+      setInCall(false);
       setMeetingId('');
       setIsCaller(false);
       setCurrentCallType('voice');
     }
-  };
+  }, [rtcEngine, inCall, user, redirectToLogin, requestPermissions]); // Added all dependencies
 
-  const endCall = async () => {
+  const endCall = useCallback(async () => {
     if (rtcEngine) {
       try {
-        // Get the contact ID from the meeting ID (format: 'type_callerId_contactId_timestamp')
         const parts = meetingId.split('_');
         const isVideo = parts[0] === 'video';
+        // Note: The meetingId format is `type_callerId_contactId_timestamp`
+        // So, parts[1] is the caller ID, parts[2] is the receiver ID
         const callerIdFromMeetingId = parts[1];
-        const recipientIdFromMeetingId = parts[2];
+        const receiverIdFromMeetingId = parts[2];
 
-        // Determine which ID is the recipient based on whether current user is caller
-        const recipientId = isCaller ? recipientIdFromMeetingId : callerIdFromMeetingId;
-        const callerId = isCaller ? user?.id : callerIdFromMeetingId;
+        // Determine which ID is the recipient based on whether current user is the original caller
+        const recipientId = isCaller ? receiverIdFromMeetingId : callerIdFromMeetingId;
+        const callerId = isCaller ? user?.id : callerIdFromMeetingId; // Use current user's ID if they are the caller
 
-        // Leave the channel
-        await rtcEngine.stopPreview(); // Stop local video preview
+        await rtcEngine.stopPreview();
         await rtcEngine.leaveChannel();
         setInCall(false);
 
-        // Notify the API that the call has ended
         if (recipientId && callerId) {
           await ApiService.handleCall({
             callerId: callerId,
             receiverId: recipientId,
             action: 'end',
             callType: isVideo ? 'video-call' : 'audio-call',
-            callId: parseInt(parts[3] || '0', 10), // Use timestamp as call ID
+            callId: parseInt(parts[3] || '0', 10),
           });
           console.log(`Call with ${recipientId} ended`);
         }
 
         setMeetingId('');
         setIsCaller(false);
-        setCurrentCallType('voice'); // Reset call type after call ends
+        setCurrentCallType('voice');
       } catch (error) {
         console.error('Error leaving call:', error);
         Alert.alert('Error', 'Failed to end call.');
       }
     }
-  };
+  }, [rtcEngine, meetingId, isCaller, user]); // Added all dependencies
 
   const updateFcmToken = async (fcmToken: string) => {
     if (!user?.id) return;
@@ -604,25 +617,24 @@ const TipCallScreen: React.FC = () => {
     }
   };
 
-  const fetchMissedCalls = async () => {
+  const fetchMissedCalls = useCallback(async () => { // Wrapped in useCallback
     if (!user?.id) return;
 
     try {
       const response = await ApiService.getMissedCalls(user.id);
       if (response.status && response.data) {
         console.log('Missed calls:', response.data.calls);
-        // You could set state and display them in the UI
       }
     } catch (error) {
       console.error('Error fetching missed calls:', error);
     }
-  };
+  }, [user]); // Added user to dependencies
 
   useEffect(() => {
     if (user?.id) {
       fetchMissedCalls();
     }
-  }, [user]);
+  }, [user, fetchMissedCalls]); // Added fetchMissedCalls to dependencies
 
   if (loading && !contacts.length && !inCall) {
     return (
@@ -1016,7 +1028,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 1000, // Ensure the call overlay is on top
+    zIndex: 1000,
   },
   callStatus: {
     fontSize: 20,
@@ -1069,7 +1081,6 @@ const styles = StyleSheet.create({
   categoryItemTextUnselected: {
     color: '#374151',
   },
-  // Styles for video streams
   localVideo: {
     width: 100,
     height: 150,
