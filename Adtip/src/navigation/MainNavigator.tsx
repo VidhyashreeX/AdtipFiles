@@ -12,6 +12,7 @@ import CreatePostScreen from '../screens/content/CreatePostScreen';
 import SelectCategoryScreen from '../screens/content/SelectCategoryScreen';
 import TipTubeUploadScreen from '../screens/content/TipTubeUploadScreen';
 import TipShortsUploadScreen from '../screens/content/TipShortsUploadScreen';
+import TipShorts from '../screens/tipshorts/tipshorts';
 import VideoPreviewScreen from '../screens/media/VideoPreviewScreen';
 import VideoScreen from '../screens/media/VideoScreen';
 import ShortsScreen from '../screens/media/ShortsScreen';
@@ -49,6 +50,7 @@ const MainNavigator = () => {
   const EnhancedVideoPreviewScreen = withWalletBalance(VideoPreviewScreen);
   const EnhancedVideoScreen = withWalletBalance(VideoScreen);
   const EnhancedShortsScreen = withWalletBalance(ShortsScreen);
+  const EnhancedTipShortsScreen = withWalletBalance(TipShorts);
   const EnhancedChannelScreen = withWalletBalance(ChannelScreen);
   const EnhancedCreateChannelScreen = withWalletBalance(CreateChannelScreen);
   const EnhancedPackagesScreen = withWalletBalance(PackagesScreen);
@@ -93,6 +95,7 @@ const MainNavigator = () => {
         component={EnhancedVideoPreviewScreen}
       />
       <Stack.Screen name="Video" component={EnhancedVideoScreen} />
+      <Stack.Screen name="TipShorts" component={EnhancedTipShortsScreen} />
       <Stack.Screen name="Shorts" component={EnhancedShortsScreen} />
       {/* Channel */}
       <Stack.Screen name="Channel" component={EnhancedChannelScreen} />

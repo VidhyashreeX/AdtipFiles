@@ -20,6 +20,8 @@ import {SafeAreaProvider} from 'react-native-safe-area-context';
 // Contexts
 import {AuthProvider} from './src/contexts/AuthContext';
 import {WalletProvider} from './src/contexts/WalletContext';
+import {ThemeProvider} from './src/contexts/ThemeContext';
+import {ShortsProvider} from './src/contexts/ShortsContext'; // ** NEW: Import the ShortsProvider **
 
 // Services
 // Commented out PubScale integration - June 2, 2025
@@ -32,7 +34,6 @@ import AuthNavigator from './src/navigation/AuthNavigator';
 import {navigationRef} from './src/navigation/NavigationService';
 
 // Theme
-import {ThemeProvider} from './src/contexts/ThemeContext';
 import {COLORS} from './src/constants/colors';
 
 // Stack type
@@ -45,6 +46,7 @@ function App(): React.JSX.Element {
   // State
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false); // Check authentication state and initialize services when app loads
+
   useEffect(() => {
     const initApp = async () => {
       try {
@@ -91,6 +93,7 @@ function App(): React.JSX.Element {
       </SafeAreaProvider>
     );
   }
+
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.safeArea}>
@@ -98,19 +101,25 @@ function App(): React.JSX.Element {
           <ThemeProvider>
             <AuthProvider>
               <WalletProvider>
-                <NavigationContainer ref={navigationRef}>
-                  <StatusBar
-                    backgroundColor={COLORS.primary}
-                    barStyle="light-content"
-                  />
-                  <Stack.Navigator screenOptions={{headerShown: false}}>
-                    {isAuthenticated ? (
-                      <Stack.Screen name="Main" component={MainNavigator} />
-                    ) : (
-                      <Stack.Screen name="Auth" component={AuthNavigator} />
-                    )}
-                  </Stack.Navigator>
-                </NavigationContainer>
+                {/* ** NEW: Wrap the NavigationContainer with ShortsProvider **
+                  This ensures that any screen within your navigators (AuthNavigator or MainNavigator)
+                  that needs access to the global shorts context (like TipShorts) will have it available.
+                */}
+                <ShortsProvider> 
+                  <NavigationContainer ref={navigationRef}>
+                    <StatusBar
+                      backgroundColor={COLORS.primary}
+                      barStyle="light-content"
+                    />
+                    <Stack.Navigator screenOptions={{headerShown: false}}>
+                      {isAuthenticated ? (
+                        <Stack.Screen name="Main" component={MainNavigator} />
+                      ) : (
+                        <Stack.Screen name="Auth" component={AuthNavigator} />
+                      )}
+                    </Stack.Navigator>
+                  </NavigationContainer>
+                </ShortsProvider>
               </WalletProvider>
             </AuthProvider>
           </ThemeProvider>

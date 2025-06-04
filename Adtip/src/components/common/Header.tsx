@@ -52,6 +52,11 @@ const Header: React.FC<HeaderProps> = ({
   const navigateToSearch = () => {
     navigation.navigate('Search' as never);
   };
+  
+  // Add navigation to TipShorts
+  const navigateToTipShorts = () => {
+    navigation.navigate('TipShorts' as never);
+  };
 
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
@@ -81,11 +86,19 @@ const Header: React.FC<HeaderProps> = ({
           rightComponent
         ) : (
           <>
+            {/* Add TipShorts icon button */}
+            <TouchableOpacity
+              onPress={navigateToTipShorts}
+              style={styles.iconButton}>
+              <Icon name="play-circle" size={22} color={colors.text.secondary} />
+            </TouchableOpacity>
+            
             <TouchableOpacity
               onPress={navigateToSearch}
               style={styles.iconButton}>
               <Icon name="search" size={22} color={colors.text.secondary} />
             </TouchableOpacity>
+            
             {showNotifications && (
               <TouchableOpacity
                 onPress={navigateToNotifications}
@@ -99,6 +112,7 @@ const Header: React.FC<HeaderProps> = ({
                 />
               </TouchableOpacity>
             )}
+            
             {showWallet && (
               <TouchableOpacity
                 onPress={navigateToWallet}

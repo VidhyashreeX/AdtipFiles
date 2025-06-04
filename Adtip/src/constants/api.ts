@@ -111,6 +111,7 @@ export const ENDPOINTS = {
   SUBSCRIBE: '/api/subscribe',
   UNSUBSCRIBE: '/api/unsubscribe',
   GET_PUBLIC_SHOTS: '/api/public-shots',
+  GET_SHORTS: '/api/getshots',
 
   // Wallet endpoints
   GET_WALLET_BALANCE: '/api/wallet/balance',

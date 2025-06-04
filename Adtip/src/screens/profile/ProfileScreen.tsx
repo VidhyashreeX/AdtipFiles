@@ -107,6 +107,7 @@ const ProfileScreen: React.FC = () => {
   // Fetch user posts
   const fetchUserPosts = async (id: string | number | undefined) => {
     if (!id) {
+      setPosts([]); // Set posts to empty if no ID is provided
       return;
     }
 
@@ -125,7 +126,13 @@ const ProfileScreen: React.FC = () => {
       );
 
       if (!response.ok) {
-        throw new Error('Failed to fetch user posts');
+        // Specifically handle 404 as 'no posts' (not an error)
+        if (response.status === 404) {
+          setPosts([]);
+          return;
+        }
+        // For other errors, throw an error
+        throw new Error(`Failed to fetch user posts. Status: ${response.status}`);
       }
 
       const result = await response.json();
