@@ -13,15 +13,21 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
+import {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 // Hooks and contexts
 import {useAuth} from '../../contexts/AuthContext';
 import {useTheme} from '../../contexts/ThemeContext';
 
+// Types
+import {RootStackParamList} from '../../types/navigation';
+
+type OTPScreenProps = NativeStackScreenProps<RootStackParamList, 'OTP'>;
+
 /**
  * OTP verification screen component
  */
-const OTPScreen = ({navigation, route}) => {
+const OTPScreen = ({navigation, route}: OTPScreenProps) => {
   // Route params
   const {mobileNumber, id, isFirstTime} = route.params;
 
@@ -50,7 +56,6 @@ const OTPScreen = ({navigation, route}) => {
       return () => clearInterval(interval);
     }
   }, [timer]);
-
   // Handle OTP verification
   const handleVerifyOtp = async () => {
     // Validate OTP
@@ -70,13 +75,9 @@ const OTPScreen = ({navigation, route}) => {
       // Navigate based on first time status
       if (isFirstTime || userData.is_first_time) {
         navigation.navigate('UserDetails');
-      } else {
-        // Reset navigation stack and go to main app
-        navigation.reset({
-          index: 0,
-          routes: [{name: 'Main'}],
-        });
       }
+      // For returning users, AuthContext will automatically handle the navigation
+      // by setting isAuthenticated to true, and App.tsx will switch to MainNavigator
     } catch (err) {
       // Handle error
       console.error('OTP verification error:', err);
@@ -154,7 +155,7 @@ const OTPScreen = ({navigation, route}) => {
           style={[
             styles.otpInput,
             {
-              borderColor: colors.border.default,
+              borderColor: colors.border,
               color: colors.text.primary,
             },
           ]}

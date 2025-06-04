@@ -16,6 +16,9 @@ import { useAuth } from "../../contexts/AuthContext"; // Assuming AuthContext wo
 import { useNavigation } from "@react-navigation/native"; // For React Navigation
 import ApiService from "../../services/ApiService";
 
+// Components
+import Header from "../../components/common/Header";
+
 // Get screen width for responsive image/video sizing
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -270,6 +273,7 @@ const TipTubeScreen = () => {
 
   return (
     <View style={styles.container}>
+      <Header title="TipTube" showLogo={true} />
       <ScrollView
         ref={scrollViewRef}
         onScroll={handleScroll}
@@ -411,10 +415,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f3f4f6", // gray-100
-    paddingHorizontal: 16,
-    paddingVertical: 24,
   },
   scrollViewContent: {
+    paddingHorizontal: 16,
     paddingBottom: 20, // Add some padding at the bottom for content
   },
   categoryScroller: {

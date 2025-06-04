@@ -1,8 +1,9 @@
 // src/components/home/PostItem.tsx
-import React from 'react';
+import React, {useState, useRef, useEffect} from 'react';
 import {View, Text, StyleSheet, Image, TouchableOpacity} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
+import Video from 'react-native-video';
 
 interface PostItemProps {
   id: number;
@@ -23,6 +24,7 @@ interface PostItemProps {
   onFollow: (userId: number) => Promise<void>;
   isLiked?: boolean;
   userId: number;
+  isVisible?: boolean; // Add isVisible prop to control video playback
 }
 
 const PostItem: React.FC<PostItemProps> = ({
@@ -44,8 +46,20 @@ const PostItem: React.FC<PostItemProps> = ({
   onFollow,
   isLiked = false,
   userId,
+  isVisible = false,
 }) => {
   const {colors} = useTheme();
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [isVideoPaused, setIsVideoPaused] = useState(true);
+  const [isVideoMuted, setIsVideoMuted] = useState(true);
+  const videoRef = useRef(null);
+  
+  // Automatically pause video when post is scrolled out of view
+  useEffect(() => {
+    if (!isVisible && isVideoPlaying && !isVideoPaused) {
+      setIsVideoPaused(true);
+    }
+  }, [isVisible, isVideoPlaying, isVideoPaused]);
 
   return (
     <View style={[styles.container, {backgroundColor: colors.white}]}> 
@@ -79,22 +93,82 @@ const PostItem: React.FC<PostItemProps> = ({
         </View>
       </View>
 
-      <TouchableOpacity onPress={() => onPostPress(id)} disabled={!postImage}>
+      <TouchableOpacity 
+        onPress={() => {
+          if (media_type === 'video' && postImage) {
+            setIsVideoPlaying(!isVideoPlaying);
+            setIsVideoPaused(!isVideoPaused);
+          } else {
+            onPostPress(id);
+          }
+        }} 
+        disabled={!postImage}
+      >
         {postImage ? (
           <View style={styles.postImageContainer}>
-            <Image
-              source={{uri: postImage}}
-              style={styles.postImage}
-              resizeMode="cover"
-            />
+            {media_type === 'video' && isVideoPlaying ? (
+              <View style={styles.videoContainer}>
+                <Video
+                  ref={videoRef}
+                  source={{uri: postImage}}
+                  style={styles.postImage}
+                  resizeMode="cover"
+                  paused={isVideoPaused}
+                  muted={isVideoMuted}
+                  repeat={true}
+                  playInBackground={false}
+                  playWhenInactive={false}
+                  ignoreSilentSwitch="ignore"
+                  onError={(error) => console.error('Video error:', error)}
+                />
+                {isVideoPaused && (
+                  <TouchableOpacity 
+                    style={styles.videoPlayButton}
+                    onPress={() => setIsVideoPaused(false)}
+                  >
+                    <Icon name="play" size={32} color={colors.white} />
+                  </TouchableOpacity>
+                )}
+                {!isVideoPaused && (
+                  <View style={styles.videoControls}>
+                    <TouchableOpacity
+                      style={styles.videoControlButton}
+                      onPress={() => setIsVideoPaused(true)}
+                    >
+                      <Icon name="pause" size={20} color={colors.white} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.videoControlButton}
+                      onPress={() => setIsVideoMuted(!isVideoMuted)}
+                    >
+                      <Icon name={isVideoMuted ? "volume-x" : "volume-2"} size={20} color={colors.white} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.videoControlButton}
+                      onPress={() => onPostPress(id)}
+                    >
+                      <Icon name="maximize" size={20} color={colors.white} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <>
+                <Image
+                  source={{uri: postImage}}
+                  style={styles.postImage}
+                  resizeMode="cover"
+                />
+                {media_type === 'video' && !isVideoPlaying && (
+                  <View style={styles.videoIcon}>
+                    <Icon name="play" size={28} color={colors.white} />
+                  </View>
+                )}
+              </>
+            )}
             {isPremium ? (
               <View style={[styles.premiumBadge, {backgroundColor: colors.secondary}]}> 
                 <Text style={styles.premiumText}>Premium</Text>
-              </View>
-            ) : null}
-            {media_type === 'video' && postImage ? (
-              <View style={styles.videoIcon}>
-                <Icon name="play" size={28} color={colors.white} />
               </View>
             ) : null}
           </View>
@@ -221,6 +295,43 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  videoContainer: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  videoPlayButton: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginLeft: -25,
+    marginTop: -25,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  videoControls: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  videoControlButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
   premiumBadge: {
     position: 'absolute',
     top: 10,
@@ -228,6 +339,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
+    zIndex: 5,
   },
   premiumText: {
     color: 'white',
@@ -246,6 +358,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 5,
   },
   actions: {
     flexDirection: 'row',
@@ -290,4 +403,17 @@ const styles = StyleSheet.create({
   },
 });
 
-export default PostItem;
+// Memoize the PostItem component to prevent unnecessary re-renders
+export default React.memo(
+  PostItem, 
+  (prevProps, nextProps) => {
+    // Only re-render if these props change
+    return (
+      prevProps.id === nextProps.id &&
+      prevProps.isLiked === nextProps.isLiked &&
+      prevProps.likes === nextProps.likes &&
+      prevProps.comments === nextProps.comments &&
+      prevProps.isVisible === nextProps.isVisible
+    );
+  }
+);

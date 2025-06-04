@@ -359,9 +359,9 @@ const TipCallScreen: React.FC<TipCallScreenProps> = ({walletBalance}) => {
   return (
     <View style={[styles.container, {backgroundColor: colors.backgroundMuted || colors.gray[50]}]}>
       <Header
-        title="TipCall Experts"
+        title="TipCall"
         showBackButton={false} // Or true if needed
-        showLogo={false}
+        showLogo={true}
         showWallet={true}
         walletAmount={walletBalance}
       />

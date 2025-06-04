@@ -1,5 +1,5 @@
 // src/screens/home/HomeScreen.tsx
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   FlatList,
   Platform,
   ScrollView,
+  ViewabilityConfig,
+  ViewToken,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -175,8 +177,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
     loadingMore: false,
   });
   const [error, setError] = useState<string | null>(null);
-  const [likedPosts, setLikedPosts] = useState<{[key: number]: boolean}>({});
-  const [_walletAmount, setWalletAmount] = useState('0.00');
+  const [likedPosts, setLikedPosts] = useState<{[key: number]: boolean}>({});  const [_walletAmount, setWalletAmount] = useState('0.00');
+  const [visiblePostIds, setVisiblePostIds] = useState<number[]>([]);
+
+  // Viewability configuration
+  const viewabilityConfig = useRef<ViewabilityConfig>({
+    itemVisiblePercentThreshold: 50, // Item is considered visible when 50% of it is in viewport
+    minimumViewTime: 300, // Must be visible for 300ms before triggering callback
+  }).current;
+
+  // Track which posts are currently visible
+  const onViewableItemsChanged = useRef(({viewableItems}: {viewableItems: ViewToken[]}) => {
+    const visibleIds = viewableItems
+      .filter(item => item.isViewable && item.item)
+      .map(viewToken => viewToken.item.id);
+    setVisiblePostIds(visibleIds);
+  }).current;
 
   // Helper functions
   const getFullImageUrl = (url?: string | null) => {
@@ -508,28 +524,34 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
         <ActivityIndicator size="small" color={colors.primary} />
       </View>
     );
-  }; // Render a single post item
-  const renderPostItem = ({item}: {item: Post}) => (
-    <PostItem
-      id={item.id}
-      username={item.user_name}      profileImage={item.user_profile_image}
-      postImage={item.media_url}
-      caption={item.content}
-      likes={item.likeCount}
-      comments={item.commentCount}
-      timeAgo={getTimeAgo(item.created_at)}
-      media_type={item.media_type}
-      isPremium={item.is_premium}
-      onLike={handleLike}
-      onComment={handleComment}
-      onShare={handleShare}
-      onPostPress={handlePostPress}
-      onUserPress={handleUserPress}
-      onFollow={handleFollow}
-      isLiked={!!likedPosts[item.id]}
-      userId={item.user_id}
-    />
-  );
+  };  // Render a single post item
+  const renderPostItem = ({item}: {item: Post}) => {
+    const isVisible = visiblePostIds.includes(item.id);
+    
+    return (
+      <PostItem
+        id={item.id}
+        username={item.user_name}
+        profileImage={item.user_profile_image}
+        postImage={item.media_url}
+        caption={item.content}
+        likes={item.likeCount}
+        comments={item.commentCount}
+        timeAgo={getTimeAgo(item.created_at)}
+        media_type={item.media_type}
+        isPremium={item.is_premium}
+        onLike={handleLike}
+        onComment={handleComment}
+        onShare={handleShare}
+        onPostPress={handlePostPress}
+        onUserPress={handleUserPress}
+        onFollow={handleFollow}
+        isLiked={!!likedPosts[item.id]}
+        userId={item.user_id}
+        isVisible={isVisible}
+      />
+    );
+  };
 
   // Render header content for FlatList
   const renderListHeader = () => (
@@ -568,11 +590,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
       <Header
+        title="Home"
         showLogo={true}
         showWallet={true}
         walletAmount={walletBalance ? walletBalance.toString() : undefined}
-      />
-      <FlatList
+      />      <FlatList
         data={posts}
         renderItem={renderPostItem}
         keyExtractor={(item, index) => `post-${item.id}-${index}`}
@@ -586,6 +608,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
         updateCellsBatchingPeriod={50}
         removeClippedSubviews={Platform.OS === 'android'}
         ListHeaderComponent={renderListHeader}
+        viewabilityConfig={viewabilityConfig}
+        onViewableItemsChanged={onViewableItemsChanged}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

@@ -238,7 +238,7 @@ const ProfileScreen: React.FC = () => {
   if (loading && !refreshing) {
     return (
       <View style={[styles.container, {backgroundColor: colors.background}]}>
-        <Header showBackButton={true} title="Profile" />
+        <Header title={isOwnProfile ? 'Profile' : 'Profile'} showLogo={true} showNotifications={isOwnProfile || false} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -249,11 +249,9 @@ const ProfileScreen: React.FC = () => {
   if (!user && !loading) {
     return (
       <View style={[styles.container, {backgroundColor: colors.background}]}>
-        <Header showBackButton={true} title="Profile" />
+        <Header title={isOwnProfile ? 'Profile' : 'Profile'} showLogo={true} showNotifications={isOwnProfile || false} />
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, {color: colors.text.primary}]}>
-            User not found or there was an error loading the profile.
-          </Text>
+          <Text style={[styles.errorText, {color: colors.text.primary}]}>User not found or there was an error loading the profile.</Text>
           <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
             <Text style={{color: colors.primary}}>Retry</Text>
           </TouchableOpacity>
@@ -263,13 +261,12 @@ const ProfileScreen: React.FC = () => {
   }
 
   return (
-    <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header
-        showBackButton={true}
-        title={isOwnProfile ? 'My Profile' : 'Profile'}
-        showNotifications={isOwnProfile || false}
-      />
+    <View style={[styles.container, {backgroundColor: colors.background}]}> 
+      <View style={{width: '100%', alignSelf: 'center', zIndex: 10, backgroundColor: colors.background}}>
+        <Header title={isOwnProfile ? 'Profile' : 'Profile'} showLogo={true} showNotifications={isOwnProfile || false} />
+      </View>
       <ScrollView
+        contentContainerStyle={{paddingBottom: 24}}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

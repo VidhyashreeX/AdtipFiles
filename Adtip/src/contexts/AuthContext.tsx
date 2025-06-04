@@ -73,13 +73,14 @@ type AuthContextType = {
   // Channel methods
   hasChannel: boolean;
   createChannel: (name: string, description: string) => Promise<void>;
+  completeOnboarding: () => void; // Added
 };
 
 // Create context
 const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   user: null,
-  loading: false,
+  loading: true, // Start with loading true
   error: null,
   login: async () => ({
     otp: '',
@@ -96,6 +97,7 @@ const AuthContext = createContext<AuthContextType>({
   refreshUserData: async () => {},
   hasChannel: false,
   createChannel: async () => {},
+  completeOnboarding: () => {}, // Added
 });
 
 // Auth provider component
@@ -104,9 +106,13 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
 }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start with loading true
   const [error, setError] = useState<string | null>(null);
   const [hasChannel, setHasChannel] = useState(false);
+
+  const completeOnboarding = () => {
+    setIsAuthenticated(true);
+  };
 
   // Load user from storage on mount
   useEffect(() => {
@@ -119,8 +125,11 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         if (userJson && token) {
           const userData = JSON.parse(userJson) as User;
           setUser(userData);
-          setIsAuthenticated(true);
-
+          // If user is not first time (is_first_time === 0)
+          // OR if user was first_time but has already saved details (isSaveUserDetails === 1)
+          if (userData.is_first_time === 0 || userData.isSaveUserDetails === 1) {
+            setIsAuthenticated(true);
+          }
           // Check if user has a channel
           checkChannelStatus(userData.id);
         }
@@ -206,17 +215,24 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       }
 
       // Save token and user data to storage
+      const userData = data.data[0] as User;
       await AsyncStorage.setItem('accessToken', data.accessToken);
-      await AsyncStorage.setItem('user', JSON.stringify(data.data[0]));
+      await AsyncStorage.setItem('user', JSON.stringify(userData));
 
       // Update state
-      setUser(data.data[0]);
-      setIsAuthenticated(true);
+      setUser(userData);
+      
+      // Only set authenticated if user is not a first-time user.
+      // If they are first-time, they'll go through UserDetailsScreen,
+      // which will then call completeOnboarding.
+      if (userData.is_first_time === 0) {
+        setIsAuthenticated(true);
+      }
 
       // Check if user has a channel
-      checkChannelStatus(data.data[0].id);
+      checkChannelStatus(userData.id);
 
-      return data.data[0];
+      return userData;
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'OTP verification failed';
@@ -381,6 +397,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         refreshUserData,
         hasChannel,
         createChannel,
+        completeOnboarding, // Added
       }}>
       {children}
     </AuthContext.Provider>

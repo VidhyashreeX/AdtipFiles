@@ -4,7 +4,7 @@
  * @format
  */
 
-import React, {useState, useEffect} from 'react';
+import React, {useEffect} from 'react';
 import {
   SafeAreaView,
   StatusBar,
@@ -14,19 +14,13 @@ import {
 } from 'react-native';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 
 // Contexts
-import {AuthProvider} from './src/contexts/AuthContext';
+import {AuthProvider, useAuth} from './src/contexts/AuthContext';
 import {WalletProvider} from './src/contexts/WalletContext';
 import {ThemeProvider} from './src/contexts/ThemeContext';
-import {ShortsProvider} from './src/contexts/ShortsContext'; // ** NEW: Import the ShortsProvider **
-
-// Services
-// Commented out PubScale integration - June 2, 2025
-// import RewardService from './src/services/RewardService';
-// import PubScaleService from './src/services/PubScaleService';
+import {ShortsProvider} from './src/contexts/ShortsContext';
 
 // Navigators
 import MainNavigator from './src/navigation/MainNavigator';
@@ -40,21 +34,14 @@ import {COLORS} from './src/constants/colors';
 const Stack = createNativeStackNavigator();
 
 /**
- * Main application component
+ * App Navigator component that uses auth context
  */
-function App(): React.JSX.Element {
-  // State
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false); // Check authentication state and initialize services when app loads
+const AppNavigator = () => {
+  const {isAuthenticated, loading} = useAuth();
 
   useEffect(() => {
     const initApp = async () => {
       try {
-        // Check auth status
-        const userToken = await AsyncStorage.getItem('accessToken');
-        const isAuth = !!userToken;
-        setIsAuthenticated(isAuth);
-
         // Commented out PubScale integration - June 2, 2025
         // Initialize PubScale SDK with user ID
         // await PubScaleService.initialize(userId);
@@ -69,8 +56,6 @@ function App(): React.JSX.Element {
         // });
       } catch (error) {
         console.error('Error initializing app:', error);
-      } finally {
-        setIsLoading(false);
       }
     };
 
@@ -84,16 +69,35 @@ function App(): React.JSX.Element {
   }, []);
 
   // Show loading indicator while checking auth status
-  if (isLoading) {
+  if (loading) {
     return (
-      <SafeAreaProvider>
-        <SafeAreaView style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        </SafeAreaView>
-      </SafeAreaProvider>
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </SafeAreaView>
     );
   }
 
+  return (
+    <NavigationContainer ref={navigationRef}>
+      <StatusBar
+        backgroundColor={COLORS.primary}
+        barStyle="light-content"
+      />
+      <Stack.Navigator screenOptions={{headerShown: false}}>
+        {isAuthenticated ? (
+          <Stack.Screen name="Main" component={MainNavigator} />
+        ) : (
+          <Stack.Screen name="Auth" component={AuthNavigator} />
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};
+
+/**
+ * Main application component
+ */
+function App(): React.JSX.Element {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.safeArea}>
@@ -101,24 +105,8 @@ function App(): React.JSX.Element {
           <ThemeProvider>
             <AuthProvider>
               <WalletProvider>
-                {/* ** NEW: Wrap the NavigationContainer with ShortsProvider **
-                  This ensures that any screen within your navigators (AuthNavigator or MainNavigator)
-                  that needs access to the global shorts context (like TipShorts) will have it available.
-                */}
                 <ShortsProvider> 
-                  <NavigationContainer ref={navigationRef}>
-                    <StatusBar
-                      backgroundColor={COLORS.primary}
-                      barStyle="light-content"
-                    />
-                    <Stack.Navigator screenOptions={{headerShown: false}}>
-                      {isAuthenticated ? (
-                        <Stack.Screen name="Main" component={MainNavigator} />
-                      ) : (
-                        <Stack.Screen name="Auth" component={AuthNavigator} />
-                      )}
-                    </Stack.Navigator>
-                  </NavigationContainer>
+                  <AppNavigator />
                 </ShortsProvider>
               </WalletProvider>
             </AuthProvider>

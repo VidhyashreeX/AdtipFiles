@@ -4,7 +4,7 @@ import {NavigationProp} from '@react-navigation/native';
 export type RootStackParamList = {
   // Auth screens
   Login: undefined;
-  OtpVerification: {mobileNumber: string; id: number};
+  OTP: {mobileNumber: string; id: string; isFirstTime: boolean};
   UserDetails: undefined;
 
   // Main app screens
@@ -36,5 +36,5 @@ export type RootStackParamList = {
 export type NavigationProps = NavigationProp<RootStackParamList>;
 export type AuthNavigationProps = NavigationProp<
   RootStackParamList,
-  'Login' | 'OtpVerification' | 'UserDetails'
+  'Login' | 'OTP' | 'UserDetails'
 >;

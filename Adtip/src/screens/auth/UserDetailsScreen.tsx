@@ -40,9 +40,8 @@ const UserDetailsScreen = () => {
 
   // Navigation
   const navigation = useNavigation<UserDetailsScreenNavigationProp>();
-
   // Auth context
-  const {user, updateUserDetails, loading} = useAuth();
+  const {user, updateUserDetails, loading, completeOnboarding} = useAuth();
 
   // Location state
   const [location, setLocation] = useState({
@@ -221,8 +220,7 @@ const UserDetailsScreen = () => {
 
     setFormErrors(errors);
     return isValid;
-  };
-  // Submit form handler
+  };  // Submit form handler
   const handleSubmit = async () => {
     // Validate form
     if (!validateForm()) {
@@ -239,11 +237,10 @@ const UserDetailsScreen = () => {
         longitude: location.longitude,
       });
 
-      // Navigate to main app
-      navigation.reset({
-        index: 0,
-        routes: [{name: 'Main'}],
-      });
+      // Complete onboarding - this will set isAuthenticated to true
+      // and App.tsx will automatically switch to MainNavigator
+      completeOnboarding();
+
     } catch (err) {
       console.error('Update user details error:', err);
       Alert.alert('Error', 'Failed to update user details. Please try again.');

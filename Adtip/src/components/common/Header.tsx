@@ -1,6 +1,6 @@
 // src/components/common/Header.tsx
 import React from 'react';
-import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
+import {View, Text, StyleSheet, TouchableOpacity, Image} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {useNavigation} from '@react-navigation/native';
 import {useTheme} from '../../contexts/ThemeContext';
@@ -70,7 +70,11 @@ const Header: React.FC<HeaderProps> = ({
         ) : null}
         {showLogo && !centerComponent && (
           <View style={styles.logoContainer}>
-            <Text style={[styles.logoText, {color: colors.primary}]}>Adtip</Text>
+            <Image 
+              source={require('../../../assets/images/logo.png')} 
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
         )}
         {title && !centerComponent && (
@@ -176,7 +180,6 @@ const styles = StyleSheet.create({
   logoImage: {
     width: 30,
     height: 30,
-    borderRadius: 15,
     marginRight: 8,
   },
   logoText: {
