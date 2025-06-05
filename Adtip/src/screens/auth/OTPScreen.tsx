@@ -27,15 +27,20 @@ type OTPScreenProps = NativeStackScreenProps<RootStackParamList, 'OTP'>;
 /**
  * OTP verification screen component
  */
-const OTPScreen = ({navigation, route}: OTPScreenProps) => {
-  // Route params
-  const {mobileNumber, id, isFirstTime} = route.params;
+const OTPScreen = ({navigation, route}: OTPScreenProps) => {  // Route params - now we only receive mobileNumber initially
+  const {mobileNumber} = route.params;
 
   // Theme
   const {colors} = useTheme();
-
+  
   // Auth context
   const {verifyOtp, login, loading} = useAuth();
+  
+  // Local state for OTP request/verification
+  const [verifying, setVerifying] = useState(false);
+  const [otpRequestLoading, setOtpRequestLoading] = useState(true);
+  const [otpRequestId, setOtpRequestId] = useState<string>('');
+  const [isFirstTimeUser, setIsFirstTimeUser] = useState(false);
 
   // Local state
   const [otp, setOtp] = useState('');
@@ -45,7 +50,31 @@ const OTPScreen = ({navigation, route}: OTPScreenProps) => {
 
   // Input ref
   const otpInputRef = useRef<TextInput>(null);
+  // Request OTP on component mount
+  useEffect(() => {
+    const requestOtp = async () => {
+      setOtpRequestLoading(true);
+      setError(null);
+      
+      try {
+        // Call the API to get OTP
+        const response = await login(mobileNumber);
+        
+        // Store the OTP request ID and first-time status
+        setOtpRequestId(response.id.toString());
+        setIsFirstTimeUser(response.is_first_time);
+      } catch (err) {
+        console.error('OTP request error:', err);
+        setError(err instanceof Error ? err.message : 'Failed to send OTP. Please try again.');
+      } finally {
+        setOtpRequestLoading(false);
+      }
+    };
 
+    // Request the OTP when the component mounts
+    requestOtp();
+  }, [login, mobileNumber]);
+  
   // Timer effect
   useEffect(() => {
     if (timer > 0) {
@@ -55,8 +84,7 @@ const OTPScreen = ({navigation, route}: OTPScreenProps) => {
 
       return () => clearInterval(interval);
     }
-  }, [timer]);
-  // Handle OTP verification
+  }, [timer]);// Handle OTP verification
   const handleVerifyOtp = async () => {
     // Validate OTP
     if (!otp || otp.length !== 6) {
@@ -67,13 +95,16 @@ const OTPScreen = ({navigation, route}: OTPScreenProps) => {
     // Clear error and dismiss keyboard
     setError(null);
     Keyboard.dismiss();
+    
+    // Show local loading indicator
+    setVerifying(true);
 
     try {
-      // Verify OTP
-      const userData = await verifyOtp(mobileNumber, otp, id);
+      // Verify OTP with real authentication using the ID we got from the OTP request
+      const userData = await verifyOtp(mobileNumber, otp, otpRequestId);
 
       // Navigate based on first time status
-      if (isFirstTime || userData.is_first_time) {
+      if (isFirstTimeUser || userData.is_first_time === 1) {
         navigation.navigate('UserDetails');
       }
       // For returning users, AuthContext will automatically handle the navigation
@@ -81,11 +112,11 @@ const OTPScreen = ({navigation, route}: OTPScreenProps) => {
     } catch (err) {
       // Handle error
       console.error('OTP verification error:', err);
-      setError('Invalid OTP. Please try again.');
+      setError(err instanceof Error ? err.message : 'Invalid OTP. Please try again.');
+    } finally {
+      setVerifying(false);
     }
-  };
-
-  // Handle resend OTP
+  };  // Handle resend OTP with real API call
   const handleResendOtp = async () => {
     if (timer > 0) {
       return;
@@ -95,16 +126,19 @@ const OTPScreen = ({navigation, route}: OTPScreenProps) => {
     setError(null);
 
     try {
-      // Request new OTP
-      await login(mobileNumber);
-
+      // Call login API to resend OTP
+      const response = await login(mobileNumber);
+      
+      // Update stored OTP request ID and first-time status
+      setOtpRequestId(response.id.toString());
+      setIsFirstTimeUser(response.is_first_time);
+      
       // Reset timer
       setTimer(60);
       Alert.alert('Success', 'OTP resent successfully.');
     } catch (err) {
-      // Handle error
       console.error('Resend OTP error:', err);
-      setError('Failed to resend OTP. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to resend OTP. Please try again.');
     } finally {
       setResending(false);
     }
@@ -138,74 +172,84 @@ const OTPScreen = ({navigation, route}: OTPScreenProps) => {
             OTP Verification
           </Text>
           <View style={styles.placeholderView} />
-        </View>
-
-        {/* Title and subtitle */}
+        </View>        {/* Title and subtitle */}
         <Text style={[styles.title, {color: colors.text.primary}]}>
           Enter OTP
         </Text>
-        <Text style={[styles.subtitle, {color: colors.text.tertiary}]}>
-          We've sent a 6-digit verification code to{'\n'}
-          {countryCode} {mobileNumber}
-        </Text>
-
-        {/* OTP input */}
-        <TextInput
-          ref={otpInputRef}
-          style={[
-            styles.otpInput,
-            {
-              borderColor: colors.border,
-              color: colors.text.primary,
-            },
-          ]}
-          placeholder="Enter 6-digit OTP"
-          placeholderTextColor={colors.text.light}
-          keyboardType="number-pad"
-          maxLength={6}
-          value={otp}
-          onChangeText={handleOtpChange}
-          autoFocus
-        />
-
-        {/* Error message */}
-        {error && <Text style={styles.errorText}>{error}</Text>}
-
-        {/* Verify button */}
-        <TouchableOpacity
-          style={[
-            styles.verifyButton,
-            {backgroundColor: colors.primary},
-            (!otp || otp.length !== 6 || loading) && styles.disabledButton,
-          ]}
-          onPress={handleVerifyOtp}
-          disabled={!otp || otp.length !== 6 || loading}>
-          {loading ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text style={styles.verifyButtonText}>Verify</Text>
-          )}
-        </TouchableOpacity>
-
-        {/* Resend OTP */}
-        <View style={styles.resendContainer}>
-          {timer > 0 ? (
-            <Text style={[styles.timerText, {color: colors.text.tertiary}]}>
-              Resend code in{' '}
-              <Text style={{color: colors.primary}}>{timer}s</Text>
+        
+        {otpRequestLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator color={colors.primary} size="large" />
+            <Text style={[styles.loadingText, {color: colors.text.tertiary}]}>
+              Sending OTP to your mobile number...
             </Text>
-          ) : (
-            <TouchableOpacity onPress={handleResendOtp} disabled={resending}>
-              {resending ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
-                <Text style={[styles.resendText, {color: colors.primary}]}>
-                  Resend OTP
-                </Text>
-              )}
-            </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        ) : (
+          <>
+            <Text style={[styles.subtitle, {color: colors.text.tertiary}]}>
+              We've sent a 6-digit verification code to{'\n'}
+              {countryCode} {mobileNumber}
+            </Text>
+
+            {/* OTP input */}
+            <TextInput
+              ref={otpInputRef}
+              style={[
+                styles.otpInput,
+                {
+                  borderColor: colors.border,
+                  color: colors.text.primary,
+                },
+              ]}
+              placeholder="Enter 6-digit OTP"
+              placeholderTextColor={colors.text.light}
+              keyboardType="number-pad"
+              maxLength={6}
+              value={otp}
+              onChangeText={handleOtpChange}
+              autoFocus
+            />
+          </>
+        )}        {/* Error message */}
+        {error && <Text style={styles.errorText}>{error}</Text>}
+        
+        {/* Verify button - only shown after OTP is requested */}
+        {!otpRequestLoading && (
+          <TouchableOpacity
+            style={[
+              styles.verifyButton,
+              {backgroundColor: colors.primary},
+              (!otp || otp.length !== 6 || verifying) && styles.disabledButton,
+            ]}
+            onPress={handleVerifyOtp}
+            disabled={!otp || otp.length !== 6 || verifying}>
+            {verifying ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.verifyButtonText}>Verify</Text>
+            )}
+          </TouchableOpacity>
+        )}        {/* Resend OTP - only shown after initial OTP is requested */}
+        {!otpRequestLoading && (
+          <View style={styles.resendContainer}>
+            {timer > 0 ? (
+              <Text style={[styles.timerText, {color: colors.text.tertiary}]}>
+                Resend code in{' '}
+                <Text style={{color: colors.primary}}>{timer}s</Text>
+              </Text>
+            ) : (
+              <TouchableOpacity onPress={handleResendOtp} disabled={resending}>
+                {resending ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Text style={[styles.resendText, {color: colors.primary}]}>
+                    Resend OTP
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -221,6 +265,16 @@ const styles = StyleSheet.create({
   contentContainer: {
     flex: 1,
     paddingHorizontal: 24,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 40,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    textAlign: 'center',
   },
   header: {
     flexDirection: 'row',

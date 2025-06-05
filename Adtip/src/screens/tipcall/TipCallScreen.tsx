@@ -15,6 +15,7 @@ import {
   Search,
   Phone,
   Video,
+  Clock,
 } from 'lucide-react-native';
 import Header from '../../components/common/Header';
 import {
@@ -31,6 +32,8 @@ import {useAuth} from '../../contexts/AuthContext';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import ApiService from '../../services/ApiService';
+import MissedCallsList from '../../components/tipcall/MissedCallsList';
+import { AgoraHelper } from '../../services/AgoraHelper';
 
 // Define navigation stack param list
 type RootStackParamList = {
@@ -318,6 +321,7 @@ const TipCallScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isCaller, setIsCaller] = useState<boolean>(false); // Track if the current user initiated the call
   const [currentCallType, setCurrentCallType] = useState<'voice' | 'video'>('voice');
+  const [activeTab, setActiveTab] = useState('contacts'); // 'contacts' or 'missed'
   const localUid = useRef<number>(0); // Store the local user ID for Agora
 
   const redirectToLogin = useCallback(() => {
@@ -342,7 +346,7 @@ const TipCallScreen: React.FC = () => {
 
           const granted = await PermissionsAndroid.requestMultiple(permissions);
           const allGranted = permissions.every(
-            perm => granted[perm] === PermissionsAndroid.results.GRANTED,
+            perm => granted[perm] === PermissionsAndroid.RESULTS.GRANTED,
           );
           if (!allGranted) {
             Alert.alert('Permissions Required', 'Audio and Camera permissions are needed for calls.');
@@ -408,6 +412,38 @@ const TipCallScreen: React.FC = () => {
   useEffect(() => {
     fetchUsers(1, false);
   }, [fetchUsers]);
+
+  // Register device FCM token with server for push notifications
+  useEffect(() => {
+    const registerFcmToken = async () => {
+      try {
+        if (!user?.id) {
+          console.log('User not authenticated, skipping FCM token registration');
+          return;
+        }
+        
+        // Get FCM token from AsyncStorage (this should be set elsewhere in the app when FCM token is received)
+        const fcmToken = await AsyncStorage.getItem('fcmToken');
+        
+        if (!fcmToken) {
+          console.log('No FCM token available');
+          return;
+        }
+        
+        // Register/update token with server
+        await ApiService.updateFcmToken({
+          userId: user.id,
+          fcmToken: fcmToken
+        });
+        
+        console.log('FCM token registered successfully');
+      } catch (error) {
+        console.error('Failed to register FCM token:', error);
+      }
+    };
+    
+    registerFcmToken();
+  }, [user]);
 
   const loadMoreUsers = useCallback(() => { // Wrapped in useCallback
     if (loading || contacts.length >= totalRecords) return;
@@ -501,7 +537,13 @@ const TipCallScreen: React.FC = () => {
       localUid.current = uid;
       const token = await fetchAgoraToken(newMeetingId, uid);
 
-      await rtcEngine.joinChannel(token, newMeetingId, '', uid);
+      // Use the helper to safely join channel
+      await AgoraHelper.safeJoinChannel(
+        rtcEngine,
+        token,
+        newMeetingId,
+        uid
+      );
 
       setMeetingId(newMeetingId);
       setIsCaller(true);
@@ -546,7 +588,13 @@ const TipCallScreen: React.FC = () => {
       localUid.current = uid;
       const token = await fetchAgoraToken(newMeetingId, uid);
 
-      await rtcEngine.joinChannel(token, newMeetingId, '', uid);
+      // Use the helper to safely join channel
+      await AgoraHelper.safeJoinChannel(
+        rtcEngine,
+        token,
+        newMeetingId,
+        uid
+      );
 
       setMeetingId(newMeetingId);
       setIsCaller(true);
@@ -579,7 +627,7 @@ const TipCallScreen: React.FC = () => {
         const callerId = isCaller ? user?.id : callerIdFromMeetingId; // Use current user's ID if they are the caller
 
         await rtcEngine.stopPreview();
-        await rtcEngine.leaveChannel();
+        await AgoraHelper.safeLeaveChannel(rtcEngine);
         setInCall(false);
 
         if (recipientId && callerId) {
@@ -656,150 +704,165 @@ const TipCallScreen: React.FC = () => {
         showWallet={true}
       />
 
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Search size={18} color="#9ca3af" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search user"
-            placeholderTextColor="#9ca3af"
-            value={searchQuery}
-            onChangeText={text => setSearchQuery(text)}
-          />
-        </View>
+      {/* Tab navigation */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'contacts' && styles.activeTab]} 
+          onPress={() => setActiveTab('contacts')}
+        >
+          <Text style={[styles.tabText, activeTab === 'contacts' && styles.activeTabText]}>Contacts</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'missed' && styles.activeTab]} 
+          onPress={() => setActiveTab('missed')}
+        >
+          <Text style={[styles.tabText, activeTab === 'missed' && styles.activeTabText]}>Missed Calls</Text>
+          <Clock size={16} color={activeTab === 'missed' ? '#24d05a' : '#666'} />
+        </TouchableOpacity>
       </View>
 
-      {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity
-            onPress={() => fetchUsers(1, false)}
-            style={styles.retryButton}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
+      {/* Search bar and filters - only show for contacts tab */}
+      {activeTab === 'contacts' && (
+        <View style={styles.searchContainer}>
+          <View style={styles.searchBar}>
+            <Search size={20} color="#9ca3af" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search users..."
+              placeholderTextColor="#9ca3af"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onSubmitEditing={() => fetchUsers(1, false)}
+            />
+          </View>
+          
+          <View style={styles.filtersContainer}>
+            <Text style={styles.filterTitle}>Categories</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filtersScroll}>
+              {CATEGORIES.map(category => (
+                <TouchableOpacity
+                  key={category.id}
+                  style={[
+                    styles.categoryItem,
+                    selectedCategory === category.id
+                      ? styles.categoryItemSelected
+                      : styles.categoryItemUnselected,
+                  ]}
+                  onPress={() => setSelectedCategory(category.id)}>
+                  <Text
+                    style={[
+                      styles.categoryItemText,
+                      selectedCategory === category.id
+                        ? styles.categoryItemTextSelected
+                        : styles.categoryItemTextUnselected,
+                    ]}>
+                    {category.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.filterTitle}>Languages</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filtersScroll}>
+              {LANGUAGES.map(language => (
+                <TouchableOpacity
+                  key={language.id}
+                  style={[
+                    styles.categoryItem,
+                    selectedLanguage === language.id
+                      ? styles.categoryItemSelected
+                      : styles.categoryItemUnselected,
+                  ]}
+                  onPress={() => setSelectedLanguage(language.id)}>
+                  <Text
+                    style={[
+                      styles.categoryItemText,
+                      selectedLanguage === language.id
+                        ? styles.categoryItemTextSelected
+                        : styles.categoryItemTextUnselected,
+                    ]}>
+                    {language.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
         </View>
       )}
 
-      <View style={styles.filtersContainer}>
-        <Text style={styles.filterTitle}>Categories</Text>
+      {/* Content area */}
+      {activeTab === 'contacts' ? (
         <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filtersScroll}>
-          {CATEGORIES.map(category => (
-            <TouchableOpacity
-              key={category.id}
-              style={[
-                styles.categoryItem,
-                selectedCategory === category.id
-                  ? styles.categoryItemSelected
-                  : styles.categoryItemUnselected,
-              ]}
-              onPress={() => setSelectedCategory(category.id)}>
-              <Text
-                style={[
-                  styles.categoryItemText,
-                  selectedCategory === category.id
-                    ? styles.categoryItemTextSelected
-                    : styles.categoryItemTextUnselected,
-                ]}>
-                {category.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          style={styles.contentScrollView}
+          onScroll={({nativeEvent}) => {
+            const {layoutMeasurement, contentOffset, contentSize} = nativeEvent;
+            const isCloseToBottom =
+              layoutMeasurement.height + contentOffset.y >=
+              contentSize.height - 50;
+
+            if (isCloseToBottom) {
+              loadMoreUsers();
+            }
+          }}
+          scrollEventThrottle={400}>
+          {error ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : contacts.length === 0 && !loading ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No contacts found</Text>
+            </View>
+          ) : (
+            contacts.map(contact => (
+              <View key={contact.id} style={styles.contactItem}>
+                <View style={styles.contactInfo}>
+                  <Text style={styles.contactName}>
+                    {contact.name || 'Unknown'}
+                  </Text>
+                  <Text style={styles.contactStatus}>
+                    {contact.online_status ? 'available now' : contact.last_seen}
+                  </Text>
+                </View>
+                <View style={styles.callButtons}>
+                  <TouchableOpacity
+                    style={styles.callButton}
+                    onPress={() => startVoiceCall(contact.id)}
+                    disabled={inCall}>
+                    <Phone size={20} color="white" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.callButton}
+                    onPress={() => startVideoCall(contact.id)}
+                    disabled={inCall}>
+                    <Video size={20} color="white" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
+          )}
+          {loading && (
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Loading...</Text>
+            </View>
+          )}
+          <View style={styles.bottomPadding} />
         </ScrollView>
-
-        <Text style={styles.filterTitle}>Languages</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filtersScroll}>
-          {LANGUAGES.map(language => (
-            <TouchableOpacity
-              key={language.id}
-              style={[
-                styles.categoryItem,
-                selectedLanguage === language.id
-                  ? styles.categoryItemSelected
-                  : styles.categoryItemUnselected,
-              ]}
-              onPress={() => setSelectedLanguage(language.id)}>
-              <Text
-                style={[
-                  styles.categoryItemText,
-                  selectedLanguage === language.id
-                    ? styles.categoryItemTextSelected
-                    : styles.categoryItemTextUnselected,
-                ]}>
-                {language.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      <View style={styles.tabsContainer}>
-        {TABS.map(tab => (
-          <TouchableOpacity
-            key={tab.id}
-            style={[styles.tab, selectedTab === tab.id && styles.selectedTab]}
-            onPress={() => setSelectedTab(tab.id)}>
-            <Text
-              style={[
-                styles.tabText,
-                selectedTab === tab.id && styles.selectedTabText,
-              ]}>
-              {tab.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <ScrollView
-        style={styles.contactsContainer}
-        onScroll={({nativeEvent}) => {
-          if (
-            nativeEvent.contentOffset.y +
-              nativeEvent.layoutMeasurement.height >=
-            nativeEvent.contentSize.height - 20
-          ) {
-            loadMoreUsers();
+      ) : (
+        <MissedCallsList onCallUser={(userId, callType) => {
+          if (callType === 'audio') {
+            startVoiceCall(userId);
+          } else {
+            startVideoCall(userId);
           }
-        }}
-        scrollEventThrottle={400}>
-        {contacts.map(contact => (
-          <View key={contact.id} style={styles.contactItem}>
-            <View style={styles.contactInfo}>
-              <Text style={styles.contactName}>
-                {contact.name || 'Unknown'}
-              </Text>
-              <Text style={styles.contactStatus}>
-                {contact.online_status ? 'available now' : contact.last_seen}
-              </Text>
-            </View>
-            <View style={styles.callButtons}>
-              <TouchableOpacity
-                style={styles.callButton}
-                onPress={() => startVoiceCall(contact.id)}
-                disabled={inCall}>
-                <Phone size={20} color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.callButton}
-                onPress={() => startVideoCall(contact.id)}
-                disabled={inCall}>
-                <Video size={20} color="white" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))}
-        {loading && (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading...</Text>
-          </View>
-        )}
-        <View style={styles.bottomPadding} />
-      </ScrollView>
+        }} />
+      )}
 
       {inCall && rtcEngine && (
         <MeetingView
@@ -828,6 +891,41 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     paddingHorizontal: 16,
     backgroundColor: 'white',
+  },
+  // Tab navigation styles
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    marginBottom: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: '#24d05a',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginRight: 4,
+  },
+  activeTabText: {
+    color: '#24d05a',
+  },
+  contentScrollView: {
+    flex: 1,
   },
   logoContainer: {
     flexDirection: 'row',
@@ -965,20 +1063,23 @@ const styles = StyleSheet.create({
   tab: {
     flex: 1,
     paddingVertical: 12,
-    alignItems: 'center',
+    flexDirection: 'row',
     justifyContent: 'center',
-  },
-  selectedTab: {
+    alignItems: 'center',
     borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
     borderBottomColor: '#24d05a',
   },
   tabText: {
     fontSize: 14,
-    color: '#64748b',
-  },
-  selectedTabText: {
-    color: '#24d05a',
     fontWeight: '600',
+    color: '#666',
+    marginRight: 4,
+  },
+  activeTabText: {
+    color: '#24d05a',
   },
   contactsContainer: {
     flex: 1,
@@ -1099,6 +1200,47 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: 'black',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    marginBottom: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: '#24d05a',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginRight: 4,
+  },
+  activeTabText: {
+    color: '#24d05a',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  emptyText: {
+    color: '#9ca3af',
+    fontSize: 16,
   },
 });
 

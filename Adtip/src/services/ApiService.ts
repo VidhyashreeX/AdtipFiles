@@ -25,6 +25,12 @@ import {
   MissedCallsResponse,
 } from '../types/api';
 
+// Define public endpoints that don't require authentication
+const PUBLIC_ENDPOINTS = [
+  ApiEndpoints.AUTH_ENDPOINTS.OTP_LOGIN,
+  ApiEndpoints.AUTH_ENDPOINTS.OTP_VERIFY
+];
+
 // Create axios instance with default configuration
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -35,20 +41,28 @@ const apiClient = axios.create({
   },
 });
 
-// Endpoints that don't require // Add request interceptor to add auth token to every request
+// Add request interceptor to add auth token to requests (except public endpoints)
 apiClient.interceptors.request.use(
   async config => {
     try {
-      // Check both token storage keys - the app uses 'accessToken', but our service was checking '@auth_token'
-      let token = await AsyncStorage.getItem('accessToken');
-      if (!token) {
-        token = await AsyncStorage.getItem('@auth_token'); // Fallback to old key format
-      }
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-        console.log('Authorization header added to request');
-      } else {
-        console.warn('No auth token found in storage');
+      // Check if the URL is a public endpoint that doesn't need authentication
+      const isPublicEndpoint = PUBLIC_ENDPOINTS.some(endpoint => 
+        config.url?.includes(endpoint)
+      );
+
+      // Only try to add auth token for protected endpoints
+      if (!isPublicEndpoint) {
+        // Check both token storage keys - the app uses 'accessToken', but our service was checking '@auth_token'
+        let token = await AsyncStorage.getItem('accessToken');
+        if (!token) {
+          token = await AsyncStorage.getItem('@auth_token'); // Fallback to old key format
+        }
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+          console.log('Authorization header added to request');
+        } else {
+          console.warn('No auth token found for protected endpoint');
+        }
       }
     } catch (error) {
       console.error('Error adding auth token:', error);
@@ -479,6 +493,44 @@ export default class ApiService {
       ApiEndpoints.TIP_CALLS_ENDPOINTS.CALL,
       data,
     );
+  }
+
+  /**
+   * Update call status for call tracking
+   * @param callerId - ID of the caller
+   * @param receiverId - ID of the receiver
+   * @param status - Call status (accepted, rejected, missed, ended)
+   * @param callType - Type of call (audio or video)
+   * @param callId - Optional call ID for tracking ongoing calls
+   */
+  static async updateCallStatus(
+    callerId: string | number,
+    receiverId: string | number,
+    status: string,
+    callType: string,
+    callId?: number,
+  ): Promise<ApiResponse<any>> {
+    // Map the status to the appropriate action for the API
+    let action: 'start' | 'end' | 'missed-video-call' | 'missed-audio-call';
+    
+    switch (status) {
+      case 'accepted':
+        action = 'start';
+        break;
+      case 'missed':
+        action = callType === 'video' ? 'missed-video-call' : 'missed-audio-call';
+        break;
+      default:
+        action = 'end'; // Default to end for rejected/ended calls
+    }
+    
+    return this.handleCall({
+      callerId,
+      receiverId,
+      action,
+      callType: callType === 'video' ? 'video-call' : 'audio-call',
+      ...(callId && { callId }),
+    });
   }
 
   /**

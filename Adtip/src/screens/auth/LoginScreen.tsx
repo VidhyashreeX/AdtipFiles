@@ -25,15 +25,13 @@ const LoginScreen = ({navigation}: {navigation: any}) => {
   const {colors} = useTheme();
 
   // Auth context
-  const {login, loading} = useAuth();
-
-  // Local state
+  const {login, loading} = useAuth();  // Local state
   const [mobileNumber, setMobileNumber] = useState('');
   const [countryCode] = useState('+91'); // Remove setCountryCode since it's unused
   const [error, setError] = useState<string | null>(null);
-
-  // Handle login
-  const handleLogin = async () => {
+  const [localLoading, setLocalLoading] = useState(false);
+    // Handle login
+  const handleLogin = () => {
     // Validate mobile number
     if (!mobileNumber || mobileNumber.length < 10) {
       setError('Please enter a valid 10-digit mobile number');
@@ -44,21 +42,11 @@ const LoginScreen = ({navigation}: {navigation: any}) => {
     setError(null);
     Keyboard.dismiss();
 
-    try {
-      // Request OTP
-      const otpResponse = await login(mobileNumber);
-
-      // Navigate to OTP verification screen
-      navigation.navigate('OTP', {
-        mobileNumber,
-        id: otpResponse.id.toString(),
-        isFirstTime: otpResponse.is_first_time,
-      });
-    } catch (err) {
-      // Handle error
-      console.error('Login error:', err);
-      setError('Failed to send the OTP. Please try again.');
-    }
+    // Simply navigate to OTP screen with just the mobile number
+    // The OTP API call will be triggered from the OTP screen
+    navigation.navigate('OTP', {
+      mobileNumber,
+    });
   };
 
   return (
@@ -102,20 +90,18 @@ const LoginScreen = ({navigation}: {navigation: any}) => {
         </View>
 
         {/* Error message */}
-        {error && <Text style={styles.errorText}>{error}</Text>}
-
-        {/* Login button */}
+        {error && <Text style={styles.errorText}>{error}</Text>}        {/* Login button */}
         <TouchableOpacity
           style={[
             styles.loginButton,
             {backgroundColor: colors.primary},
-            (!mobileNumber || mobileNumber.length < 10 || loading) &&
+            (!mobileNumber || mobileNumber.length < 10 || localLoading) &&
               styles.disabledButton,
           ]}
           onPress={handleLogin}
-          disabled={!mobileNumber || mobileNumber.length < 10 || loading}>
-          {loading ? (
-            <ActivityIndicator color="#ffffff" />
+          disabled={!mobileNumber || mobileNumber.length < 10 || localLoading}>
+          {localLoading ? (
+            <ActivityIndicator color="#ffffff" size="small" />
           ) : (
             <Text style={styles.loginButtonText}>Get OTP</Text>
           )}
