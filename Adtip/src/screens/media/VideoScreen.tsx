@@ -58,10 +58,13 @@ interface VideoProps {
 }
 
 const VideoScreen = () => {
-  const {colors} = useTheme();
+  const {colors, isDarkMode} = useTheme();
   const {user} = useAuth();
   const navigation = useNavigation();
   const route = useRoute();
+  
+  // Create dynamic styles based on theme
+  const styles = createStyles(colors, isDarkMode);
   const videoRef = useRef<any>(null);
 
   // Get video from route params
@@ -641,34 +644,40 @@ const VideoScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.background,
   },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
+    color: colors.text.primary,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: colors.background,
   },
   errorText: {
     fontSize: 16,
     textAlign: 'center',
     marginVertical: 16,
+    color: colors.text.primary,
   },
   retryButton: {
     paddingVertical: 10,
     paddingHorizontal: 24,
     borderRadius: 8,
+    backgroundColor: colors.primary,
   },
   videoContainer: {
     width: '100%',
@@ -750,14 +759,14 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 16,
-  },
-  videoInfo: {
+  },  videoInfo: {
     marginBottom: 16,
   },
   videoTitle: {
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 8,
+    color: colors.text.primary,
   },
   videoStats: {
     flexDirection: 'row',
@@ -767,15 +776,15 @@ const styles = StyleSheet.create({
   },
   statsText: {
     fontSize: 14,
+    color: colors.text.secondary,
   },
   actionButtons: {
     flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
+    borderColor: isDarkMode ? colors.border : 'rgba(0, 0, 0, 0.1)',
     paddingVertical: 12,
-  },
-  actionButton: {
+  },  actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     marginRight: 24,
@@ -783,15 +792,17 @@ const styles = StyleSheet.create({
   actionText: {
     marginLeft: 6,
     fontSize: 14,
+    color: colors.text.primary,
   },
   likedActionText: {
     fontWeight: '600',
+    color: colors.primary,
   },
   rewardContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginLeft: 'auto',
-    backgroundColor: 'rgba(46, 204, 113, 0.1)',
+    backgroundColor: isDarkMode ? 'rgba(46, 204, 113, 0.15)' : 'rgba(46, 204, 113, 0.1)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -800,13 +811,14 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontSize: 12,
     fontWeight: '500',
-  },
-  channelContainer: {
+    color: isDarkMode ? '#2ecc71' : '#27ae60',
+  },  channelContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
     marginBottom: 16,
   },
   channelInfo: {
@@ -825,11 +837,12 @@ const styles = StyleSheet.create({
   channelName: {
     fontSize: 16,
     fontWeight: '500',
+    color: colors.text.primary,
   },
   subscriberCount: {
     fontSize: 14,
-  },
-  subscribeButton: {
+    color: colors.text.secondary,
+  },  subscribeButton: {
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
@@ -837,6 +850,7 @@ const styles = StyleSheet.create({
   subscribedButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
+    borderColor: colors.border,
   },
   notSubscribedButton: {
     // backgroundColor will be set to colors.primary in component
@@ -845,6 +859,7 @@ const styles = StyleSheet.create({
   subscribeText: {
     fontSize: 14,
     fontWeight: '600',
+    color: colors.text.primary,
   },
   descriptionContainer: {
     marginBottom: 20,
@@ -852,6 +867,7 @@ const styles = StyleSheet.create({
   descriptionText: {
     fontSize: 14,
     lineHeight: 22,
+    color: colors.text.primary,
   },
   fullscreenContainer: {
     backgroundColor: '#000',

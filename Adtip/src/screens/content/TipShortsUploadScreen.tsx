@@ -34,9 +34,12 @@ const RECORDING_MAX_DURATION = 60; // Max 60 seconds for shorts
 import { RootStackParamList } from '../../types/navigation';
 
 const TipShortsUploadScreen = () => {
-  const {colors} = useTheme();
+  const {colors, isDarkMode} = useTheme();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RootStackParamList, 'TipShortsUploadScreen'>>();
+
+  // Create dynamic styles based on theme
+  const styles = createStyles(colors, isDarkMode);
 
   // State
   const [videoSource, setVideoSource] = useState<any>(null);
@@ -485,20 +488,22 @@ const TipShortsUploadScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
   recordingContainer: {
     flex: 1,
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: colors.background,
   },
   cameraPlaceholder: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
+    backgroundColor: colors.surface,
   },
   placeholderText: {
-    color: '#fff',
+    color: colors.text.primary,
     marginTop: 16,
     fontSize: 16,
     textAlign: 'center',
@@ -515,7 +520,7 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     backgroundColor: 'transparent',
     borderWidth: 4,
-    borderColor: '#fff',
+    borderColor: colors.text.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -534,7 +539,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   durationText: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 16,
     marginLeft: 8,
     fontVariant: ['tabular-nums'],
@@ -549,6 +554,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 16,
     position: 'relative',
+    backgroundColor: colors.surface,
   },
   previewImage: {
     width: '100%',
@@ -570,22 +576,30 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   captionInput: {
     padding: 0,
     fontSize: 16,
     textAlignVertical: 'top',
     minHeight: 80,
+    color: colors.text.primary,
   },
   captionCount: {
     fontSize: 12,
     alignSelf: 'flex-end',
     marginTop: 8,
+    color: colors.text.secondary,
   },
   optionsContainer: {
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   optionRow: {
     flexDirection: 'row',
@@ -600,6 +614,7 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: 16,
     marginLeft: 12,
+    color: colors.text.primary,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -613,6 +628,9 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   publishButton: {
     flex: 2,
@@ -620,29 +638,34 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.primary,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 999,
+    backgroundColor: isDarkMode ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)',
   },
   loadingContainer: {
     padding: 24,
     borderRadius: 12,
     alignItems: 'center',
     minWidth: 250,
+    backgroundColor: colors.card,
   },
   loadingText: {
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 16,
+    color: colors.text.primary,
   },
   progressBar: {
     marginVertical: 12,
   },
   percentText: {
     fontSize: 14,
+    color: colors.text.secondary,
   },
   flex1: {
     flex: 1,

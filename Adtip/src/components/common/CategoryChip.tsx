@@ -32,10 +32,13 @@ const CategoryChip: React.FC<CategoryChipProps> = ({
   textStyle,
   small = false,
 }) => {
-  const {colors} = useTheme();
+  const {colors, isDarkMode} = useTheme();
 
   // Determine the chip color based on the category's color or use the theme primary color
   const chipColor = category.color || colors.primary;
+
+  // Adjust opacity for background in dark mode
+  const bgOpacity = isDarkMode ? '30' : '20';
 
   return (
     <TouchableOpacity
@@ -43,10 +46,14 @@ const CategoryChip: React.FC<CategoryChipProps> = ({
       style={[
         styles.container,
         {
-          backgroundColor: selected ? chipColor + '20' : 'transparent',
+          backgroundColor: selected ? chipColor + bgOpacity : 'transparent',
           borderColor: chipColor,
           paddingVertical: small ? 4 : 6,
           paddingHorizontal: small ? 10 : 12,
+        },
+        isDarkMode && {
+          borderWidth: selected ? 1 : 1,
+          borderColor: selected ? chipColor : chipColor + '60',
         },
         style,
       ]}

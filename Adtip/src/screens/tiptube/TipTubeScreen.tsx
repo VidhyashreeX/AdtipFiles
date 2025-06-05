@@ -14,6 +14,8 @@ import {
 import Video from "react-native-video"; // Import react-native-video
 import { useAuth } from "../../contexts/AuthContext"; // Assuming AuthContext works similarly
 import { useNavigation } from "@react-navigation/native"; // For React Navigation
+import { useTheme } from "../../contexts/ThemeContext";
+import { useTabNavigator } from "../../contexts/TabNavigatorContext";
 import ApiService from "../../services/ApiService";
 
 // Components
@@ -99,6 +101,8 @@ const marketplaceMenu = [
 ];
 
 const TipTubeScreen = () => {
+  const { isDarkMode, colors } = useTheme();
+  const { contentPaddingBottom } = useTabNavigator();
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [videos, setVideos] = useState<Video[]>([]);
   const [offset, setOffset] = useState(1);
@@ -111,6 +115,9 @@ const TipTubeScreen = () => {
   const scrollViewRef = useRef<ScrollView>(null);
   const { user } = useAuth();
   const navigation = useNavigation<any>(); // Use any to avoid navigation typing errors
+
+  // Create dynamic styles based on theme
+  const styles = createStyles(colors, isDarkMode);
 
   // Transform API video data to match Video interface
   const transformVideoData = (apiVideo: any): Video => ({
@@ -273,12 +280,11 @@ const TipTubeScreen = () => {
 
   return (
     <View style={styles.container}>
-      <Header title="TipTube" showLogo={true} />
-      <ScrollView
+      <Header title="TipTube" showLogo={true} />      <ScrollView
         ref={scrollViewRef}
         onScroll={handleScroll}
         scrollEventThrottle={16} // Optimize scroll event frequency
-        contentContainerStyle={styles.scrollViewContent}
+        contentContainerStyle={[styles.scrollViewContent, {paddingBottom: contentPaddingBottom}]}
       >
         {/* Category Filter (You'd typically have a horizontal scroll view here) */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroller}>
@@ -411,14 +417,12 @@ const TipTubeScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f3f4f6", // gray-100
-  },
-  scrollViewContent: {
+    backgroundColor: colors.background,
+  },  scrollViewContent: {
     paddingHorizontal: 16,
-    paddingBottom: 20, // Add some padding at the bottom for content
   },
   categoryScroller: {
     marginBottom: 20,
@@ -428,20 +432,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: "#e5e7eb", // gray-200
+    backgroundColor: isDarkMode ? colors.gray[700] : colors.gray[200],
     marginRight: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
   selectedCategoryButton: {
-    backgroundColor: "#00C896", // adtip-teal
+    backgroundColor: "#00C896", // adtip-teal (keep consistent for both modes)
   },
   categoryButtonText: {
-    color: "#4b5563", // gray-700
+    color: isDarkMode ? colors.gray[300] : colors.text.secondary,
     fontWeight: "500",
   },
   selectedCategoryButtonText: {
-    color: "#fff",
+    color: "#fff", // White for both light and dark mode
   },
   videoGrid: {
     flexDirection: "row",
@@ -454,19 +458,18 @@ const styles = StyleSheet.create({
     // Adjust based on column count and screen size for md, lg
     // For simplicity, we'll keep 2 columns.
     // For more complex responsive grid, use Dimensions.get('window').width and calculate columns
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
     borderRadius: 12, // rounded-xl
-    shadowColor: "#000",
+    shadowColor: isDarkMode ? "#000" : "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: isDarkMode ? 0.3 : 0.1,
     shadowRadius: 3.84,
     elevation: 5,
     marginBottom: 16, // gap-6
     overflow: "hidden", // Important for rounded corners
-  },
-  thumbnailContainer: {
+  },  thumbnailContainer: {
     aspectRatio: 16 / 9,
-    backgroundColor: "#e5e7eb", // gray-200
+    backgroundColor: isDarkMode ? colors.gray[700] : colors.gray[200],
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
     overflow: "hidden",
@@ -533,12 +536,12 @@ const styles = StyleSheet.create({
   },
   videoStats: {
     fontSize: 10, // text-xs
-    color: "#6b7280", // gray-500
+    color: colors.text.tertiary,
   },
   videoTitle: {
     fontSize: 16, // text-base
     fontWeight: "500", // font-medium
-    color: "#1f2937", // gray-900
+    color: colors.text.primary,
     marginBottom: 4,
   },
   loadingContainer: {
@@ -557,14 +560,14 @@ const styles = StyleSheet.create({
     paddingVertical: 48,
   },
   noVideosText: {
-    color: "#6b7280", // gray-500
+    color: colors.text.tertiary,
     fontSize: 16,
   },
 
   // Player Modal Styles
   playerModalContainer: {
     flex: 1,
-    backgroundColor: "#f3f4f6", // gray-100
+    backgroundColor: colors.background,
   },
   mainVideoPlayer: {
     width: "100%",
@@ -574,12 +577,12 @@ const styles = StyleSheet.create({
   mainVideoInfo: {
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb", // gray-200
+    borderBottomColor: colors.borderLight,
   },
   mainVideoTitle: {
     fontSize: 20, // text-xl
     fontWeight: "bold",
-    color: "#1f2937", // gray-900
+    color: colors.text.primary,
     marginBottom: 8,
   },
   mainVideoCreatorSection: {
@@ -599,11 +602,11 @@ const styles = StyleSheet.create({
   mainVideoCreatorName: {
     fontSize: 16, // text-base
     fontWeight: "600",
-    color: "#1f2937", // gray-900
+    color: colors.text.primary,
   },
   mainVideoStats: {
     fontSize: 12, // text-xs
-    color: "#6b7280", // gray-500
+    color: colors.text.tertiary,
   },
   subscribeButton: {
     backgroundColor: "#00C896", // adtip-teal
@@ -626,18 +629,17 @@ const styles = StyleSheet.create({
   actionButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f3f4f6", // gray-100
+    backgroundColor: colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 9999, // rounded-full
   },
   actionButtonText: {
-    color: "#4b5563", // gray-700
+    color: colors.text.secondary,
     fontWeight: "500",
     marginLeft: 4, // for icon spacing
-  },
-  backButton: {
-    backgroundColor: "#e5e7eb", // gray-200
+  },  backButton: {
+    backgroundColor: isDarkMode ? colors.gray[700] : colors.gray[200],
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 9999, // rounded-full
@@ -645,7 +647,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   backButtonText: {
-    color: "#4b5563", // gray-700
+    color: colors.text.secondary,
     fontWeight: "500",
   },
   relatedVideosSection: {
@@ -656,15 +658,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 12,
-    color: "#1f2937",
+    color: colors.text.primary,
   },
   relatedVideoCard: {
     flexDirection: "row",
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
     borderRadius: 8, // rounded-lg
-    shadowColor: "#000",
+    shadowColor: isDarkMode ? "#000" : "#000",
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOpacity: isDarkMode ? 0.3 : 0.05,
     shadowRadius: 2,
     elevation: 2,
     marginBottom: 12, // gap-3
@@ -683,16 +685,16 @@ const styles = StyleSheet.create({
   relatedVideoTitle: {
     fontSize: 14, // text-sm
     fontWeight: "600",
-    color: "#1f2937", // gray-900
+    color: colors.text.primary,
     marginBottom: 4,
   },
   relatedVideoCreator: {
     fontSize: 12, // text-xs
-    color: "#4b5563", // gray-600
+    color: colors.text.secondary,
   },
   relatedVideoStats: {
     fontSize: 10, // text-xs
-    color: "#6b7280", // gray-500
+    color: colors.text.tertiary,
   },
 });
 

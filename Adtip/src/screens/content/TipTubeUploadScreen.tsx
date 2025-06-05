@@ -42,9 +42,12 @@ type TipTubeUploadScreenParams = {
 };
 
 const TipTubeUploadScreen = () => {
-  const {colors} = useTheme();
+  const {colors, isDarkMode} = useTheme();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<{params: TipTubeUploadScreenParams}, 'params'>>();
+
+  // Create dynamic styles based on theme
+  const styles = createStyles(colors, isDarkMode);
 
   // State variables
   const [title, setTitle] = useState('');
@@ -523,10 +526,10 @@ const TipTubeUploadScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
   },
   flex1: {
     flex: 1,
@@ -538,16 +541,19 @@ const styles = StyleSheet.create({
   uploadContainer: {
     borderWidth: 2,
     borderStyle: 'dashed',
+    borderColor: colors.border,
     borderRadius: 12,
     height: 180,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
+    backgroundColor: colors.surface,
   },
   uploadText: {
     marginTop: 12,
     fontSize: 16,
     fontWeight: '500',
+    color: colors.text.primary,
   },
   videoPreviewContainer: {
     flexDirection: 'row',
@@ -555,6 +561,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 20,
     height: 100,
+    backgroundColor: colors.card,
   },
   thumbnailPreview: {
     width: 100,
@@ -567,6 +574,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.gray[200],
   },
   videoInfoContainer: {
     flex: 1,
@@ -577,9 +585,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     marginBottom: 4,
+    color: colors.text.primary,
   },
   videoSize: {
     fontSize: 14,
+    color: colors.text.secondary,
   },
   videoActionButtons: {
     justifyContent: 'center',
@@ -593,11 +603,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
+    backgroundColor: colors.surface,
   },
   errorText: {
     marginBottom: 16,
     fontSize: 14,
     textAlign: 'center',
+    color: colors.error,
   },
   formContainer: {
     flex: 1,
@@ -609,13 +621,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 8,
     fontWeight: '500',
+    color: colors.text.primary,
   },
   input: {
     borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
+    backgroundColor: colors.surface,
+    color: colors.text.primary,
   },
   textArea: {
     height: 100,
@@ -627,9 +643,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
+    backgroundColor: colors.surface,
   },
   toggleContainer: {
     flexDirection: 'row',
@@ -644,30 +662,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     marginBottom: 2,
+    color: colors.text.primary,
   },
   toggleDescription: {
     fontSize: 14,
+    color: colors.text.secondary,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: isDarkMode ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)',
   },
   loadingContainer: {
     padding: 24,
     borderRadius: 12,
     alignItems: 'center',
+    backgroundColor: colors.card,
   },
   loadingText: {
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 16,
+    color: colors.text.primary,
   },
   progressBar: {
     marginVertical: 12,
   },
   percentText: {
     fontSize: 14,
+    color: colors.text.secondary,
   },
   scrollContentContainer: {
     paddingBottom: 30,

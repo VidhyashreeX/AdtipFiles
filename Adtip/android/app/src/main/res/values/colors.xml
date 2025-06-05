@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#24d05a</color>
+    <color name="colorPrimaryDark">#1eb54a</color>
+    <color name="colorAccent">#00C853</color>
+    <color name="statusBarColor">#FFFFFF</color>
+    <color name="backgroundColor">#F8FAFC</color>
+    <color name="cardBackground">#FFFFFF</color>
+    <color name="textPrimary">#0F172A</color>
+    <color name="textSecondary">#374151</color>
+    <color name="textTertiary">#6B7280</color>
+    <color name="iconColor">#374151</color>
+    <color name="borderColor">#D1D5DB</color>
+    <color name="rippleColor">#20000000</color>
+</resources>

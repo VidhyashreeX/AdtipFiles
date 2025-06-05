@@ -29,6 +29,7 @@ import {
 } from 'react-native-agora';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useAuth} from '../../contexts/AuthContext';
+import {useTabNavigator} from '../../contexts/TabNavigatorContext';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import ApiService from '../../services/ApiService';
@@ -306,6 +307,7 @@ const MeetingView: React.FC<MeetingViewProps> = ({
 
 const TipCallScreen: React.FC = () => {
   const {user} = useAuth();
+  const {contentPaddingBottom} = useTabNavigator();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>(); // Corrected navigation prop type
   const [selectedCategory, setSelectedCategory] = useState<string>('1');
   const [selectedLanguage, setSelectedLanguage] = useState<string>('1');
@@ -852,7 +854,7 @@ const TipCallScreen: React.FC = () => {
               <Text style={styles.loadingText}>Loading...</Text>
             </View>
           )}
-          <View style={styles.bottomPadding} />
+          <View style={[styles.bottomPadding, {height: contentPaddingBottom}]} />
         </ScrollView>
       ) : (
         <MissedCallsList onCallUser={(userId, callType) => {
@@ -1159,7 +1161,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   bottomPadding: {
-    height: 80,
+    // Height will be set dynamically using contentPaddingBottom
   },
   categoryItem: {
     paddingVertical: 8,

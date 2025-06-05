@@ -16,16 +16,17 @@ const EarnCard: React.FC<EarnCardProps> = ({
   description,
   iconName,
   onPress,
-}) => {
-  const {colors} = useTheme();
+}) => {  const {colors, isDarkMode} = useTheme();
 
   return (
     <TouchableOpacity
       style={[
         styles.card,
         {
-          backgroundColor: colors.white,
-          shadowColor: colors.black,
+          backgroundColor: colors.card,
+          shadowColor: isDarkMode ? 'rgba(0,0,0,0.8)' : colors.black,
+          borderColor: isDarkMode ? colors.border : 'transparent',
+          borderWidth: isDarkMode ? 1 : 0,
         },
       ]}
       onPress={onPress}>
@@ -41,7 +42,7 @@ const EarnCard: React.FC<EarnCardProps> = ({
         <View
           style={[
             styles.iconContainer,
-            {backgroundColor: colors.primary + '10'},
+            {backgroundColor: isDarkMode ? colors.primary + '20' : colors.primary + '10'},
           ]}>
           <Icon name={iconName} size={24} color={colors.primary} />
         </View>

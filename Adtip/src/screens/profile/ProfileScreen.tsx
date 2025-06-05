@@ -1,47 +1,61 @@
 // src/screens/profile/ProfileScreen.tsx
-import React, {useState, useEffect} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  ScrollView,
   Image,
   TouchableOpacity,
+  ScrollView,
+  StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import {useRoute, useNavigation} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Feather';
 
 // Components
 import Header from '../../components/common/Header';
-import PostItem from '../../components/home/PostItem';
+import LastSeen from '../../components/common/LastSeen';
 
 // Context
 import {useTheme} from '../../contexts/ThemeContext';
 import {useAuth} from '../../contexts/AuthContext';
+import {useTabNavigator} from '../../contexts/TabNavigatorContext';
 
 // Constants
 import {API_BASE_URL, API_ENDPOINTS} from '../../constants/api';
 
-type ProfileParams = {
+// Define profile params type
+interface ProfileParams {
   userId?: number;
-};
+}
 
 const ProfileScreen: React.FC = () => {
   const route = useRoute();
   const {userId} = (route.params as ProfileParams) || {};
-  const {colors} = useTheme();
+  const {colors, isDarkMode} = useTheme();
+  
+  // Add a try/catch block to handle missing context
+  let contentPaddingBottom = 0;
+  try {
+    // Try to use the TabNavigator context
+    const tabNavigator = useTabNavigator();
+    contentPaddingBottom = tabNavigator.contentPaddingBottom;
+  } catch (error) {
+    // Fallback to a reasonable value if context is not available
+    contentPaddingBottom = 80; // Default padding that should work in most cases
+  }
+  
   const {user: currentUser, logout} = useAuth();
   const navigation = useNavigation();
 
   // State
   const [user, setUser] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'posts' | 'videos' | 'about'>(
-    'posts',
-  );
+  const [activeTab, setActiveTab] = useState<'posts' | 'videos' | 'about'>('posts');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState({
@@ -50,6 +64,7 @@ const ProfileScreen: React.FC = () => {
     likes: Math.floor(Math.random() * 10000),
   });
   const [isFollowing, setIsFollowing] = useState(false);
+  const [showFullMenu, setShowFullMenu] = useState(false);
 
   const isOwnProfile =
     !userId || (currentUser && userId === parseInt(currentUser.id, 10));
@@ -72,24 +87,37 @@ const ProfileScreen: React.FC = () => {
       let userData: any;
 
       if (isOwnProfile && currentUser) {
+        // Use current user data for own profile
         userData = currentUser;
-      } else {
+      } else {        // Fetch other user profile data
         const token = await AsyncStorage.getItem('accessToken');
-        const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
-          method: 'GET',
-          headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
+        const response = await fetch(
+          `${API_BASE_URL}/api/users/${userId}`,
+          {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
           },
-        });
+        );
 
         if (!response.ok) {
-          throw new Error('Failed to fetch user data');
+          console.error('Error response:', await response.text());
+          setUser(null);
+          setLoading(false);
+          return;
         }
 
         const result = await response.json();
-        userData = result.data;
+        if (result.success && result.data) {
+          userData = result.data;
+        } else {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
       }
 
       setUser(userData);
@@ -107,7 +135,7 @@ const ProfileScreen: React.FC = () => {
   // Fetch user posts
   const fetchUserPosts = async (id: string | number | undefined) => {
     if (!id) {
-      setPosts([]); // Set posts to empty if no ID is provided
+      setPosts([]);
       return;
     }
 
@@ -126,13 +154,9 @@ const ProfileScreen: React.FC = () => {
       );
 
       if (!response.ok) {
-        // Specifically handle 404 as 'no posts' (not an error)
-        if (response.status === 404) {
-          setPosts([]);
-          return;
-        }
-        // For other errors, throw an error
-        throw new Error(`Failed to fetch user posts. Status: ${response.status}`);
+        console.error('Error response:', await response.text());
+        setPosts([]);
+        return;
       }
 
       const result = await response.json();
@@ -218,6 +242,56 @@ const ProfileScreen: React.FC = () => {
     return Promise.resolve();
   };
 
+  // Menu items based on design
+  const menuItems = [
+    {
+      id: 'account',
+      icon: 'user',
+      title: 'My Account',
+      subtitle: 'Account settings and preferences',
+      onPress: handleSettings,
+      active: false,
+    },    {
+      id: 'videos',
+      icon: 'play-circle',
+      title: 'Watch Videos',
+      subtitle: 'Earn coins by watching content',
+      onPress: () => navigation.navigate('TipShorts' as never),
+      active: false,
+    },    {
+      id: 'earnings',
+      icon: 'dollar-sign',
+      title: 'My Earnings',
+      subtitle: 'Track your daily rewards',
+      onPress: () => navigation.navigate('Earnings' as never),
+      active: false,
+    },
+    {
+      id: 'premium',
+      icon: 'award',
+      title: 'Premium Content',
+      subtitle: 'Unlock exclusive videos',
+      onPress: () => console.log('Navigate to premium content'),
+      active: true,
+    },
+    {
+      id: 'privacy',
+      icon: 'shield',
+      title: 'Privacy',
+      subtitle: 'Privacy and security settings',
+      onPress: () => console.log('Navigate to privacy settings'),
+      active: false,
+    },
+    {
+      id: 'support',
+      icon: 'help-circle',
+      title: 'Support',
+      subtitle: 'Help center and contact us',
+      onPress: () => console.log('Navigate to support'),
+      active: false,
+    },
+  ];
+
   // Handler for sign out
   const handleSignOut = async () => {
     try {
@@ -228,6 +302,21 @@ const ProfileScreen: React.FC = () => {
     }
   };
 
+  // Get user initials for avatar
+  const getUserInitials = () => {
+    if (!user) return 'JD';
+    
+    const name = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim();
+    if (!name) return 'JD';
+    
+    return name
+      .split(' ')
+      .map((n: string) => n[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
+  
   // Effects
   useEffect(() => {
     fetchUserData();
@@ -259,14 +348,17 @@ const ProfileScreen: React.FC = () => {
       </View>
     );
   }
-
   return (
-    <View style={[styles.container, {backgroundColor: colors.background}]}> 
-      <View style={{width: '100%', alignSelf: 'center', zIndex: 10, backgroundColor: colors.background}}>
-        <Header title={isOwnProfile ? 'Profile' : 'Profile'} showLogo={true} showNotifications={isOwnProfile || false} />
-      </View>
-      <ScrollView
-        contentContainerStyle={{paddingBottom: 24}}
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
+      <Header 
+        title={isOwnProfile ? 'Profile' : user?.name || 'Profile'} 
+        showLogo={true} // Always show logo, regardless of profile type
+        showBackButton={!isOwnProfile}
+        showNotifications={isOwnProfile || false} 
+      />
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={{ paddingBottom: contentPaddingBottom }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -274,346 +366,122 @@ const ProfileScreen: React.FC = () => {
             colors={[colors.primary]}
             tintColor={colors.primary}
           />
-        }>
-        <View style={styles.profileHeader}>
-          <View style={styles.coverPhotoContainer}>
-            <Image
-              source={{
-                uri: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809',
-              }}
-              style={styles.coverPhoto}
-            />
-          </View>
-
-          <View style={styles.profileInfoContainer}>
-            <View style={styles.avatarContainer}>
-              <Image
-                source={{
-                  uri: user.profile_image
-                    ? getFullImageUrl(user.profile_image)
-                    : 'https://via.placeholder.com/150',
-                }}
-                style={styles.avatar}
-              />
-            </View>
-
-            <View style={styles.nameContainer}>
-              <Text style={[styles.name, {color: colors.text.primary}]}>
-                {user.name ||
-                  `${user.firstName || ''} ${user.lastName || ''}`.trim()}
-              </Text>
-              <Text style={[styles.username, {color: colors.text.secondary}]}>
-                @{user.username || `user${user.id}`}
-              </Text>
-
-              {user.bio && (
-                <Text style={[styles.bio, {color: colors.text.secondary}]}>
-                  {user.bio}
-                </Text>
+        }
+      >
+        {/* Gradient Header */}
+        <LinearGradient
+          colors={['#4080FF', '#9747FF']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.gradientHeader}
+        >
+          {isOwnProfile && (
+            <TouchableOpacity style={styles.cameraButton}>
+              <Icon name="camera" size={20} color="#fff" />
+            </TouchableOpacity>
+          )}
+        </LinearGradient>        {/* Avatar */}
+        <View style={styles.avatarContainer}>
+          <LinearGradient
+            colors={['#4080FF', '#9747FF']}
+            style={styles.avatarGradient}
+          >
+            <View style={[styles.avatarWrapper, {backgroundColor: colors.card}]}>
+              {user?.profile_image ? (
+                <Image source={{ uri: getFullImageUrl(user.profile_image) }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarInitials}>{getUserInitials()}</Text>
               )}
-            </View>
-
-            {isOwnProfile ? (
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[
-                    styles.editButton,
-                    {borderColor: colors.border},
-                  ]}
-                  onPress={handleEditProfile}>
-                  <Text style={{color: colors.text.primary}}>Edit Profile</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.settingsButton}
-                  onPress={handleSettings}>
-                  <Icon name="settings" size={20} color={colors.text.primary} />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={[
-                  styles.followButton,
-                  {
-                    backgroundColor: isFollowing
-                      ? colors.gray[200]
-                      : colors.primary,
-                  },
-                ]}
-                onPress={handleFollowToggle}>
-                <Text
-                  style={[
-                    {
-                      color: isFollowing ? colors.text.primary : colors.white,
-                    },
-                    styles.followButtonText,
-                  ]}>
-                  {isFollowing ? 'Following' : 'Follow'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View
-            style={[styles.statsContainer, {borderColor: colors.borderLight}]}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, {color: colors.text.primary}]}>
-                {stats.followers}
-              </Text>
-              <Text style={[styles.statLabel, {color: colors.text.secondary}]}>
-                Followers
-              </Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, {color: colors.text.primary}]}>
-                {stats.following}
-              </Text>
-              <Text style={[styles.statLabel, {color: colors.text.secondary}]}>
-                Following
-              </Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, {color: colors.text.primary}]}>
-                {stats.likes}
-              </Text>
-              <Text style={[styles.statLabel, {color: colors.text.secondary}]}>
-                Likes
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {!user.hasChannel && isOwnProfile && (
-          <TouchableOpacity
-            style={[
-              styles.createChannelButton,
-              {backgroundColor: colors.primary},
-            ]}
-            onPress={handleCreateChannel}>
-            <Icon name="video" size={20} color={colors.white} />
-            <Text style={styles.createChannelText}>Create Your Channel</Text>
-          </TouchableOpacity>
-        )}
-
-        <View
-          style={[
-            styles.tabsContainer,
-            {borderBottomColor: colors.borderLight},
-          ]}>
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === 'posts' && [
-                styles.activeTab,
-                {borderBottomColor: colors.primary},
-              ],
-            ]}
-            onPress={() => handleTabChange('posts')}>
-            <Text
-              style={[
-                styles.tabText,
-                {
-                  color:
-                    activeTab === 'posts'
-                      ? colors.primary
-                      : colors.text.secondary,
-                },
-              ]}>
-              Posts
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === 'videos' && [
-                styles.activeTab,
-                {borderBottomColor: colors.primary},
-              ],
-            ]}
-            onPress={() => handleTabChange('videos')}>
-            <Text
-              style={[
-                styles.tabText,
-                {
-                  color:
-                    activeTab === 'videos'
-                      ? colors.primary
-                      : colors.text.secondary,
-                },
-              ]}>
-              Videos
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === 'about' && [
-                styles.activeTab,
-                {borderBottomColor: colors.primary},
-              ],
-            ]}
-            onPress={() => handleTabChange('about')}>
-            <Text
-              style={[
-                styles.tabText,
-                {
-                  color:
-                    activeTab === 'about'
-                      ? colors.primary
-                      : colors.text.secondary,
-                },
-              ]}>
-              About
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {activeTab === 'posts' && (
-          <View style={styles.contentContainer}>
-            {posts.length === 0 ? (
-              <View style={styles.emptyContent}>
-                <Icon name="image" size={50} color={colors.gray[300]} />
-                <Text
-                  style={[styles.emptyText, {color: colors.text.secondary}]}>
-                  {isOwnProfile
-                    ? "You haven't posted anything yet"
-                    : 'No posts yet'}
-                </Text>
-                {isOwnProfile && (
-                  <TouchableOpacity
-                    style={[
-                      styles.createPostButton,
-                      {backgroundColor: colors.primary},
-                    ]}
-                    onPress={() => navigation.navigate('CreatePost' as never)}>
-                    <Text style={styles.createButtonText}>Create Post</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            ) : (
-              posts.map(post => (
-                <PostItem
-                  key={post.id}
-                  id={post.id}
-                  username={post.user_name || user.name}
-                  profileImage={
-                    post.user_profile_image ||
-                    getFullImageUrl(user.profile_image)
-                  }
-                  postImage={post.media_url}
-                  caption={post.content}
-                  likes={post.likeCount}
-                  comments={post.commentCount}
-                  timeAgo={
-                    post.created_at
-                      ? new Date(post.created_at).toLocaleDateString()
-                      : 'Recently'
-                  }
-                  media_type={post.media_type}
-                  isPremium={post.is_premium}
-                  onLike={handleLike}
-                  onComment={handleComment}
-                  onShare={handleShare}
-                  onPostPress={handlePostPress}
-                  onUserPress={() => {}}
-                  onFollow={handleFollow}
-                  userId={post.user_id || parseInt(user.id, 10)}
-                />
-              ))
-            )}
-          </View>
-        )}
-
-        {activeTab === 'videos' && (
-          <View style={styles.contentContainer}>
-            <View style={styles.emptyContent}>
-              <Icon name="video" size={50} color={colors.gray[300]} />
-              <Text style={[styles.emptyText, {color: colors.text.secondary}]}>
-                {isOwnProfile
-                  ? "You haven't uploaded any videos yet"
-                  : 'No videos yet'}
-              </Text>
               {isOwnProfile && (
-                <TouchableOpacity
-                  style={[
-                    styles.createPostButton,
-                    {backgroundColor: colors.primary},
-                  ]}
-                  onPress={() => navigation.navigate('TipTubeUpload' as never)}>
-                  <Text style={styles.createButtonText}>Upload Video</Text>
+                <TouchableOpacity style={styles.avatarCameraButton}>
+                  <Icon name="camera" size={14} color="#fff" />
                 </TouchableOpacity>
               )}
             </View>
+          </LinearGradient>
+        </View>        {/* Name, Username, Bio, Location */}
+        <View style={styles.userInfoContainer}>
+          <Text style={[styles.userName, {color: colors.text.primary}]}>
+            {user?.name || 'John Doe'}
+          </Text>
+          
+          <LastSeen 
+            lastActiveTime={user.last_active}
+            isOnline={user.is_online}
+            style={styles.lastSeen}
+          />
+          
+          <Text style={[styles.userHandle, {color: colors.text.secondary}]}>@{user?.username || 'johndoe'}</Text>
+          <Text style={[styles.userBio, {color: colors.text.secondary}]}>
+            {user?.bio || '🎬 Video enthusiast earning daily rewards 💰\nWatch, Learn, Earn with every view! 🚀'}
+          </Text>
+          <View style={styles.locationContainer}>
+            <Icon name="map-pin" size={14} color={colors.text.tertiary} />
+            <Text style={[styles.locationText, {color: colors.text.tertiary}]}>
+              {user?.address || user?.location || 'San Francisco, CA'}
+            </Text>
           </View>
-        )}
-
-        {activeTab === 'about' && (
-          <View
-            style={[styles.aboutContainer, {backgroundColor: colors.white}]}>
-            <View style={styles.aboutSection}>
-              <Text style={[styles.aboutTitle, {color: colors.text.primary}]}>
-                Personal Information
-              </Text>
-              <View style={styles.aboutItem}>
-                <Icon name="mail" size={18} color={colors.text.tertiary} />
-                <Text
-                  style={[styles.aboutText, {color: colors.text.secondary}]}>
-                  {user.emailId || 'Not provided'}
-                </Text>
-              </View>
-              <View style={styles.aboutItem}>
-                <Icon name="phone" size={18} color={colors.text.tertiary} />
-                <Text
-                  style={[styles.aboutText, {color: colors.text.secondary}]}>
-                  {user.mobile_number || 'Not provided'}
-                </Text>
-              </View>
-              <View style={styles.aboutItem}>
-                <Icon name="map-pin" size={18} color={colors.text.tertiary} />
-                <Text
-                  style={[styles.aboutText, {color: colors.text.secondary}]}>
-                  {user.address || 'Not provided'}
-                </Text>
-              </View>
-            </View>
-            <View
-              style={[styles.divider, {backgroundColor: colors.borderLight}]}
-            />
-            <View style={styles.aboutSection}>
-              <Text style={[styles.aboutTitle, {color: colors.text.primary}]}>
-                Professional Information
-              </Text>
-              <View style={styles.aboutItem}>
-                <Icon name="briefcase" size={18} color={colors.text.tertiary} />
-                <Text
-                  style={[styles.aboutText, {color: colors.text.secondary}]}>
-                  {user.profession || 'Not provided'}
-                </Text>
-              </View>
-
-              {isOwnProfile && (
-                <TouchableOpacity
-                  style={[
-                    styles.editDetailsButton,
-                    {borderColor: colors.border},
-                  ]}
-                  onPress={handleEditProfile}>
-                  <Text style={{color: colors.primary}}>Edit Details</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+        </View>        {/* Stats Row */}
+        <View style={[styles.statsContainer, {backgroundColor: isDarkMode ? colors.card : '#fff'}]}>
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, {color: colors.text.primary}]}>{posts.length || 128}</Text>
+            <Text style={[styles.statLabel, {color: colors.text.tertiary}]}>Posts</Text>
           </View>
-        )}
-
+          <View style={[styles.statDivider, {backgroundColor: colors.borderLight}]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, {color: colors.text.primary}]}>{stats.followers?.toLocaleString() || '2.5K'}</Text>
+            <Text style={[styles.statLabel, {color: colors.text.tertiary}]}>Followers</Text>
+          </View>
+          <View style={[styles.statDivider, {backgroundColor: colors.borderLight}]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, {color: colors.text.primary}]}>{stats.following || 892}</Text>
+            <Text style={[styles.statLabel, {color: colors.text.tertiary}]}>Following</Text>
+          </View>
+        </View>        {/* Edit Profile & Settings Buttons */}
         {isOwnProfile && (
-          <TouchableOpacity
-            style={styles.signOutButton}
-            onPress={handleSignOut}>
-            <Text style={styles.signOutButtonText}>Sign Out</Text>
-          </TouchableOpacity>
+          <View style={styles.actionButtonsContainer}>
+            <TouchableOpacity
+              style={styles.editProfileButton}
+              onPress={handleEditProfile}
+            >
+              <Icon name="edit-2" size={18} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={styles.editButtonText}>Edit Profile</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.settingsButton, {backgroundColor: isDarkMode ? colors.gray[700] : colors.gray[200]}]}
+              onPress={() => navigation.navigate('Settings' as never)}
+            >
+              <Icon name="settings" size={22} color={colors.text.secondary} />
+            </TouchableOpacity>
+          </View>
         )}
+
+        {/* Menu Section */}
+        <View style={[styles.menuContainer, {backgroundColor: isDarkMode ? colors.card : '#fff'}]}>
+          <Text style={[styles.menuTitle, {color: colors.text.primary}]}>Menu</Text>
+          {menuItems.map((item, idx) => (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.menuItem}
+              onPress={item.onPress}
+              activeOpacity={0.85}
+            >
+              <View style={styles.menuItemLeft}>
+                <View style={[styles.menuIconContainer, {backgroundColor: isDarkMode ? colors.background : colors.gray[100]}]}>
+                  <Icon name={item.icon} size={22} color={colors.text.secondary} />
+                </View>
+                <View style={styles.menuItemTextContainer}>
+                  <Text style={[styles.menuItemTitle, {color: colors.text.primary}]}>{item.title}</Text>
+                  <Text style={[styles.menuItemSubtitle, {color: colors.text.tertiary}]}>{item.subtitle}</Text>
+                </View>
+              </View>
+              <View style={styles.menuItemRight}>
+                {item.active && <View style={styles.activeIndicator} />}
+                <Icon name="chevron-right" size={20} color={colors.text.tertiary} />
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
       </ScrollView>
     </View>
   );
@@ -623,146 +491,196 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  followButtonText: {
-    fontWeight: '600',
+  scrollView: {
+    flex: 1,
   },
-  createButtonText: {
-    fontWeight: '600',
-    color: 'white',
+  gradientHeader: {
+    height: 120,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
-  profileHeader: {
-    marginBottom: 16,
-  },
-  coverPhotoContainer: {
-    height: 150,
-  },
-  coverPhoto: {
-    width: '100%',
-    height: '100%',
-  },
-  profileInfoContainer: {
-    padding: 16,
-    marginTop: -40,
+  cameraButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    backgroundColor: '#ffffff22',
+    borderRadius: 16,
+    padding: 6,
   },
   avatarContainer: {
-    marginBottom: 8,
+    alignItems: 'center',
+    marginTop: -48,
   },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 3,
-    borderColor: 'white',
+  avatarGradient: {
+    padding: 3,
+    borderRadius: 48,
   },
-  nameContainer: {
-    marginBottom: 12,
+  avatarWrapper: {
+    borderRadius: 45,
+    width: 90,
+    height: 90,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  name: {
-    fontSize: 20,
+  avatarImage: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+  },
+  avatarInitials: {
+    fontSize: 32,
     fontWeight: '700',
+    color: '#4080FF',
+  },
+  avatarCameraButton: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: '#4080FF',
+    borderRadius: 16,
+    padding: 3,
+  },
+  userInfoContainer: {
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 8,
+    paddingHorizontal: 16,
+  },
+  userName: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  userHandle: {
+    fontSize: 15,
     marginBottom: 4,
   },
-  username: {
+  userBio: {
     fontSize: 14,
-    marginBottom: 8,
+    textAlign: 'center',
+    marginBottom: 4,
   },
-  bio: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  actionButtons: {
+  locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 2,
   },
-  editButton: {
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    marginRight: 12,
-  },
-  settingsButton: {
-    padding: 8,
-  },
-  followButton: {
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 24,
-    alignSelf: 'flex-start',
-    marginTop: 12,
+  locationText: {
+    fontSize: 14,
+    marginLeft: 4,
   },
   statsContainer: {
     flexDirection: 'row',
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
+    paddingVertical: 16,
   },
   statValue: {
     fontSize: 18,
     fontWeight: '700',
-    marginBottom: 4,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 13,
   },
   statDivider: {
     width: 1,
-    backgroundColor: '#E5E7EB',
+    marginVertical: 12,
   },
-  createChannelButton: {
+  actionButtonsContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 16,
     marginBottom: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
   },
-  createChannelText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 16,
-    marginLeft: 8,
-  },
-  tabsContainer: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-  },
-  tab: {
+  editProfileButton: {
     flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  activeTab: {
-    borderBottomWidth: 2,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  contentContainer: {
-    minHeight: 300,
-  },
-  emptyContent: {
+    marginHorizontal: 16,
+    backgroundColor: '#4080FF',
+    borderRadius: 16,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 40,
+    paddingVertical: 12,
   },
-  emptyText: {
-    marginTop: 16,
-    marginBottom: 24,
+  editButtonText: {
+    color: '#fff',
+    fontWeight: '600',
     fontSize: 16,
-    textAlign: 'center',
   },
-  createPostButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+  settingsButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  menuContainer: {
     borderRadius: 20,
+    marginHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 0,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+  },
+  menuTitle: {
+    fontWeight: '700',
+    fontSize: 16,
+    marginLeft: 20,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    marginBottom: 4,
+    backgroundColor: 'transparent',
+  },
+  menuItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  menuIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  menuItemTextContainer: {
+    flex: 1,
+  },
+  menuItemTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  menuItemSubtitle: {
+    fontSize: 13,
+  },
+  menuItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  activeIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#4080FF',
+    marginRight: 8,
   },
   loadingContainer: {
     flex: 1,
@@ -785,53 +703,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#EEEEEE',
-  },
-  aboutContainer: {
-    padding: 16,
-    borderRadius: 8,
-    marginHorizontal: 16,
-    marginTop: 16,
-  },
-  aboutSection: {
-    marginBottom: 16,
-  },
-  aboutTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  aboutItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  aboutText: {
-    marginLeft: 12,
-    fontSize: 14,
-  },
-  divider: {
-    height: 1,
-    marginVertical: 16,
-  },
-  editDetailsButton: {
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    alignSelf: 'flex-start',
-    marginTop: 12,
-  },
-  signOutButton: {
-    margin: 24,
-    padding: 14,
-    backgroundColor: '#ef4444',
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  signOutButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
   },
 });
 

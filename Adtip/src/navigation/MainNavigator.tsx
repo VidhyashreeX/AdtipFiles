@@ -31,6 +31,11 @@ import NotificationScreen from '../screens/notifications/NotificationScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import EarningsScreen from '../screens/earnings/EarningsScreen';
 import ReferralScreen from '../screens/referral/ReferralScreen';
+import PlayToEarnScreen from '../screens/playtoEarn/PlayToEarnScreen';
+import WatchToEarnScreen from '../screens/watchToEarn/WatchToEarnScreen';
+import AdPassbookScreen from '../screens/adPassbook/AdPassbookScreen';
+import SupportScreen from '../screens/support/SupportScreen';
+import CreateCampaignScreen from '../screens/adPassbook/CreateCampaignScreen';
 
 // Create stack navigator
 const Stack = createNativeStackNavigator();
@@ -62,8 +67,11 @@ const MainNavigator = () => {
   const EnhancedSearchScreen = withWalletBalance(SearchScreen);
   const EnhancedNotificationScreen = withWalletBalance(NotificationScreen);
   const EnhancedSettingsScreen = withWalletBalance(SettingsScreen);
-  const EnhancedEarningsScreen = withWalletBalance(EarningsScreen);
-  const EnhancedReferralScreen = withWalletBalance(ReferralScreen);
+  const EnhancedEarningsScreen = withWalletBalance(EarningsScreen);  const EnhancedReferralScreen = withWalletBalance(ReferralScreen);
+  const EnhancedPlayToEarnScreen = withWalletBalance(PlayToEarnScreen);
+  const EnhancedWatchToEarnScreen = withWalletBalance(WatchToEarnScreen);
+  const EnhancedAdPassbookScreen = withWalletBalance(AdPassbookScreen);
+  const EnhancedSupportScreen = withWalletBalance(SupportScreen);
 
   // Note: We don't wrap WalletScreen because it already has its own direct wallet balance implementation
 
@@ -123,6 +131,11 @@ const MainNavigator = () => {
       <Stack.Screen name="Settings" component={EnhancedSettingsScreen} />
       <Stack.Screen name="Earnings" component={EnhancedEarningsScreen} />
       <Stack.Screen name="Referral" component={EnhancedReferralScreen} />
+      <Stack.Screen name="PlayToEarn" component={EnhancedPlayToEarnScreen} />
+      <Stack.Screen name="WatchToEarn" component={EnhancedWatchToEarnScreen} />
+      <Stack.Screen name="AdPassbook" component={EnhancedAdPassbookScreen} />
+      <Stack.Screen name="Support" component={EnhancedSupportScreen} />
+      <Stack.Screen name="CreateCampaign" component={withWalletBalance(CreateCampaignScreen)} />
     </Stack.Navigator>
   );
 };

@@ -12,6 +12,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
+import {useNavigation} from '@react-navigation/native';
 
 interface SettingItem {
   id: string;
@@ -25,11 +26,12 @@ interface SettingItem {
 }
 
 const SettingsScreen: React.FC = () => {
-  const {colors} = useTheme();
+  const {colors, isDarkMode, toggleTheme, setDarkMode} = useTheme();
+  const navigation = useNavigation();
   const [settings, setSettings] = useState({
     pushNotifications: true,
     emailNotifications: false,
-    darkMode: false,
+    darkMode: isDarkMode,
     autoPlay: true,
     cellularData: false,
     analytics: true,
@@ -101,15 +103,17 @@ const SettingsScreen: React.FC = () => {
     },
     {
       title: 'Preferences',
-      items: [
-        {
+      items: [        {
           id: 'darkMode',
           title: 'Dark Mode',
           subtitle: 'Use dark theme',
           type: 'toggle',
           icon: 'moon',
-          value: settings.darkMode,
-          onToggle: (value: boolean) => updateSetting('darkMode', value),
+          value: isDarkMode,
+          onToggle: (value: boolean) => {
+            updateSetting('darkMode', value);
+            setDarkMode(value);
+          },
         },
         {
           id: 'autoPlay',
@@ -163,14 +167,13 @@ const SettingsScreen: React.FC = () => {
     },
     {
       title: 'Support',
-      items: [
-        {
+      items: [        {
           id: 'help',
           title: 'Help & Support',
           subtitle: 'Get help and contact support',
           type: 'navigation',
           icon: 'help-circle',
-          onPress: () => console.log('Navigate to Help & Support'),
+          onPress: () => navigation.navigate('Support' as never),
         },
         {
           id: 'feedback',
@@ -189,118 +192,156 @@ const SettingsScreen: React.FC = () => {
           onPress: () => console.log('Navigate to About'),
         },
       ] as SettingItem[],
-    },
-    {
-      title: 'Account',
-      items: [
-        {
-          id: 'logout',
-          title: 'Sign Out',
-          type: 'action',
-          icon: 'log-out',
-          onPress: handleLogout,
-        },
-        {
-          id: 'delete',
-          title: 'Delete Account',
-          subtitle: 'Permanently delete your account',
-          type: 'action',
-          icon: 'trash-2',
-          onPress: handleDeleteAccount,
-        },
-      ] as SettingItem[],
-    },
-  ];
-
-  const renderSettingItem = (item: SettingItem, isLast: boolean = false) => {
-    const titleColor = item.id === 'delete' ? '#FF6B6B' : colors.text.primary;
-    return (
-      <TouchableOpacity
-        key={item.id}
-        style={[
-          styles.settingItem,
-          {borderBottomColor: colors.border},
-          isLast && styles.lastItem,
-        ]}
-        onPress={item.onPress}
-        disabled={item.type === 'toggle'}>
-        <View style={styles.settingContent}>
-          <View style={[styles.iconContainer, {backgroundColor: colors.surface}]}>
-            <Icon
-              name={item.icon}
-              size={20}
-              color={item.id === 'delete' ? '#FF6B6B' : colors.text.secondary}
-            />
-          </View>
-
-          <View style={styles.textContainer}>
-            <Text
-              style={[
-                styles.settingTitle,
-                {color: titleColor},
-              ]}>
-              {item.title}
-            </Text>
-            {item.subtitle && (
-              <Text
-                style={[styles.settingSubtitle, {color: colors.text.secondary}]}>
-                {item.subtitle}
-              </Text>
-            )}
-          </View>
-
-          <View style={styles.actionContainer}>
-            {item.type === 'toggle' && item.onToggle && (
-              <Switch
-                value={item.value || false}
-                onValueChange={item.onToggle}
-                trackColor={{
-                  false: colors.border,
-                  true: colors.primary + '40',
-                }}
-                thumbColor={item.value ? colors.primary : colors.text.secondary}
-              />
-            )}
-            {item.type === 'navigation' && (
-              <Icon
-                name="chevron-right"
-                size={20}
-                color={colors.text.secondary}
-              />
-            )}
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
+    },  ];
   return (
-    <SafeAreaView
-      style={[styles.container, {backgroundColor: colors.background}]}>
+    <SafeAreaView style={[styles.container, {backgroundColor: colors.background}]}> 
       <Header title="Settings" showBackButton />
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {settingSections.map(section => (
-          <View key={section.title} style={styles.section}>
-            <Text style={[styles.sectionTitle, {color: colors.text.secondary}]}>
-              {section.title}
-            </Text>
-            <View
-              style={[
-                styles.sectionContent,
-                {backgroundColor: colors.surface},
-              ]}>
-              {section.items.map((item, itemIndex) =>
-                renderSettingItem(item, itemIndex === section.items.length - 1),
-              )}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{paddingTop: 16}}>
+        {settingSections.map((section, sectionIdx) => {
+          // Define section colors
+          const sectionColors = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444'];
+          const sectionColor = sectionColors[sectionIdx] || '#6B7280';
+          
+          return (
+            <View key={section.title} style={{marginBottom: 24}}>
+              {/* Section Header with Accent Bar */}
+              <View style={{flexDirection: 'row', alignItems: 'center', marginLeft: 20, marginBottom: 8}}>
+                <View style={{
+                  width: 4, 
+                  height: 20, 
+                  borderRadius: 2, 
+                  backgroundColor: sectionColor, 
+                  marginRight: 12
+                }} />
+                <Text style={[styles.sectionTitle, {
+                  color: colors.text.primary, 
+                  fontSize: 15, 
+                  fontWeight: '600', 
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  marginBottom: 0
+                }]}>
+                  {section.title}
+                </Text>
+              </View>
+              
+              {/* Section Content Card */}
+              <View style={[styles.sectionContent, {
+                backgroundColor: isDarkMode ? colors.card : '#FFFFFF', 
+                borderRadius: 12, 
+                marginHorizontal: 16,
+                shadowColor: isDarkMode ? '#000000' : '#000000', 
+                shadowOpacity: isDarkMode ? 0.3 : 0.08, 
+                shadowRadius: 12, 
+                shadowOffset: {width: 0, height: 4},
+                elevation: 3
+              }]}> 
+                {section.items.map((item, itemIndex) => {
+                  const isLast = itemIndex === section.items.length - 1;
+                  const iconBg = item.id === 'logout' || item.id === 'delete' ? '#EF444415' : sectionColor + '15';
+                  const iconColor = item.id === 'logout' || item.id === 'delete' ? '#EF4444' : sectionColor;
+                  
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={{
+                        flexDirection: 'row', 
+                        alignItems: 'center', 
+                        paddingHorizontal: 16, 
+                        paddingVertical: 14, 
+                        borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth, 
+                        borderBottomColor: isDarkMode ? colors.border : '#F1F5F9',
+                        backgroundColor: 'transparent'
+                      }} 
+                      onPress={item.onPress}
+                      disabled={item.type === 'toggle'}
+                      activeOpacity={0.8}
+                    >
+                      {/* Icon Container */}
+                      <View style={{
+                        width: 36, 
+                        height: 36, 
+                        borderRadius: 10, 
+                        backgroundColor: iconBg, 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        marginRight: 12
+                      }}>
+                        <Icon name={item.icon} size={18} color={iconColor} />
+                      </View>
+                      
+                      {/* Text Content */}
+                      <View style={{flex: 1}}>
+                        <Text style={{
+                          fontSize: 16, 
+                          fontWeight: '500', 
+                          color: item.id === 'delete' ? '#EF4444' : colors.text.primary
+                        }}>
+                          {item.title}
+                        </Text>
+                        {!!item.subtitle && (
+                          <Text style={{
+                            fontSize: 13, 
+                            color: colors.text.secondary, 
+                            marginTop: 1,
+                            lineHeight: 18
+                          }}>
+                            {item.subtitle}
+                          </Text>
+                        )}
+                      </View>
+                      
+                      {/* Action Component */}
+                      <View style={{marginLeft: 8}}>
+                        {item.type === 'toggle' && item.onToggle && (
+                          <Switch
+                            value={item.value || false}
+                            onValueChange={item.onToggle}
+                            trackColor={{false: isDarkMode ? '#374151' : '#E5E7EB', true: sectionColor + '40'}}
+                            thumbColor={item.value ? sectionColor : (isDarkMode ? '#9CA3AF' : '#FFFFFF')}
+                            ios_backgroundColor={isDarkMode ? '#374151' : '#E5E7EB'}
+                          />
+                        )}
+                        {item.type === 'navigation' && (
+                          <Icon name="chevron-right" size={18} color={colors.text.tertiary} />
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
+          );
+        })}
+        
+        {/* Sign Out Button */}
+        <TouchableOpacity
+          style={{
+            marginHorizontal: 16, 
+            marginTop: 8, 
+            marginBottom: 32, 
+            backgroundColor: '#EF4444', 
+            borderRadius: 12, 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            paddingVertical: 16, 
+            shadowColor: '#EF4444', 
+            shadowOpacity: 0.25, 
+            shadowRadius: 12, 
+            shadowOffset: {width: 0, height: 4},
+            elevation: 4
+          }}
+          onPress={handleLogout}
+          activeOpacity={0.9}
+        >
+          <View style={{flexDirection: 'row', alignItems: 'center'}}>
+            <Icon name="log-out" size={18} color="#FFFFFF" style={{marginRight: 8}} />
+            <Text style={{color: '#FFFFFF', fontWeight: '600', fontSize: 16}}>Sign Out</Text>
           </View>
-        ))}
-
+        </TouchableOpacity>
+        
         <View style={styles.footer}>
-          <Text style={[styles.version, {color: colors.text.tertiary}]}>
-            Version 1.0.0
-          </Text>
+          <Text style={[styles.version, {color: colors.text.tertiary}]}>Version 1.0.0</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -314,55 +355,14 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  section: {
-    marginBottom: 32,
-  },
   sectionTitle: {
     fontSize: 13,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginHorizontal: 16,
-    marginBottom: 8,
   },
   sectionContent: {
-    marginHorizontal: 16,
-    borderRadius: 12,
     overflow: 'hidden',
-  },
-  settingItem: {
-    borderBottomWidth: 1,
-  },
-  lastItem: {
-    borderBottomWidth: 0,
-  },
-  settingContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  iconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  textContainer: {
-    flex: 1,
-  },
-  settingTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  settingSubtitle: {
-    fontSize: 14,
-  },
-  actionContainer: {
-    marginLeft: 12,
   },
   footer: {
     alignItems: 'center',

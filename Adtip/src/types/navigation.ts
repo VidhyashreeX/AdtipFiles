@@ -31,6 +31,19 @@ export type RootStackParamList = {
       duration?: number;
     };
   };
+
+  // Navigation screens
+  TabHome: undefined;
+  Search: undefined;
+  Wallet: undefined;
+  Settings: undefined;
+  TipShorts: undefined;
+  PlayToEarn: undefined;
+  WatchToEarn: undefined;
+  AdPassbook: undefined;
+  Earnings: undefined;
+  Analytics: undefined;
+  Notifications: undefined;
 };
 
 export type NavigationProps = NavigationProp<RootStackParamList>;

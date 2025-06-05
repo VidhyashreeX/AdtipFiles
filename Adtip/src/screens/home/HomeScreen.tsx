@@ -26,10 +26,12 @@ import EarnCard from '../../components/home/EarnCard';
 // Services
 import WalletService from '../../services/WalletService';
 import ApiService from '../../services/ApiService';
+import LastSeenService from '../../services/LastSeenService';
 
 // Context
 import {useTheme} from '../../contexts/ThemeContext';
 import {useAuth} from '../../contexts/AuthContext';
+import {useTabNavigator} from '../../contexts/TabNavigatorContext';
 
 // Constants
 import {API_BASE_URL} from '../../constants/api';
@@ -67,6 +69,7 @@ interface Post {
   created_at: string;
   is_premium?: boolean;
   is_liked?: boolean;
+  last_active?: string | null;
 }
 
 interface Pagination {
@@ -151,6 +154,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
   const {colors} = useTheme();
   const {user} = useAuth();
   const navigation = useNavigation<NavigationProps>();
+  const {contentPaddingBottom} = useTabNavigator();
+  
   // State
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategoryState, setSelectedCategoryState] = useState<string | null>(null);
@@ -305,6 +310,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
           created_at: rawPost.created_at || new Date().toISOString(),
           is_premium: !!rawPost.is_premium,
           is_liked: !!rawPost.is_liked,
+          last_active: rawPost.last_active || null, // Add this line
         }));
         if (result.pagination) {
           setPagination(result.pagination);
@@ -463,12 +469,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
     if (!user) {
       return;
     }
+    
+    // Start tracking user presence when home screen loads
+    LastSeenService.startTracking();
+    
     // Fetch wallet and posts on mount or when user/category changes
     const fetchInitialData = async () => {
       await fetchWalletAmount();
       await fetchPosts(1, false);
     };
     fetchInitialData();
+    
+    // Clean up when component unmounts
+    return () => {
+      // We don't stop tracking here because user might navigate to other screens
+      // LastSeenService.stopTracking() is called in AuthContext logout and cleanup
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, selectedCategoryState]);
 
@@ -549,6 +565,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
         isLiked={!!likedPosts[item.id]}
         userId={item.user_id}
         isVisible={isVisible}
+        last_active={item.last_active} // Add this line
       />
     );
   };
@@ -617,9 +634,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
             colors={[colors.primary]}
             tintColor={colors.primary}
           />
-        }
-        ListEmptyComponent={renderListEmpty}
-        contentContainerStyle={styles.postsContainerStyle}
+        }        ListEmptyComponent={renderListEmpty}
+        contentContainerStyle={[styles.postsContainerStyle, {paddingBottom: contentPaddingBottom}]}
         maintainVisibleContentPosition={{
           minIndexForVisible: 0,
           autoscrollToTopThreshold: 10,
@@ -679,10 +695,8 @@ const styles = StyleSheet.create({
   postsContainer: {
     paddingTop: 8,
     // flex: 1, // Removed flex:1 as it restricts scrolling
-  },
-  postsContainerStyle: {
+  },  postsContainerStyle: {
     paddingTop: 8,
-    paddingBottom: 16, // Added padding at the bottom for better UX
   },
   loadingContainer: {
     padding: 20,

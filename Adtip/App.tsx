@@ -11,16 +11,27 @@ import {
   StyleSheet,
   View,
   ActivityIndicator,
+  useWindowDimensions,
+  Platform,
+  PixelRatio,
 } from 'react-native';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import {SafeAreaProvider} from 'react-native-safe-area-context';
+import {
+  SafeAreaProvider,
+  SafeAreaView as SafeAreaViewRN,
+  useSafeAreaInsets
+} from 'react-native-safe-area-context';
 
 // Contexts
 import {AuthProvider, useAuth} from './src/contexts/AuthContext';
 import {WalletProvider} from './src/contexts/WalletContext';
-import {ThemeProvider} from './src/contexts/ThemeContext';
+import {ThemeProvider, useTheme} from './src/contexts/ThemeContext';
 import {ShortsProvider} from './src/contexts/ShortsContext';
+import {SidebarProvider} from './src/contexts/SidebarContext';
+
+// Components
+import Sidebar from './src/components/sidebar/Sidebar';
 
 // Navigators
 import MainNavigator from './src/navigation/MainNavigator';
@@ -32,6 +43,18 @@ import {COLORS} from './src/constants/colors';
 
 // Stack type
 const Stack = createNativeStackNavigator();
+
+// Theme-aware status bar component
+const ThemeAwareStatusBar = () => {
+  const { isDarkMode } = useTheme();
+  return (
+    <StatusBar
+      translucent={true}
+      backgroundColor="transparent"
+      barStyle={isDarkMode ? "light-content" : "dark-content"}
+    />
+  );
+};
 
 /**
  * App Navigator component that uses auth context
@@ -67,29 +90,49 @@ const AppNavigator = () => {
       // PubScaleService.removeRewardListener();
     };
   }, []);
-
   // Show loading indicator while checking auth status
   if (loading) {
+    const insets = useSafeAreaInsets();
     return (
-      <SafeAreaView style={styles.loadingContainer}>
+      <SafeAreaViewRN style={[
+        styles.loadingContainer,
+        { paddingTop: insets.top } // Apply top inset to start below status bar
+      ]}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-      </SafeAreaView>
-    );
-  }
-
+      </SafeAreaViewRN>
+    );  }
+  
+  // Get safe area insets to ensure content renders below status bar
+  const insets = useSafeAreaInsets();  const { isDarkMode, colors } = useTheme();
+  
   return (
-    <NavigationContainer ref={navigationRef}>
-      <StatusBar
-        backgroundColor={COLORS.primary}
-        barStyle="light-content"
-      />
-      <Stack.Navigator screenOptions={{headerShown: false}}>
-        {isAuthenticated ? (
-          <Stack.Screen name="Main" component={MainNavigator} />
-        ) : (
-          <Stack.Screen name="Auth" component={AuthNavigator} />
-        )}
-      </Stack.Navigator>
+    <NavigationContainer 
+      ref={navigationRef}
+    >
+      <View 
+        style={{
+          flex: 1, 
+          width: '100%', 
+          paddingTop: insets.top // Apply top padding to avoid content appearing behind status bar
+        }}
+      >
+        <Stack.Navigator 
+          screenOptions={{
+            headerShown: false,
+            contentStyle: {
+              width: '100%',
+              height: '100%'
+            }
+          }}
+        >
+          {isAuthenticated ? (
+            <Stack.Screen name="Main" component={MainNavigator} />
+          ) : (
+            <Stack.Screen name="Auth" component={AuthNavigator} />
+          )}
+        </Stack.Navigator>
+        <Sidebar />
+      </View>
     </NavigationContainer>
   );
 };
@@ -98,21 +141,47 @@ const AppNavigator = () => {
  * Main application component
  */
 function App(): React.JSX.Element {
+  const {width, height} = useWindowDimensions();
+  
+  // Get normalized dimensions that adjust for different screen densities
+  const normalizedWidth = width / PixelRatio.get();
+  const normalizedHeight = height / PixelRatio.get();
+  
+  // This will be used if we need to apply different styles based on orientation
+  const isLandscape = width > height;
+  
+  // We will access ThemeContext inside ThemeProvider render
+  
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.appContentContainer}>
-          <ThemeProvider>
+      {/* Use the SafeAreaView from react-native-safe-area-context which is more reliable */}
+      <SafeAreaViewRN 
+        style={styles.safeArea}
+        edges={['left', 'right', 'bottom']} // Exclude top edge to handle it manually in AppNavigator
+      >        
+        <View 
+          style={[
+            styles.appContentContainer,
+            {
+              // Apply conditional styling based on orientation if needed
+              maxWidth: isLandscape && (width >= 768) ? 900 : '100%',
+              alignSelf: 'center',
+            }
+          ]}
+        >          <ThemeProvider>
+            <ThemeAwareStatusBar />
             <AuthProvider>
               <WalletProvider>
-                <ShortsProvider> 
-                  <AppNavigator />
+                <ShortsProvider>
+                  <SidebarProvider>
+                    <AppNavigator />
+                  </SidebarProvider>
                 </ShortsProvider>
               </WalletProvider>
             </AuthProvider>
           </ThemeProvider>
         </View>
-      </SafeAreaView>
+      </SafeAreaViewRN>
     </SafeAreaProvider>
   );
 }
@@ -120,20 +189,28 @@ function App(): React.JSX.Element {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: COLORS.primary, // Or a neutral color if status bar and app bg differ
+    backgroundColor: COLORS.primary,
+    width: '100%',
+    height: '100%',
   },
-  appContentContainer: { // Replaces the role of the old 'styles.container' for the main app
+  appContentContainer: {
     flex: 1,
-    backgroundColor: COLORS.white, // App's main background color
+    backgroundColor: COLORS.background, // Use theme-compatible background color
+    width: '100%',
+    overflow: 'hidden', // Ensure nothing renders outside container bounds
   },
-  loadingContainer: { // For the loading screen's SafeAreaView
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.background, // Use theme-compatible background color
+    width: '100%',
+    ...Platform.select({
+      android: {
+        paddingTop: StatusBar.currentHeight || 0, // Respect status bar height on Android
+      },
+    }),
   },
-  // The original 'container' style is removed as 'appContentContainer' and 'safeArea' cover its roles.
-  // If 'container' was used elsewhere, it might need to be kept or refactored.
 });
 
 export default App;

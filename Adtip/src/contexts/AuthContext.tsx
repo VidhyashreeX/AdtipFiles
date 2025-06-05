@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {API_BASE_URL, ENDPOINTS} from '../constants/api';
 import ApiService from '../services/ApiService';
 import {navigationRef} from '../navigation/NavigationService';
+import LastSeenService from '../services/LastSeenService';
 
 // Define user type
 export type User = {
@@ -184,6 +185,9 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         throw new Error(data.message || 'Failed to send OTP');
       }
 
+      // Start tracking user presence after successful login
+      LastSeenService.startTracking();
+
       return data.data[0];
     } catch (err) {
       const errorMessage =
@@ -248,6 +252,9 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     setError(null);
 
     try {
+      // Stop tracking before logout
+      LastSeenService.stopTracking();
+      
       if (user) {
         // Call logout API
         await ApiService.post(ENDPOINTS.LOGOUT, {id: user.id});

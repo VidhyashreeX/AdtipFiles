@@ -31,7 +31,7 @@ import ApiService from '../../services/ApiService';
 import {ENDPOINTS} from '../../constants/api';
 
 const CreatePostScreen = () => {
-  const {colors} = useTheme();
+  const {colors, isDarkMode} = useTheme();
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const [content, setContent] = useState('');
   const [images, setImages] = useState<any[]>([]);
@@ -39,6 +39,9 @@ const CreatePostScreen = () => {
   const [isPublic, setIsPublic] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const textInputRef = useRef<TextInput>(null);
+  
+  // Create dynamic styles based on theme
+  const styles = createStyles(colors, isDarkMode);
 
   // Focus input when screen loads
   useEffect(() => {
@@ -314,9 +317,10 @@ const CreatePostScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   editorContainer: {
     padding: 16,
@@ -326,6 +330,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlignVertical: 'top',
     minHeight: 120,
+    color: colors.text.primary,
   },
   imagePreviewContainer: {
     flexDirection: 'row',
@@ -350,6 +355,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: isDarkMode ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.8)',
   },
   categoryContainer: {
     flexDirection: 'row',
@@ -360,12 +366,14 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     marginTop: 8,
     fontSize: 12,
+    color: colors.text.secondary,
   },
   actionBar: {
     flexDirection: 'row',
     padding: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
+    borderTopColor: colors.border,
+    backgroundColor: colors.card,
   },
   actionButton: {
     width: 40,
@@ -382,9 +390,11 @@ const styles = StyleSheet.create({
   visibilityText: {
     marginRight: 8,
     fontSize: 14,
+    color: colors.text.primary,
   },
   publishText: {
     fontWeight: 'bold',
+    color: colors.primary,
   },
 });
 

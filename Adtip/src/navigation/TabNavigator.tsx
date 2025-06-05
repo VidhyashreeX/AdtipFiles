@@ -3,6 +3,7 @@ import {StyleSheet, View, TouchableOpacity, Platform} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {BlurView} from '@react-native-community/blur';
 import Icon from 'react-native-vector-icons/Feather';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import HomeScreen from '../screens/home/HomeScreen';
 import TipTubeScreen from '../screens/tiptube/TipTubeScreen';
@@ -12,6 +13,7 @@ import CreateContentModal from '../screens/content/CreateContentModal';
 
 // Import theme and contexts
 import {useTheme} from '../contexts/ThemeContext';
+import {TabNavigatorProvider} from '../contexts/TabNavigatorContext';
 import {withWalletBalance} from '../components/hoc/withWalletBalance';
 
 // Create tab navigator
@@ -34,12 +36,15 @@ const CreateContentButton = () => {
 
   return (
     <>
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={handlePress}
-        style={[styles.createButton, {backgroundColor: colors.primary}]}>
-        <Icon name="plus" color={colors.white} size={24} />
-      </TouchableOpacity>
+      {/* Added wrapper View for proper centering */}
+      <View style={styles.createButtonContainer}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={handlePress}
+          style={[styles.createButton, {backgroundColor: colors.primary}]}>
+          <Icon name="plus" color={colors.white} size={24} />
+        </TouchableOpacity>
+      </View>
 
       {modalVisible && (
         <CreateContentModal visible={modalVisible} onClose={handleCloseModal} />
@@ -52,7 +57,8 @@ const CreateContentButton = () => {
  * Bottom tab navigator component
  */
 const TabNavigator = () => {
-  const {colors} = useTheme();
+  const {colors, isDarkMode} = useTheme();
+  const insets = useSafeAreaInsets();
 
   // Wrap screen components with wallet balance
   const EnhancedHomeScreen = withWalletBalance(HomeScreen);
@@ -60,87 +66,100 @@ const TabNavigator = () => {
   const EnhancedTipCallScreen = withWalletBalance(TipCallScreen);
   const EnhancedProfileScreen = withWalletBalance(ProfileScreen);
 
+  // Calculate the tab bar height (standard height + bottom insets, capped at a reasonable value)
+  const tabBarHeight = 60 + Math.min(insets.bottom, 20);
+
   return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.text.tertiary,
-        tabBarStyle: {
-          position: 'absolute',
-          borderTopWidth: 0,
-          elevation: 0,
-          height: 60,
-          backgroundColor: 'transparent',
-          marginBottom: 16,
-        },
-        tabBarBackground: () =>
-          Platform.OS === 'ios' ? (
-            <BlurView
-              blurType="light"
-              blurAmount={10}
-              style={StyleSheet.absoluteFill}
-            />
-          ) : (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                {backgroundColor: colors.white + 'F0'},
-              ]}
-            />
-          ),
-      }}>
-      <Tab.Screen
-        name="Home"
-        component={EnhancedHomeScreen}
-        options={{
-          tabBarIcon: ({color, size}) => (
-            <Icon name="home" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="TipTube"
-        component={EnhancedTipTubeScreen}
-        options={{
-          tabBarIcon: ({color, size}) => (
-            <Icon name="video" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="CreateContent"
-        component={HomeScreen} // This is a dummy component, we're using custom tab bar button
-        options={{
-          tabBarButton: () => <CreateContentButton />,
-          tabBarLabel: '',
-        }}
-        listeners={{
-          tabPress: e => {
-            // Prevent default action
-            e.preventDefault();
+    <TabNavigatorProvider>
+      <Tab.Navigator
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.text.tertiary,
+          tabBarStyle: {
+            position: 'absolute',
+            borderTopWidth: 0,
+            elevation: 0,
+            height: tabBarHeight,
+            backgroundColor: 'transparent',
+            marginBottom: 0, // Remove margin to make it flush with bottom
           },
-        }}
-      />
-      <Tab.Screen
-        name="TipCall"
-        component={EnhancedTipCallScreen}
-        options={{
-          tabBarIcon: ({color, size}) => (
-            <Icon name="phone" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={EnhancedProfileScreen}
-        options={{
-          tabBarIcon: ({color, size}) => (
-            <Icon name="user" color={color} size={size} />
-          ),
-        }}
-      />
-    </Tab.Navigator>
+          tabBarBackground: () =>
+            Platform.OS === 'ios' ? (
+              <BlurView
+                blurType={isDarkMode ? 'dark' : 'light'}
+                blurAmount={10}
+                style={StyleSheet.absoluteFill}
+              />
+            ) : (
+              <View
+                style={[
+                  StyleSheet.absoluteFill,
+                  {
+                    backgroundColor: isDarkMode
+                      ? colors.card + 'F0' // Semi-transparent card color in dark mode
+                      : colors.white + 'F0', // Semi-transparent white in light mode
+                  },
+                ]}
+              />
+            ),
+          tabBarItemStyle: {
+            // Add padding to properly align items with the increased height
+            paddingBottom: Math.min(insets.bottom, 10),
+          },
+        }}>
+        <Tab.Screen
+          name="Home"
+          component={EnhancedHomeScreen}
+          options={{
+            tabBarIcon: ({color, size}) => (
+              <Icon name="home" color={color} size={size} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="TipTube"
+          component={EnhancedTipTubeScreen}
+          options={{
+            tabBarIcon: ({color, size}) => (
+              <Icon name="video" color={color} size={size} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="CreateContent"
+          component={HomeScreen} // This is a dummy component, we're using custom tab bar button
+          options={{
+            tabBarButton: () => <CreateContentButton />,
+            tabBarLabel: '',
+          }}
+          listeners={{
+            tabPress: e => {
+              // Prevent default action
+              e.preventDefault();
+            },
+          }}
+        />
+        <Tab.Screen
+          name="TipCall"
+          component={EnhancedTipCallScreen}
+          options={{
+            tabBarIcon: ({color, size}) => (
+              <Icon name="phone" color={color} size={size} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Profile"
+          component={EnhancedProfileScreen}
+          options={{
+            tabBarIcon: ({color, size}) => (
+              <Icon name="user" color={color} size={size} />
+            ),
+          }}
+        />
+      </Tab.Navigator>
+    </TabNavigatorProvider>
   );
 };
 
@@ -151,7 +170,7 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 25,
+    marginBottom: 5, // Reduced bottom margin to position it better
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.2,
@@ -159,6 +178,12 @@ const styles = StyleSheet.create({
     elevation: 5,
     position: 'relative',
     zIndex: 10,
+  },
+  createButtonContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    // Add any additional styling if needed
   },
 });
 

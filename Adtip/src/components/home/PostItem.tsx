@@ -4,6 +4,7 @@ import {View, Text, StyleSheet, Image, TouchableOpacity} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
 import Video from 'react-native-video';
+import LastSeen from '../common/LastSeen';
 
 interface PostItemProps {
   id: number;
@@ -25,6 +26,7 @@ interface PostItemProps {
   isLiked?: boolean;
   userId: number;
   isVisible?: boolean; // Add isVisible prop to control video playback
+  last_active?: string | null;
 }
 
 const PostItem: React.FC<PostItemProps> = ({
@@ -47,8 +49,9 @@ const PostItem: React.FC<PostItemProps> = ({
   isLiked = false,
   userId,
   isVisible = false,
+  last_active,
 }) => {
-  const {colors} = useTheme();
+  const {colors, isDarkMode} = useTheme();
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [isVideoPaused, setIsVideoPaused] = useState(true);
   const [isVideoMuted, setIsVideoMuted] = useState(true);
@@ -62,7 +65,7 @@ const PostItem: React.FC<PostItemProps> = ({
   }, [isVisible, isVideoPlaying, isVideoPaused]);
 
   return (
-    <View style={[styles.container, {backgroundColor: colors.white}]}> 
+    <View style={[styles.container, {backgroundColor: colors.card}]}> 
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.userInfo}
@@ -74,14 +77,23 @@ const PostItem: React.FC<PostItemProps> = ({
               <View
                 style={[
                   styles.profileImagePlaceholder,
-                  {backgroundColor: colors.gray[200]},
+                  {backgroundColor: isDarkMode ? colors.gray[700] : colors.gray[200]},
                 ]}
               />
             )}
           </View>
-          <Text style={[styles.username, {color: colors.text.primary}]}> 
-            {String(username)}
-          </Text>
+          <View style={styles.userInfo}>
+            <Text style={[styles.username, {color: colors.text.primary}]}>
+              {username}
+            </Text>
+            {last_active && (
+              <LastSeen 
+                lastActiveTime={last_active}
+                style={styles.lastSeen}
+                showOnlineStatus={false}
+              />
+            )}
+          </View>
         </TouchableOpacity>
         <View style={styles.headerActions}>
           <TouchableOpacity onPress={() => onFollow(userId)}>
@@ -123,7 +135,9 @@ const PostItem: React.FC<PostItemProps> = ({
                 />
                 {isVideoPaused && (
                   <TouchableOpacity 
-                    style={styles.videoPlayButton}
+                    style={[styles.videoPlayButton, {
+                      backgroundColor: isDarkMode ? 'rgba(20,20,20,0.7)' : 'rgba(0,0,0,0.5)'
+                    }]}
                     onPress={() => setIsVideoPaused(false)}
                   >
                     <Icon name="play" size={32} color={colors.white} />
@@ -132,19 +146,25 @@ const PostItem: React.FC<PostItemProps> = ({
                 {!isVideoPaused && (
                   <View style={styles.videoControls}>
                     <TouchableOpacity
-                      style={styles.videoControlButton}
+                      style={[styles.videoControlButton, {
+                        backgroundColor: isDarkMode ? 'rgba(20,20,20,0.7)' : 'rgba(0,0,0,0.5)'
+                      }]}
                       onPress={() => setIsVideoPaused(true)}
                     >
                       <Icon name="pause" size={20} color={colors.white} />
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.videoControlButton}
+                      style={[styles.videoControlButton, {
+                        backgroundColor: isDarkMode ? 'rgba(20,20,20,0.7)' : 'rgba(0,0,0,0.5)'
+                      }]}
                       onPress={() => setIsVideoMuted(!isVideoMuted)}
                     >
                       <Icon name={isVideoMuted ? "volume-x" : "volume-2"} size={20} color={colors.white} />
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.videoControlButton}
+                      style={[styles.videoControlButton, {
+                        backgroundColor: isDarkMode ? 'rgba(20,20,20,0.7)' : 'rgba(0,0,0,0.5)'
+                      }]}
                       onPress={() => onPostPress(id)}
                     >
                       <Icon name="maximize" size={20} color={colors.white} />
@@ -160,7 +180,9 @@ const PostItem: React.FC<PostItemProps> = ({
                   resizeMode="cover"
                 />
                 {media_type === 'video' && !isVideoPlaying && (
-                  <View style={styles.videoIcon}>
+                  <View style={[styles.videoIcon, {
+                    backgroundColor: isDarkMode ? 'rgba(20,20,20,0.7)' : 'rgba(0,0,0,0.5)'
+                  }]}>
                     <Icon name="play" size={28} color={colors.white} />
                   </View>
                 )}
@@ -173,8 +195,19 @@ const PostItem: React.FC<PostItemProps> = ({
             ) : null}
           </View>
         ) : (
-          <View style={[styles.postImageContainer, {backgroundColor: colors.gray[100], justifyContent: 'center', alignItems: 'center'}]}>
-            <Icon name="image" size={48} color={colors.gray[300]} />
+          <View style={[
+            styles.postImageContainer, 
+            {
+              backgroundColor: isDarkMode ? colors.gray[800] : colors.gray[100], 
+              justifyContent: 'center', 
+              alignItems: 'center'
+            }
+          ]}>
+            <Icon 
+              name="image" 
+              size={48} 
+              color={isDarkMode ? colors.gray[600] : colors.gray[300]} 
+            />
           </View>
         )}
       </TouchableOpacity>
@@ -400,6 +433,9 @@ const styles = StyleSheet.create({
   },
   timestamp: {
     fontSize: 12,
+  },
+  lastSeen: {
+    marginTop: 2,
   },
 });
 

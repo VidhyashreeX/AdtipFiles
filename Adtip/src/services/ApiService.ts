@@ -314,6 +314,13 @@ export default class ApiService {
   static async ping(): Promise<any> {
     return this.get(ApiEndpoints.AUTH_ENDPOINTS.PING);
   }
+
+  /**
+   * Ping the server to check if it's alive
+   */
+  public ping(): Promise<any> {
+    return this.api.get('/api/ping');
+  }
   // ===== HOME PAGE SERVICES =====
 
   /**

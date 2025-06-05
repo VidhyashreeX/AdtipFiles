@@ -14,14 +14,24 @@ const CategoryItem: React.FC<CategoryItemProps> = ({
   selected = false,
   onPress,
 }) => {
-  const {colors} = useTheme();
+  const {colors, isDarkMode} = useTheme();
 
   return (
     <TouchableOpacity
       style={[
         styles.container,
-        {backgroundColor: selected ? colors.primary : colors.gray[100]},
-        selected && styles.selectedContainer,
+        {
+          backgroundColor: selected
+            ? colors.primary
+            : isDarkMode ? colors.gray[800] : colors.gray[100]
+        },
+        selected && [
+          styles.selectedContainer,
+          {
+            shadowColor: isDarkMode ? 'rgba(0,0,0,0.9)' : '#000',
+            shadowOpacity: isDarkMode ? 0.3 : 0.1
+          }
+        ],
       ]}
       onPress={onPress}>
       <Text
@@ -43,9 +53,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   selectedContainer: {
-    shadowColor: '#000',
     shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.1,
     shadowRadius: 1.5,
     elevation: 2,
   },
