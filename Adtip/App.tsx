@@ -60,7 +60,7 @@ const ThemeAwareStatusBar = () => {
  * App Navigator component that uses auth context
  */
 const AppNavigator = () => {
-  const {isAuthenticated, loading} = useAuth();
+  const {isAuthenticated, isInitialized} = useAuth(); // <-- Get isInitialized, remove loading
 
   useEffect(() => {
     const initApp = async () => {
@@ -84,26 +84,27 @@ const AppNavigator = () => {
 
     initApp();
 
-    // Cleanup on unmount
     return () => {
       // Commented out PubScale integration - June 2, 2025
       // PubScaleService.removeRewardListener();
     };
   }, []);
-  // Show loading indicator while checking auth status
-  if (loading) {
+
+  // Show loading indicator ONLY while AuthContext is initializing
+  if (!isInitialized) { // <-- Use !isInitialized here
     const insets = useSafeAreaInsets();
     return (
       <SafeAreaViewRN style={[
         styles.loadingContainer,
-        { paddingTop: insets.top } // Apply top inset to start below status bar
+        { paddingTop: insets.top }
       ]}>
         <ActivityIndicator size="large" color={COLORS.primary} />
       </SafeAreaViewRN>
-    );  }
+    );
+  }
   
-  // Get safe area insets to ensure content renders below status bar
-  const insets = useSafeAreaInsets();  const { isDarkMode, colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { isDarkMode, colors } = useTheme();
   
   return (
     <NavigationContainer 
@@ -113,7 +114,7 @@ const AppNavigator = () => {
         style={{
           flex: 1, 
           width: '100%', 
-          paddingTop: insets.top // Apply top padding to avoid content appearing behind status bar
+          paddingTop: insets.top 
         }}
       >
         <Stack.Navigator 
@@ -143,34 +144,29 @@ const AppNavigator = () => {
 function App(): React.JSX.Element {
   const {width, height} = useWindowDimensions();
   
-  // Get normalized dimensions that adjust for different screen densities
   const normalizedWidth = width / PixelRatio.get();
   const normalizedHeight = height / PixelRatio.get();
   
-  // This will be used if we need to apply different styles based on orientation
   const isLandscape = width > height;
   
-  // We will access ThemeContext inside ThemeProvider render
   
   return (
     <SafeAreaProvider>
-      {/* Use the SafeAreaView from react-native-safe-area-context which is more reliable */}
       <SafeAreaViewRN 
         style={styles.safeArea}
-        edges={['left', 'right', 'bottom']} // Exclude top edge to handle it manually in AppNavigator
+        edges={['left', 'right', 'bottom']} 
       >        
         <View 
           style={[
             styles.appContentContainer,
             {
-              // Apply conditional styling based on orientation if needed
               maxWidth: isLandscape && (width >= 768) ? 900 : '100%',
               alignSelf: 'center',
             }
           ]}
         >          <ThemeProvider>
             <ThemeAwareStatusBar />
-            <AuthProvider>
+            <AuthProvider> {/* AuthProvider now correctly wraps AppNavigator */}
               <WalletProvider>
                 <ShortsProvider>
                   <SidebarProvider>
@@ -189,27 +185,23 @@ function App(): React.JSX.Element {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primary, // This might be better as theme background or transparent
     width: '100%',
     height: '100%',
   },
   appContentContainer: {
     flex: 1,
-    backgroundColor: COLORS.background, // Use theme-compatible background color
+    backgroundColor: COLORS.background, 
     width: '100%',
-    overflow: 'hidden', // Ensure nothing renders outside container bounds
+    overflow: 'hidden', 
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.background, // Use theme-compatible background color
+    backgroundColor: COLORS.background, 
     width: '100%',
-    ...Platform.select({
-      android: {
-        paddingTop: StatusBar.currentHeight || 0, // Respect status bar height on Android
-      },
-    }),
+    // paddingTop is handled by SafeAreaViewRN in the component now
   },
 });
 

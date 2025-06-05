@@ -3,102 +3,47 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {API_BASE_URL, ENDPOINTS} from '../constants/api';
 import ApiService from '../services/ApiService';
 import {navigationRef} from '../navigation/NavigationService';
-import LastSeenService from '../services/LastSeenService';
+import LastSeenService from '../services/LastSeenService'; // Ensure this import is present
+import { ApiResponse, OtpLoginResponse as ApiOtpResponse, User as ApiUserType } from '../types/api';
 
-// Define user type
-export type User = {
-  id: string;
-  name: string;
-  firstName: string | null;
-  lastName: string | null;
-  emailId: string;
-  gender: string;
-  dob: string;
-  profile_image: string | null;
-  mobile_number: string;
-  profession: string;
-  maternal_status: string;
-  address: string;
-  longitude: string;
-  latitude: string;
-  pincode: string | null;
-  isOtpVerified: number;
-  isSaveUserDetails: number;
-  online_status: boolean;
-  referal_code: string;
-  referal_earnings: number;
-  referred_by: string | null;
-  username: string | null;
-  referred_count: number;
-  is_first_time: number;
-  bio: string | null;
-  premium_plan_id: number;
-  content_creator_plan_id: number;
-  is_available: boolean;
-  dnd: boolean;
-  premium: number;
-  country_code: string;
-  country: string;
-  languages: any[];
-  interests: any[];
-  is_premium: boolean;
-};
+// Define user type (using the one from api.ts for consistency)
+export type User = ApiUserType; // Assuming ApiUserType from types/api.ts is the correct User type
 
-// Define OTP response type
-type OtpResponse = {
-  otp: string;
-  id: number;
-  messageId: string;
-  mobile_number: string;
-  user_type: string;
-  isOtpVerified: number;
-  is_first_time: boolean;
-};
+type OtpResponse = ApiOtpResponse;
+
 
 // Define context type
 type AuthContextType = {
   isAuthenticated: boolean;
   user: User | null;
-  loading: boolean;
+  loading: boolean; // For individual operations like login, verifyOtp
   error: string | null;
-
-  // Auth methods
+  isInitialized: boolean; // <-- Add this
   login: (mobileNumber: string) => Promise<OtpResponse>;
   verifyOtp: (mobileNumber: string, otp: string, id: string) => Promise<User>;
   logout: () => Promise<void>;
-
-  // User data methods
   updateUserDetails: (userData: Partial<User>) => Promise<void>;
   refreshUserData: () => Promise<void>;
-
-  // Channel methods
   hasChannel: boolean;
   createChannel: (name: string, description: string) => Promise<void>;
-  completeOnboarding: () => void; // Added
+  completeOnboarding: () => void;
 };
 
 // Create context
 const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   user: null,
-  loading: true, // Start with loading true
+  loading: false, // Default operation loading to false
   error: null,
-  login: async () => ({
-    otp: '',
-    id: 0,
-    messageId: '',
-    mobile_number: '',
-    user_type: '',
-    isOtpVerified: 0,
-    is_first_time: false,
-  }),
+  isInitialized: false, // <-- Default to false
+  login: async () => ({}) as OtpResponse,
   verifyOtp: async () => ({}) as User,
   logout: async () => {},
   updateUserDetails: async () => {},
   refreshUserData: async () => {},
   hasChannel: false,
   createChannel: async () => {},
-  completeOnboarding: () => {}, // Added
+  completeOnboarding: () => {},
 });
 
 // Auth provider component
@@ -107,38 +52,40 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
 }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true); // Start with loading true
+  const [loading, setLoading] = useState(false); // For individual operations
   const [error, setError] = useState<string | null>(null);
   const [hasChannel, setHasChannel] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false); // <-- Add state
 
   const completeOnboarding = () => {
     setIsAuthenticated(true);
+    if (user && user.is_first_time === 1 && user.isSaveUserDetails === 1) { 
+         LastSeenService.startTracking();
+    }
   };
 
   // Load user from storage on mount
   useEffect(() => {
     const loadUser = async () => {
       try {
-        setLoading(true);
+        // setLoading(true); // No, this loading is for operations, not initialization
         const userJson = await AsyncStorage.getItem('user');
         const token = await AsyncStorage.getItem('accessToken');
 
         if (userJson && token) {
           const userData = JSON.parse(userJson) as User;
           setUser(userData);
-          // If user is not first time (is_first_time === 0)
-          // OR if user was first_time but has already saved details (isSaveUserDetails === 1)
           if (userData.is_first_time === 0 || userData.isSaveUserDetails === 1) {
             setIsAuthenticated(true);
           }
-          // Check if user has a channel
           checkChannelStatus(userData.id);
         }
       } catch (err) {
         console.error('Error loading user data:', err);
         setError('Failed to load user data');
       } finally {
-        setLoading(false);
+        // setLoading(false); // Not this loading
+        setIsInitialized(true); // <-- Mark as initialized
       }
     };
 
@@ -172,30 +119,27 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
   };
   // Login - Send OTP
   const login = async (mobileNumber: string): Promise<OtpResponse> => {
-    setLoading(true);
+    setLoading(true); // Operation loading
     setError(null);
 
     try {
-      const data = await ApiService.post(ENDPOINTS.OTP_LOGIN, {
+      const apiResponse = await ApiService.post<ApiResponse<OtpResponse[]>>(ENDPOINTS.OTP_LOGIN, {
         mobileNumber,
         userType: '2',
       });
 
-      if (data.status !== 200) {
-        throw new Error(data.message || 'Failed to send OTP');
+      if (apiResponse.status !== 200 || !apiResponse.data || !Array.isArray(apiResponse.data) || apiResponse.data.length === 0) {
+        throw new Error(apiResponse.message || 'Failed to send OTP or invalid response structure');
       }
-
-      // Start tracking user presence after successful login
-      LastSeenService.startTracking();
-
-      return data.data[0];
+      return apiResponse.data[0];
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to send OTP';
       setError(errorMessage);
+      console.error('AuthContext login error:', errorMessage, err); 
       throw err;
     } finally {
-      setLoading(false);
+      setLoading(false); // Operation loading
     }
   };
   // Verify OTP
@@ -204,36 +148,38 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     otp: string,
     id: string,
   ): Promise<User> => {
-    setLoading(true);
+    setLoading(true); // Operation loading
     setError(null);
 
     try {
-      const data = await ApiService.post(ENDPOINTS.OTP_VERIFY, {
+      type VerifyOtpApiResponse = ApiResponse<User[]> & { accessToken?: string };
+      const verifyResponse = await ApiService.post<VerifyOtpApiResponse>(ENDPOINTS.OTP_VERIFY, {
         mobile_number: mobileNumber,
         otp,
         id,
       });
 
-      if (data.status !== 200) {
-        throw new Error(data.message || 'OTP verification failed');
-      }
 
-      // Save token and user data to storage
-      const userData = data.data[0] as User;
-      await AsyncStorage.setItem('accessToken', data.accessToken);
+      if (verifyResponse.status !== 200 || !verifyResponse.data || !Array.isArray(verifyResponse.data) || verifyResponse.data.length === 0) {
+        throw new Error(verifyResponse.message || 'OTP verification failed');
+      }
+      
+      const userData = verifyResponse.data[0];
+      if (verifyResponse.accessToken) { 
+        await AsyncStorage.setItem('accessToken', verifyResponse.accessToken);
+      } else {
+        console.warn('[AuthContext] AccessToken not found in verifyOtp response');
+      }
       await AsyncStorage.setItem('user', JSON.stringify(userData));
 
-      // Update state
+
       setUser(userData);
       
-      // Only set authenticated if user is not a first-time user.
-      // If they are first-time, they'll go through UserDetailsScreen,
-      // which will then call completeOnboarding.
       if (userData.is_first_time === 0) {
         setIsAuthenticated(true);
+        LastSeenService.startTracking(); 
       }
 
-      // Check if user has a channel
       checkChannelStatus(userData.id);
 
       return userData;
@@ -243,28 +189,24 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       setError(errorMessage);
       throw err;
     } finally {
-      setLoading(false);
+      setLoading(false); // Operation loading
     }
   };
   // Logout
   const logout = async (): Promise<void> => {
-    setLoading(true);
+    setLoading(true); // Operation loading
     setError(null);
 
     try {
-      // Stop tracking before logout
       LastSeenService.stopTracking();
       
       if (user) {
-        // Call logout API
         await ApiService.post(ENDPOINTS.LOGOUT, {id: user.id});
       }
-      // Clear all async storage
       await AsyncStorage.clear();
       setUser(null);
       setIsAuthenticated(false);
       setHasChannel(false);
-      // Redirect to onboarding/login screen using navigationRef
       if (navigationRef.isReady()) {
         navigationRef.reset({
           index: 0,
@@ -273,7 +215,6 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       }
     } catch (err) {
       console.error('Error during logout:', err);
-      // Still clear storage and state on error
       await AsyncStorage.clear();
       setUser(null);
       setIsAuthenticated(false);
@@ -285,7 +226,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         });
       }
     } finally {
-      setLoading(false);
+      setLoading(false); // Operation loading
     }
   };
 
@@ -296,7 +237,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       throw new Error('User not authenticated');
     }
 
-    setLoading(true);
+    setLoading(true); // Operation loading
     setError(null);
 
     try {
@@ -318,7 +259,6 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         throw new Error(data.message || 'Failed to update user details');
       }
 
-      // Update user in storage and state
       const updatedUser = data.data[0];
       await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
@@ -328,7 +268,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       setError(errorMessage);
       throw err;
     } finally {
-      setLoading(false);
+      setLoading(false); // Operation loading
     }
   };
 
@@ -338,10 +278,9 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       return;
     }
 
-    setLoading(true);
+    setLoading(true); // Operation loading
 
     try {
-      // Using ping endpoint to refresh user session
       await fetch(`${API_BASE_URL}/api/ping`, {
         method: 'GET',
         headers: {
@@ -349,12 +288,11 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         },
       });
 
-      // Check if user has a channel
       checkChannelStatus(user.id);
     } catch (err) {
       console.error('Error refreshing user data:', err);
     } finally {
-      setLoading(false);
+      setLoading(false); // Operation loading
     }
   };
 
@@ -368,16 +306,11 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       throw new Error('User not authenticated');
     }
 
-    setLoading(true);
+    setLoading(true); // Operation loading
     setError(null);
 
     try {
-      // This would be implemented with a real API in production
-      // For now, just update the state
       setHasChannel(true);
-
-      // In a real implementation, you would call an API to create the channel
-      // and then update the user data
       console.log('Creating channel:', {name, description});
     } catch (err) {
       const errorMessage =
@@ -385,7 +318,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       setError(errorMessage);
       throw err;
     } finally {
-      setLoading(false);
+      setLoading(false); // Operation loading
     }
   };
 
@@ -395,8 +328,9 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       value={{
         isAuthenticated,
         user,
-        loading,
+        loading, // This is for operations
         error,
+        isInitialized, // <-- Provide this
         login,
         verifyOtp,
         logout,
@@ -404,7 +338,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         refreshUserData,
         hasChannel,
         createChannel,
-        completeOnboarding, // Added
+        completeOnboarding,
       }}>
       {children}
     </AuthContext.Provider>

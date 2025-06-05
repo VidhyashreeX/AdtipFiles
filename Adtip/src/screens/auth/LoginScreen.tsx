@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,76 +9,98 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
   Keyboard,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Hooks and contexts
-import {useAuth} from '../../contexts/AuthContext';
-import {useTheme} from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 /**
  * Login screen component
  */
-const LoginScreen = ({navigation}: {navigation: any}) => {
+const LoginScreen = ({ navigation }) => {
   // Theme
-  const {colors} = useTheme();
-
+  const { colors } = useTheme();
+  
   // Auth context
-  const {login, loading} = useAuth();  // Local state
+  const { login, loading } = useAuth();
+  
+  // Local state
   const [mobileNumber, setMobileNumber] = useState('');
-  const [countryCode] = useState('+91'); // Remove setCountryCode since it's unused
+  const [countryCode, setCountryCode] = useState('+91');
   const [error, setError] = useState<string | null>(null);
-  const [localLoading, setLocalLoading] = useState(false);
-    // Handle login
-  const handleLogin = () => {
+  
+  // Handle login
+  const handleLogin = async () => {
     // Validate mobile number
     if (!mobileNumber || mobileNumber.length < 10) {
       setError('Please enter a valid 10-digit mobile number');
       return;
     }
-
+    
     // Clear error and dismiss keyboard
     setError(null);
     Keyboard.dismiss();
-
-    // Simply navigate to OTP screen with just the mobile number
-    // The OTP API call will be triggered from the OTP screen
-    navigation.navigate('OTP', {
-      mobileNumber,
-    });
+    
+    try {
+      console.log('[LoginScreen] Attempting to call login from AuthContext...');
+      // Request OTP
+      const otpResponse = await login(mobileNumber);
+      console.log('[LoginScreen] Received OTP Response:', JSON.stringify(otpResponse));
+      
+      // Validate essential fields from otpResponse needed for navigation
+      if (!otpResponse || typeof otpResponse.id === 'undefined' || typeof otpResponse.is_first_time === 'undefined') {
+        console.error('[LoginScreen] Invalid or incomplete otpResponse:', otpResponse);
+        setError('Failed to get necessary OTP details from the server. Please try again.');
+        return;
+      }
+      
+      console.log(`[LoginScreen] Navigating to OTP screen with mobileNumber: ${mobileNumber}, id: ${otpResponse.id}, isFirstTime: ${otpResponse.is_first_time}`);
+      // Navigate to OTP verification screen
+      navigation.navigate('OTP', {
+        mobileNumber,
+        id: otpResponse.id.toString(), // OTPScreen expects id as part of route.params
+        isFirstTime: otpResponse.is_first_time,
+      });
+      console.log('[LoginScreen] Navigation to OTP screen initiated.');
+    } catch (err) {
+      // Handle error
+      console.error('[LoginScreen] Login error in handleLogin:', err);
+      const errorMessage = err && (err as any).message ? (err as any).message : 'Failed to send the OTP. Please try again.';
+      setError(errorMessage);
+    }
   };
-
+  
   return (
-    <SafeAreaView
-      style={[styles.container, {backgroundColor: colors.background}]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
         style={styles.contentContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}>
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+      >
         {/* App logo */}
         <Image
           source={require('../../assets/images/logo.png')}
           style={styles.logo}
           resizeMode="contain"
         />
-
+        
         {/* Title and subtitle */}
-        <Text style={[styles.title, {color: colors.text.primary}]}>
-          Welcome to Adtip
-        </Text>
-        <Text style={[styles.subtitle, {color: colors.text.tertiary}]}>
+        <Text style={[styles.title, { color: colors.text.primary }]}>Welcome to Adtip</Text>
+        <Text style={[styles.subtitle, { color: colors.text.tertiary }]}>
           Please enter your mobile number to continue
         </Text>
-
+        
         {/* Mobile number input */}
-        <View
-          style={[styles.inputContainer, {borderColor: colors.border}]}>
-          <Text style={[styles.countryCode, {color: colors.text.primary}]}>
+        <View style={[styles.inputContainer, { borderColor: colors.border.default }]}>
+          <Text style={[styles.countryCode, { color: colors.text.primary }]}>
             {countryCode}
           </Text>
           <TextInput
-            style={[styles.input, {color: colors.text.primary}]}
+            style={[styles.input, { color: colors.text.primary }]}
             placeholder="Enter mobile number"
             placeholderTextColor={colors.text.light}
             keyboardType="phone-pad"
@@ -88,42 +110,43 @@ const LoginScreen = ({navigation}: {navigation: any}) => {
             autoFocus
           />
         </View>
-
+        
         {/* Error message */}
-        {error && <Text style={styles.errorText}>{error}</Text>}        {/* Login button */}
+        {error && (
+          <Text style={styles.errorText}>{error}</Text>
+        )}
+        
+        {/* Login button */}
         <TouchableOpacity
           style={[
             styles.loginButton,
-            {backgroundColor: colors.primary},
-            (!mobileNumber || mobileNumber.length < 10 || localLoading) &&
-              styles.disabledButton,
+            { backgroundColor: colors.primary },
+            (!mobileNumber || mobileNumber.length < 10 || loading) && styles.disabledButton,
           ]}
           onPress={handleLogin}
-          disabled={!mobileNumber || mobileNumber.length < 10 || localLoading}>
-          {localLoading ? (
-            <ActivityIndicator color="#ffffff" size="small" />
+          disabled={!mobileNumber || mobileNumber.length < 10 || loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#ffffff" />
           ) : (
             <Text style={styles.loginButtonText}>Get OTP</Text>
           )}
         </TouchableOpacity>
-
+        
         {/* Terms and conditions */}
         <View style={styles.termsContainer}>
-          <Text style={[styles.termsText, {color: colors.text.tertiary}]}>
+          <Text style={[styles.termsText, { color: colors.text.tertiary }]}>
             By continuing, you agree to our
           </Text>
           <View style={styles.termsLinksContainer}>
             <TouchableOpacity>
-              <Text style={[styles.termsLink, {color: colors.primary}]}>
+              <Text style={[styles.termsLink, { color: colors.primary }]}>
                 Terms of Service
               </Text>
             </TouchableOpacity>
-            <Text style={[styles.termsText, {color: colors.text.tertiary}]}>
-              {' '}
-              and{' '}
-            </Text>
+            <Text style={[styles.termsText, { color: colors.text.tertiary }]}> and </Text>
             <TouchableOpacity>
-              <Text style={[styles.termsLink, {color: colors.primary}]}>
+              <Text style={[styles.termsLink, { color: colors.primary }]}>
                 Privacy Policy
               </Text>
             </TouchableOpacity>
