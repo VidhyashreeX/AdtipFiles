@@ -16,7 +16,7 @@
       "backgroundColor": "#ffffff" // White background for splash
     },
     "android": {
-      "package": "com.adtip.app", // Unique Android package name
+      "package": "com.adtip.app.adtip_app.app", // Unique Android package name
       "icon": "./assets/icon.png", // Android-specific icon
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png", // For Android 8.0+
@@ -26,7 +26,7 @@
       "versionCode": 1
     },
     "ios": {
-      "bundleIdentifier": "com.adtip.app", // Unique iOS bundle ID
+      "bundleIdentifier": "com.adtip.app.adtip_app.app", // Unique iOS bundle ID
       "icon": "./assets/icon.png", // iOS-specific icon
       "buildNumber": "1.0.0",
       "supportsTablet": true // Support iPads

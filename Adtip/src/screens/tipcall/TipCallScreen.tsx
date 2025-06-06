@@ -10,6 +10,7 @@ import {
   Alert,
   Platform,
   PermissionsAndroid,
+  AppState,
 } from 'react-native';
 import {
   Search,
@@ -35,6 +36,12 @@ import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import ApiService from '../../services/ApiService';
 import MissedCallsList from '../../components/tipcall/MissedCallsList';
 import { AgoraHelper } from '../../services/AgoraHelper';
+import firebase from '@react-native-firebase/app';
+import messaging from '@react-native-firebase/messaging';
+
+// Get the initialized app instance and messaging instance
+const firebaseApp = firebase.app();
+const messagingInstance = messaging();
 
 // Define navigation stack param list
 type RootStackParamList = {
@@ -325,6 +332,12 @@ const TipCallScreen: React.FC = () => {
   const [currentCallType, setCurrentCallType] = useState<'voice' | 'video'>('voice');
   const [activeTab, setActiveTab] = useState('contacts'); // 'contacts' or 'missed'
   const localUid = useRef<number>(0); // Store the local user ID for Agora
+  const [incomingCall, setIncomingCall] = useState<{
+    callerId: string;
+    callerName: string;
+    channelName: string;
+    callType: 'voice' | 'video';
+  } | null>(null);
 
   const redirectToLogin = useCallback(() => {
     Alert.alert('Authentication Required', 'Please log in to continue.', [
@@ -686,6 +699,156 @@ const TipCallScreen: React.FC = () => {
     }
   }, [user, fetchMissedCalls]); // Added fetchMissedCalls to dependencies
 
+  // Handle incoming call notifications
+  useEffect(() => {
+    // Handle app state changes (foreground/background)
+    const appStateListener = AppState.addEventListener('change', nextAppState => {
+      if (nextAppState === 'active') {
+        // App came to foreground, check for pending notifications
+        checkPendingNotifications();
+      }
+    });
+
+    // Request notification permissions
+    NotificationService.requestPermissions(messagingInstance);
+
+    // Check for any notification that launched the app
+    const checkPendingNotifications = async () => {
+      // Check if app was opened from a notification
+      const initialNotification = await messaging().getInitialNotification();
+      if (initialNotification) {
+        handleIncomingCallNotification(initialNotification);
+      }
+    };
+
+    // Foreground notification handler
+    const unsubscribeOnMessage = messaging().onMessage(async remoteMessage => {
+      console.log('Foreground notification received:', remoteMessage);
+      if (remoteMessage.data && (remoteMessage.data.callType === 'video-call' || remoteMessage.data.callType === 'audio-call')) {
+        handleIncomingCallNotification(remoteMessage);
+      }
+    });
+
+    // Background/quit state notification handler
+    const unsubscribeOnNotificationOpened = messaging().onNotificationOpenedApp(remoteMessage => {
+      console.log('Background notification opened:', remoteMessage);
+      if (remoteMessage.data && (remoteMessage.data.callType === 'video-call' || remoteMessage.data.callType === 'audio-call')) {
+        handleIncomingCallNotification(remoteMessage);
+      }
+    });
+
+    // Initial check
+    checkPendingNotifications();
+
+    // Clean up
+    return () => {
+      appStateListener.remove();
+      unsubscribeOnMessage();
+      unsubscribeOnNotificationOpened();
+    };
+  }, []);
+
+  // Handle incoming call notification
+  const handleIncomingCallNotification = (remoteMessage: any) => {
+    const callData = NotificationService.extractCallData(remoteMessage);
+    if (callData) {
+      // Don't show incoming call UI if already in a call
+      if (inCall) {
+        // Auto-reject if in another call
+        NotificationService.updateCallStatus(
+          callData.callerId,
+          user?.id || '',
+          'rejected',
+          callData.callType
+        );
+        return;
+      }
+      
+      // Set incoming call data to show the incoming call screen
+      setIncomingCall(callData);
+    }
+  };
+
+  // Accept incoming call
+  const acceptIncomingCall = async () => {
+    if (!incomingCall || !rtcEngine || !user?.id) return;
+    
+    try {
+      // Request permissions first
+      const hasPermissions = await requestPermissions(incomingCall.callType);
+      if (!hasPermissions) {
+        rejectIncomingCall();
+        return;
+      }
+      
+      // Setup call based on type
+      if (incomingCall.callType === 'video') {
+        await rtcEngine.enableVideo();
+        await rtcEngine.startPreview();
+      } else {
+        await rtcEngine.enableAudio();
+        await rtcEngine.disableVideo();
+      }
+      
+      // Get a UID for the local user
+      const uid = Math.floor(Math.random() * 100000) + 1;
+      localUid.current = uid;
+      
+      // Get token for the channel
+      const token = await fetchAgoraToken(incomingCall.channelName, uid);
+      
+      // Join the channel
+      await AgoraHelper.safeJoinChannel(
+        rtcEngine,
+        token,
+        incomingCall.channelName,
+        uid
+      );
+      
+      // Update call states
+      setMeetingId(incomingCall.channelName);
+      setIsCaller(false);
+      setCurrentCallType(incomingCall.callType);
+      setInCall(true);
+      
+      // Notify caller that call was accepted
+      await NotificationService.updateCallStatus(
+        incomingCall.callerId,
+        user.id,
+        'accepted',
+        incomingCall.callType
+      );
+      
+      // Clear incoming call state
+      setIncomingCall(null);
+    } catch (error) {
+      console.error('Error accepting call:', error);
+      Alert.alert('Error', 'Failed to accept call. Please try again.');
+      rejectIncomingCall();
+    }
+  };
+
+  // Reject incoming call
+  const rejectIncomingCall = async () => {
+    if (!incomingCall || !user?.id) return;
+    
+    try {
+      // Notify caller that call was rejected
+      await NotificationService.updateCallStatus(
+        incomingCall.callerId,
+        user.id,
+        'rejected',
+        incomingCall.callType
+      );
+      
+      // Clear incoming call state
+      setIncomingCall(null);
+    } catch (error) {
+      console.error('Error rejecting call:', error);
+      setIncomingCall(null);
+    }
+  };
+
   if (loading && !contacts.length && !inCall) {
     return (
       <View style={[styles.container, {backgroundColor: '#f8fafc'}]}>
@@ -874,6 +1037,15 @@ const TipCallScreen: React.FC = () => {
           isCaller={isCaller}
           callType={currentCallType}
           localUid={localUid.current}
+        />
+      )}
+
+      {incomingCall && (
+        <IncomingCallScreen
+          callerName={incomingCall.callerName}
+          callType={incomingCall.callType}
+          onAccept={acceptIncomingCall}
+          onReject={rejectIncomingCall}
         />
       )}
     </View>

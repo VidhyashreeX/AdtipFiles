@@ -22,6 +22,9 @@ import {
   SafeAreaView as SafeAreaViewRN,
   useSafeAreaInsets
 } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { initializeApp } from '@react-native-firebase/app';
+import { getMessaging, isSupported } from '@react-native-firebase/messaging';
 
 // Contexts
 import {AuthProvider, useAuth} from './src/contexts/AuthContext';
@@ -40,6 +43,7 @@ import {navigationRef} from './src/navigation/NavigationService';
 
 // Theme
 import {COLORS} from './src/constants/colors';
+import NotificationService from './src/services/NotificationService';
 
 // Stack type
 const Stack = createNativeStackNavigator();
@@ -56,6 +60,9 @@ const ThemeAwareStatusBar = () => {
   );
 };
 
+const firebaseApp = initializeApp();
+const messagingInstance = isSupported() ? getMessaging(firebaseApp) : null;
+
 /**
  * App Navigator component that uses auth context
  */
@@ -65,6 +72,27 @@ const AppNavigator = () => {
   useEffect(() => {
     const initApp = async () => {
       try {
+        // Initialize push notifications
+        if (messagingInstance) {
+          await NotificationService.requestPermissions(messagingInstance);
+          
+          // Set background message handler for call notifications
+          messagingInstance.setBackgroundMessageHandler(async remoteMessage => {
+            console.log('Message handled in the background:', remoteMessage);
+            // Our Java service will handle the notification UI
+            return Promise.resolve();
+          });
+
+          // Register FCM token with backend if user is authenticated
+          if (isAuthenticated) {
+            // Get user ID from auth context or storage
+            const userId = await AsyncStorage.getItem('userId');
+            if (userId) {
+              await NotificationService.registerFcmToken(userId, messagingInstance);
+            }
+          }
+        }
+
         // Commented out PubScale integration - June 2, 2025
         // Initialize PubScale SDK with user ID
         // await PubScaleService.initialize(userId);
@@ -78,17 +106,18 @@ const AppNavigator = () => {
         //   // You can call your backend API here to update the user's balance
         // });
       } catch (error) {
-        console.error('Error initializing app:', error);
+        console.log('Error initializing app:', error);
       }
     };
 
     initApp();
 
     return () => {
+      // Cleanup logic
       // Commented out PubScale integration - June 2, 2025
       // PubScaleService.removeRewardListener();
     };
-  }, []);
+  }, [isAuthenticated]); // Add isAuthenticated as a dependency since we use it
 
   // Show loading indicator ONLY while AuthContext is initializing
   if (!isInitialized) { // <-- Use !isInitialized here

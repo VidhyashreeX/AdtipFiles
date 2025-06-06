@@ -1,4 +1,4 @@
-package com.adtip
+package com.adtip.app.adtip_app
 
 import android.app.Application
 import com.facebook.react.PackageList
@@ -12,7 +12,7 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import com.facebook.soloader.SoLoader
 // Commented out PubScale integration - June 2, 2025
-//import com.adtip.PubscaleOfferwallSdkPackage
+//import com.adtip.app.adtip_app.PubscaleOfferwallSdkPackage
 
 class MainApplication : Application(), ReactApplication {
 

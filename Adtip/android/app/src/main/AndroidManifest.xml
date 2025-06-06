@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="com.adtip"> <!-- IMPORTANT: REPLACE WITH YOUR ACTUAL PACKAGE NAME (e.g., com.myawesomeapp) -->
+    package="com.adtip.app.adtip_app"> <!-- IMPORTANT: REPLACE WITH YOUR ACTUAL PACKAGE NAME (e.g., com.myawesomeapp) -->
 
     <!-- BASIC NETWORK PERMISSIONS -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -115,6 +115,20 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- For handling incoming call notifications when app is in background -->
+        <service
+            android:name=".CallNotificationService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- This ensures the app can be launched from notifications when closed -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="call_channel" />
 
         <!-- Add any other services, receivers, or providers here if your app uses them -->
 
