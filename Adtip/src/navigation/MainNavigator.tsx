@@ -1,11 +1,11 @@
 import React from 'react';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 // Import navigators
 import TabNavigator from './TabNavigator';
 
 // Import the withWalletBalance HOC
-import {withWalletBalance} from '../components/hoc/withWalletBalance';
+import { withWalletBalance } from '../components/hoc/withWalletBalance';
 
 // Import screens
 import CreatePostScreen from '../screens/content/CreatePostScreen';
@@ -36,9 +36,48 @@ import WatchToEarnScreen from '../screens/watchToEarn/WatchToEarnScreen';
 import AdPassbookScreen from '../screens/adPassbook/AdPassbookScreen';
 import SupportScreen from '../screens/support/SupportScreen';
 import CreateCampaignScreen from '../screens/adPassbook/CreateCampaignScreen';
+import CommentsScreen from '../screens/home/CommentScreen';
+import FollowersList from '../screens/profile/FollowersList'; // Import FollowersList
+import FollowingsList from '../screens/profile/FollowingsList'; // Import FollowingsList
 
 // Create stack navigator
 const Stack = createNativeStackNavigator();
+
+// Define the stack param list (consistent with ProfileScreen, FollowersList, and FollowingsList)
+type RootStackParamList = {
+  TabHome: undefined;
+  CreatePost: undefined;
+  SelectCategory: undefined;
+  TipTubeUpload: undefined;
+  TipShortsUpload: undefined;
+  PromotePost: undefined;
+  VideoPreview: undefined;
+  Video: undefined;
+  TipShorts: undefined;
+  Shorts: undefined;
+  Comments: { postId: number };
+  Channel: undefined;
+  CreateChannel: undefined;
+  Packages: undefined;
+  ChoosePackages: undefined;
+  Checkout: undefined;
+  Analytics: undefined;
+  Profile: { userId?: number };
+  Wallet: undefined;
+  TrackOrder: undefined;
+  Search: undefined;
+  Notifications: undefined;
+  Settings: undefined;
+  Earnings: undefined;
+  Referral: undefined;
+  PlayToEarn: undefined;
+  WatchToEarn: undefined;
+  AdPassbook: undefined;
+  Support: undefined;
+  CreateCampaign: undefined;
+  FollowersList: { followers: any[]; userId?: number };
+  FollowingsList: { followings: any[]; userId?: number };
+};
 
 /**
  * Main application stack navigator (when user is authenticated)
@@ -48,9 +87,7 @@ const MainNavigator = () => {
   const EnhancedCreatePostScreen = withWalletBalance(CreatePostScreen);
   const EnhancedSelectCategoryScreen = withWalletBalance(SelectCategoryScreen);
   const EnhancedTipTubeUploadScreen = withWalletBalance(TipTubeUploadScreen);
-  const EnhancedTipShortsUploadScreen = withWalletBalance(
-    TipShortsUploadScreen,
-  );
+  const EnhancedTipShortsUploadScreen = withWalletBalance(TipShortsUploadScreen);
   const EnhancedPromotePostScreen = withWalletBalance(PromotePostScreen);
   const EnhancedVideoPreviewScreen = withWalletBalance(VideoPreviewScreen);
   const EnhancedVideoScreen = withWalletBalance(VideoScreen);
@@ -67,11 +104,16 @@ const MainNavigator = () => {
   const EnhancedSearchScreen = withWalletBalance(SearchScreen);
   const EnhancedNotificationScreen = withWalletBalance(NotificationScreen);
   const EnhancedSettingsScreen = withWalletBalance(SettingsScreen);
-  const EnhancedEarningsScreen = withWalletBalance(EarningsScreen);  const EnhancedReferralScreen = withWalletBalance(ReferralScreen);
+  const EnhancedEarningsScreen = withWalletBalance(EarningsScreen);
+  const EnhancedReferralScreen = withWalletBalance(ReferralScreen);
   const EnhancedPlayToEarnScreen = withWalletBalance(PlayToEarnScreen);
   const EnhancedWatchToEarnScreen = withWalletBalance(WatchToEarnScreen);
   const EnhancedAdPassbookScreen = withWalletBalance(AdPassbookScreen);
   const EnhancedSupportScreen = withWalletBalance(SupportScreen);
+  const EnhancedCreateCampaignScreen = withWalletBalance(CreateCampaignScreen);
+  const EnhancedCommentsScreen = withWalletBalance(CommentsScreen);
+  const EnhancedFollowersList = withWalletBalance(FollowersList); // Enhance FollowersList
+  const EnhancedFollowingsList = withWalletBalance(FollowingsList); // Enhance FollowingsList
 
   // Note: We don't wrap WalletScreen because it already has its own direct wallet balance implementation
 
@@ -80,43 +122,28 @@ const MainNavigator = () => {
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',
-      }}>
+      }}
+    >
       <Stack.Screen name="TabHome" component={TabNavigator} />
       {/* Content creation */}
       <Stack.Screen name="CreatePost" component={EnhancedCreatePostScreen} />
-      <Stack.Screen
-        name="SelectCategory"
-        component={EnhancedSelectCategoryScreen}
-      />
-      <Stack.Screen
-        name="TipTubeUpload"
-        component={EnhancedTipTubeUploadScreen}
-      />
-      <Stack.Screen
-        name="TipShortsUpload"
-        component={EnhancedTipShortsUploadScreen}
-      />
+      <Stack.Screen name="SelectCategory" component={EnhancedSelectCategoryScreen} />
+      <Stack.Screen name="TipTubeUpload" component={EnhancedTipTubeUploadScreen} />
+      <Stack.Screen name="TipShortsUpload" component={EnhancedTipShortsUploadScreen} />
       <Stack.Screen name="PromotePost" component={EnhancedPromotePostScreen} />
       {/* Media viewing */}
-      <Stack.Screen
-        name="VideoPreview"
-        component={EnhancedVideoPreviewScreen}
-      />
+      <Stack.Screen name="VideoPreview" component={EnhancedVideoPreviewScreen} />
       <Stack.Screen name="Video" component={EnhancedVideoScreen} />
       <Stack.Screen name="TipShorts" component={EnhancedTipShortsScreen} />
       <Stack.Screen name="Shorts" component={EnhancedShortsScreen} />
+      {/* Comments */}
+      <Stack.Screen name="Comments" component={EnhancedCommentsScreen} />
       {/* Channel */}
       <Stack.Screen name="Channel" component={EnhancedChannelScreen} />
-      <Stack.Screen
-        name="CreateChannel"
-        component={EnhancedCreateChannelScreen}
-      />
+      <Stack.Screen name="CreateChannel" component={EnhancedCreateChannelScreen} />
       {/* Packages and checkout */}
       <Stack.Screen name="Packages" component={EnhancedPackagesScreen} />
-      <Stack.Screen
-        name="ChoosePackages"
-        component={EnhancedChoosePackagesScreen}
-      />
+      <Stack.Screen name="ChoosePackages" component={EnhancedChoosePackagesScreen} />
       <Stack.Screen name="Checkout" component={EnhancedCheckoutScreen} />
       {/* Other screens */}
       <Stack.Screen name="Analytics" component={EnhancedAnalyticsScreen} />
@@ -124,10 +151,7 @@ const MainNavigator = () => {
       <Stack.Screen name="Wallet" component={WalletScreen} />
       <Stack.Screen name="TrackOrder" component={EnhancedTrackOrderScreen} />
       <Stack.Screen name="Search" component={EnhancedSearchScreen} />
-      <Stack.Screen
-        name="Notifications"
-        component={EnhancedNotificationScreen}
-      />
+      <Stack.Screen name="Notifications" component={EnhancedNotificationScreen} />
       <Stack.Screen name="Settings" component={EnhancedSettingsScreen} />
       <Stack.Screen name="Earnings" component={EnhancedEarningsScreen} />
       <Stack.Screen name="Referral" component={EnhancedReferralScreen} />
@@ -135,7 +159,10 @@ const MainNavigator = () => {
       <Stack.Screen name="WatchToEarn" component={EnhancedWatchToEarnScreen} />
       <Stack.Screen name="AdPassbook" component={EnhancedAdPassbookScreen} />
       <Stack.Screen name="Support" component={EnhancedSupportScreen} />
-      <Stack.Screen name="CreateCampaign" component={withWalletBalance(CreateCampaignScreen)} />
+      <Stack.Screen name="CreateCampaign" component={EnhancedCreateCampaignScreen} />
+      {/* Add FollowersList and FollowingsList */}
+      <Stack.Screen name="FollowersList" component={EnhancedFollowersList} />
+      <Stack.Screen name="FollowingsList" component={EnhancedFollowingsList} />
     </Stack.Navigator>
   );
 };

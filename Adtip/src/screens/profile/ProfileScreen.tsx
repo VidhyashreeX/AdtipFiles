@@ -1,5 +1,4 @@
-// src/screens/profile/ProfileScreen.tsx
-import React, {useEffect, useState} from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -11,7 +10,8 @@ import {
   RefreshControl,
   Platform,
 } from 'react-native';
-import {useRoute, useNavigation} from '@react-navigation/native';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Feather';
@@ -21,58 +21,99 @@ import Header from '../../components/common/Header';
 import LastSeen from '../../components/common/LastSeen';
 
 // Context
-import {useTheme} from '../../contexts/ThemeContext';
-import {useAuth} from '../../contexts/AuthContext';
-import {useTabNavigator} from '../../contexts/TabNavigatorContext';
+import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 
 // Constants
-import {API_BASE_URL, API_ENDPOINTS} from '../../constants/api';
+import { API_BASE_URL, API_ENDPOINTS } from '../../constants/api';
+
+// Define navigation param list
+type RootStackParamList = {
+  EditProfile: undefined;
+  Settings: undefined;
+  CreateChannel: undefined;
+  FollowersList: { followers: any[] };
+  FollowingsList: { followings: any[] };
+  Comments: { postId: number };
+  PostDetail: { postId: number };
+  TipShorts: undefined;
+  Earnings: undefined;
+};
+
+// Define navigation type
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 // Define profile params type
 interface ProfileParams {
   userId?: number;
 }
 
+// Define user type
+interface User {
+  id: string | number;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  username?: string;
+  bio?: string;
+  address?: string;
+  location?: string;
+  profile_image?: string | null;
+  last_active?: string | null;
+  is_online?: boolean;
+}
+
+// Define post type
+interface Post {
+  id: number;
+  user_profile_image?: string | null;
+  media_url?: string | null;
+  likeCount: number;
+  commentCount: number;
+}
+
 const ProfileScreen: React.FC = () => {
   const route = useRoute();
-  const {userId} = (route.params as ProfileParams) || {};
-  const {colors, isDarkMode} = useTheme();
-  
+  const { userId } = (route.params as ProfileParams) || {};
+  const { colors, isDarkMode } = useTheme();
+  const navigation = useNavigation<NavigationProp>();
+
   // Add a try/catch block to handle missing context
   let contentPaddingBottom = 0;
   try {
-    // Try to use the TabNavigator context
     const tabNavigator = useTabNavigator();
     contentPaddingBottom = tabNavigator.contentPaddingBottom;
   } catch (error) {
-    // Fallback to a reasonable value if context is not available
-    contentPaddingBottom = 80; // Default padding that should work in most cases
+    contentPaddingBottom = 80; // Default padding
   }
-  
-  const {user: currentUser, logout} = useAuth();
-  const navigation = useNavigation();
+
+  const { user: currentUser, logout } = useAuth();
+  const isOwnProfile = !userId || (currentUser && userId === parseInt(String(currentUser.id), 10));
 
   // State
-  const [user, setUser] = useState<any>(null);
-  const [posts, setPosts] = useState<any[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [followers, setFollowers] = useState<any[]>([]);
+  const [followings, setFollowings] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'posts' | 'videos' | 'about'>('posts');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState({
-    followers: Math.floor(Math.random() * 1000),
-    following: Math.floor(Math.random() * 500),
-    likes: Math.floor(Math.random() * 10000),
+    followers: 0,
+    following: 0,
+    likes: 0,
   });
   const [isFollowing, setIsFollowing] = useState(false);
   const [showFullMenu, setShowFullMenu] = useState(false);
 
-  const isOwnProfile =
-    !userId || (currentUser && userId === parseInt(currentUser.id, 10));
+  // Default profile image
+  const DEFAULT_PROFILE_IMAGE = 'https://via.placeholder.com/150';
 
   // Helper function for full image URLs
-  const getFullImageUrl = (url?: string | null): string | undefined => {
+  const getFullImageUrl = (url?: string | null): string => {
     if (!url || url === 'null' || url === 'undefined') {
-      return undefined;
+      return DEFAULT_PROFILE_IMAGE;
     }
     if (url.startsWith('http')) {
       return url;
@@ -80,28 +121,24 @@ const ProfileScreen: React.FC = () => {
     return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
-  // Fetch user data
+  // Fetch user data, followers, followings, and posts
   const fetchUserData = async () => {
     try {
       setLoading(true);
-      let userData: any;
+      const token = await AsyncStorage.getItem('accessToken');
+      let userData: User | null = null;
 
       if (isOwnProfile && currentUser) {
-        // Use current user data for own profile
         userData = currentUser;
-      } else {        // Fetch other user profile data
-        const token = await AsyncStorage.getItem('accessToken');
-        const response = await fetch(
-          `${API_BASE_URL}/api/users/${userId}`,
-          {
-            method: 'GET',
-            headers: {
-              Accept: 'application/json',
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
+      } else {
+        const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
           },
-        );
+        });
 
         if (!response.ok) {
           console.error('Error response:', await response.text());
@@ -122,8 +159,59 @@ const ProfileScreen: React.FC = () => {
 
       setUser(userData);
 
+      // Fetch followers
+      const followersResponse = await fetch(`${API_BASE_URL}/api/follow/followers/${userId}`, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (followersResponse.ok) {
+        const followersResult = await followersResponse.json();
+        if (followersResult.status && followersResult.data) {
+          setFollowers(
+            followersResult.data.map((follower: any) => ({
+              ...follower,
+              profile_image: getFullImageUrl(follower.profile_image),
+            })),
+          );
+        }
+      }
+
+      // Fetch followings
+      const followingsResponse = await fetch(`${API_BASE_URL}/api/follow/followings/${userId}`, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (followingsResponse.ok) {
+        const followingsResult = await followingsResponse.json();
+        if (followingsResult.status && followingsResult.data) {
+          setFollowings(
+            followingsResult.data.map((following: any) => ({
+              ...following,
+              profile_image: getFullImageUrl(following.profile_image),
+            })),
+          );
+        }
+      }
+
+      // Update stats
+      setStats({
+        followers: followers.length,
+        following: followings.length,
+        likes: posts.reduce((sum, post) => sum + (post.likeCount || 0), 0),
+      });
+
       // Fetch user posts
-      await fetchUserPosts(isOwnProfile ? currentUser?.id : userId);
+      await fetchUserPosts(isOwnProfile ? currentUser?.id : String(userId));
     } catch (error) {
       console.error('Error fetching user data:', error);
     } finally {
@@ -142,7 +230,7 @@ const ProfileScreen: React.FC = () => {
     try {
       const token = await AsyncStorage.getItem('accessToken');
       const response = await fetch(
-        `${API_BASE_URL}${API_ENDPOINTS.PROFILE.USER_POSTS}/${id}/posts`,
+        `${API_BASE_URL}/api/users/${id}/posts?page=1&limit=10&loggined_user_id=${id}`,
         {
           method: 'GET',
           headers: {
@@ -162,12 +250,12 @@ const ProfileScreen: React.FC = () => {
       const result = await response.json();
 
       if (result?.data && Array.isArray(result.data)) {
-        const formattedPosts = result.data.map((post: any) => ({
+        const formattedPosts: Post[] = result.data.map((post: any) => ({
           ...post,
           user_profile_image: getFullImageUrl(post.user_profile_image),
           media_url: getFullImageUrl(post.media_url),
-          likeCount: post.likes || 0,
-          commentCount: post.comments || 0,
+          likeCount: post.likeCount || 0,
+          commentCount: post.commentCount || 0,
         }));
 
         setPosts(formattedPosts);
@@ -192,57 +280,58 @@ const ProfileScreen: React.FC = () => {
 
   const handleFollowToggle = () => {
     setIsFollowing(!isFollowing);
-    // Update follower count
-    setStats(prev => ({
+    setStats((prev) => ({
       ...prev,
       followers: prev.followers + (isFollowing ? -1 : 1),
     }));
-
-    // API call would go here in real implementation
   };
 
   const handleEditProfile = () => {
-    navigation.navigate('EditProfile' as never);
+    navigation.navigate('EditProfile');
   };
 
   const handleSettings = () => {
-    navigation.navigate('Settings' as never);
+    navigation.navigate('Settings');
   };
 
   const handleCreateChannel = () => {
-    navigation.navigate('CreateChannel' as never);
+    navigation.navigate('CreateChannel');
   };
 
-  // Post interaction handlers
+  const handleFollowersPress = () => {
+    navigation.navigate('FollowersList', { followers });
+  };
+
+  const handleFollowingsPress = () => {
+    navigation.navigate('FollowingsList', { followings });
+  };
+
+  const handlePostsPress = () => {
+    console.log('Posts pressed');
+  };
+
   const handleLike = (postId: number) => {
-    // Like post functionality
     console.log('Like post', postId);
   };
 
   const handleComment = (postId: number) => {
-    // Navigate to comment screen
-    // @ts-ignore
-    navigation.navigate('Comments', {postId});
+    navigation.navigate('Comments', { postId });
   };
 
   const handleShare = (postId: number) => {
-    // Share functionality
     console.log('Share post', postId);
   };
 
   const handlePostPress = (postId: number) => {
-    // Navigate to post detail
-    // @ts-ignore
-    navigation.navigate('PostDetail', {postId});
+    navigation.navigate('PostDetail', { postId });
   };
 
   const handleFollow = async (followUserId: number) => {
-    // Follow functionality
     console.log('Follow user', followUserId);
     return Promise.resolve();
   };
 
-  // Menu items based on design
+  // Menu items
   const menuItems = [
     {
       id: 'account',
@@ -251,19 +340,21 @@ const ProfileScreen: React.FC = () => {
       subtitle: 'Account settings and preferences',
       onPress: handleSettings,
       active: false,
-    },    {
+    },
+    {
       id: 'videos',
       icon: 'play-circle',
       title: 'Watch Videos',
       subtitle: 'Earn coins by watching content',
-      onPress: () => navigation.navigate('TipShorts' as never),
+      onPress: () => navigation.navigate('TipShorts'),
       active: false,
-    },    {
+    },
+    {
       id: 'earnings',
       icon: 'dollar-sign',
       title: 'My Earnings',
       subtitle: 'Track your daily rewards',
-      onPress: () => navigation.navigate('Earnings' as never),
+      onPress: () => navigation.navigate('Earnings'),
       active: false,
     },
     {
@@ -296,7 +387,6 @@ const ProfileScreen: React.FC = () => {
   const handleSignOut = async () => {
     try {
       await logout();
-      // Navigation reset is now handled in AuthContext.logout, so nothing else is needed here.
     } catch (err) {
       console.error('Logout failed:', err);
     }
@@ -305,10 +395,10 @@ const ProfileScreen: React.FC = () => {
   // Get user initials for avatar
   const getUserInitials = () => {
     if (!user) return 'JD';
-    
+
     const name = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim();
     if (!name) return 'JD';
-    
+
     return name
       .split(' ')
       .map((n: string) => n[0])
@@ -316,18 +406,21 @@ const ProfileScreen: React.FC = () => {
       .toUpperCase()
       .substring(0, 2);
   };
-  
+
   // Effects
   useEffect(() => {
     fetchUserData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   // Render functions
   if (loading && !refreshing) {
     return (
-      <View style={[styles.container, {backgroundColor: colors.background}]}>
-        <Header title={isOwnProfile ? 'Profile' : 'Profile'} showLogo={true} showNotifications={isOwnProfile || false} />
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Header
+          title={isOwnProfile ? 'Profile' : 'Profile'}
+          showLogo={true}
+          showNotifications={isOwnProfile || false}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -337,27 +430,34 @@ const ProfileScreen: React.FC = () => {
 
   if (!user && !loading) {
     return (
-      <View style={[styles.container, {backgroundColor: colors.background}]}>
-        <Header title={isOwnProfile ? 'Profile' : 'Profile'} showLogo={true} showNotifications={isOwnProfile || false} />
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Header
+          title={isOwnProfile ? 'Profile' : 'Profile'}
+          showLogo={true}
+          showNotifications={isOwnProfile || false}
+        />
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, {color: colors.text.primary}]}>User not found or there was an error loading the profile.</Text>
+          <Text style={[styles.errorText, { color: colors.text.primary }]}>
+            User not found or there was an error loading the profile.
+          </Text>
           <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
-            <Text style={{color: colors.primary}}>Retry</Text>
+            <Text style={{ color: colors.primary }}>Retry</Text>
           </TouchableOpacity>
         </View>
       </View>
     );
   }
+
   return (
-    <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header 
-        title={isOwnProfile ? 'Profile' : user?.name || 'Profile'} 
-        showLogo={true} // Always show logo, regardless of profile type
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Header
+        title={isOwnProfile ? 'Profile' : user?.name || 'Profile'}
+        showLogo={true}
         showBackButton={!isOwnProfile}
-        showNotifications={isOwnProfile || false} 
+        showNotifications={isOwnProfile || false}
       />
-      <ScrollView 
-        style={styles.scrollView} 
+      <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={{ paddingBottom: contentPaddingBottom }}
         refreshControl={
           <RefreshControl
@@ -380,15 +480,16 @@ const ProfileScreen: React.FC = () => {
               <Icon name="camera" size={20} color="#fff" />
             </TouchableOpacity>
           )}
-        </LinearGradient>        {/* Avatar */}
+        </LinearGradient>
+        {/* Avatar */}
         <View style={styles.avatarContainer}>
-          <LinearGradient
-            colors={['#4080FF', '#9747FF']}
-            style={styles.avatarGradient}
-          >
-            <View style={[styles.avatarWrapper, {backgroundColor: colors.card}]}>
+          <LinearGradient colors={['#4080FF', '#9747FF']} style={styles.avatarGradient}>
+            <View style={[styles.avatarWrapper, { backgroundColor: colors.card }]}>
               {user?.profile_image ? (
-                <Image source={{ uri: getFullImageUrl(user.profile_image) }} style={styles.avatarImage} />
+                <Image
+                  source={{ uri: getFullImageUrl(user.profile_image) }}
+                  style={styles.avatarImage}
+                />
               ) : (
                 <Text style={styles.avatarInitials}>{getUserInitials()}</Text>
               )}
@@ -399,67 +500,80 @@ const ProfileScreen: React.FC = () => {
               )}
             </View>
           </LinearGradient>
-        </View>        {/* Name, Username, Bio, Location */}
+        </View>
+        {/* Name, Username, Bio, Location */}
         <View style={styles.userInfoContainer}>
-          <Text style={[styles.userName, {color: colors.text.primary}]}>
+          <Text style={[styles.userName, { color: colors.text.primary }]}>
             {user?.name || 'John Doe'}
           </Text>
-          
-          <LastSeen 
-            lastActiveTime={user.last_active}
-            isOnline={user.is_online}
+          <LastSeen
+            lastActiveTime={user?.last_active || null}
+            isOnline={user?.is_online || false}
             style={styles.lastSeen}
           />
-          
-          <Text style={[styles.userHandle, {color: colors.text.secondary}]}>@{user?.username || 'johndoe'}</Text>
-          <Text style={[styles.userBio, {color: colors.text.secondary}]}>
+          <Text style={[styles.userHandle, { color: colors.text.secondary }]}>
+            @{user?.username || 'johndoe'}
+          </Text>
+          <Text style={[styles.userBio, { color: colors.text.secondary }]}>
             {user?.bio || '🎬 Video enthusiast earning daily rewards 💰\nWatch, Learn, Earn with every view! 🚀'}
           </Text>
           <View style={styles.locationContainer}>
             <Icon name="map-pin" size={14} color={colors.text.tertiary} />
-            <Text style={[styles.locationText, {color: colors.text.tertiary}]}>
+            <Text style={[styles.locationText, { color: colors.text.tertiary }]}>
               {user?.address || user?.location || 'San Francisco, CA'}
             </Text>
           </View>
-        </View>        {/* Stats Row */}
-        <View style={[styles.statsContainer, {backgroundColor: isDarkMode ? colors.card : '#fff'}]}>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, {color: colors.text.primary}]}>{posts.length || 128}</Text>
-            <Text style={[styles.statLabel, {color: colors.text.tertiary}]}>Posts</Text>
-          </View>
-          <View style={[styles.statDivider, {backgroundColor: colors.borderLight}]} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, {color: colors.text.primary}]}>{stats.followers?.toLocaleString() || '2.5K'}</Text>
-            <Text style={[styles.statLabel, {color: colors.text.tertiary}]}>Followers</Text>
-          </View>
-          <View style={[styles.statDivider, {backgroundColor: colors.borderLight}]} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, {color: colors.text.primary}]}>{stats.following || 892}</Text>
-            <Text style={[styles.statLabel, {color: colors.text.tertiary}]}>Following</Text>
-          </View>
-        </View>        {/* Edit Profile & Settings Buttons */}
+        </View>
+        {/* Stats Row */}
+        <View style={[styles.statsContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+          <TouchableOpacity style={styles.statItem} onPress={handlePostsPress}>
+            <Text style={[styles.statValue, { color: colors.text.primary }]}>{posts.length}</Text>
+            <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Posts</Text>
+          </TouchableOpacity>
+          <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
+          <TouchableOpacity style={styles.statItem} onPress={handleFollowersPress}>
+            <Text style={[styles.statValue, { color: colors.text.primary }]}>
+              {stats.followers.toLocaleString()}
+            </Text>
+            <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Followers</Text>
+          </TouchableOpacity>
+          <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
+          <TouchableOpacity style={styles.statItem} onPress={handleFollowingsPress}>
+            <Text style={[styles.statValue, { color: colors.text.primary }]}>{stats.following}</Text>
+            <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Following</Text>
+          </TouchableOpacity>
+        </View>
+        {/* Edit Profile & Settings Buttons */}
         {isOwnProfile && (
           <View style={styles.actionButtonsContainer}>
-            <TouchableOpacity
-              style={styles.editProfileButton}
-              onPress={handleEditProfile}
-            >
+            <TouchableOpacity style={styles.editProfileButton} onPress={handleEditProfile}>
               <Icon name="edit-2" size={18} color="#fff" style={{ marginRight: 8 }} />
               <Text style={styles.editButtonText}>Edit Profile</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.settingsButton, {backgroundColor: isDarkMode ? colors.gray[700] : colors.gray[200]}]}
-              onPress={() => navigation.navigate('Settings' as never)}
+              style={[styles.settingsButton, { backgroundColor: isDarkMode ? colors.gray[700] : colors.gray[200] }]}
+              onPress={handleSettings}
             >
               <Icon name="settings" size={22} color={colors.text.secondary} />
             </TouchableOpacity>
           </View>
         )}
-
+        {/* Posts Grid */}
+        <View style={styles.postsContainer}>
+          {posts.map((post) => (
+            <TouchableOpacity
+              key={post.id}
+              style={styles.postItem}
+              onPress={() => handlePostPress(post.id)}
+            >
+              <Image source={{ uri: getFullImageUrl(post.media_url) }} style={styles.postImage} resizeMode="cover" />
+            </TouchableOpacity>
+          ))}
+        </View>
         {/* Menu Section */}
-        <View style={[styles.menuContainer, {backgroundColor: isDarkMode ? colors.card : '#fff'}]}>
-          <Text style={[styles.menuTitle, {color: colors.text.primary}]}>Menu</Text>
-          {menuItems.map((item, idx) => (
+        <View style={[styles.menuContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+          <Text style={[styles.menuTitle, { color: colors.text.primary }]}>Menu</Text>
+          {menuItems.map((item) => (
             <TouchableOpacity
               key={item.id}
               style={styles.menuItem}
@@ -467,12 +581,14 @@ const ProfileScreen: React.FC = () => {
               activeOpacity={0.85}
             >
               <View style={styles.menuItemLeft}>
-                <View style={[styles.menuIconContainer, {backgroundColor: isDarkMode ? colors.background : colors.gray[100]}]}>
+                <View
+                  style={[styles.menuIconContainer, { backgroundColor: isDarkMode ? colors.background : colors.gray[100] }]}
+                >
                   <Icon name={item.icon} size={22} color={colors.text.secondary} />
                 </View>
                 <View style={styles.menuItemTextContainer}>
-                  <Text style={[styles.menuItemTitle, {color: colors.text.primary}]}>{item.title}</Text>
-                  <Text style={[styles.menuItemSubtitle, {color: colors.text.tertiary}]}>{item.subtitle}</Text>
+                  <Text style={[styles.menuItemTitle, { color: colors.text.primary }]}>{item.title}</Text>
+                  <Text style={[styles.menuItemSubtitle, { color: colors.text.tertiary }]}>{item.subtitle}</Text>
                 </View>
               </View>
               <View style={styles.menuItemRight}>
@@ -568,6 +684,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginLeft: 4,
   },
+  lastSeen: {
+    marginVertical: 4,
+  },
   statsContainer: {
     flexDirection: 'row',
     borderRadius: 16,
@@ -621,6 +740,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
+  },
+  postsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: 8,
+    marginBottom: 16,
+  },
+  postItem: {
+    width: '33.33%',
+    aspectRatio: 1,
+    padding: 4,
+  },
+  postImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
   },
   menuContainer: {
     borderRadius: 20,
