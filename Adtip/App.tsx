@@ -4,7 +4,7 @@
  * @format
  */
 
-import React, {useEffect} from 'react';
+import React, {useEffect, useState} from 'react'; // Import useState
 import {
   SafeAreaView,
   StatusBar,
@@ -24,7 +24,7 @@ import {
 } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initializeApp } from '@react-native-firebase/app';
-import { getMessaging, isSupported } from '@react-native-firebase/messaging';
+import { getMessaging, isSupported } from '@react-native-firebase/messaging'; // isSupported is still imported, but used later
 
 // Contexts
 import {AuthProvider, useAuth} from './src/contexts/AuthContext';
@@ -60,29 +60,56 @@ const ThemeAwareStatusBar = () => {
   );
 };
 
-const firebaseApp = initializeApp();
-const messagingInstance = isSupported() ? getMessaging(firebaseApp) : null;
+// Remove these lines from the top level
+// const firebaseApp = initializeApp();
+// const messagingInstance = isSupported() ? getMessaging(firebaseApp) : null;
 
 /**
  * App Navigator component that uses auth context
  */
 const AppNavigator = () => {
-  const {isAuthenticated, isInitialized} = useAuth(); // <-- Get isInitialized, remove loading
+  const {isAuthenticated, isInitialized} = useAuth();
+  // State to hold the messaging instance once it's initialized
+  const [messagingInstance, setMessagingInstance] = useState(null);
 
   useEffect(() => {
-    const initApp = async () => {
+    const initFirebaseMessaging = async () => {
       try {
-        // Initialize push notifications
-        if (messagingInstance) {
-          await NotificationService.requestPermissions(messagingInstance);
-          
+        const firebaseApp = initializeApp(); // Initialize Firebase app here
+        // Check if messaging is supported dynamically
+        const isMessagingSupported = await isSupported(); // Await isSupported()
+        if (isMessagingSupported) {
+          const instance = getMessaging(firebaseApp);
+          setMessagingInstance(instance); // Set the instance in state
+          console.log('Firebase Messaging is supported and initialized.');
+
           // Set background message handler for call notifications
-          messagingInstance.setBackgroundMessageHandler(async remoteMessage => {
+          instance.setBackgroundMessageHandler(async remoteMessage => {
             console.log('Message handled in the background:', remoteMessage);
             // Our Java service will handle the notification UI
             return Promise.resolve();
           });
+        } else {
+          console.log('Firebase Messaging is NOT supported on this device.');
+        }
+      } catch (error) {
+        console.error('Error initializing Firebase Messaging:', error);
+      }
+    };
 
+    initFirebaseMessaging();
+
+    return () => {
+      // Cleanup if needed, though usually not for firebase messaging
+    };
+  }, []); // Run only once on component mount
+
+  useEffect(() => {
+    const setupNotifications = async () => {
+      if (messagingInstance) { // Ensure messagingInstance is available
+        try {
+          await NotificationService.requestPermissions(messagingInstance);
+          
           // Register FCM token with backend if user is authenticated
           if (isAuthenticated) {
             // Get user ID from auth context or storage
@@ -91,36 +118,23 @@ const AppNavigator = () => {
               await NotificationService.registerFcmToken(userId, messagingInstance);
             }
           }
+        } catch (error) {
+          console.error('Error setting up notifications:', error);
         }
-
-        // Commented out PubScale integration - June 2, 2025
-        // Initialize PubScale SDK with user ID
-        // await PubScaleService.initialize(userId);
-
-        // Initialize reward service
-        // await RewardService.init();
-
-        // Set up PubScale reward listener
-        // PubScaleService.setRewardListener((reward) => {
-        //   console.log('Reward received in App.tsx:', reward);
-        //   // You can call your backend API here to update the user's balance
-        // });
-      } catch (error) {
-        console.log('Error initializing app:', error);
       }
     };
 
-    initApp();
+    // Only run this effect if messagingInstance or isAuthenticated changes
+    // This ensures permissions and token registration happen after Firebase Messaging is ready
+    setupNotifications();
 
     return () => {
-      // Cleanup logic
-      // Commented out PubScale integration - June 2, 2025
-      // PubScaleService.removeRewardListener();
+      // Cleanup logic if any for NotificationService listeners
     };
-  }, [isAuthenticated]); // Add isAuthenticated as a dependency since we use it
+  }, [isAuthenticated, messagingInstance]); // Dependencies
 
   // Show loading indicator ONLY while AuthContext is initializing
-  if (!isInitialized) { // <-- Use !isInitialized here
+  if (!isInitialized) {
     const insets = useSafeAreaInsets();
     return (
       <SafeAreaViewRN style={[
@@ -184,7 +198,7 @@ function App(): React.JSX.Element {
       <SafeAreaViewRN 
         style={styles.safeArea}
         edges={['left', 'right', 'bottom']} 
-      >        
+      >
         <View 
           style={[
             styles.appContentContainer,
@@ -193,7 +207,8 @@ function App(): React.JSX.Element {
               alignSelf: 'center',
             }
           ]}
-        >          <ThemeProvider>
+        >
+          <ThemeProvider>
             <ThemeAwareStatusBar />
             <AuthProvider> {/* AuthProvider now correctly wraps AppNavigator */}
               <WalletProvider>
@@ -214,7 +229,7 @@ function App(): React.JSX.Element {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: COLORS.primary, // This might be better as theme background or transparent
+    backgroundColor: COLORS.primary,
     width: '100%',
     height: '100%',
   },
@@ -230,7 +245,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: COLORS.background, 
     width: '100%',
-    // paddingTop is handled by SafeAreaViewRN in the component now
   },
 });
 
