@@ -174,6 +174,94 @@ const notifyRecipient = async (
   }
 };
 
+// --- Placeholder for NotificationService ---
+// This service is used but not defined in your provided code.
+// You'll need to implement the actual logic for requesting permissions,
+// extracting call data, and updating call status.
+const NotificationService = {
+  requestPermissions: async (messagingInstance: any) => {
+    try {
+      if (Platform.OS === 'ios') {
+        const authStatus = await messagingInstance.requestPermission();
+        const enabled =
+          authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+          authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+        if (!enabled) {
+          Alert.alert('Notification Permission', 'Please enable notifications for a better call experience.');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to request notification permissions:', error);
+    }
+  },
+  extractCallData: (remoteMessage: any) => {
+    if (remoteMessage.data) {
+      const { callerId, callerName, channelName, callType } = remoteMessage.data;
+      if (callerId && callerName && channelName && (callType === 'video-call' || callType === 'audio-call')) {
+        return {
+          callerId: callerId,
+          callerName: callerName,
+          channelName: channelName,
+          callType: callType === 'video-call' ? 'video' : 'voice',
+        };
+      }
+    }
+    return null;
+  },
+  updateCallStatus: async (
+    callerId: string,
+    receiverId: string,
+    action: 'accepted' | 'rejected' | 'missed-video-call' | 'missed-audio-call',
+    callType: 'video' | 'audio',
+  ) => {
+    try {
+      await ApiService.handleCall({
+        callerId: callerId,
+        receiverId: receiverId,
+        action: action,
+        callType: callType === 'video' ? 'video-call' : 'audio-call',
+      });
+      console.log(`Call status updated to ${action} for call from ${callerId} to ${receiverId}`);
+    } catch (error) {
+      console.error(`Error updating call status to ${action}:`, error);
+    }
+  },
+};
+
+// --- Placeholder for IncomingCallScreen component ---
+// This component is used in TipCallScreen but not defined.
+// You'll need to define its UI and functionality.
+interface IncomingCallScreenProps {
+  callerName: string;
+  callType: 'voice' | 'video';
+  onAccept: () => void;
+  onReject: () => void;
+}
+
+const IncomingCallScreen: React.FC<IncomingCallScreenProps> = ({
+  callerName,
+  callType,
+  onAccept,
+  onReject,
+}) => {
+  return (
+    <View style={styles.incomingCallOverlay}>
+      <Text style={styles.incomingCallText}>Incoming {callType} call from:</Text>
+      <Text style={styles.incomingCallerName}>{callerName}</Text>
+      <View style={styles.incomingCallButtons}>
+        <TouchableOpacity style={styles.acceptCallButton} onPress={onAccept}>
+          <Text style={styles.acceptCallText}>Accept</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.rejectCallButton} onPress={onReject}>
+          <Text style={styles.rejectCallText}>Reject</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+
 interface MeetingViewProps {
   meetingId: string;
   engine: IRtcEngine;
@@ -196,26 +284,38 @@ const MeetingView: React.FC<MeetingViewProps> = ({
   // Use useRef with null initial value
   const remoteVideoCanvas = useRef<View>(null);
   const localVideoCanvas = useRef<View>(null);
-  
+
   // Add a key state to force recreation of video views
   const [videoViewKey, setVideoViewKey] = useState(Date.now());
+  const remoteUsersRef = useRef<number[]>([]); // Ref to hold remote users, for use in cleanup
 
-  // Clean up function for video views
+  useEffect(() => {
+    remoteUsersRef.current = remoteUsers;
+  }, [remoteUsers]);
+
+  // Clean up function for video views - primarily for explicit actions like ending a call
+  // or resetting UI if the component were to be reused (though it unmounts here).
   const cleanupVideoViews = useCallback(() => {
-    if (callType === 'video') {
-      // Release video views
+    if (callType === 'video' && engine) { // Check engine existence
+      console.log('MeetingView: cleanupVideoViews called.');
       try {
-        engine.setupLocalVideo({view: null});
-        remoteUsers.forEach(uid => {
-          engine.setupRemoteVideo({uid, view: null});
+        engine.setupLocalVideo({ view: null });
+        // Use the ref here as well if this can be called during complex state transitions
+        remoteUsersRef.current.forEach(uid => {
+          engine.setupRemoteVideo({ uid: uid, view: null });
         });
-        // Force recreate views on next render
+        // These state updates are okay if cleanupVideoViews is called while component is still mounted
+        // and needs a visual reset. If called during unmount, they are less critical.
         setVideoViewKey(Date.now());
+        setRemoteUsers([]); // Reset remote users state
       } catch (e) {
-        console.error('Error cleaning up video views:', e);
+        console.error('Error in cleanupVideoViews:', e);
       }
+    } else if (callType === 'voice' && engine) {
+      // For voice calls, ensure audio is handled if necessary, though no views to clean.
+      // This function is mostly for video.
     }
-  }, [engine, remoteUsers, callType]);
+  }, [engine, callType]); // Removed remoteUsers from deps, uses remoteUsersRef.current
 
   useEffect(() => {
     if (!engine) return;
@@ -224,7 +324,7 @@ const MeetingView: React.FC<MeetingViewProps> = ({
     let timeoutId: NodeJS.Timeout | null = null;
     if (isCaller) {
       timeoutId = setTimeout(() => {
-        if (remoteUsers.length === 0) {
+        if (remoteUsersRef.current.length === 0) { // Use ref here
           // Get the contact ID from the meeting ID
           const contactIdMatch = meetingId.match(/_([\d]+)_/);
           const contactId = contactIdMatch ? contactIdMatch[1] : null;
@@ -253,13 +353,19 @@ const MeetingView: React.FC<MeetingViewProps> = ({
 
     const onUserJoined = (connection: RtcConnection, remoteUid: number) => {
       console.log(`User ${remoteUid} joined channel ${connection.channelId}`);
-      setRemoteUsers(prev => [...new Set([...prev, remoteUid])]);
-      
-      // Don't setup immediately - wait for the next render cycle
-      // when the view ref is definitely attached
+
+      // First update state to trigger re-render with the new remote user
+      setRemoteUsers(prev => {
+        // If this user is already in our list, don't add them again
+        if (prev.includes(remoteUid)) return prev;
+        return [...prev, remoteUid];
+      });
+
+      // Use a longer timeout to ensure the view has fully rendered
       setTimeout(() => {
         if (callType === 'video' && remoteVideoCanvas.current) {
           try {
+            console.log(`Setting up remote video for uid ${remoteUid}`);
             engine.setupRemoteVideo({
               uid: remoteUid,
               view: remoteVideoCanvas.current,
@@ -269,12 +375,12 @@ const MeetingView: React.FC<MeetingViewProps> = ({
             console.error(`Error setting up remote video for uid ${remoteUid}:`, e);
           }
         }
-      }, 500);
+      }, 1000); // Increased timeout to 1 second
     };
 
     const onUserOffline = (connection: RtcConnection, remoteUid: number) => {
       console.log(`User ${remoteUid} left channel ${connection.channelId}`);
-      
+
       // Release the view before removing the user
       if (callType === 'video') {
         try {
@@ -286,10 +392,10 @@ const MeetingView: React.FC<MeetingViewProps> = ({
           console.error(`Error releasing remote video for uid ${remoteUid}:`, e);
         }
       }
-      
+
       setRemoteUsers(prev => prev.filter(uid => uid !== remoteUid));
-      
-      if (remoteUsers.length === 1 && remoteUsers[0] === remoteUid) {
+
+      if (remoteUsersRef.current.length === 1 && remoteUsersRef.current[0] === remoteUid) {
         // If the only other user leaves, end the call
         cleanupVideoViews();
         onEndCall();
@@ -326,48 +432,74 @@ const MeetingView: React.FC<MeetingViewProps> = ({
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
-      
+
       // Clean up video views when unmounting
       cleanupVideoViews();
-      
+
       engine.removeListener('onUserJoined', onUserJoined);
       engine.removeListener('onUserOffline', onUserOffline);
       engine.removeListener('onError', onError);
     };
   }, [engine, onEndCall, isCaller, meetingId, user, callType, cleanupVideoViews]);
 
+  // In the MeetingView component:
+
+  // 1. Add this function to handle view cleanup when component unmounts or remounts
+  useEffect(() => {
+    // This cleanup runs when component mounts (to clean up any lingering views)
+    // and when it unmounts
+    return () => {
+      if (callType === 'video' && engine) {
+        console.log('Cleaning up video views on unmount');
+        try {
+          // First set up with null views to detach
+          engine.setupLocalVideo({view: null});
+          remoteUsersRef.current.forEach(uid => { // Use ref for remoteUsers
+            engine.setupRemoteVideo({uid, view: null});
+          });
+        } catch (e) {
+          console.error('Error during view cleanup:', e);
+        }
+      }
+    };
+  }, [callType, engine]); // Removed remoteUsers from deps, uses remoteUsersRef.current
+
+  // 2. Update the VideoCanvas rendering to use completely separate containers
   return (
     <View style={styles.callOverlay}>
       {callType === 'video' && (
         <>
-          {/* Add key to force recreation */}
-          <View 
-            key={`remote-${videoViewKey}`} 
-            style={styles.remoteVideo}
-          >
-            {remoteUsers.length > 0 && (
-              <VideoCanvas 
-                style={{width: '100%', height: '100%'}} 
-                ref={remoteVideoCanvas} 
-                zOrderMediaOverlay={true} 
+          {/* Remote Video */}
+          {remoteUsers.length > 0 ? (
+            <View
+              key={`remote-${videoViewKey}-${remoteUsers[0]}`} // Ensure key changes robustly
+              style={styles.remoteVideo}
+            >
+              <View
+                ref={remoteVideoCanvas} // This View is what Agora draws onto
+                style={{width: '100%', height: '100%'}}
               />
-            )}
-          </View>
-          
-          {/* Separate local video with its own key */}
-          <View 
-            key={`local-${videoViewKey}`} 
+            </View>
+          ) : (
+            <View style={[styles.remoteVideo, {justifyContent: 'center', alignItems: 'center'}]}>
+              <Text style={{color: 'white'}}>Waiting for other participant...</Text>
+            </View>
+          )}
+
+          {/* Local Video */}
+          <View
+            key={`local-${videoViewKey}`}
             style={styles.localVideo}
           >
-            <VideoCanvas 
-              style={{width: '100%', height: '100%'}} 
-              ref={localVideoCanvas} 
-              zOrderMediaOverlay={true} 
+            <View
+              ref={localVideoCanvas} // This View is what Agora draws onto
+              style={{width: '100%', height: '100%'}}
             />
           </View>
         </>
       )}
 
+      {/* Call status and other controls... */}
       <Text style={styles.callStatus}>In Call: {meetingId}</Text>
       <Text style={styles.callStatus}>
         {remoteUsers.length > 0
@@ -415,7 +547,7 @@ const TipCallScreen: React.FC = () => {
     Alert.alert('Authentication Required', 'Please log in to continue.', [
       {text: 'OK', onPress: () => navigation.navigate('Login')},
     ]);
-  }, [navigation]); // Added navigation to dependencies
+  }, [navigation]);
 
   // Request permissions for audio and video
   // Wrapped in useCallback for stability
@@ -447,7 +579,7 @@ const TipCallScreen: React.FC = () => {
       }
       return true;
     },
-    [], // No dependencies, as this function itself doesn't depend on props/state
+    [],
   );
 
   const fetchUsers = useCallback(
@@ -493,7 +625,7 @@ const TipCallScreen: React.FC = () => {
         setLoading(false);
       }
     },
-    [selectedCategory, selectedLanguage, searchQuery, user, redirectToLogin], // Added redirectToLogin to dependencies
+    [selectedCategory, selectedLanguage, searchQuery, user, redirectToLogin],
   );
 
   useEffect(() => {
@@ -508,34 +640,34 @@ const TipCallScreen: React.FC = () => {
           console.log('User not authenticated, skipping FCM token registration');
           return;
         }
-        
+
         // Get FCM token from AsyncStorage (this should be set elsewhere in the app when FCM token is received)
         const fcmToken = await AsyncStorage.getItem('fcmToken');
-        
+
         if (!fcmToken) {
           console.log('No FCM token available');
           return;
         }
-        
+
         // Register/update token with server
         await ApiService.updateFcmToken({
           userId: user.id,
           fcmToken: fcmToken
         });
-        
+
         console.log('FCM token registered successfully');
       } catch (error) {
         console.error('Failed to register FCM token:', error);
       }
     };
-    
+
     registerFcmToken();
   }, [user]);
 
-  const loadMoreUsers = useCallback(() => { // Wrapped in useCallback
+  const loadMoreUsers = useCallback(() => {
     if (loading || contacts.length >= totalRecords) return;
     fetchUsers(page + 1, true);
-  }, [loading, contacts.length, totalRecords, page, fetchUsers]); // Added all dependencies
+  }, [loading, contacts.length, totalRecords, page, fetchUsers]);
 
   useEffect(() => {
     const initAgora = async () => {
@@ -586,7 +718,7 @@ const TipCallScreen: React.FC = () => {
       if (rtcEngine) {
         try {
           // Remove listeners before leaving and releasing
-          rtcEngine.removeAllListeners(); // Good practice to remove all listeners
+          rtcEngine.removeAllListeners();
           rtcEngine.leaveChannel();
           rtcEngine.release();
           console.log('Agora engine released.');
@@ -595,7 +727,7 @@ const TipCallScreen: React.FC = () => {
         }
       }
     };
-  }, [rtcEngine]); // rtcEngine as dependency ensures cleanup happens when engine is set
+  }, [rtcEngine]);
 
   const startVoiceCall = useCallback(async (contactId: number) => {
     if (!rtcEngine) {
@@ -646,7 +778,7 @@ const TipCallScreen: React.FC = () => {
       setIsCaller(false);
       setCurrentCallType('voice');
     }
-  }, [rtcEngine, inCall, user, redirectToLogin, requestPermissions]); // Added all dependencies
+  }, [rtcEngine, inCall, user, redirectToLogin, requestPermissions]);
 
   const startVideoCall = useCallback(async (contactId: number) => {
     if (!rtcEngine) {
@@ -697,7 +829,7 @@ const TipCallScreen: React.FC = () => {
       setIsCaller(false);
       setCurrentCallType('voice');
     }
-  }, [rtcEngine, inCall, user, redirectToLogin, requestPermissions]); // Added all dependencies
+  }, [rtcEngine, inCall, user, redirectToLogin, requestPermissions]);
 
   const endCall = useCallback(async () => {
     if (rtcEngine) {
@@ -736,7 +868,7 @@ const TipCallScreen: React.FC = () => {
         Alert.alert('Error', 'Failed to end call.');
       }
     }
-  }, [rtcEngine, meetingId, isCaller, user]); // Added all dependencies
+  }, [rtcEngine, meetingId, isCaller, user]);
 
   const updateFcmToken = async (fcmToken: string) => {
     if (!user?.id) return;
@@ -752,7 +884,7 @@ const TipCallScreen: React.FC = () => {
     }
   };
 
-  const fetchMissedCalls = useCallback(async () => { // Wrapped in useCallback
+  const fetchMissedCalls = useCallback(async () => {
     if (!user?.id) return;
 
     try {
@@ -763,13 +895,13 @@ const TipCallScreen: React.FC = () => {
     } catch (error) {
       console.error('Error fetching missed calls:', error);
     }
-  }, [user]); // Added user to dependencies
+  }, [user]);
 
   useEffect(() => {
     if (user?.id) {
       fetchMissedCalls();
     }
-  }, [user, fetchMissedCalls]); // Added fetchMissedCalls to dependencies
+  }, [user, fetchMissedCalls]);
 
   // Handle incoming call notifications
   useEffect(() => {
@@ -835,7 +967,7 @@ const TipCallScreen: React.FC = () => {
         );
         return;
       }
-      
+
       // Set incoming call data to show the incoming call screen
       setIncomingCall(callData);
     }
@@ -844,7 +976,7 @@ const TipCallScreen: React.FC = () => {
   // Accept incoming call
   const acceptIncomingCall = async () => {
     if (!incomingCall || !rtcEngine || !user?.id) return;
-    
+
     try {
       // Request permissions first
       const hasPermissions = await requestPermissions(incomingCall.callType);
@@ -852,7 +984,7 @@ const TipCallScreen: React.FC = () => {
         rejectIncomingCall();
         return;
       }
-      
+
       // Setup call based on type
       if (incomingCall.callType === 'video') {
         await rtcEngine.enableVideo();
@@ -861,14 +993,14 @@ const TipCallScreen: React.FC = () => {
         await rtcEngine.enableAudio();
         await rtcEngine.disableVideo();
       }
-      
+
       // Get a UID for the local user
       const uid = Math.floor(Math.random() * 100000) + 1;
       localUid.current = uid;
-      
+
       // Get token for the channel
       const token = await fetchAgoraToken(incomingCall.channelName, uid);
-      
+
       // Join the channel
       await AgoraHelper.safeJoinChannel(
         rtcEngine,
@@ -876,13 +1008,13 @@ const TipCallScreen: React.FC = () => {
         incomingCall.channelName,
         uid
       );
-      
+
       // Update call states
       setMeetingId(incomingCall.channelName);
       setIsCaller(false);
       setCurrentCallType(incomingCall.callType);
       setInCall(true);
-      
+
       // Notify caller that call was accepted
       await NotificationService.updateCallStatus(
         incomingCall.callerId,
@@ -890,7 +1022,7 @@ const TipCallScreen: React.FC = () => {
         'accepted',
         incomingCall.callType
       );
-      
+
       // Clear incoming call state
       setIncomingCall(null);
     } catch (error) {
@@ -903,7 +1035,7 @@ const TipCallScreen: React.FC = () => {
   // Reject incoming call
   const rejectIncomingCall = async () => {
     if (!incomingCall || !user?.id) return;
-    
+
     try {
       // Notify caller that call was rejected
       await NotificationService.updateCallStatus(
@@ -912,7 +1044,7 @@ const TipCallScreen: React.FC = () => {
         'rejected',
         incomingCall.callType
       );
-      
+
       // Clear incoming call state
       setIncomingCall(null);
     } catch (error) {
@@ -943,14 +1075,14 @@ const TipCallScreen: React.FC = () => {
 
       {/* Tab navigation */}
       <View style={styles.tabContainer}>
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'contacts' && styles.activeTab]} 
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'contacts' && styles.activeTab]}
           onPress={() => setActiveTab('contacts')}
         >
           <Text style={[styles.tabText, activeTab === 'contacts' && styles.activeTabText]}>Contacts</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'missed' && styles.activeTab]} 
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'missed' && styles.activeTab]}
           onPress={() => setActiveTab('missed')}
         >
           <Text style={[styles.tabText, activeTab === 'missed' && styles.activeTabText]}>Missed Calls</Text>
@@ -972,7 +1104,7 @@ const TipCallScreen: React.FC = () => {
               onSubmitEditing={() => fetchUsers(1, false)}
             />
           </View>
-          
+
           <View style={styles.filtersContainer}>
             <Text style={styles.filterTitle}>Categories</Text>
             <ScrollView
@@ -1300,33 +1432,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
   },
-  tabsContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  activeTab: {
-    borderBottomColor: '#24d05a',
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-    marginRight: 4,
-  },
-  activeTabText: {
-    color: '#24d05a',
-  },
   contactsContainer: {
     flex: 1,
     backgroundColor: 'white',
@@ -1447,37 +1552,6 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: 'black',
   },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
-    marginBottom: 8,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  activeTab: {
-    borderBottomColor: '#24d05a',
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-    marginRight: 4,
-  },
-  activeTabText: {
-    color: '#24d05a',
-  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1487,6 +1561,57 @@ const styles = StyleSheet.create({
   emptyText: {
     color: '#9ca3af',
     fontSize: 16,
+  },
+  // Styles for IncomingCallScreen
+  incomingCallOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1001, // Higher zIndex to overlay everything
+  },
+  incomingCallText: {
+    fontSize: 22,
+    color: 'white',
+    marginBottom: 10,
+    fontWeight: 'bold',
+  },
+  incomingCallerName: {
+    fontSize: 28,
+    color: '#24d05a',
+    marginBottom: 40,
+    fontWeight: 'bold',
+  },
+  incomingCallButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '80%',
+  },
+  acceptCallButton: {
+    backgroundColor: '#24d05a',
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 30,
+  },
+  acceptCallText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  rejectCallButton: {
+    backgroundColor: '#ff0000',
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 30,
+  },
+  rejectCallText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
 
