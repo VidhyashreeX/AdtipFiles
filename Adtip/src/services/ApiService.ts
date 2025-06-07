@@ -358,7 +358,7 @@ export default class ApiService {
    * Ping the server to check if it's alive
    */
   public ping(): Promise<any> {
-    return this.api.get('/api/ping');
+    return ApiService.get(ApiEndpoints.AUTH_ENDPOINTS.PING);
   }
   // ===== HOME PAGE SERVICES =====
 
@@ -521,13 +521,19 @@ export default class ApiService {
    */
   static async getAgoraToken(
     data: AgoraTokenRequest,
-  ): Promise<AgoraTokenResponse> { // Changed return type
-    console.log('ApiService.getAgoraToken called with data:', data);
-    // This endpoint returns the AgoraTokenResponse object directly.
-    return this.post<AgoraTokenResponse>( // Changed type argument for post
-      ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_AGORA_TOKEN,
-      data,
-    );
+  ): Promise<AgoraTokenResponse> {
+    console.log('[FCM-API] getAgoraToken called with data:', JSON.stringify(data, null, 2));
+    try {
+      const response = await this.post<AgoraTokenResponse>(
+        ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_AGORA_TOKEN,
+        data,
+      );
+      console.log('[FCM-API] getAgoraToken response:', JSON.stringify(response, null, 2));
+      return response;
+    } catch (error) {
+      console.error('[FCM-API] getAgoraToken error:', error);
+      throw error;
+    }
   }
 
   /**
@@ -537,48 +543,18 @@ export default class ApiService {
   static async handleCall(
     data: AgoraCallRequest,
   ): Promise<ApiResponse<any>> {
-    return this.post<ApiResponse<any>>(
-      ApiEndpoints.TIP_CALLS_ENDPOINTS.CALL,
-      data,
-    );
-  }
-
-  /**
-   * Update call status for call tracking
-   * @param callerId - ID of the caller
-   * @param receiverId - ID of the receiver
-   * @param status - Call status (accepted, rejected, missed, ended)
-   * @param callType - Type of call (audio or video)
-   * @param callId - Optional call ID for tracking ongoing calls
-   */
-  static async updateCallStatus(
-    callerId: string | number,
-    receiverId: string | number,
-    status: string,
-    callType: string,
-    callId?: number,
-  ): Promise<ApiResponse<any>> {
-    // Map the status to the appropriate action for the API
-    let action: 'start' | 'end' | 'missed-video-call' | 'missed-audio-call';
-    
-    switch (status) {
-      case 'accepted':
-        action = 'start';
-        break;
-      case 'missed':
-        action = callType === 'video' ? 'missed-video-call' : 'missed-audio-call';
-        break;
-      default:
-        action = 'end'; // Default to end for rejected/ended calls
+    console.log('[FCM-API] handleCall request:', JSON.stringify(data, null, 2));
+    try {
+      const response = await this.post<ApiResponse<any>>(
+        ApiEndpoints.TIP_CALLS_ENDPOINTS.CALL,
+        data,
+      );
+      console.log('[FCM-API] handleCall response:', JSON.stringify(response, null, 2));
+      return response;
+    } catch (error) {
+      console.error('[FCM-API] handleCall error:', error);
+      throw error;
     }
-    
-    return this.handleCall({
-      callerId,
-      receiverId,
-      action,
-      callType: callType === 'video' ? 'video-call' : 'audio-call',
-      ...(callId && { callId }),
-    });
   }
 
   /**
@@ -588,10 +564,22 @@ export default class ApiService {
   static async updateFcmToken(
     data: FcmTokenRequest,
   ): Promise<ApiResponse<any>> {
-    return this.post<ApiResponse<any>>(
-      ApiEndpoints.TIP_CALLS_ENDPOINTS.UPDATE_FCM_TOKEN,
-      data,
-    );
+    console.log('[FCM-API] updateFcmToken request:', JSON.stringify({
+      userId: data.userId,
+      fcmToken: data.fcmToken.substring(0, 10) + '...' // Log partial token for security
+    }, null, 2));
+    
+    try {
+      const response = await this.post<ApiResponse<any>>(
+        ApiEndpoints.TIP_CALLS_ENDPOINTS.UPDATE_FCM_TOKEN,
+        data,
+      );
+      console.log('[FCM-API] updateFcmToken response:', JSON.stringify(response, null, 2));
+      return response;
+    } catch (error) {
+      console.error('[FCM-API] updateFcmToken error:', error);
+      throw error;
+    }
   }
 
   /**

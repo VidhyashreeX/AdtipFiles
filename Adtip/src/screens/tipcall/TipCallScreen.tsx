@@ -109,7 +109,7 @@ interface AgoraTokenResponse {
   token: string;
   channelName: string;
   uid: number;
-  expiresAt: number;
+  expiresAt: string;
 }
 
 const APP_ID = 'ef5fbd2647c64582a64db9e47b9f9335';
@@ -183,74 +183,112 @@ const notifyRecipient = async (
   callType: 'voice' | 'video',
   userId: string | undefined,
 ) => {
+  console.log(`[FCM-CALL] Initiating ${callType} call notification to recipient ${recipientId}`);
+  console.log(`[FCM-CALL] Call parameters - Channel: ${channelId}, Caller: ${userId}`);
+  
   if (!userId) {
-    console.warn('No authenticated user for notification');
+    console.warn('[FCM-CALL] No authenticated user for notification');
     return;
   }
+  
   try {
-    await ApiService.handleCall({
+    const payload = {
       callerId: userId,
       receiverId: recipientId.toString(),
-      action: 'start',
-      callType: callType === 'video' ? 'video-call' : 'audio-call',
-    });
-    console.log(`${callType} call notification sent to recipient ID ${recipientId}`);
+      action: 'start' as 'start',
+      callType: callType === 'video' ? 'video-call' : 'audio-call' as 'video-call' | 'audio-call',
+    } as const;
+    
+    console.log('[FCM-CALL] Sending call notification with payload:', JSON.stringify(payload, null, 2));
+    const response = await ApiService.handleCall(payload);
+    console.log('[FCM-CALL] Call notification response:', JSON.stringify(response, null, 2));
+    console.log(`[FCM-CALL] ${callType} call notification sent to recipient ID ${recipientId}`);
+    
+    return response;
   } catch (error) {
-    console.error('Error notifying recipient:', error);
+    console.error('[FCM-CALL] Error notifying recipient:', error);
+    return null;
   }
 };
 
-// --- Placeholder for NotificationService ---
-// This service is used but not defined in your provided code.
-// You'll need to implement the actual logic for requesting permissions,
-// extracting call data, and updating call status.
+// --- NotificationService with enhanced logging ---
 const NotificationService = {
   requestPermissions: async (messagingInstance: any) => {
     try {
+      console.log('[FCM] Requesting notification permissions...');
       if (Platform.OS === 'ios') {
         const authStatus = await messagingInstance.requestPermission();
         const enabled =
           authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
           authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
+        console.log('[FCM] iOS notification permissions:', enabled ? 'GRANTED' : 'DENIED');
+        
         if (!enabled) {
           Alert.alert('Notification Permission', 'Please enable notifications for a better call experience.');
         }
+      } else {
+        console.log('[FCM] Android permissions handled by manifest');
       }
     } catch (error) {
-      console.error('Failed to request notification permissions:', error);
+      console.error('[FCM] Failed to request notification permissions:', error);
     }
   },
+  
   extractCallData: (remoteMessage: any) => {
+    console.log('[FCM] Extracting call data from notification payload');
     if (remoteMessage.data) {
       const { callerId, callerName, channelName, callType } = remoteMessage.data;
+      console.log('[FCM] Notification data fields:', { callerId, callerName, channelName, callType });
+      
       if (callerId && callerName && channelName && (callType === 'video-call' || callType === 'audio-call')) {
-        return {
+        const extractedData = {
           callerId: callerId,
           callerName: callerName,
           channelName: channelName,
           callType: callType === 'video-call' ? 'video' : 'voice',
         };
+        console.log('[FCM] Successfully extracted call data:', JSON.stringify(extractedData, null, 2));
+        return extractedData;
       }
     }
+    console.log('[FCM] Failed to extract call data from notification');
     return null;
   },
+  
   updateCallStatus: async (
     callerId: string,
     receiverId: string,
     action: 'accepted' | 'rejected' | 'missed-video-call' | 'missed-audio-call',
     callType: 'video' | 'audio',
   ) => {
+    // Map 'accepted' and 'rejected' to valid AgoraCallRequest actions
+    let mappedAction: 'start' | 'end' | 'missed-video-call' | 'missed-audio-call';
+    if (action === 'accepted' || action === 'rejected') {
+      mappedAction = 'end';
+    } else {
+      mappedAction = action;
+    }
+    
+    console.log(`[FCM] Updating call status - Action: ${action} (mapped to: ${mappedAction}), CallType: ${callType}`);
+    console.log(`[FCM] Call parties - Caller: ${callerId}, Receiver: ${receiverId}`);
+    
     try {
-      await ApiService.handleCall({
+      const payload = {
         callerId: callerId,
         receiverId: receiverId,
-        action: action,
-        callType: callType === 'video' ? 'video-call' : 'audio-call',
-      });
-      console.log(`Call status updated to ${action} for call from ${callerId} to ${receiverId}`);
+        action: mappedAction,
+        callType: callType === 'video' ? 'video-call' : 'audio-call' as 'video-call' | 'audio-call',
+      };
+      
+      console.log('[FCM] Call status update payload:', JSON.stringify(payload, null, 2));
+      const response = await ApiService.handleCall(payload);
+      console.log('[FCM] Call status update response:', JSON.stringify(response, null, 2));
+      
+      return response;
     } catch (error) {
-      console.error(`Error updating call status to ${action}:`, error);
+      console.error(`[FCM] Error updating call status to ${action}:`, error);
+      return null;
     }
   },
 };
@@ -362,7 +400,7 @@ const MeetingView: React.FC<MeetingViewProps> = ({
               receiverId: contactId,
               action: callType === 'video' ? 'missed-video-call' : 'missed-audio-call',
               callType: callType === 'video' ? 'video-call' : 'audio-call',
-            }).catch(err => console.error('Error sending missed call notification:', err));
+            } as const).catch(err => console.error('Error sending missed call notification:', err));
           }
 
           Alert.alert(
@@ -630,7 +668,7 @@ const TipCallScreen: React.FC = () => {
             selectedCategory === '1' ? [] : [parseInt(selectedCategory, 10)],
           user_id: null,
           search_by_name: searchQuery || '',
-          loggined_user_id: parseInt(user.id, 10),
+          loggined_user_id: user.id,
           sortBy: {},
         };
 
@@ -663,27 +701,42 @@ const TipCallScreen: React.FC = () => {
     const registerFcmToken = async () => {
       try {
         if (!user?.id) {
-          console.log('User not authenticated, skipping FCM token registration');
+          console.log('[FCM] User not authenticated, skipping FCM token registration');
           return;
         }
 
-        // Get FCM token from AsyncStorage (this should be set elsewhere in the app when FCM token is received)
-        const fcmToken = await AsyncStorage.getItem('fcmToken');
-
-        if (!fcmToken) {
-          console.log('No FCM token available');
-          return;
-        }
+        // Get current FCM token from Firebase
+        const currentToken = await messaging().getToken();
+        console.log('[FCM] Current Firebase token:', currentToken);
+        
+        // Store token in AsyncStorage
+        await AsyncStorage.setItem('fcmToken', currentToken);
+        console.log('[FCM] Saved token to AsyncStorage');
 
         // Register/update token with server
-        await ApiService.updateFcmToken({
+        console.log(`[FCM] Registering token with server for user ${user.id}`);
+        const response = await ApiService.updateFcmToken({
           userId: user.id,
-          fcmToken: fcmToken
+          fcmToken: currentToken
+        });
+        
+        console.log('[FCM] Server registration response:', JSON.stringify(response, null, 2));
+
+        // Listen for token refreshes
+        const unsubscribe = messaging().onTokenRefresh(async newToken => {
+          console.log('[FCM] Token refreshed:', newToken);
+          await AsyncStorage.setItem('fcmToken', newToken);
+          
+          const refreshResponse = await ApiService.updateFcmToken({
+            userId: user.id,
+            fcmToken: newToken
+          });
+          console.log('[FCM] Token refresh registration response:', JSON.stringify(refreshResponse, null, 2));
         });
 
-        console.log('FCM token registered successfully');
+        return () => unsubscribe();
       } catch (error) {
-        console.error('Failed to register FCM token:', error);
+        console.error('[FCM] Failed to register FCM token:', error);
       }
     };
 
@@ -777,8 +830,11 @@ const TipCallScreen: React.FC = () => {
       await rtcEngine.enableAudio();
       await rtcEngine.disableVideo(); // Ensure video is off for voice call
 
-      const uid = Math.floor(Math.random() * 100000) + 1;
+      // Use user.id instead of random number
+      const uid = parseInt(String(user.id), 10);
       localUid.current = uid;
+      
+      console.log(`Using user ID ${uid} as Agora UID`);
 
       // Fetch token and server-provided channelName
       const agoraAuthData = await fetchAgoraToken(uid);
@@ -799,7 +855,7 @@ const TipCallScreen: React.FC = () => {
       setIsCaller(true);
       setCurrentCallType('voice');
       // Notify recipient with the server-provided channelName
-      await notifyRecipient(contactId, serverChannelName, 'voice', user.id);
+      await notifyRecipient(contactId, serverChannelName, 'voice', user.id.toString());
 
       console.log(`Voice call started with contact ID ${contactId} on channel ${serverChannelName}`);
     } catch (error: any) {
@@ -834,8 +890,11 @@ const TipCallScreen: React.FC = () => {
       await rtcEngine.enableVideo();
       await rtcEngine.startPreview();
 
-      const uid = Math.floor(Math.random() * 100000) + 1;
+      // Use user.id instead of random number
+      const uid = parseInt(String(user.id), 10);
       localUid.current = uid;
+      
+      console.log(`Using user ID ${uid} as Agora UID`);
 
       // Fetch token and server-provided channelName
       const agoraAuthData = await fetchAgoraToken(uid);
@@ -856,7 +915,7 @@ const TipCallScreen: React.FC = () => {
       setIsCaller(true);
       setCurrentCallType('video');
       // Notify recipient with the server-provided channelName
-      await notifyRecipient(contactId, serverChannelName, 'video', user.id);
+      await notifyRecipient(contactId, serverChannelName, 'video', user.id.toString());
 
       console.log(`Video call started with contact ID ${contactId} on channel ${serverChannelName}`);
     } catch (error: any) {
@@ -894,7 +953,7 @@ const TipCallScreen: React.FC = () => {
             action: 'end',
             callType: isVideo ? 'video-call' : 'audio-call',
             callId: parseInt(parts[3] || '0', 10),
-          });
+          } as const);
           console.log(`Call with ${recipientId} ended`);
         }
 
@@ -945,6 +1004,7 @@ const TipCallScreen: React.FC = () => {
   useEffect(() => {
     // Handle app state changes (foreground/background)
     const appStateListener = AppState.addEventListener('change', nextAppState => {
+      console.log(`[FCM] App state changed to: ${nextAppState}`);
       if (nextAppState === 'active') {
         // App came to foreground, check for pending notifications
         checkPendingNotifications();
@@ -952,30 +1012,42 @@ const TipCallScreen: React.FC = () => {
     });
 
     // Request notification permissions
-    NotificationService.requestPermissions(messagingInstance);
+    NotificationService.requestPermissions(messagingInstance).then(() => {
+      console.log('[FCM] Notification permissions requested');
+    });
 
     // Check for any notification that launched the app
     const checkPendingNotifications = async () => {
       // Check if app was opened from a notification
+      console.log('[FCM] Checking for notifications that launched the app');
       const initialNotification = await messaging().getInitialNotification();
       if (initialNotification) {
+        console.log('[FCM] App launched by notification:', JSON.stringify(initialNotification, null, 2));
         handleIncomingCallNotification(initialNotification);
+      } else {
+        console.log('[FCM] No initial notification found');
       }
     };
 
     // Foreground notification handler
     const unsubscribeOnMessage = messaging().onMessage(async remoteMessage => {
-      console.log('Foreground notification received:', remoteMessage);
+      console.log('[FCM] FOREGROUND NOTIFICATION RECEIVED:', JSON.stringify(remoteMessage, null, 2));
       if (remoteMessage.data && (remoteMessage.data.callType === 'video-call' || remoteMessage.data.callType === 'audio-call')) {
+        console.log(`[FCM] Handling incoming call notification - Type: ${remoteMessage.data.callType}`);
         handleIncomingCallNotification(remoteMessage);
+      } else {
+        console.log('[FCM] Ignoring non-call notification:', JSON.stringify(remoteMessage.data, null, 2));
       }
     });
 
     // Background/quit state notification handler
     const unsubscribeOnNotificationOpened = messaging().onNotificationOpenedApp(remoteMessage => {
-      console.log('Background notification opened:', remoteMessage);
+      console.log('[FCM] BACKGROUND NOTIFICATION OPENED:', JSON.stringify(remoteMessage, null, 2));
       if (remoteMessage.data && (remoteMessage.data.callType === 'video-call' || remoteMessage.data.callType === 'audio-call')) {
+        console.log(`[FCM] Handling background call notification - Type: ${remoteMessage.data.callType}`);
         handleIncomingCallNotification(remoteMessage);
+      } else {
+        console.log('[FCM] Ignoring non-call background notification:', JSON.stringify(remoteMessage.data, null, 2));
       }
     });
 
@@ -984,6 +1056,7 @@ const TipCallScreen: React.FC = () => {
 
     // Clean up
     return () => {
+      console.log('[FCM] Cleaning up notification listeners');
       appStateListener.remove();
       unsubscribeOnMessage();
       unsubscribeOnNotificationOpened();
@@ -992,22 +1065,37 @@ const TipCallScreen: React.FC = () => {
 
   // Handle incoming call notification
   const handleIncomingCallNotification = (remoteMessage: any) => {
+    console.log('[FCM] Processing incoming call notification...');
+    
     const callData = NotificationService.extractCallData(remoteMessage);
+    console.log('[FCM] Extracted call data:', JSON.stringify(callData, null, 2));
+    
     if (callData) {
       // Don't show incoming call UI if already in a call
       if (inCall) {
+        console.log('[FCM] Already in a call, auto-rejecting incoming call');
         // Auto-reject if in another call
         NotificationService.updateCallStatus(
           callData.callerId,
-          user?.id || '',
+          user?.id?.toString() || '',
           'rejected',
-          callData.callType
-        );
+          callData.callType as 'video' | 'audio'
+        ).then(response => {
+          console.log('[FCM] Auto-reject call response:', JSON.stringify(response, null, 2));
+        });
         return;
       }
 
+      console.log(`[FCM] Setting incoming call from ${callData.callerName} (${callData.callerId}), type: ${callData.callType}`);
       // Set incoming call data to show the incoming call screen
-      setIncomingCall(callData);
+      setIncomingCall({
+        callerId: callData.callerId,
+        callerName: callData.callerName,
+        channelName: callData.channelName,
+        callType: callData.callType === 'video' ? 'video' : 'voice',
+      });
+    } else {
+      console.log('[FCM] Invalid call data in notification:', JSON.stringify(remoteMessage.data, null, 2));
     }
   };
 
@@ -1032,9 +1120,11 @@ const TipCallScreen: React.FC = () => {
         await rtcEngine.disableVideo();
       }
 
-      // Get a UID for the local user
-      const uid = Math.floor(Math.random() * 100000) + 1;
+      // Use user.id instead of random number
+      const uid = parseInt(String(user.id), 10);
       localUid.current = uid;
+      
+      console.log(`Using user ID ${uid} as Agora UID`);
 
       // Get token for the channel
       const token = await fetchAgoraToken(uid);
@@ -1056,9 +1146,9 @@ const TipCallScreen: React.FC = () => {
       // Notify caller that call was accepted
       await NotificationService.updateCallStatus(
         incomingCall.callerId,
-        user.id,
+        user.id.toString(),
         'accepted',
-        incomingCall.callType
+        incomingCall.callType as 'video' | 'audio'
       );
 
       // Clear incoming call state
@@ -1078,9 +1168,9 @@ const TipCallScreen: React.FC = () => {
       // Notify caller that call was rejected
       await NotificationService.updateCallStatus(
         incomingCall.callerId,
-        user.id,
+        user.id.toString(),
         'rejected',
-        incomingCall.callType
+        incomingCall.callType as 'video' | 'audio'
       );
 
       // Clear incoming call state
