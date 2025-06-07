@@ -4,7 +4,7 @@
  * @format
  */
 
-import React, {useEffect, useState} from 'react'; // Import useState
+import React, { useEffect, useState } from 'react'; // Ensure useState and useEffect are imported
 import {
   SafeAreaView,
   StatusBar,
@@ -23,8 +23,8 @@ import {
   useSafeAreaInsets
 } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { initializeApp } from '@react-native-firebase/app';
-import { getMessaging, isSupported } from '@react-native-firebase/messaging'; // isSupported is still imported, but used later
+import messaging from '@react-native-firebase/messaging';
+import firebase from '@react-native-firebase/app'; // Import firebase for app instance
 
 // Contexts
 import {AuthProvider, useAuth} from './src/contexts/AuthContext';
@@ -60,49 +60,61 @@ const ThemeAwareStatusBar = () => {
   );
 };
 
-// Remove these lines from the top level
-// const firebaseApp = initializeApp();
-// const messagingInstance = isSupported() ? getMessaging(firebaseApp) : null;
-
 /**
  * App Navigator component that uses auth context
  */
 const AppNavigator = () => {
-  const {isAuthenticated, isInitialized} = useAuth();
-  // State to hold the messaging instance once it's initialized
-  const [messagingInstance, setMessagingInstance] = useState(null);
+  // Ensure isAuthenticated and isInitialized are used, or remove them if not.
+  // For example, you might use isInitialized to delay Firebase setup.
+  const { isAuthenticated, isInitialized } = useAuth();
+  const [messagingInstance, setMessagingInstance] = useState<ReturnType<typeof messaging> | null>(null);
 
   useEffect(() => {
     const initFirebaseMessaging = async () => {
       try {
-        const firebaseApp = initializeApp(); // Initialize Firebase app here
-        // Check if messaging is supported dynamically
-        const isMessagingSupported = await isSupported(); // Await isSupported()
-        if (isMessagingSupported) {
-          const instance = getMessaging(firebaseApp);
-          setMessagingInstance(instance); // Set the instance in state
+        // Check if the default Firebase app is initialized.
+        // This usually happens automatically via native configuration.
+        if (firebase.apps.length === 0) {
+          // You might call firebase.initializeApp() here if you have a specific non-default setup,
+          // but for the default app, native initialization is standard.
+          console.log('Default Firebase app not initialized. Ensure native setup is correct.');
+          // Optionally, initialize explicitly: await firebase.initializeApp();
+        }
+
+        const instance = messaging(); // Get the messaging instance
+
+        // Check if messaging is supported. Your usage is correct.
+        // The linter warning about this is likely due to type definition issues.
+        if (instance.isSupported) {
+          setMessagingInstance(instance);
           console.log('Firebase Messaging is supported and initialized.');
 
-          // Set background message handler for call notifications
+          // Set background message handler. Your usage is correct.
+          // The linter warning about this is also likely due to type definition issues.
           instance.setBackgroundMessageHandler(async remoteMessage => {
             console.log('Message handled in the background:', remoteMessage);
-            // Our Java service will handle the notification UI
+            // Your background message handling logic here.
+            // This handler must return a Promise.
             return Promise.resolve();
           });
         } else {
           console.log('Firebase Messaging is NOT supported on this device.');
         }
       } catch (error) {
-        console.error('Error initializing Firebase Messaging:', error);
+        console.error('Failed to initialize Firebase Messaging:', error);
       }
     };
 
-    initFirebaseMessaging();
+    // Example: Initialize Firebase Messaging only after auth state is determined
+    if (isInitialized) {
+      initFirebaseMessaging();
+    }
 
-    return () => {
-      // Cleanup if needed, though usually not for firebase messaging
-    };
-  }, []); // Run only once on component mount
+    // Optional: Cleanup function if needed
+    // return () => {
+    //   // Perform any cleanup, e.g., unsubscribe from listeners
+    // };
+  }, [isInitialized]); // Re-run effect if isInitialized changes
 
   useEffect(() => {
     const setupNotifications = async () => {

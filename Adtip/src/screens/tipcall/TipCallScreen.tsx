@@ -104,6 +104,14 @@ interface ApiResponse {
   };
 }
 
+// New response type for Agora token fetching
+interface AgoraTokenResponse {
+  token: string;
+  channelName: string;
+  uid: number;
+  expiresAt: number;
+}
+
 const APP_ID = 'ef5fbd2647c64582a64db9e47b9f9335';
 
 // Constants for filters
@@ -131,22 +139,40 @@ const CATEGORIES: Category[] = [
 ];
 
 // Fetch Agora token from server using ApiService
-const fetchAgoraToken = async (channelName: string, uid: number): Promise<string> => {
+// Now returns an object with token, channelName, and uid from the server response
+const fetchAgoraToken = async (uid: number): Promise<AgoraTokenResponse> => {
   try {
-    console.log(`Fetching Agora token for channel: ${channelName}, uid: ${uid}`);
-    const response = await ApiService.getAgoraToken({
-      channelName,
-      uid,
-    });
+    console.log(`Fetching Agora token for uid: ${uid}`);
+    // ApiService.getAgoraToken now correctly typed to return Promise<AgoraTokenResponse>
+    const agoraTokenData = await ApiService.getAgoraToken({ uid });
 
-    if (response.status && response.data?.token) {
-      console.log('Successfully received Agora token');
-      return response.data.token;
+    console.log('Exact Agora Token Server Response (agoraTokenData):', JSON.stringify(agoraTokenData, null, 2));
+
+    // Check for essential fields in the received AgoraTokenResponse
+    if (agoraTokenData && agoraTokenData.token && agoraTokenData.channelName) {
+      console.log('Successfully received Agora token and channelName:', agoraTokenData);
+      return agoraTokenData;
+    } else {
+      // This case implies the server returned a 2xx response, but the body
+      // (expected to be AgoraTokenResponse) is missing critical fields or is null.
+      let errorMsg = 'Failed to fetch token or channelName from server (malformed response data)';
+      if (!agoraTokenData) {
+        errorMsg = 'Empty response from Agora token server';
+      } else if (!agoraTokenData.token) {
+        errorMsg = 'Token missing in Agora server response';
+      } else if (!agoraTokenData.channelName) {
+        errorMsg = 'ChannelName missing in Agora server response';
+      }
+      // It's also possible 'agoraTokenData' itself contains an error message from a non-standard success response
+      // For example, if the server responds with 200 OK but a JSON like { error: "some issue" }
+      // However, the current structure of ApiService would likely have thrown an HTTP error before this if status was not 2xx.
+      throw new Error(errorMsg);
     }
-    throw new Error(response.message || 'Failed to fetch token');
-  } catch (error) {
+  } catch (error) { // This catches errors from ApiService (like network/HTTP errors) or the explicit throw above.
     console.error('Error fetching Agora token:', error);
-    throw new Error('Failed to get Agora token');
+    // Ensure the error message propagated is useful.
+    const specificMessage = error instanceof Error ? error.message : 'An unknown error occurred while fetching the Agora token';
+    throw new Error(specificMessage); // Re-throw to be caught by call initiation logic
   }
 };
 
@@ -749,27 +775,33 @@ const TipCallScreen: React.FC = () => {
 
     try {
       await rtcEngine.enableAudio();
-      await rtcEngine.disableVideo();
+      await rtcEngine.disableVideo(); // Ensure video is off for voice call
 
-      const newMeetingId = `voice_${user.id}_${contactId}_${Date.now()}`;
-      const uid = Math.floor(Math.random() * 100000) + 1; // UIDs should be > 0
+      const uid = Math.floor(Math.random() * 100000) + 1;
       localUid.current = uid;
-      const token = await fetchAgoraToken(newMeetingId, uid);
 
-      // Use the helper to safely join channel
+      // Fetch token and server-provided channelName
+      const agoraAuthData = await fetchAgoraToken(uid);
+      const { token, channelName: serverChannelName } = agoraAuthData;
+
+      if (!token || !serverChannelName) {
+        throw new Error('Invalid token or channelName received from server.');
+      }
+
       await AgoraHelper.safeJoinChannel(
         rtcEngine,
         token,
-        newMeetingId,
+        serverChannelName, // Use server-provided channelName
         uid
       );
 
-      setMeetingId(newMeetingId);
+      setMeetingId(serverChannelName); // Use server-provided channelName as meetingId
       setIsCaller(true);
       setCurrentCallType('voice');
-      await notifyRecipient(contactId, newMeetingId, 'voice', user.id);
+      // Notify recipient with the server-provided channelName
+      await notifyRecipient(contactId, serverChannelName, 'voice', user.id);
 
-      console.log(`Voice call started with contact ID ${contactId}`);
+      console.log(`Voice call started with contact ID ${contactId} on channel ${serverChannelName}`);
     } catch (error: any) {
       console.error('Error starting voice call:', error);
       Alert.alert('Error', `Failed to start voice call: ${error.message}`);
@@ -802,32 +834,38 @@ const TipCallScreen: React.FC = () => {
       await rtcEngine.enableVideo();
       await rtcEngine.startPreview();
 
-      const newMeetingId = `video_${user.id}_${contactId}_${Date.now()}`;
-      const uid = Math.floor(Math.random() * 100000) + 1; // UIDs should be > 0
+      const uid = Math.floor(Math.random() * 100000) + 1;
       localUid.current = uid;
-      const token = await fetchAgoraToken(newMeetingId, uid);
 
-      // Use the helper to safely join channel
+      // Fetch token and server-provided channelName
+      const agoraAuthData = await fetchAgoraToken(uid);
+      const { token, channelName: serverChannelName } = agoraAuthData;
+
+      if (!token || !serverChannelName) {
+        throw new Error('Invalid token or channelName received from server.');
+      }
+
       await AgoraHelper.safeJoinChannel(
         rtcEngine,
         token,
-        newMeetingId,
+        serverChannelName, // Use server-provided channelName
         uid
       );
 
-      setMeetingId(newMeetingId);
+      setMeetingId(serverChannelName); // Use server-provided channelName as meetingId
       setIsCaller(true);
       setCurrentCallType('video');
-      await notifyRecipient(contactId, newMeetingId, 'video', user.id);
+      // Notify recipient with the server-provided channelName
+      await notifyRecipient(contactId, serverChannelName, 'video', user.id);
 
-      console.log(`Video call started with contact ID ${contactId}`);
+      console.log(`Video call started with contact ID ${contactId} on channel ${serverChannelName}`);
     } catch (error: any) {
       console.error('Error starting video call:', error);
       Alert.alert('Error', `Failed to start video call: ${error.message}`);
       setInCall(false);
       setMeetingId('');
       setIsCaller(false);
-      setCurrentCallType('voice');
+      setCurrentCallType('voice'); // Reset to voice on error, or handle appropriately
     }
   }, [rtcEngine, inCall, user, redirectToLogin, requestPermissions]);
 
@@ -999,12 +1037,12 @@ const TipCallScreen: React.FC = () => {
       localUid.current = uid;
 
       // Get token for the channel
-      const token = await fetchAgoraToken(incomingCall.channelName, uid);
+      const token = await fetchAgoraToken(uid);
 
       // Join the channel
       await AgoraHelper.safeJoinChannel(
         rtcEngine,
-        token,
+        token.token,
         incomingCall.channelName,
         uid
       );

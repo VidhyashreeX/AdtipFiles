@@ -95,7 +95,6 @@ export interface AgoraCallRequest {
 }
 
 export interface AgoraTokenRequest {
-  channelName: string;
   uid: number;
 }
 
@@ -103,6 +102,7 @@ export interface AgoraTokenResponse {
   token: string;
   channelName: string;
   uid: number;
+  expiresAt: string; // Added this line
 }
 
 export interface FcmTokenRequest {

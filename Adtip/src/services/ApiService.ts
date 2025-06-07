@@ -27,8 +27,9 @@ import {
 
 // Define public endpoints that don't require authentication
 const PUBLIC_ENDPOINTS = [
-  ApiEndpoints.AUTH_ENDPOINTS.OTP_LOGIN,
-  ApiEndpoints.AUTH_ENDPOINTS.OTP_VERIFY
+  ApiEndpoints.AUTH_ENDPOINTS.OTP_LOGIN,          // Example: "/api/otplogin"
+  ApiEndpoints.AUTH_ENDPOINTS.OTP_VERIFY,         // Example: "/api/otpverify"
+  ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_AGORA_TOKEN, // Example: "/api/get-agora-token"
 ];
 
 // Create axios instance with default configuration
@@ -46,12 +47,18 @@ apiClient.interceptors.request.use(
   async config => {
     try {
       // Check if the URL is a public endpoint that doesn't need authentication
-      const isPublicEndpoint = PUBLIC_ENDPOINTS.some(endpoint => 
-        config.url?.includes(endpoint)
-      );
+      // Use a more precise check: config.url should exactly match one of the public endpoints.
+      // Axios config.url is the path relative to the baseURL.
+      const isPublicEndpoint = PUBLIC_ENDPOINTS.some(endpoint => {
+        // Ensure both config.url and endpoint are treated consistently (e.g., leading slash)
+        const requestPath = config.url;
+        return requestPath === endpoint;
+      });
 
-      // Only try to add auth token for protected endpoints
-      if (!isPublicEndpoint) {
+      if (isPublicEndpoint) {
+        console.log(`Request to public endpoint: ${config.url}. No Authorization header will be added.`);
+      } else {
+        console.log(`Request to protected endpoint: ${config.url}. Attempting to add Authorization header.`);
         // Check both token storage keys - the app uses 'accessToken', but our service was checking '@auth_token'
         let token = await AsyncStorage.getItem('accessToken');
         if (!token) {
@@ -59,13 +66,13 @@ apiClient.interceptors.request.use(
         }
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
-          console.log('Authorization header added to request');
+          console.log('Authorization header added to request for:', config.url);
         } else {
-          console.warn('No auth token found for protected endpoint');
+          console.warn(`No auth token found for protected endpoint: ${config.url}`);
         }
       }
     } catch (error) {
-      console.error('Error adding auth token:', error);
+      console.error('Error in request interceptor while handling auth token:', error);
     }
     return config;
   },
@@ -510,12 +517,14 @@ export default class ApiService {
 
   /**
    * Get Agora token for a channel
-   * @param data - Request data containing channel name and uid
+   * @param data - Request data containing uid
    */
   static async getAgoraToken(
     data: AgoraTokenRequest,
-  ): Promise<ApiResponse<AgoraTokenResponse>> {
-    return this.post<ApiResponse<AgoraTokenResponse>>(
+  ): Promise<AgoraTokenResponse> { // Changed return type
+    console.log('ApiService.getAgoraToken called with data:', data);
+    // This endpoint returns the AgoraTokenResponse object directly.
+    return this.post<AgoraTokenResponse>( // Changed type argument for post
       ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_AGORA_TOKEN,
       data,
     );
