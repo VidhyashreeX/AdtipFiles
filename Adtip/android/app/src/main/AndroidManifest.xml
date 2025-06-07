@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="com.adtip.app.adtip_app"> <!-- IMPORTANT: REPLACE WITH YOUR ACTUAL PACKAGE NAME (e.g., com.myawesomeapp) -->
+    xmlns:tools="http://schemas.android.com/tools"> <!-- IMPORTANT: REPLACE WITH YOUR ACTUAL PACKAGE NAME (e.g., com.myawesomeapp) -->
 
     <!-- BASIC NETWORK PERMISSIONS -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -128,7 +127,8 @@
         <!-- This ensures the app can be launched from notifications when closed -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="call_channel" />
+            android:value="call_channel" 
+            tools:replace="android:value"/>
 
         <!-- Add any other services, receivers, or providers here if your app uses them -->
 

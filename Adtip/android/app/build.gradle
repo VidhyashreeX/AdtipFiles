@@ -113,6 +113,9 @@ dependencies {    // The version of react-native is set by the React Native Grad
     // Commented out PubScale integration - June 2, 2025
     // implementation 'com.pubscale.sdkone:offerwall:1.0.10' // Using the version we know exists
 
+    // Add this line for Firebase Messaging
+    implementation 'com.google.firebase:firebase-messaging:23.1.2'
+
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {
