@@ -34,7 +34,7 @@ const PUBLIC_ENDPOINTS = [
 // Create axios instance with default configuration
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000, // 30 seconds timeout
+  timeout: 60000, // Increase to 60 seconds
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -247,10 +247,42 @@ export default class ApiService {
    */
   private static handleError(error: any): Error {
     if (axios.isAxiosError(error)) {
-      const serverError = error.response?.data?.message || error.message;
-      return new Error(serverError);
+      // Detailed logging to diagnose the exact issue
+      console.log('API Error Details:', {
+        isAxiosError: true,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          baseURL: error.config?.baseURL,
+          timeout: error.config?.timeout,
+        }
+      });
+      
+      if (error.response) {
+        // The server responded with an error status
+        const serverMessage = error.response.data?.message || error.response.statusText;
+        return new Error(serverMessage || error.message);
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.log('Request was made but no response received:', error.request);
+        // Check if we're using the emulator and if the API is on localhost
+        const isEmulator = error.config?.baseURL?.includes('10.0.2.2');
+        if (isEmulator) {
+          return new Error('Network error while connecting to local server. Ensure your server is running and accessible.');
+        }
+        return new Error('Network error. Check your connection and try again.');
+      } else {
+        // Something happened in setting up the request
+        return new Error(`Error setting up request: ${error.message}`);
+      }
     }
-    return error;
+    // Not an Axios error
+    console.log('Non-Axios error:', error);
+    return error instanceof Error ? error : new Error(String(error));
   }
 
   // ===== AUTHENTICATION SERVICES =====

@@ -193,8 +193,29 @@ const MeetingView: React.FC<MeetingViewProps> = ({
 }) => {
   const [remoteUsers, setRemoteUsers] = useState<number[]>([]);
   const {user} = useAuth();
+  // Use useRef with null initial value
   const remoteVideoCanvas = useRef<View>(null);
   const localVideoCanvas = useRef<View>(null);
+  
+  // Add a key state to force recreation of video views
+  const [videoViewKey, setVideoViewKey] = useState(Date.now());
+
+  // Clean up function for video views
+  const cleanupVideoViews = useCallback(() => {
+    if (callType === 'video') {
+      // Release video views
+      try {
+        engine.setupLocalVideo({view: null});
+        remoteUsers.forEach(uid => {
+          engine.setupRemoteVideo({uid, view: null});
+        });
+        // Force recreate views on next render
+        setVideoViewKey(Date.now());
+      } catch (e) {
+        console.error('Error cleaning up video views:', e);
+      }
+    }
+  }, [engine, remoteUsers, callType]);
 
   useEffect(() => {
     if (!engine) return;
@@ -233,25 +254,44 @@ const MeetingView: React.FC<MeetingViewProps> = ({
     const onUserJoined = (connection: RtcConnection, remoteUid: number) => {
       console.log(`User ${remoteUid} joined channel ${connection.channelId}`);
       setRemoteUsers(prev => [...new Set([...prev, remoteUid])]);
-      if (callType === 'video') {
-        // Ensure remote video canvas view is ready before setting up
-        if (remoteVideoCanvas.current) {
-          engine.setupRemoteVideo({
-            uid: remoteUid,
-            view: remoteVideoCanvas.current,
-            renderMode: RenderModeType.RenderModeHidden,
-          });
-        } else {
-          console.warn('Remote video canvas ref is null, cannot set up remote video.');
+      
+      // Don't setup immediately - wait for the next render cycle
+      // when the view ref is definitely attached
+      setTimeout(() => {
+        if (callType === 'video' && remoteVideoCanvas.current) {
+          try {
+            engine.setupRemoteVideo({
+              uid: remoteUid,
+              view: remoteVideoCanvas.current,
+              renderMode: RenderModeType.RenderModeHidden,
+            });
+          } catch (e) {
+            console.error(`Error setting up remote video for uid ${remoteUid}:`, e);
+          }
         }
-      }
+      }, 500);
     };
 
     const onUserOffline = (connection: RtcConnection, remoteUid: number) => {
       console.log(`User ${remoteUid} left channel ${connection.channelId}`);
+      
+      // Release the view before removing the user
+      if (callType === 'video') {
+        try {
+          engine.setupRemoteVideo({
+            uid: remoteUid,
+            view: null,
+          });
+        } catch (e) {
+          console.error(`Error releasing remote video for uid ${remoteUid}:`, e);
+        }
+      }
+      
       setRemoteUsers(prev => prev.filter(uid => uid !== remoteUid));
+      
       if (remoteUsers.length === 1 && remoteUsers[0] === remoteUid) {
         // If the only other user leaves, end the call
+        cleanupVideoViews();
         onEndCall();
       }
     };
@@ -266,36 +306,65 @@ const MeetingView: React.FC<MeetingViewProps> = ({
     engine.addListener('onUserOffline', onUserOffline);
     engine.addListener('onError', onError);
 
-    // Setup local video view if it's a video call
+    // Setup local video view if it's a video call - with delay
     if (callType === 'video') {
-      if (localVideoCanvas.current) {
-        engine.setupLocalVideo({
-          view: localVideoCanvas.current,
-          renderMode: RenderModeType.RenderModeHidden,
-        });
-      } else {
-        console.warn('Local video canvas ref is null, cannot set up local video.');
-      }
+      setTimeout(() => {
+        if (localVideoCanvas.current) {
+          try {
+            engine.setupLocalVideo({
+              view: localVideoCanvas.current,
+              renderMode: RenderModeType.RenderModeHidden,
+            });
+          } catch (e) {
+            console.error('Error setting up local video:', e);
+          }
+        }
+      }, 500);
     }
 
     return () => {
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
+      
+      // Clean up video views when unmounting
+      cleanupVideoViews();
+      
       engine.removeListener('onUserJoined', onUserJoined);
       engine.removeListener('onUserOffline', onUserOffline);
       engine.removeListener('onError', onError);
     };
-  }, [engine, remoteUsers, onEndCall, isCaller, meetingId, user, callType]); // Added callType to dependencies
+  }, [engine, onEndCall, isCaller, meetingId, user, callType, cleanupVideoViews]);
 
   return (
     <View style={styles.callOverlay}>
       {callType === 'video' && (
         <>
-          {/* Main video feed for the remote user */}
-          <VideoCanvas style={styles.remoteVideo} ref={remoteVideoCanvas} zOrderMediaOverlay={true} />
-          {/* Small overlay for the local user's video */}
-          <VideoCanvas style={styles.localVideo} ref={localVideoCanvas} zOrderMediaOverlay={true} />
+          {/* Add key to force recreation */}
+          <View 
+            key={`remote-${videoViewKey}`} 
+            style={styles.remoteVideo}
+          >
+            {remoteUsers.length > 0 && (
+              <VideoCanvas 
+                style={{width: '100%', height: '100%'}} 
+                ref={remoteVideoCanvas} 
+                zOrderMediaOverlay={true} 
+              />
+            )}
+          </View>
+          
+          {/* Separate local video with its own key */}
+          <View 
+            key={`local-${videoViewKey}`} 
+            style={styles.localVideo}
+          >
+            <VideoCanvas 
+              style={{width: '100%', height: '100%'}} 
+              ref={localVideoCanvas} 
+              zOrderMediaOverlay={true} 
+            />
+          </View>
         </>
       )}
 
@@ -305,7 +374,10 @@ const MeetingView: React.FC<MeetingViewProps> = ({
           ? `${remoteUsers.length} user(s) connected`
           : 'Waiting for others...'}
       </Text>
-      <TouchableOpacity style={styles.endCallButton} onPress={onEndCall}>
+      <TouchableOpacity style={styles.endCallButton} onPress={() => {
+        cleanupVideoViews();
+        onEndCall();
+      }}>
         <Text style={styles.endCallText}>End Call</Text>
       </TouchableOpacity>
     </View>

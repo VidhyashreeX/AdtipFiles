@@ -119,27 +119,34 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
   };
   // Login - Send OTP
   const login = async (mobileNumber: string): Promise<OtpResponse> => {
-    setLoading(true); // Operation loading
+    setLoading(true);
     setError(null);
 
     try {
+      console.log(`[AuthContext] Attempting login with number: ${mobileNumber}`);
+      console.log(`[AuthContext] API_BASE_URL: ${API_BASE_URL}`);
+      
       const apiResponse = await ApiService.post<ApiResponse<OtpResponse[]>>(ENDPOINTS.OTP_LOGIN, {
         mobileNumber,
         userType: '2',
       });
+      
+      console.log('[AuthContext] Login API response:', JSON.stringify(apiResponse));
 
       if (apiResponse.status !== 200 || !apiResponse.data || !Array.isArray(apiResponse.data) || apiResponse.data.length === 0) {
         throw new Error(apiResponse.message || 'Failed to send OTP or invalid response structure');
       }
       return apiResponse.data[0];
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Failed to send OTP';
+      const errorMessage = err instanceof Error ? err.message : 'Failed to send OTP';
       setError(errorMessage);
-      console.error('AuthContext login error:', errorMessage, err); 
+      console.error('[AuthContext] Login error details:', {
+        message: errorMessage,
+        error: err,
+      });
       throw err;
     } finally {
-      setLoading(false); // Operation loading
+      setLoading(false);
     }
   };
   // Verify OTP
