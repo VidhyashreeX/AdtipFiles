@@ -24,6 +24,7 @@ import {
   FcmTokenRequest,
   MissedCallsResponse,
 } from '../types/api';
+import { RtmTokenRequest, RtmTokenResponse } from './AgoraRtmHelper';
 
 // Define public endpoints that don't require authentication
 const PUBLIC_ENDPOINTS = [
@@ -606,5 +607,37 @@ export default class ApiService {
     return this.get<ReferralDetailsResponse>(
       `${ApiEndpoints.REFERRAL_ENDPOINTS.GET_REFERRAL_DETAILS}/${userId}`,
     );
+  }
+
+  /**
+   * Get Agora RTM token for messaging
+   * @param data - Request data containing uid
+   */
+  static async getRtmToken(
+    data: RtmTokenRequest,
+  ): Promise<RtmTokenResponse> {
+    console.log('[RTM-API] getRtmToken called with data:', JSON.stringify(data, null, 2));
+    try {
+      // Attempt to call the backend RTM token endpoint
+      // Uncomment this when backend endpoint is available
+      
+      const response = await this.post<RtmTokenResponse>(
+        ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_RTM_TOKEN,
+        data,
+      );
+      console.log('[RTM-API] getRtmToken response:', JSON.stringify(response, null, 2));
+      return response;
+      
+      
+      // For development: return a dummy token until backend is ready
+      console.warn('[RTM-API] Using dummy RTM token for development');
+      return {
+        token: 'dummy_rtm_token_for_testing',
+        userId: data.uid
+      };
+    } catch (error) {
+      console.error('[RTM-API] getRtmToken error:', error);
+      throw error;
+    }
   }
 }

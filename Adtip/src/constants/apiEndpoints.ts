@@ -37,7 +37,8 @@ export const TIP_CALLS_ENDPOINTS = {
   GET_ALL_USERS: '/api/allusers',
   CALL: '/api/call',
   GET_AGORA_TOKEN: '/api/get-agora-token',
-  MISSED_CALLS: '/api/missed-calls', // + '/:userId'
+  GET_RTM_TOKEN: '/api/get-rtm-token', // Add this line
+  MISSED_CALLS: '/api/missed-calls',
   UPDATE_FCM_TOKEN: '/api/update-fcm-token',
 };
 

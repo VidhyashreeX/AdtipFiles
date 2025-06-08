@@ -11,6 +11,7 @@ import {
   Platform,
   PermissionsAndroid,
   AppState,
+  AppStateStatus,
 } from 'react-native';
 import {
   Search,
@@ -38,6 +39,8 @@ import MissedCallsList from '../../components/tipcall/MissedCallsList';
 import { AgoraHelper } from '../../services/AgoraHelper';
 import firebase from '@react-native-firebase/app';
 import messaging from '@react-native-firebase/messaging';
+import AgoraRtmHelper, { RtmEventType } from '../../services/AgoraRtmHelper';
+import { RtmLocalInvitation, RtmRemoteInvitation } from 'agora-react-native-rtm';
 
 // Get the initialized app instance and messaging instance
 const firebaseApp = firebase.app();
@@ -211,6 +214,14 @@ const notifyRecipient = async (
   }
 };
 
+// Define the type for call request payloads
+type AgoraCallRequest = {
+  callerId: string;
+  receiverId: string;
+  action: 'start' | 'end' | 'missed-video-call' | 'missed-audio-call';
+  callType: 'audio-call' | 'video-call';
+};
+
 // --- NotificationService with enhanced logging ---
 const NotificationService = {
   requestPermissions: async (messagingInstance: any) => {
@@ -236,20 +247,34 @@ const NotificationService = {
   },
   
   extractCallData: (remoteMessage: any) => {
-    console.log('[FCM] Extracting call data from notification payload');
+    console.log('[FCM] Extracting call data from notification payload:', JSON.stringify(remoteMessage.data, null, 2));
     if (remoteMessage.data) {
-      const { callerId, callerName, channelName, callType } = remoteMessage.data;
-      console.log('[FCM] Notification data fields:', { callerId, callerName, channelName, callType });
+      // Use the new field names from your specified payload
+      const {
+        channelName,
+        caller_app_user_id, // New field
+        callee_agora_uid,   // New field
+        agora_token,        // New field
+        call_type,          // New field ("audio" or "video")
+        callerName          // Keep attempting to get callerName
+      } = remoteMessage.data;
       
-      if (callerId && callerName && channelName && (callType === 'video-call' || callType === 'audio-call')) {
+      console.log('[FCM] Notification data fields:', { channelName, caller_app_user_id, callee_agora_uid, agora_token, call_type, callerName });
+      
+      // Validate essential fields
+      if (caller_app_user_id && channelName && agora_token && callee_agora_uid && (call_type === "audio" || call_type === "video")) {
         const extractedData = {
-          callerId: callerId,
-          callerName: callerName,
+          callerId: caller_app_user_id, // Map to existing 'callerId'
+          callerName: callerName || "Unknown Caller", // Default if not present
           channelName: channelName,
-          callType: callType === 'video-call' ? 'video' : 'voice',
+          callType: call_type === "video" ? "video" : "voice", // Map "audio" to "voice"
+          calleeAgoraUid: callee_agora_uid,
+          agoraToken: agora_token,
         };
         console.log('[FCM] Successfully extracted call data:', JSON.stringify(extractedData, null, 2));
         return extractedData;
+      } else {
+        console.warn('[FCM] Missing essential fields in call notification data:', remoteMessage.data);
       }
     }
     console.log('[FCM] Failed to extract call data from notification');
@@ -257,35 +282,42 @@ const NotificationService = {
   },
   
   updateCallStatus: async (
-    callerId: string,
-    receiverId: string,
+    callerId: string, // This is the original caller's app user ID
+    receiverId: string, // This is the current user's app user ID
     action: 'accepted' | 'rejected' | 'missed-video-call' | 'missed-audio-call',
-    callType: 'video' | 'audio',
+    callType: 'video' | 'audio', // 'audio' or 'video' (JS internal)
   ) => {
-    // Map 'accepted' and 'rejected' to valid AgoraCallRequest actions
-    let mappedAction: 'start' | 'end' | 'missed-video-call' | 'missed-audio-call';
-    if (action === 'accepted' || action === 'rejected') {
-      mappedAction = 'end';
+    let apiAction: AgoraCallRequest['action'];
+    // Map 'accepted' and 'rejected' to allowed values for the API
+    if (action === 'accepted') {
+      apiAction = 'start';
+    } else if (action === 'rejected') {
+      apiAction = 'end';
     } else {
-      mappedAction = action;
+      apiAction = action; // 'missed-video-call' or 'missed-audio-call'
     }
     
-    console.log(`[FCM] Updating call status - Action: ${action} (mapped to: ${mappedAction}), CallType: ${callType}`);
+    console.log(`[FCM] Updating call status - Action: ${action} (API action: ${apiAction}), CallType: ${callType}`);
     console.log(`[FCM] Call parties - Caller: ${callerId}, Receiver: ${receiverId}`);
     
     try {
-      const payload = {
-        callerId: callerId,
-        receiverId: receiverId,
-        action: mappedAction,
-        callType: callType === 'video' ? 'video-call' : 'audio-call' as 'video-call' | 'audio-call',
+      const payload: AgoraCallRequest = {
+        callerId: callerId, // Original caller
+        receiverId: receiverId, // Current user (who accepted/rejected)
+        action: apiAction,
+        // Map JS 'voice'/'video' to backend's 'audio-call'/'video-call'
+        callType: callType === 'video' ? 'video-call' : 'audio-call',
       };
       
       console.log('[FCM] Call status update payload:', JSON.stringify(payload, null, 2));
       const response = await ApiService.handleCall(payload);
       console.log('[FCM] Call status update response:', JSON.stringify(response, null, 2));
       
-      return response;
+      // If action was 'accepted', the response might contain the backend's callId
+      if (action === 'accepted' && response && response.data && typeof response.data.callId === 'number') {
+        return { callId: response.data.callId };
+      }
+      return response; // Return the whole response or null
     } catch (error) {
       console.error(`[FCM] Error updating call status to ${action}:`, error);
       return null;
@@ -601,11 +633,19 @@ const TipCallScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState('contacts'); // 'contacts' or 'missed'
   const localUid = useRef<number>(0); // Store the local user ID for Agora
   const [incomingCall, setIncomingCall] = useState<{
-    callerId: string;
+    callerId: string; // This will store caller_app_user_id
     callerName: string;
     channelName: string;
-    callType: 'voice' | 'video';
+    callType: 'voice' | 'video'; // Will be mapped from "audio" or "video"
+    calleeAgoraUid?: string; // The UID this user (callee) should join with
+    agoraToken?: string;   // The token this user (callee) should use
   } | null>(null);
+
+  // New state variables for RTM
+  const [rtmInitialized, setRtmInitialized] = useState<boolean>(false);
+  const rtmHelperRef = useRef<AgoraRtmHelper | null>(null);
+  const localInvitationRef = useRef<RtmLocalInvitation | null>(null);
+  const remoteInvitationRef = useRef<RtmRemoteInvitation | null>(null);
 
   const redirectToLogin = useCallback(() => {
     Alert.alert('Authentication Required', 'Please log in to continue.', [
@@ -808,378 +848,393 @@ const TipCallScreen: React.FC = () => {
     };
   }, [rtcEngine]);
 
-  const startVoiceCall = useCallback(async (contactId: number) => {
-    if (!rtcEngine) {
-      Alert.alert('Error', 'Call engine not initialized.');
-      return;
-    }
-    if (inCall) {
-      Alert.alert('Error', 'You are already in a call.');
-      return;
-    }
-    if (!user?.id) {
-      Alert.alert('Error', 'User not authenticated.');
-      redirectToLogin();
-      return;
-    }
-
-    const hasPermissions = await requestPermissions('voice');
-    if (!hasPermissions) return;
-
-    try {
-      await rtcEngine.enableAudio();
-      await rtcEngine.disableVideo(); // Ensure video is off for voice call
-
-      // Use user.id instead of random number
-      const uid = parseInt(String(user.id), 10);
-      localUid.current = uid;
-      
-      console.log(`Using user ID ${uid} as Agora UID`);
-
-      // Fetch token and server-provided channelName
-      const agoraAuthData = await fetchAgoraToken(uid);
-      const { token, channelName: serverChannelName } = agoraAuthData;
-
-      if (!token || !serverChannelName) {
-        throw new Error('Invalid token or channelName received from server.');
-      }
-
-      await AgoraHelper.safeJoinChannel(
-        rtcEngine,
-        token,
-        serverChannelName, // Use server-provided channelName
-        uid
-      );
-
-      setMeetingId(serverChannelName); // Use server-provided channelName as meetingId
-      setIsCaller(true);
-      setCurrentCallType('voice');
-      // Notify recipient with the server-provided channelName
-      await notifyRecipient(contactId, serverChannelName, 'voice', user.id.toString());
-
-      console.log(`Voice call started with contact ID ${contactId} on channel ${serverChannelName}`);
-    } catch (error: any) {
-      console.error('Error starting voice call:', error);
-      Alert.alert('Error', `Failed to start voice call: ${error.message}`);
-      setInCall(false);
-      setMeetingId('');
-      setIsCaller(false);
-      setCurrentCallType('voice');
-    }
-  }, [rtcEngine, inCall, user, redirectToLogin, requestPermissions]);
-
-  const startVideoCall = useCallback(async (contactId: number) => {
-    if (!rtcEngine) {
-      Alert.alert('Error', 'Call engine not initialized.');
-      return;
-    }
-    if (inCall) {
-      Alert.alert('Error', 'You are already in a call.');
-      return;
-    }
-    if (!user?.id) {
-      Alert.alert('Error', 'User not authenticated.');
-      redirectToLogin();
-      return;
-    }
-
-    const hasPermissions = await requestPermissions('video');
-    if (!hasPermissions) return;
-
-    try {
-      await rtcEngine.enableVideo();
-      await rtcEngine.startPreview();
-
-      // Use user.id instead of random number
-      const uid = parseInt(String(user.id), 10);
-      localUid.current = uid;
-      
-      console.log(`Using user ID ${uid} as Agora UID`);
-
-      // Fetch token and server-provided channelName
-      const agoraAuthData = await fetchAgoraToken(uid);
-      const { token, channelName: serverChannelName } = agoraAuthData;
-
-      if (!token || !serverChannelName) {
-        throw new Error('Invalid token or channelName received from server.');
-      }
-
-      await AgoraHelper.safeJoinChannel(
-        rtcEngine,
-        token,
-        serverChannelName, // Use server-provided channelName
-        uid
-      );
-
-      setMeetingId(serverChannelName); // Use server-provided channelName as meetingId
-      setIsCaller(true);
-      setCurrentCallType('video');
-      // Notify recipient with the server-provided channelName
-      await notifyRecipient(contactId, serverChannelName, 'video', user.id.toString());
-
-      console.log(`Video call started with contact ID ${contactId} on channel ${serverChannelName}`);
-    } catch (error: any) {
-      console.error('Error starting video call:', error);
-      Alert.alert('Error', `Failed to start video call: ${error.message}`);
-      setInCall(false);
-      setMeetingId('');
-      setIsCaller(false);
-      setCurrentCallType('voice'); // Reset to voice on error, or handle appropriately
-    }
-  }, [rtcEngine, inCall, user, redirectToLogin, requestPermissions]);
-
-  const endCall = useCallback(async () => {
-    if (rtcEngine) {
+  // Initialize Agora RTM (Signaling)
+  useEffect(() => {
+    const initAgoraRtm = async () => {
       try {
-        const parts = meetingId.split('_');
-        const isVideo = parts[0] === 'video';
-        // Note: The meetingId format is `type_callerId_contactId_timestamp`
-        // So, parts[1] is the caller ID, parts[2] is the receiver ID
-        const callerIdFromMeetingId = parts[1];
-        const receiverIdFromMeetingId = parts[2];
-
-        // Determine which ID is the recipient based on whether current user is the original caller
-        const recipientId = isCaller ? receiverIdFromMeetingId : callerIdFromMeetingId;
-        const callerId = isCaller ? user?.id : callerIdFromMeetingId; // Use current user's ID if they are the caller
-
-        await rtcEngine.stopPreview();
-        await AgoraHelper.safeLeaveChannel(rtcEngine);
-        setInCall(false);
-
-        if (recipientId && callerId) {
-          await ApiService.handleCall({
-            callerId: callerId,
-            receiverId: recipientId,
-            action: 'end',
-            callType: isVideo ? 'video-call' : 'audio-call',
-            callId: parseInt(parts[3] || '0', 10),
-          } as const);
-          console.log(`Call with ${recipientId} ended`);
+        if (!user?.id) {
+          console.log('[RTM] User not authenticated, skipping RTM initialization');
+          return;
         }
 
-        setMeetingId('');
-        setIsCaller(false);
-        setCurrentCallType('voice');
+        console.log('[RTM] Initializing Agora RTM');
+        const rtmHelper = AgoraRtmHelper.getInstance();
+        await rtmHelper.initialize();
+        
+        // Login with user ID as string
+        await rtmHelper.login(user.id.toString());
+        
+        // Set up RTM event listeners
+        setupRtmEventListeners(rtmHelper);
+        
+        rtmHelperRef.current = rtmHelper;
+        setRtmInitialized(true);
+        console.log('[RTM] Agora RTM initialized successfully with user ID:', user.id);
       } catch (error) {
-        console.error('Error leaving call:', error);
-        Alert.alert('Error', 'Failed to end call.');
-      }
-    }
-  }, [rtcEngine, meetingId, isCaller, user]);
-
-  const updateFcmToken = async (fcmToken: string) => {
-    if (!user?.id) return;
-
-    try {
-      await ApiService.updateFcmToken({
-        userId: user.id,
-        fcmToken: fcmToken
-      });
-      console.log('FCM token updated successfully');
-    } catch (error) {
-      console.error('Error updating FCM token:', error);
-    }
-  };
-
-  const fetchMissedCalls = useCallback(async () => {
-    if (!user?.id) return;
-
-    try {
-      const response = await ApiService.getMissedCalls(user.id);
-      if (response.status && response.data) {
-        console.log('Missed calls:', response.data.calls);
-      }
-    } catch (error) {
-      console.error('Error fetching missed calls:', error);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (user?.id) {
-      fetchMissedCalls();
-    }
-  }, [user, fetchMissedCalls]);
-
-  // Handle incoming call notifications
-  useEffect(() => {
-    // Handle app state changes (foreground/background)
-    const appStateListener = AppState.addEventListener('change', nextAppState => {
-      console.log(`[FCM] App state changed to: ${nextAppState}`);
-      if (nextAppState === 'active') {
-        // App came to foreground, check for pending notifications
-        checkPendingNotifications();
-      }
-    });
-
-    // Request notification permissions
-    NotificationService.requestPermissions(messagingInstance).then(() => {
-      console.log('[FCM] Notification permissions requested');
-    });
-
-    // Check for any notification that launched the app
-    const checkPendingNotifications = async () => {
-      // Check if app was opened from a notification
-      console.log('[FCM] Checking for notifications that launched the app');
-      const initialNotification = await messaging().getInitialNotification();
-      if (initialNotification) {
-        console.log('[FCM] App launched by notification:', JSON.stringify(initialNotification, null, 2));
-        handleIncomingCallNotification(initialNotification);
-      } else {
-        console.log('[FCM] No initial notification found');
+        console.error('[RTM] Failed to initialize RTM:', error);
+        Alert.alert('Error', 'Failed to initialize call signaling. Call functionality may be limited.');
       }
     };
-
-    // Foreground notification handler
-    const unsubscribeOnMessage = messaging().onMessage(async remoteMessage => {
-      console.log('[FCM] FOREGROUND NOTIFICATION RECEIVED:', JSON.stringify(remoteMessage, null, 2));
-      if (remoteMessage.data && (remoteMessage.data.callType === 'video-call' || remoteMessage.data.callType === 'audio-call')) {
-        console.log(`[FCM] Handling incoming call notification - Type: ${remoteMessage.data.callType}`);
-        handleIncomingCallNotification(remoteMessage);
-      } else {
-        console.log('[FCM] Ignoring non-call notification:', JSON.stringify(remoteMessage.data, null, 2));
-      }
-    });
-
-    // Background/quit state notification handler
-    const unsubscribeOnNotificationOpened = messaging().onNotificationOpenedApp(remoteMessage => {
-      console.log('[FCM] BACKGROUND NOTIFICATION OPENED:', JSON.stringify(remoteMessage, null, 2));
-      if (remoteMessage.data && (remoteMessage.data.callType === 'video-call' || remoteMessage.data.callType === 'audio-call')) {
-        console.log(`[FCM] Handling background call notification - Type: ${remoteMessage.data.callType}`);
-        handleIncomingCallNotification(remoteMessage);
-      } else {
-        console.log('[FCM] Ignoring non-call background notification:', JSON.stringify(remoteMessage.data, null, 2));
-      }
-    });
-
-    // Initial check
-    checkPendingNotifications();
-
-    // Clean up
+    
+    const setupRtmEventListeners = (rtmHelper: AgoraRtmHelper) => {
+      // Remote invitation received (incoming call)
+      rtmHelper.on('remoteInvitationReceived' as RtmEventType, (invitation: RtmRemoteInvitation) => {
+        if (inCall || remoteInvitationRef.current) {
+          console.log('[RTM] Already in a call, refusing invitation');
+          rtmHelper.refuseCallInvitation(invitation).catch(err => {
+            console.error('[RTM] Error refusing call while busy:', err);
+          });
+          return;
+        }
+        
+        remoteInvitationRef.current = invitation;
+        
+        try {
+          const content = JSON.parse(invitation.getContent() || '{}');
+          console.log('[RTM] Call invitation content:', content);
+          
+          setIncomingCall({
+            callerId: invitation.getCallerId(),
+            callerName: content.callerName || 'Unknown Caller',
+            channelName: content.channelName,
+            callType: content.callType === 'video' ? 'video' : 'voice',
+            calleeAgoraUid: user?.id?.toString(),
+            agoraToken: content.rtcToken
+          });
+        } catch (error) {
+          console.error('[RTM] Error parsing invitation content:', error);
+          rtmHelper.refuseCallInvitation(invitation).catch(err => {
+            console.error('[RTM] Error refusing malformed invitation:', err);
+          });
+        }
+      });
+      
+      // Local invitation accepted by callee
+      rtmHelper.on('localInvitationAccepted' as RtmEventType, (invitation: RtmLocalInvitation) => {
+        console.log('[RTM] Call invitation accepted by recipient');
+        // The RTC connection should already be established
+        localInvitationRef.current = null;
+      });
+      
+      // Local invitation refused by callee
+      rtmHelper.on('localInvitationRefused' as RtmEventType, (invitation: RtmLocalInvitation) => {
+        console.log('[RTM] Call invitation refused by recipient');
+        Alert.alert('Call Rejected', 'The recipient rejected your call');
+        
+        if (inCall) {
+          endCall();
+        }
+        
+        localInvitationRef.current = null;
+      });
+      
+      // Remote invitation canceled by caller
+      rtmHelper.on('remoteInvitationCanceled' as RtmEventType, (invitation: RtmRemoteInvitation) => {
+        console.log('[RTM] Call invitation canceled by caller');
+        Alert.alert('Call Ended', 'The caller canceled the call');
+        
+        setIncomingCall(null);
+        remoteInvitationRef.current = null;
+        
+        if (inCall) {
+          endCall();
+        }
+      });
+      
+      // Other event handlers...
+    };
+    
+    initAgoraRtm();
+    
+    // Cleanup
     return () => {
-      console.log('[FCM] Cleaning up notification listeners');
-      appStateListener.remove();
-      unsubscribeOnMessage();
-      unsubscribeOnNotificationOpened();
-    };
-  }, []);
-
-  // Handle incoming call notification
-  const handleIncomingCallNotification = (remoteMessage: any) => {
-    console.log('[FCM] Processing incoming call notification...');
-    
-    const callData = NotificationService.extractCallData(remoteMessage);
-    console.log('[FCM] Extracted call data:', JSON.stringify(callData, null, 2));
-    
-    if (callData) {
-      // Don't show incoming call UI if already in a call
-      if (inCall) {
-        console.log('[FCM] Already in a call, auto-rejecting incoming call');
-        // Auto-reject if in another call
-        NotificationService.updateCallStatus(
-          callData.callerId,
-          user?.id?.toString() || '',
-          'rejected',
-          callData.callType as 'video' | 'audio'
-        ).then(response => {
-          console.log('[FCM] Auto-reject call response:', JSON.stringify(response, null, 2));
+      if (rtmHelperRef.current) {
+        console.log('[RTM] Cleaning up RTM resources');
+        rtmHelperRef.current.release().catch(e => {
+          console.error('[RTM] Error releasing RTM resources:', e);
         });
-        return;
       }
+    };
+  }, [user?.id]);
 
-      console.log(`[FCM] Setting incoming call from ${callData.callerName} (${callData.callerId}), type: ${callData.callType}`);
-      // Set incoming call data to show the incoming call screen
-      setIncomingCall({
-        callerId: callData.callerId,
-        callerName: callData.callerName,
-        channelName: callData.channelName,
-        callType: callData.callType === 'video' ? 'video' : 'voice',
-      });
-    } else {
-      console.log('[FCM] Invalid call data in notification:', JSON.stringify(remoteMessage.data, null, 2));
+  // Replace or modify your existing startCallInternal function
+  const startCallInternal = async (contactId: number, callType: 'voice' | 'video') => {
+    if (!rtcEngine) {
+      Alert.alert('Error', 'Call engine not initialized');
+      return;
     }
-  };
-
-  // Accept incoming call
-  const acceptIncomingCall = async () => {
-    if (!incomingCall || !rtcEngine || !user?.id) return;
-
+    
+    if (inCall) {
+      Alert.alert('Error', 'You are already in a call');
+      return;
+    }
+    
+    if (!user?.id) {
+      Alert.alert('Error', 'User not authenticated');
+      redirectToLogin();
+      return;
+    }
+    
+    if (!rtmInitialized || !rtmHelperRef.current) {
+      Alert.alert('Error', 'Call signaling not initialized. Please try again later.');
+      return;
+    }
+    
+    const hasPermissions = await requestPermissions(callType);
+    if (!hasPermissions) return;
+    
+    setLoading(true);
+    
     try {
-      // Request permissions first
-      const hasPermissions = await requestPermissions(incomingCall.callType);
-      if (!hasPermissions) {
-        rejectIncomingCall();
-        return;
-      }
-
-      // Setup call based on type
-      if (incomingCall.callType === 'video') {
+      // Configure RTC for call type
+      if (callType === 'video') {
         await rtcEngine.enableVideo();
         await rtcEngine.startPreview();
       } else {
         await rtcEngine.enableAudio();
         await rtcEngine.disableVideo();
       }
-
-      // Use user.id instead of random number
-      const uid = parseInt(String(user.id), 10);
+      
+      // Use user.id as RTC UID
+      const uid = parseInt(user.id.toString(), 10);
       localUid.current = uid;
       
-      console.log(`Using user ID ${uid} as Agora UID`);
-
-      // Get token for the channel
-      const token = await fetchAgoraToken(uid);
-
-      // Join the channel
-      await AgoraHelper.safeJoinChannel(
-        rtcEngine,
-        token.token,
-        incomingCall.channelName,
-        uid
+      // Get token from server
+      const agoraAuthData = await fetchAgoraToken(uid);
+      const { token: rtcToken, channelName } = agoraAuthData;
+      
+      if (!rtcToken || !channelName) {
+        throw new Error('Failed to get valid token or channel');
+      }
+      
+      // Create RTM call invitation
+      const invitation = await rtmHelperRef.current.createCallInvitation(
+        contactId.toString(),
+        callType,
+        channelName,
+        rtcToken
       );
-
-      // Update call states
-      setMeetingId(incomingCall.channelName);
-      setIsCaller(false);
-      setCurrentCallType(incomingCall.callType);
+      
+      localInvitationRef.current = invitation;
+      
+      // Join RTC channel first
+      await AgoraHelper.safeJoinChannel(rtcEngine, rtcToken, channelName, uid);
+      
+      // Update UI state
+      setMeetingId(channelName);
+      setIsCaller(true);
+      setCurrentCallType(callType);
       setInCall(true);
-
-      // Notify caller that call was accepted
-      await NotificationService.updateCallStatus(
-        incomingCall.callerId,
-        user.id.toString(),
-        'accepted',
-        incomingCall.callType as 'video' | 'audio'
-      );
-
-      // Clear incoming call state
-      setIncomingCall(null);
-    } catch (error) {
-      console.error('Error accepting call:', error);
-      Alert.alert('Error', 'Failed to accept call. Please try again.');
-      rejectIncomingCall();
+      
+      // Send RTM invitation
+      await rtmHelperRef.current.sendCallInvitation(invitation);
+      console.log(`[RTM] ${callType} call invitation sent to ${contactId}`);
+      
+      // Also send FCM notification as backup
+      await notifyRecipient(contactId, channelName, callType, user.id.toString());
+      
+    } catch (error: any) {
+      console.error(`Error starting ${callType} call:`, error);
+      Alert.alert('Error', `Failed to start call: ${error.message}`);
+      
+      // Cleanup on error
+      if (localInvitationRef.current && rtmHelperRef.current) {
+        try {
+          await rtmHelperRef.current.cancelCallInvitation(localInvitationRef.current);
+        } catch (e) {
+          console.error('[RTM] Error canceling invitation during failure:', e);
+        }
+        localInvitationRef.current = null;
+      }
+      
+      if (inCall && rtcEngine) {
+        try {
+          await rtcEngine.leaveChannel();
+        } catch (e) {
+          console.error('[RTC] Error leaving channel during failure:', e);
+        }
+      }
+      
+      setInCall(false);
+      setMeetingId('');
+      setIsCaller(false);
+      
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Reject incoming call
-  const rejectIncomingCall = async () => {
-    if (!incomingCall || !user?.id) return;
-
+  // Modify acceptIncomingCall to use RTM
+  const acceptIncomingCall = async () => {
+    if (!incomingCall || !rtcEngine || !user?.id) {
+      console.warn('[AcceptCall] Missing required data');
+      setIncomingCall(null);
+      return;
+    }
+    
+    if (!rtmInitialized || !rtmHelperRef.current || !remoteInvitationRef.current) {
+      console.warn('[AcceptCall] RTM not initialized or missing invitation');
+      setIncomingCall(null);
+      return;
+    }
+    
+    const { channelName, callType, agoraToken } = incomingCall;
+    
+    if (!agoraToken || !channelName) {
+      Alert.alert('Error', 'Call information is incomplete');
+      
+      try {
+        await rtmHelperRef.current.refuseCallInvitation(remoteInvitationRef.current);
+      } catch (e) {
+        console.error('[RTM] Error refusing call with missing data:', e);
+      }
+      
+      setIncomingCall(null);
+      remoteInvitationRef.current = null;
+      return;
+    }
+    
+    setLoading(true);
+    
     try {
-      // Notify caller that call was rejected
-      await NotificationService.updateCallStatus(
-        incomingCall.callerId,
-        user.id.toString(),
-        'rejected',
-        incomingCall.callType as 'video' | 'audio'
-      );
-
-      // Clear incoming call state
+      const hasPermissions = await requestPermissions(callType);
+      if (!hasPermissions) {
+        await rtmHelperRef.current.refuseCallInvitation(remoteInvitationRef.current);
+        setIncomingCall(null);
+        remoteInvitationRef.current = null;
+        setLoading(false);
+        return;
+      }
+      
+      // Configure RTC
+      if (callType === 'video') {
+        await rtcEngine.enableVideo();
+        await rtcEngine.startPreview();
+      } else {
+        await rtcEngine.enableAudio();
+        await rtcEngine.disableVideo();
+      }
+      
+      // Accept RTM invitation
+      await rtmHelperRef.current.acceptCallInvitation(remoteInvitationRef.current);
+      
+      // Join RTC channel
+      const uid = parseInt(user.id.toString(), 10);
+      localUid.current = uid;
+      
+      await AgoraHelper.safeJoinChannel(rtcEngine, agoraToken, channelName, uid);
+      
+      // Update UI state
+      setMeetingId(channelName);
+      setIsCaller(false);
+      setCurrentCallType(callType);
+      setInCall(true);
       setIncomingCall(null);
+      remoteInvitationRef.current = null;
+      
     } catch (error) {
-      console.error('Error rejecting call:', error);
+      console.error('[AcceptCall] Error accepting call:', error);
+      Alert.alert('Error', 'Failed to accept call');
+      
+      // Clean up on error
       setIncomingCall(null);
+      remoteInvitationRef.current = null;
+      
+      if (inCall && rtcEngine) {
+        try {
+          await rtcEngine.leaveChannel();
+        } catch (e) {
+          console.error('[RTC] Error leaving channel during accept failure:', e);
+        }
+      }
+      
+      setInCall(false);
+      setMeetingId('');
+      
+    } finally {
+      setLoading(false);
     }
   };
+
+  // Modify rejectIncomingCall to use RTM
+  const rejectIncomingCall = async () => {
+    if (!incomingCall) {
+      setIncomingCall(null);
+      return;
+    }
+    
+    if (!rtmInitialized || !rtmHelperRef.current || !remoteInvitationRef.current) {
+      console.warn('[RejectCall] RTM not initialized or missing invitation');
+      setIncomingCall(null);
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      // Refuse RTM invitation
+      await rtmHelperRef.current.refuseCallInvitation(remoteInvitationRef.current);
+      
+      // Optionally notify backend
+      if (user?.id) {
+        await NotificationService.updateCallStatus(
+          incomingCall.callerId,
+          user.id.toString(),
+          'rejected',
+          incomingCall.callType === 'video' ? 'video' : 'audio'
+        );
+      }
+      
+    } catch (error) {
+      console.error('[RejectCall] Error rejecting call:', error);
+    } finally {
+      setIncomingCall(null);
+      remoteInvitationRef.current = null;
+      setLoading(false);
+    }
+  };
+
+  // Modify endCall to include RTM cancellation
+  const endCall = useCallback(async () => {
+    console.log('[EndCall] Ending call');
+    setLoading(true);
+    
+    // Cancel invitation if we're the caller
+    if (isCaller && localInvitationRef.current && rtmHelperRef.current) {
+      try {
+        await rtmHelperRef.current.cancelCallInvitation(localInvitationRef.current);
+      } catch (e) {
+        console.error('[RTM] Error canceling invitation:', e);
+      }
+      
+      localInvitationRef.current = null;
+    }
+    
+    // Leave RTC channel
+    if (rtcEngine) {
+      try {
+        await rtcEngine.stopPreview();
+        await AgoraHelper.safeLeaveChannel(rtcEngine);
+      } catch (error) {
+        console.error('[RTC] Error leaving channel:', error);
+      }
+    }
+    
+    // Reset state
+    setInCall(false);
+    setMeetingId('');
+    setIsCaller(false);
+    setCurrentCallType('voice');
+    setLoading(false);
+  }, [rtcEngine, isCaller, rtmHelperRef]);
+
+  const startVoiceCall = useCallback((contactId: number) => {
+    startCallInternal(contactId, 'voice');
+  }, [rtcEngine, inCall, user, rtmInitialized, rtmHelperRef.current]);
+
+  const startVideoCall = useCallback((contactId: number) => {
+    startCallInternal(contactId, 'video');
+  }, [rtcEngine, inCall, user, rtmInitialized, rtmHelperRef.current]);
 
   if (loading && !contacts.length && !inCall) {
     return (
