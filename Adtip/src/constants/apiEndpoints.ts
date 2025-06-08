@@ -60,3 +60,8 @@ export const REFERRAL_ENDPOINTS = {
 export const WALLET_ENDPOINTS = {
   GET_FUNDS: '/api/getfunds', // Already defined in HOME_ENDPOINTS, just aliased here
 };
+
+// Explore endpoints
+export const EXPLORE_ENDPOINTS = {
+  GET_EXPLORE_CONTENT: '/api/explore',
+};

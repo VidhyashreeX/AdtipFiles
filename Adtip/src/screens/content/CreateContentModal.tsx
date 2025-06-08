@@ -184,15 +184,10 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({
                   <Icon name="wifi" size={24} color={colors.white} />
                 </View>
                 <Text style={[styles.optionText, {color: colors.text.primary}]}>
-                  Go Live
+                  Start Stream
                 </Text>
-                <Icon
-                  name="chevron-right"
-                  size={20}
-                  color={colors.text.tertiary}
-                />
               </TouchableOpacity>
-            </View>{' '}
+            </View>
           </Animated.View>
         </View>
       </SafeAreaView>

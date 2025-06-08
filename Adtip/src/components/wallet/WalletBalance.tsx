@@ -62,8 +62,8 @@ const WalletBalance = ({
               style={styles.icon}
             />
             <Text style={[styles.compactBalance, {color: colors.text.primary}]}>
-              ₹{String(balance)}
-            </Text>{' '}
+              ₹{String(balance)}{' '}
+            </Text>
             {isPremium ? (
               <Icon
                 name="star"

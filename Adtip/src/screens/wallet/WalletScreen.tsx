@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import {useNavigation, NavigationProp} from '@react-navigation/native';
 
 // Components
 import Header from '../../components/common/Header';
@@ -20,7 +21,13 @@ import {useTheme} from '../../contexts/ThemeContext';
 import RewardService from '../../services/RewardService';
 import useWallet from '../../hooks/useWallet';
 
+type WalletStackParamList = {
+  Packages: undefined;
+  // add other routes if needed
+};
+
 const WalletScreen = () => {
+  const navigation = useNavigation<NavigationProp<WalletStackParamList>>();
   const {colors} = useTheme();
   // Use our wallet hook instead of managing state manually
   const {balance, transactions, isLoading, isRefreshing, refreshWallet} =
@@ -98,6 +105,13 @@ const WalletScreen = () => {
               <Text style={styles.earnButtonText}>Earn More Coins</Text>
             </>
           )}
+        </TouchableOpacity>
+
+        {/* Upgrade Plan Button */}
+        <TouchableOpacity
+          style={[styles.upgradeButton, {backgroundColor: colors.primary}]}
+          onPress={() => navigation.navigate('Packages')}>
+          <Text style={styles.upgradeButtonText}>Upgrade Plan</Text>
         </TouchableOpacity>
 
         {/* Transactions List */}
@@ -214,6 +228,19 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   earnButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  upgradeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 8,
+    marginVertical: 16,
+  },
+  upgradeButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',

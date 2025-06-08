@@ -8,11 +8,13 @@ import {
   SafeAreaView,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 import {useNavigation} from '@react-navigation/native';
+import { useAuth } from '../../contexts/AuthContext'; // Import useAuth
 
 interface SettingItem {
   id: string;
@@ -28,6 +30,7 @@ interface SettingItem {
 const SettingsScreen: React.FC = () => {
   const {colors, isDarkMode, toggleTheme, setDarkMode} = useTheme();
   const navigation = useNavigation();
+  const { logout, loading: authLoading } = useAuth(); // Get logout function and loading state
   const [settings, setSettings] = useState({
     pushNotifications: true,
     emailNotifications: false,
@@ -47,9 +50,15 @@ const SettingsScreen: React.FC = () => {
       {
         text: 'Sign Out',
         style: 'destructive',
-        onPress: () => {
-          // Handle logout
-          console.log('User logged out');
+        onPress: async () => {
+          try {
+            await logout();
+            // Navigation to login/onboarding screen is handled within the logout function in AuthContext
+            console.log('User logged out successfully and navigated.');
+          } catch (error) {
+            console.error('Failed to logout:', error);
+            Alert.alert('Error', 'Failed to sign out. Please try again.');
+          }
         },
       },
     ]);
@@ -320,7 +329,7 @@ const SettingsScreen: React.FC = () => {
             marginHorizontal: 16, 
             marginTop: 8, 
             marginBottom: 32, 
-            backgroundColor: '#EF4444', 
+            backgroundColor: authLoading ? '#F87171' : '#EF4444', // Dim if loading 
             borderRadius: 12, 
             alignItems: 'center', 
             justifyContent: 'center', 
@@ -333,11 +342,16 @@ const SettingsScreen: React.FC = () => {
           }}
           onPress={handleLogout}
           activeOpacity={0.9}
+          disabled={authLoading} // Disable button when auth operation is in progress
         >
-          <View style={{flexDirection: 'row', alignItems: 'center'}}>
-            <Icon name="log-out" size={18} color="#FFFFFF" style={{marginRight: 8}} />
-            <Text style={{color: '#FFFFFF', fontWeight: '600', fontSize: 16}}>Sign Out</Text>
-          </View>
+          {authLoading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <View style={{flexDirection: 'row', alignItems: 'center'}}>
+              <Icon name="log-out" size={18} color="#FFFFFF" style={{marginRight: 8}} />
+              <Text style={{color: '#FFFFFF', fontWeight: '600', fontSize: 16}}>Sign Out</Text>
+            </View>
+          )}
         </TouchableOpacity>
         
         <View style={styles.footer}>

@@ -27,12 +27,16 @@ const CreateContentButton = () => {
   const [modalVisible, setModalVisible] = useState(false);
 
   const handlePress = () => {
+    console.log('CreateContentButton: handlePress called'); // DEBUG
     setModalVisible(true);
   };
 
   const handleCloseModal = () => {
+    console.log('CreateContentButton: handleCloseModal called'); // DEBUG
     setModalVisible(false);
   };
+
+  console.log('CreateContentButton: rendering, modalVisible =', modalVisible); // DEBUG
 
   return (
     <>

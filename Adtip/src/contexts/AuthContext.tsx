@@ -201,27 +201,42 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
   };
   // Logout
   const logout = async (): Promise<void> => {
-    setLoading(true); // Operation loading
+    // setLoading(true); // This is the AuthContext's general 'loading' state, 
+                      // which is fine if you want a global loading indicator for auth operations.
+                      // SettingsScreen uses its own 'authLoading' derived from this.
     setError(null);
+
+    const currentUserId = user?.id; // Get user ID before clearing user state
 
     try {
       LastSeenService.stopTracking();
       
-      if (user) {
-        await ApiService.post(ENDPOINTS.LOGOUT, {id: user.id});
+      if (currentUserId) { // Check if there was a user to log out
+        console.log(`[AuthContext] Attempting to call API logout for user ID: ${currentUserId}`);
+        await ApiService.post(ENDPOINTS.LOGOUT, {id: currentUserId}); // Ensure ENDPOINTS.LOGOUT is correct
+        console.log(`[AuthContext] API logout call successful for user ID: ${currentUserId}`);
+      } else {
+        console.log('[AuthContext] No user was signed in, proceeding to clear local data.');
       }
+      
       await AsyncStorage.clear();
+      console.log('[AuthContext] AsyncStorage cleared.');
+
       setUser(null);
       setIsAuthenticated(false);
       setHasChannel(false);
+      console.log('[AuthContext] Local auth state reset.');
+
       if (navigationRef.isReady()) {
         navigationRef.reset({
           index: 0,
-          routes: [{name: 'Onboarding'}],
+          routes: [{name: 'Onboarding'}], // This will take user to Onboarding, then to Login if not skipped
         });
+        console.log('[AuthContext] Navigation reset to Onboarding.');
       }
     } catch (err) {
-      console.error('Error during logout:', err);
+      console.error('[AuthContext] Error during logout:', err);
+      // Even if API logout fails, proceed to clear local data and log out locally
       await AsyncStorage.clear();
       setUser(null);
       setIsAuthenticated(false);
@@ -232,8 +247,11 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
           routes: [{name: 'Onboarding'}],
         });
       }
+      // Optionally, rethrow or set an error message that can be displayed to the user
+      // setError("Failed to communicate with the server during logout, but you have been logged out locally.");
+      throw err; // Re-throw to be caught by SettingsScreen if needed
     } finally {
-      setLoading(false); // Operation loading
+      // setLoading(false);
     }
   };
 

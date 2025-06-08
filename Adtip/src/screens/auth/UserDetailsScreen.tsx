@@ -489,8 +489,8 @@ const UserDetailsScreen = () => {
           {/* Date of Birth */}
           <View style={styles.formGroup}>
             <Text style={[styles.label, {color: colors.text.secondary}]}>
-              Date of Birth
-            </Text>{' '}
+              Date of Birth {' '}
+            </Text>
             <TouchableOpacity
               style={[
                 styles.input,

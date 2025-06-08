@@ -111,6 +111,7 @@ const Sidebar: React.FC = () => {
       'TabHome': 'TabHome',
       'Main': 'TabHome',
       'Search': 'Search', 
+      'Explore': 'Explore', // Add this mapping
       'Wallet': 'Wallet',
       'Referral': 'Referral',
       'Settings': 'Settings',
@@ -178,7 +179,7 @@ const Sidebar: React.FC = () => {
   const sizes = getFontSizes();
   const menuItems: MenuItem[] = [
     {icon: 'home', label: 'Home', screen: 'TabHome'},
-    {icon: 'search', label: 'Explore', screen: 'Search'},
+    {icon: 'compass', label: 'Explore', screen: 'Explore'}, // Changed icon to 'compass' for better semantics and screen to 'Explore'
     {icon: 'credit-card', label: 'Wallet', screen: 'Wallet'},
     {icon: 'users', label: 'Refer & Earn', screen: 'Referral'},
     {icon: 'play', label: 'Play to Earn', screen: 'PlayToEarn'},
@@ -199,7 +200,7 @@ const Sidebar: React.FC = () => {
           NavigationService.navigate('TabHome');
         } else if ([
           'Search', 'Wallet', 'Referral', 'Settings', 'Profile', 'TipShorts',
-          'PlayToEarn', 'WatchToEarn', 'AdPassbook'
+          'PlayToEarn', 'WatchToEarn', 'AdPassbook', 'Explore' // Add 'Explore' here
         ].includes(screenName)) {
           // These are top-level screens in the MainNavigator
           NavigationService.navigate(screenName);

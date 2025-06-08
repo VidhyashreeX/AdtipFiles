@@ -155,7 +155,12 @@ class AgoraRtmHelper {
   // Login to RTM service with user ID
   async login(userId: string): Promise<void> {
     if (!this.rtmEngine) {
+     console.log('[RTM] RTM engine not initialized, attempting to initialize now.');
       await this.initialize();
+      if (!this.rtmEngine) { // Check again after initialize attempt
+        console.error('[RTM] RTM engine failed to initialize. Cannot login.');
+        throw new Error('RTM engine failed to initialize.');
+      }
     }
 
     if (this.isLoggedIn && this.userId === userId) {
@@ -164,33 +169,92 @@ class AgoraRtmHelper {
     }
 
     try {
-      console.log(`[RTM] Getting RTM token for user ${userId}`);
-      const rtmTokenResponse = await this.fetchRtmToken(userId);
+      console.log(`[RTM] Attempting to fetch RTM token for user ${userId}`);
+      const rtmTokenResponse = await this.fetchRtmToken(userId); // This already logs the exact token server response
+
+      if (!rtmTokenResponse || !rtmTokenResponse.token) {
+        console.error(`[RTM] Failed to obtain a valid RTM token for user ${userId}. Token response:`, rtmTokenResponse);
+        throw new Error('Failed to obtain a valid RTM token.');
+      }
       
-      console.log(`[RTM] Logging in as user ${userId}`);
+      console.log(`[RTM] Attempting to login to RTM service as user ${userId} with token: ${rtmTokenResponse.token.substring(0, 20)}... (token truncated for brevity)`);
       await this.rtmEngine!.login({ token: rtmTokenResponse.token, uid: userId });
       
       this.userId = userId;
       this.isLoggedIn = true;
       console.log(`[RTM] Successfully logged in as user ${userId}`);
     } catch (error) {
-      console.error('[RTM] Failed to login:', error);
-      throw error;
+      console.error('[RTM] Login failed.');
+      console.error('[RTM] User ID used for login attempt:', userId);
+      
+      // Log the raw error object for inspection (e.g., in debugger)
+      console.error('[RTM] Raw login error object:', error); 
+
+      // Attempt to stringify the error to capture more details if available
+      try {
+        // Using Object.getOwnPropertyNames to include non-enumerable properties if any
+        const errorDetails = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
+        console.error('[RTM] Stringified login error details:', errorDetails);
+      } catch (stringifyError) {
+        // If stringifying fails (e.g., circular references not handled by default)
+        console.error('[RTM] Could not stringify the login error object. Logging basic properties.');
+        if (typeof error === 'object' && error !== null) {
+          for (const key in error) {
+            if (Object.prototype.hasOwnProperty.call(error, key)) {
+              // @ts-ignore
+              console.error(`[RTM] Login error property - ${key}:`, error[key]);
+            }
+          }
+        }
+      }
+
+      // Log standard error properties if it's an Error instance
+      if (error instanceof Error) {
+        console.error('[RTM] Login error message:', error.message); // This usually contains the "LOGIN_ERR_REJECTED" or similar
+        console.error('[RTM] Login error name:', error.name);
+        if (error.stack) {
+          console.error('[RTM] Login error stack:', error.stack);
+        }
+      }
+      
+      // It's important to check the token that was attempted for login
+      // The fetchRtmToken method already logs the server response for the token.
+      // Re-iterate that the token should be checked.
+      console.error('[RTM] Ensure the RTM token fetched (see previous logs for "Exact RTM Token Server Response") is valid for the App ID and UID.');
+
+      throw error; // Re-throw the original error so it propagates
     }
   }
 
   // Fetch RTM token from server
   private async fetchRtmToken(userId: string): Promise<RtmTokenResponse> {
     try {
-      console.log(`[RTM] Fetching RTM token for user ${userId}`);
-      // Call your API to get RTM token
+      console.log(`[RTM] Fetching RTM token from server for user ${userId}`);
       const response = await ApiService.getRtmToken({ uid: userId });
+      console.log('[RTM] Exact RTM Token Server Response:', JSON.stringify(response, null, 2)); 
+      
+      if (!response || !response.token || typeof response.token !== 'string' || response.token.trim() === '') {
+        console.error('[RTM] Invalid or empty token received from server:', response);
+        throw new Error('Received invalid or empty token from server.');
+      }
+      // Optionally, also verify if response.userId matches the requested userId
+      if (response.userId !== userId) {
+        console.warn(`[RTM] Token fetched for UID ${response.userId} but requested for ${userId}. This might be an issue.`);
+        // Depending on your server logic, this might be acceptable or an error.
+        // For strictness, you could throw an error here too.
+      }
       return response;
     } catch (error) {
-      console.error('[RTM] Failed to fetch RTM token:', error);
-      // Return a dummy token for testing - REMOVE IN PRODUCTION!
-      console.warn('[RTM] Using dummy token for development');
-      return { token: 'dummy_rtm_token_for_dev', userId };
+      console.error(`[RTM] CRITICAL ERROR during fetchRtmToken for user ${userId}:`, error);
+      // Log underlying HTTP error details if available
+      if (error instanceof Error && (error as any).response && (error as any).response.data) {
+        console.error('[RTM] fetchRtmToken underlying HTTP error data:', JSON.stringify((error as any).response.data, null, 2));
+      } else if (error instanceof Error && (error as any).response) {
+        console.error('[RTM] fetchRtmToken underlying HTTP error response:', JSON.stringify((error as any).response, null, 2));
+      }
+      // Re-throw a more specific error to prevent login with a bad/dummy token
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to fetch a valid RTM token for ${userId}: ${errorMessage}`);
     }
   }
 

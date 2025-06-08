@@ -39,9 +39,12 @@ import CreateCampaignScreen from '../screens/adPassbook/CreateCampaignScreen';
 import CommentsScreen from '../screens/home/CommentScreen';
 import FollowersList from '../screens/profile/FollowersList'; // Import FollowersList
 import FollowingsList from '../screens/profile/FollowingsList'; // Import FollowingsList
+import ExploreScreen from '../screens/explore/ExploreScreen';
 
 // Create stack navigator
-const Stack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator<Record<string, any> & {
+  Checkout: { package: { id: string; name: string; price: number; bestValue?: boolean } }; // Ensure Checkout route is correctly typed in RootStackParamList
+}>();
 
 // Define the stack param list (consistent with ProfileScreen, FollowersList, and FollowingsList)
 type RootStackParamList = {
@@ -114,6 +117,7 @@ const MainNavigator = () => {
   const EnhancedCommentsScreen = withWalletBalance(CommentsScreen);
   const EnhancedFollowersList = withWalletBalance(FollowersList); // Enhance FollowersList
   const EnhancedFollowingsList = withWalletBalance(FollowingsList); // Enhance FollowingsList
+  const EnhancedExploreScreen = withWalletBalance(ExploreScreen); // Enhance ExploreScreen
 
   // Note: We don't wrap WalletScreen because it already has its own direct wallet balance implementation
 
@@ -163,6 +167,7 @@ const MainNavigator = () => {
       {/* Add FollowersList and FollowingsList */}
       <Stack.Screen name="FollowersList" component={EnhancedFollowersList} />
       <Stack.Screen name="FollowingsList" component={EnhancedFollowingsList} />
+      <Stack.Screen name="Explore" component={EnhancedExploreScreen} />
     </Stack.Navigator>
   );
 };

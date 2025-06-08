@@ -33,11 +33,19 @@ const CheckoutScreen: React.FC = () => {
   const billingData = routeParams?.billing;
   const totalPrice = routeParams?.totalPrice;
 
-  const paymentMethods: PaymentMethod[] = [
-    {id: 'card', name: 'Credit/Debit Card', icon: 'credit-card'},
-    {id: 'paypal', name: 'PayPal', icon: 'smartphone'},
-    {id: 'apple', name: 'Apple Pay', icon: 'smartphone'},
-    {id: 'google', name: 'Google Pay', icon: 'smartphone'},
+  const offers = [
+    {id: 'offer1', description: 'Upto ₹200 cashback via CRE...'},
+  ];
+  const recommendedMethods = [
+    {id: 'google', name: 'UPI - Google Pay', icon: 'google'},
+    {id: 'phonepe', name: 'UPI - PhonePe', icon: 'phone'},
+  ];
+  const allPaymentOptions = [
+    {id: 'upi', name: 'UPI', description: 'Upto ₹200 cashback', icon: 'upi'},
+    {id: 'phonepe', name: 'PhonePe', icon: 'phone'},
+    {id: 'google', name: 'Google Pay', icon: 'google'},
+    {id: 'apps', name: 'Apps & UPI ID', icon: 'apps'},
+    {id: 'cards', name: 'Cards', description: 'Upto 1.5% savings with NeuCard', icon: 'credit-card'},
   ];
 
   const handleCheckout = async () => {
@@ -68,53 +76,40 @@ const CheckoutScreen: React.FC = () => {
     }
   };
 
+  // Replace 'light' property usage with valid logic
+  const borderColor = colors.border || '#ccc';
+
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Checkout" showBackButton />
+      <Header title="Payment Options" showBackButton />
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Order Summary */}
+      <ScrollView contentContainerStyle={styles.contentContainer}>
+        {/* Available Offers */}
         <View style={[styles.section, {backgroundColor: colors.surface}]}>
           <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
-            Order Summary
+            Available Offers
           </Text>
-          <View style={styles.orderItem}>
-            <Text style={[styles.orderItemName, {color: colors.text.primary}]}>
-              {packageData?.name} Plan - {billingData?.label}
+          <View style={styles.offerRow}>
+            <Text style={[styles.offerText, {color: colors.text.primary}]}>
+              Upto Rs 200 cashback via CRED
             </Text>
-            <Text style={[styles.orderItemPrice, {color: colors.text.primary}]}>
-              ${totalPrice?.toFixed(2)}
-            </Text>
-          </View>
-          <View
-            style={[styles.totalRow, {borderTopColor: colors.border.light}]}>
-            <Text style={[styles.totalLabel, {color: colors.text.primary}]}>
-              Total
-            </Text>
-            <Text style={[styles.totalPrice, {color: colors.text.primary}]}>
-              ${totalPrice?.toFixed(2)}
-            </Text>
+            <TouchableOpacity>
+              <Text style={[styles.offerLink, {color: colors.primary}]}>
+                View all
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Payment Method */}
-        <View style={styles.section}>
+        {/* Recommended Payment Methods */}
+        <View style={[styles.section, {backgroundColor: colors.surface}]}>
           <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
-            Payment Method
+            Recommended
           </Text>
-          {paymentMethods.map(method => (
+          {allPaymentOptions.slice(0, 2).map(method => (
             <TouchableOpacity
               key={method.id}
-              style={[
-                styles.paymentMethod,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor:
-                    selectedPayment === method.id
-                      ? colors.primary
-                      : colors.border.light,
-                },
-              ]}
+              style={[styles.paymentMethod, {backgroundColor: colors.surface}]}
               onPress={() => setSelectedPayment(method.id)}>
               <Icon
                 name={method.icon}
@@ -128,106 +123,61 @@ const CheckoutScreen: React.FC = () => {
                 ]}>
                 {method.name}
               </Text>
-              {selectedPayment === method.id && (
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* All Payment Options */}
+        <View style={[styles.section, {backgroundColor: colors.surface}]}>
+          <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
+            All Payment Options
+          </Text>
+          {allPaymentOptions.map(option => (
+            <TouchableOpacity
+              key={option.id}
+              style={[styles.paymentMethod, {
+                backgroundColor: colors.surface,
+                borderColor: selectedPayment === option.id ? colors.primary : borderColor,
+              }]}
+              onPress={() => setSelectedPayment(option.id)}>
+              <Icon
+                name={option.icon}
+                size={20}
+                color={colors.text.secondary}
+              />
+              <Text
+                style={[
+                  styles.paymentMethodName,
+                  {color: colors.text.primary},
+                ]}>
+                {option.name}
+              </Text>
+              {selectedPayment === option.id && (
                 <Icon name="check-circle" size={20} color={colors.primary} />
               )}
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Payment Form */}
-        {selectedPayment === 'card' && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
-              Card Information
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border.light,
-                  color: colors.text.primary,
-                },
-              ]}
-              placeholder="Card Number"
-              placeholderTextColor={colors.text.tertiary}
-              keyboardType="numeric"
-            />
-            <View style={styles.cardRow}>
-              <TextInput
-                style={[
-                  styles.halfInput,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border.light,
-                    color: colors.text.primary,
-                  },
-                ]}
-                placeholder="MM/YY"
-                placeholderTextColor={colors.text.tertiary}
-                keyboardType="numeric"
-              />
-              <TextInput
-                style={[
-                  styles.halfInput,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border.light,
-                    color: colors.text.primary,
-                  },
-                ]}
-                placeholder="CVC"
-                placeholderTextColor={colors.text.tertiary}
-                keyboardType="numeric"
-              />
-            </View>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border.light,
-                  color: colors.text.primary,
-                },
-              ]}
-              placeholder="Cardholder Name"
-              placeholderTextColor={colors.text.tertiary}
-            />
-          </View>
-        )}
-
-        {/* Terms */}
-        <View style={styles.termsSection}>
-          <Text style={[styles.termsText, {color: colors.text.tertiary}]}>
-            By completing this purchase, you agree to our Terms of Service and
-            Privacy Policy. Your subscription will automatically renew unless
-            cancelled.
+        {/* Continue Button */}
+        <View style={styles.bottomContainer}>
+          <Text style={[styles.totalPrice, {color: colors.text.primary}]}>
+            ₹{totalPrice?.toFixed(2)}
           </Text>
+          <TouchableOpacity
+            style={[styles.continueButton, {backgroundColor: colors.primary}]}
+            onPress={handleCheckout}
+            disabled={loading}>
+            {loading ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <Text style={[styles.continueButtonText, {color: colors.white}]}>
+                Continue
+              </Text>
+            )}
+          </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* Checkout Button */}
-      <View style={[styles.bottomContainer, {backgroundColor: colors.surface}]}>
-        <TouchableOpacity
-          style={[
-            styles.checkoutButton,
-            {
-              backgroundColor: colors.primary,
-              opacity: loading ? 0.7 : 1,
-            },
-          ]}
-          onPress={handleCheckout}
-          disabled={loading}>
-          {loading ? (
-            <ActivityIndicator size="small" color={colors.white} />
-          ) : (
-            <Text style={[styles.checkoutButtonText, {color: colors.white}]}>
-              Complete Purchase - ${totalPrice?.toFixed(2)}
-            </Text>
-          )}
-        </TouchableOpacity>
-      </View>
     </View>
   );
 };
@@ -236,8 +186,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
-    flex: 1,
+  contentContainer: {
+    flexGrow: 1,
     padding: 16,
   },
   section: {
@@ -320,18 +270,65 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   bottomContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#EEEEEE',
   },
-  checkoutButton: {
+  continueButton: {
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
   },
-  checkoutButtonText: {
+  continueButtonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  offerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  offerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  offerText: {
+    fontSize: 14,
+  },
+  offerLink: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  viewAllButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  viewAllText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  paymentOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  paymentOptionDetails: {
+    marginLeft: 12,
+  },
+  paymentOptionName: {
+    fontSize: 14,
+  },
+  paymentOptionDescription: {
+    fontSize: 12,
   },
 });
 
