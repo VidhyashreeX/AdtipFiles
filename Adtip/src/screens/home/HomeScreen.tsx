@@ -72,6 +72,17 @@ interface Post {
   last_active?: string | null;
 }
 
+interface Comment {
+  id: number;
+  postId: number;
+  user_id: number;
+  comment: string;
+  created_at: string;
+  updated_at: string;
+  user_name: string;
+  user_profile: string | null;
+}
+
 interface Pagination {
   current_page: number;
   total_page: number;
@@ -416,7 +427,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
     }
   };
 
-  const handleLike = (postId: number) => {
+  const handleLike = async (postId: number) => {
+    const previousLikedState = likedPosts[postId] || false;
+
+    // Optimistically update the UI
     setLikedPosts(prev => ({
       ...prev,
       [postId]: !prev[postId],
@@ -431,6 +445,40 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
     );
 
     // TODO: Implement API call to like/unlike post
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/save-user-post-like`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // Add any other headers your API requires
+        },
+        body: JSON.stringify({
+          postId,
+          isLiked: !previousLikedState,
+          userId: user?.id, // Include user ID if needed
+        }),
+      });
+      const result = await response.json();
+      if (result.postId !== postId || result.is_liked !== !previousLikedState) {
+        throw new Error('Failed to update like status');
+      }
+    } catch (err) {
+      // Rollback UI change on error
+      setLikedPosts(prev => ({
+        ...prev,
+        [postId]: previousLikedState,
+      }));
+
+      setPosts(prevPosts =>
+        prevPosts.map(post =>
+          post.id === postId
+            ? {...post, likeCount: post.likeCount - (likedPosts[postId] ? -1 : 1)}
+            : post,
+        ),
+      );
+
+      setError('Failed to update like. Please try again.');
+    }
   };
 
   const handleComment = (postId: number) => {

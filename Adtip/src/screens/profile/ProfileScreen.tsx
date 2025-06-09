@@ -307,7 +307,7 @@ const ProfileScreen: React.FC = () => {
   };
 
   const handlePostsPress = () => {
-    console.log('Posts pressed');
+    navigation.navigate('Posts' as never);
   };
 
   const handleLike = (postId: number) => {

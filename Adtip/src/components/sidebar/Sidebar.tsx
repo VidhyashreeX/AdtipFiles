@@ -129,7 +129,7 @@ const Sidebar: React.FC = () => {
       'ChoosePackages': 'Wallet',
       'Checkout': 'Wallet',
       'TrackOrder': 'Wallet',
-      'Earnings': 'Wallet', // Earnings are related to wallet
+      'Earnings': 'Earnings', // Ensure Earnings maps to itself for active state
       'SelectCategory': 'TabHome',
       'TipTubeUpload': 'TabHome',
       'TipShortsUpload': 'TipShorts',
@@ -188,6 +188,7 @@ const Sidebar: React.FC = () => {
     {icon: 'user', label: 'View Profile', screen: 'Profile'},
     {icon: 'video', label: 'Tip Shorts', screen: 'TipShorts'},
     {icon: 'settings', label: 'Settings', screen: 'Settings'},
+    {icon: 'dollar-sign', label: 'My Earnings', screen: 'Earnings'}, // Added My Earnings item
   ];  const navigateTo = useCallback((screenName: string) => {
     closeSidebar();
     
@@ -198,10 +199,12 @@ const Sidebar: React.FC = () => {
         if (screenName === 'TabHome') {
           // Navigate to the main tab home
           NavigationService.navigate('TabHome');
-        } else if ([
-          'Search', 'Wallet', 'Referral', 'Settings', 'Profile', 'TipShorts',
-          'PlayToEarn', 'WatchToEarn', 'AdPassbook', 'Explore' // Add 'Explore' here
-        ].includes(screenName)) {
+        } else if (
+          [
+            'Search', 'Wallet', 'Referral', 'Settings', 'Profile', 'TipShorts',
+            'PlayToEarn', 'WatchToEarn', 'AdPassbook', 'Explore', 'Earnings' // Add 'Earnings' here
+          ].includes(screenName)
+        ) {
           // These are top-level screens in the MainNavigator
           NavigationService.navigate(screenName);
         } else {
@@ -369,7 +372,7 @@ const styles = StyleSheet.create({
   },  sidebarHeader: {
     paddingHorizontal: 24,
     paddingBottom: 16,
-    borderBottomWidth: 1,
+    borderBottomWidth: 10,
     marginBottom: 8,
   },
   profileSection: {
