@@ -1,6 +1,6 @@
 // src/components/common/Header.tsx
-import React from 'react';
-import {View, Text, StyleSheet, TouchableOpacity, Image, useWindowDimensions, Platform} from 'react-native';
+import React, {useState, useRef} from 'react';
+import {View, Text, StyleSheet, TouchableOpacity, Image, useWindowDimensions, Platform, TextInput, Keyboard} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {useNavigation} from '@react-navigation/native';
 import {useTheme} from '../../contexts/ThemeContext';
@@ -10,234 +10,217 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 interface HeaderProps {
   title?: string;
-  showBackButton?: boolean;
-  showLogo?: boolean;
+  // showBackButton?: boolean; // This is currently not used as per previous changes
+  showLogo?: boolean; // Controls logo visibility, defaults based on context
   showWallet?: boolean;
   showNotifications?: boolean;
-  walletAmount?: string;
+  // walletAmount?: string; // Amount display was removed previously
   leftComponent?: React.ReactNode;
   rightComponent?: React.ReactNode;
-  centerComponent?: React.ReactNode;
+  centerComponent?: React.ReactNode; // Will be overridden by search if active
+  rightIcon?: string;
+  onRightIconPress?: () => void;
+  showTipShortsIcon?: boolean;
+  onSearchSubmit?: (query: string) => void;
+}
+
+// Utility to help decide default logo visibility (can be adjusted or removed if prop is always explicit)
+function isScreenHeader(): boolean {
+  return true; // Assuming header is mostly used in screens where logo might be hidden by default
 }
 
 const Header: React.FC<HeaderProps> = ({
   title,
-  showBackButton = false,
-  showLogo = true,
+  showLogo, // Explicit prop from screen takes precedence
   showWallet = true,
   showNotifications = true,
-  walletAmount,
+  // walletAmount, // Removed
   leftComponent,
   rightComponent,
   centerComponent,
-}) => {  const navigation = useNavigation();
+  rightIcon,
+  onRightIconPress,
+  showTipShortsIcon,
+  onSearchSubmit,
+}) => {
+  const navigation = useNavigation();
   const {colors} = useTheme();
-  const {balance} = useWallet();
+  const {balance} = useWallet(); // Assuming balance is still needed for other logic if any
   const {toggleSidebar} = useSidebar();
   const {width: screenWidth} = useWindowDimensions();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeAreaInsets(); // For potential future use, not directly for padding here if SafeAreaView is at root
+  const searchInputRef = useRef<TextInput>(null);
 
-  // Use the wallet balance from context if no walletAmount is explicitly provided
-  // Ensure it's a string to avoid the "Text strings must be rendered within a <Text> component" warning
-  const displayAmount = (walletAmount || balance || '0.00').toString();
+  const [isSearchActive, setIsSearchActive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const handleBackPress = () => {
-    navigation.goBack();
+  // Determine if logo should be shown. Default to false for screens if not specified.
+  const defaultShowLogo = !isScreenHeader(); // Example: show logo by default if not a "screen" context
+  const actualShowLogo = typeof showLogo === 'boolean' ? showLogo : defaultShowLogo;
+
+  const shouldShowTipShortsIconProp = !!showTipShortsIcon;
+
+  // const displayAmount = (walletAmount || balance || '0.00').toString(); // Not displayed
+
+  const navigateToWallet = () => navigation.navigate('Wallet' as never);
+  const navigateToNotifications = () => navigation.navigate('Notifications' as never);
+  const navigateToTipShorts = () => navigation.navigate('TipShorts' as never);
+
+  const handleSearchIconPress = () => {
+    setIsSearchActive(true);
+    setTimeout(() => searchInputRef.current?.focus(), 50);
   };
 
-  const navigateToWallet = () => {
-    navigation.navigate('Wallet' as never);
+  const handleCloseSearch = () => {
+    Keyboard.dismiss();
+    setIsSearchActive(false);
+    setSearchQuery('');
   };
 
-  const navigateToNotifications = () => {
-    navigation.navigate('Notifications' as never);
-  };
+  const handleSearchQueryChange = (text: string) => setSearchQuery(text);
 
-  const navigateToSearch = () => {
-    navigation.navigate('Search' as never);
-  };
-  
-  // Add navigation to TipShorts
-  const navigateToTipShorts = () => {
-    navigation.navigate('TipShorts' as never);
-  };  // Calculate dynamic sizes based on screen width
-  const getResponsiveSizes = () => {
-    // Small screens (phones)
-    if (screenWidth < 360) {
-      return {
-        iconSize: 18,
-        menuIconSize: 22,
-        paddingHorizontal: 8,
-        iconSpacing: 6,
-        titleSize: 15,
-        walletFontSize: 12,
-        walletIconSize: 12,
-        maxWalletWidth: 50,
-      };
+  const handleSearchSubmit = () => {
+    Keyboard.dismiss();
+    if (searchQuery.trim() && onSearchSubmit) {
+      onSearchSubmit(searchQuery.trim());
     }
-    // Medium screens (larger phones)
-    else if (screenWidth < 480) {
-      return {
-        iconSize: 20,
-        menuIconSize: 24,
-        paddingHorizontal: 12,
-        iconSpacing: 10,
-        titleSize: 16,
-        walletFontSize: 13,
-        walletIconSize: 14,
-        maxWalletWidth: 60,
-      };
-    }
-    // Large screens (tablets)
-    else {
-      return {
-        iconSize: 22,
-        menuIconSize: 26,
-        paddingHorizontal: 16,
-        iconSpacing: 14,
-        titleSize: 18,
-        walletFontSize: 14,
-        walletIconSize: 16,
-        maxWalletWidth: 80,
-      };
-    }
+    // Optionally keep search active: setIsSearchActive(false); setSearchQuery('');
   };
 
-  const sizes = getResponsiveSizes();
-  return (    <View 
+  const sizes = getResponsiveSizes(screenWidth);
+
+  return (
+    <View 
       style={[
         styles.container, 
         { 
           backgroundColor: colors.background,
           paddingHorizontal: sizes.paddingHorizontal,
           borderBottomColor: colors.borderLight,
-          // No need for paddingTop as the parent view in App.tsx handles safe area
         }
       ]}
     >
-      <View style={styles.leftSection}>
-        {leftComponent ? (
-          leftComponent
-        ) : (
+      {/* --- LEFT SECTION --- */}
+      <View style={[styles.leftSection, { marginRight: sizes.iconSpacing / 2 }]}>
+        {leftComponent ? leftComponent : (
           <>
-            {/* Hamburger Menu Icon */}
             <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
               <Icon name="menu" size={sizes.menuIconSize} color={colors.text.primary} />
             </TouchableOpacity>
-            
-            {/* Show back button if needed */}
-            {showBackButton && (
-              <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
-                <Icon name="arrow-left" size={sizes.menuIconSize} color={colors.text.primary} />
-              </TouchableOpacity>
+            {actualShowLogo && (
+              <View style={styles.logoContainer}>
+                <Image 
+                  source={require('../../../assets/images/logo.png')} 
+                  style={[styles.logoImage, {width: sizes.menuIconSize + 4, height: sizes.menuIconSize + 4}]}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
+            {/* Show title in left section if no centerComponent is active and search is not active OR if title is short */}
+            {title && !centerComponent && (
+              <Text 
+                numberOfLines={1} 
+                ellipsizeMode="tail"
+                style={[styles.title, {color: colors.text.primary, fontSize: sizes.titleSize, marginLeft: actualShowLogo ? sizes.iconSpacing / 2 : 0 }]}>
+                {title}
+              </Text>
             )}
           </>
         )}
-        {showLogo && !centerComponent && (
-          <View style={styles.logoContainer}>
-            <Image 
-              source={require('../../../assets/images/logo.png')} 
-              style={[styles.logoImage, {width: sizes.menuIconSize + 4, height: sizes.menuIconSize + 4}]}
-              resizeMode="contain"
+      </View>
+
+      {/* --- CENTER SECTION: Search Input OR Original Center Component --- */}
+      <View style={[styles.centerSectionContainer, { marginHorizontal: sizes.iconSpacing / 2 }]}>
+        {isSearchActive ? (
+          <>
+            <TextInput
+              ref={searchInputRef}
+              style={[
+                styles.searchInput, 
+                {
+                  color: colors.text.primary, 
+                  borderColor: colors.border, 
+                  backgroundColor: colors.inputBackground, // Use theme color for input background
+                  fontSize: sizes.titleSize > 16 ? sizes.titleSize - 2 : sizes.titleSize, // Slightly smaller font for input
+                }
+              ]}
+              placeholder="Search Adtip..."
+              placeholderTextColor={colors.text.secondary}
+              value={searchQuery}
+              onChangeText={handleSearchQueryChange}
+              onSubmitEditing={handleSearchSubmit}
+              returnKeyType="search"
+              autoFocus={true}
             />
-          </View>
-        )}
-        {title && !centerComponent && (
-          <Text 
-            numberOfLines={1}
-            style={[
-              styles.title, 
-              {
-                color: colors.text.primary,
-                fontSize: sizes.titleSize
-              }
-            ]}
-          >
-            {title}
-          </Text>
-        )}
-        {centerComponent && (
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.searchClearIcon}>
+                <Icon name="x" size={sizes.iconSize * 0.8} color={colors.text.secondary} />
+              </TouchableOpacity>
+            )}
+          </>
+        ) : centerComponent ? (
           <View style={styles.centerComponent}>{centerComponent}</View>
-        )}
-      </View>      <View style={styles.rightSection}>
-        {rightComponent ? (
-          rightComponent
         ) : (
-          <>            {/* Add TipShorts icon button */}
-            <TouchableOpacity
-              onPress={navigateToTipShorts}
-              style={[styles.iconButton, {marginLeft: sizes.iconSpacing}]}>
-              <Icon name="play-circle" size={sizes.iconSize} color={colors.text.secondary} />
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              onPress={navigateToSearch}
-              style={[styles.iconButton, {marginLeft: sizes.iconSpacing}]}>
-              <Icon name="search" size={sizes.iconSize} color={colors.text.secondary} />
-            </TouchableOpacity>
+          // This view ensures the center section takes up space if no specific center content
+          <View style={{flex: 1}} /> 
+        )}
+      </View>
+
+      {/* --- RIGHT SECTION --- */}
+      <View style={styles.rightSection}>
+        {rightComponent ? rightComponent : (
+          <>
+            {/* Custom Right Icon (e.g., refresh) - appears before search/close */}
+            {rightIcon && onRightIconPress && (
+              <TouchableOpacity
+                onPress={onRightIconPress}
+                style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}> {/* Adjusted spacing */}
+                <Icon name={rightIcon} size={sizes.iconSize} color={colors.text.secondary} />
+              </TouchableOpacity>
+            )}
+
+            {shouldShowTipShortsIconProp && (
+              <TouchableOpacity
+                onPress={navigateToTipShorts}
+                style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}> {/* Adjusted spacing */}
+                <Icon name="play-circle" size={sizes.iconSize} color={colors.text.secondary} />
+              </TouchableOpacity>
+            )}
+
+            {/* Search Icon / Close Search Icon */}
+            {isSearchActive ? (
+              <TouchableOpacity onPress={handleCloseSearch} style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}> {/* Adjusted spacing */}
+                <Icon name="x" size={sizes.iconSize} color={colors.text.primary} /> {/* Changed to primary for better visibility as a close button */}
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={handleSearchIconPress} style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}> {/* Adjusted spacing */}
+                <Icon name="search" size={sizes.iconSize} color={colors.text.secondary} />
+              </TouchableOpacity>
+            )}
             
             {showNotifications && (
               <TouchableOpacity
                 onPress={navigateToNotifications}
-                style={[styles.iconButton, {marginLeft: sizes.iconSpacing}]}>
+                style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}> {/* Adjusted spacing */}
                 <Icon name="bell" size={sizes.iconSize} color={colors.text.secondary} />
                 <View
                   style={[
                     styles.notificationBadge,
                     {
                       backgroundColor: colors.primary,
-                      width: sizes.iconSize * 0.3,
-                      height: sizes.iconSize * 0.3,
+                      width: sizes.iconSize * 0.3, height: sizes.iconSize * 0.3,
                       borderRadius: sizes.iconSize * 0.15,
-                      top: sizes.iconSize * 0.3,
-                      right: sizes.iconSize * 0.3,
+                      top: sizes.iconSize * 0.3, right: sizes.iconSize * 0.3,
                     },
                   ]}
                 />
               </TouchableOpacity>
             )}
             
-            {showWallet && screenWidth > 320 && (
+            {showWallet && ( // Simplified wallet icon display (amount was already removed)
               <TouchableOpacity
                 onPress={navigateToWallet}
-                style={[
-                  styles.walletButton,
-                  {
-                    borderColor: colors.borderLight,
-                    paddingHorizontal: sizes.iconSpacing - 2,
-                    paddingVertical: 3,
-                    marginLeft: sizes.iconSpacing,
-                    borderRadius: 16,
-                  },
-                ]}>
-                <Icon
-                  name="credit-card"
-                  size={sizes.walletIconSize}
-                  color={colors.primary}
-                  style={styles.walletIcon}
-                />
-                <Text
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                  style={[
-                    styles.walletAmount, 
-                    {
-                      color: colors.text.primary,
-                      fontSize: sizes.walletFontSize,
-                      maxWidth: sizes.maxWalletWidth
-                    }
-                  ]}
-                >
-                  ₹{displayAmount || '0.00'}
-                </Text>
-              </TouchableOpacity>
-            )}
-            
-            {/* For very small screens, show only wallet icon without amount */}
-            {showWallet && screenWidth <= 320 && (
-              <TouchableOpacity
-                onPress={navigateToWallet}
-                style={[styles.iconButton, {marginLeft: sizes.iconSpacing}]}>
+                style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}> {/* Adjusted spacing */}
                 <Icon name="credit-card" size={sizes.iconSize} color={colors.primary} />
               </TouchableOpacity>
             )}
@@ -248,21 +231,46 @@ const Header: React.FC<HeaderProps> = ({
   );
 };
 
-const styles = StyleSheet.create({  container: {
+const getResponsiveSizes = (screenWidth: number) => {
+  if (screenWidth < 360) {
+    return {
+      iconSize: 18, menuIconSize: 22, paddingHorizontal: 8, iconSpacing: 6,
+      titleSize: 15, walletFontSize: 12, walletIconSize: 12, maxWalletWidth: 50,
+    };
+  } else if (screenWidth < 480) {
+    return {
+      iconSize: 20, menuIconSize: 24, paddingHorizontal: 12, iconSpacing: 10,
+      titleSize: 16, walletFontSize: 13, walletIconSize: 14, maxWalletWidth: 60,
+    };
+  } else {
+    return {
+      iconSize: 22, menuIconSize: 26, paddingHorizontal: 16, iconSpacing: 14,
+      titleSize: 18, walletFontSize: 14, walletIconSize: 16, maxWalletWidth: 80,
+    };
+  }
+};
+
+const styles = StyleSheet.create({
+  container: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 8,
-    borderBottomWidth: 1,
-    // borderBottomColor handled in style prop for dark mode compatibility
+    borderBottomWidth: StyleSheet.hairlineWidth, // Use hairlineWidth for a thinner border
     width: '100%',
   },
   leftSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    // flexShrink: 1, // Allow shrinking if title is long
+    // marginRight: sizes.iconSpacing / 2, // Moved to inline style in JSX
   },
-  centerComponent: {
+  centerSectionContainer: {
+    flex: 1, // This is crucial for the search bar to take available space
+    flexDirection: 'row',
+    alignItems: 'center',
+    // marginHorizontal: sizes.iconSpacing / 2, // Moved to inline style in JSX
+  },
+  centerComponent: { // For the original centerComponent prop
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -270,31 +278,24 @@ const styles = StyleSheet.create({  container: {
   rightSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    flexShrink: 0,
+    // marginLeft: sizes.iconSpacing / 2, // Default from getResponsiveSizes might be too large
   },
   menuButton: {
     padding: 4,
-    marginRight: 8,
-  },
-  backButton: {
-    marginRight: 8,
+    marginRight: 8, // Space after menu icon
   },
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    // marginRight: 6, // Space after logo if title follows
   },
   logoImage: {
-    marginRight: 6,
     resizeMode: 'contain',
-  },
-  logoText: {
-    fontWeight: 'bold',
   },
   title: {
     fontWeight: 'bold',
-    flexShrink: 1,
-    marginRight: 4,
+    // marginLeft: actualShowLogo ? sizes.iconSpacing / 2 : 0, // Handled in JSX
+    flexShrink: 1, // Allow title to shrink if needed
   },
   iconButton: {
     padding: 6,
@@ -303,16 +304,23 @@ const styles = StyleSheet.create({  container: {
   notificationBadge: {
     position: 'absolute',
   },
-  walletButton: {
-    flexDirection: 'row',
+  // walletButton and walletIcon styles are not strictly needed if it's just an iconButton now
+  
+  // Styles for inline search (within centerSectionContainer)
+  searchInput: {
+    flex: 1,
+    height: 36, // Consistent height for the input bar
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 8 : 4, // Adjust vertical padding for centering text
+    borderRadius: 18, // Rounded edges
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  searchClearIcon: {
+    paddingLeft: 6, // Padding to the left of the 'x' icon
+    paddingRight: 2, // Minimal padding to the right
+    height: 36, // Match input height
+    justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-  },
-  walletIcon: {
-    marginRight: 3,
-  },
-  walletAmount: {
-    fontWeight: '600',
   },
 });
 

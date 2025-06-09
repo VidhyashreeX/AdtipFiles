@@ -68,6 +68,16 @@ interface PublicShot {
   total_channel_followers: number;
 }
 
+// Utility function to shuffle an array (add this at the top of the file or import from utils)
+function shuffleArray<T>(array: T[]): T[] {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+}
+
 const TipShorts = () => {
   const { colors } = useTheme();
   const navigation = useNavigation();
@@ -123,8 +133,8 @@ const TipShorts = () => {
   const fetchShorts = useCallback(async (reset = false) => {
     try {
       if (reset) setPage(1);
-      setLoading(reset);
-      setIsFetchingMore(!reset);
+      setLoading(reset); // Only set main loading true on reset
+      setIsFetchingMore(!reset); // Set fetching more true if not a reset
       setError(null);
 
       const userId = user?.id || '50816'; 
@@ -143,7 +153,7 @@ const TipShorts = () => {
           ? response.data.data
           : [];
 
-      const mappedShorts: ShortVideo[] = publicShots
+      let mappedShorts: ShortVideo[] = publicShots
         .map((shot: PublicShot) => ({
           id: shot.id?.toString() || Math.random().toString(),
           title: shot.name || 'Untitled Short',
@@ -179,7 +189,8 @@ const TipShorts = () => {
         .filter(short => short.videoUrl && short.videoUrl.startsWith('http'));
 
       if (reset) {
-        setShorts(mappedShorts);
+        // Shuffle shorts on refresh (reset)
+        setShorts(shuffleArray(mappedShorts));
       } else {
         setShorts(prev => {
           const existingIds = new Set(prev.map(s => s.id));
@@ -188,8 +199,10 @@ const TipShorts = () => {
         });
       }
       setHasMore(mappedShorts.length === PAGE_SIZE);
-      if (mappedShorts.length > 0) {
+      if (mappedShorts.length > 0 && !reset) { // Only increment page if not a reset and new shorts were fetched
         setPage(prev => prev + 1);
+      } else if (mappedShorts.length > 0 && reset) {
+        setPage(2); // After a reset, the next page to fetch is 2
       }
     } catch (fetchError: any) {
       console.error('Error fetching shorts:', fetchError.message, fetchError.stack);
@@ -199,7 +212,7 @@ const TipShorts = () => {
       setIsFetchingMore(false);
       setRefreshing(false);
     }
-  }, [page, user]);
+  }, [page, user, isGloballyMuted, isGloballyPlaying]); // Added isGloballyMuted and isGloballyPlaying if they influence fetching logic, otherwise remove
 
   useEffect(() => {
     fetchShorts(true);

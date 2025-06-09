@@ -83,7 +83,7 @@ const SupportScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Help & Support" showBackButton />
+      <Header title="Help & Support"/>
       
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Welcome Card */}

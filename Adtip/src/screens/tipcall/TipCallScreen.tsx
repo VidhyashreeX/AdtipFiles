@@ -1251,7 +1251,6 @@ const TipCallScreen: React.FC = () => {
     <View style={styles.container}>
       <Header
         title="Tip Call"
-        showBackButton={false}
         showLogo={true}
         showWallet={true}
       />

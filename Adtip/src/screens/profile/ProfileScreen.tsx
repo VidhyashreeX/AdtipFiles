@@ -453,7 +453,6 @@ const ProfileScreen: React.FC = () => {
       <Header
         title={isOwnProfile ? 'Profile' : user?.name || 'Profile'}
         showLogo={true}
-        showBackButton={!isOwnProfile}
         showNotifications={isOwnProfile || false}
       />
       <ScrollView

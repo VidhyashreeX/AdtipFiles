@@ -98,7 +98,7 @@ const SearchScreen: React.FC = () => {
   return (
     <SafeAreaView
       style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Search" showBackButton />
+      <Header title="Search"/>
 
       <View style={styles.content}>
         <View

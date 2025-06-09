@@ -204,7 +204,7 @@ const SettingsScreen: React.FC = () => {
     },  ];
   return (
     <SafeAreaView style={[styles.container, {backgroundColor: colors.background}]}> 
-      <Header title="Settings" showBackButton />
+      <Header title="Settings"/>
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{paddingTop: 16}}>
         {settingSections.map((section, sectionIdx) => {
           // Define section colors

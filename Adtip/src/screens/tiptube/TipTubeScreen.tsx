@@ -10,6 +10,8 @@ import {
   Dimensions,
   Modal,
   Pressable,
+  RefreshControl,
+  FlatList, // Import FlatList
 } from "react-native";
 import Video from "react-native-video"; // Import react-native-video
 import { useAuth } from "../../contexts/AuthContext"; // Assuming AuthContext works similarly
@@ -100,25 +102,42 @@ const marketplaceMenu = [
   { key: "PremiumContent", label: "Premium Content", icon: "" },
 ];
 
+// Utility function to shuffle an array (add this at the top of the file or import from utils)
+function shuffleArray<T>(array: T[]): T[] {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+}
+
 const TipTubeScreen = () => {
   const { isDarkMode, colors } = useTheme();
   const { contentPaddingBottom } = useTabNavigator();
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [videos, setVideos] = useState<Video[]>([]);
-  const [offset, setOffset] = useState(1); // Start with offset 1 for the first page
+  const [offset, setOffset] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [showPlayerModal, setShowPlayerModal] = useState(false);
   const [currentVideo, setCurrentVideo] = useState<Video | null>(null);
-  const [search, setSearch] = useState(""); // Assuming search might be implemented later
+  const [search, setSearch] = useState("");
   const [previewingVideoId, setPreviewingVideoId] = useState<number | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const { user } = useAuth();
   const navigation = useNavigation<any>();
 
+  // State for "Up Next" videos in the player modal
+  const [upNextVideos, setUpNextVideos] = useState<Video[]>([]);
+  const [upNextOffset, setUpNextOffset] = useState(1);
+  const [hasMoreUpNext, setHasMoreUpNext] = useState(true);
+  const [loadingUpNext, setLoadingUpNext] = useState(false);
+
   const styles = createStyles(colors, isDarkMode);
 
-  const transformVideoData = (apiVideo: any): Video => ({
+  const transformVideoData = useCallback((apiVideo: any): Video => ({
     id: apiVideo.id || 0,
     title: apiVideo.name || "",
     thumbnail: apiVideo.video_Thumbnail !== "undefined" ? apiVideo.video_Thumbnail : undefined,
@@ -131,113 +150,169 @@ const TipTubeScreen = () => {
     isVerified: false,
     channelId: apiVideo.video_channel || apiVideo.channelId || apiVideo.createdby || 0,
     price: apiVideo.price ? parseFloat(apiVideo.price) : undefined,
-  });
+  }), []);
 
   const fetchVideos = useCallback(
+    // ... (existing fetchVideos function remains largely the same)
     async (isReset: boolean = false) => {
-      // Prevent fetching if already loading (for scroll-triggered calls)
-      // For reset calls, we might want to allow it, but setLoading(true) will handle it.
-      if (loading && !isReset) {
-        console.log('[TipTubeScreen] Fetch videos: Already loading and not a reset. Skipping.');
+      if (loading && !isReset && !refreshing) {
         return;
       }
-
-      setLoading(true);
+      if (!isReset) {
+        setLoading(true);
+      }
       const pageToFetch = isReset ? 1 : offset;
-      console.log(`[TipTubeScreen] Fetching videos. Reset: ${isReset}, Page: ${pageToFetch}, Category: ${selectedCategory}`);
-
       try {
-        const userIdForApi = user?.id ? user.id : 0; // Use 0 or a specific public user ID for non-logged-in users
+        const userIdForApi = user?.id ? user.id : 0; 
         const categoryId = categoryToIdMap[selectedCategory] || 0;
-
-        const apiRes = await ApiService.getVideos(
-          userIdForApi,
-          categoryId,
-          pageToFetch
-        );
-
-        let newVideos: Video[] = [];
+        const apiRes = await ApiService.getVideos(userIdForApi, categoryId, pageToFetch);
+        let newVideosData: Video[] = [];
         if (apiRes && Array.isArray(apiRes.data)) {
-          newVideos = apiRes.data.map(transformVideoData);
-        } else {
-          console.warn(`[TipTubeScreen] API response data is not an array or apiRes is null/undefined for page ${pageToFetch}`, apiRes);
+          newVideosData = apiRes.data.map(transformVideoData);
         }
-        
         if (isReset) {
-          setVideos(newVideos);
-          setOffset(1); // Ensure offset is reset to 1 for the next potential scroll load (page 2)
+          setVideos(shuffleArray(newVideosData));
+          setOffset(2);
         } else {
-          setVideos((prevVideos) => [...prevVideos, ...newVideos]);
+          setVideos((prevVideos) => [...prevVideos, ...newVideosData]);
+          if (newVideosData.length > 0) {
+            setOffset((prevOffset) => prevOffset + 1);
+          }
         }
-
-        // Determine if there's more data.
-        // This logic assumes that if the API returns an empty array for `newVideos`,
-        // or fewer items than a typical page size (if known), there's no more data.
-        // If your API returns a specific `hasMore` flag or `totalCount`, use that for a more robust check.
-        if (newVideos.length === 0) {
-          setHasMore(false);
-          console.log(`[TipTubeScreen] No more videos to load. Page fetched: ${pageToFetch}, Videos received: 0`);
-        } else {
-          setHasMore(true); // Assume more if we received videos
-        }
+        const nextPageHasData = newVideosData.length > 0; // Simplified check
+        setHasMore(nextPageHasData);
 
       } catch (err) {
         console.error("[TipTubeScreen] Failed to fetch videos:", err);
-        setHasMore(false); // Stop trying on error
+        setHasMore(false); 
       } finally {
-        setLoading(false);
+        if (!isReset) {
+          setLoading(false);
+        }
       }
     },
-    // `loading` is removed from deps to prevent re-creating `fetchVideos` when it changes.
-    // `offset` is included because `pageToFetch` logic depends on it when `isReset` is false.
-    [selectedCategory, offset, user, transformVideoData] // Keep `transformVideoData` if it's stable or memoized
+    [selectedCategory, offset, user, transformVideoData, loading, refreshing] 
   );
 
-  // Effect for initial load and when category changes
-  useEffect(() => {
-    console.log(`[TipTubeScreen] Category changed to: ${selectedCategory}. Resetting and fetching videos.`);
-    setVideos([]); // Clear videos immediately for better UX
-    setHasMore(true); // Assume there's more data for the new category
-    // `fetchVideos(true)` will also internally call `setOffset(1)`
-    fetchVideos(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategory, search]); // `fetchVideos` is not a direct dependency here to avoid potential loops
-                                 // if its own dependencies were not managed carefully.
-                                 // The call `fetchVideos(true)` uses the latest `selectedCategory` from closure.
+  const fetchUpNextVideos = useCallback(async (isReset: boolean = false) => {
+    if (loadingUpNext && !isReset) {
+        console.log('[TipTubeScreen] Fetch Up Next: Already loading and not a reset. Skipping.');
+        return;
+    }
+    if (!currentVideo && !isReset) { // Allow reset even if currentVideo is briefly null during transition
+        console.log('[TipTubeScreen] Fetch Up Next: No current video. Skipping.');
+        return;
+    }
 
-  // Effect for handling infinite scroll (pagination)
+    setLoadingUpNext(true);
+    const pageToFetch = isReset ? 1 : upNextOffset;
+    console.log(`[TipTubeScreen] Fetching Up Next videos. Reset: ${isReset}, Page: ${pageToFetch}`);
+
+    try {
+        const userIdForApi = user?.id ? user.id : 0;
+        // For "Up Next", fetch from "All" or a specific related category. Here, using "All".
+        const categoryIdForUpNext = 0; 
+
+        const apiRes = await ApiService.getVideos(userIdForApi, categoryIdForUpNext, pageToFetch);
+        let newVideosData: Video[] = [];
+
+        if (apiRes && Array.isArray(apiRes.data)) {
+            newVideosData = apiRes.data
+                .map(transformVideoData)
+                // Ensure the currently playing video is not in the "Up Next" list immediately
+                .filter(v => currentVideo ? v.id !== currentVideo.id : true);
+        } else {
+            console.warn(`[TipTubeScreen] Up Next API response data is not an array or apiRes is null for page ${pageToFetch}`, apiRes);
+        }
+        
+        if (isReset) {
+            setUpNextVideos(newVideosData);
+            setUpNextOffset(2); 
+        } else {
+            // Filter out duplicates that might already be in upNextVideos if API returns overlapping results
+            const uniqueNewVideos = newVideosData.filter(
+              (newVid) => !upNextVideos.find((existingVid) => existingVid.id === newVid.id) && (currentVideo ? newVid.id !== currentVideo.id : true)
+            );
+            setUpNextVideos(prevVideos => [...prevVideos, ...uniqueNewVideos]);
+            if (uniqueNewVideos.length > 0) {
+                setUpNextOffset(prevOffset => prevOffset + 1);
+            }
+        }
+        setHasMoreUpNext(newVideosData.length > 0); // If API returns empty, assume no more for now
+
+    } catch (err) {
+        console.error("[TipTubeScreen] Failed to fetch Up Next videos:", err);
+        setHasMoreUpNext(false); 
+    } finally {
+        setLoadingUpNext(false);
+    }
+  }, [currentVideo, upNextOffset, user, transformVideoData, loadingUpNext, upNextVideos]);
+
+
+  const handleRefresh = useCallback(async () => {
+    // ... (existing handleRefresh function)
+    console.log('[TipTubeScreen] Refresh triggered.');
+    setRefreshing(true);
+    await fetchVideos(true); 
+    setRefreshing(false);
+  }, [fetchVideos]);
+
   useEffect(() => {
-    // This effect triggers when `offset` is changed by `handleScroll` (for pages > 1)
-    if (offset > 1 && hasMore && !loading) { // Ensure not already loading
-      console.log(`[TipTubeScreen] Offset > 1 detected: ${offset}. Fetching next page.`);
-      fetchVideos(false); // Fetch next page, not a reset
+    // ... (existing useEffect for category change)
+    console.log(`[TipTubeScreen] Category changed to: ${selectedCategory}. Resetting and fetching videos.`);
+    setVideos([]); 
+    setHasMore(true); 
+    setOffset(1); 
+    fetchVideos(true); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategory, search]); 
+
+  useEffect(() => {
+    // ... (existing useEffect for infinite scroll)
+    if (offset > 1 && hasMore && !loading && !refreshing) { 
+      fetchVideos(false); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [offset, hasMore]); // `fetchVideos` is also not a direct dependency here for simplicity,
-                         // as `fetchVideos` itself depends on `offset`.
-                         // The `!loading` check is added here as an extra safeguard.
+  }, [offset, hasMore, loading, refreshing]); 
+
+  // Effect to load/reset "Up Next" videos when the player modal opens or currentVideo changes
+  useEffect(() => {
+    if (showPlayerModal && currentVideo) {
+        console.log("[TipTubeScreen] Player modal opened or current video changed. Fetching initial Up Next videos for video ID:", currentVideo.id);
+        // Resetting states for the "Up Next" list
+        setUpNextVideos([]);
+        setHasMoreUpNext(true);
+        setUpNextOffset(1); // Start from page 1 for the new "Up Next" list
+        // setLoadingUpNext(false); // Ensure loading is false before triggering fetch
+        // Directly call fetchUpNextVideos with reset true
+        // Wrapped in a timeout to allow state to clear if needed, though usually not necessary with useCallback
+        setTimeout(() => fetchUpNextVideos(true), 0);
+    } else if (!showPlayerModal) {
+        // Optionally clear upNextVideos when modal closes to save memory
+        // setUpNextVideos([]); 
+    }
+  // fetchUpNextVideos is a dependency, ensure it's stable or correctly handles its own deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps 
+  }, [showPlayerModal, currentVideo]); // Removed fetchUpNextVideos from here, will call it directly.
 
   const handleScroll = useCallback(
+    // ... (existing handleScroll function)
     ({ nativeEvent }: { nativeEvent: any }) => {
       const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-      const paddingToBottom = 250; // Threshold from bottom to trigger load. Adjust as needed.
-
-      // Check if scrolled to bottom, not currently loading, and there's more data
+      const paddingToBottom = 250; 
       if (
-        contentOffset.y > 0 && // User has scrolled at least a bit
-        contentSize.height > layoutMeasurement.height && // Content is actually scrollable
+        contentOffset.y > 0 &&
+        contentSize.height > layoutMeasurement.height &&
         layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom &&
         !loading &&
         hasMore
       ) {
-        console.log('[TipTubeScreen] Scroll near bottom detected. Incrementing offset.');
         setOffset((prevOffset) => prevOffset + 1);
       }
     },
-    [loading, hasMore] // Dependencies for `handleScroll`
+    [loading, hasMore]
   );
 
-  // Video player modal logic
   const openPlayer = (video: Video) => {
     setCurrentVideo(video);
     setShowPlayerModal(true);
@@ -247,8 +322,8 @@ const TipTubeScreen = () => {
     setCurrentVideo(null);
   };
 
-  // Video card rendering with press-in/press-out preview
   const renderVideoCard = (video: Video) => (
+    // ... (existing renderVideoCard function)
     <TouchableOpacity
       key={video.id}
       style={styles.videoCard}
@@ -257,13 +332,11 @@ const TipTubeScreen = () => {
       onPressOut={() => setPreviewingVideoId(null)}
     >
       <View style={styles.thumbnailContainer}>
-        {/* Price badge if paid */}
         {video.price && video.price > 0 && (
           <View style={styles.priceBadge}>
             <Text style={styles.priceBadgeText}>₹{video.price}</Text>
           </View>
         )}
-        {/* Show video on active press, else show thumbnail */}
         {previewingVideoId === video.id && video.videoUrl ? (
           <Video
             source={{ uri: video.videoUrl }}
@@ -295,7 +368,10 @@ const TipTubeScreen = () => {
           />
           <View style={styles.creatorText}>
             <TouchableOpacity
-              onPress={() => navigation.navigate("Channel", { channelId: video.channelId })}
+              onPress={() => {
+                closePlayer(); // Close modal before navigating
+                navigation.navigate("Channel", { channelId: video.channelId });
+              }}
             >
               <Text style={styles.creatorName} numberOfLines={1}>
                 {video.creatorName}
@@ -313,16 +389,49 @@ const TipTubeScreen = () => {
     </TouchableOpacity>
   );
 
+  const renderRelatedVideoCard = ({ item }: { item: Video }) => (
+    <TouchableOpacity
+        style={styles.relatedVideoCard}
+        onPress={() => {
+            console.log(`[TipTubeScreen] Up Next video pressed: ${item.title}, ID: ${item.id}`);
+            setCurrentVideo(item); // This will trigger the useEffect to reload Up Next for the new video
+        }}
+    >
+        <Image
+            source={{ uri: item.thumbnail || "https://via.placeholder.com/120x67" }}
+            style={styles.relatedVideoThumbnail}
+            resizeMode="cover"
+        />
+        <View style={styles.relatedVideoContent}>
+            <Text style={styles.relatedVideoTitle} numberOfLines={2}>
+                {item.title}
+            </Text>
+            <Text style={styles.relatedVideoCreator}>{item.creatorName}</Text>
+            <Text style={styles.relatedVideoStats}>
+                {item.views.toLocaleString()} views • {item.posted}
+            </Text>
+        </View>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.container}>
-      <Header title="TipTube" showLogo={true} />
+      {/* ... (Header and main ScrollView with categories and video grid) ... */}
+      <Header title="TipTube" showTipShortsIcon />
       <ScrollView
         ref={scrollViewRef}
         onScroll={handleScroll}
-        scrollEventThrottle={16} // Standard throttle value
+        scrollEventThrottle={16} 
         contentContainerStyle={[styles.scrollViewContent, {paddingBottom: contentPaddingBottom}]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
       >
-        {/* Category Filter (You'd typically have a horizontal scroll view here) */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroller}>
           {categories.map((cat) => (
             <TouchableOpacity
@@ -343,26 +452,23 @@ const TipTubeScreen = () => {
           ))}
         </ScrollView>
 
-        {/* Video Grid */}
         <View style={styles.videoGrid}>
           {videos.map(renderVideoCard)}
         </View>
 
-        {loading && videos.length > 0 && ( // Show loading indicator at the bottom only if appending
+        {loading && videos.length > 0 && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={[styles.loadingText, {color: colors.text.secondary}]}>Loading more...</Text>
           </View>
         )}
-
-        {loading && videos.length === 0 && ( // Show centered loader for initial category load
-             <View style={[styles.loadingContainer, {flex: 1, justifyContent: 'center'}]}>
+        {loading && videos.length === 0 && !refreshing && (
+             <View style={[styles.loadingContainer, {flex: 1, justifyContent: 'center', paddingTop: 50}]}>
                 <ActivityIndicator size="large" color={colors.primary} />
                 <Text style={[styles.loadingText, {color: colors.text.secondary}]}>Loading videos...</Text>
             </View>
         )}
-
-        {!loading && !hasMore && videos.length === 0 && (
+        {!loading && !hasMore && videos.length === 0 && !refreshing && (
           <View style={styles.noVideosContainer}>
             <Text style={[styles.noVideosText, {color: colors.text.secondary}]}>No videos found for this category.</Text>
           </View>
@@ -373,7 +479,7 @@ const TipTubeScreen = () => {
       <Modal
         visible={showPlayerModal}
         animationType="slide"
-        presentationStyle="fullScreen"
+        presentationStyle="fullScreen" // Consider "overFullScreen" for more control if needed
         onRequestClose={closePlayer}
       >
         <View style={styles.playerModalContainer}>
@@ -382,8 +488,8 @@ const TipTubeScreen = () => {
               <Video
                 source={{ uri: currentVideo.videoUrl }}
                 style={styles.mainVideoPlayer}
-                controls={true} // react-native-video provides its own controls
-                paused={!showPlayerModal} // Pause when modal is not visible
+                controls={true}
+                paused={!showPlayerModal}
                 resizeMode="contain"
                 onFullscreenPlayerWillPresent={() => console.log('Fullscreen entered')}
                 onFullscreenPlayerDidDismiss={() => console.log('Fullscreen exited')}
@@ -397,7 +503,10 @@ const TipTubeScreen = () => {
                   />
                   <View style={styles.mainVideoCreatorText}>
                     <TouchableOpacity
-                      onPress={() => navigation.navigate("Channel", { channelId: currentVideo.channelId })}
+                      onPress={() => {
+                        closePlayer(); // Close modal before navigating
+                        navigation.navigate("Channel", { channelId: currentVideo.channelId });
+                      }}
                     >
                       <Text style={styles.mainVideoCreatorName}>{currentVideo.creatorName}</Text>
                     </TouchableOpacity>
@@ -426,31 +535,31 @@ const TipTubeScreen = () => {
                 </TouchableOpacity>
               </View>
 
-              {/* Relevant Videos Sidebar (adapted for RN layout, perhaps a vertical list below main video on small screens or a separate section) */}
+              {/* Up Next Section with FlatList */}
               <View style={styles.relatedVideosSection}>
                 <Text style={styles.relatedVideosTitle}>Up Next</Text>
-                {videos.filter(v => v.id !== currentVideo.id).map((video, idx) => (
-                  <TouchableOpacity
-                    key={video.id}
-                    style={styles.relatedVideoCard}
-                    onPress={() => setCurrentVideo(video)} // Change current video in modal
-                  >
-                    <Image
-                      source={{ uri: video.thumbnail || "https://via.placeholder.com/120x67" }}
-                      style={styles.relatedVideoThumbnail}
-                      resizeMode="cover"
-                    />
-                    <View style={styles.relatedVideoContent}>
-                      <Text style={styles.relatedVideoTitle} numberOfLines={2}>
-                        {video.title}
-                      </Text>
-                      <Text style={styles.relatedVideoCreator}>{video.creatorName}</Text>
-                      <Text style={styles.relatedVideoStats}>
-                        {video.views.toLocaleString()} views • {video.posted}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
+                <FlatList
+                  data={upNextVideos}
+                  renderItem={renderRelatedVideoCard}
+                  keyExtractor={(item, index) => `${item.id}-${index}`} // Ensure unique keys
+                  onEndReached={() => {
+                    if (hasMoreUpNext && !loadingUpNext) {
+                      console.log("[TipTubeScreen] Reached end of Up Next list. Fetching more.");
+                      fetchUpNextVideos(false); // Fetch next page, not a reset
+                    }
+                  }}
+                  onEndReachedThreshold={0.5} // Trigger when 50% of the last item is visible
+                  ListFooterComponent={
+                    loadingUpNext ? (
+                      <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
+                    ) : null
+                  }
+                  ListEmptyComponent={
+                    !loadingUpNext && upNextVideos.length === 0 ? (
+                        <Text style={[styles.noVideosText, {color: colors.text.secondary, textAlign: 'center', paddingVertical: 20}]}>No more videos up next.</Text>
+                    ) : null
+                  }
+                />
               </View>
             </>
           )}
@@ -614,6 +723,9 @@ const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
   playerModalContainer: {
     flex: 1,
     backgroundColor: colors.background,
+    // If mainVideoInfo and relatedVideosSection are in a column, this container needs to manage their layout.
+    // If relatedVideosSection is intended to scroll independently of mainVideoInfo,
+    // ensure mainVideoInfo doesn't take up all the space.
   },
   mainVideoPlayer: {
     width: "100%",
@@ -624,6 +736,7 @@ const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
+    // This section should not have flex: 1 if relatedVideosSection is below it and needs to scroll
   },
   mainVideoTitle: {
     fontSize: 20, // text-xl
@@ -697,8 +810,9 @@ const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
     fontWeight: "500",
   },
   relatedVideosSection: {
-    flex: 1, // Take remaining space in column layout
-    padding: 16,
+    flex: 1, // This allows the FlatList to take remaining space and scroll
+    paddingHorizontal: 16, // Add horizontal padding if not already there
+    paddingTop: 8, // Some padding at the top
   },
   relatedVideosTitle: {
     fontSize: 18,
@@ -708,38 +822,35 @@ const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
   },
   relatedVideoCard: {
     flexDirection: "row",
-    backgroundColor: colors.card,
-    borderRadius: 8, // rounded-lg
-    shadowColor: isDarkMode ? "#000" : "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: isDarkMode ? 0.3 : 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-    marginBottom: 12, // gap-3
-    overflow: "hidden",
+    backgroundColor: colors.card, // Or transparent if you want it to blend
+    borderRadius: 8,
+    marginBottom: 12,
+    overflow: "hidden", // If using shadows or specific borders
   },
   relatedVideoThumbnail: {
-    width: 144, // w-36
-    height: 80, // h-20
+    width: 120, // Adjust as needed
+    height: 67, // Maintain 16:9 or desired aspect ratio
     flexShrink: 0,
+    backgroundColor: colors.surface, // Placeholder color
   },
   relatedVideoContent: {
     flex: 1,
-    padding: 8, // py-2 pr-2
-    justifyContent: "space-between",
+    padding: 8,
+    justifyContent: "center", // Or 'space-between'
   },
   relatedVideoTitle: {
-    fontSize: 14, // text-sm
+    fontSize: 14,
     fontWeight: "600",
     color: colors.text.primary,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   relatedVideoCreator: {
-    fontSize: 12, // text-xs
+    fontSize: 12,
     color: colors.text.secondary,
+    marginBottom: 1,
   },
   relatedVideoStats: {
-    fontSize: 10, // text-xs
+    fontSize: 10,
     color: colors.text.tertiary,
   },
 });

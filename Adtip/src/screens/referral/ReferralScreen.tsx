@@ -240,7 +240,7 @@ const ReferralScreen: React.FC = () => {
   return (
     <SafeAreaView
       style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Referrals" showBackButton />
+      <Header title="Referrals"/>
 
       <FlatList
         data={activities}

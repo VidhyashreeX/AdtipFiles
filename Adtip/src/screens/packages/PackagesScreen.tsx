@@ -38,7 +38,7 @@ const PackagesScreen = () => {
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Header title="Premium Plans" showBackButton />
+        <Header title="Premium Plans"/>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -46,7 +46,7 @@ const PackagesScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header title="Premium Plans" showBackButton />
+      <Header title="Premium Plans"/>
       <ScrollView contentContainerStyle={styles.contentContainer}>
         {packages.map((pkg) => (
           <View

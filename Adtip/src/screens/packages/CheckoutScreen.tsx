@@ -81,7 +81,7 @@ const CheckoutScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Payment Options" showBackButton />
+      <Header title="Payment Options"/>
 
       <ScrollView contentContainerStyle={styles.contentContainer}>
         {/* Available Offers */}

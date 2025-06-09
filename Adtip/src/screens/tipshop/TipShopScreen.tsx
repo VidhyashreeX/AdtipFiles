@@ -306,7 +306,7 @@ const TipShopScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="TipShop" showBackButton={false} showLogo={false} />
+      <Header title="TipShop" showLogo={false} />
 
       <View style={[styles.searchBar, {backgroundColor: colors.gray[100]}]}>
         <TouchableOpacity

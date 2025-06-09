@@ -159,7 +159,7 @@ const TrackOrderScreen: React.FC = () => {
   if (loading) {
     return (
       <View style={[styles.container, {backgroundColor: colors.background}]}>
-        <Header title="Track Order" showBackButton />
+        <Header title="Track Order"/>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -170,7 +170,7 @@ const TrackOrderScreen: React.FC = () => {
   if (!orderInfo) {
     return (
       <View style={[styles.container, {backgroundColor: colors.background}]}>
-        <Header title="Track Order" showBackButton />
+        <Header title="Track Order"/>
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, {color: colors.text.secondary}]}>
             Order not found
@@ -182,7 +182,7 @@ const TrackOrderScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Track Order" showBackButton />
+      <Header title="Track Order"/>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Order Header */}

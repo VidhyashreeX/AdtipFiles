@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useCallback} from 'react'; // Added useCallback
 import {StyleSheet, View, TouchableOpacity, Platform} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {BlurView} from '@react-native-community/blur';
@@ -40,7 +40,6 @@ const CreateContentButton = () => {
 
   return (
     <>
-      {/* Added wrapper View for proper centering */}
       <View style={styles.createButtonContainer}>
         <TouchableOpacity
           activeOpacity={0.8}
@@ -50,6 +49,7 @@ const CreateContentButton = () => {
         </TouchableOpacity>
       </View>
 
+      {/* Ensure CreateContentModal is correctly rendered using the state */}
       {modalVisible && (
         <CreateContentModal visible={modalVisible} onClose={handleCloseModal} />
       )}
@@ -64,14 +64,16 @@ const TabNavigator = () => {
   const {colors, isDarkMode} = useTheme();
   const insets = useSafeAreaInsets();
 
-  // Wrap screen components with wallet balance
   const EnhancedHomeScreen = withWalletBalance(HomeScreen);
   const EnhancedTipTubeScreen = withWalletBalance(TipTubeScreen);
   const EnhancedTipCallScreen = withWalletBalance(TipCallScreen);
   const EnhancedProfileScreen = withWalletBalance(ProfileScreen);
 
-  // Calculate the tab bar height (standard height + bottom insets, capped at a reasonable value)
   const tabBarHeight = 60 + Math.min(insets.bottom, 20);
+
+  // Memoize the function that renders the CreateContentButton
+  // This prevents CreateContentButton from re-instantiating on every TabNavigator re-render
+  const renderCreateButton = useCallback(() => <CreateContentButton />, []);
 
   return (
     <TabNavigatorProvider>
@@ -86,7 +88,7 @@ const TabNavigator = () => {
             elevation: 0,
             height: tabBarHeight,
             backgroundColor: 'transparent',
-            marginBottom: 0, // Remove margin to make it flush with bottom
+            marginBottom: 0, 
           },
           tabBarBackground: () =>
             Platform.OS === 'ios' ? (
@@ -101,14 +103,13 @@ const TabNavigator = () => {
                   StyleSheet.absoluteFill,
                   {
                     backgroundColor: isDarkMode
-                      ? colors.card + 'F0' // Semi-transparent card color in dark mode
-                      : colors.white + 'F0', // Semi-transparent white in light mode
+                      ? colors.card + 'F0' 
+                      : colors.white + 'F0', 
                   },
                 ]}
               />
             ),
           tabBarItemStyle: {
-            // Add padding to properly align items with the increased height
             paddingBottom: Math.min(insets.bottom, 10),
           },
         }}>
@@ -132,15 +133,14 @@ const TabNavigator = () => {
         />
         <Tab.Screen
           name="CreateContent"
-          component={HomeScreen} // This is a dummy component, we're using custom tab bar button
+          component={HomeScreen} // Dummy component, actual action is via tabBarButton
           options={{
-            tabBarButton: () => <CreateContentButton />,
+            tabBarButton: renderCreateButton, // Use the memoized function
             tabBarLabel: '',
           }}
           listeners={{
             tabPress: e => {
-              // Prevent default action
-              e.preventDefault();
+              e.preventDefault(); // Prevent navigation
             },
           }}
         />
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 5, // Reduced bottom margin to position it better
+    marginBottom: 5, 
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.2,
@@ -187,7 +187,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    // Add any additional styling if needed
   },
 });
 

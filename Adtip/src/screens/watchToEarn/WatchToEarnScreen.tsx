@@ -16,7 +16,7 @@ const WatchToEarnScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Watch to Earn" showBackButton />
+      <Header title="Watch to Earn"/>
       <ScrollView 
         style={styles.content} 
         showsVerticalScrollIndicator={false}

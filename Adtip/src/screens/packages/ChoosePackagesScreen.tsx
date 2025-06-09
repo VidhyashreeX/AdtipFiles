@@ -87,7 +87,7 @@ const ChoosePackagesScreen: React.FC = () => {
   if (!packageData) {
     return (
       <View style={[styles.container, {backgroundColor: colors.background}]}>
-        <Header title="Package Options" showBackButton />
+        <Header title="Package Options"/>
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, {color: colors.text.secondary}]}>
             Package information not found
@@ -99,7 +99,7 @@ const ChoosePackagesScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Package Options" showBackButton />
+      <Header title="Package Options"/>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Package Summary */}

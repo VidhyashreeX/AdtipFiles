@@ -289,7 +289,7 @@ const AdPassbookScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header title="My Ad Passbook" showBackButton />
+      <Header title="My Ad Passbook" />
       <ScrollView 
         style={styles.content} 
         showsVerticalScrollIndicator={false}

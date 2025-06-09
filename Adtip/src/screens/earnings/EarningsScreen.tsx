@@ -100,7 +100,7 @@ const EarningsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Earnings" showBackButton />
+      <Header title="Earnings"/>
       
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Earnings Card */}

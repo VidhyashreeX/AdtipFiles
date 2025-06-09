@@ -93,7 +93,7 @@ const CreateCampaignScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header title="Create Campaign" showBackButton />
+      <Header title="Create Campaign"/>
       
       <ScrollView 
         style={styles.content} 

@@ -30,7 +30,7 @@ import LastSeenService from '../../services/LastSeenService';
 
 // Context
 import {useTheme} from '../../contexts/ThemeContext';
-import {useAuth} from '../../contexts/AuthContext';
+import {useAuth} from '../../contexts/AuthContext'; // Make sure AuthContext exports refreshUserData
 import {useTabNavigator} from '../../contexts/TabNavigatorContext';
 
 // Constants
@@ -149,10 +149,21 @@ const CategoriesRow: React.FC<CategoriesRowProps> = ({
   );
 };
 
+// Utility function to shuffle an array (add this at the top of the file or import from utils)
+function shuffleArray<T>(array: T[]): T[] {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+}
+
 const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
   // Hooks
   const {colors} = useTheme();
-  const {user} = useAuth();
+  // Destructure refreshUserData from useAuth
+  const {user, refreshUserData} = useAuth(); 
   const navigation = useNavigation<NavigationProps>();
   const {contentPaddingBottom} = useTabNavigator();
   
@@ -175,7 +186,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
     {id: '6', name: 'Fashion'},
     {id: '7', name: 'Business'},
     {id: '8', name: 'Sports'},
-  ]);  const [loading, setLoading] = useState({
+  ]);
+  
+  const [loading, setLoading] = useState({
     stories: true,
     categories: false,
     posts: false, // Changed from true to false so fetchPosts will run on initial render
@@ -295,7 +308,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
       };
       const result = await ApiService.listPosts(requestData);
       if (result?.data && Array.isArray(result.data)) {
-        const formattedPosts = result.data.map((rawPost: any) => ({
+        let formattedPosts = result.data.map((rawPost: any) => ({
           id: rawPost.id,
           user_id: rawPost.user_id,
           title: rawPost.title || '',
@@ -310,13 +323,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
           created_at: rawPost.created_at || new Date().toISOString(),
           is_premium: !!rawPost.is_premium,
           is_liked: !!rawPost.is_liked,
-          last_active: rawPost.last_active || null, // Add this line
+          last_active: rawPost.last_active || null,
         }));
+
         if (result.pagination) {
           setPagination(result.pagination);
         } else if (loadMore) {
           setPagination(prev => ({...prev, current_page: page}));
         }
+
         if (loadMore) {
           setPosts(prevPosts => {
             const existingIds = new Set(prevPosts.map(post => post.id));
@@ -324,8 +339,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
             return [...prevPosts, ...newPosts];
           });
         } else {
-          setPosts(formattedPosts);
+          // Shuffle posts on initial load or refresh
+          setPosts(shuffleArray(formattedPosts));
         }
+
         const newLikedPosts: {[key: number]: boolean} = {};
         formattedPosts.forEach((post: Post) => {
           if (post.is_liked) {
@@ -351,13 +368,29 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
     }
   };
 
-  // Handlers
   const handleRefresh = async () => {
     setRefreshing(true);
-    setError(null);
-    await fetchPosts(1, false);
-    await fetchWalletAmount();
-    setRefreshing(false);
+    setError(null); 
+
+    try {
+      if (user && typeof refreshUserData === 'function') {
+        await refreshUserData();
+      }
+      setPagination({current_page: 1, total_page: 1, total_count: 0});
+      // setPosts([]); // Clearing posts is now handled by fetchPosts before setting shuffled data
+      // setStories([]); // Stories will update based on shuffled posts
+
+      await Promise.all([
+        fetchWalletAmount(), 
+        fetchPosts(1, false), // This will now fetch and shuffle
+      ]);
+      
+    } catch (err) {
+      console.error('Error during refresh:', err);
+      setError('Failed to refresh content. Please try again.');
+    } finally {
+      setRefreshing(false); 
+    }
   };
   const handleLoadMore = () => {
     // Prevent multiple simultaneous requests or unnecessary requests
@@ -611,30 +644,32 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
         showLogo={true}
         showWallet={true}
         walletAmount={walletBalance ? walletBalance.toString() : undefined}
-      />      <FlatList
+      />
+      <FlatList
         data={posts}
         renderItem={renderPostItem}
         keyExtractor={(item, index) => `post-${item.id}-${index}`}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.4} // Trigger at 40% from the end
         ListFooterComponent={renderFooter}
+        ListHeaderComponent={renderListHeader}
+        ListEmptyComponent={renderListEmpty} // Ensure this handles the refreshing state appropriately if needed
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[colors.primary]} // For Android
+            tintColor={colors.primary} // For iOS
+          />
+        }
         showsVerticalScrollIndicator={false}
         initialNumToRender={5}
         maxToRenderPerBatch={10}
         windowSize={21}
         updateCellsBatchingPeriod={50}
         removeClippedSubviews={Platform.OS === 'android'}
-        ListHeaderComponent={renderListHeader}
         viewabilityConfig={viewabilityConfig}
         onViewableItemsChanged={onViewableItemsChanged}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        }        ListEmptyComponent={renderListEmpty}
         contentContainerStyle={[styles.postsContainerStyle, {paddingBottom: contentPaddingBottom}]}
         maintainVisibleContentPosition={{
           minIndexForVisible: 0,

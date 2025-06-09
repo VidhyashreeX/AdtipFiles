@@ -113,7 +113,7 @@ const AnalyticsScreen: React.FC = () => {
   if (loading) {
     return (
       <View style={[styles.container, {backgroundColor: colors.background}]}>
-        <Header title="Analytics" showBackButton />
+        <Header title="Analytics"/>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -123,7 +123,7 @@ const AnalyticsScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Analytics" showBackButton />
+      <Header title="Analytics"/>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Period Selector */}

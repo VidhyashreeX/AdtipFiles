@@ -9,6 +9,8 @@ import {
   SafeAreaView,
   StatusBar,
   Animated,
+  Platform,
+  Dimensions, // Added Dimensions
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -21,174 +23,181 @@ interface CreateContentModalProps {
   onClose: () => void;
 }
 
+const screenHeight = Dimensions.get('window').height; // Get screen height for animation
+
 const CreateContentModal: React.FC<CreateContentModalProps> = ({
-  visible,
+  visible: propVisible, // Renamed for clarity within this component
   onClose,
 }) => {
   const {colors} = useTheme();
   const navigation = useNavigation();
-  const [modalVisible, setModalVisible] = React.useState(visible);
+  const [isContentMounted, setIsContentMounted] = React.useState(false);
   const slideAnimation = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
-    if (visible) {
-      setModalVisible(true);
+    if (propVisible) {
+      setIsContentMounted(true);
       Animated.timing(slideAnimation, {
         toValue: 1,
         duration: 300,
         useNativeDriver: true,
       }).start();
     } else {
-      Animated.timing(slideAnimation, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => {
-        setModalVisible(false);
-      });
+      if (isContentMounted) {
+        Animated.timing(slideAnimation, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start(() => {
+          setIsContentMounted(false);
+        });
+      }
     }
-  }, [visible, slideAnimation]);
+  }, [propVisible, slideAnimation, isContentMounted]);
 
-  const handleCloseModal = () => {
-    Animated.timing(slideAnimation, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      setModalVisible(false);
-      onClose();
-    });
+  const handleCloseModalWithAnimation = () => {
+    onClose();
   };
 
-  const handleCreatePost = () => {
-    setModalVisible(false);
-    navigation.navigate('CreatePost' as never);
+  const createNavigationHandler = (screenName: string) => () => {
+    onClose();
+    navigation.navigate(screenName as never);
   };
 
-  const handleUploadVideo = () => {
-    setModalVisible(false);
-    navigation.navigate('TipTubeUpload' as never);
-  };
+  const handleCreatePost = createNavigationHandler('CreatePost');
+  const handleUploadVideo = createNavigationHandler('TipTubeUpload');
+  const handleCreateShort = createNavigationHandler('TipShortsUpload');
+  const handleStartStream = createNavigationHandler('StartStream');
 
-  const handleCreateShort = () => {
-    setModalVisible(false);
-    navigation.navigate('TipShortsUpload' as never);
-  };
-
-  const handleStartStream = () => {
-    setModalVisible(false);
-    navigation.navigate('StartStream' as never);
-  };
-  // Calculate transforms for animation
   const translateY = slideAnimation.interpolate({
     inputRange: [0, 1],
-    outputRange: [600, 0],
+    // Corrected outputRange:
+    // 0 (initial state, off-screen) -> screenHeight
+    // 1 (final state, on-screen) -> 0
+    outputRange: [screenHeight, 0], // Modal slides up from the bottom
   });
 
-  if (!modalVisible) {
-    return null;
+  if (!isContentMounted && !propVisible) {
+      return null;
   }
 
   return (
     <Modal
       transparent={true}
-      visible={modalVisible}
-      onRequestClose={handleCloseModal}
-      animationType="none">
+      visible={propVisible}
+      onRequestClose={handleCloseModalWithAnimation}
+      animationType="none"
+    >
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar backgroundColor="rgba(0,0,0,0.5)" barStyle="light-content" />
-        <View style={styles.centeredView}>
-          <Animated.View
-            style={[
-              styles.modalView,
-              {backgroundColor: colors.background},
-              {transform: [{translateY}]},
-            ]}>
-            <View style={styles.header}>
-              <Text style={[styles.title, {color: colors.text.primary}]}>
-                Create Content
-              </Text>
-              <TouchableOpacity onPress={handleCloseModal}>
-                <Icon name="x" size={24} color={colors.text.primary} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.optionsContainer}>
-              <TouchableOpacity
-                style={[styles.option, {backgroundColor: colors.gray[100]}]}
-                onPress={handleCreatePost}>
-                <View
-                  style={[
-                    styles.iconContainer,
-                    {backgroundColor: colors.primary},
-                  ]}>
-                  <Icon name="file-text" size={24} color={colors.white} />
-                </View>
-                <Text style={[styles.optionText, {color: colors.text.primary}]}>
-                  Create Post
+        <StatusBar
+          backgroundColor={propVisible ? "rgba(0,0,0,0.5)" : "transparent"}
+          barStyle={propVisible ? "light-content" : (colors.isDarkMode ? "light-content" : "dark-content")}
+        />
+        <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={handleCloseModalWithAnimation}
+        />
+        <View style={styles.centeredView} pointerEvents="box-none">
+          {isContentMounted && (
+            <Animated.View
+              style={[
+                styles.modalView,
+                {backgroundColor: colors.background},
+                {transform: [{translateY}]}, // Apply the corrected translateY
+              ]}
+            >
+              <View style={styles.header}>
+                <Text style={[styles.title, {color: colors.text.primary}]}>
+                  Create Content
                 </Text>
-                <Icon
-                  name="chevron-right"
-                  size={20}
-                  color={colors.text.tertiary}
-                />
-              </TouchableOpacity>
+                <TouchableOpacity onPress={handleCloseModalWithAnimation}>
+                  <Icon name="x" size={24} color={colors.text.primary} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.optionsContainer}>
+                <TouchableOpacity
+                  style={[styles.option, {backgroundColor: colors.gray[100]}]}
+                  onPress={handleCreatePost}>
+                  <View
+                    style={[
+                      styles.iconContainer,
+                      {backgroundColor: colors.primary},
+                    ]}>
+                    <Icon name="file-text" size={24} color={colors.white} />
+                  </View>
+                  <Text style={[styles.optionText, {color: colors.text.primary}]}>
+                    Create Post
+                  </Text>
+                  <Icon
+                    name="chevron-right"
+                    size={20}
+                    color={colors.text.tertiary}
+                  />
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.option, {backgroundColor: colors.gray[100]}]}
-                onPress={handleUploadVideo}>
-                <View
-                  style={[
-                    styles.iconContainer,
-                    {backgroundColor: colors.secondary},
-                  ]}>
-                  <Icon name="video" size={24} color={colors.white} />
-                </View>
-                <Text style={[styles.optionText, {color: colors.text.primary}]}>
-                  Upload Video
-                </Text>
-                <Icon
-                  name="chevron-right"
-                  size={20}
-                  color={colors.text.tertiary}
-                />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.option, {backgroundColor: colors.gray[100]}]}
+                  onPress={handleUploadVideo}>
+                  <View
+                    style={[
+                      styles.iconContainer,
+                      {backgroundColor: colors.secondary},
+                    ]}>
+                    <Icon name="video" size={24} color={colors.white} />
+                  </View>
+                  <Text style={[styles.optionText, {color: colors.text.primary}]}>
+                    Upload Video
+                  </Text>
+                  <Icon
+                    name="chevron-right"
+                    size={20}
+                    color={colors.text.tertiary}
+                  />
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.option, {backgroundColor: colors.gray[100]}]}
-                onPress={handleCreateShort}>
-                <View
-                  style={[
-                    styles.iconContainer,
-                    {backgroundColor: colors.error},
-                  ]}>
-                  <Icon name="play" size={24} color={colors.white} />
-                </View>
-                <Text style={[styles.optionText, {color: colors.text.primary}]}>
-                  Create Short
-                </Text>
-                <Icon
-                  name="chevron-right"
-                  size={20}
-                  color={colors.text.tertiary}
-                />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.option, {backgroundColor: colors.gray[100]}]}
+                  onPress={handleCreateShort}>
+                  <View
+                    style={[
+                      styles.iconContainer,
+                      {backgroundColor: colors.error},
+                    ]}>
+                    <Icon name="play" size={24} color={colors.white} />
+                  </View>
+                  <Text style={[styles.optionText, {color: colors.text.primary}]}>
+                    Create Short
+                  </Text>
+                  <Icon
+                    name="chevron-right"
+                    size={20}
+                    color={colors.text.tertiary}
+                  />
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.option, {backgroundColor: colors.gray[100]}]}
-                onPress={handleStartStream}>
-                <View
-                  style={[
-                    styles.iconContainer,
-                    {backgroundColor: colors.info},
-                  ]}>
-                  <Icon name="wifi" size={24} color={colors.white} />
-                </View>
-                <Text style={[styles.optionText, {color: colors.text.primary}]}>
-                  Start Stream
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
+                <TouchableOpacity
+                  style={[styles.option, {backgroundColor: colors.gray[100]}]}
+                  onPress={handleStartStream}>
+                  <View
+                    style={[
+                      styles.iconContainer,
+                      {backgroundColor: colors.info},
+                    ]}>
+                    <Icon name="wifi" size={24} color={colors.white} />
+                  </View>
+                  <Text style={[styles.optionText, {color: colors.text.primary}]}>
+                    Start Stream
+                  </Text>
+                  <Icon
+                    name="chevron-right"
+                    size={20}
+                    color={colors.text.tertiary}
+                  />
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          )}
         </View>
       </SafeAreaView>
     </Modal>
@@ -198,7 +207,6 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   centeredView: {
     flex: 1,
@@ -216,6 +224,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
+    minHeight: 200,
+    width: '100%', // Ensure modal view takes full width
   },
   header: {
     flexDirection: 'row',
@@ -228,7 +238,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   optionsContainer: {
-    marginBottom: 20,
+    marginBottom: Platform.OS === 'ios' ? 20 : 40,
   },
   option: {
     flexDirection: 'row',

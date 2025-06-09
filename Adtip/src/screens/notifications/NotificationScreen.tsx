@@ -229,7 +229,6 @@ const NotificationScreen: React.FC = () => {
       style={[styles.container, {backgroundColor: colors.background}]}>
       <Header
         title="Notifications"
-        showBackButton
         rightComponent={
           unreadCount > 0 ? (
             <TouchableOpacity

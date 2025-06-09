@@ -164,7 +164,7 @@ const PromotePostScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Promote Post" showBackButton />
+      <Header title="Promote Post"/>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Post Preview */}
