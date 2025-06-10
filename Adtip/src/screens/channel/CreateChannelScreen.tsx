@@ -81,7 +81,7 @@ const CreateChannelScreen: React.FC = () => {
 
   // Generate a random avatar URL using DiceBear API if none provided
   const getRandomAvatarUrl = (userId: string | number) => {
-    return https://api.dicebear.com/9.x/identicon/svg?seed=${userId || Math.random()};
+    return `https://api.dicebear.com/9.x/identicon/svg?seed=${userId || Math.random()}`;
   };
 
   useEffect(() => {
@@ -100,12 +100,12 @@ const CreateChannelScreen: React.FC = () => {
           return;
         }
 
-        const response = await fetch(https://api.adtip.in/api/getchannelbyuserid/${user.id}, {
+        const response = await fetch(`https://api.adtip.in/api/getchannelbyuserid/${user.id}`, {
           method: 'GET',
           headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
-            Authorization: Bearer ${token},
+            Authorization: `Bearer ${token}`,
           },
         });
 
@@ -189,7 +189,7 @@ const CreateChannelScreen: React.FC = () => {
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          Authorization: Bearer ${token},
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });
