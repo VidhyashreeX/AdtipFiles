@@ -192,16 +192,34 @@ export interface UserListRequest {
   sortBy: Record<string, any>;
 }
 
-export interface User {
+export interface Contact { // Assuming Contact is also defined here or imported
   id: number;
-  name: string;
-  profile_image: string | null;
+  name?: string | null;
+  emailId?: string | null;
+  is_available: boolean;
+  dnd: boolean;
+  updated_date: string;
+  last_active: string | null;
+  // ... other contact properties
+  languages: any[]; // Replace 'any' with your Language interface if available here
+  interests: any[]; // Replace 'any' with your Interest interface if available here
+  product_count: number;
+  post_count: number;
+  is_following: number;
+  following_count: number;
+  followers_count: number;
+  is_blocked: boolean;
+  social_links: string[];
+  is_active: boolean;
+  last_seen: string;
   online_status: boolean;
-  // Add other fields as needed
 }
 
 export interface UserListResponse {
-  data: User[];
+  status: boolean;
+  message: string; // <--- Make sure this line exists
+  error?: string;
+  data: Contact[]; // Or the correct type for your user data items
   pagination: {
     page: number;
     limit: number;

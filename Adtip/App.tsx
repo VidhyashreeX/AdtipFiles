@@ -67,7 +67,11 @@ const ThemeAwareStatusBar = () => {
 const AppNavigator = () => {
   const { isAuthenticated, isInitialized } = useAuth();
   const [messagingInstance, setMessagingInstance] = useState<ReturnType<typeof messaging> | null>(null);
-  const [initialCallData, setInitialCallData] = useState<any>(null); // Store initial call data
+  // const [initialCallData, setInitialCallData] = useState<any>(null); // This state seems unused, consider removing if not needed for other logic
+
+  // Call all hooks at the top level
+  const insets = useSafeAreaInsets();
+  const { isDarkMode, colors } = useTheme(); // Assuming useTheme() is from your ThemeContext
 
   useEffect(() => {
     const initFirebaseMessaging = async () => {
@@ -83,18 +87,13 @@ const AppNavigator = () => {
 
         const instance = messaging(); // Get the messaging instance
 
-        // Check if messaging is supported. Your usage is correct.
-        // The linter warning about this is likely due to type definition issues.
-        if (instance.isSupported) {
+        // Check if messaging is supported.
+        if (instance.isSupported()) { 
           setMessagingInstance(instance);
           console.log('Firebase Messaging is supported and initialized.');
 
-          // Set background message handler. Your usage is correct.
-          // The linter warning about this is also likely due to type definition issues.
           instance.setBackgroundMessageHandler(async remoteMessage => {
             console.log('Message handled in the background:', remoteMessage);
-            // Your background message handling logic here.
-            // This handler must return a Promise.
             return Promise.resolve();
           });
         } else {
@@ -105,26 +104,18 @@ const AppNavigator = () => {
       }
     };
 
-    // Example: Initialize Firebase Messaging only after auth state is determined
     if (isInitialized) {
       initFirebaseMessaging();
     }
-
-    // Optional: Cleanup function if needed
-    // return () => {
-    //   // Perform any cleanup, e.g., unsubscribe from listeners
-    // };
-  }, [isInitialized]); // Re-run effect if isInitialized changes
+  }, [isInitialized]); 
 
   useEffect(() => {
     const setupNotifications = async () => {
-      if (messagingInstance) { // Ensure messagingInstance is available
+      if (messagingInstance) { 
         try {
           await NotificationService.requestPermissions(messagingInstance);
           
-          // Register FCM token with backend if user is authenticated
           if (isAuthenticated) {
-            // Get user ID from auth context or storage
             const userId = await AsyncStorage.getItem('userId');
             if (userId) {
               await NotificationService.registerFcmToken(userId, messagingInstance);
@@ -135,18 +126,10 @@ const AppNavigator = () => {
         }
       }
     };
-
-    // Only run this effect if messagingInstance or isAuthenticated changes
-    // This ensures permissions and token registration happen after Firebase Messaging is ready
     setupNotifications();
-
-    return () => {
-      // Cleanup logic if any for NotificationService listeners
-    };
-  }, [isAuthenticated, messagingInstance]); // Dependencies
+  }, [isAuthenticated, messagingInstance]); 
 
   useEffect(() => {
-    // Check for initial notification when app opens from killed state
     messaging()
       .getInitialNotification()
       .then(remoteMessage => {
@@ -155,26 +138,28 @@ const AppNavigator = () => {
             '[FCM] App opened from killed state by notification:',
             remoteMessage.data,
           );
-          // Assuming your CallNotificationService puts relevant data here
-          // You might need to adapt this based on the actual structure of remoteMessage.data
-          // and what your CallNotificationService.java puts in the intent.
-          // The `extractCallData` logic from TipCallScreen's NotificationService could be reused or adapted.
-          if (remoteMessage.data && remoteMessage.data.isIncomingCall === 'true') { // Check your actual data keys
-             const callData = { // Reconstruct call data similar to what RTM provides
+          if (remoteMessage.data && remoteMessage.data.isIncomingCall === 'true') { 
+             const callData = { 
                 callerName: remoteMessage.data.callerName,
                 callType: remoteMessage.data.callType as ('voice' | 'video'),
                 channelName: remoteMessage.data.channelName,
-                rtcToken: remoteMessage.data.agoraToken, // Ensure this is the RTC token
-                callerRtcUid: remoteMessage.data.callerId, // Assuming callerId from FCM is the RTM/RTC UID
-                // This is not a full RtmRemoteInvitation, so TipCallScreen needs to handle this partial data
+                rtcToken: remoteMessage.data.agoraToken, 
+                callerRtcUid: remoteMessage.data.callerId, 
                 isFromNotification: true, 
              };
-             setInitialCallData(callData);
+             if (navigationRef.isReady()) {
+                navigationRef.navigate('Main', { 
+                    screen: 'TipCall', 
+                    params: { initialCallNotificationData: callData } 
+                });
+             } else {
+                console.warn('[FCM] Navigation not ready for initial notification, data might be lost if not handled.');
+                // Consider a more robust queueing mechanism for pending navigations if this is a common issue.
+             }
           }
         }
       });
 
-    // Listen for notifications when app is in background and opened
     const unsubscribeForeground = messaging().onNotificationOpenedApp(remoteMessage => {
       console.log(
         '[FCM] App opened from background by notification:',
@@ -189,38 +174,37 @@ const AppNavigator = () => {
             callerRtcUid: remoteMessage.data.callerId,
             isFromNotification: true,
          };
-         // Navigate to TipCallScreen or set state that TipCallScreen can read
-         // For simplicity, if TipCallScreen is always part of the stack,
-         // you could use navigation events or a global state/context.
-         // Or, pass initialCallData down as a prop.
          navigationRef.navigate('Main', { 
-            screen: 'TipCall', // Assuming TipCall is a screen in MainNavigator
+            screen: 'TipCall', 
             params: { initialCallNotificationData: callData } 
          });
       }
     });
 
-    return () => {
-      // unsubscribeForeground(); // If you store the unsubscribe function
-    };
+    // It's good practice to store and call the unsubscribe function
+    // return () => {
+    //   if (typeof unsubscribeForeground === 'function') {
+    //     unsubscribeForeground();
+    //   }
+    // };
   }, []);
 
 
   // Show loading indicator ONLY while AuthContext is initializing
   if (!isInitialized) {
-    const insets = useSafeAreaInsets();
+    // const insets = useSafeAreaInsets(); // Moved to top
     return (
       <SafeAreaViewRN style={[
         styles.loadingContainer,
-        { paddingTop: insets.top }
+        { paddingTop: insets.top } // 'insets' is now available from the top-level call
       ]}>
         <ActivityIndicator size="large" color={COLORS.primary} />
       </SafeAreaViewRN>
     );
   }
   
-  const insets = useSafeAreaInsets();
-  const { isDarkMode, colors } = useTheme();
+  // const insets = useSafeAreaInsets(); // Moved to top
+  // const { isDarkMode, colors } = useTheme(); // Moved to top
   
   return (
     <NavigationContainer 

@@ -34,6 +34,7 @@
     "react": "19.0.0",
     "react-native": "0.79.2",
     "react-native-agora": "^4.5.3",
+    "react-native-callkeep": "^4.3.16",
     "react-native-country-codes-picker": "^2.3.5",
     "react-native-css-interop": "^0.1.22",
     "react-native-date-picker": "^5.0.12",

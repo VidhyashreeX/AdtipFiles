@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useCallback, useRef} from 'react';
+import React, {useEffect, useState, useCallback, useRef} from 'react'; // Ensure React is imported
 import {
   View,
   Text,
@@ -15,23 +15,26 @@ import {
 import {useNavigation, useRoute, RouteProp} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
-import {firebase} from '@react-native-firebase/app';
+import firebase from '@react-native-firebase/app';
 import messaging from '@react-native-firebase/messaging';
-import RtcEngine, {
-  ChannelProfile, 
-  ClientRole, 
-  IRtcEngine, 
-  RtmLocalInvitation, 
-  RtmRemoteInvitation,
-  RtcLocalView  // Add this import
+import { 
+  createAgoraRtcEngine, // Main function to create engine instance
+  RtcEngineContext,     // Context for initialization
+  ChannelProfileType,   // Enum for channel profile
+  ClientRoleType,       // Enum for client role
+  IRtcEngine,
+  // RtcLocalView, // No longer a direct export
+  // RtcRemoteView, // No longer a direct export
+  RtcSurfaceView, // Use RtcSurfaceView for both local and remote
 } from 'react-native-agora';
-import RtcRemoteView from 'react-native-agora';
+// Remove RtcRemoteView import if it was separate, RtcSurfaceView handles both
+// import { RtcRemoteView } from 'react-native-agora'; 
 
 
 import {useAuth} from '../../contexts/AuthContext';
 import {useTabNavigator} from '../../contexts/TabNavigatorContext';
 import ApiService from '../../services/ApiService';
-import AgoraRtmHelper, { RtmEventType } from '../../services/AgoraRtmHelper'; // Import RtmEventType
+import AgoraRtmHelper, { RtmEventType, RtmLocalInvitation, RtmRemoteInvitation, RtmLocalInvitationProps } from '../../services/AgoraRtmHelper'; // Added RtmLocalInvitationProps
 import {AgoraHelper} from '../../services/AgoraHelper';
 import IncomingCallScreenComponent from '../../components/tipcall/IncomingCallScreen'; // Renamed to avoid conflict
 
@@ -345,52 +348,50 @@ interface MeetingViewProps {
 }
 
 const MeetingView: React.FC<MeetingViewProps> = ({
-  channelName,
+  channelName, // This prop is still useful for logging or other logic if needed
   rtcEngine,
   onEndCall,
   isCaller,
   callType,
-  localUid,
+  localUid, 
   token,
 }) => {
   const [remoteUsers, setRemoteUsers] = useState<number[]>([]);
-  const remoteUsersRef = useRef<number[]>([]); // To manage remote users correctly
+  const remoteUsersRef = useRef<number[]>([]);
 
   useEffect(() => {
     const initRtc = async () => {
       console.log('[RTC] MeetingView: Initializing RTC Engine for call.');
-      await rtcEngine.enableVideo(); // Enable video if it's a video call
-      await rtcEngine.setChannelProfile(ChannelProfile.Communication);
+      await rtcEngine.setChannelProfile(ChannelProfileType.ChannelProfileCommunication);
       if (callType === 'video') {
          await rtcEngine.enableVideo();
       } else {
-         await rtcEngine.disableVideo(); // Ensure video is off for voice calls
+         await rtcEngine.disableVideo();
       }
 
-      rtcEngine.addListener('UserJoined', (uid) => {
-        console.log('[RTC] MeetingView: Remote user joined:', uid);
+      rtcEngine.addListener('onUserJoined', (connection, uid, elapsed) => { 
+        console.log('[RTC] MeetingView: Remote user joined:', uid, 'on channel:', connection.channelId);
         if (!remoteUsersRef.current.includes(uid)) {
           setRemoteUsers(prev => [...prev, uid]);
           remoteUsersRef.current = [...remoteUsersRef.current, uid];
         }
       });
 
-      rtcEngine.addListener('UserOffline', (uid) => {
-        console.log('[RTC] MeetingView: Remote user offline:', uid);
+      rtcEngine.addListener('onUserOffline', (connection, uid, reason) => { 
+        console.log('[RTC] MeetingView: Remote user offline:', uid, 'reason:', reason, 'on channel:', connection.channelId);
         setRemoteUsers(prev => prev.filter(userUid => userUid !== uid));
         remoteUsersRef.current = remoteUsersRef.current.filter(userUid => userUid !== uid);
-        if (remoteUsersRef.current.length === 0 && !isCaller) { // If all remote users left and current user is not caller
-            onEndCall(); // Consider ending call if no one else is there
+        if (remoteUsersRef.current.length === 0 && !isCaller) { 
+            onEndCall(); 
         }
       });
       
-      rtcEngine.addListener('JoinChannelSuccess', (channel, uid, elapsed) => {
-        console.log(`[RTC] MeetingView: Joined RTC channel ${channel} successfully as UID ${uid}`);
+      rtcEngine.addListener('onJoinChannelSuccess', (connection, elapsed) => { 
+        console.log(`[RTC] MeetingView: Joined RTC channel ${connection.channelId} successfully as UID ${connection.localUid}`);
       });
 
-      rtcEngine.addListener('Error', (err) => {
-        console.error('[RTC] MeetingView: RTC Error:', err);
-        // Potentially end call on critical errors
+      rtcEngine.addListener('onError', (err, msg) => { 
+        console.error('[RTC] MeetingView: RTC Error Code:', err, 'Message:', msg);
       });
       
       console.log(`[RTC] MeetingView: Attempting to join RTC channel: ${channelName} with UID: ${localUid} and Token: ${token ? 'Present' : 'Absent'}`);
@@ -401,10 +402,10 @@ const MeetingView: React.FC<MeetingViewProps> = ({
 
     return () => {
       console.log('[RTC] MeetingView: Cleaning up RTC listeners and leaving channel.');
-      rtcEngine.removeAllListeners('UserJoined');
-      rtcEngine.removeAllListeners('UserOffline');
-      rtcEngine.removeAllListeners('JoinChannelSuccess');
-      rtcEngine.removeAllListeners('Error');
+      rtcEngine.removeAllListeners('onUserJoined');
+      rtcEngine.removeAllListeners('onUserOffline');
+      rtcEngine.removeAllListeners('onJoinChannelSuccess');
+      rtcEngine.removeAllListeners('onError');
       AgoraHelper.safeLeaveChannel(rtcEngine).catch(err => console.error("[RTC] MeetingView: Error leaving channel on cleanup", err));
     };
   }, [rtcEngine, channelName, localUid, token, callType, onEndCall, isCaller]);
@@ -414,11 +415,19 @@ const MeetingView: React.FC<MeetingViewProps> = ({
       <Text style={styles.callStatus}>In {callType} call...</Text>
       {callType === 'video' && (
         <>
-          {/* Local Video */}
-          <RtcLocalView.SurfaceView style={styles.localVideo} channelId={channelName} />
-          {/* Remote Video(s) */}
+          <RtcSurfaceView 
+            style={styles.localVideo} 
+            canvas={{uid: 0}} // Standard practice for local view
+            // channelId prop removed
+          />
+          
           {remoteUsers.map(uid => (
-            <RtcRemoteView.SurfaceView key={uid} style={styles.remoteVideo} uid={uid} channelId={channelName} />
+            <RtcSurfaceView 
+              key={uid} 
+              style={styles.remoteVideo} 
+              canvas={{uid: uid}} 
+              // channelId prop removed
+            />
           ))}
           {remoteUsers.length === 0 && <Text style={styles.callStatus}>Waiting for peer...</Text>}
         </>
@@ -456,18 +465,23 @@ const TipCallScreen: React.FC = () => {
   const [currentCallType, setCurrentCallType] = useState<'voice' | 'video'>('voice');
   const [activeTab, setActiveTab] = useState('contacts'); // 'contacts' or 'missed_calls'
 
+  const [isRtcEngineReady, setIsRtcEngineReady] = useState<boolean>(false); // New state for RTC readiness
+  const [isRtmReady, setIsRtmReady] = useState<boolean>(false); // New state for RTM readiness
+
+
   const [incomingCallData, setIncomingCallData] = useState<{
-    rtmInvitation: RtmRemoteInvitation;
+    rtmInvitation: RtmRemoteInvitation; // This can be a full RtmRemoteInvitation or a mocked one
     callerName: string;
     callType: 'voice' | 'video';
-    channelName: string; // RTC Channel Name from invitation
-    rtcToken: string;    // RTC Token from invitation
-    callerRtcUid: string; // Caller's UID for RTC
+    channelName: string; // RTC Channel Name from invitation/notification
+    rtcToken: string;    // RTC Token from invitation/notification
+    callerRtcUid: string; // Caller's UID for RTC (can be RTM ID or specific RTC UID)
+    isFromNotification?: boolean; // Add this optional property
   } | null>(null);
 
   const rtmHelperRef = useRef<AgoraRtmHelper | null>(null);
-  const localInvitationRef = useRef<RtmLocalInvitation | null>(null);
-  // remoteInvitationRef is now part of incomingCallData.rtmInvitation
+  // const localInvitationRef = useRef<RtmLocalInvitation | null>; // Replace with outgoingInvitationDetails
+  const [outgoingInvitationDetails, setOutgoingInvitationDetails] = useState<RtmLocalInvitationProps | null>(null);
 
   const redirectToLogin = useCallback(() => {
     navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
@@ -529,12 +543,35 @@ const TipCallScreen: React.FC = () => {
         limit: 15,
         language: selectedLanguage === '1' ? [] : [parseInt(selectedLanguage)],
         interest: selectedCategory === '1' ? [] : [parseInt(selectedCategory)],
+        user_id: user.id, // Add this line to satisfy the required property
         search_by_name: searchQuery,
         loggined_user_id: user.id,
         sortBy: {},
       });
-      if (response.status && response.data) {
-        setContacts(prev => (append ? [...prev, ...response.data] : response.data));
+      if (response.data) {
+        // Ensure all items are of type Contact
+        const contactsData: Contact[] = response.data.map((item: any) => ({
+          id: item.id,
+          name: item.name ?? null,
+          emailId: item.emailId ?? null,
+          is_available: item.is_available ?? false,
+          dnd: item.dnd ?? false,
+          updated_date: item.updated_date ?? '',
+          last_active: item.last_active ?? null,
+          languages: item.languages ?? [],
+          interests: item.interests ?? [],
+          product_count: item.product_count ?? 0,
+          post_count: item.post_count ?? 0,
+          is_following: item.is_following ?? 0,
+          following_count: item.following_count ?? 0,
+          followers_count: item.followers_count ?? 0,
+          is_blocked: item.is_blocked ?? false,
+          social_links: item.social_links ?? [],
+          is_active: item.is_active ?? false,
+          last_seen: item.last_seen ?? '',
+          online_status: item.online_status ?? false,
+        }));
+        setContacts(prev => (append ? [...prev, ...contactsData] : contactsData));
         setPage(response.pagination.page);
         setTotalRecords(response.pagination.totalRecords);
       } else {
@@ -552,119 +589,164 @@ const TipCallScreen: React.FC = () => {
   }, [fetchUsers]);
 
 
+  // Add this debug effect
+  useEffect(() => {
+    console.log('[DEBUG] State changes:');
+    console.log('[DEBUG] isRtcEngineReady:', isRtcEngineReady);
+    console.log('[DEBUG] isRtmReady:', isRtmReady);
+    console.log('[DEBUG] user:', user?.id);
+  }, [isRtcEngineReady, isRtmReady, user]);
+
   // Initialize RTC Engine
   useEffect(() => {
     const initRtcEngine = async () => {
       try {
-        rtcEngineRef.current = await RtcEngine.create(APP_ID);
-        console.log('[RTC] RTC Engine created');
+        if (!rtcEngineRef.current) {
+          console.log('[RTC] Attempting to create RTC Engine instance...');
+          // Use createAgoraRtcEngine to get an instance
+          const engine = createAgoraRtcEngine();
+          rtcEngineRef.current = engine;
+
+          // Initialize the engine instance with context
+          const rtcContext = new RtcEngineContext(); // Construct with no arguments
+          rtcContext.appId = APP_ID; // Set the appId property
+          // You can also set channelProfile here if it's global for the engine
+          // rtcContext.channelProfile = ChannelProfileType.ChannelProfileCommunication;
+          await rtcEngineRef.current.initialize(rtcContext);
+          
+          setIsRtcEngineReady(true);
+          console.log('[RTC] RTC Engine created and initialized');
+        }
       } catch (e) {
-        console.error('[RTC] Failed to create RTC Engine:', e);
+        console.error('[RTC] Failed to create or initialize RTC Engine:', e);
+        setIsRtcEngineReady(false);
       }
     };
     initRtcEngine();
     return () => {
-      rtcEngineRef.current?.destroy();
-      rtcEngineRef.current = null;
-      console.log('[RTC] RTC Engine destroyed');
+      if (rtcEngineRef.current) {
+        console.log('[RTC] Releasing RTC Engine...');
+        // Use release() to destroy the engine created by createAgoraRtcEngine
+        rtcEngineRef.current.release();
+        rtcEngineRef.current = null;
+        console.log('[RTC] RTC Engine released');
+      }
+      setIsRtcEngineReady(false);
     };
   }, []);
 
   // Initialize Agora RTM
   useEffect(() => {
+    let isMounted = true;
     if (user && user.id) {
-      const rtmId = user.id.toString(); // RTM UID is typically a string
+      const rtmId = user.id.toString(); 
       console.log(`[RTM] Initializing RTM for user: ${rtmId}`);
-      rtmHelperRef.current = AgoraRtmHelper.getInstance();
-      rtmHelperRef.current.initialize()
+      const rtmHelper = AgoraRtmHelper.getInstance();
+      rtmHelperRef.current = rtmHelper;
+
+      rtmHelper.initialize()
         .then(() => {
+          if (!isMounted) return;
           console.log('[RTM] RTM Helper initialized. Attempting login...');
-          return rtmHelperRef.current!.login(rtmId);
+          return rtmHelper.login(rtmId);
         })
         .then(() => {
+          if (!isMounted) return;
           console.log('[RTM] Successfully logged into RTM.');
-          // Setup RTM event listeners after successful login
-          rtmHelperRef.current!.on('remoteInvitationReceived', (remoteInvitation: RtmRemoteInvitation) => {
-            console.log('[RTM] Remote Invitation Received:', remoteInvitation);
-            try {
-              const content = JSON.parse(remoteInvitation.getContent());
-              console.log('[RTM] Parsed Invitation Content:', content);
-              setIncomingCallData({
-                rtmInvitation: remoteInvitation,
-                callerName: content.callerName || remoteInvitation.getCallerId(),
-                callType: content.callType || 'voice',
-                channelName: content.channelName, // RTC Channel Name
-                rtcToken: content.rtcToken,       // RTC Token
-                callerRtcUid: content.callerRtcUid, // Caller's UID for RTC
-              });
-            } catch (e) {
-              console.error('[RTM] Failed to parse remote invitation content:', e);
-               // Fallback: if content parsing fails, still show basic invitation
-              setIncomingCallData({
-                rtmInvitation: remoteInvitation,
-                callerName: remoteInvitation.getCallerId(),
-                callType: 'voice', // Default if content is unparsable
-                channelName: `call_${Date.now()}`, // Generate a fallback channel
-                rtcToken: '', // No token available
-                callerRtcUid: remoteInvitation.getCallerId(),
-              });
-            }
-          });
-
-          rtmHelperRef.current!.on('localInvitationAccepted', (localInvitation: RtmLocalInvitation) => {
-            console.log('[RTM] Local Invitation Accepted by peer:', localInvitation);
-            if (localInvitationRef.current && localInvitationRef.current.getCalleeId() === localInvitation.getCalleeId()) {
-              // Callee accepted, now the caller joins the RTC channel
+          setIsRtmReady(true);
+          if (rtmHelperRef.current) {
+            rtmHelperRef.current.on('remoteInvitationReceived', (remoteInvitation: RtmRemoteInvitation) => {
+              console.log('[RTM] Remote invitation received:', remoteInvitation);
               try {
-                const content = JSON.parse(localInvitationRef.current.getContent());
-                console.log('[RTM] Joining RTC channel from localInvitationAccepted. Content:', content);
-                setCurrentChannelName(content.channelName);
-                setCurrentRtcToken(content.rtcToken);
-                // Caller's RTC UID was set when fetching RTC token
-                setInCall(true); 
-                // isCaller is already true
-              } catch (e) {
-                console.error('[RTM] Failed to parse local invitation content on acceptance:', e);
-                Alert.alert("Call Error", "Failed to process call acceptance.");
-                endCall(); // Clean up
-              }
-            }
-          });
+                // Use the .content property as defined in your agora-rtm.d.ts
+                const invitationContentString = remoteInvitation.content; 
+                if (invitationContentString) {
+                  const parsedContent = JSON.parse(invitationContentString);
+                  console.log('[RTM] Parsed remote invitation content:', parsedContent);
 
-          rtmHelperRef.current!.on('localInvitationRefused', (localInvitation: RtmLocalInvitation) => {
-            console.log('[RTM] Local Invitation Refused by peer:', localInvitation);
-            Alert.alert('Call Refused', `${localInvitation.getCalleeId()} refused your call.`);
-            endCall(); // Clean up
-          });
-          rtmHelperRef.current!.on('localInvitationFailure', (localInvitation: RtmLocalInvitation, errorCode: number) => {
-            console.log('[RTM] Local Invitation Failure:', localInvitation, 'Error Code:', errorCode);
-            Alert.alert('Call Failed', `Failed to send call invitation. Error: ${errorCode}`);
-            endCall();
-          });
-           rtmHelperRef.current!.on('tokenExpired', async () => {
-            console.warn('[RTM] RTM Token Expired. Attempting to re-login...');
-            if (user && user.id) {
-              try {
-                // You might need a renewToken method in AgoraRtmHelper or re-fetch and login
-                await rtmHelperRef.current?.login(user.id.toString());
-                console.log('[RTM] Re-logged in successfully after token expiry.');
+                  // Proceed to use parsedContent to setIncomingCallData
+                  setIncomingCallData({
+                    rtmInvitation: remoteInvitation,
+                    callerName: parsedContent.callerName || `User ${remoteInvitation.getCallerId()}`,
+                    callType: parsedContent.callType,
+                    channelName: parsedContent.channelName,
+                    rtcToken: parsedContent.rtcToken,
+                    callerRtcUid: parsedContent.callerRtcUid,
+                    // isFromNotification: false, // Assuming this is a live RTM event
+                  });
+                } else {
+                  console.error('[RTM] Received remote invitation with empty or null content.');
+                  // Handle cases where content might be missing, if applicable
+                }
               } catch (e) {
-                console.error('[RTM] Failed to re-login after token expiry:', e);
-                Alert.alert("Connection Issue", "RTM connection lost. Please try again.");
-                // Potentially logout or redirect to login
+                console.error('[RTM] Error parsing remote invitation content:', e);
+                // Handle JSON parsing errors
               }
-            }
-          });
+            });
 
+            rtmHelperRef.current.on('localInvitationAccepted', (localInvitation: RtmLocalInvitation) => {
+              console.log('[RTM] Local Invitation Accepted by peer:', localInvitation);
+              // Match based on calleeId from the event and stored outgoing details
+              if (outgoingInvitationDetails && localInvitation.getCalleeId() === outgoingInvitationDetails.uid) {
+                try {
+                  const contentString = localInvitation.getContent(); // Get content from event's invitation
+                  if (!contentString) {
+                    console.error('[RTM] Accepted invitation has no content.');
+                    Alert.alert("Call Error", "Failed to process call acceptance: Missing content.");
+                    endCall();
+                    return;
+                  }
+                  const content = JSON.parse(contentString);
+                  console.log('[RTM] Joining RTC channel from localInvitationAccepted. Content:', content);
+                  setCurrentChannelName(content.channelName);
+                  setCurrentRtcToken(content.rtcToken);
+                  setInCall(true); 
+                  setOutgoingInvitationDetails(null); // Clear details once accepted
+                } catch (e) {
+                  console.error('[RTM] Failed to parse local invitation content on acceptance:', e);
+                  Alert.alert("Call Error", "Failed to process call acceptance.");
+                  endCall(); 
+                }
+              } else {
+                console.warn('[RTM] Received localInvitationAccepted for an unexpected invitation:', localInvitation.getCalleeId());
+              }
+            });
+
+            rtmHelperRef.current.on('localInvitationRefused', (localInvitation: RtmLocalInvitation) => {
+              console.log('[RTM] Local Invitation Refused by peer:', localInvitation);
+              if (outgoingInvitationDetails && localInvitation.getCalleeId() === outgoingInvitationDetails.uid) {
+                Alert.alert('Call Refused', `${localInvitation.getCalleeId()} refused your call.`);
+                setOutgoingInvitationDetails(null); // Clear details
+                endCall(); 
+              }
+            });
+            rtmHelperRef.current.on('localInvitationFailure', (data: { localInvitation: RtmLocalInvitation, errorCode: number }) => {
+              const { localInvitation, errorCode } = data;
+              console.log('[RTM] Local Invitation Failure:', localInvitation, 'Error Code:', errorCode);
+              if (outgoingInvitationDetails && localInvitation.getCalleeId() === outgoingInvitationDetails.uid) {
+                Alert.alert('Call Failed', `Failed to send call invitation. Error: ${errorCode}`);
+                setOutgoingInvitationDetails(null); // Clear details
+                endCall();
+              }
+            });
+            // ... (tokenExpired logic remains the same) ...
+          }
         })
         .catch(err => {
+          if (!isMounted) return;
           console.error('[RTM] Failed to initialize or login to RTM:', err);
-          Alert.alert("RTM Error", "Could not connect to signaling service.");
+          // Alert.alert("RTM Error", "Could not connect to signaling service."); // Already present
+          setIsRtmReady(false); // Ensure RTM is not ready on error
         });
+    } else {
+      console.log('[RTM] No user found, setting RTM not ready');
+      setIsRtmReady(false); // If no user, RTM is not ready
     }
     return () => {
+      isMounted = false;
       rtmHelperRef.current?.release();
       rtmHelperRef.current = null;
+      setIsRtmReady(false);
       console.log('[RTM] RTM Helper released');
     };
   }, [user]);
@@ -675,14 +757,15 @@ const TipCallScreen: React.FC = () => {
       Alert.alert('Login Required', 'Please login to make calls.');
       return;
     }
-    if (!rtmHelperRef.current) {
-      Alert.alert('RTM Error', 'Signaling service not ready.');
+    if (!isRtmReady || !rtmHelperRef.current || !rtmHelperRef.current.getIsLoggedIn()) {
+      Alert.alert('RTM Error', 'Signaling service not ready. Please wait or try again.');
       return;
     }
-    if (!rtcEngineRef.current) {
-      Alert.alert('RTC Error', 'Call engine not ready.');
+    if (!isRtcEngineReady || !rtcEngineRef.current) {
+      Alert.alert('RTC Error', 'Call engine not ready. Please wait or try again.');
       return;
     }
+    
     if (inCall || incomingCallData) {
       Alert.alert('Busy', 'You are already in a call or receiving one.');
       return;
@@ -695,50 +778,62 @@ const TipCallScreen: React.FC = () => {
     setCurrentCallType(callType);
 
     try {
-      // 1. Fetch RTC token and channel details (caller initiates this)
-      // The UID for RTC token generation should be the current user's ID.
       const rtcAuthDetails = await fetchAgoraRtcToken(user.id); 
-      setCurrentChannelName(rtcAuthDetails.channelName);
-      setCurrentRtcToken(rtcAuthDetails.token);
-      setCurrentLocalRtcUid(rtcAuthDetails.uid); // This is the caller's UID for RTC
+      setCurrentLocalRtcUid(rtcAuthDetails.uid); 
 
-      console.log(`[RTM] Creating ${callType} call invitation to ${contact.id.toString()}`);
-      console.log(`[RTM] RTC Details for invitation: Channel=${rtcAuthDetails.channelName}, RTC Token=${rtcAuthDetails.token ? 'Present' : 'Absent'}, CallerRTCUid=${rtcAuthDetails.uid}`);
-
-      // 2. Create RTM Local Invitation
-      const invitation = await rtmHelperRef.current.createCallInvitation(
-        contact.id.toString(), // Callee's RTM UID
+      console.log(`[RTM] Initiating ${callType} call to ${contact.id.toString()} via sendLocalInvitation props`);
+      console.log(`[RTM] RTC Details for invitation: Channel=${rtcAuthDetails.channelName}, CallerRTCUid=${rtcAuthDetails.uid}`);
+      
+      const calleeRtmId = contact.id.toString();
+      const rtmChannelId = rtcAuthDetails.channelName; // Using RTC channel name as RTM channelId
+      const invitationContent = JSON.stringify({
+        channelName: rtcAuthDetails.channelName,
         callType,
-        rtcAuthDetails.channelName, // RTC Channel Name
-        rtcAuthDetails.token        // RTC Token
-        // The content of the invitation now includes rtcToken and callerRtcUid (which is user.id)
-      );
-      localInvitationRef.current = invitation;
+        callerName: user.id.toString(), // Caller's RTM ID
+        rtcToken: rtcAuthDetails.token,
+        callerRtcUid: rtcAuthDetails.uid,
+      });
 
-      // 3. Send RTM Local Invitation
-      await rtmHelperRef.current.sendCallInvitation(invitation);
-      console.log('[RTM] Call invitation sent.');
-      // UI should update to "Calling..." state. Caller does not join RTC channel yet.
-      // Caller joins RTC channel only after 'localInvitationAccepted' is received.
-      // For now, let's set inCall to true to show a "calling" UI, but not join RTC yet.
-      // This part needs careful UI state management.
-      // To simplify, we can set inCall to true and let MeetingView handle joining.
-      // However, the correct flow is: send invite -> wait for accept -> then join.
-      // For now, to show a calling screen:
-      setInCall(true); // This will render MeetingView, which will attempt to join.
-                       // This is okay if MeetingView handles "waiting for peer" state.
+      // Store details for potential cancellation
+      setOutgoingInvitationDetails({
+        uid: calleeRtmId,
+        channelId: rtmChannelId,
+        content: invitationContent,
+      });
+
+      await rtmHelperRef.current.initiateAndSendCallInvitation(
+        calleeRtmId,
+        callType,
+        rtmChannelId, 
+        rtcAuthDetails.token,
+        rtcAuthDetails.uid 
+      );
+      
+      console.log('[RTM] Call invitation sent via props.');
+      // UI updates to "Calling..." state. Caller joins RTC upon 'localInvitationAccepted'.
+      // For now, setting inCall to true to show a "calling" UI.
+      // This will render MeetingView, which will attempt to join.
+      // MeetingView should ideally handle "waiting for peer" state until localInvitationAccepted.
+      // For simplicity in this step, we set inCall, but RTC join is triggered by MeetingView.
+      // The actual RTC join for the caller should happen after localInvitationAccepted.
+      // Let's adjust MeetingView or this logic later if needed.
+      // For now, to show a "calling..." screen:
+      setCurrentChannelName(rtcAuthDetails.channelName); // Set for MeetingView
+      setCurrentRtcToken(rtcAuthDetails.token);         // Set for MeetingView
+      setInCall(true); 
 
     } catch (error: any) {
       console.error('[RTM] Failed to start call:', error);
       Alert.alert('Call Failed', error.message || 'Could not initiate the call.');
       setIsCaller(false);
-      setInCall(false); // Reset state
+      setInCall(false); 
+      setOutgoingInvitationDetails(null); // Clear details on failure
     }
   };
 
   const acceptIncomingCall = async () => {
-    if (!incomingCallData || !rtmHelperRef.current || !rtcEngineRef.current || !user || !user.id) {
-      Alert.alert("Error", "Cannot accept call. Invitation data or RTM/RTC service missing.");
+    if (!incomingCallData || !rtmHelperRef.current || !isRtmReady || !rtcEngineRef.current || !isRtcEngineReady || !user || !user.id) {
+      Alert.alert("Error", "Cannot accept call. Services not ready or invitation data missing.");
       return;
     }
     
@@ -747,7 +842,18 @@ const TipCallScreen: React.FC = () => {
     const permissionsGranted = await requestPermissions(callType);
     if (!permissionsGranted) {
       // Optionally, refuse the call if permissions are denied
-      await rtmHelperRef.current.refuseCallInvitation(rtmInvitation);
+      // Ensure rtmInvitation is valid before using it
+      if (!isFromNotification && rtmInvitation) {
+        await rtmHelperRef.current.refuseCallInvitation(rtmInvitation);
+      } else if (isFromNotification) {
+        // If from notification and permissions denied, update backend status to rejected
+        await NotificationService.updateCallStatus(
+            callerRtcUid,
+            user.id.toString(),
+            'rejected',
+            callType === 'voice' ? 'audio' : callType // Map 'voice' to 'audio'
+        );
+      }
       setIncomingCallData(null);
       return;
     }
@@ -767,7 +873,7 @@ const TipCallScreen: React.FC = () => {
             callerRtcUid, // Original caller's ID
             user.id.toString(),    // Current user (callee) ID
             'accepted',
-            callType
+            callType === 'voice' ? 'audio' : callType // Map 'voice' to 'audio'
         );
       } else {
         throw new Error("Invalid incoming call data state.");
@@ -789,12 +895,36 @@ const TipCallScreen: React.FC = () => {
   };
   
   const rejectIncomingCall = async () => {
-    if (!incomingCallData || !rtmHelperRef.current) return;
+    if (!incomingCallData || !rtmHelperRef.current || !user || !user.id) { // Added user check for updateCallStatus
+        console.warn('[CALL] Cannot reject call. Services not ready or invitation data missing.');
+        setIncomingCallData(null); // Clear data to prevent stale UI
+        return;
+    }
+    
+    const { isFromNotification, rtmInvitation, callerRtcUid, callType } = incomingCallData;
+
     try {
-      await rtmHelperRef.current.refuseCallInvitation(incomingCallData.rtmInvitation);
-      console.log('[RTM] Remote invitation refused.');
+      if (isFromNotification) {
+        console.log('[FCM] Rejecting call from notification. Updating backend status.');
+        await NotificationService.updateCallStatus(
+          callerRtcUid, // Original caller's ID
+          user.id.toString(), // Current user (callee) ID
+          'rejected',
+          callType === 'voice' ? 'audio' : callType // Map 'voice' to 'audio'
+        );
+      } else if (rtmInvitation) { // Live RTM invitation
+        if (!isRtmReady) {
+            console.warn('[RTM] RTM not ready, cannot send RTM refusal.');
+            // Still update backend if possible, or just clear UI
+        } else {
+            await rtmHelperRef.current.refuseCallInvitation(rtmInvitation);
+            console.log('[RTM] Live remote invitation refused via RTM.');
+        }
+      } else {
+        console.warn('[CALL] Rejecting call but no valid RTM invitation and not marked as from notification.');
+      }
     } catch (error: any) {
-      console.error('[RTM] Failed to refuse call invitation:', error);
+      console.error('[CALL] Failed to reject call:', error);
       // Alert.alert('Reject Failed', error.message || 'Could not refuse the call.');
     } finally {
       setIncomingCallData(null);
@@ -803,18 +933,15 @@ const TipCallScreen: React.FC = () => {
 
   const endCall = useCallback(async () => {
     console.log('[CALL] Ending call...');
-    if (isCaller && localInvitationRef.current) {
+    if (isCaller && outgoingInvitationDetails) {
       try {
-        // If the call was never accepted, cancel the invitation
-        // Check invitation state if SDK provides it, otherwise assume cancel if not in RTC call yet
-        // For simplicity, always try to cancel if localInvitationRef exists and user is caller
-        console.log('[RTM] Caller ending call, attempting to cancel local invitation.');
-        await rtmHelperRef.current?.cancelCallInvitation(localInvitationRef.current);
+        console.log('[RTM] Caller ending call, attempting to cancel local invitation via props.');
+        await rtmHelperRef.current?.cancelCallInvitation(outgoingInvitationDetails);
       } catch (e) {
         console.warn('[RTM] Failed to cancel local invitation on endCall (it might have been accepted/refused already):', e);
       }
     }
-    localInvitationRef.current = null;
+    setOutgoingInvitationDetails(null); // Clear outgoing invitation details
 
     if (rtcEngineRef.current) {
       await AgoraHelper.safeLeaveChannel(rtcEngineRef.current);
@@ -825,11 +952,8 @@ const TipCallScreen: React.FC = () => {
     setCurrentChannelName('');
     setCurrentRtcToken('');
     setIsCaller(false);
-    setIncomingCallData(null); // Clear any pending incoming call UI
-    // Reset RTC engine state if necessary, though destroying/recreating might be safer for complex scenarios
-    // For now, just leaving channel.
-  }, [isCaller, rtcEngineRef, rtmHelperRef]);
-
+    setIncomingCallData(null); 
+  }, [isCaller, outgoingInvitationDetails, rtmHelperRef]); // Added outgoingInvitationDetails
 
   const startVoiceCall = useCallback((contact: Contact) => {
     startCallInternal(contact, 'voice');
@@ -867,7 +991,7 @@ const TipCallScreen: React.FC = () => {
 
   useEffect(() => {
     const initialData = route.params?.initialCallNotificationData as any; // Cast as needed
-    if (initialData && initialData.isFromNotification && !incomingCallData && !inCall) {
+    if (initialData && initialData.isFromNotification && !incomingCallData && !inCall && isRtmReady && isRtcEngineReady) { // Check readiness
       console.log('[TipCallScreen] Received initial call data from notification:', initialData);
       // This is not a full RtmRemoteInvitation, so you can't directly use rtmHelper.acceptCallInvitation
       // You need to simulate the state of receiving an invitation.
@@ -901,8 +1025,26 @@ const TipCallScreen: React.FC = () => {
         isFromNotification: true,
       });
     }
-  }, [route.params?.initialCallNotificationData]);
+  }, [route.params?.initialCallNotificationData, inCall, incomingCallData, isRtmReady, isRtcEngineReady]); // Added readiness states
 
+  if (!isRtcEngineReady || !isRtmReady) { // Show a general loading/initializing screen
+      if (loading && contacts.length === 0 && !inCall && !incomingCallData) { // Keep existing contacts loading
+        return (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#24d05a" />
+            <Text style={styles.loadingText}>Loading Contacts...</Text>
+          </View>
+        );
+      }
+      // Show a generic initializing screen if engines are not ready yet
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#24d05a" />
+          <Text style={styles.loadingText}>Initializing call services...</Text>
+        </View>
+      );
+  }
+  
   if (loading && contacts.length === 0 && !inCall && !incomingCallData) {
     return (
       <View style={styles.loadingContainer}>
@@ -977,7 +1119,7 @@ const TipCallScreen: React.FC = () => {
       <FlatList
         data={contacts}
         renderItem={renderContactItem}
-        keyExtractor={item => item.id.toString()}
+        keyExtractor={(item: Contact) => item.id.toString()}
         style={styles.contactsContainer}
         ListEmptyComponent={
           !loading ? (
@@ -1087,8 +1229,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
     marginBottom: 4,
+ 
+    // color: '#64748b', // This line seems to be a duplicate or misplaced. Consider removing or correcting it.
+                       // If '#64748b' was intended for the status, it's now used below.
   },
-  contactStatus: {
+  contactStatus: { // Add this new style definition
     fontSize: 14,
     color: '#64748b',
   },

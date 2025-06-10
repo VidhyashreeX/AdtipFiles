@@ -1,12 +1,16 @@
 import { Platform } from 'react-native'; // Keeping Platform import, though not used in this file
+// Import RtmEngine as the default export, and other types as named exports
 import RtmEngine, {
-  RtmLocalInvitation,
-  RtmRemoteInvitation,
+  RtmLocalInvitation as AgoraRtmLocalInvitation,
+  RtmRemoteInvitation as AgoraRtmRemoteInvitation,
   ConnectionState,
   ConnectionChangeReason,
   RtmMessage,
-  RtmStatusCode
+  LoginInfo,
+  RtmLocalInvitationProps, // Import RtmLocalInvitationProps
 } from 'agora-react-native-rtm';
+// Remove RtmStatusCode import if it's not used or defined as such
+// import RtmStatusCode from 'agora-react-native-rtm'; 
 import ApiService from './ApiService'; // Assuming ApiService exists and is correctly implemented
 
 export interface RtmTokenRequest {
@@ -39,8 +43,8 @@ export type RtmEventType =
 class AgoraRtmHelper {
   private static instance: AgoraRtmHelper;
   private rtmEngine: RtmEngine | null = null;
-  private APP_ID = 'ef5fbd2647c64582a64db9e47b9f9335'; // Same as RTC APP_ID
-  private userId: string | null = null; // Stores the currently logged-in RTM UID
+  private APP_ID = 'ef5fbd2647c64582a64db9e47b9f9335';
+  private userId: string | null = null;
   private isLoggedIn: boolean = false;
   private eventListeners: Map<RtmEventType, Set<Function>> = new Map();
 
@@ -63,11 +67,27 @@ class AgoraRtmHelper {
     }
 
     try {
-      console.log('[RTM] Initializing Agora RTM engine');
-      this.rtmEngine = new RtmEngine();
-      // CORRECTED: Use createClient instead of createInstance for agora-react-native-rtm
-      await this.rtmEngine.createClient(this.APP_ID);
+      console.log('[RTM] Initializing Agora RTM engine (new RtmEngine() -> createClient())');
+      console.log('[RTM DEBUG] RtmEngine import:', RtmEngine);
+      console.log('[RTM DEBUG] typeof RtmEngine:', typeof RtmEngine);
 
+      if (typeof RtmEngine === 'function') { // Check if RtmEngine is a class constructor
+        this.rtmEngine = new RtmEngine();
+        console.log('[RTM DEBUG] RtmEngine instance created:', this.rtmEngine);
+        if (this.rtmEngine && typeof this.rtmEngine.createClient === 'function') {
+          console.log('[RTM DEBUG] rtmEngine.createClient IS a function. Calling it.');
+          await this.rtmEngine.createClient(this.APP_ID);
+        } else {
+          console.error('[RTM DEBUG] rtmEngine.createClient is NOT a function on the instance.');
+          console.error('[RTM DEBUG] RtmEngine instance value:', this.rtmEngine);
+          throw new Error('RtmEngine instance does not have createClient method. The RTM module might not be loaded correctly.');
+        }
+      } else {
+        console.error('[RTM DEBUG] RtmEngine is NOT a constructor or RtmEngine is not as expected.');
+        console.error('[RTM DEBUG] RtmEngine value:', RtmEngine);
+        throw new Error('RtmEngine is not a constructor. The RTM module might not be loaded correctly.');
+      }
+      
       // Set up RTM event listeners
       this.setupEventListeners();
 
@@ -75,7 +95,7 @@ class AgoraRtmHelper {
       return this.rtmEngine;
     } catch (error) {
       console.error('[RTM] Failed to initialize Agora RTM engine:', error);
-      this.rtmEngine = null; // Ensure rtmEngine is null if initialization fails
+      this.rtmEngine = null;
       throw error;
     }
   }
@@ -188,39 +208,28 @@ class AgoraRtmHelper {
   async login(userId: string): Promise<void> {
     if (!this.rtmEngine) {
       console.log('[RTM] RTM engine not initialized, attempting to initialize now.');
-      await this.initialize();
-      if (!this.rtmEngine) {
-        console.error('[RTM] RTM engine failed to initialize. Cannot login.');
-        throw new Error('RTM engine failed to initialize.');
+      await this.initialize(); // This will throw if initialization fails
+      if (!this.rtmEngine) { // Should not be reached if initialize throws
+        throw new Error('RTM engine failed to initialize and is null after attempt.');
       }
     }
 
-    // Check if already logged in with the same user ID to prevent redundant logins
-    if (this.isLoggedIn && this.userId === userId && this.rtmEngine.getConnectionState() === ConnectionState.CONNECTED) {
+    if (this.isLoggedIn && this.userId === userId) {
       console.log(`[RTM] Already logged in as user ${userId}`);
       return;
     }
 
     try {
-      console.log(`[RTM] Attempting to fetch RTM token for user ${userId}`);
       const rtmTokenResponse = await this.fetchRtmToken(userId);
-
       if (!rtmTokenResponse || !rtmTokenResponse.token || !rtmTokenResponse.userId) {
-        console.error(`[RTM] Failed to obtain a valid RTM token or userId from server for user ${userId}. Token response:`, rtmTokenResponse);
         throw new Error('Failed to obtain a valid RTM token or userId from server.');
       }
+      
+      const uidForLogin = userId; // Or rtmTokenResponse.userId based on your backend
+      const loginOpts: LoginInfo = { uid: uidForLogin, token: rtmTokenResponse.token };
 
-      // It's crucial that the UID used for RTM login is consistent.
-      // Use the userId parameter from the method signature as the RTM UID.
-      // If your backend generates a different RTM UID than what's passed,
-      // you must use rtmTokenResponse.userId here instead.
-      const uidForLogin = userId; // Assuming the token is generated for this 'userId'
-
-      console.log(`[RTM] Attempting to login to RTM service as UID: ${uidForLogin} with token: ${rtmTokenResponse.token.substring(0, 20)}...`);
-
-      // Pass both token and uid (as userId) to the login method
-      // The `uid` parameter to `login` must be a string.
-      await this.rtmEngine.login({ uid: uidForLogin, token: rtmTokenResponse.token });
+      console.log(`[RTM] Attempting to login to RTM service as UID: ${loginOpts.uid} with token: ${loginOpts.token ? loginOpts.token.substring(0, 10) + '...' : 'N/A'}`);
+      await this.rtmEngine.login(loginOpts);
 
       this.userId = uidForLogin;
       this.isLoggedIn = true;
@@ -297,98 +306,95 @@ class AgoraRtmHelper {
     }
   }
 
-  // Create a call invitation
-  async createCallInvitation(calleeId: string, callType: 'voice' | 'video', channelName: string, rtcToken: string, callerRtcUid: number): Promise<RtmLocalInvitation> {
-    if (!this.rtmEngine || !this.isLoggedIn) {
-      throw new Error('[RTM] Not logged in. Cannot create call invitation.');
-    }
-    if (!this.userId) {
-        throw new Error('[RTM] Current RTM userId is not set. Cannot create invitation.');
-    }
-
-    try {
-      console.log(`[RTM] Creating call invitation to ${calleeId}`);
-      const localInvitation = await this.rtmEngine.createLocalInvitation(calleeId);
-
-      // Set content with call information
-      // IMPORTANT: callerRtcUid should be a number if your RTC UIDs are numbers.
-      // Ensure the value passed to this method (callerRtcUid: number) is indeed a numeric UID.
-      const content = JSON.stringify({
-        channelName,
-        callType,
-        callerName: this.userId, // Use current RTM user ID as name
-        rtcToken,
-        callerRtcUid: callerRtcUid, // Use the numeric RTC UID passed to the method
-      });
-
-      await localInvitation.setContent(content);
-      return localInvitation;
-    } catch (error) {
-      console.error('[RTM] Failed to create call invitation:', error);
-      throw error;
-    }
-  }
-
-  // Send a call invitation
-  async sendCallInvitation(localInvitation: RtmLocalInvitation): Promise<void> {
+  // New method to initiate and send call invitation using props
+  async initiateAndSendCallInvitation(
+    calleeId: string,
+    callType: 'voice' | 'video',
+    channelName: string, // This will be used as RTM channelId and in content
+    rtcToken: string,
+    callerRtcUid: number
+  ): Promise<void> {
     if (!this.rtmEngine || !this.isLoggedIn) {
       throw new Error('[RTM] Not logged in. Cannot send call invitation.');
     }
+    if (!this.userId) {
+      throw new Error('[RTM] Current RTM userId is not set. Cannot send invitation.');
+    }
 
     try {
-      console.log('[RTM] Sending call invitation');
-      await this.rtmEngine.sendLocalInvitation(localInvitation);
-      console.log('[RTM] Call invitation sent successfully');
+      const content = JSON.stringify({
+        channelName, // RTC channel name
+        callType,
+        callerName: this.userId, // Caller's RTM ID (or name)
+        rtcToken,
+        callerRtcUid,
+      });
+
+      const invitationProps: RtmLocalInvitationProps = {
+        uid: calleeId,
+        channelId: channelName, // Using RTC channelName as RTM invitation channelId
+        content: content,
+      };
+
+      console.log('[RTM] Sending call invitation with props:', invitationProps);
+      await this.rtmEngine.sendLocalInvitation(invitationProps);
+      console.log('[RTM] Call invitation sent successfully via props.');
     } catch (error) {
-      console.error('[RTM] Failed to send call invitation:', error);
+      console.error('[RTM] Failed to send call invitation via props:', error);
       throw error;
     }
   }
 
-  // Cancel a call invitation
-  async cancelCallInvitation(localInvitation: RtmLocalInvitation): Promise<void> {
+  // Update cancelCallInvitation to use props
+  async cancelCallInvitation(props: RtmLocalInvitationProps): Promise<void> {
     if (!this.rtmEngine || !this.isLoggedIn) {
-      throw new Error('[RTM] Not logged in. Cannot cancel call invitation.');
+      // Allow cancellation even if not logged in, as the invitation might be outstanding.
+      // However, the SDK might require login for cancellation. Test this behavior.
+      // For now, let's assume it might work or fail gracefully if not logged in.
+      console.warn('[RTM] Attempting to cancel call invitation while potentially not logged in.');
+      if (!this.rtmEngine) throw new Error ('[RTM] RTM Engine not available. Cannot cancel call invitation.');
+    }
+     if (!props.uid || !props.content || !props.channelId) {
+      throw new Error('[RTM] Callee ID, content, and channel ID are required to cancel invitation by props.');
     }
 
+
     try {
-      console.log('[RTM] Canceling call invitation');
-      await this.rtmEngine.cancelLocalInvitation(localInvitation);
-      console.log('[RTM] Call invitation canceled successfully');
+      console.log('[RTM] Canceling call invitation with props:', props);
+      await this.rtmEngine.cancelLocalInvitation(props);
+      console.log('[RTM] Call invitation canceled successfully via props');
     } catch (error) {
-      console.error('[RTM] Failed to cancel call invitation:', error);
+      console.error('[RTM] Failed to cancel call invitation via props:', error);
       throw error;
     }
   }
 
-  // Accept a call invitation
-  async acceptCallInvitation(remoteInvitation: RtmRemoteInvitation): Promise<void> {
-    if (!this.rtmEngine || !this.isLoggedIn) {
-      throw new Error('[RTM] Not logged in. Cannot accept call invitation.');
+  // Add this method
+  async acceptCallInvitation(remoteInvitation: AgoraRtmRemoteInvitation): Promise<void> {
+    if (!this.rtmEngine) {
+      throw new Error('[RTM] RTM engine not initialized. Cannot accept invitation.');
     }
-
     try {
-      console.log('[RTM] Accepting call invitation');
+      console.log('[RTM] Accepting remote invitation:', remoteInvitation);
       await this.rtmEngine.acceptRemoteInvitation(remoteInvitation);
-      console.log('[RTM] Call invitation accepted successfully');
+      console.log('[RTM] Remote invitation accepted successfully.');
     } catch (error) {
-      console.error('[RTM] Failed to accept call invitation:', error);
+      console.error('[RTM] Failed to accept remote invitation:', error);
       throw error;
     }
   }
 
-  // Refuse a call invitation
-  async refuseCallInvitation(remoteInvitation: RtmRemoteInvitation): Promise<void> {
-    if (!this.rtmEngine || !this.isLoggedIn) {
-      throw new Error('[RTM] Not logged in. Cannot refuse call invitation.');
+  // Add this method
+  async refuseCallInvitation(remoteInvitation: AgoraRtmRemoteInvitation): Promise<void> {
+    if (!this.rtmEngine) {
+      throw new Error('[RTM] RTM engine not initialized. Cannot refuse invitation.');
     }
-
     try {
-      console.log('[RTM] Refusing call invitation');
+      console.log('[RTM] Refusing remote invitation:', remoteInvitation);
       await this.rtmEngine.refuseRemoteInvitation(remoteInvitation);
-      console.log('[RTM] Call invitation refused successfully');
+      console.log('[RTM] Remote invitation refused successfully.');
     } catch (error) {
-      console.error('[RTM] Failed to refuse call invitation:', error);
+      console.error('[RTM] Failed to refuse remote invitation:', error);
       throw error;
     }
   }
@@ -406,14 +412,17 @@ class AgoraRtmHelper {
         await this.logout();
       }
 
-      this.rtmEngine.removeAllListeners();
-      this.rtmEngine.destroy(); // Destroy the client instance
+      this.rtmEngine.removeAllListeners(); // Call on the instance
+      // For agora-react-native-rtm@1.5.1, use destroy method
+      await this.rtmEngine.destroy(); // Call on the instance
+      
       this.rtmEngine = null;
       this.eventListeners.clear();
       console.log('[RTM] Agora RTM engine released');
     } catch (error) {
       console.error('[RTM] Failed to release Agora RTM engine:', error);
-      throw error;
+      // Don't throw error during cleanup
+      this.rtmEngine = null;
     }
   }
 
@@ -451,3 +460,8 @@ class AgoraRtmHelper {
 }
 
 export default AgoraRtmHelper;
+
+// Export the types directly so they can be imported by other modules
+export type RtmLocalInvitation = AgoraRtmLocalInvitation;
+export type RtmRemoteInvitation = AgoraRtmRemoteInvitation;
+export type { RtmLocalInvitationProps }; // Export the props type

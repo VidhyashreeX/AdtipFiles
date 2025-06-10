@@ -4,7 +4,7 @@ declare module 'agora-react-native-rtm' {
     CONNECTING = 2,
     CONNECTED = 3,
     RECONNECTING = 4,
-    ABORTED = 5
+    ABORTED = 5,
   }
 
   export enum ConnectionChangeReason {
@@ -15,89 +15,90 @@ declare module 'agora-react-native-rtm' {
     INTERRUPTED = 5,
     LOGOUT = 6,
     BANNED_BY_SERVER = 7,
-    REMOTE_LOGIN = 8
-  }
-
-  export interface RtmStatusCode {
-    [key: string]: number;
+    REMOTE_LOGIN = 8,
+    TOKEN_EXPIRED = 9,
   }
 
   export interface LoginInfo {
-    token: string;
-    uid: string; // Ensure uid is required
-  }
-
-  export interface LocalInvitationProps {
-    calleeId: string;
-    content?: string;
-    channelId?: string;
-    state?: number;
-    response?: string;
-  }
-
-  export interface RemoteInvitationProps {
-    callerId: string;
-    content?: string;
-    channelId?: string;
-    state?: number;
-    response?: string;
-  }
-
-  export class RtmLocalInvitation {
-    constructor(calleeId: string);
-    setContent(content: string): Promise<void>;
-    send(): Promise<void>;
-    cancel(): Promise<void>;
-    getCalleeId(): string;
-    getContent(): string;
-    getChannelId(): string;
-    getState(): number;
-    getResponse(): string;
-  }
-
-  export class RtmRemoteInvitation {
-    accept(): Promise<void>;
-    refuse(): Promise<void>;
-    setResponse(response: string): Promise<void>;
-    getCallerId(): string;
-    getContent(): string;
-    getChannelId(): string;
-    getState(): number;
-    getResponse(): string;
+    token?: string;
+    uid: string;
   }
 
   export interface RtmMessage {
     text: string;
-    messageType?: string;
-    rawMessage?: Uint8Array;
-    serverReceivedTs?: number;
-    isOfflineMessage?: boolean;
+    messageType?: number;
   }
 
-  export default class RtmEngine {
-    constructor();
-    createInstance(appId: string): Promise<void>;
-    destroy(): Promise<void>;
-    login(loginInfo: LoginInfo): Promise<void>;
-    logout(): Promise<void>;
-    renewToken(token: string): Promise<void>;
-    createLocalInvitation(calleeId: string): Promise<RtmLocalInvitation>;
-    sendLocalInvitation(localInvitation: RtmLocalInvitation): Promise<void>;
-    cancelLocalInvitation(localInvitation: RtmLocalInvitation): Promise<void>;
-    acceptRemoteInvitation(remoteInvitation: RtmRemoteInvitation): Promise<void>;
-    refuseRemoteInvitation(remoteInvitation: RtmRemoteInvitation): Promise<void>;
-    sendMessageToPeer(peerId: string, message: string | RtmMessage): Promise<void>;
-    createChannel(channelId: string): Promise<RtmChannel>;
-    getChannelAttributesByKeys(channelId: string, keys: string[]): Promise<any>;
-    getChannelAttributes(channelId: string): Promise<any>;
-    removeAllListeners(): void;
-    on(event: string, listener: Function): void;
+  export interface RtmLocalInvitation {
+    getCalleeId(): string;
+    getContent(): string;
+    getChannelId(): string;
+    getResponse(): string;
+    getState(): number;
+  }
+
+  export interface RtmRemoteInvitation {
+    getCallerId(): string;
+    // getContent(): string; // Remove this method
+    content: string;        // Add this property
+    setResponse(response: string): Promise<void>;
+    getChannelId(): string;
+    getResponse(): string;
+    getState(): number;
+  }
+
+  // Add this new interface
+  export interface RtmLocalInvitationProps {
+    uid: string; 
+    channelId?: string; 
+    content?: string; 
   }
 
   export class RtmChannel {
     join(): Promise<void>;
     leave(): Promise<void>;
     sendMessage(message: string | RtmMessage): Promise<void>;
-    getMembers(): Promise<any[]>;
+    getMembers(): Promise<Array<{ userId: string; channelId: string }>>;
   }
+
+  export class RtmEngine {
+    // Constructor is used implicitly with 'new RtmEngine()'
+    
+    // Instance method to initialize the client with App ID
+    createClient(appId: string): Promise<void>; 
+
+    destroy(): Promise<void>;
+    login(loginInfo: LoginInfo): Promise<void>;
+    logout(): Promise<void>;
+    renewToken(token: string): Promise<void>;
+
+    // createLocalInvitation is still useful for getting an object if needed elsewhere,
+    // but not for setContent. Update its signature if it accepts content/channelId.
+    createLocalInvitation(calleeId: string, content?: string, channelId?: string): Promise<RtmLocalInvitation>;
+
+    // For sending, prioritize the props version as per the fix
+    sendLocalInvitation(props: RtmLocalInvitationProps): Promise<void>;
+    // If the old version taking an RtmLocalInvitation object is still needed by the SDK's V2 pattern:
+    // sendLocalInvitation(localInvitation: RtmLocalInvitation): Promise<void>; 
+
+    // For cancelling, prioritize the props version
+    cancelLocalInvitation(props: RtmLocalInvitationProps): Promise<void>;
+    // If the old version taking an RtmLocalInvitation object is still needed:
+    // cancelLocalInvitation(localInvitation: RtmLocalInvitation): Promise<void>;
+
+    acceptRemoteInvitation(remoteInvitation: RtmRemoteInvitation): Promise<void>;
+    refuseRemoteInvitation(remoteInvitation: RtmRemoteInvitation): Promise<void>;
+
+    sendMessageToPeer(peerId: string, message: string | RtmMessage): Promise<void>;
+    createChannel(channelId: string): Promise<RtmChannel>;
+
+    on(event: string, listener: (...args: any[]) => void): void;
+    removeAllListeners(event?: string): void;
+
+    getChannelAttributes(channelId: string): Promise<Array<{ key: string; value: string }>>;
+    getChannelAttributesByKeys(channelId: string, keys: string[]): Promise<Array<{ key: string; value: string }>>;
+    getChannelMemberCount(channelIds: string[]): Promise<Array<{ channelId: string; count: number }>>;
+  }
+
+  export default RtmEngine;
 }
