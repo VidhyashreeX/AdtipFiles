@@ -12,9 +12,11 @@ import {
   StatusBar,
   SafeAreaView,
   Platform,
+  Animated,
 } from 'react-native';
-import Video, { OnErrorData } from 'react-native-video';
+import Video from 'react-native-video';
 import Icon from 'react-native-vector-icons/Feather';
+import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -23,7 +25,7 @@ import { ENDPOINTS } from '../../constants/api';
 import { useShorts } from '../../contexts/ShortsContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 8; // Number of shorts to fetch per page
 
 interface ShortVideo {
   id: string;
@@ -68,7 +70,7 @@ interface PublicShot {
   total_channel_followers: number;
 }
 
-// Utility function to shuffle an array (add this at the top of the file or import from utils)
+// Utility function to shuffle an array
 function shuffleArray<T>(array: T[]): T[] {
   const newArray = [...array];
   for (let i = newArray.length - 1; i > 0; i--) {
@@ -77,6 +79,118 @@ function shuffleArray<T>(array: T[]): T[] {
   }
   return newArray;
 }
+
+// Animated Like Button Component
+const AnimatedLikeButton = memo(({ 
+  isLiked, 
+  onPress, 
+  likeCount,
+  disabled = false 
+}: { 
+  isLiked: boolean; 
+  onPress: () => void; 
+  likeCount: number;
+  disabled?: boolean;
+}) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+
+  const handlePress = useCallback(() => {
+    if (disabled) return;
+
+    // Scale animation
+    Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: 0.8,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1.2,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Pulse animation for liked state
+    if (!isLiked) {
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.3,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      // Rotation animation
+      Animated.timing(rotateAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }).start(() => {
+        rotateAnim.setValue(0);
+      });
+    }
+
+    onPress();
+  }, [disabled, isLiked, scaleAnim, pulseAnim, rotateAnim, onPress]);
+
+  const animatedStyle = {
+    transform: [
+      { scale: scaleAnim },
+      { 
+        rotate: rotateAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: ['0deg', '360deg'],
+        })
+      },
+    ],
+  };
+
+  const pulseStyle = {
+    transform: [{ scale: pulseAnim }],
+  };
+
+  return (
+    <TouchableOpacity 
+      style={styles.actionButton} 
+      onPress={handlePress}
+      disabled={disabled}
+      activeOpacity={0.7}
+    >
+      <Animated.View style={animatedStyle}>
+        {isLiked ? (
+          <Animated.View style={pulseStyle}>
+            <LinearGradient
+              colors={['#FF6B6B', '#FF8E53', '#FF6B35']}
+              start={{x: 0, y: 0}}
+              end={{x: 1, y: 1}}
+              style={styles.likedHeartGradient}
+            >
+              <Icon name="heart" size={28} color="#FFFFFF" />
+            </LinearGradient>
+          </Animated.View>
+        ) : (
+          <View style={styles.unlikedHeartContainer}>
+            <Icon name="heart" size={28} color="#FFF" />
+          </View>
+        )}
+      </Animated.View>
+      <Text style={styles.actionText}>{likeCount}</Text>
+    </TouchableOpacity>
+  );
+});
 
 const TipShorts = () => {
   const { colors } = useTheme();
@@ -92,6 +206,7 @@ const TipShorts = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [likedShorts, setLikedShorts] = useState<{ [key: string]: boolean }>({});
+  const [likingShorts, setLikingShorts] = useState<{ [key: string]: boolean }>({});
   const [refreshing, setRefreshing] = useState(false);
 
   // Pagination states
@@ -99,48 +214,130 @@ const TipShorts = () => {
   const [hasMore, setHasMore] = useState(true);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
 
-  // Refs for FlatList and individual Video components
+  // Refs for FlatList and to manage scroll cooldown
   const flatListRef = useRef<FlatList>(null);
-  const videoRefs = useRef<{ [key: string]: any }>({});
-  
-  // Track the last scroll time to implement scroll cooldown and prevent accidental scrolling
   const lastScrollTime = useRef(0);
-  const SCROLL_COOLDOWN = 1500; // Increased cooldown to 1.5 seconds
+  const SCROLL_COOLDOWN = 600;
 
-  // FIXED: Enhanced callback for FlatList's onViewableItemsChanged with proper scroll protection
-  const handleViewableItemsChanged = useRef(({ viewableItems }: any) => {
+  // Handle like/unlike short video
+  const handleLikeShort = useCallback(async (shortId: string, creatorId: string, currentLikes: number) => {
+    if (!user?.id || likingShorts[shortId]) {
+      console.warn('User not authenticated or already processing like for this short');
+      return;
+    }
+
+    const wasLiked = likedShorts[shortId] || false;
+    const newLikedState = !wasLiked;
+
+    // Optimistically update the UI
+    setLikedShorts(prev => ({
+      ...prev,
+      [shortId]: newLikedState,
+    }));
+
+    setShorts(prevShorts =>
+      prevShorts.map(short =>
+        short.id === shortId
+          ? { ...short, likes: short.likes + (newLikedState ? 1 : -1) }
+          : short,
+      ),
+    );
+
+    // Set loading state for this specific short
+    setLikingShorts(prev => ({
+      ...prev,
+      [shortId]: true,
+    }));
+
+    try {
+      console.log('Sending like request for short:', { 
+        shortId, 
+        userId: user.id, 
+        creatorId, 
+        newLikedState 
+      });
+      
+      const response = await ApiService.likeShortVideo({
+        reelId: parseInt(shortId),
+        userId: parseInt(user.id.toString()),
+        like: newLikedState ? 1 : 0,
+        reelCreatorId: parseInt(creatorId),
+      });
+      
+      console.log('Short like API response:', response);
+      
+      if (response.status !== 200 && response.status !== 1) {
+        throw new Error('API response indicates failure');
+      }
+      
+      console.log('Short like status updated successfully');
+      
+    } catch (error: any) {
+      console.error('Error updating short like status:', error);
+      
+      // Rollback UI changes on error
+      setLikedShorts(prev => ({
+        ...prev,
+        [shortId]: wasLiked,
+      }));
+
+      setShorts(prevShorts =>
+        prevShorts.map(short =>
+          short.id === shortId
+            ? { ...short, likes: short.likes + (wasLiked ? 1 : -1) }
+            : short,
+        ),
+      );
+
+      setError(`Failed to ${newLikedState ? 'like' : 'unlike'} short. Please try again.`);
+    } finally {
+      // Remove loading state for this specific short
+      setLikingShorts(prev => {
+        const newState = { ...prev };
+        delete newState[shortId];
+        return newState;
+      });
+    }
+  }, [user, likedShorts, likingShorts]);
+
+  // Memoized callback for FlatList's onViewableItemsChanged
+  const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
       const newIndex = viewableItems[0].index;
       const now = Date.now();
-      
-      // Only proceed if this is a new index and we're outside the cooldown period
+
       if (newIndex !== activeIndex && (now - lastScrollTime.current > SCROLL_COOLDOWN)) {
-        console.log(`Video index changing from ${activeIndex} to ${newIndex}`); // Debug log
         setActiveIndex(newIndex);
         lastScrollTime.current = now;
       }
     }
-  }).current;
-  
-  // FIXED: More restrictive viewability configuration
+  }, [activeIndex]);
+
+  // Viewability configuration for FlatList
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 100, // Require 100% visibility (was 95%)
-    waitForInteraction: true, // Only update after user interaction
-    minimumViewTime: 2000, // Must be visible for 2 seconds (was 1.2s)
+    itemVisiblePercentThreshold: 100,
+    minimumViewTime: 500,
   }).current;
 
   // Function to fetch short videos from the API
   const fetchShorts = useCallback(async (reset = false) => {
+    if (isFetchingMore && !reset) return;
+
     try {
-      if (reset) setPage(1);
-      setLoading(reset); // Only set main loading true on reset
-      setIsFetchingMore(!reset); // Set fetching more true if not a reset
+      if (reset) {
+        setLoading(true);
+        setShorts([]);
+        setPage(1);
+        setHasMore(true);
+      } else {
+        setIsFetchingMore(true);
+      }
       setError(null);
 
-      const userId = user?.id || '50816'; 
+      const userId = user?.id || '50816';
       const currentPage = reset ? 1 : page;
       const apiUrl = `${ENDPOINTS.GET_SHORTS}/${userId}?page=${currentPage}&limit=${PAGE_SIZE}`;
-      
+
       const response = await ApiService.get(apiUrl);
 
       if (!response || (!response.data && response.status !== 200)) {
@@ -188,21 +385,16 @@ const TipShorts = () => {
         }))
         .filter(short => short.videoUrl && short.videoUrl.startsWith('http'));
 
-      if (reset) {
-        // Shuffle shorts on refresh (reset)
-        setShorts(shuffleArray(mappedShorts));
-      } else {
-        setShorts(prev => {
-          const existingIds = new Set(prev.map(s => s.id));
-          const newUniqueShorts = mappedShorts.filter(s => !existingIds.has(s.id));
-          return [...prev, ...newUniqueShorts];
-        });
-      }
+      setShorts(prev => {
+        const existingIds = new Set(prev.map(s => s.id));
+        const newUniqueShorts = mappedShorts.filter(s => !existingIds.has(s.id));
+        
+        return reset ? shuffleArray(newUniqueShorts) : [...prev, ...newUniqueShorts];
+      });
+
       setHasMore(mappedShorts.length === PAGE_SIZE);
-      if (mappedShorts.length > 0 && !reset) { // Only increment page if not a reset and new shorts were fetched
+      if (mappedShorts.length > 0) {
         setPage(prev => prev + 1);
-      } else if (mappedShorts.length > 0 && reset) {
-        setPage(2); // After a reset, the next page to fetch is 2
       }
     } catch (fetchError: any) {
       console.error('Error fetching shorts:', fetchError.message, fetchError.stack);
@@ -212,12 +404,14 @@ const TipShorts = () => {
       setIsFetchingMore(false);
       setRefreshing(false);
     }
-  }, [page, user, isGloballyMuted, isGloballyPlaying]); // Added isGloballyMuted and isGloballyPlaying if they influence fetching logic, otherwise remove
+  }, [page, user, isFetchingMore]);
 
+  // Initial data fetch on component mount
   useEffect(() => {
     fetchShorts(true);
-  }, []);
+  }, [fetchShorts]);
 
+  // Handle pull-to-refresh
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     setActiveIndex(0);
@@ -227,23 +421,24 @@ const TipShorts = () => {
     fetchShorts(true);
   }, [fetchShorts]);
 
+  // Handle reaching the end of the list to load more data
   const handleEndReached = useCallback(() => {
     if (!loading && !isFetchingMore && hasMore) {
       fetchShorts(false);
     }
   }, [loading, isFetchingMore, hasMore, fetchShorts]);
 
-  // FIXED: Manual navigation function with proper cooldown
+  // Manual navigation function with cooldown to prevent rapid scrolls
   const navigateToShort = useCallback((direction: 'next' | 'previous') => {
     const now = Date.now();
     if (now - lastScrollTime.current < SCROLL_COOLDOWN) {
       return;
     }
-    
-    const nextIndex = direction === 'next' 
+
+    const nextIndex = direction === 'next'
       ? Math.min(activeIndex + 1, shorts.length - 1)
       : Math.max(activeIndex - 1, 0);
-    
+
     if (nextIndex !== activeIndex && flatListRef.current) {
       lastScrollTime.current = now;
       flatListRef.current.scrollToIndex({
@@ -255,7 +450,7 @@ const TipShorts = () => {
     }
   }, [activeIndex, shorts.length, SCROLL_COOLDOWN]);
 
-  // FIXED: Properly memoized ShortCard component
+  // Memoized ShortCard component for performance
   const ShortCard = memo(
     ({
       item,
@@ -268,6 +463,7 @@ const TipShorts = () => {
       onNavigateToChannel,
       toggleGlobalPlayPause,
       toggleGlobalMute,
+      likingInProgress,
     }: {
       item: ShortVideo;
       isActive: boolean;
@@ -279,9 +475,8 @@ const TipShorts = () => {
       onNavigateToChannel: () => void;
       toggleGlobalPlayPause: () => void;
       toggleGlobalMute: () => void;
+      likingInProgress: boolean;
     }) => {
-      const videoRef = useRef<any>(null);
-      
       const videoSource = useMemo(() => ({ uri: item.videoUrl }), [item.videoUrl]);
 
       const handlePlayPausePress = useCallback((e: any) => {
@@ -294,20 +489,16 @@ const TipShorts = () => {
         toggleGlobalMute();
       }, [toggleGlobalMute]);
 
-      useEffect(() => {
-        if (videoRef.current) {
-          videoRefs.current[item.id] = videoRef.current;
-        }
-        return () => {
-          delete videoRefs.current[item.id];
-        };
-      }, [item.id]);
-
       return (
         <View style={styles.shortCardContainer}>
-          <View style={styles.videoTouchable}>
+          <TouchableOpacity
+            style={styles.videoTouchable}
+            activeOpacity={1}
+            onPress={() => {
+              // Optional tap-to-pause/play functionality
+            }}
+          >
             <Video
-              ref={videoRef}
               source={videoSource}
               style={styles.video}
               resizeMode="cover"
@@ -319,7 +510,7 @@ const TipShorts = () => {
               playInBackground={false}
               playWhenInactive={false}
               ignoreSilentSwitch="ignore"
-              onError={(e) => console.error(`Error loading video ${item.id}:`, e.error || e)}
+              onError={(e: any) => console.error(`Error loading video ${item.id}:`, e.error || e)}
               bufferConfig={{
                 minBufferMs: 15000,
                 maxBufferMs: 50000,
@@ -327,17 +518,18 @@ const TipShorts = () => {
                 bufferForPlaybackAfterRebufferMs: 5000,
               }}
             />
-          </View>
+          </TouchableOpacity>
 
+          {/* Top Controls Overlay (Play/Pause, Mute/Unmute) */}
           <View style={styles.topControlsOverlay}>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={handlePlayPausePress}
               style={styles.controlButton}
               activeOpacity={0.7}
             >
               <Icon name={isGloballyPlaying && isActive ? "pause" : "play"} size={26} color="#FFF" />
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={handleMutePress}
               style={styles.controlButton}
               activeOpacity={0.7}
@@ -346,6 +538,7 @@ const TipShorts = () => {
             </TouchableOpacity>
           </View>
 
+          {/* Bottom Content and Actions Overlay */}
           <View style={styles.overlay}>
             <View style={styles.bottomContent}>
               <TouchableOpacity onPress={onNavigateToChannel} style={styles.channelInfo}>
@@ -364,10 +557,12 @@ const TipShorts = () => {
             </View>
 
             <View style={styles.actions}>
-              <TouchableOpacity style={styles.actionButton} onPress={onLike}>
-                <Icon name="heart" size={28} color={liked ? colors.primary : '#FFF'} />
-                <Text style={styles.actionText}>{item.likes + (liked ? 1 : 0)}</Text>
-              </TouchableOpacity>
+              <AnimatedLikeButton
+                isLiked={liked}
+                onPress={onLike}
+                likeCount={item.likes}
+                disabled={likingInProgress}
+              />
               <TouchableOpacity style={styles.actionButton}>
                 <Icon name="message-circle" size={28} color="#FFF" />
                 <Text style={styles.actionText}>{item.comments}</Text>
@@ -384,14 +579,14 @@ const TipShorts = () => {
         </View>
       );
     },
-    // FIXED: Proper comparison function that returns the actual comparison result
     (prevProps, nextProps) => {
       return (
         prevProps.item.id === nextProps.item.id &&
         prevProps.isActive === nextProps.isActive &&
         prevProps.isGloballyMuted === nextProps.isGloballyMuted &&
         prevProps.isGloballyPlaying === nextProps.isGloballyPlaying &&
-        prevProps.liked === nextProps.liked
+        prevProps.liked === nextProps.liked &&
+        prevProps.likingInProgress === nextProps.likingInProgress
       );
     }
   );
@@ -399,6 +594,7 @@ const TipShorts = () => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background || '#000' }]}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
+      
       {loading && shorts.length === 0 ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary || '#FF4057'} />
@@ -438,37 +634,39 @@ const TipShorts = () => {
               isGloballyMuted={isGloballyMuted}
               isGloballyPlaying={isGloballyPlaying}
               liked={!!likedShorts[item.id]}
-              onLike={() => {
-                setLikedShorts(prev => ({ ...prev, [item.id]: !prev[item.id] }));
-              }}
-              onShare={async () => {
+              onLike={useCallback(() => {
+                handleLikeShort(item.id, item.channel.id, item.likes);
+              }, [item.id, item.channel.id, item.likes])}
+              onShare={useCallback(async () => {
                 try {
                   await Share.share({ message: `Check out this short by ${item.channel.name}: ${item.videoUrl}` });
                 } catch (shareError) {
                   console.error('Error sharing video:', shareError);
                 }
-              }}
-              onNavigateToChannel={() =>
-                navigation.navigate('ChannelProfileScreen' as never, { userId: item.channel.id } as never)
-              }
+              }, [item.channel.name, item.videoUrl])}
+              onNavigateToChannel={useCallback(() =>
+                navigation.navigate('ChannelProfileScreen' as never, { userId: item.channel.id } as never),
+                [item.channel.id, navigation]
+              )}
               toggleGlobalPlayPause={toggleGlobalPlayPause}
               toggleGlobalMute={toggleGlobalMute}
+              likingInProgress={!!likingShorts[item.id]}
             />
           )}
           pagingEnabled
           showsVerticalScrollIndicator={false}
-          onViewableItemsChanged={handleViewableItemsChanged}
+          onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
           snapToInterval={SCREEN_HEIGHT}
           snapToAlignment="start"
-          decelerationRate="normal" // Changed from fast to normal for better control
-          scrollEventThrottle={16} // Reduced for better responsiveness
+          decelerationRate="fast"
+          scrollEventThrottle={16}
           bounces={false}
           overScrollMode="never"
           directionalLockEnabled={true}
           disableIntervalMomentum={true}
-          scrollEnabled={true} // Ensure scrolling is enabled
-          nestedScrollEnabled={false} // Prevent nested scroll conflicts
+          scrollEnabled={true}
+          nestedScrollEnabled={false}
           getItemLayout={(data, index) => ({
             length: SCREEN_HEIGHT,
             offset: SCREEN_HEIGHT * index,
@@ -477,13 +675,13 @@ const TipShorts = () => {
           initialScrollIndex={0}
           onRefresh={handleRefresh}
           refreshing={refreshing}
-          windowSize={3} // Reduced for better performance
-          maxToRenderPerBatch={2} // Reduced for better performance
-          initialNumToRender={1} // Only render initial video
+          windowSize={3}
+          maxToRenderPerBatch={2}
+          initialNumToRender={1}
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.7}
           ListFooterComponent={isFetchingMore ? (
-            <ActivityIndicator size="small" color={colors.primary || '#FF4057'} style={styles.footerLoader}/>
+            <ActivityIndicator size="small" color={colors.primary || '#FF4057'} style={styles.footerLoader} />
           ) : !hasMore && shorts.length > 0 ? (
             <Text style={[styles.endOfListText, { color: colors.text?.secondary || '#AAA' }]}>
               You've reached the end!
@@ -492,11 +690,11 @@ const TipShorts = () => {
           removeClippedSubviews={Platform.OS === 'android'}
         />
       )}
-      
-      {/* Manual Navigation Controls with proper cooldown */}
+
+      {/* Manual Navigation Controls */}
       <View style={styles.navigationControls}>
         {activeIndex > 0 && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.navButton}
             onPress={() => navigateToShort('previous')}
           >
@@ -504,7 +702,7 @@ const TipShorts = () => {
           </TouchableOpacity>
         )}
         {activeIndex < shorts.length - 1 && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.navButton}
             onPress={() => navigateToShort('next')}
           >
@@ -684,6 +882,32 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.7)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
+  },
+  // Like button styles
+  likedHeartGradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#FF6B6B',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  unlikedHeartContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   footerLoader: {
     marginVertical: 20,

@@ -14,6 +14,7 @@ import {
   useWindowDimensions,
   Platform,
   PixelRatio,
+  Linking
 } from 'react-native';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
@@ -64,10 +65,9 @@ const ThemeAwareStatusBar = () => {
  * App Navigator component that uses auth context
  */
 const AppNavigator = () => {
-  // Ensure isAuthenticated and isInitialized are used, or remove them if not.
-  // For example, you might use isInitialized to delay Firebase setup.
   const { isAuthenticated, isInitialized } = useAuth();
   const [messagingInstance, setMessagingInstance] = useState<ReturnType<typeof messaging> | null>(null);
+  const [initialCallData, setInitialCallData] = useState<any>(null); // Store initial call data
 
   useEffect(() => {
     const initFirebaseMessaging = async () => {
@@ -144,6 +144,67 @@ const AppNavigator = () => {
       // Cleanup logic if any for NotificationService listeners
     };
   }, [isAuthenticated, messagingInstance]); // Dependencies
+
+  useEffect(() => {
+    // Check for initial notification when app opens from killed state
+    messaging()
+      .getInitialNotification()
+      .then(remoteMessage => {
+        if (remoteMessage) {
+          console.log(
+            '[FCM] App opened from killed state by notification:',
+            remoteMessage.data,
+          );
+          // Assuming your CallNotificationService puts relevant data here
+          // You might need to adapt this based on the actual structure of remoteMessage.data
+          // and what your CallNotificationService.java puts in the intent.
+          // The `extractCallData` logic from TipCallScreen's NotificationService could be reused or adapted.
+          if (remoteMessage.data && remoteMessage.data.isIncomingCall === 'true') { // Check your actual data keys
+             const callData = { // Reconstruct call data similar to what RTM provides
+                callerName: remoteMessage.data.callerName,
+                callType: remoteMessage.data.callType as ('voice' | 'video'),
+                channelName: remoteMessage.data.channelName,
+                rtcToken: remoteMessage.data.agoraToken, // Ensure this is the RTC token
+                callerRtcUid: remoteMessage.data.callerId, // Assuming callerId from FCM is the RTM/RTC UID
+                // This is not a full RtmRemoteInvitation, so TipCallScreen needs to handle this partial data
+                isFromNotification: true, 
+             };
+             setInitialCallData(callData);
+          }
+        }
+      });
+
+    // Listen for notifications when app is in background and opened
+    const unsubscribeForeground = messaging().onNotificationOpenedApp(remoteMessage => {
+      console.log(
+        '[FCM] App opened from background by notification:',
+        remoteMessage.data,
+      );
+      if (remoteMessage.data && remoteMessage.data.isIncomingCall === 'true') {
+         const callData = {
+            callerName: remoteMessage.data.callerName,
+            callType: remoteMessage.data.callType as ('voice' | 'video'),
+            channelName: remoteMessage.data.channelName,
+            rtcToken: remoteMessage.data.agoraToken,
+            callerRtcUid: remoteMessage.data.callerId,
+            isFromNotification: true,
+         };
+         // Navigate to TipCallScreen or set state that TipCallScreen can read
+         // For simplicity, if TipCallScreen is always part of the stack,
+         // you could use navigation events or a global state/context.
+         // Or, pass initialCallData down as a prop.
+         navigationRef.navigate('Main', { 
+            screen: 'TipCall', // Assuming TipCall is a screen in MainNavigator
+            params: { initialCallNotificationData: callData } 
+         });
+      }
+    });
+
+    return () => {
+      // unsubscribeForeground(); // If you store the unsubscribe function
+    };
+  }, []);
+
 
   // Show loading indicator ONLY while AuthContext is initializing
   if (!isInitialized) {

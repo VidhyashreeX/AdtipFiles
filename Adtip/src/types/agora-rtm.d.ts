@@ -24,7 +24,7 @@ declare module 'agora-react-native-rtm' {
 
   export interface LoginInfo {
     token: string;
-    uid: string;
+    uid: string; // Ensure uid is required
   }
 
   export interface LocalInvitationProps {

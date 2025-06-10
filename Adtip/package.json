@@ -24,6 +24,7 @@
     "@react-navigation/native-stack": "^7.3.14",
     "@react-navigation/stack": "^7.3.3",
     "agora-react-native-rtm": "^1.5.1",
+    "agora-rtm-sdk": "^2.2.2",
     "axios": "^1.9.0",
     "date-fns": "^4.1.0",
     "expo-file-system": "^18.1.10",

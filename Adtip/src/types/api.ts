@@ -223,3 +223,31 @@ export interface ReferralDetailsResponse {
   coupon_code: string | null;
   each_coupon: number;
 }
+
+// Add these interfaces for the like functionality
+export interface LikePostRequest {
+  userId: number;
+  postId: number;
+  is_liked: boolean;
+}
+
+// Update LikePostResponse to match actual API response
+export interface LikePostResponse {
+  status: boolean;
+  message: string;
+  is_liked: boolean;
+}
+
+// Add these interfaces for short video like functionality
+export interface LikeShortRequest {
+  reelId: number;
+  userId: number;
+  like: number; // 1 for like, 0 for unlike
+  reelCreatorId: number;
+}
+
+export interface LikeShortResponse {
+  status: number;
+  message: string;
+  data?: any;
+}

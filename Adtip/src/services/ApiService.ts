@@ -26,6 +26,33 @@ import {
 } from '../types/api';
 import { RtmTokenRequest, RtmTokenResponse } from './AgoraRtmHelper';
 
+// Interfaces moved from inside the class
+export interface LikePostRequest {
+  userId: number;
+  postId: number;
+  is_liked: boolean;
+}
+
+// Update the LikePostResponse interface to match actual API response
+export interface LikePostResponse {
+  status: boolean;
+  message: string;
+  is_liked: boolean;
+}
+
+export interface LikeShortRequest {
+  reelId: number;
+  userId: number;
+  like: number; // 1 for like, 0 for unlike
+  reelCreatorId: number;
+}
+
+export interface LikeShortResponse {
+  status: number;
+  message: string;
+  data?: any;
+}
+
 // Define public endpoints that don't require authentication
 const PUBLIC_ENDPOINTS = [
   ApiEndpoints.AUTH_ENDPOINTS.OTP_LOGIN,          // Example: "/api/otplogin"
@@ -616,27 +643,60 @@ export default class ApiService {
   static async getRtmToken(
     data: RtmTokenRequest,
   ): Promise<RtmTokenResponse> {
-    console.log('[RTM-API] getRtmToken called with data:', JSON.stringify(data, null, 2));
+    console.log('[RTM-API] Fetching RTM token for uid:', data.uid);
     try {
-      // Attempt to call the backend RTM token endpoint
-      // Uncomment this when backend endpoint is available
-      
       const response = await this.post<RtmTokenResponse>(
         ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_RTM_TOKEN,
         data,
       );
-      console.log('[RTM-API] getRtmToken response:', JSON.stringify(response, null, 2));
+      console.log('[RTM-API] RTM token response:', JSON.stringify(response, null, 2));
+      
+      if (!response || !response.token || typeof response.token !== 'string') {
+        console.error('[RTM-API] Invalid RTM token response:', response);
+        throw new Error('Invalid RTM token received from server');
+      }
+      
       return response;
-      
-      
-      // For development: return a dummy token until backend is ready
-      console.warn('[RTM-API] Using dummy RTM token for development');
-      return {
-        token: 'dummy_rtm_token_for_testing',
-        userId: data.uid
-      };
     } catch (error) {
-      console.error('[RTM-API] getRtmToken error:', error);
+      console.error('[RTM-API] Error fetching RTM token:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Like or unlike a post
+   * @param data - Like request data containing userId, postId, and is_liked status
+   */
+  static async likePost(data: LikePostRequest): Promise<LikePostResponse> {
+    console.log('[API] Sending like request:', JSON.stringify(data, null, 2));
+    try {
+      const response = await this.post<LikePostResponse>(
+        '/api/save-user-post-like',
+        data,
+      );
+      console.log('[API] Like response:', JSON.stringify(response, null, 2));
+      return response;
+    } catch (error) {
+      console.error('[API] Like request failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Like or unlike a short video
+   * @param data - Like request data containing reelId, userId, like status, and reelCreatorId
+   */
+  static async likeShortVideo(data: LikeShortRequest): Promise<LikeShortResponse> {
+    console.log('[API] Sending short like request:', JSON.stringify(data, null, 2));
+    try {
+      const response = await this.post<LikeShortResponse>(
+        '/saveVideoLike',
+        data,
+      );
+      console.log('[API] Short like response:', JSON.stringify(response, null, 2));
+      return response;
+    } catch (error) {
+      console.error('[API] Short like request failed:', error);
       throw error;
     }
   }

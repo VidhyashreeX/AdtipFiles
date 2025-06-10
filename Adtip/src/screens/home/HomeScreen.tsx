@@ -22,6 +22,7 @@ import StoryItem from '../../components/home/StoryItem';
 import CategoryItem from '../../components/home/CategoryItem';
 import PostItem from '../../components/home/PostItem';
 import EarnCard from '../../components/home/EarnCard';
+import CommentScreen from './CommentScreen'; // Add this import
 
 // Services
 import WalletService from '../../services/WalletService';
@@ -208,6 +209,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
   const [error, setError] = useState<string | null>(null);
   const [likedPosts, setLikedPosts] = useState<{[key: number]: boolean}>({});  const [_walletAmount, setWalletAmount] = useState('0.00');
   const [visiblePostIds, setVisiblePostIds] = useState<number[]>([]);
+  const [commentModalVisible, setCommentModalVisible] = useState(false);
+  const [selectedCommentPostId, setSelectedCommentPostId] = useState<number | null>(null);
 
   // Viewability configuration
   const viewabilityConfig = useRef<ViewabilityConfig>({
@@ -428,42 +431,55 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
   };
 
   const handleLike = async (postId: number) => {
+    if (!user?.id) {
+      console.warn('User not authenticated, cannot like post');
+      return;
+    }
+
     const previousLikedState = likedPosts[postId] || false;
+    const newLikedState = !previousLikedState;
 
     // Optimistically update the UI
     setLikedPosts(prev => ({
       ...prev,
-      [postId]: !prev[postId],
+      [postId]: newLikedState,
     }));
 
     setPosts(prevPosts =>
       prevPosts.map(post =>
         post.id === postId
-          ? {...post, likeCount: post.likeCount + (likedPosts[postId] ? -1 : 1)}
+          ? {...post, likeCount: post.likeCount + (newLikedState ? 1 : -1)}
           : post,
       ),
     );
 
-    // TODO: Implement API call to like/unlike post
     try {
-      const response = await fetch(`${API_BASE_URL}/api/save-user-post-like`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // Add any other headers your API requires
-        },
-        body: JSON.stringify({
-          postId,
-          isLiked: !previousLikedState,
-          userId: user?.id, // Include user ID if needed
-        }),
+      console.log('Sending like request:', { userId: user.id, postId, is_liked: newLikedState });
+      
+      const response = await ApiService.likePost({
+        userId: user.id,
+        postId: postId,
+        is_liked: newLikedState,
       });
-      const result = await response.json();
-      if (result.postId !== postId || result.is_liked !== !previousLikedState) {
-        throw new Error('Failed to update like status');
+      
+      console.log('Like API response:', response);
+      
+      // Handle the actual API response structure
+      if (response.status === true && response.is_liked === newLikedState) {
+        // Success - UI is already updated optimistically
+        console.log('Post like status updated successfully');
+      } else if (response.status === false) {
+        // API returned failure status
+        throw new Error(response.message || 'API request failed');
+      } else {
+        // Unexpected response structure
+        console.warn('Unexpected API response structure, but treating as success');
       }
-    } catch (err) {
-      // Rollback UI change on error
+      
+    } catch (error: any) {
+      console.error('Error updating like status:', error);
+      
+      // Rollback UI changes on error
       setLikedPosts(prev => ({
         ...prev,
         [postId]: previousLikedState,
@@ -472,18 +488,23 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
       setPosts(prevPosts =>
         prevPosts.map(post =>
           post.id === postId
-            ? {...post, likeCount: post.likeCount - (likedPosts[postId] ? -1 : 1)}
+            ? {...post, likeCount: post.likeCount + (previousLikedState ? 1 : -1)}
             : post,
         ),
       );
 
-      setError('Failed to update like. Please try again.');
+      setError(`Failed to ${newLikedState ? 'like' : 'unlike'} post. Please try again.`);
     }
   };
 
   const handleComment = (postId: number) => {
-    // Navigate to comment screen
-    navigation.navigate('Comments', {postId});
+    setSelectedCommentPostId(postId);
+    setCommentModalVisible(true);
+  };
+
+  const handleCloseCommentModal = () => {
+    setCommentModalVisible(false);
+    setTimeout(() => setSelectedCommentPostId(null), 300); // Wait for animation to finish
   };
 
   const handleShare = (_postId: number) => {
@@ -736,6 +757,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
           }
         }}
       />
+      {/* Comments Modal Overlay */}
+      {commentModalVisible && selectedCommentPostId !== null && (
+        <CommentScreen
+          visible={commentModalVisible}
+          postId={selectedCommentPostId}
+          onClose={handleCloseCommentModal}
+        />
+      )}
     </View>
   );
 };

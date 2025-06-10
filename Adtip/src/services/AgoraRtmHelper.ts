@@ -1,13 +1,13 @@
-import { Platform } from 'react-native';
-import RtmEngine, { 
+import { Platform } from 'react-native'; // Keeping Platform import, though not used in this file
+import RtmEngine, {
   RtmLocalInvitation,
-  RtmRemoteInvitation, 
+  RtmRemoteInvitation,
   ConnectionState,
   ConnectionChangeReason,
   RtmMessage,
   RtmStatusCode
 } from 'agora-react-native-rtm';
-import ApiService from './ApiService';
+import ApiService from './ApiService'; // Assuming ApiService exists and is correctly implemented
 
 export interface RtmTokenRequest {
   uid: string;
@@ -15,12 +15,12 @@ export interface RtmTokenRequest {
 
 export interface RtmTokenResponse {
   token: string;
-  userId: string;
+  userId: string; // Ensure your backend sends this along with the token
 }
 
 // Event types for type safety
-export type RtmEventType = 
-  'connectionStateChanged' | 
+export type RtmEventType =
+  'connectionStateChanged' |
   'messageReceived' |
   'tokenExpired' |
   'error' |
@@ -33,13 +33,14 @@ export type RtmEventType =
   'remoteInvitationAccepted' |
   'remoteInvitationRefused' |
   'remoteInvitationCanceled' |
-  'remoteInvitationFailure';
+  'remoteInvitationFailure' |
+  'reloginFailed'; // Added for more specific error handling
 
 class AgoraRtmHelper {
   private static instance: AgoraRtmHelper;
   private rtmEngine: RtmEngine | null = null;
   private APP_ID = 'ef5fbd2647c64582a64db9e47b9f9335'; // Same as RTC APP_ID
-  private userId: string | null = null;
+  private userId: string | null = null; // Stores the currently logged-in RTM UID
   private isLoggedIn: boolean = false;
   private eventListeners: Map<RtmEventType, Set<Function>> = new Map();
 
@@ -64,26 +65,40 @@ class AgoraRtmHelper {
     try {
       console.log('[RTM] Initializing Agora RTM engine');
       this.rtmEngine = new RtmEngine();
-      await this.rtmEngine.createInstance(this.APP_ID);
-      
+      // CORRECTED: Use createClient instead of createInstance for agora-react-native-rtm
+      await this.rtmEngine.createClient(this.APP_ID);
+
       // Set up RTM event listeners
       this.setupEventListeners();
-      
+
       console.log('[RTM] Agora RTM engine initialized successfully');
       return this.rtmEngine;
     } catch (error) {
       console.error('[RTM] Failed to initialize Agora RTM engine:', error);
+      this.rtmEngine = null; // Ensure rtmEngine is null if initialization fails
       throw error;
     }
   }
 
   // Set up event listeners for RTM events
   private setupEventListeners() {
-    if (!this.rtmEngine) return;
+    if (!this.rtmEngine) {
+      console.warn('[RTM] RTM Engine is null. Cannot set up event listeners.');
+      return;
+    }
 
     this.rtmEngine.on('ConnectionStateChanged', (newState: ConnectionState, reason: ConnectionChangeReason) => {
       console.log(`[RTM] Connection state changed to ${newState}, reason: ${reason}`);
       this.emit('connectionStateChanged', { newState, reason });
+
+      // Optionally, update isLoggedIn based on connection state
+      if (newState === ConnectionState.CONNECTED) {
+        this.isLoggedIn = true;
+      } else if (newState === ConnectionState.DISCONNECTED || newState === ConnectionState.ABORTED) {
+        this.isLoggedIn = false;
+        // userId should only be cleared if it's a forced logout or unrecoverable error
+        // For transient disconnections, keep userId to allow re-login.
+      }
     });
 
     this.rtmEngine.on('MessageReceived', (peerId: string, message: RtmMessage) => {
@@ -141,13 +156,30 @@ class AgoraRtmHelper {
       this.emit('remoteInvitationFailure', { remoteInvitation, errorCode });
     });
 
-    this.rtmEngine.on('TokenExpired', () => {
-      console.log('[RTM] Token expired');
-      this.emit('tokenExpired');
+    // IMPROVED: Handle TokenExpired with automatic re-login attempt
+    this.rtmEngine.on('TokenExpired', async () => {
+      console.warn('[RTM] RTM Token expired! Attempting to re-login...');
+      this.emit('tokenExpired'); // Notify any listeners that token has expired
+
+      if (this.userId) { // Only attempt to re-login if we have a known user ID
+        try {
+          // Fetch a new token and re-login with the same user ID
+          // The `login` method already handles fetching a new token
+          await this.login(this.userId);
+          console.log('[RTM] Successfully re-logged in after token expiration.');
+        } catch (error) {
+          console.error('[RTM] Failed to re-login after token expiration:', error);
+          this.emit('reloginFailed', error); // Emit specific event for UI/App logic
+          // Consider forced logout or UI intervention if re-login consistently fails
+        }
+      } else {
+        console.error('[RTM] Token expired but userId is null. Cannot re-login automatically.');
+        // This scenario indicates a logic error if a token expires but user ID is lost.
+      }
     });
 
     this.rtmEngine.on('Error', (errorCode: number) => {
-      console.error('[RTM] Error occurred:', errorCode);
+      console.error(`[RTM] SDK Error occurred: ${errorCode}`);
       this.emit('error', errorCode);
     });
   }
@@ -155,74 +187,62 @@ class AgoraRtmHelper {
   // Login to RTM service with user ID
   async login(userId: string): Promise<void> {
     if (!this.rtmEngine) {
-     console.log('[RTM] RTM engine not initialized, attempting to initialize now.');
+      console.log('[RTM] RTM engine not initialized, attempting to initialize now.');
       await this.initialize();
-      if (!this.rtmEngine) { // Check again after initialize attempt
+      if (!this.rtmEngine) {
         console.error('[RTM] RTM engine failed to initialize. Cannot login.');
         throw new Error('RTM engine failed to initialize.');
       }
     }
 
-    if (this.isLoggedIn && this.userId === userId) {
+    // Check if already logged in with the same user ID to prevent redundant logins
+    if (this.isLoggedIn && this.userId === userId && this.rtmEngine.getConnectionState() === ConnectionState.CONNECTED) {
       console.log(`[RTM] Already logged in as user ${userId}`);
       return;
     }
 
     try {
       console.log(`[RTM] Attempting to fetch RTM token for user ${userId}`);
-      const rtmTokenResponse = await this.fetchRtmToken(userId); // This already logs the exact token server response
+      const rtmTokenResponse = await this.fetchRtmToken(userId);
 
-      if (!rtmTokenResponse || !rtmTokenResponse.token) {
-        console.error(`[RTM] Failed to obtain a valid RTM token for user ${userId}. Token response:`, rtmTokenResponse);
-        throw new Error('Failed to obtain a valid RTM token.');
+      if (!rtmTokenResponse || !rtmTokenResponse.token || !rtmTokenResponse.userId) {
+        console.error(`[RTM] Failed to obtain a valid RTM token or userId from server for user ${userId}. Token response:`, rtmTokenResponse);
+        throw new Error('Failed to obtain a valid RTM token or userId from server.');
       }
-      
-      console.log(`[RTM] Attempting to login to RTM service as user ${userId} with token: ${rtmTokenResponse.token.substring(0, 20)}... (token truncated for brevity)`);
-      await this.rtmEngine!.login({ token: rtmTokenResponse.token, uid: userId });
-      
-      this.userId = userId;
+
+      // It's crucial that the UID used for RTM login is consistent.
+      // Use the userId parameter from the method signature as the RTM UID.
+      // If your backend generates a different RTM UID than what's passed,
+      // you must use rtmTokenResponse.userId here instead.
+      const uidForLogin = userId; // Assuming the token is generated for this 'userId'
+
+      console.log(`[RTM] Attempting to login to RTM service as UID: ${uidForLogin} with token: ${rtmTokenResponse.token.substring(0, 20)}...`);
+
+      // Pass both token and uid (as userId) to the login method
+      // The `uid` parameter to `login` must be a string.
+      await this.rtmEngine.login({ uid: uidForLogin, token: rtmTokenResponse.token });
+
+      this.userId = uidForLogin;
       this.isLoggedIn = true;
-      console.log(`[RTM] Successfully logged in as user ${userId}`);
+      console.log(`[RTM] Successfully logged in as user ${uidForLogin}`);
     } catch (error) {
-      console.error('[RTM] Login failed.');
-      console.error('[RTM] User ID used for login attempt:', userId);
-      
-      // Log the raw error object for inspection (e.g., in debugger)
-      console.error('[RTM] Raw login error object:', error); 
-
-      // Attempt to stringify the error to capture more details if available
-      try {
-        // Using Object.getOwnPropertyNames to include non-enumerable properties if any
-        const errorDetails = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
-        console.error('[RTM] Stringified login error details:', errorDetails);
-      } catch (stringifyError) {
-        // If stringifying fails (e.g., circular references not handled by default)
-        console.error('[RTM] Could not stringify the login error object. Logging basic properties.');
-        if (typeof error === 'object' && error !== null) {
-          for (const key in error) {
-            if (Object.prototype.hasOwnProperty.call(error, key)) {
-              // @ts-ignore
-              console.error(`[RTM] Login error property - ${key}:`, error[key]);
-            }
-          }
-        }
+      console.error(`[RTM] Login failed for user ${userId}.`);
+      const specificMessage = error instanceof Error ? error.message : JSON.stringify(error);
+      console.error('[RTM] Login error details:', specificMessage);
+      // Provide more specific advice based on the Agora RTM error codes
+      // Note: Error codes for `agora-react-native-rtm` typically come directly from the native SDKs.
+      // You might need to map them to specific RTM SDK error codes if needed.
+      if (specificMessage.includes('LOGIN_ERR_INVALID_ARGUMENT')) {
+        console.error('[RTM] LOGIN_ERR_INVALID_ARGUMENT: The token or UID format is incorrect, or one is missing when expected.');
+      } else if (specificMessage.includes('LOGIN_ERR_INVALID_TOKEN')) {
+        console.error('[RTM] LOGIN_ERR_INVALID_TOKEN: The RTM token itself is invalid or expired. Verify token generation on your server.');
+      } else if (specificMessage.includes('LOGIN_ERR_REJECTED')) {
+        console.error('[RTM] LOGIN_ERR_REJECTED: Login was rejected by the server, often due to authentication issues or invalid App ID.');
+      } else if (specificMessage.includes('LOGIN_ERR_TIMEOUT')) {
+        console.error('[RTM] LOGIN_ERR_TIMEOUT: Login attempt timed out, likely a network issue.');
       }
-
-      // Log standard error properties if it's an Error instance
-      if (error instanceof Error) {
-        console.error('[RTM] Login error message:', error.message); // This usually contains the "LOGIN_ERR_REJECTED" or similar
-        console.error('[RTM] Login error name:', error.name);
-        if (error.stack) {
-          console.error('[RTM] Login error stack:', error.stack);
-        }
-      }
-      
-      // It's important to check the token that was attempted for login
-      // The fetchRtmToken method already logs the server response for the token.
-      // Re-iterate that the token should be checked.
-      console.error('[RTM] Ensure the RTM token fetched (see previous logs for "Exact RTM Token Server Response") is valid for the App ID and UID.');
-
-      throw error; // Re-throw the original error so it propagates
+      this.isLoggedIn = false; // Ensure isLoggedIn is false on login failure
+      throw error;
     }
   }
 
@@ -231,17 +251,18 @@ class AgoraRtmHelper {
     try {
       console.log(`[RTM] Fetching RTM token from server for user ${userId}`);
       const response = await ApiService.getRtmToken({ uid: userId });
-      console.log('[RTM] Exact RTM Token Server Response:', JSON.stringify(response, null, 2)); 
-      
-      if (!response || !response.token || typeof response.token !== 'string' || response.token.trim() === '') {
+      console.log('[RTM] Exact RTM Token Server Response:', JSON.stringify(response, null, 2));
+
+      if (!response || typeof response.token !== 'string' || response.token.trim() === '') {
         console.error('[RTM] Invalid or empty token received from server:', response);
         throw new Error('Received invalid or empty token from server.');
       }
-      // Optionally, also verify if response.userId matches the requested userId
+      // OPTIONAL: Verify if response.userId matches the requested userId.
+      // This can be a strong check if your backend strictly ties tokens to the requested UID.
       if (response.userId !== userId) {
-        console.warn(`[RTM] Token fetched for UID ${response.userId} but requested for ${userId}. This might be an issue.`);
-        // Depending on your server logic, this might be acceptable or an error.
-        // For strictness, you could throw an error here too.
+         console.warn(`[RTM] Token fetched for UID ${response.userId} but requested for ${userId}. Using requested UID for login.`);
+         // Depending on your server logic, you might want to use response.userId instead of input userId
+         // for login, or throw an error if they must match.
       }
       return response;
     } catch (error) {
@@ -261,13 +282,14 @@ class AgoraRtmHelper {
   // Logout from RTM service
   async logout(): Promise<void> {
     if (!this.rtmEngine || !this.isLoggedIn) {
+      console.log('[RTM] Not logged in or engine not initialized, skipping logout.');
       return;
     }
 
     try {
       await this.rtmEngine.logout();
       this.isLoggedIn = false;
-      this.userId = null;
+      this.userId = null; // Clear userId on successful logout
       console.log('[RTM] Successfully logged out');
     } catch (error) {
       console.error('[RTM] Failed to logout:', error);
@@ -276,24 +298,29 @@ class AgoraRtmHelper {
   }
 
   // Create a call invitation
-  async createCallInvitation(calleeId: string, callType: 'voice' | 'video', channelName: string, rtcToken: string): Promise<RtmLocalInvitation> {
+  async createCallInvitation(calleeId: string, callType: 'voice' | 'video', channelName: string, rtcToken: string, callerRtcUid: number): Promise<RtmLocalInvitation> {
     if (!this.rtmEngine || !this.isLoggedIn) {
-      throw new Error('[RTM] Not logged in');
+      throw new Error('[RTM] Not logged in. Cannot create call invitation.');
+    }
+    if (!this.userId) {
+        throw new Error('[RTM] Current RTM userId is not set. Cannot create invitation.');
     }
 
     try {
       console.log(`[RTM] Creating call invitation to ${calleeId}`);
       const localInvitation = await this.rtmEngine.createLocalInvitation(calleeId);
-      
+
       // Set content with call information
+      // IMPORTANT: callerRtcUid should be a number if your RTC UIDs are numbers.
+      // Ensure the value passed to this method (callerRtcUid: number) is indeed a numeric UID.
       const content = JSON.stringify({
         channelName,
         callType,
-        callerName: this.userId, // Use current user ID as name
+        callerName: this.userId, // Use current RTM user ID as name
         rtcToken,
-        callerRtcUid: this.userId, // Use same ID for RTM and RTC
+        callerRtcUid: callerRtcUid, // Use the numeric RTC UID passed to the method
       });
-      
+
       await localInvitation.setContent(content);
       return localInvitation;
     } catch (error) {
@@ -305,7 +332,7 @@ class AgoraRtmHelper {
   // Send a call invitation
   async sendCallInvitation(localInvitation: RtmLocalInvitation): Promise<void> {
     if (!this.rtmEngine || !this.isLoggedIn) {
-      throw new Error('[RTM] Not logged in');
+      throw new Error('[RTM] Not logged in. Cannot send call invitation.');
     }
 
     try {
@@ -321,7 +348,7 @@ class AgoraRtmHelper {
   // Cancel a call invitation
   async cancelCallInvitation(localInvitation: RtmLocalInvitation): Promise<void> {
     if (!this.rtmEngine || !this.isLoggedIn) {
-      throw new Error('[RTM] Not logged in');
+      throw new Error('[RTM] Not logged in. Cannot cancel call invitation.');
     }
 
     try {
@@ -337,7 +364,7 @@ class AgoraRtmHelper {
   // Accept a call invitation
   async acceptCallInvitation(remoteInvitation: RtmRemoteInvitation): Promise<void> {
     if (!this.rtmEngine || !this.isLoggedIn) {
-      throw new Error('[RTM] Not logged in');
+      throw new Error('[RTM] Not logged in. Cannot accept call invitation.');
     }
 
     try {
@@ -353,7 +380,7 @@ class AgoraRtmHelper {
   // Refuse a call invitation
   async refuseCallInvitation(remoteInvitation: RtmRemoteInvitation): Promise<void> {
     if (!this.rtmEngine || !this.isLoggedIn) {
-      throw new Error('[RTM] Not logged in');
+      throw new Error('[RTM] Not logged in. Cannot refuse call invitation.');
     }
 
     try {
@@ -369,16 +396,18 @@ class AgoraRtmHelper {
   // Release RTM engine resources
   async release(): Promise<void> {
     if (!this.rtmEngine) {
+      console.log('[RTM] RTM engine not initialized, no need to release.');
       return;
     }
 
     try {
+      // Ensure logout before destroying the engine
       if (this.isLoggedIn) {
         await this.logout();
       }
-      
+
       this.rtmEngine.removeAllListeners();
-      this.rtmEngine.destroy();
+      this.rtmEngine.destroy(); // Destroy the client instance
       this.rtmEngine = null;
       this.eventListeners.clear();
       console.log('[RTM] Agora RTM engine released');
@@ -408,6 +437,16 @@ class AgoraRtmHelper {
         listener(...args);
       }
     }
+  }
+
+  // Getter for isLoggedIn state
+  getIsLoggedIn(): boolean {
+    return this.isLoggedIn;
+  }
+
+  // Getter for current userId
+  getCurrentUserId(): string | null {
+    return this.userId;
   }
 }
 

@@ -1,16 +1,27 @@
 // src/components/home/PostItem.tsx
-import React, {useState, useRef, useEffect} from 'react';
-import {View, Text, StyleSheet, Image, TouchableOpacity} from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
-import {useTheme} from '../../contexts/ThemeContext';
+import React, {useRef, useEffect, useState, useCallback} from 'react';
+import {
+  View,
+  Text,
+  Image,
+  StyleSheet,
+  TouchableOpacity,
+  Dimensions,
+  ActivityIndicator,
+  TouchableWithoutFeedback,
+} from 'react-native';
 import Video from 'react-native-video';
-import LastSeen from '../common/LastSeen';
+import Icon from 'react-native-vector-icons/Feather';
+import { Heart, MessageCircle, Share2, UserPlus } from 'lucide-react-native';
+import {useTheme} from '../../contexts/ThemeContext';
+
+const {width} = Dimensions.get('window');
 
 interface PostItemProps {
   id: number;
   username: string;
   profileImage?: string | null;
-  postImage: string | null; // Allow null for postImage
+  postImage: string | null;
   caption: string;
   likes: number;
   comments: number;
@@ -25,7 +36,7 @@ interface PostItemProps {
   onFollow: (userId: number) => Promise<void>;
   isLiked?: boolean;
   userId: number;
-  isVisible?: boolean; // Add isVisible prop to control video playback
+  isVisible?: boolean;
   last_active?: string | null;
 }
 
@@ -52,404 +63,401 @@ const PostItem: React.FC<PostItemProps> = ({
   last_active,
 }) => {
   const {colors, isDarkMode} = useTheme();
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-  const [isVideoPaused, setIsVideoPaused] = useState(true);
-  const [isVideoMuted, setIsVideoMuted] = useState(true);
-  const videoRef = useRef(null);
-  
-  // Automatically pause video when post is scrolled out of view
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+  const [videoLoading, setVideoLoading] = useState(true);
+  const [showControls, setShowControls] = useState(false);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoError, setVideoError] = useState(false);
+
+  // --- Video Playback Logic ---
   useEffect(() => {
-    if (!isVisible && isVideoPlaying && !isVideoPaused) {
-      setIsVideoPaused(true);
+    if (media_type === 'video') {
+      if (isVisible) {
+        setIsPlaying(true);
+        setVideoError(false);
+      } else {
+        setIsPlaying(false);
+      }
     }
-  }, [isVisible, isVideoPlaying, isVideoPaused]);
+  }, [isVisible, media_type]);
+
+  const togglePlayPause = useCallback(() => {
+    setIsPlaying(prev => !prev);
+    setShowControls(true);
+    setTimeout(() => setShowControls(false), 2000);
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    setIsMuted(prev => !prev);
+    setShowControls(true);
+    setTimeout(() => setShowControls(false), 2000);
+  }, []);
+
+  const handleVideoLoadStart = useCallback(() => {
+    setVideoLoading(true);
+  }, []);
+
+  const handleVideoLoad = useCallback((meta: any) => {
+    setVideoDuration(meta.duration);
+    setVideoLoading(false);
+  }, []);
+
+  const handleVideoProgress = useCallback((progress: any) => {
+    setVideoProgress(progress.currentTime);
+  }, []);
+
+  const handleVideoEnd = useCallback(() => {
+    setIsPlaying(false);
+  }, []);
+
+  const handleVideoError = useCallback((error: any) => {
+    console.error("Video playback error:", error);
+    setVideoError(true);
+    setIsPlaying(false);
+    setVideoLoading(false);
+  }, []);
+
+  const handleLikePress = () => {
+    onLike(id);
+  };
+
+  const handleCommentPress = () => {
+    onComment(id);
+  };
+
+  const handleSharePress = () => {
+    onShare(id);
+  };
+
+  const handlePostPress = () => {
+    onPostPress(id);
+  };
+
+  const handleUserPress = () => {
+    onUserPress(userId);
+  };
+
+  const handleFollowPress = async () => {
+    await onFollow(userId);
+  };
 
   return (
-    <View style={[styles.container, {backgroundColor: colors.card}]}> 
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.userInfo}
-          onPress={() => onUserPress(userId)}>
-          <View style={styles.profileImageContainer}>
-            {profileImage ? (
-              <Image source={{uri: profileImage}} style={styles.profileImage} />
-            ) : (
-              <View
-                style={[
-                  styles.profileImagePlaceholder,
-                  {backgroundColor: isDarkMode ? colors.gray[700] : colors.gray[200]},
-                ]}
-              />
-            )}
-          </View>
-          <View style={styles.userInfo}>
-            <Text style={[styles.username, {color: colors.text.primary}]}>
-              {username}
-            </Text>
+    <View style={[styles.postContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      {/* User Info Header */}
+      <View style={styles.postHeader}>
+        <TouchableOpacity onPress={handleUserPress} style={styles.userInfo}>
+          <Image
+            source={{
+              uri: profileImage || 'https://via.placeholder.com/40x40.png?text=U',
+            }}
+            style={styles.profileImage}
+          />
+          <View>
+            <Text style={[styles.username, {color: colors.text.primary}]}>{username}</Text>
             {last_active && (
-              <LastSeen 
-                lastActiveTime={last_active}
-                style={styles.lastSeen}
-                showOnlineStatus={false}
-              />
+              <Text style={[styles.lastActive, {color: colors.text.secondary}]}>
+                Active {timeAgo}
+              </Text>
             )}
           </View>
         </TouchableOpacity>
-        <View style={styles.headerActions}>
-          <TouchableOpacity onPress={() => onFollow(userId)}>
-            <Text style={[styles.followButton, {color: colors.primary}]}>Follow</Text>
-          </TouchableOpacity>
-          <TouchableOpacity>
-            <Text style={[styles.moreOptions, {color: colors.text.primary}]}>•••</Text>
-          </TouchableOpacity>
-        </View>
+        
+        <TouchableOpacity onPress={handleFollowPress} style={styles.followIconButton}>
+          <UserPlus size={20} color={colors.primary} />
+        </TouchableOpacity>
       </View>
 
-      <TouchableOpacity 
-        onPress={() => {
-          if (media_type === 'video' && postImage) {
-            setIsVideoPlaying(!isVideoPlaying);
-            setIsVideoPaused(!isVideoPaused);
-          } else {
-            onPostPress(id);
-          }
-        }} 
-        disabled={!postImage}
-      >
-        {postImage ? (
-          <View style={styles.postImageContainer}>
-            {media_type === 'video' && isVideoPlaying ? (
-              <View style={styles.videoContainer}>
+      {/* Media Content (Image or Video) */}
+      <TouchableWithoutFeedback onPress={handlePostPress}>
+        <View style={styles.mediaContainer}>
+          {media_type === 'image' && postImage && (
+            <Image
+              source={{ uri: postImage }}
+              style={styles.postMedia}
+              resizeMode="cover"
+            />
+          )}
+
+          {media_type === 'video' && postImage && !videoError && (
+            <TouchableWithoutFeedback onPress={togglePlayPause}>
+              <View style={styles.videoPlayerContainer}>
                 <Video
-                  ref={videoRef}
                   source={{uri: postImage}}
-                  style={styles.postImage}
+                  style={styles.postMedia}
                   resizeMode="cover"
-                  paused={isVideoPaused}
-                  muted={isVideoMuted}
                   repeat={true}
-                  playInBackground={false}
-                  playWhenInactive={false}
-                  ignoreSilentSwitch="ignore"
-                  onError={(error) => console.error('Video error:', error)}
+                  paused={!isPlaying}
+                  muted={isMuted}
+                  onLoadStart={handleVideoLoadStart}
+                  onLoad={handleVideoLoad}
+                  onProgress={handleVideoProgress}
+                  onEnd={handleVideoEnd}
+                  onError={handleVideoError}
+                  bufferConfig={{
+                    minBufferMs: 15000,
+                    maxBufferMs: 50000,
+                    bufferForPlaybackMs: 2500,
+                    bufferForPlaybackAfterRebufferMs: 5000,
+                  }}
                 />
-                {isVideoPaused && (
-                  <TouchableOpacity 
-                    style={[styles.videoPlayButton, {
-                      backgroundColor: isDarkMode ? 'rgba(20,20,20,0.7)' : 'rgba(0,0,0,0.5)'
-                    }]}
-                    onPress={() => setIsVideoPaused(false)}
-                  >
-                    <Icon name="play" size={32} color={colors.white} />
+                {videoLoading && (
+                  <View style={styles.videoOverlay}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                  </View>
+                )}
+                {/* Play/Pause Button */}
+                {(showControls || !isPlaying) && !videoLoading && (
+                  <TouchableOpacity onPress={togglePlayPause} style={styles.videoControlOverlay}>
+                    <Icon name={isPlaying ? 'pause-circle' : 'play-circle'} size={50} color="white" />
                   </TouchableOpacity>
                 )}
-                {!isVideoPaused && (
-                  <View style={styles.videoControls}>
-                    <TouchableOpacity
-                      style={[styles.videoControlButton, {
-                        backgroundColor: isDarkMode ? 'rgba(20,20,20,0.7)' : 'rgba(0,0,0,0.5)'
-                      }]}
-                      onPress={() => setIsVideoPaused(true)}
-                    >
-                      <Icon name="pause" size={20} color={colors.white} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.videoControlButton, {
-                        backgroundColor: isDarkMode ? 'rgba(20,20,20,0.7)' : 'rgba(0,0,0,0.5)'
-                      }]}
-                      onPress={() => setIsVideoMuted(!isVideoMuted)}
-                    >
-                      <Icon name={isVideoMuted ? "volume-x" : "volume-2"} size={20} color={colors.white} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.videoControlButton, {
-                        backgroundColor: isDarkMode ? 'rgba(20,20,20,0.7)' : 'rgba(0,0,0,0.5)'
-                      }]}
-                      onPress={() => onPostPress(id)}
-                    >
-                      <Icon name="maximize" size={20} color={colors.white} />
-                    </TouchableOpacity>
-                  </View>
+                {/* Mute Button */}
+                {(showControls || !isPlaying) && !videoLoading && (
+                  <TouchableOpacity onPress={toggleMute} style={styles.muteButton}>
+                    <Icon name={isMuted ? 'volume-x' : 'volume-2'} size={24} color="white" />
+                  </TouchableOpacity>
                 )}
               </View>
-            ) : (
-              <>
-                <Image
-                  source={{uri: postImage}}
-                  style={styles.postImage}
-                  resizeMode="cover"
-                />
-                {media_type === 'video' && !isVideoPlaying && (
-                  <View style={[styles.videoIcon, {
-                    backgroundColor: isDarkMode ? 'rgba(20,20,20,0.7)' : 'rgba(0,0,0,0.5)'
-                  }]}>
-                    <Icon name="play" size={28} color={colors.white} />
-                  </View>
-                )}
-              </>
-            )}
-            {isPremium ? (
-              <View style={[styles.premiumBadge, {backgroundColor: colors.secondary}]}> 
-                <Text style={styles.premiumText}>Premium</Text>
-              </View>
-            ) : null}
-          </View>
-        ) : (
-          <View style={[
-            styles.postImageContainer, 
-            {
-              backgroundColor: isDarkMode ? colors.gray[800] : colors.gray[100], 
-              justifyContent: 'center', 
-              alignItems: 'center'
-            }
-          ]}>
-            <Icon 
-              name="image" 
-              size={48} 
-              color={isDarkMode ? colors.gray[600] : colors.gray[300]} 
-            />
-          </View>
-        )}
-      </TouchableOpacity>
+            </TouchableWithoutFeedback>
+          )}
 
-      <View style={styles.actions}>
-        <View style={styles.primaryActions}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => onLike(id)}>
-            <Icon
-              name={isLiked ? 'heart' : 'heart'}
-              size={24}
-              color={isLiked ? colors.error : colors.text.secondary}
+          {media_type === 'video' && videoError && (
+             <View style={styles.errorMedia}>
+                <Icon name="alert-triangle" size={50} color={colors.danger || '#FF0000'} />
+                <Text style={[styles.errorText, {color: colors.text.secondary}]}>Video failed to load.</Text>
+                <TouchableOpacity onPress={() => {setVideoError(false); setIsPlaying(true);}} style={styles.retryButton}>
+                  <Text style={{color: colors.primary}}>Tap to Retry</Text>
+                </TouchableOpacity>
+             </View>
+          )}
+
+          {/* Default placeholder when no media */}
+          {!postImage && (
+            <View style={[styles.placeholderMedia, { backgroundColor: colors.surface }]}>
+              <Icon name="image" size={50} color={colors.text.tertiary || '#CCCCCC'} />
+              <Text style={[styles.placeholderText, { color: colors.text.tertiary }]}>No media</Text>
+            </View>
+          )}
+
+          {isPremium && (
+            <View style={styles.premiumBadge}>
+              <Text style={styles.premiumText}>Premium</Text>
+            </View>
+          )}
+        </View>
+      </TouchableWithoutFeedback>
+
+      {/* Actions (Like, Comment, Share) */}
+      <View style={styles.postActions}>
+        <View style={styles.leftActions}>
+          <TouchableOpacity onPress={handleLikePress} style={styles.actionButton}>
+            <Heart 
+              size={24} 
+              color={isLiked ? "#FF0000" : (isDarkMode ? colors.text.primary : "#1A1A1A")} 
+              fill={isLiked ? "#FF0000" : "none"}
             />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => onComment(id)}>
-            <Icon
-              name="message-circle"
-              size={24}
-              color={colors.text.secondary}
-            />
+          <TouchableOpacity onPress={handleCommentPress} style={styles.actionButton}>
+            <MessageCircle size={24} color={isDarkMode ? colors.text.primary : "#1A1A1A"} />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => onShare(id)}>
-            <Icon name="share-2" size={24} color={colors.text.secondary} />
+          <TouchableOpacity onPress={handleSharePress} style={styles.actionButton}>
+            <Share2 size={24} color={isDarkMode ? colors.text.primary : "#1A1A1A"} />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity>
-          <Icon name="bookmark" size={24} color={colors.text.secondary} />
+      </View>
+
+      {/* Like Count */}
+      <Text style={[styles.likesCount, {color: colors.text.primary}]}>
+        {likes} {likes === 1 ? 'like' : 'likes'}
+      </Text>
+
+      {/* Caption */}
+      {caption && (
+        <Text style={[styles.caption, {color: colors.text.primary}]}>
+          <Text style={styles.captionUsername}>{username}</Text> {caption}
+        </Text>
+      )}
+
+      {/* Comment Count */}
+      {comments > 0 && (
+        <TouchableOpacity onPress={handleCommentPress}>
+          <Text style={[styles.commentsCount, {color: colors.text.secondary}]}>
+            View all {comments} comments
+          </Text>
         </TouchableOpacity>
-      </View>
+      )}
 
-      <View style={styles.content}>
-        <Text style={[styles.likesCount, {color: colors.text.primary}]}> 
-          {String(likes)} likes
-        </Text>
-        <View style={styles.captionContainer}>
-          <Text style={[styles.captionUsername, {color: colors.text.primary}]}> 
-            {String(username)}
-          </Text>
-          <Text style={[styles.caption, {color: colors.text.secondary}]}> 
-            {String(caption)}
-          </Text>
-        </View>
-        {comments > 0 ? (
-          <TouchableOpacity onPress={() => onComment(id)}>
-            <Text style={[styles.viewComments, {color: colors.text.tertiary}]}> 
-              View all {String(comments)} comments
-            </Text>
-          </TouchableOpacity>
-        ) : null}
-        <Text style={[styles.timestamp, {color: colors.text.tertiary}]}> 
-          {String(timeAgo)}
-        </Text>
-      </View>
+      {/* Time Ago */}
+      <Text style={[styles.timeAgo, {color: colors.text.secondary}]}>{timeAgo}</Text>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 16,
+  postContainer: {
+    backgroundColor: '#FFFFFF',
+    marginBottom: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
   },
-  header: {
+  postHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  profileImageContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: 10,
-    overflow: 'hidden',
+    flex: 1,
   },
   profileImage: {
-    width: '100%',
-    height: '100%',
-  },
-  profileImagePlaceholder: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 12,
+    backgroundColor: '#E0E0E0',
   },
   username: {
     fontWeight: '600',
     fontSize: 14,
+    color: '#1A1A1A',
   },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  lastActive: {
+    fontSize: 12,
+    marginTop: 2,
+    color: '#666666',
   },
-  followButton: {
-    fontWeight: '600',
-    fontSize: 14,
-    marginRight: 10,
+  followIconButton: {
+    padding: 4,
   },
-  moreOptions: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    transform: [{rotate: '90deg'}],
-  },
-  postImageContainer: {
+  mediaContainer: {
     width: '100%',
-    height: 400,
-    position: 'relative',
-  },
-  postImage: {
-    width: '100%',
-    height: '100%',
-  },
-  videoContainer: {
-    width: '100%',
-    height: '100%',
-    position: 'relative',
-  },
-  videoPlayButton: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    marginLeft: -25,
-    marginTop: -25,
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    height: width,
+    backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 10,
   },
-  videoControls: {
+  postMedia: {
+    width: '100%',
+    height: '100%',
+  },
+  videoPlayerContainer: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  videoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  videoControlOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  muteButton: {
     position: 'absolute',
     bottom: 10,
-    left: 10,
     right: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  videoControlButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
     backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 15,
+    padding: 5,
+  },
+  errorMedia: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    padding: 20,
+  },
+  errorText: {
+    textAlign: 'center',
+    marginTop: 10,
+    fontSize: 14,
+  },
+  retryButton: {
+    marginTop: 15,
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  placeholderMedia: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+  },
+  placeholderText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#CCCCCC',
   },
   premiumBadge: {
     position: 'absolute',
     top: 10,
     right: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4,
-    zIndex: 5,
+    borderRadius: 5,
   },
   premiumText: {
-    color: 'white',
-    fontWeight: '600',
+    color: '#FFD700',
     fontSize: 12,
+    fontWeight: 'bold',
   },
-  videoIcon: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    marginLeft: -20,
-    marginTop: -20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 5,
-  },
-  actions: {
+  postActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
-  primaryActions: {
+  leftActions: {
     flexDirection: 'row',
   },
   actionButton: {
     marginRight: 16,
-  },
-  content: {
-    paddingHorizontal: 12,
-    paddingBottom: 12,
+    padding: 4,
   },
   likesCount: {
     fontWeight: '600',
-    marginBottom: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
     fontSize: 14,
+    color: '#1A1A1A',
   },
-  captionContainer: {
-    flexDirection: 'row',
-    marginBottom: 6,
+  caption: {
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    fontSize: 14,
+    lineHeight: 18,
+    color: '#1A1A1A',
   },
   captionUsername: {
     fontWeight: '600',
-    marginRight: 6,
-    fontSize: 14,
   },
-  caption: {
+  commentsCount: {
+    paddingHorizontal: 16,
+    paddingVertical: 4,
     fontSize: 14,
-    flex: 1,
+    color: '#666666',
   },
-  viewComments: {
-    marginBottom: 4,
-    fontSize: 14,
-  },
-  timestamp: {
+  timeAgo: {
     fontSize: 12,
-  },
-  lastSeen: {
-    marginTop: 2,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    color: '#666666',
   },
 });
 
-// Memoize the PostItem component to prevent unnecessary re-renders
-export default React.memo(
-  PostItem, 
-  (prevProps, nextProps) => {
-    // Only re-render if these props change
-    return (
-      prevProps.id === nextProps.id &&
-      prevProps.isLiked === nextProps.isLiked &&
-      prevProps.likes === nextProps.likes &&
-      prevProps.comments === nextProps.comments &&
-      prevProps.isVisible === nextProps.isVisible
-    );
-  }
-);
+export default React.memo(PostItem);
