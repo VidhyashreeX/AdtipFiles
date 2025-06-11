@@ -1065,6 +1065,7 @@ const TipCallScreen: React.FC = () => {
       };
       console.log('[RTM] Setting up remoteInvitationReceived listener');
       rtmHelperRef.current.on('remoteInvitationReceived', handler);
+      console.log('[RTM] remoteInvitationReceived listener setup SUCCESSFUL');
       return () => {
         console.log('[RTM] Removing remoteInvitationReceived listener');
         rtmHelperRef.current?.off('remoteInvitationReceived', handler);
