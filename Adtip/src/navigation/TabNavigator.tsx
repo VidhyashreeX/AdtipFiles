@@ -1,4 +1,4 @@
-import React, {useState, useCallback} from 'react'; // Added useCallback
+import React, {useState, useCallback, useMemo} from 'react'; // Add useMemo
 import {StyleSheet, View, TouchableOpacity, Platform} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {BlurView} from '@react-native-community/blur';
@@ -20,23 +20,155 @@ import {withWalletBalance} from '../components/hoc/withWalletBalance';
 const Tab = createBottomTabNavigator();
 
 /**
+ * Bottom tab navigator component
+ */
+const TabNavigator = () => {
+  const {colors, isDarkMode} = useTheme();
+  const insets = useSafeAreaInsets();
+
+  // Memoize enhanced components to prevent recreation
+  const EnhancedHomeScreen = useMemo(() => withWalletBalance(HomeScreen), []);
+  const EnhancedTipTubeScreen = useMemo(() => withWalletBalance(TipTubeScreen), []);
+  const EnhancedTipCallScreen = useMemo(() => withWalletBalance(TipCallScreen), []);
+  const EnhancedProfileScreen = useMemo(() => withWalletBalance(ProfileScreen), []);
+
+  // Memoize tab bar height calculation
+  const tabBarHeight = useMemo(() => 60 + Math.min(insets.bottom, 20), [insets.bottom]);
+
+  // Memoize tab bar style
+  const tabBarStyle = useMemo(() => ({
+    position: 'absolute' as const,
+    borderTopWidth: 0,
+    elevation: 0,
+    height: tabBarHeight,
+    backgroundColor: 'transparent',
+    marginBottom: 0, 
+  }), [tabBarHeight]);
+
+  // Memoize tab bar background component
+  const TabBarBackground = useCallback(() =>
+    Platform.OS === 'ios' ? (
+      <BlurView
+        blurType={isDarkMode ? 'dark' : 'light'}
+        blurAmount={10}
+        style={StyleSheet.absoluteFill}
+      />
+    ) : (
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: isDarkMode
+              ? colors.card + 'F0' 
+              : colors.white + 'F0', 
+          },
+        ]}
+      />
+    ), [isDarkMode, colors.card, colors.white]);
+
+  // Memoize tab bar item style
+  const tabBarItemStyle = useMemo(() => ({
+    paddingBottom: Math.min(insets.bottom, 10),
+  }), [insets.bottom]);
+
+  // Memoize screen options
+  const screenOptions = useMemo(() => ({
+    headerShown: false,
+    tabBarActiveTintColor: colors.primary,
+    tabBarInactiveTintColor: colors.text.tertiary,
+    tabBarStyle,
+    tabBarBackground: TabBarBackground,
+    tabBarItemStyle,
+  }), [colors.primary, colors.text.tertiary, tabBarStyle, TabBarBackground, tabBarItemStyle]);
+
+  // Memoize icon renderers
+  const HomeIcon = useCallback(({color, size}: {color: string, size: number}) => (
+    <Icon name="home" color={color} size={size} />
+  ), []);
+
+  const TipTubeIcon = useCallback(({color, size}: {color: string, size: number}) => (
+    <Icon name="video" color={color} size={size} />
+  ), []);
+
+  const TipCallIcon = useCallback(({color, size}: {color: string, size: number}) => (
+    <Icon name="phone" color={color} size={size} />
+  ), []);
+
+  const ProfileIcon = useCallback(({color, size}: {color: string, size: number}) => (
+    <Icon name="user" color={color} size={size} />
+  ), []);
+
+  // Memoize the function that renders the CreateContentButton
+  const renderCreateButton = useCallback(() => <CreateContentButton />, []);
+
+  // Memoize tab press listener
+  const createContentTabPress = useCallback((e: any) => {
+    e.preventDefault(); // Prevent navigation
+  }, []);
+
+  return (
+    <TabNavigatorProvider>
+      <Tab.Navigator screenOptions={screenOptions}>
+        <Tab.Screen
+          name="Home"
+          component={EnhancedHomeScreen}
+          options={{
+            tabBarIcon: HomeIcon,
+          }}
+        />
+        <Tab.Screen
+          name="TipTube"
+          component={EnhancedTipTubeScreen}
+          options={{
+            tabBarIcon: TipTubeIcon,
+          }}
+        />
+        <Tab.Screen
+          name="CreateContent"
+          component={HomeScreen} // Dummy component
+          options={{
+            tabBarButton: renderCreateButton,
+            tabBarLabel: '',
+          }}
+          listeners={{
+            tabPress: createContentTabPress,
+          }}
+        />
+        <Tab.Screen
+          name="TipCall"
+          component={EnhancedTipCallScreen}
+          options={{
+            tabBarIcon: TipCallIcon,
+          }}
+        />
+        <Tab.Screen
+          name="Profile"
+          component={EnhancedProfileScreen}
+          options={{
+            tabBarIcon: ProfileIcon,
+          }}
+        />
+      </Tab.Navigator>
+    </TabNavigatorProvider>
+  );
+};
+
+/**
  * Custom tab bar button for the create content action
  */
 const CreateContentButton = () => {
   const {colors} = useTheme();
   const [modalVisible, setModalVisible] = useState(false);
 
-  const handlePress = () => {
-    console.log('CreateContentButton: handlePress called'); // DEBUG
+  const handlePress = useCallback(() => {
+    console.log('CreateContentButton: handlePress called');
     setModalVisible(true);
-  };
+  }, []);
 
-  const handleCloseModal = () => {
-    console.log('CreateContentButton: handleCloseModal called'); // DEBUG
+  const handleCloseModal = useCallback(() => {
+    console.log('CreateContentButton: handleCloseModal called');
     setModalVisible(false);
-  };
-
-  console.log('CreateContentButton: rendering, modalVisible =', modalVisible); // DEBUG
+  }, []);
 
   return (
     <>
@@ -49,121 +181,10 @@ const CreateContentButton = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Ensure CreateContentModal is correctly rendered using the state */}
       {modalVisible && (
         <CreateContentModal visible={modalVisible} onClose={handleCloseModal} />
       )}
     </>
-  );
-};
-
-/**
- * Bottom tab navigator component
- */
-const TabNavigator = () => {
-  const {colors, isDarkMode} = useTheme();
-  const insets = useSafeAreaInsets();
-
-  const EnhancedHomeScreen = withWalletBalance(HomeScreen);
-  const EnhancedTipTubeScreen = withWalletBalance(TipTubeScreen);
-  const EnhancedTipCallScreen = withWalletBalance(TipCallScreen);
-  const EnhancedProfileScreen = withWalletBalance(ProfileScreen);
-
-  const tabBarHeight = 60 + Math.min(insets.bottom, 20);
-
-  // Memoize the function that renders the CreateContentButton
-  // This prevents CreateContentButton from re-instantiating on every TabNavigator re-render
-  const renderCreateButton = useCallback(() => <CreateContentButton />, []);
-
-  return (
-    <TabNavigatorProvider>
-      <Tab.Navigator
-        screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.text.tertiary,
-          tabBarStyle: {
-            position: 'absolute',
-            borderTopWidth: 0,
-            elevation: 0,
-            height: tabBarHeight,
-            backgroundColor: 'transparent',
-            marginBottom: 0, 
-          },
-          tabBarBackground: () =>
-            Platform.OS === 'ios' ? (
-              <BlurView
-                blurType={isDarkMode ? 'dark' : 'light'}
-                blurAmount={10}
-                style={StyleSheet.absoluteFill}
-              />
-            ) : (
-              <View
-                style={[
-                  StyleSheet.absoluteFill,
-                  {
-                    backgroundColor: isDarkMode
-                      ? colors.card + 'F0' 
-                      : colors.white + 'F0', 
-                  },
-                ]}
-              />
-            ),
-          tabBarItemStyle: {
-            paddingBottom: Math.min(insets.bottom, 10),
-          },
-        }}>
-        <Tab.Screen
-          name="Home"
-          component={EnhancedHomeScreen}
-          options={{
-            tabBarIcon: ({color, size}) => (
-              <Icon name="home" color={color} size={size} />
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="TipTube"
-          component={EnhancedTipTubeScreen}
-          options={{
-            tabBarIcon: ({color, size}) => (
-              <Icon name="video" color={color} size={size} />
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="CreateContent"
-          component={HomeScreen} // Dummy component, actual action is via tabBarButton
-          options={{
-            tabBarButton: renderCreateButton, // Use the memoized function
-            tabBarLabel: '',
-          }}
-          listeners={{
-            tabPress: e => {
-              e.preventDefault(); // Prevent navigation
-            },
-          }}
-        />
-        <Tab.Screen
-          name="TipCall"
-          component={EnhancedTipCallScreen}
-          options={{
-            tabBarIcon: ({color, size}) => (
-              <Icon name="phone" color={color} size={size} />
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="Profile"
-          component={EnhancedProfileScreen}
-          options={{
-            tabBarIcon: ({color, size}) => (
-              <Icon name="user" color={color} size={size} />
-            ),
-          }}
-        />
-      </Tab.Navigator>
-    </TabNavigatorProvider>
   );
 };
 
@@ -190,4 +211,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default TabNavigator;
+export default React.memo(TabNavigator);

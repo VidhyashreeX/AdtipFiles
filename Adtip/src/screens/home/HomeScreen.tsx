@@ -1,987 +1,597 @@
 // src/screens/home/HomeScreen.tsx
-import React, {useState, useEffect, useRef} from 'react';
+import React, {useState, useEffect, useCallback, useRef, useMemo} from 'react'; // Added useMemo
 import {
   View,
   Text,
+  FlatList,
+  ActivityIndicator,
   StyleSheet,
   RefreshControl,
-  ActivityIndicator,
-  FlatList,
-  Platform,
   ScrollView,
-  ViewabilityConfig,
+  Platform,
+  ViewabilityConfig, // Keep this import for the type
   ViewToken,
+  Keyboard,
+  TouchableOpacity,
 } from 'react-native';
-import {useNavigation} from '@react-navigation/native';
+import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
+import axios from 'axios';
+
+// Contexts & Services
+import {useTheme} from '../../contexts/ThemeContext';
+import {useAuth} from '../../contexts/AuthContext';
+import {useTabNavigator} from '../../contexts/TabNavigatorContext';
+import ApiService from '../../services/ApiService';
+import {API_BASE_URL} from '../../constants/api';
 
 // Components
 import Header from '../../components/common/Header';
+import PostItem from '../../components/home/PostItem';
 import StoryItem from '../../components/home/StoryItem';
 import CategoryItem from '../../components/home/CategoryItem';
-import PostItem from '../../components/home/PostItem';
 import EarnCard from '../../components/home/EarnCard';
-import CommentScreen from './CommentScreen'; // Add this import
-import StoryItemSkeleton from '../../components/skeletons/StoryItemSkeleton';
-import CategoryItemSkeleton from '../../components/skeletons/CategoryItemSkeleton';
+import CommentScreen from './CommentScreen';
+
+// Skeleton Components
+import StorySkeleton from '../../components/skeletons/StoryItemSkeleton';
+import CategorySkeleton from '../../components/skeletons/CategoryItemSkeleton';
 import EarnCardSkeleton from '../../components/skeletons/EarnCardSkeleton';
 import PostItemSkeleton from '../../components/skeletons/PostItemSkeleton';
 
-// Services
-import WalletService from '../../services/WalletService';
-import ApiService from '../../services/ApiService';
-import LastSeenService from '../../services/LastSeenService';
-
-// Context
-import {useTheme} from '../../contexts/ThemeContext';
-import {useAuth} from '../../contexts/AuthContext'; // Make sure AuthContext exports refreshUserData
-import {useTabNavigator} from '../../contexts/TabNavigatorContext';
-
-// Constants
-import {API_BASE_URL} from '../../constants/api';
-
 // Types
-import { AppNavigationProps as NavigationProps } from '../../types/navigation'; // Changed to AppNavigationProps and aliased
+import {AppNavigationProps} from '../../types/navigation';
 
-interface HomeScreenProps {
-  walletBalance?: string; // Optional wallet balance coming from HOC
-}
-
-interface Story {
-  id: string;
-  username: string;
-  imageUrl: string | null;
-}
-
-interface Category {
-  id: string;
-  name: string;
-}
-
+// Interfaces
+interface Story { id: string; username: string; imageUrl: string | null; }
+interface Category { id: string; name: string; }
 interface Post {
-  id: number;
-  user_id: number;
-  title: string;
-  content: string;
-  media_url: string | null; // Updated to allow null
-  media_type: string;
-  user_name: string;
-  user_profile_image: string | null;
-  likeCount: number;
-  commentCount: number;
-  is_promoted?: number;
-  created_at: string;
-  is_premium?: boolean;
-  is_liked?: boolean;
-  last_active?: string | null;
+  id: number; user_id: number; title: string; content: string;
+  media_url: string | null; media_type: string; user_name: string;
+  user_profile_image: string | null; likeCount: number; commentCount: number;
+  is_promoted?: number; created_at: string; is_premium?: boolean;
+  is_liked?: boolean; last_active?: string | null;
 }
+interface Pagination { current_page: number; total_page: number; total_count: number; }
+interface HomeScreenProps { walletBalance?: string; }
 
-interface Comment {
-  id: number;
-  postId: number;
-  user_id: number;
-  comment: string;
-  created_at: string;
-  updated_at: string;
-  user_name: string;
-  user_profile: string | null;
-}
+// Helper Components (assuming these are defined as in your provided context)
+interface StoriesRowProps { stories: Story[]; onStoryPress: (storyId: string) => void; onAddStoryPress: () => void; isLoading?: boolean; }
+const StoriesRow: React.FC<StoriesRowProps> = ({ stories, onStoryPress, onAddStoryPress, isLoading }) => {
+  const {colors} = useTheme();
+  const styles = createHomeScreenStyles(colors);
 
-interface Pagination {
-  current_page: number;
-  total_page: number;
-  total_count: number;
-}
-
-// Move StoriesRow and CategoriesRow outside HomeScreen component
-
-interface StoriesRowProps {
-  stories: Story[];
-  onStoryPress: (storyId: string) => void;
-  onAddStoryPress: () => void;
-}
-const StoriesRow: React.FC<StoriesRowProps> = ({
-  stories,
-  onStoryPress,
-  onAddStoryPress,
-}) => {
-  const scrollViewRef = React.useRef<ScrollView>(null);
+  if (isLoading) {
+    return (
+      <View style={styles.storiesSection}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.storiesContainer} contentContainerStyle={styles.storiesContentContainer}>
+          <StorySkeleton isAddStory={true} />
+          {Array(5).fill(0).map((_, index) => <StorySkeleton key={`story-skel-${index}`} />)}
+        </ScrollView>
+      </View>
+    );
+  }
   return (
     <View style={styles.storiesSection}>
-      <ScrollView
-        ref={scrollViewRef}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.storiesContainer}
-        contentContainerStyle={styles.storiesContentContainer}>
-        <StoryItem
-          isAddStory={true}
-          onPress={onAddStoryPress}
-          key="add-story"
-        />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.storiesContainer} contentContainerStyle={styles.storiesContentContainer}>
+        <StoryItem isAddStory={true} onPress={onAddStoryPress} key="add-story" />
         {stories.map((story: Story, idx: number) => (
-          <StoryItem
-            key={`${story.id}-${idx}`}
-            imageUrl={story.imageUrl || undefined}
-            username={story.username ? String(story.username) : ''}
-            onPress={() => onStoryPress(story.id)}
-          />
+          <StoryItem key={`${story.id}-${idx}`} imageUrl={story.imageUrl || undefined} username={story.username ? String(story.username) : ''} onPress={() => onStoryPress(story.id)} />
         ))}
       </ScrollView>
     </View>
   );
 };
 
-interface CategoriesRowProps {
-  categories: Category[];
-  selectedCategory: string | null;
-  onCategoryPress: (categoryId: string) => void;
-}
-const CategoriesRow: React.FC<CategoriesRowProps> = ({
-  categories,
-  selectedCategory,
-  onCategoryPress,
-}) => {
-  const scrollViewRef = React.useRef<ScrollView>(null);
+// Helper: CategoriesRow Component
+interface CategoriesRowProps { categories: Category[]; selectedCategory: string | null; onCategoryPress: (categoryId: string) => void; isLoading?: boolean; }
+const CategoriesRow: React.FC<CategoriesRowProps> = ({ categories, selectedCategory, onCategoryPress, isLoading }) => {
+  const {colors} = useTheme();
+  const styles = createHomeScreenStyles(colors);
+
+  if (isLoading) {
+    return (
+      <View style={styles.categoriesSection}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesContainer} contentContainerStyle={styles.categoriesContentContainer}>
+          {Array(6).fill(0).map((_, index) => <CategorySkeleton key={`cat-skel-${index}`} />)}
+        </ScrollView>
+      </View>
+    );
+  }
   return (
     <View style={styles.categoriesSection}>
-      <ScrollView
-        ref={scrollViewRef}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoriesContainer}
-        contentContainerStyle={styles.categoriesContentContainer}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesContainer} contentContainerStyle={styles.categoriesContentContainer}>
         {categories.map((category: Category, idx: number) => (
-          <CategoryItem
-            key={`${category.id}-${idx}`}
-            name={category.name ? String(category.name) : ''}
-            selected={selectedCategory === category.id}
-            onPress={() => onCategoryPress(category.id)}
-          />
+          <CategoryItem key={`${category.id}-${idx}`} name={category.name ? String(category.name) : ''} selected={selectedCategory === category.id} onPress={() => onCategoryPress(category.id)} />
         ))}
       </ScrollView>
     </View>
   );
 };
 
-// Utility function to shuffle an array (add this at the top of the file or import from utils)
+// Helper: EarnCardsRow Component
+interface EarnCardsRowProps { onWatchAndEarn: () => void; onReferAndEarn: () => void; isLoading?: boolean; }
+const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onReferAndEarn, isLoading }) => {
+  const {colors} = useTheme();
+  const styles = createHomeScreenStyles(colors);
+  if (isLoading) {
+    return (
+      <View style={styles.earnCardsSection}>
+        <View style={styles.earnCard}><EarnCardSkeleton /></View>
+        <View style={styles.earnCard}><EarnCardSkeleton /></View>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.earnCardsSection}>
+      <View style={styles.earnCard}>
+        <EarnCard
+          title="Watch & Earn"
+          description="Watch videos and earn rewards"
+          iconName="play-circle"
+          onPress={onWatchAndEarn}
+        />
+      </View>
+      <View style={styles.earnCard}>
+        <EarnCard
+          title="Refer & Earn"
+          description="Invite friends and earn rewards together"
+          iconName="user-plus"
+          onPress={onReferAndEarn}
+        />
+      </View>
+    </View>
+  );
+};
+
+
 function shuffleArray<T>(array: T[]): T[] {
   const newArray = [...array];
-  for (let i = newArray.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-  }
+  for (let i = newArray.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [newArray[i], newArray[j]] = [newArray[j], newArray[i]]; }
   return newArray;
 }
 
-const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
-  // Hooks
+const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}) => {
   const {colors} = useTheme();
-  // Destructure refreshUserData from useAuth
-  const {user, refreshUserData} = useAuth(); 
-  const navigation = useNavigation<NavigationProps>();
+  const {user, refreshUserData} = useAuth();
+  const navigation = useNavigation<AppNavigationProps>();
   const {contentPaddingBottom} = useTabNavigator();
-  
-  // State
+  const styles = createHomeScreenStyles(colors);
+
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedCategoryState, setSelectedCategoryState] = useState<string | null>(null);
+  const [selectedCategoryState, setSelectedCategoryState] = useState<string | null>('0');
   const [posts, setPosts] = useState<Post[]>([]);
   const [stories, setStories] = useState<Story[]>([]);
-  const [pagination, setPagination] = useState<Pagination>({
-    current_page: 1,
-    total_page: 1,
-    total_count: 0,
-  });
-  const [categories] = useState<Category[]>([
-    {id: '1', name: 'All'},
-    {id: '2', name: 'Recent'},
-    {id: '3', name: 'Popular'},
-    {id: '4', name: 'Following'},
-    {id: '5', name: 'Technology'},
-    {id: '6', name: 'Fashion'},
-    {id: '7', name: 'Business'},
-    {id: '8', name: 'Sports'},
+  const [pagination, setPagination] = useState<Pagination>({ current_page: 1, total_page: 1, total_count: 0 });
+  const [staticCategories] = useState<Category[]>([
+    {id: '0', name: 'All'}, {id: '1', name: 'Recent'}, {id: '2', name: 'Popular'}, {id: '3', name: 'Following'},
+    {id: '4', name: 'Technology'}, {id: '5', name: 'Fashion'}, {id: '6', name: 'Business'}, {id: '7', name: 'Sports'},
   ]);
-  
-  const [loading, setLoading] = useState({
-    stories: true,
-    categories: false,
-    posts: false, // Changed from true to false so fetchPosts will run on initial render
-    loadingMore: false,
-  });
+  const [loading, setLoading] = useState({ posts: false, loadingMore: false });
   const [error, setError] = useState<string | null>(null);
-  const [likedPosts, setLikedPosts] = useState<{[key: number]: boolean}>({});  const [_walletAmount, setWalletAmount] = useState('0.00');
+  const [likedPosts, setLikedPosts] = useState<{[key: number]: boolean}>({});
+  const [walletAmount] = useState(hocWalletBalance || '0.00');
   const [visiblePostIds, setVisiblePostIds] = useState<number[]>([]);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [selectedCommentPostId, setSelectedCommentPostId] = useState<number | null>(null);
-  const [initialLoading, setInitialLoading] = useState(true); // New state for initial full skeleton
+  const [initialLoading, setInitialLoading] = useState(true);
 
-  // Viewability configuration
-  const viewabilityConfig = useRef<ViewabilityConfig>({
-    itemVisiblePercentThreshold: 50, // Item is considered visible when 50% of it is in viewport
-    minimumViewTime: 300, // Must be visible for 300ms before triggering callback
-  }).current;
+  const postsAbortControllerRef = useRef<AbortController | null>(null);
+  const likeAbortControllerRef = useRef<AbortController | null>(null);
 
-  // Track which posts are currently visible
-  const onViewableItemsChanged = useRef(({viewableItems}: {viewableItems: ViewToken[]}) => {
-    const visibleIds = viewableItems
+  // Use useMemo for stable object reference for viewabilityConfig
+  const viewabilityConfig = useMemo<ViewabilityConfig>(() => ({ // Explicitly type with imported ViewabilityConfig
+    itemVisiblePercentThreshold: 50,
+    minimumViewTime: 300,
+  }), []);
+
+  // Use useCallback for stable function reference for onViewableItemsChanged
+  const onViewableItemsChanged = useCallback(({viewableItems}: {viewableItems: ViewToken[]}) => {
+    const currentVisibleIds = viewableItems
       .filter(item => item.isViewable && item.item)
-      .map(viewToken => viewToken.item.id);
-    setVisiblePostIds(visibleIds);
-  }).current;
+      .map(viewToken => viewToken.item.id as number); // Assuming item.id is number
 
-  // Helper functions
-  const getFullImageUrl = (url?: string | null) => {
-    if (!url || url === 'null' || url === 'undefined') {
-      return null;
-    }
-    if (url.startsWith('http')) {
-      return url;
-    }
+    // This logic updates the state with IDs that become visible.
+    // Consider if you need to remove IDs that are no longer visible.
+    setVisiblePostIds(prevVisibleIds => {
+      const newVisibleIdsSet = new Set(prevVisibleIds);
+      currentVisibleIds.forEach(id => newVisibleIdsSet.add(id));
+      return Array.from(newVisibleIdsSet);
+    });
+  }, []); // setVisiblePostIds is stable, so dependency array is empty
+
+  const getFullImageUrl = useCallback((url?: string | null) => {
+    if (!url || url === 'null' || url === 'undefined') return null;
+    if (url.startsWith('http')) return url;
     return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
-  };
+  }, []);
 
-  const getTimeAgo = (timestamp: string) => {
-    const now = new Date();
-    const postTime = new Date(timestamp);
-    const diffInMinutes = Math.floor(
-      (now.getTime() - postTime.getTime()) / (1000 * 60),
-    );
-
-    if (diffInMinutes < 1) {
-      return 'Just now';
-    }
-    if (diffInMinutes < 60) {
-      return `${diffInMinutes} ${diffInMinutes === 1 ? 'minute' : 'minutes'} ago`;
-    }
-
+  const getTimeAgo = useCallback((timestamp: string) => {
+    const now = new Date(); const postTime = new Date(timestamp);
+    const diffInMinutes = Math.floor((now.getTime() - postTime.getTime()) / (1000 * 60));
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes} ${diffInMinutes === 1 ? 'minute' : 'minutes'} ago`;
     const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) {
-      return `${diffInHours} ${diffInHours === 1 ? 'hour' : 'hours'} ago`;
-    }
-
+    if (diffInHours < 24) return `${diffInHours} ${diffInHours === 1 ? 'hour' : 'hours'} ago`;
     const diffInDays = Math.floor(diffInHours / 24);
-    if (diffInDays < 30) {
-      return `${diffInDays} ${diffInDays === 1 ? 'day' : 'days'} ago`;
-    }
-
+    if (diffInDays < 30) return `${diffInDays} ${diffInDays === 1 ? 'day' : 'days'} ago`;
     const diffInMonths = Math.floor(diffInDays / 30);
     return `${diffInMonths} ${diffInMonths === 1 ? 'month' : 'months'} ago`;
-  };
-  // API calls
-  const fetchWalletAmount = async () => {
+  }, []);
+  
+  const deriveStoriesFromPosts = useCallback((currentPosts: Post[]) => {
+    if (currentPosts.length > 0) {
+      const storyUsers = currentPosts.slice(0, 10).map((post: Post, index: number) => ({
+        id: `story-${post.id}-${index}`, username: post.user_name || 'User',
+        imageUrl: getFullImageUrl(post.user_profile_image),
+      }));
+      setStories(storyUsers);
+    } else {
+      setStories([]);
+    }
+  }, [getFullImageUrl]);
+
+  const fetchPosts = useCallback(async (page = 1, loadMore = false, signal?: AbortSignal) => {
+    if (!user?.id) {
+      if (!signal?.aborted && !loadMore && !refreshing) setInitialLoading(false);
+      return;
+    }
+    if (!loadMore && !refreshing && loading.posts) {
+        console.log('[HomeScreen PostsFetch] Skipped: Already loading initial posts and not refreshing.');
+        return;
+    }
+    if (loadMore && loading.loadingMore) {
+        console.log('[HomeScreen PostsFetch] Skipped: Already loading more.');
+        return;
+    }
+    if (loadMore && (pagination.current_page >= pagination.total_page && pagination.total_page > 0 && posts.length >= pagination.total_count && pagination.total_count > 0)) {
+        console.log('[HomeScreen PostsFetch] Skipped (loadMore): No more pages.');
+        setLoading(prev => ({...prev, loadingMore: false}));
+        return;
+    }
+    const loggedInUserId = Number(user.id);
+    if (isNaN(loggedInUserId)) {
+      console.error("[HomeScreen PostsFetch] Invalid user ID:", user.id);
+      if (!signal?.aborted) {
+        if (!loadMore) { setError("User information is invalid. Cannot load posts."); setInitialLoading(false); setPosts([]); deriveStoriesFromPosts([]); }
+        if (loadMore) setLoading(prev => ({...prev, loadingMore: false}));
+      }
+      return;
+    }
     try {
-      if (!user) {
+      if (loadMore) setLoading(prev => ({...prev, loadingMore: true}));
+      else if (!refreshing) setLoading(prev => ({...prev, posts: true}));
+      
+      const requestData = { category: selectedCategoryState ? parseInt(selectedCategoryState, 10) : 0, page: page, limit: 10, loggined_user_id: loggedInUserId };
+      const result = await ApiService.listPosts(requestData, {signal});
+
+      if (signal?.aborted) {
+        console.log('[HomeScreen PostsFetch] Aborted by signal.');
         return;
       }
-      const balance = await WalletService.getWalletBalance(user.id);
-      setWalletAmount(balance || '0.00');
-    } catch (err) {
-      console.error('Error fetching wallet amount:', err);
-      const cachedBalance =
-        (await AsyncStorage.getItem('@wallet_balance')) || '0.00';
-      setWalletAmount(cachedBalance);
-    }
-  };
-
-  // Only fetch stories once, after posts are loaded
-  const fetchStories = async () => {
-    try {
-      setLoading(prev => ({...prev, stories: true}));
-      if (posts.length > 0) {
-        const storyUsers = posts.slice(0, 5).map((post: Post, index: number) => ({
-          id: `story-${index}`,
-          username: post.user_name || 'User',
-          imageUrl: getFullImageUrl(post.user_profile_image),
-        }));
-        setStories(storyUsers);
-      } else {
-        setStories([]);
+      if (result && result.message === 'Request canceled by client') {
+        console.log('[HomeScreen PostsFetch] ApiService reported client cancellation.');
+        if (loadMore) setLoading(prev => ({...prev, loadingMore: false}));
+        else { setLoading(prev => ({...prev, posts: false})); if (!refreshing) setInitialLoading(false); }
+        return;
       }
-    } catch (err) {
-      console.error('Stories fetch error:', err);
-      setError('Failed to load stories. Please try again later.');
-    } finally {
-      setLoading(prev => ({...prev, stories: false}));
-    }
-  };
-
-  // Only fetch posts if not already loading or at end
-  const fetchPosts = async (page = 1, loadMore = false) => {
-    if (!user) { 
-      setInitialLoading(false); // Ensure loading stops if no user
-      return; 
-    }
-    if (loading.posts || loading.loadingMore) { return; }
-    if (loadMore && (pagination.current_page >= pagination.total_page)) { return; }
-    try {
-      if (loadMore) {
-        setLoading(prev => ({...prev, loadingMore: true}));
-      } else {
-        setLoading(prev => ({...prev, posts: true}));
-        setError(null);
-      }
-      const requestData = {
-        category: selectedCategoryState ? parseInt(selectedCategoryState, 10) : 0,
-        page: page,
-        limit: 10,
-        loggined_user_id: Number(user.id),
-      };
-      const result = await ApiService.listPosts(requestData);
       if (result?.data && Array.isArray(result.data)) {
-        let formattedPosts = result.data.map((rawPost: any) => ({
-          id: rawPost.id,
-          user_id: rawPost.user_id,
-          title: rawPost.title || '',
-          content: rawPost.content || '',
-          media_url: getFullImageUrl(rawPost.media_url),
-          media_type: rawPost.media_type || 'image',
-          user_name: rawPost.user_name || 'User',
-          user_profile_image: getFullImageUrl(rawPost.user_profile_image),
-          likeCount: rawPost.likeCount || rawPost.like_count || 0,
-          commentCount: rawPost.commentCount || rawPost.comment_count || 0,
-          is_promoted: rawPost.is_promoted || 0,
-          created_at: rawPost.created_at || new Date().toISOString(),
-          is_premium: !!rawPost.is_premium,
-          is_liked: !!rawPost.is_liked,
-          last_active: rawPost.last_active || null,
+        const formattedPosts = result.data.map((rawPost: any) => ({
+          id: rawPost.id, user_id: rawPost.user_id, title: rawPost.title || '', content: rawPost.content || '',
+          media_url: getFullImageUrl(rawPost.media_url), media_type: rawPost.media_type || 'image',
+          user_name: rawPost.user_name || 'User', user_profile_image: getFullImageUrl(rawPost.user_profile_image),
+          likeCount: rawPost.likeCount || rawPost.like_count || 0, commentCount: rawPost.commentCount || rawPost.comment_count || 0,
+          is_promoted: rawPost.is_promoted || 0, created_at: rawPost.created_at || new Date().toISOString(),
+          is_premium: !!rawPost.is_premium, is_liked: !!rawPost.is_liked, last_active: rawPost.last_active || null,
         }));
-
-        if (result.pagination) {
-          setPagination(result.pagination);
-        } else if (loadMore) {
-          setPagination(prev => ({...prev, current_page: page}));
-        }
-
-        if (loadMore) {
-          setPosts(prevPosts => {
-            const existingIds = new Set(prevPosts.map(post => post.id));
-            const newPosts = formattedPosts.filter(post => !existingIds.has(post.id));
-            return [...prevPosts, ...newPosts];
-          });
-        } else {
-          // Shuffle posts on initial load or refresh
-          setPosts(shuffleArray(formattedPosts));
-        }
-
+        if (loadMore) setPosts(prevPosts => shuffleArray([...prevPosts, ...formattedPosts]));
+        else { setPosts(shuffleArray(formattedPosts)); deriveStoriesFromPosts(formattedPosts); }
+        if (result.pagination) setPagination(result.pagination);
         const newLikedPosts: {[key: number]: boolean} = {};
-        formattedPosts.forEach((post: Post) => {
-          if (post.is_liked) {
-            newLikedPosts[post.id] = true;
-          }
-        });
+        formattedPosts.forEach((post: Post) => { newLikedPosts[post.id] = !!post.is_liked; });
         setLikedPosts(prev => ({...prev, ...newLikedPosts}));
+      } else if (!loadMore) { setPosts([]); deriveStoriesFromPosts([]); }
+      const responseStatus = (result as any)?.status; const responseMessage = (result as any)?.message;
+      if (!loadMore && responseMessage && responseStatus === false && result.message !== 'Request canceled by client') setError(responseMessage);
+      else if (!loadMore) setError(null);
+    } catch (err: any) {
+      if (!axios.isCancel(err) && err.name !== 'AbortError') { 
+        console.error('Posts fetch error (catch block):', err);
+        if (!signal?.aborted && !loadMore) setError('Failed to load posts.'); 
       } else {
-        if (!loadMore) {
-          setPosts([]);
-          setError('No posts available at the moment.');
-        }
+        console.log('[HomeScreen PostsFetch] Canceled/aborted during API call (caught).');
       }
-    } catch (err) {
-      console.error('Posts fetch error:', err);
-      setError('Failed to load posts. Please try again later.');
     } finally {
-      if (loadMore) {
-        setLoading(prev => ({...prev, loadingMore: false}));
-      } else {
-        setLoading(prev => ({...prev, posts: false}));
+      if (!signal?.aborted) {
+        if (loadMore) setLoading(prev => ({...prev, loadingMore: false}));
+        else { setLoading(prev => ({...prev, posts: false})); if (!refreshing) setInitialLoading(false); }
       }
-      setInitialLoading(false); // Set initial loading to false after first fetch attempt
     }
-  };
-  
-  // Only fetch posts if not already loading or at end
-  const fetchPostsV2 = async (page = 1, loadMore = false) => {
-    if (!user) { return; }
-    if (loading.posts || loading.loadingMore) { return; }
-    if (loadMore && (pagination.current_page >= pagination.total_page)) { return; }
-    try {
-      if (loadMore) {
-        setLoading(prev => ({...prev, loadingMore: true}));
-      } else {
-        setLoading(prev => ({...prev, posts: true}));
-        setError(null);
-      }
-      const requestData = {
-        category: selectedCategoryState ? parseInt(selectedCategoryState, 10) : 0,
-        page: page,
-        limit: 10,
-        loggined_user_id: Number(user.id),
+  }, [
+    user?.id,
+    selectedCategoryState,
+    getFullImageUrl,
+    deriveStoriesFromPosts,
+    refreshing
+  ]);
+
+
+  useEffect(() => {
+    if (!user) { setInitialLoading(false); setPosts([]); setStories([]); setPagination({ current_page: 1, total_page: 1, total_count: 0 }); return; }
+    postsAbortControllerRef.current?.abort('New user/category effect run');
+    postsAbortControllerRef.current = new AbortController();
+    const postsSignal = postsAbortControllerRef.current.signal;
+    setInitialLoading(true); setError(null); setPosts([]); setStories([]); setPagination(prev => ({ ...prev, current_page: 1, total_page: 1, total_count: 0 }));
+    const fetchInitialData = async () => {
+      if (!postsSignal.aborted) await fetchPosts(1, false, postsSignal);
+      else { setInitialLoading(false); setLoading(prev => ({...prev, posts: false}));}
+    };
+    fetchInitialData();
+    return () => { postsAbortControllerRef.current?.abort('Effect cleanup for user/category change'); };
+  }, [user?.id, selectedCategoryState, fetchPosts]);
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[HomeScreen] Focused.');
+      return () => {
+        console.log('[HomeScreen] Unfocused/Unmounted (useFocusEffect cleanup): Aborting API calls.');
+        postsAbortControllerRef.current?.abort('Screen unfocused or unmounted');
+        likeAbortControllerRef.current?.abort('Screen unfocused or unmounted');
       };
-      const result = await ApiService.listPosts(requestData);
-      if (result?.data && Array.isArray(result.data)) {
-        let formattedPosts = result.data.map((rawPost: any) => ({
-          id: rawPost.id,
-          user_id: rawPost.user_id,
-          title: rawPost.title || '',
-          content: rawPost.content || '',
-          media_url: getFullImageUrl(rawPost.media_url),
-          media_type: rawPost.media_type || 'image',
-          user_name: rawPost.user_name || 'User',
-          user_profile_image: getFullImageUrl(rawPost.user_profile_image),
-          likeCount: rawPost.likeCount || rawPost.like_count || 0,
-          commentCount: rawPost.commentCount || rawPost.comment_count || 0,
-          is_promoted: rawPost.is_promoted || 0,
-          created_at: rawPost.created_at || new Date().toISOString(),
-          is_premium: !!rawPost.is_premium,
-          is_liked: !!rawPost.is_liked,
-          last_active: rawPost.last_active || null,
-        }));
+    }, [])
+  );
 
-        if (result.pagination) {
-          setPagination(result.pagination);
-        } else if (loadMore) {
-          setPagination(prev => ({...prev, current_page: page}));
-        }
-
-        if (loadMore) {
-          setPosts(prevPosts => {
-            const existingIds = new Set(prevPosts.map(post => post.id));
-            const newPosts = formattedPosts.filter(post => !existingIds.has(post.id));
-            return [...prevPosts, ...newPosts];
-          });
-        } else {
-          // Shuffle posts on initial load or refresh
-          setPosts(shuffleArray(formattedPosts));
-        }
-
-        const newLikedPosts: {[key: number]: boolean} = {};
-        formattedPosts.forEach((post: Post) => {
-          if (post.is_liked) {
-            newLikedPosts[post.id] = true;
-          }
-        });
-        setLikedPosts(prev => ({...prev, ...newLikedPosts}));
-      } else {
-        if (!loadMore) {
-          setPosts([]);
-          setError('No posts available at the moment.');
-        }
-      }
-    } catch (err) {
-      console.error('Posts fetch error:', err);
-      setError('Failed to load posts. Please try again later.');
-    } finally {
-      if (loadMore) {
-        setLoading(prev => ({...prev, loadingMore: false}));
-      } else {
-        setLoading(prev => ({...prev, posts: false}));
-      }
-      setInitialLoading(false); // Set initial loading to false after first fetch attempt
-    }
-  };
-
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
+    if (!user?.id) { setRefreshing(false); return; }
+    console.log('[HomeScreen] Refresh triggered.');
     setRefreshing(true);
-    setError(null); 
-    // setInitialLoading(true); // Optional: if you want skeleton on pull-to-refresh of empty list
+    setError(null);
+    // Abort previous post and like fetches
+    postsAbortControllerRef.current?.abort('Refresh initiated');
+    likeAbortControllerRef.current?.abort('Refresh initiated');
+
+    // Create new controller for this refresh operation
+    const currentPostsCtrl = new AbortController();
+    postsAbortControllerRef.current = currentPostsCtrl;
+    const postsSignal = currentPostsCtrl.signal;
 
     try {
-      if (user && typeof refreshUserData === 'function') {
-        await refreshUserData();
-      }
+      if (typeof refreshUserData === 'function') await refreshUserData();
+      // Reset pagination for refresh
       setPagination({current_page: 1, total_page: 1, total_count: 0});
-      // setPosts([]); // Clearing posts is now handled by fetchPosts before setting shuffled data
-      // setStories([]); // Stories will update based on shuffled posts
-
-      await Promise.all([
-        fetchWalletAmount(), 
-        fetchPosts(1, false), // This will now fetch and shuffle
-      ]);
-      
-    } catch (err) {
-      console.error('Error during refresh:', err);
-      setError('Failed to refresh content. Please try again.');
+      // Fetch posts for page 1. fetchPosts will handle its own loading.posts state.
+      // initialLoading is not set to true here, as 'refreshing' state indicates the loading type.
+      await fetchPosts(1, false, postsSignal);
+    } catch (err: any) {
+      if (!axios.isCancel(err) && err.name !== 'AbortError') {
+        console.error('Error during refresh (handleRefresh catch):', err);
+        setError('Failed to refresh content.');
+      } else {
+         console.log('[HomeScreen Refresh] A fetch during refresh was canceled/aborted.');
+      }
     } finally {
-      setRefreshing(false); 
-      // initialLoading will be set to false by fetchPosts
+      // Ensure refreshing is set to false only if the signal for *this* refresh operation wasn't aborted.
+      // If it was aborted (e.g., by unmount), then another process is in control.
+      if (!postsSignal.aborted) {
+          setRefreshing(false);
+      }
     }
-  };
+  }, [user?.id, refreshUserData, fetchPosts]); // fetchPosts is a dependency
 
-  const handleLoadMore = () => {
-    // Prevent multiple simultaneous requests or unnecessary requests
-    if (loading.loadingMore || loading.posts || refreshing) {
-      return;
+  const handleLoadMore = useCallback(() => {
+    // Guards use current state values. These states are not dependencies of this useCallback.
+    if (loading.loadingMore || (loading.posts && !refreshing) || refreshing || initialLoading || posts.length === 0 || error) {
+        // ... (optional logging for why it's returning)
+        return;
     }
-
-    // Don't load more if we're already at the last page
-    if (pagination.current_page >= pagination.total_page) {
-      console.log('Already at the last page');
-      return;
-    }
-
-    // Don't load if we have no posts or are in an error state
-    if (posts.length === 0 || error) {
-      return;
+    if (pagination.current_page >= pagination.total_page && pagination.total_page > 0 && posts.length >= pagination.total_count && pagination.total_count > 0) {
+        return;
     }
 
-    // Only trigger if we have posts already (to avoid double fetching on empty state)
-    if (posts.length > 0) {
-      console.log('Loading more posts, page:', pagination.current_page + 1);
-      fetchPosts(pagination.current_page + 1, true);
+    console.log('[HomeScreen] Load more posts, page:', pagination.current_page + 1);
+    // Ensure there's a fresh controller if the previous one was used and potentially aborted
+    if (!postsAbortControllerRef.current || postsAbortControllerRef.current.signal.aborted) {
+      postsAbortControllerRef.current = new AbortController();
     }
-  };
+    const signal = postsAbortControllerRef.current.signal;
+    fetchPosts(pagination.current_page + 1, true, signal);
+  }, [
+    fetchPosts, // If fetchPosts definition changes, we need a new handleLoadMore
+    // States used in guards are read from closure:
+    // loading.loadingMore, loading.posts, refreshing, initialLoading, posts.length, error,
+    // pagination.current_page, pagination.total_page, pagination.total_count
+    // To satisfy exhaustive-deps, you might list them, but be wary of cycles.
+    pagination.current_page, // Used to calculate next page for fetchPosts
+    pagination.total_page,   // Used in guard
+    pagination.total_count,  // Used in guard
+    initialLoading,          // Used in guard
+    refreshing,              // Used in guard
+    error,                   // Used in guard
+    posts.length,            // Used in guard
+    loading.loadingMore,     // Used in guard
+    loading.posts            // Used in guard
+  ]);
 
-  const handleLike = async (postId: number) => {
-    if (!user?.id) {
-      console.warn('User not authenticated, cannot like post');
-      return;
-    }
+  const handleLike = useCallback(async (postId: number) => {
+    if (!user?.id) return;
+    likeAbortControllerRef.current?.abort();
+    likeAbortControllerRef.current = new AbortController();
+    const signal = likeAbortControllerRef.current.signal;
 
     const previousLikedState = likedPosts[postId] || false;
     const newLikedState = !previousLikedState;
 
-    // Optimistically update the UI
-    setLikedPosts(prev => ({
-      ...prev,
-      [postId]: newLikedState,
-    }));
-
-    setPosts(prevPosts =>
-      prevPosts.map(post =>
-        post.id === postId
-          ? {...post, likeCount: post.likeCount + (newLikedState ? 1 : -1)}
-          : post,
-      ),
-    );
+    setLikedPosts(prev => ({...prev, [postId]: newLikedState}));
+    setPosts(prevPosts => prevPosts.map(post => post.id === postId ? {...post, likeCount: post.likeCount + (newLikedState ? 1 : -1), is_liked: newLikedState} : post));
 
     try {
-      console.log('Sending like request:', { userId: user.id, postId, is_liked: newLikedState });
-      
-      const response = await ApiService.likePost({
-        userId: user.id,
-        postId: postId,
-        is_liked: newLikedState,
-      });
-      
-      console.log('Like API response:', response);
-      
-      // Handle the actual API response structure
-      if (response.status === true && response.is_liked === newLikedState) {
-        // Success - UI is already updated optimistically
-        console.log('Post like status updated successfully');
-      } else if (response.status === false) {
-        // API returned failure status
-        throw new Error(response.message || 'API request failed');
-      } else {
-        // Unexpected response structure
-        console.warn('Unexpected API response structure, but treating as success');
+      const response = await ApiService.likePost({ userId: Number(user.id), postId: postId, is_liked: newLikedState }, {signal});
+      if (signal.aborted) { console.log('[LikePost] Aborted.'); return; }
+      if (!response.status || response.is_liked !== newLikedState) {
+        // Revert UI on failed API call
+        setLikedPosts(prev => ({...prev, [postId]: previousLikedState}));
+        setPosts(prevPosts => prevPosts.map(post => post.id === postId ? {...post, likeCount: post.likeCount + (previousLikedState ? 1 : -1), is_liked: previousLikedState} : post));
       }
-      
-    } catch (error: any) {
-      console.error('Error updating like status:', error);
-      
-      // Rollback UI changes on error
-      setLikedPosts(prev => ({
-        ...prev,
-        [postId]: previousLikedState,
-      }));
-
-      setPosts(prevPosts =>
-        prevPosts.map(post =>
-          post.id === postId
-            ? {...post, likeCount: post.likeCount + (previousLikedState ? 1 : -1)}
-            : post,
-        ),
-      );
-
-      setError(`Failed to ${newLikedState ? 'like' : 'unlike'} post. Please try again.`);
+    } catch (err: any) {
+      if (!axios.isCancel(err) && err.name !== 'AbortError') {
+        console.error('Like post error:', err);
+        // Revert UI on error
+        setLikedPosts(prev => ({...prev, [postId]: previousLikedState}));
+        setPosts(prevPosts => prevPosts.map(post => post.id === postId ? {...post, likeCount: post.likeCount + (previousLikedState ? 1 : -1), is_liked: previousLikedState} : post));
+      } else {
+        console.log('[LikePost] Canceled/aborted.');
+      }
     }
-  };
+  }, [user?.id, likedPosts]);
 
-  const handleComment = (postId: number) => {
-    setSelectedCommentPostId(postId);
-    setCommentModalVisible(true);
-  };
+  const handleCreatePost = () => navigation.navigate('Main', { screen: 'CreatePost' });
+  const handleWatchAndEarn = () => navigation.navigate('Main', { screen: 'WatchToEarn' });
+  const handleReferAndEarn = () => navigation.navigate('Main', { screen: 'Referral' });
+  const handleStoryPress = (storyId: string) => console.log('Story pressed:', storyId);
+  const handleCategoryPress = (categoryId: string) => { if (selectedCategoryState !== categoryId) setSelectedCategoryState(categoryId); };
+  const handleComment = (postId: number) => { setSelectedCommentPostId(postId); setCommentModalVisible(true); };
+  const handleCloseCommentModal = () => { setCommentModalVisible(false); setSelectedCommentPostId(null); };
+  const handleShare = (postId: number) => console.log('Share post:', postId);
+  const handlePostPress = (postId: number) => console.log('Post pressed:', postId);
+  const handleUserPress = (userId: number) => navigation.navigate('Main', { screen: 'Profile', params: { userId } });
+  const handleFollow = async (userId: number) => { console.log('Follow user:', userId); };
 
-  const handleCloseCommentModal = () => {
-    setCommentModalVisible(false);
-    setTimeout(() => setSelectedCommentPostId(null), 300); // Wait for animation to finish
-  };
-
-  const handleShare = (_postId: number) => {
-    // Implement share functionality
-  };
-
-  const handlePostPress = (postId: number) => {
-    // Navigate to post detail
-    const post = posts.find(p => p.id === postId);
-    if (post?.media_type === 'video') {
-      navigation.navigate('Video', {postId});
-    } else {
-      navigation.navigate('PostDetail', {postId});
-    }
-  };
-
-  const handleUserPress = (_userId: number) => {
-    // Navigate to user profile
-    navigation.navigate('Profile', {userId: _userId});
-  };
-
-  const handleFollow = async (_userIdToFollow: number) => {
-    // Implement follow functionality
-    return new Promise<void>(resolve => {
-      // TODO: Implement API call to follow user
-      setTimeout(() => {
-        resolve();
-      }, 500);
-    });
-  };
-
-  const handleStoryPress = (storyId: string) => {
-    // Navigate to story view
-    navigation.navigate('Story', {storyId});
-  };
-
-  const handleWatchAndEarn = () => {
-    // Implement watch and earn functionality
-    navigation.navigate('WatchAndEarn');
-  };
-
-  const handleReferAndEarn = () => {
-    // Navigate to referral screen
-    navigation.navigate('Referral');
-  };
-
-  const handleCreatePost = () => {
-    // Navigate to create post screen
-    navigation.navigate('CreatePost');
-  };
-  const handleCategoryPress = (categoryId: string) => {
-    const newCategory = categoryId === selectedCategoryState ? null : categoryId;
-    setSelectedCategoryState(newCategory);
-
-    // Reset pagination and reload posts with the new category filter
-    setPagination({current_page: 1, total_page: 1, total_count: 0});
-    setPosts([]); // Clear posts to show loading state
-
-    // The fetch will be triggered by the useEffect that depends on selectedCategory
-  };
-  // Effects
-  // Remove useFocusEffect for posts/wallet fetch, use useEffect for initial load and category change
-  useEffect(() => {
-    if (!user) {
-      setInitialLoading(false); // Stop initial loading if no user
-      return;
-    }
-    
-    // Start tracking user presence when home screen loads
-    LastSeenService.startTracking();
-    
-    // Fetch wallet and posts on mount or when user/category changes
-    const fetchInitialData = async () => {
-      setInitialLoading(true); // Set initial loading true before fetching
-      await fetchWalletAmount();
-      await fetchPosts(1, false); // This will set initialLoading to false in its finally block
-    };
-    fetchInitialData();
-    
-    // Clean up when component unmounts
-    return () => {
-      // We don't stop tracking here because user might navigate to other screens
-      // LastSeenService.stopTracking() is called in AuthContext logout and cleanup
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, selectedCategoryState]);
-
-  // Only fetch stories after posts are loaded
-  useEffect(() => {
-    if (posts.length > 0) {
-      fetchStories();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [posts.length]); // Only run when posts.length changes, not on every post change
-
-  // Skeleton rendering for the entire initial screen
-  const renderInitialSkeleton = () => (
-    <ScrollView
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={[styles.postsContainerStyle, {paddingBottom: contentPaddingBottom}]}
-    >
-      {/* Stories Skeleton */}
-      <View style={styles.storiesSection}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.storiesContainer} contentContainerStyle={styles.storiesContentContainer}>
-          <StoryItemSkeleton isAddStory={true} />
-          {Array(5).fill(0).map((_, i) => <StoryItemSkeleton key={`story_sk_${i}`} />)}
-        </ScrollView>
-      </View>
-      {/* Categories Skeleton */}
-      <View style={styles.categoriesSection}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesContainer} contentContainerStyle={styles.categoriesContentContainer}>
-          {Array(5).fill(0).map((_, i) => <CategoryItemSkeleton key={`cat_sk_${i}`} />)}
-        </ScrollView>
-      </View>
-      {/* Earn Cards Skeleton */}
-      <View style={styles.earnCardsSection}>
-        <EarnCardSkeleton />
-        <EarnCardSkeleton />
-      </View>
-      {/* Posts Skeleton */}
-      {Array(3).fill(0).map((_, i) => <PostItemSkeleton key={`post_sk_${i}`} />)}
-    </ScrollView>
+  const renderListHeader = () => (
+    <>
+      <StoriesRow stories={stories} onStoryPress={handleStoryPress} onAddStoryPress={handleCreatePost} isLoading={initialLoading && posts.length === 0 && !error} />
+      <CategoriesRow categories={staticCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} isLoading={initialLoading && posts.length === 0 && !error} />
+      <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onReferAndEarn={handleReferAndEarn} isLoading={initialLoading && posts.length === 0 && !error} />
+    </>
   );
 
-  // Render functions
-  const renderStories = () => (
-    <StoriesRow
-      stories={stories}
-      onStoryPress={handleStoryPress}
-      onAddStoryPress={handleCreatePost}
+  const renderPostItem = ({item}: {item: Post}) => (
+    <PostItem id={item.id} username={item.user_name} profileImage={getFullImageUrl(item.user_profile_image)}
+      postImage={getFullImageUrl(item.media_url)} caption={item.content} likes={item.likeCount}
+      comments={item.commentCount} timeAgo={getTimeAgo(item.created_at)} media_type={item.media_type}
+      isPremium={item.is_premium} onLike={() => handleLike(item.id)} onComment={() => handleComment(item.id)}
+      onShare={() => handleShare(item.id)} onPostPress={() => handlePostPress(item.id)}
+      onUserPress={() => handleUserPress(item.user_id)} onFollow={() => handleFollow(item.user_id)}
+      isLiked={!!likedPosts[item.id]} userId={item.user_id}
+      isVisible={visiblePostIds.includes(item.id)} last_active={item.last_active}
     />
   );
 
-  const renderCategories = () => (
-    <CategoriesRow
-      categories={categories}
-      selectedCategory={selectedCategoryState}
-      onCategoryPress={handleCategoryPress}
-    />
-  );
-
-  const renderEarnCards = () => (
-    <View style={styles.earnCardsSection}>
-      <EarnCard
-        title="Watch & Earn"
-        description="Watch videos and earn rewards"
-        iconName="play-circle"
-        onPress={handleWatchAndEarn}
-      />
-      <EarnCard
-        title="Refer & Earn"
-        description="Invite friends and earn rewards together"
-        iconName="user-plus"
-        onPress={handleReferAndEarn}
-      />
-    </View>
-  );
-  // Removed unused renderPost function
   const renderFooter = () => {
-    if (!loading.loadingMore) {
-      return null;
-    }
-
+    if (!loading.loadingMore) return null;
     return (
       <View style={styles.footerLoader}>
         <ActivityIndicator size="small" color={colors.primary} />
       </View>
     );
-  };  // Render a single post item
-  const renderPostItem = ({item}: {item: Post}) => {
-    const isVisible = visiblePostIds.includes(item.id);
-    
-    return (
-      <PostItem
-        id={item.id}
-        username={item.user_name}
-        profileImage={item.user_profile_image}
-        postImage={item.media_url}
-        caption={item.content}
-        likes={item.likeCount}
-        comments={item.commentCount}
-        timeAgo={getTimeAgo(item.created_at)}
-        media_type={item.media_type}
-        isPremium={item.is_premium}
-        onLike={handleLike}
-        onComment={handleComment}
-        onShare={handleShare}
-        onPostPress={handlePostPress}
-        onUserPress={handleUserPress}
-        onFollow={handleFollow}
-        isLiked={!!likedPosts[item.id]}
-        userId={item.user_id}
-        isVisible={isVisible}
-        last_active={item.last_active} // Add this line
-      />
-    );
   };
 
-  // Render header content for FlatList
-  const renderListHeader = () => (
-    <>
-      {renderStories()}
-      {renderCategories()}
-      {renderEarnCards()}
-    </>
-  );
-
-  // Render empty/error/loading state for FlatList
   const renderListEmpty = () => {
-    if (loading.posts && !refreshing) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      );
-    }
+    if (initialLoading || (loading.posts && !refreshing)) return null; // Show nothing if still in initial/posts loading phase
     if (error) {
       return (
         <View style={styles.errorContainer}>
-          {error ? (
-            <Text style={[styles.emptyText, {color: colors.text.secondary}]}>{error}</Text>
-          ) : null}
+          <Icon name="alert-triangle" size={48} color={colors.error} />
+          <Text style={[styles.emptyText, {color: colors.text.secondary}]}>{error}</Text>
+          <TouchableOpacity onPress={handleRefresh}>
+            <Text style={[styles.emptyText, {color: colors.primary}]}>Tap to retry</Text>
+          </TouchableOpacity>
         </View>
       );
     }
-    return (
-      <View style={styles.emptyContainer}>
-        <Icon name="inbox" size={50} color={colors.gray[400]} />
-        <Text style={[styles.emptyText, {color: colors.text.secondary}]}>No posts yet</Text>
-      </View>
-    );
+    if (posts.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Icon name="inbox" size={48} color={colors.text.tertiary} />
+          <Text style={[styles.emptyText, {color: colors.text.secondary}]}>No posts yet.</Text>
+          <Text style={[styles.emptyText, {color: colors.text.tertiary, fontSize: 14}]}>
+            Follow some users or check back later!
+          </Text>
+        </View>
+      );
+    }
+    return null;
   };
-  // Main render
-  if (initialLoading && !refreshing) { // Show full skeleton on initial load
-    return (
-      <View style={[styles.container, {backgroundColor: colors.background}]}>
-        <Header
-          title="Home"
-          showLogo={true}
-          showWallet={true}
-          // walletAmount can be undefined or a placeholder during skeleton
-        />
-        {renderInitialSkeleton()}
-      </View>
-    );
+
+  const renderInitialSkeletonView = () => (
+    <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.postsContainerStyle, {paddingBottom: contentPaddingBottom}]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
+    >
+      <StoriesRow stories={[]} onStoryPress={() => {}} onAddStoryPress={() => {}} isLoading={true} />
+      <CategoriesRow categories={staticCategories} selectedCategory={null} onCategoryPress={() => {}} isLoading={true} />
+      <EarnCardsRow onWatchAndEarn={() => {}} onReferAndEarn={() => {}} isLoading={true} />
+      {Array(3).fill(0).map((_, index) => <PostItemSkeleton key={`post-skel-${index}`} />)}
+    </ScrollView>
+  );
+
+  // For debugging, log the value just before render
+  // console.log('ViewabilityConfig before FlatList render:', viewabilityConfig);
+  // console.log('Type of viewabilityConfig:', typeof viewabilityConfig);
+
+  if (initialLoading && !refreshing && !error) {
+    return renderInitialSkeletonView();
   }
 
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header
-        title="Home"
-        showLogo={true}
-        showWallet={true}
-        walletAmount={walletBalance ? walletBalance.toString() : undefined}
-      />
+      <Header title="Home" showLogo={true} showWallet={true} walletAmount={walletAmount} />
       <FlatList
         data={posts}
         renderItem={renderPostItem}
         keyExtractor={(item, index) => `post-${item.id}-${index}`}
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.4} // Trigger at 40% from the end
-        ListFooterComponent={renderFooter}
         ListHeaderComponent={renderListHeader}
-        ListEmptyComponent={ // Modified to not show ActivityIndicator if initialLoading was true
-          !loading.posts && !refreshing ? ( // Only show empty/error if not actively loading posts
-            error ? (
-              <View style={styles.errorContainer}>
-                <Text style={[styles.emptyText, {color: colors.text.secondary}]}>{error}</Text>
-              </View>
-            ) : (
-              <View style={styles.emptyContainer}>
-                <Icon name="inbox" size={50} color={colors.gray?.[400] || '#A0AEC0'} />
-                <Text style={[styles.emptyText, {color: colors.text.secondary}]}>No posts yet</Text>
-              </View>
-            )
-          ) : null // Return null if loading.posts is true (FlatList's own loader or refresh control will show)
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={[colors.primary]} // For Android
-            tintColor={colors.primary} // For iOS
-          />
-        }
+        ListFooterComponent={renderFooter}
+        ListEmptyComponent={renderListEmpty}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
         showsVerticalScrollIndicator={false}
         initialNumToRender={5}
         maxToRenderPerBatch={10}
         windowSize={21}
-        updateCellsBatchingPeriod={50}
-        removeClippedSubviews={Platform.OS === 'android'}
-        viewabilityConfig={viewabilityConfig}
-        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig} // Now uses the useMemo version
+        onViewableItemsChanged={onViewableItemsChanged} // Now uses the useCallback version
         contentContainerStyle={[styles.postsContainerStyle, {paddingBottom: contentPaddingBottom}]}
-        maintainVisibleContentPosition={{
-          minIndexForVisible: 0,
-          autoscrollToTopThreshold: 10,
-        }}
-        onScrollBeginDrag={() => {
-          // Reset any error state on user scroll
-          if (error) {
-            setError(null);
-          }
-        }}
-        onMomentumScrollBegin={() => {
-          // Reset loading state when user starts scrolling
-          if (loading.loadingMore) {
-            setLoading(prev => ({...prev, loadingMore: false}));
-          }
-        }}
+        maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 10 }}
+        onScrollBeginDrag={() => Keyboard.dismiss()}
       />
-      {/* Comments Modal Overlay */}
       {commentModalVisible && selectedCommentPostId !== null && (
-        <CommentScreen
-          visible={commentModalVisible}
-          postId={selectedCommentPostId}
-          onClose={handleCloseCommentModal}
-        />
+        <CommentScreen visible={commentModalVisible} postId={selectedCommentPostId} onClose={handleCloseCommentModal} />
       )}
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  storiesSection: {
-    paddingVertical: 12,
-    // borderBottomWidth: 1, // Optional for skeleton
-    // borderBottomColor: '#EEEEEE', // Optional for skeleton
-  },
-  storiesContainer: {
-    paddingLeft: 16,
-  },
-  storiesContentContainer: {
-    paddingRight: 16,
-  },
-  categoriesSection: {
-    paddingVertical: 12,
-  },
-  categoriesContainer: {
-    paddingLeft: 16,
-    paddingRight: 8, // Ensure this matches original
-  },
-  categoriesContentContainer: { // Added for consistency
-    paddingRight: 8,
-  },
+const createHomeScreenStyles = (colors: any) => StyleSheet.create({
+  container: { flex: 1 },
+  scrollView: { flex: 1 },
+  storiesSection: { paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderLight },
+  storiesContainer: { paddingLeft: 16 },
+  storiesContentContainer: { paddingRight: 16 },
+  categoriesSection: { paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderLight },
+  categoriesContainer: { paddingLeft: 16 },
+  categoriesContentContainer: { paddingRight: 16 },
   earnCardsSection: {
-    padding: 16,
+    flexDirection: 'column', // stack vertically
+    gap: 12, // for RN 0.71+, otherwise use marginBottom below
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
   },
-  postsContainerStyle: { // Used by both FlatList and Skeleton ScrollView
-    paddingTop: 8,
+  earnCard: {
+    width: '100%',
+    marginBottom: 12, // space between cards
   },
-  loadingContainer: { // For FlatList's ListEmptyComponent when loading.posts is true
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 200,
-  },
-  errorContainer: {
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 200, // Give some space for the error message
-  },
-  emptyContainer: {
-    padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 200, // Give some space for the empty message
-  },
-  emptyText: {
-    fontSize: 16,
-    marginVertical: 12,
-    textAlign: 'center',
-  },
-  footerLoader: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
+  postsContainerStyle: { paddingTop: 0 },
+  loadingContainer: { flex:1, padding: 20, alignItems: 'center', justifyContent: 'center' },
+  errorContainer: { flex:1, padding: 20, alignItems: 'center', justifyContent: 'center', minHeight: 200 },
+  emptyContainer: { flex:1, padding: 40, alignItems: 'center', justifyContent: 'center', minHeight: 200 },
+  emptyText: { fontSize: 16, marginVertical: 12, textAlign: 'center' },
+  footerLoader: { paddingVertical: 20, alignItems: 'center' },
 });
 
 export default HomeScreen;

@@ -6,7 +6,7 @@ import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns';
  */
 class LastSeenService {
   private pingIntervalId: NodeJS.Timeout | null = null;
-  private pingInterval = 60000; // 1 minute
+  private pingInterval = 600000; // 10 minute
 
   /**
    * Start tracking user's online presence

@@ -14,7 +14,8 @@ import {
   useWindowDimensions,
   Platform,
   PixelRatio,
-  Linking
+  Linking,
+  Text, // Import Text component
 } from 'react-native';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
@@ -67,31 +68,20 @@ const ThemeAwareStatusBar = () => {
 const AppNavigator = () => {
   const { isAuthenticated, isInitialized } = useAuth();
   const [messagingInstance, setMessagingInstance] = useState<ReturnType<typeof messaging> | null>(null);
-  // const [initialCallData, setInitialCallData] = useState<any>(null); // This state seems unused, consider removing if not needed for other logic
 
-  // Call all hooks at the top level
   const insets = useSafeAreaInsets();
-  const { isDarkMode, colors } = useTheme(); // Assuming useTheme() is from your ThemeContext
+  const { isDarkMode, colors } = useTheme(); // Get colors from theme
 
   useEffect(() => {
     const initFirebaseMessaging = async () => {
       try {
-        // Check if the default Firebase app is initialized.
-        // This usually happens automatically via native configuration.
         if (firebase.apps.length === 0) {
-          // You might call firebase.initializeApp() here if you have a specific non-default setup,
-          // but for the default app, native initialization is standard.
           console.log('Default Firebase app not initialized. Ensure native setup is correct.');
-          // Optionally, initialize explicitly: await firebase.initializeApp();
         }
-
-        const instance = messaging(); // Get the messaging instance
-
-        // Check if messaging is supported.
+        const instance = messaging();
         if (instance.isSupported()) { 
           setMessagingInstance(instance);
           console.log('Firebase Messaging is supported and initialized.');
-
           instance.setBackgroundMessageHandler(async remoteMessage => {
             console.log('Message handled in the background:', remoteMessage);
             return Promise.resolve();
@@ -103,7 +93,6 @@ const AppNavigator = () => {
         console.error('Failed to initialize Firebase Messaging:', error);
       }
     };
-
     if (isInitialized) {
       initFirebaseMessaging();
     }
@@ -114,7 +103,6 @@ const AppNavigator = () => {
       if (messagingInstance) { 
         try {
           await NotificationService.requestPermissions(messagingInstance);
-          
           if (isAuthenticated) {
             const userId = await AsyncStorage.getItem('userId');
             if (userId) {
@@ -154,7 +142,6 @@ const AppNavigator = () => {
                 });
              } else {
                 console.warn('[FCM] Navigation not ready for initial notification, data might be lost if not handled.');
-                // Consider a more robust queueing mechanism for pending navigations if this is a common issue.
              }
           }
         }
@@ -180,8 +167,6 @@ const AppNavigator = () => {
          });
       }
     });
-
-    // It's good practice to store and call the unsubscribe function
     // return () => {
     //   if (typeof unsubscribeForeground === 'function') {
     //     unsubscribeForeground();
@@ -192,19 +177,20 @@ const AppNavigator = () => {
 
   // Show loading indicator ONLY while AuthContext is initializing
   if (!isInitialized) {
-    // const insets = useSafeAreaInsets(); // Moved to top
     return (
       <SafeAreaViewRN style={[
         styles.loadingContainer,
-        { paddingTop: insets.top } // 'insets' is now available from the top-level call
+        // Use dynamic theme colors for the loading screen background
+        { backgroundColor: colors.background, paddingTop: insets.top } 
       ]}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <ActivityIndicator size="large" color={colors.primary} />
+        {/* Ensure any text here is wrapped in a <Text> component */}
+        <Text style={[styles.loadingText, { color: colors.text?.primary }]}>
+          Initializing...
+        </Text>
       </SafeAreaViewRN>
     );
   }
-  
-  // const insets = useSafeAreaInsets(); // Moved to top
-  // const { isDarkMode, colors } = useTheme(); // Moved to top
   
   return (
     <NavigationContainer 
@@ -214,7 +200,8 @@ const AppNavigator = () => {
         style={{
           flex: 1, 
           width: '100%', 
-          paddingTop: insets.top 
+          paddingTop: insets.top // This provides a global top padding; ensure it's intended.
+                                // Individual screens or navigators might also handle safe areas.
         }}
       >
         <Stack.Navigator 
@@ -249,7 +236,6 @@ function App(): React.JSX.Element {
   
   const isLandscape = width > height;
   
-  
   return (
     <SafeAreaProvider>
       <SafeAreaViewRN 
@@ -265,9 +251,9 @@ function App(): React.JSX.Element {
             }
           ]}
         >
-          <ThemeProvider>
+          <ThemeProvider> {/* ThemeProvider wraps everything that needs theme context */}
             <ThemeAwareStatusBar />
-            <AuthProvider> {/* AuthProvider now correctly wraps AppNavigator */}
+            <AuthProvider> {/* AuthProvider wraps components needing auth context, including AppNavigator */}
               <WalletProvider>
                 <ShortsProvider>
                   <SidebarProvider>
@@ -286,13 +272,13 @@ function App(): React.JSX.Element {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primary, // Outer background, if visible due to appContentContainer constraints
     width: '100%',
     height: '100%',
   },
   appContentContainer: {
     flex: 1,
-    backgroundColor: COLORS.background, 
+    backgroundColor: COLORS.background, // Default background for the main content area
     width: '100%',
     overflow: 'hidden', 
   },
@@ -300,9 +286,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.background, 
+    // backgroundColor is now set dynamically using theme colors inline
     width: '100%',
   },
+  loadingText: { // Added style for loading text
+    marginTop: 10,
+    fontSize: 16,
+  }
 });
 
 export default App;

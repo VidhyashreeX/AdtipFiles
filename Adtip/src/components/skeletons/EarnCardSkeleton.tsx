@@ -5,8 +5,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 
 const EarnCardSkeleton: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
-  const skeletonBackgroundColor = isDarkMode ? colors.gray?.[700] || '#3A3A3C' : colors.gray?.[200] || '#E1E1E1';
-  const skeletonHighlightColor = isDarkMode ? colors.gray?.[600] || '#4A4A4C' : colors.gray?.[50] || '#F0F0F0';
+  const skeletonBackgroundColor = isDarkMode ? colors.gray[700] : colors.gray[200];
+  const skeletonHighlightColor = isDarkMode ? colors.gray[600] : colors.gray[50];
 
   return (
     <SkeletonPlaceholder backgroundColor={skeletonBackgroundColor} highlightColor={skeletonHighlightColor} speed={1000}>

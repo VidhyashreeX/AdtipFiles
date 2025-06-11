@@ -10,56 +10,72 @@ import WalletService from '../services/WalletService';
  */
 export const useWallet = () => {
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [isLoadingHook, setIsLoadingHook] = useState<boolean>(false);
+  const [isRefreshingHook, setIsRefreshingHook] = useState<boolean>(false);
   const {user} = useAuth();
 
-  // Get wallet data from context
   const walletContext = useWalletContext();
-  const {balance, isPremium, refreshBalance} = walletContext;
 
-  // Function to fetch wallet data
   const fetchWalletData = useCallback(async () => {
+    if (!user || !user.id) {
+      // Ensure states are reset if no user
+      setTransactions([]);
+      // isLoadingHook and isRefreshingHook are managed by refreshWalletHook
+      return;
+    }
+
     try {
-      if (!user || !user.id) {
-        return;
-      }
+      // Refresh balance using the wallet context's method
+      await walletContext.refreshBalance();
 
-      setIsLoading(true);
-
-      // First refresh the balance using the wallet context
-      await refreshBalance();
-
-      // Get transaction history - still handled by this hook
+      // Fetch transaction history
       const history = await WalletService.getTransactionHistory(user.id);
       setTransactions(history);
     } catch (error) {
-      console.error('Error in useWallet hook:', error);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      console.error('Error in useWallet hook fetchWalletData:', error);
     }
-  }, [user, refreshBalance]); // Added refreshBalance here
+  }, [user, walletContext]);
 
-  // Function to refresh wallet data
-  const refreshWallet = () => {
-    setIsRefreshing(true);
-    fetchWalletData();
-  };
-  // Load wallet data when user changes
-  useEffect(() => {
-    if (user && user.id) {
-      fetchWalletData();
+  const refreshWalletHook = useCallback(async () => {
+    if (!user || !user.id) {
+      // If no user, don't attempt to refresh.
+      // Reset states if necessary, though fetchWalletData also handles this.
+      setIsLoadingHook(false);
+      setIsRefreshingHook(false);
+      setTransactions([]);
+      // Ensure context balance is also reset if desired (context might handle this or expose a reset)
+      return;
+    }
+    setIsLoadingHook(true);
+    setIsRefreshingHook(true); // Typically set true for user-initiated refresh
+    try {
+      await fetchWalletData();
+    } catch (e) {
+      console.error("Error in refreshWalletHook", e);
+    } finally {
+      setIsLoadingHook(false);
+      setIsRefreshingHook(false);
     }
   }, [user, fetchWalletData]);
 
+  // Removed useEffect that called fetchWalletData automatically
+  // useEffect(() => {
+  //   if (user && user.id) {
+  //     // fetchWalletData(); // This was causing automatic fetch
+  //   } else {
+  //     setIsLoadingHook(false);
+  //     setTransactions([]);
+  //   }
+  // }, [user, fetchWalletData]);
+
+
   return {
-    balance,
+    balance: walletContext.balance,
     transactions,
-    isLoading,
-    isRefreshing,
-    refreshWallet,
-    isPremium,
+    isLoading: isLoadingHook || walletContext.isLoading, // Combined loading state
+    isRefreshing: isRefreshingHook,
+    refreshWallet: refreshWalletHook,
+    isPremium: walletContext.isPremium,
   };
 };
 

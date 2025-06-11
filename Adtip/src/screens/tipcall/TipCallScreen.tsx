@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useCallback, useRef} from 'react'; // Ensure React is imported
+import React, {useEffect, useState, useCallback, useRef} from 'react';
 import {
   View,
   Text,
@@ -11,37 +11,32 @@ import {
   Alert,
   TextInput,
   StatusBar,
+  ScrollView,
 } from 'react-native';
-import {useNavigation, useRoute, RouteProp} from '@react-navigation/native';
-import {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import Icon from 'react-native-vector-icons/Feather';
-import firebase from '@react-native-firebase/app';
-import messaging from '@react-native-firebase/messaging';
 import { 
-  createAgoraRtcEngine, // Main function to create engine instance
-  RtcEngineContext,     // Context for initialization
-  ChannelProfileType,   // Enum for channel profile
-  ClientRoleType,       // Enum for client role
+  createAgoraRtcEngine,
+  RtcEngineContext,
+  ChannelProfileType,
   IRtcEngine,
-  // RtcLocalView, // No longer a direct export
-  // RtcRemoteView, // No longer a direct export
-  RtcSurfaceView, // Use RtcSurfaceView for both local and remote
+  RtcSurfaceView,
 } from 'react-native-agora';
-// Remove RtcRemoteView import if it was separate, RtcSurfaceView handles both
-// import { RtcRemoteView } from 'react-native-agora'; 
-
-
+import IncomingCallScreenComponent from '../../components/tipcall/IncomingCallScreen';
+import {useTheme} from '../../contexts/ThemeContext';
+import ContactSkeletonItem from '../../components/skeletons/ContactSkeletonItem';
+import { UserListRequest, AgoraCallerTokenRequest, AgoraCalleeTokenRequest, AgoraTokenResponse as AgoraApiTokenResponse } from '../../types/api';
 import {useAuth} from '../../contexts/AuthContext';
 import {useTabNavigator} from '../../contexts/TabNavigatorContext';
+import {useNavigation, useRoute, RouteProp} from '@react-navigation/native';
+import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import ApiService from '../../services/ApiService';
-import AgoraRtmHelper, { RtmEventType, RtmLocalInvitation, RtmRemoteInvitation, RtmLocalInvitationProps } from '../../services/AgoraRtmHelper'; // Added RtmLocalInvitationProps
-import {AgoraHelper} from '../../services/AgoraHelper';
-import IncomingCallScreenComponent from '../../components/tipcall/IncomingCallScreen'; // Renamed to avoid conflict
-import ContactSkeletonItem from '../../components/skeletons/ContactSkeletonItem';
-import { UserListRequest, AgoraCallerTokenRequest, AgoraCalleeTokenRequest, AgoraTokenResponse as AgoraApiTokenResponse } from '../../types/api'; // Updated AgoraTokenResponse import
+import Icon from 'react-native-vector-icons/Feather';
+import messaging from '@react-native-firebase/messaging';
+import * as AgoraHelper from '../../services/AgoraHelper';
+import Header from '../../components/common/Header';
 
 // Define a basic colors object for use in styles (customize as needed)
-const colors = {
+// This local colors object can be a fallback if theme doesn't provide specific keys.
+const localFallbackColors = {
   primary: '#24d05a',
   card: '#fff',
   borderLight: '#e5e7eb',
@@ -204,37 +199,52 @@ const notifyRecipient = async (
   recipientId: number,
   channelId: string,
   callType: 'voice' | 'video',
-  userId: string | undefined,
+  userId: string | undefined, // This is the caller's app user ID
+  callerName: string, // Added callerName
+  callerRtcUid: number, // Added callerRtcUid
+  callerRtcToken: string // Added callerRtcToken (caller's token for the channel)
 ) => {
-  console.log(`[FCM-CALL] Initiating ${callType} call notification to recipient ${recipientId}`);
-  console.log(`[FCM-CALL] Call parameters - Channel: ${channelId}, Caller: ${userId}`);
+  console.log(`[Signal] Initiating ${callType} call notification to recipient ${recipientId}`);
+  console.log(`[Signal] Call parameters - Channel: ${channelId}, CallerAppUserId: ${userId}, CallerName: ${callerName}, CallerRtcUid: ${callerRtcUid}`);
   
   if (!userId) {
-    console.warn('[FCM-CALL] No authenticated user for notification');
+    console.warn('[Signal] No authenticated user for notification');
     return;
   }
   
   try {
+    // This payload should align with what your backend expects for a push notification
+    // to initiate a call. It might include channelName, caller's RTC UID, caller's display name, etc.
+    // The `ApiService.handleCall` might be a generic endpoint, or you might have a specific one for notifications.
     const payload = {
-      callerId: userId,
-      receiverId: recipientId.toString(),
-      action: 'start' as 'start',
+      callerId: userId, // Caller's application user ID
+      receiverId: recipientId.toString(), // Recipient's application user ID
+      action: 'start' as 'start', // Or a specific action like 'initiate_call_notification'
       callType: callType === 'video' ? 'video-call' : 'audio-call' as 'video-call' | 'audio-call',
+      // Additional data for the recipient's notification payload:
+      channelName: channelId,
+      caller_name: callerName, // Name to display on incoming call screen
+      caller_rtc_uid: callerRtcUid.toString(), // Caller's RTC UID for the channel
+      // The caller's RTC token for the channel might also be sent if the callee needs it
+      // directly from the notification, though fetching their own is safer.
+      // For now, let's assume the callee fetches their own token upon receiving the notification.
+      // rtc_token: callerRtcToken, 
     } as const;
     
-    console.log('[FCM-CALL] Sending call notification with payload:', JSON.stringify(payload, null, 2));
-    const response = await ApiService.handleCall(payload);
-    console.log('[FCM-CALL] Call notification response:', JSON.stringify(response, null, 2));
-    console.log(`[FCM-CALL] ${callType} call notification sent to recipient ID ${recipientId}`);
-    
+    console.log('[Signal] Sending call notification with payload:', JSON.stringify(payload, null, 2));
+    // Assuming ApiService.handleCall is suitable for sending this notification trigger
+    // or you have another method like ApiService.sendCallNotification(payload)
+    const response = await ApiService.handleCall(payload); 
+    console.log('[Signal] Call notification response:', JSON.stringify(response, null, 2));
+    console.log(`[Signal] ${callType} call notification sent to recipient ID ${recipientId}`);    
     return response;
   } catch (error) {
-    console.error('[FCM-CALL] Error notifying recipient:', error);
+    console.error('[Signal] Error notifying recipient:', error);
     return null;
   }
 };
 
-// Define the type for call request payloads
+ // Define the type for call request payloads
 type AgoraCallRequest = {
   callerId: string;
   receiverId: string;
@@ -256,7 +266,7 @@ const NotificationService = {
         console.log('[FCM] iOS notification permissions:', enabled ? 'GRANTED' : 'DENIED');
         
         if (!enabled) {
-          Alert.alert('Notification Permission', 'Please enable notifications for a better call experience.');
+            Alert.alert("Permissions Denied", "Cannot receive call notifications without permission.");
         }
       } else {
         console.log('[FCM] Android permissions handled by manifest');
@@ -269,27 +279,27 @@ const NotificationService = {
   extractCallData: (remoteMessage: any) => {
     console.log('[FCM] Extracting call data from notification payload:', JSON.stringify(remoteMessage.data, null, 2));
     if (remoteMessage.data) {
-      // Use the new field names from your specified payload
+      // Use the field names from your specified payload
       const {
-        channelName,
-        caller_app_user_id, // New field
-        callee_agora_uid,   // New field
-        agora_token,        // New field
-        call_type,          // New field ("audio" or "video")
-        callerName          // Keep attempting to get callerName
+        channelName, // RTC channel name
+        caller_app_user_id, // Caller's application user ID
+        callee_agora_uid,   // Callee's (this user's) Agora RTC UID for the channel
+        agora_token,        // Callee's (this user's) Agora RTC token for the channel
+        call_type,          // "audio" or "video"
+        caller_name         // Caller's display name
       } = remoteMessage.data;
       
-      console.log('[FCM] Notification data fields:', { channelName, caller_app_user_id, callee_agora_uid, agora_token, call_type, callerName });
+      console.log('[FCM] Notification data fields:', { channelName, caller_app_user_id, callee_agora_uid, agora_token, call_type, caller_name });
       
       // Validate essential fields
       if (caller_app_user_id && channelName && agora_token && callee_agora_uid && (call_type === "audio" || call_type === "video")) {
         const extractedData = {
-          callerId: caller_app_user_id, // Map to existing 'callerId'
-          callerName: callerName || "Unknown Caller", // Default if not present
+          callerId: caller_app_user_id, 
+          callerName: caller_name || "Unknown Caller", 
           channelName: channelName,
-          callType: call_type === "video" ? "video" : "voice", // Map "audio" to "voice"
-          calleeAgoraUid: callee_agora_uid,
-          agoraToken: agora_token,
+          callType: call_type === "video" ? "video" : "voice", 
+          calleeAgoraUid: callee_agora_uid, // This is THIS user's RTC UID for the call
+          agoraToken: agora_token,        // This is THIS user's RTC token for the call
         };
         console.log('[FCM] Successfully extracted call data:', JSON.stringify(extractedData, null, 2));
         return extractedData;
@@ -310,9 +320,9 @@ const NotificationService = {
     let apiAction: AgoraCallRequest['action'];
     // Map 'accepted' and 'rejected' to allowed values for the API
     if (action === 'accepted') {
-      apiAction = 'start';
+      apiAction = 'start'; // Or 'accepted' if your backend uses that
     } else if (action === 'rejected') {
-      apiAction = 'end';
+      apiAction = 'end'; // Or 'rejected'
     } else {
       apiAction = action; // 'missed-video-call' or 'missed-audio-call'
     }
@@ -325,7 +335,6 @@ const NotificationService = {
         callerId: callerId, // Original caller
         receiverId: receiverId, // Current user (who accepted/rejected)
         action: apiAction,
-        // Map JS 'voice'/'video' to backend's 'audio-call'/'video-call'
         callType: callType === 'video' ? 'video-call' : 'audio-call',
       };
       
@@ -333,11 +342,10 @@ const NotificationService = {
       const response = await ApiService.handleCall(payload);
       console.log('[FCM] Call status update response:', JSON.stringify(response, null, 2));
       
-      // If action was 'accepted', the response might contain the backend's callId
       if (action === 'accepted' && response && response.data && typeof response.data.callId === 'number') {
         return { callId: response.data.callId };
       }
-      return response; // Return the whole response or null
+      return response; 
     } catch (error) {
       console.error(`[FCM] Error updating call status to ${action}:`, error);
       return null;
@@ -345,9 +353,8 @@ const NotificationService = {
   },
 };
 
+
 // --- Placeholder for IncomingCallScreen component ---
-// This component is used in TipCallScreen but not defined.
-// You'll need to define its UI and functionality.
 interface IncomingCallScreenProps {
   callerName: string;
   callType: 'voice' | 'video';
@@ -361,25 +368,24 @@ const IncomingCallScreen: React.FC<IncomingCallScreenProps> = ({
   onAccept,
   onReject,
 }) => {
+  const {colors} = useTheme(); // Use theme for styling
   return (
-    <View style={styles.incomingCallOverlay}>
-      <Text style={styles.incomingCallText}>Incoming {callType} call from:</Text>
-      <Text style={styles.incomingCallerName}>{callerName}</Text>
+    <View style={[styles.incomingCallOverlay, {backgroundColor: colors.backgroundOpac || 'rgba(0,0,0,0.8)'}]}>
+      <Text style={[styles.incomingCallText, {color: colors.text.light || '#FFFFFF'}]}>Incoming {callType} call from:</Text>
+      <Text style={[styles.incomingCallerName, {color: colors.text.light || '#FFFFFF'}]}>{callerName}</Text>
       <View style={styles.incomingCallButtons}>
-        <TouchableOpacity style={styles.acceptCallButton} onPress={onAccept}>
-          <Text style={styles.acceptCallText}>Accept</Text>
+        <TouchableOpacity style={[styles.acceptCallButton, {backgroundColor: colors.success || '#4CAF50'}]} onPress={onAccept}>
+          <Icon name="phone" size={24} color={colors.white || '#FFFFFF'} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.rejectCallButton} onPress={onReject}>
-          <Text style={styles.rejectCallText}>Reject</Text>
+        <TouchableOpacity style={[styles.rejectCallButton, {backgroundColor: colors.danger || '#F44336'}]} onPress={onReject}>
+          <Icon name="phone-off" size={24} color={colors.white || '#FFFFFF'} />
         </TouchableOpacity>
       </View>
     </View>
   );
 };
-
-
 interface MeetingViewProps {
-  channelName: string; // Changed from meetingId to channelName for clarity
+  channelName: string; 
   rtcEngine: IRtcEngine;
   onEndCall: () => void;
   isCaller: boolean;
@@ -389,7 +395,7 @@ interface MeetingViewProps {
 }
 
 const MeetingView: React.FC<MeetingViewProps> = ({
-  channelName, // This prop is still useful for logging or other logic if needed
+  channelName, 
   rtcEngine,
   onEndCall,
   isCaller,
@@ -398,7 +404,7 @@ const MeetingView: React.FC<MeetingViewProps> = ({
   token,
 }) => {
   const [remoteUsers, setRemoteUsers] = useState<number[]>([]);
-  const remoteUsersRef = useRef<number[]>([]);
+  const remoteUsersRef = useRef<number[]>([]); // To manage remoteUsers in callbacks without causing re-renders
 
   useEffect(() => {
     const initRtc = async () => {
@@ -407,7 +413,7 @@ const MeetingView: React.FC<MeetingViewProps> = ({
       if (callType === 'video') {
          await rtcEngine.enableVideo();
       } else {
-         await rtcEngine.disableVideo();
+         await rtcEngine.disableVideo(); // Ensure video is off for voice calls
       }
 
       rtcEngine.addListener('onUserJoined', (connection, uid, elapsed) => { 
@@ -422,7 +428,10 @@ const MeetingView: React.FC<MeetingViewProps> = ({
         console.log('[RTC] MeetingView: Remote user offline:', uid, 'reason:', reason, 'on channel:', connection.channelId);
         setRemoteUsers(prev => prev.filter(userUid => userUid !== uid));
         remoteUsersRef.current = remoteUsersRef.current.filter(userUid => userUid !== uid);
+        // If not the caller and the last remote user leaves, end the call for the callee.
+        // Caller usually ends the call explicitly or when the app is closed.
         if (remoteUsersRef.current.length === 0 && !isCaller) { 
+            console.log('[RTC] MeetingView: Last remote user left, ending call for callee.');
             onEndCall(); 
         }
       });
@@ -433,6 +442,8 @@ const MeetingView: React.FC<MeetingViewProps> = ({
 
       rtcEngine.addListener('onError', (err, msg) => { 
         console.error('[RTC] MeetingView: RTC Error Code:', err, 'Message:', msg);
+        // Potentially end call on critical errors
+        // onEndCall(); 
       });
       
       console.log(`[RTC] MeetingView: Attempting to join RTC channel: ${channelName} with UID: ${localUid} and Token: ${token ? 'Present' : 'Absent'}`);
@@ -449,7 +460,7 @@ const MeetingView: React.FC<MeetingViewProps> = ({
       rtcEngine.removeAllListeners('onError');
       AgoraHelper.safeLeaveChannel(rtcEngine).catch(err => console.error("[RTC] MeetingView: Error leaving channel on cleanup", err));
     };
-  }, [rtcEngine, channelName, localUid, token, callType, onEndCall, isCaller]);
+  }, [rtcEngine, channelName, localUid, token, callType, onEndCall, isCaller]); // Added isCaller
 
   return (
     <View style={styles.callOverlay}>
@@ -458,8 +469,7 @@ const MeetingView: React.FC<MeetingViewProps> = ({
         <>
           <RtcSurfaceView 
             style={styles.localVideo} 
-            canvas={{uid: 0}} // Standard practice for local view
-            // channelId prop removed
+            canvas={{uid: 0}} 
           />
           
           {remoteUsers.map(uid => (
@@ -467,7 +477,6 @@ const MeetingView: React.FC<MeetingViewProps> = ({
               key={uid} 
               style={styles.remoteVideo} 
               canvas={{uid: uid}} 
-              // channelId prop removed
             />
           ))}
           {remoteUsers.length === 0 && <Text style={styles.callStatus}>Waiting for peer...</Text>}
@@ -482,46 +491,41 @@ const MeetingView: React.FC<MeetingViewProps> = ({
 
 
 const TipCallScreen: React.FC = () => {
-  // ... (existing state and refs) ...
   const {user} = useAuth();
   const {contentPaddingBottom} = useTabNavigator();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<TipCallScreenRouteProp>();
-  const [selectedCategory, setSelectedCategory] = useState<string>('1');
-  const [selectedLanguage, setSelectedLanguage] = useState<string>('1');
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  
-  const [inCall, setInCall] = useState<boolean>(false);
-  const [currentChannelName, setCurrentChannelName] = useState<string>('');
-  const [currentRtcToken, setCurrentRtcToken] = useState<string>(''); // This will store the token for the current user (caller or callee)
-  const [currentLocalRtcUid, setCurrentLocalRtcUid] = useState<number>(0); // RTC UID for the current user
+  const {colors: themeColors, isDarkMode: themeIsDarkMode} = useTheme(); 
 
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [allContacts, setAllContacts] = useState<Contact[]>([]); // Stores all fetched contacts
+  const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]); // Contacts to display
+  
+  const [loadingUsers, setLoadingUsers] = useState<boolean>(false); 
+  const [fetchUsersError, setFetchUsersError] = useState<string | null>(null);
+  const [initialUsersLoadAttempted, setInitialUsersLoadAttempted] = useState<boolean>(false);
+  const [isRtcEngineReady, setIsRtcEngineReady] = useState<boolean>(false);
   const rtcEngineRef = useRef<IRtcEngine | null>(null);
+  const rtcInitializationAttempted = useRef<boolean>(false);
   const [page, setPage] = useState<number>(1);
   const [totalRecords, setTotalRecords] = useState<number>(0);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  
+  const [searchQuery, setSearchQuery] = useState<string>(''); // Updated by Header's onSearchQueryChange
+  const [inCall, setInCall] = useState<boolean>(false);
+  const [currentChannelName, setCurrentChannelName] = useState<string>('');
+  const [currentRtcToken, setCurrentRtcToken] = useState<string>('');
+  const [currentLocalRtcUid, setCurrentLocalRtcUid] = useState<number>(0);
+  
   const [isCaller, setIsCaller] = useState<boolean>(false);
   const [currentCallType, setCurrentCallType] = useState<'voice' | 'video'>('voice');
-  const [activeTab, setActiveTab] = useState('contacts');
-
-  const [isRtcEngineReady, setIsRtcEngineReady] = useState<boolean>(false);
-  const [isRtmReady, setIsRtmReady] = useState<boolean>(false);
-
   const [incomingCallData, setIncomingCallData] = useState<{
-    rtmInvitation: RtmRemoteInvitation;
-    callerName: string; // Caller's RTM ID or display name
+    callerName: string;
     callType: 'voice' | 'video';
-    channelName: string; // RTC Channel Name (from caller's token generation)
-    callerRtcUid: string; // Caller's RTC UID (from caller's token generation)
-    // rtcToken field here was the CALLER's token, callee will fetch its own.
-    // We can remove it or keep it for logging if needed, but it won't be used by callee to join.
+    channelName: string;
+    callerId: string; 
+    calleeRtcUid?: string; 
+    calleeRtcToken?: string;
     isFromNotification?: boolean;
   } | null>(null);
-
-  const rtmHelperRef = useRef<AgoraRtmHelper | null>(null);
-  const [outgoingInvitationDetails, setOutgoingInvitationDetails] = useState<RtmLocalInvitationProps | null>(null);
 
   const redirectToLogin = useCallback(() => {
     navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
@@ -569,252 +573,146 @@ const TipCallScreen: React.FC = () => {
     return true; // iOS permissions are typically handled via Info.plist
   }, []);
 
-  const fetchUsers = useCallback(async (pageNum: number = 1, append: boolean = false, currentSearchQuery: string = searchQuery) => {
-    if (!user || !user.id) {
-      redirectToLogin();
-      return;
+  const applyFilter = useCallback((query: string, contactsToFilter: Contact[]): Contact[] => {
+    if (!query.trim()) {
+      return contactsToFilter;
     }
-    setLoading(true);
-    if (!append) { // Reset error only when fetching new list, not appending
-        setError(null);
+    const lowerCaseQuery = query.toLowerCase();
+    return contactsToFilter.filter(contact => 
+      contact.name?.toLowerCase().includes(lowerCaseQuery)
+    );
+  }, []);
+
+  const fetchUsers = useCallback(async (options: { pageNumArg?: number, appendArg?: boolean, apiSearchQuery?: string } = {}) => {
+    const pageToFetch = options.pageNumArg ?? 1;
+    const shouldAppend = options.appendArg ?? false;
+    const apiQuery = options.apiSearchQuery !== undefined ? options.apiSearchQuery : ''; // API search query
+
+    if (!user || !user.id) return;
+
+    console.log(`[API] Fetching users. Page: ${pageToFetch}, Append: ${shouldAppend}, API Search: "${apiQuery}"`);
+    setLoadingUsers(true);
+    if (!shouldAppend) {
+      setFetchUsersError(null);
+      // Don't clear allContacts here if appending, only if it's a new API search or initial load
     }
 
     try {
       const payload: UserListRequest = {
-        id: 0, // As per /api/allusers sample request
-        page: pageNum,
-        limit: 15, // Current limit in your code; sample for /api/allusers was 50. Adjust if needed.
-        language: [], // Empty array for /api/allusers
-        interest: [], // Empty array for /api/allusers
-        user_id: null, // As per /api/allusers sample request
-        search_by_name: currentSearchQuery, // Use current search query
-        loggined_user_id: user.id, // Dynamically set based on the logged-in user
-        sortBy: {}, // As per /api/allusers sample request
+        id: 0, page: pageToFetch, limit: 15, language: [], interest: [], user_id: null,
+        search_by_name: apiQuery, // Use the API search query
+        loggined_user_id: user.id, sortBy: {},
       };
-
-      // Call getAllUsersList which uses the /api/allusers endpoint
       const response = await ApiService.getAllUsersList(payload);
-
       if (response.data && response.status) {
-        const contactsData: Contact[] = response.data.map((item: any) => ({
-          id: item.id,
-          name: item.name ?? null,
-          emailId: item.emailId ?? null,
-          is_available: item.is_available ?? false,
-          dnd: item.dnd ?? false,
-          updated_date: item.updated_date ?? '',
-          last_active: item.last_active ?? null,
+        const newContactsData: Contact[] = response.data.map((item: any) => ({
+          id: item.id, name: item.name ?? null, emailId: item.emailId ?? null,
+          is_available: item.is_available ?? false, dnd: item.dnd ?? false,
+          updated_date: item.updated_date ?? '', last_active: item.last_active ?? null,
           languages: item.languages?.map((lang: any) => ({ id: lang.id, name: lang.name, isPrimary: lang.isPrimary ?? false })) ?? [],
           interests: item.interests?.map((int: any) => ({ id: int.id, name: int.name, isPrimary: int.isPrimary ?? false })) ?? [],
-          product_count: item.product_count ?? 0,
-          post_count: item.post_count ?? 0,
-          is_following: item.is_following ?? 0,
-          following_count: item.following_count ?? 0,
-          followers_count: item.followers_count ?? 0,
-          is_blocked: item.is_blocked ?? false,
-          social_links: item.social_links ?? [],
-          is_active: item.is_active ?? false,
-          last_seen: item.last_seen ?? '',
-          online_status: item.online_status ?? false,
+          product_count: item.product_count ?? 0, post_count: item.post_count ?? 0,
+          is_following: item.is_following ?? 0, following_count: item.following_count ?? 0,
+          followers_count: item.followers_count ?? 0, is_blocked: item.is_blocked ?? false,
+          social_links: item.social_links ?? [], is_active: item.is_active ?? false,
+          last_seen: item.last_seen ?? '', online_status: item.online_status ?? false,
         }));
-        setContacts(prev => (append ? [...prev, ...contactsData] : contactsData));
+        
+        setAllContacts(prev => {
+          const updatedAllContacts = shouldAppend ? [...prev, ...newContactsData] : newContactsData;
+          // After updating allContacts, apply the current client-side searchQuery
+          setFilteredContacts(applyFilter(searchQuery, updatedAllContacts));
+          return updatedAllContacts;
+        });
+
         setPage(response.pagination.page);
         setTotalRecords(response.pagination.totalRecords);
       } else {
-        setError(response.message || 'Failed to fetch users.');
-        if (!append) setContacts([]); // Clear contacts if initial fetch failed
+        setFetchUsersError(response.message || 'Failed to fetch users.');
+        if (!shouldAppend) {
+            setAllContacts([]);
+            setFilteredContacts([]);
+        }
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred while fetching users.');
-      if (!append) setContacts([]); // Clear contacts on error
-    } finally {
-      setLoading(false);
-    }
-  }, [searchQuery, user, redirectToLogin]); // Updated dependencies
-
-  useEffect(() => {
-    // Fetch users when the component mounts or when searchQuery changes.
-    // The `fetchUsers` function itself now depends on `searchQuery`.
-    fetchUsers(1, false, searchQuery);
-  }, [fetchUsers, searchQuery]); // searchQuery is a direct dependency here to re-trigger fetch
-
-
-  // Add this debug effect
-  useEffect(() => {
-    console.log('[DEBUG] State changes:');
-    console.log('[DEBUG] isRtcEngineReady:', isRtcEngineReady);
-    console.log('[DEBUG] isRtmReady:', isRtmReady);
-    console.log('[DEBUG] user:', user?.id);
-  }, [isRtcEngineReady, isRtmReady, user]);
-
-  // Initialize RTC Engine
-  useEffect(() => {
-    const initRtcEngine = async () => {
-      try {
-        if (!rtcEngineRef.current) {
-          console.log('[RTC] Attempting to create RTC Engine instance...');
-          // Use createAgoraRtcEngine to get an instance
-          const engine = createAgoraRtcEngine();
-          rtcEngineRef.current = engine;
-
-          // Initialize the engine instance with context
-          const rtcContext = new RtcEngineContext(); // Construct with no arguments
-          rtcContext.appId = APP_ID; // Set the appId property
-          // You can also set channelProfile here if it's global for the engine
-          // rtcContext.channelProfile = ChannelProfileType.ChannelProfileCommunication;
-          await rtcEngineRef.current.initialize(rtcContext);
-          
-          setIsRtcEngineReady(true);
-          console.log('[RTC] RTC Engine created and initialized');
-        }
-      } catch (e) {
-        console.error('[RTC] Failed to create or initialize RTC Engine:', e);
-        setIsRtcEngineReady(false);
+      setFetchUsersError(err.message || 'An error occurred while fetching users.');
+      if (!shouldAppend) {
+        setAllContacts([]);
+        setFilteredContacts([]);
       }
-    };
-    initRtcEngine();
-    return () => {
+    } finally {
+      setLoadingUsers(false);
+      if (pageToFetch === 1 && !shouldAppend) {
+        setInitialUsersLoadAttempted(true);
+      }
+    }
+  }, [user, applyFilter, searchQuery]); // searchQuery is needed to re-filter when allContacts changes
+
+  // Effect for initial load
+  useEffect(() => {
+    if (user && user.id) {
+      fetchUsers({ pageNumArg: 1, appendArg: false, apiSearchQuery: '' }); 
+    }
+  }, [user]); // Removed fetchUsers from deps, it's stable if its own deps are stable or handled.
+
+  // Effect for client-side filtering when searchQuery changes
+  useEffect(() => {
+    setFilteredContacts(applyFilter(searchQuery, allContacts));
+  }, [searchQuery, allContacts, applyFilter]);
+
+  // After first user list load attempt, initialize RTC engine ONCE
+  useEffect(() => {
+    // Only run if users load was attempted, RTC not ready, and we haven't tried initializing yet
+    if (initialUsersLoadAttempted && !isRtcEngineReady && !rtcInitializationAttempted.current) {
+      console.log('[TipCallScreen] Starting RTC Engine initialization after user list fetch.');
+      rtcInitializationAttempted.current = true; // Mark that we've started initialization
+      
+      const initRtcEngine = async () => {
+        try {
+          if (!rtcEngineRef.current) {
+            console.log('[RTC] Creating RTC Engine instance...');
+            const engine = createAgoraRtcEngine();
+            rtcEngineRef.current = engine;
+            
+            const rtcContext = new RtcEngineContext(); 
+            rtcContext.appId = APP_ID; 
+            
+            console.log('[RTC] Initializing RTC Engine...');
+            await rtcEngineRef.current.initialize(rtcContext);
+            
+            setIsRtcEngineReady(true);
+            console.log('[RTC] RTC Engine created and initialized successfully.');
+          }
+        } catch (e) {
+          console.error('[RTC] Failed to create or initialize RTC Engine:', e);
+          setIsRtcEngineReady(false);
+          rtcInitializationAttempted.current = false; // Reset on failure to allow retry
+          setFetchUsersError("Call services could not be initialized. Please try again later.");
+        }
+      };
+      
+      initRtcEngine();
+    }
+    
+    // Cleanup function - only run on unmount
+    return () => { 
       if (rtcEngineRef.current) {
-        console.log('[RTC] Releasing RTC Engine...');
-        // Use release() to destroy the engine created by createAgoraRtcEngine
+        console.log('[RTC] Cleaning up RTC Engine on unmount');
         rtcEngineRef.current.release();
         rtcEngineRef.current = null;
-        console.log('[RTC] RTC Engine released');
       }
       setIsRtcEngineReady(false);
+      rtcInitializationAttempted.current = false;
     };
-  }, []);
+  }, [initialUsersLoadAttempted]); // REMOVED isRtcEngineReady from dependencies
 
-  // Initialize Agora RTM
-  useEffect(() => {
-    let isMounted = true;
-    if (user && user.id) {
-      const rtmId = user.id.toString(); 
-      console.log(`[RTM] Initializing RTM for user: ${rtmId}`);
-      const rtmHelper = AgoraRtmHelper.getInstance();
-      rtmHelperRef.current = rtmHelper;
-
-      rtmHelper.initialize()
-        .then(() => {
-          if (!isMounted) return;
-          console.log('[RTM] RTM Helper initialized. Attempting login...');
-          return rtmHelper.login(rtmId);
-        })
-        .then(() => {
-          if (!isMounted) return;
-          console.log('[RTM] Successfully logged into RTM.');
-          setIsRtmReady(true);
-          if (rtmHelperRef.current) {
-            console.log('[RTM] Registering remoteInvitationReceived listener');
-            rtmHelperRef.current.on('remoteInvitationReceived', (remoteInvitation: RtmRemoteInvitation) => {
-              console.log('[RTM] Remote invitation received:', remoteInvitation);
-              try {
-                const invitationContentString = remoteInvitation.content; 
-                if (invitationContentString) {
-                  const parsedContent = JSON.parse(invitationContentString);
-                  console.log('[RTM] Parsed remote invitation content:', parsedContent);
-
-                  // Ensure all necessary fields are present from the caller's invitation
-                  if (parsedContent.channelName && parsedContent.callType && parsedContent.callerRtcUid) {
-                    setIncomingCallData({
-                      rtmInvitation: remoteInvitation,
-                      callerName: parsedContent.callerName || `User ${remoteInvitation.getCallerId()}`,
-                      callType: parsedContent.callType as ('voice' | 'video'),
-                      channelName: parsedContent.channelName, // Channel to join
-                      callerRtcUid: parsedContent.callerRtcUid, // Caller's RTC UID
-                      // The rtcToken in parsedContent is the CALLER's token.
-                      // The callee will fetch its own upon acceptance.
-                      // No need to store caller's token in incomingCallData unless for specific debugging.
-                      isFromNotification: false, 
-                    });
-                  } else {
-                     console.error('[RTM] Received remote invitation with incomplete content:', parsedContent);
-                  }
-                } else {
-                  console.error('[RTM] Received remote invitation with empty or null content.');
-                }
-              } catch (e) {
-                console.error('[RTM] Error parsing remote invitation content:', e);
-              }
-            });
-
-            rtmHelperRef.current.on('localInvitationAccepted', (localInvitation: RtmLocalInvitation) => {
-              console.log('[RTM] Local Invitation Accepted by peer:', localInvitation);
-              // Match based on calleeId from the event and stored outgoing details
-              if (outgoingInvitationDetails && localInvitation.getCalleeId() === outgoingInvitationDetails.uid) {
-                try {
-                  const contentString = localInvitation.getContent(); // Get content from event's invitation
-                  if (!contentString) {
-                    console.error('[RTM] Accepted invitation has no content.');
-                    Alert.alert("Call Error", "Failed to process call acceptance: Missing content.");
-                    endCall();
-                    return;
-                  }
-                  const content = JSON.parse(contentString);
-                  console.log('[RTM] Joining RTC channel from localInvitationAccepted. Content:', content);
-                  setCurrentChannelName(content.channelName);
-                  setCurrentRtcToken(content.rtcToken);
-                  setInCall(true); 
-                  setOutgoingInvitationDetails(null); // Clear details once accepted
-                } catch (e) {
-                  console.error('[RTM] Failed to parse local invitation content on acceptance:', e);
-                  Alert.alert("Call Error", "Failed to process call acceptance.");
-                  endCall(); 
-                }
-              } else {
-                console.warn('[RTM] Received localInvitationAccepted for an unexpected invitation:', localInvitation.getCalleeId());
-              }
-            });
-
-            rtmHelperRef.current.on('localInvitationRefused', (localInvitation: RtmLocalInvitation) => {
-              console.log('[RTM] Local Invitation Refused by peer:', localInvitation);
-              if (outgoingInvitationDetails && localInvitation.getCalleeId() === outgoingInvitationDetails.uid) {
-                Alert.alert('Call Refused', `${localInvitation.getCalleeId()} refused your call.`);
-                setOutgoingInvitationDetails(null); // Clear details
-                endCall(); 
-              }
-            });
-            rtmHelperRef.current.on('localInvitationFailure', (data: { localInvitation: RtmLocalInvitation, errorCode: number }) => {
-              const { localInvitation, errorCode } = data;
-              console.log('[RTM] Local Invitation Failure:', localInvitation, 'Error Code:', errorCode);
-              if (outgoingInvitationDetails && localInvitation.getCalleeId() === outgoingInvitationDetails.uid) {
-                Alert.alert('Call Failed', `Failed to send call invitation. Error: ${errorCode}`);
-                setOutgoingInvitationDetails(null); // Clear details
-                endCall();
-              }
-            });
-            // ... (tokenExpired logic remains the same) ...
-          }
-        })
-        .catch(err => {
-          if (!isMounted) return;
-          console.error('[RTM] Failed to initialize or login to RTM:', err);
-          // Alert.alert("RTM Error", "Could not connect to signaling service."); // Already present
-          setIsRtmReady(false); // Ensure RTM is not ready on error
-        });
-    } else {
-      console.log('[RTM] No user found, setting RTM not ready');
-      setIsRtmReady(false); // If no user, RTM is not ready
-    }
-    return () => {
-      isMounted = false;
-      rtmHelperRef.current?.release();
-      rtmHelperRef.current = null;
-      setIsRtmReady(false);
-      console.log('[RTM] RTM Helper released');
-    };
-  }, [user]);
-
-
-  const startCallInternal = async (contact: Contact, callType: 'voice' | 'video') => {
+  // --- Call Handling Logic (startCallInternal, acceptIncomingCall, rejectIncomingCall, endCall) ---
+  const startCallInternal = async (contact: Contact, callTypeToStart: 'voice' | 'video') => {
     if (!user || !user.id) {
       Alert.alert('Login Required', 'Please login to make calls.');
       return;
     }
-    if (!isRtmReady || !rtmHelperRef.current || !rtmHelperRef.current.getIsLoggedIn()) {
-      Alert.alert('RTM Error', 'Signaling service not ready. Please wait or try again.');
-      return;
-    }
+    // Removed RTM readiness check
     if (!isRtcEngineReady || !rtcEngineRef.current) {
       Alert.alert('RTC Error', 'Call engine not ready. Please wait or try again.');
       return;
@@ -825,82 +723,57 @@ const TipCallScreen: React.FC = () => {
       return;
     }
 
-    const permissionsGranted = await requestPermissions(callType);
+    const permissionsGranted = await requestPermissions(callTypeToStart);
     if (!permissionsGranted) return;
 
     setIsCaller(true);
-    setCurrentCallType(callType);
+    setCurrentCallType(callTypeToStart);
 
     try {
-      // 1. Caller fetches their RTC token, channelName, and their RTC UID
       const callerRtcAuthDetails = await fetchAgoraRtcTokenForCaller(user.id); 
       
-      console.log(`[RTM] Initiating ${callType} call to ${contact.id.toString()}`);
-      console.log(`[RTM] Caller RTC Details: Channel=${callerRtcAuthDetails.channelName}, CallerRTCUid=${callerRtcAuthDetails.uid}, Token=${callerRtcAuthDetails.token.substring(0,10)}...`);
-      
-      const calleeRtmId = contact.id.toString();
-      // Content for RTM invitation: includes channel name, caller's RTC UID, and caller's RTC token
-      const invitationContent = JSON.stringify({
-        channelName: callerRtcAuthDetails.channelName,
-        callType,
-        callerName: user.name || `User ${user.id}`, // Caller's display name or RTM ID
-        callerRtcUid: callerRtcAuthDetails.uid.toString(), // Caller's RTC UID
-        // Note: The caller's RTC token is included here for the RTM message,
-        // but the callee will fetch its own token.
-        // This could be useful if the callee needed to validate something with the caller's token,
-        // or if a simplified setup sent this token for the callee to use (which we are now changing).
-        // For clarity, we can name it callerRtcToken in the payload if needed.
-        rtcToken: callerRtcAuthDetails.token 
-      });
-
-      setOutgoingInvitationDetails({
-        uid: calleeRtmId,
-        channelId: callerRtcAuthDetails.channelName, // RTM invitation uses the RTC channel name
-        content: invitationContent,
-      });
-
-      await rtmHelperRef.current!.initiateAndSendCallInvitation(
-        calleeRtmId,
-        callType,
-        callerRtcAuthDetails.channelName, 
-        callerRtcAuthDetails.token, // Caller's RTC token
-        callerRtcAuthDetails.uid  // Caller's RTC UID
+      console.log(`[Signal] Initiating ${callTypeToStart} call to ${contact.id.toString()} via notification.`);
+      console.log(`[Signal] Caller RTC Details: Channel=${callerRtcAuthDetails.channelName}, CallerRTCUid=${callerRtcAuthDetails.uid}`);      
+      // Notify recipient via your push notification service
+      await notifyRecipient(
+        contact.id, // Recipient's app user ID
+        callerRtcAuthDetails.channelName,
+        callTypeToStart,
+        user.id.toString(), // Caller's app user ID
+        user.name || `User ${user.id}`, // Caller's display name
+        callerRtcAuthDetails.uid, // Caller's RTC UID
+        callerRtcAuthDetails.token // Caller's RTC Token
       );
       
-      console.log('[RTM] Call invitation sent.');
+      console.log('[Signal] Call notification sent.');
       
-      // Caller sets up their RTC state to join the channel
       setCurrentChannelName(callerRtcAuthDetails.channelName);
-      setCurrentRtcToken(callerRtcAuthDetails.token); // Caller uses their own token
-      setCurrentLocalRtcUid(callerRtcAuthDetails.uid); // Caller uses their own RTC UID
-      setInCall(true); // This will render MeetingView, which joins the channel
+      setCurrentRtcToken(callerRtcAuthDetails.token); 
+      setCurrentLocalRtcUid(callerRtcAuthDetails.uid); 
+      setInCall(true); 
 
     } catch (error: any) {
-      console.error('[RTM] Failed to start call:', error);
+      console.error('[Signal/RTC] Failed to start call:', error);
       Alert.alert('Call Failed', error.message || 'Could not initiate the call.');
       setIsCaller(false);
       setInCall(false); 
-      setOutgoingInvitationDetails(null);
     }
   };
 
   const acceptIncomingCall = async () => {
-    if (!incomingCallData || !rtmHelperRef.current || !isRtmReady || !rtcEngineRef.current || !isRtcEngineReady || !user || !user.id) {
+    if (!incomingCallData || !rtcEngineRef.current || !isRtcEngineReady || !user || !user.id) {
       Alert.alert("Error", "Cannot accept call. Services not ready or invitation data missing.");
       setIncomingCallData(null);
       return;
     }
     
-    // Destructure carefully, rtcToken from incomingCallData is the CALLER's token
-    const { callType, channelName, callerRtcUid, isFromNotification, rtmInvitation } = incomingCallData;
+    const { callType, channelName, callerId, calleeRtcUid, calleeRtcToken, isFromNotification } = incomingCallData;
 
     const permissionsGranted = await requestPermissions(callType);
     if (!permissionsGranted) {
-      if (!isFromNotification && rtmInvitation) {
-        await rtmHelperRef.current.refuseCallInvitation(rtmInvitation);
-      } else if (isFromNotification) {
+      if (isFromNotification) { // Always true now as RTM is removed
         await NotificationService.updateCallStatus(
-            callerRtcUid, // This is the original caller's app user ID (or RTC UID if they are the same)
+            callerId, // Original caller's app user ID
             user.id.toString(),
             'rejected',
             callType === 'voice' ? 'audio' : callType
@@ -911,78 +784,75 @@ const TipCallScreen: React.FC = () => {
     }
 
     try {
-      // 1. Callee fetches their OWN RTC token for the given channelName
-      console.log(`[RTC] Callee (UID: ${user.id}) accepting call for channel: ${channelName}. Fetching callee's RTC token.`);
-      const calleeRtcAuthDetails = await fetchAgoraRtcTokenForCallee(user.id, channelName);
+      let finalRtcToken = calleeRtcToken;
+      let finalRtcUid = calleeRtcUid ? parseInt(calleeRtcUid, 10) : 0;
 
-      if (!calleeRtcAuthDetails || !calleeRtcAuthDetails.token || !calleeRtcAuthDetails.uid) {
-        throw new Error("Failed to fetch callee's RTC token.");
+      // If token/UID for callee wasn't in notification, fetch it.
+      if (!finalRtcToken || !finalRtcUid) {
+        console.log(`[RTC] Callee (AppUID: ${user.id}) accepting call for channel: ${channelName}. Fetching callee's RTC token/UID.`);
+        const calleeRtcAuthDetails = await fetchAgoraRtcTokenForCallee(user.id, channelName);
+        if (!calleeRtcAuthDetails || !calleeRtcAuthDetails.token || !calleeRtcAuthDetails.uid) {
+          throw new Error("Failed to fetch callee's RTC token.");
+        }
+        finalRtcToken = calleeRtcAuthDetails.token;
+        finalRtcUid = calleeRtcAuthDetails.uid;
+        console.log(`[RTC] Callee RTC Details: UID=${finalRtcUid}, Token=${finalRtcToken.substring(0,10)}...`);
+      } else {
+        console.log(`[RTC] Callee using RTC details from notification: UID=${finalRtcUid}, Token=${finalRtcToken.substring(0,10)}...`);
       }
-      console.log(`[RTC] Callee RTC Details: UID=${calleeRtcAuthDetails.uid}, Token=${calleeRtcAuthDetails.token.substring(0,10)}...`);
 
 
-      if (!isFromNotification && rtmInvitation) {
-        await rtmHelperRef.current.acceptCallInvitation(rtmInvitation);
-        console.log('[RTM] Live remote invitation accepted.');
-      } else if (isFromNotification) {
-        console.log('[FCM] Accepting call from notification. No RTM accept needed, proceeding to join RTC.');
+      if (isFromNotification) { // This will always be the case now
+        console.log('[Signal] Accepting call from notification. Updating backend status.');
          await NotificationService.updateCallStatus(
-            callerRtcUid, 
+            callerId, // Original caller's app user ID
             user.id.toString(),
             'accepted',
             callType === 'voice' ? 'audio' : callType
         );
       } else {
-        throw new Error("Invalid incoming call data state for accepting call.");
+        // This 'else' branch is unlikely to be hit if RTM is fully removed.
+        console.warn("Accepting call but not marked as from notification - this path should be reviewed.");
       }
 
       setIsCaller(false);
       setCurrentCallType(callType);
-      setCurrentChannelName(calleeRtcAuthDetails.channelName); // Should be same as channelName from invite
-      setCurrentRtcToken(calleeRtcAuthDetails.token); // Callee uses THEIR OWN token
-      setCurrentLocalRtcUid(calleeRtcAuthDetails.uid); // Callee uses THEIR OWN RTC UID
+      setCurrentChannelName(channelName); 
+      setCurrentRtcToken(finalRtcToken); 
+      setCurrentLocalRtcUid(finalRtcUid); 
       setInCall(true);
       setIncomingCallData(null);
 
     } catch (error: any) {
-      console.error('[RTC/RTM] Failed to accept call invitation:', error);
+      console.error('[RTC/Signal] Failed to accept call:', error);
       Alert.alert('Accept Failed', error.message || 'Could not accept the call.');
-      setIncomingCallData(null); // Clear data on error
+      setIncomingCallData(null); 
     }
   };
   
   const rejectIncomingCall = async () => {
-    if (!incomingCallData || !rtmHelperRef.current || !user || !user.id) { // Added user check for updateCallStatus
-        console.warn('[CALL] Cannot reject call. Services not ready or invitation data missing.');
-        setIncomingCallData(null); // Clear data to prevent stale UI
+    if (!incomingCallData || !user || !user.id) { 
+        console.warn('[CALL] Cannot reject call. Invitation data missing or user not available.');
+        setIncomingCallData(null); 
         return;
     }
     
-    const { isFromNotification, rtmInvitation, callerRtcUid, callType } = incomingCallData;
+    const { isFromNotification, callerId, callType } = incomingCallData;
 
     try {
-      if (isFromNotification) {
-        console.log('[FCM] Rejecting call from notification. Updating backend status.');
+      if (isFromNotification) { // This will always be the case
+        console.log('[Signal] Rejecting call from notification. Updating backend status.');
         await NotificationService.updateCallStatus(
-          callerRtcUid, // Original caller's ID
-          user.id.toString(), // Current user (callee) ID
+          callerId, // Original caller's app user ID
+          user.id.toString(), 
           'rejected',
-          callType === 'voice' ? 'audio' : callType // Map 'voice' to 'audio'
+          callType === 'voice' ? 'audio' : callType 
         );
-      } else if (rtmInvitation) { // Live RTM invitation
-        if (!isRtmReady) {
-            console.warn('[RTM] RTM not ready, cannot send RTM refusal.');
-            // Still update backend if possible, or just clear UI
-        } else {
-            await rtmHelperRef.current.refuseCallInvitation(rtmInvitation);
-            console.log('[RTM] Live remote invitation refused via RTM.');
-        }
       } else {
-        console.warn('[CALL] Rejecting call but no valid RTM invitation and not marked as from notification.');
+         console.warn('[CALL] Rejecting call but not marked as from notification.');
       }
     } catch (error: any) {
       console.error('[CALL] Failed to reject call:', error);
-      // Alert.alert('Reject Failed', error.message || 'Could not refuse the call.');
     } finally {
       setIncomingCallData(null);
     }
@@ -990,16 +860,8 @@ const TipCallScreen: React.FC = () => {
 
   const endCall = useCallback(async () => {
     console.log('[CALL] Ending call...');
-    if (isCaller && outgoingInvitationDetails) {
-      try {
-        console.log('[RTM] Caller ending call, attempting to cancel local invitation via props.');
-        await rtmHelperRef.current?.cancelCallInvitation(outgoingInvitationDetails);
-      } catch (e) {
-        console.warn('[RTM] Failed to cancel local invitation on endCall (it might have been accepted/refused already):', e);
-      }
-    }
-    setOutgoingInvitationDetails(null); // Clear outgoing invitation details
-
+    // Removed RTM outgoing invitation cancellation
+    
     if (rtcEngineRef.current) {
       await AgoraHelper.safeLeaveChannel(rtcEngineRef.current);
       console.log('[RTC] Left RTC channel.');
@@ -1010,7 +872,7 @@ const TipCallScreen: React.FC = () => {
     setCurrentRtcToken('');
     setIsCaller(false);
     setIncomingCallData(null); 
-  }, [isCaller, outgoingInvitationDetails, rtmHelperRef]); // Added outgoingInvitationDetails
+  }, [isCaller]); // Removed outgoingInvitationDetails, rtmHelperRef
 
   const startVoiceCall = useCallback((contact: Contact) => {
     startCallInternal(contact, 'voice');
@@ -1022,112 +884,74 @@ const TipCallScreen: React.FC = () => {
 
 
   const loadMoreUsers = useCallback(() => {
-    if (loading || contacts.length >= totalRecords) return;
-    fetchUsers(page + 1, true);
-  }, [loading, contacts.length, totalRecords, page, fetchUsers]);
+    if (loadingUsers || allContacts.length >= totalRecords) return;
+    // When paginating, we fetch with an empty API search query, 
+    // the dynamic filter will apply to the combined list.
+    fetchUsers({ pageNumArg: page + 1, appendArg: true, apiSearchQuery: '' }); 
+  }, [loadingUsers, allContacts.length, totalRecords, page, fetchUsers]); 
 
-
-  // Memoize renderContactItem for performance
   const renderContactItem = useCallback(({item}: {item: Contact}) => (
-    <View style={[styles.contactItem, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
+    <View style={[styles.contactItem, { backgroundColor: themeColors.card, borderBottomColor: themeColors.borderLight }]}>
       <View style={styles.contactInfo}>
-        <Text style={[styles.contactName, { color: colors.text.primary }]}>{item.name || `User ${item.id}`}</Text>
-        <Text style={[styles.contactStatus, { color: colors.text.secondary }]}>
-          {item.online_status ? 'Online' : `Last seen: ${item.last_seen || 'N/A'}`}
-        </Text>
+        <View style={[styles.avatarPlaceholder, {backgroundColor: themeColors.primary || localFallbackColors.primary}]}>
+            <Text style={styles.avatarText}>
+                {item.name ? item.name.substring(0, 1).toUpperCase() : 'U'}
+            </Text>
+        </View>
+        <View>
+            <Text style={[styles.contactName, {color: themeColors.text?.primary || localFallbackColors.text.primary}]}>{item.name || 'Unknown User'}</Text>
+            <Text style={[styles.contactStatus, {color: themeColors.text?.secondary || localFallbackColors.text.secondary}]}>
+            {item.online_status ? 'Online' : `Last seen: ${item.last_seen || 'recently'}`}
+            </Text>
+        </View>
       </View>
       <View style={styles.callButtons}>
-        <TouchableOpacity style={[styles.callButton, {backgroundColor: colors.primary}]} onPress={() => startVoiceCall(item)}>
-          <Icon name="phone" size={20} color="white" />
+        <TouchableOpacity style={[styles.callButton, {backgroundColor: themeColors.primary || localFallbackColors.primary}]} onPress={() => startVoiceCall(item)}>
+          <Icon name="phone" size={18} color="white" />
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.callButton, {backgroundColor: colors.primary}]} onPress={() => startVideoCall(item)}>
-          <Icon name="video" size={20} color="white" />
+        <TouchableOpacity style={[styles.callButton, {backgroundColor: themeColors.primary || localFallbackColors.primary, marginLeft: 10}]} onPress={() => startVideoCall(item)}>
+          <Icon name="video" size={18} color="white" />
         </TouchableOpacity>
       </View>
     </View>
-  ), [colors, startVoiceCall, startVideoCall]); // Add dependencies
+  ), [themeColors, startVoiceCall, startVideoCall, localFallbackColors]);
 
-  // Initializing services loading state
-  if (!isRtcEngineReady || !isRtmReady) {
-    return (
-      <View style={[styles.container, {paddingBottom: contentPaddingBottom, backgroundColor: colors.background }]}>
-        {/* Header Skeleton/Placeholder */}
-        <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
-          <View style={styles.logoContainer}>
-            <View style={[styles.logo, {backgroundColor: colors.primary}]}><Icon name="phone-call" size={16} color="white" /></View>
-            <Text style={[styles.title, {color: colors.primary}]}>TipCall</Text>
-          </View>
-        </View>
-        {/* Search Bar Skeleton/Placeholder */}
-        <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
-          <View style={[styles.searchBar, {backgroundColor: colors.inputBackground}]}>
-            <Icon name="search" size={18} color={colors.text.tertiary} style={styles.searchIcon} />
-            <TextInput
-              placeholder="Search contacts..."
-              placeholderTextColor={colors.text.tertiary}
-              style={[styles.searchInput, {color: colors.text.primary}]}
-              value={""} // Dummy value
-              editable={false} // Non-interactive
-            />
-          </View>
-        </View>
-        {/* Filters Title Skeleton/Placeholder */}
-        <View style={[styles.filtersContainer, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
-          <Text style={[styles.filterTitle, { color: colors.text.primary }]}>Users</Text>
-        </View>
-        {/* Contacts List Skeleton */}
-        <FlatList
-          data={Array(5).fill(0).map((_, i) => ({ id: `skeleton-init-${i}` }))} // Render 5 skeleton items
-          renderItem={() => <ContactSkeletonItem />}
-          keyExtractor={(item) => item.id}
-          style={[styles.contactsContainer, { backgroundColor: colors.background }]}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8 }}
-        />
-      </View>
-    );
-  }
-  
-  // Data loading state with Skeleton (this remains the same)
-  if (loading && contacts.length === 0 && !inCall && !incomingCallData && !error) {
-    return (
-      <View style={[styles.container, {paddingBottom: contentPaddingBottom, backgroundColor: colors.background }]}>
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
-          <View style={styles.logoContainer}>
-            <View style={[styles.logo, {backgroundColor: colors.primary}]}><Icon name="phone-call" size={16} color="white" /></View>
-            <Text style={[styles.title, {color: colors.primary}]}>TipCall</Text>
-          </View>
-        </View>
-        {/* Search Bar */}
-        <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
-          <View style={[styles.searchBar, {backgroundColor: colors.inputBackground}]}>
-            <Icon name="search" size={18} color={colors.text.tertiary} style={styles.searchIcon} />
-            <TextInput
-              placeholder="Search contacts..."
-              placeholderTextColor={colors.text.tertiary}
-              style={[styles.searchInput, {color: colors.text.primary}]}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onSubmitEditing={() => fetchUsers(1)}
-            />
-          </View>
-        </View>
-        {/* Filters Title */}
-        <View style={[styles.filtersContainer, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
-          <Text style={[styles.filterTitle, { color: colors.text.primary }]}>Users</Text>
-        </View>
-        {/* Contacts List Skeleton */}
-        <FlatList
-          data={Array(5).fill(0).map((_, i) => ({ id: `skeleton-load-${i}` }))}
-          renderItem={() => <ContactSkeletonItem />}
-          keyExtractor={(item) => item.id}
-          style={[styles.contactsContainer, { backgroundColor: colors.background }]}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8 }}
-        />
-      </View>
-    );
-  }
-  
+
+  const renderContactListSkeleton = () => (
+    <ScrollView
+      style={[styles.contactsContainer, { backgroundColor: themeColors.background }]}
+      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8 }}
+      showsVerticalScrollIndicator={false}
+    >
+      {Array(7).fill(0).map((_, index) => ( 
+        <ContactSkeletonItem key={`contact-skel-${index}`} />
+      ))}
+    </ScrollView>
+  );
+
+  // Step 1: Determine if the Skeleton View should be shown.
+  const showSkeletonView =
+    !inCall && !incomingCallData && 
+    ( 
+      !user || !user.id || 
+      !isRtcEngineReady || 
+      (loadingUsers && filteredContacts.length === 0 && !fetchUsersError && !initialUsersLoadAttempted) // Adjusted condition
+    ) && !fetchUsersError; 
+
+  // Handler for Header dynamic search query changes
+  const handleHeaderQueryChange = useCallback((query: string) => {
+    setSearchQuery(query); // This will trigger the useEffect for filtering
+  }, []);
+
+  // Handler for Header search explicit submit (optional, could trigger API search)
+  const handleHeaderSearchAPISubmit = useCallback((query: string) => {
+    console.log('[TipCallScreen] Header API search submitted with query:', query);
+    setSearchQuery(query); // Update client-side query as well
+    // Fetch users with the new query from API, resetting to page 1
+    fetchUsers({ apiSearchQuery: query, pageNumArg: 1, appendArg: false });
+  }, [fetchUsers]);
+
+
   if (inCall && rtcEngineRef.current && currentChannelName && currentRtcToken && currentLocalRtcUid > 0) {
     return (
       <MeetingView
@@ -1144,7 +968,7 @@ const TipCallScreen: React.FC = () => {
 
   if (incomingCallData) {
     return (
-      <IncomingCallScreenComponent
+      <IncomingCallScreenComponent 
         callerName={incomingCallData.callerName}
         callType={incomingCallData.callType}
         onAccept={acceptIncomingCall}
@@ -1154,295 +978,140 @@ const TipCallScreen: React.FC = () => {
   }
   
   return (
-    <View style={[styles.container, {paddingBottom: contentPaddingBottom, backgroundColor: colors.background}]}>
-      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
-        <View style={styles.logoContainer}>
-          <View style={[styles.logo, {backgroundColor: colors.primary}]}><Icon name="phone-call" size={16} color="white" /></View>
-          <Text style={[styles.title, {color: colors.primary}]}>TipCall</Text>
-        </View>
-      </View>
-
-      <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
-        <View style={[styles.searchBar, {backgroundColor: colors.inputBackground}]}>
-          <Icon name="search" size={18} color={colors.text.tertiary} style={styles.searchIcon} />
-          <TextInput
-            placeholder="Search contacts..."
-            placeholderTextColor={colors.text.tertiary}
-            style={[styles.searchInput, {color: colors.text.primary}]}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onSubmitEditing={() => fetchUsers(1, false, searchQuery)} // Pass currentSearchQuery
-          />
-        </View>
-      </View>
+    <View style={[styles.container, {paddingBottom: contentPaddingBottom, backgroundColor: themeColors.background}]}>
+      <StatusBar barStyle={themeIsDarkMode ? 'light-content' : 'dark-content'} backgroundColor={themeColors.background} />
       
-      <View style={[styles.filtersContainer, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
-        <Text style={[styles.filterTitle, { color: colors.text.primary }]}>Users</Text>
-      </View>
-
-      {error && !loading && (
-        <View style={[styles.errorContainer, { backgroundColor: colors.errorBackground || '#fee2e2'}]}>
-          <Text style={[styles.errorText, { color: colors.errorText || '#dc2626'}]}>{error}</Text>
-          <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.errorText || '#dc2626'}]} onPress={() => fetchUsers(1, false, searchQuery)}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <FlatList
-        data={contacts}
-        renderItem={renderContactItem}
-        keyExtractor={(item: Contact) => item.id.toString()}
-        style={[styles.contactsContainer, { backgroundColor: colors.background }]}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8 }}
-        ListEmptyComponent={
-          !loading && !error && contacts.length === 0 ? ( // Ensure contacts.length check
-            <View style={styles.emptyContainer}>
-              <Text style={[styles.emptyText, { color: colors.text.secondary }]}>No contacts found.</Text>
-            </View>
-          ) : null
-        }
-        onEndReached={loadMoreUsers}
-        onEndReachedThreshold={0.5}
-        ListFooterComponent={loading && contacts.length > 0 ? <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }}/> : null}
-        initialNumToRender={10}
-        maxToRenderPerBatch={10}
-        windowSize={21}
-        removeClippedSubviews={Platform.OS === 'android'}
+      <Header 
+        title="TipCall" 
+        showWallet={false}
+        showNotifications={false}
+        showSearch={true}
+        onSearchQueryChange={handleHeaderQueryChange} // For dynamic filtering
+        onSearchSubmit={handleHeaderSearchAPISubmit} // For explicit API search on submit
       />
+
+      {showSkeletonView ? (
+        renderContactListSkeleton()
+      ) : fetchUsersError ? (
+        <View style={[styles.errorContainerFeedback, {backgroundColor: themeColors.errorBackground || localFallbackColors.errorBackground}]}>
+          <Text style={[styles.errorTextFeedback, {color: themeColors.errorText || localFallbackColors.errorText}]}>{fetchUsersError}</Text>
+          {!fetchUsersError.includes("Call services could not be initialized") &&
+            <TouchableOpacity onPress={() => fetchUsers({ apiSearchQuery: searchQuery, pageNumArg: 1, appendArg: false })} style={[styles.retryButtonFeedback, {borderColor: themeColors.primary || localFallbackColors.primary}]}>
+              <Text style={[styles.retryButtonTextFeedback, {color: themeColors.primary || localFallbackColors.primary}]}>Retry</Text>
+            </TouchableOpacity>
+          }
+        </View>
+      ) : !loadingUsers && filteredContacts.length === 0 && initialUsersLoadAttempted ? (
+        <View style={styles.emptyContainer}>
+          <Icon name="users" size={40} color={themeColors.text?.tertiary || localFallbackColors.text.tertiary} />
+          <Text style={[styles.emptyText, {color: themeColors.text?.secondary || localFallbackColors.text.secondary}]}>
+            {searchQuery ? `No contacts found for "${searchQuery}".` : "No contacts found."}
+          </Text>
+          {searchQuery ? <Text style={[styles.emptyText, {fontSize: 14, color: themeColors.text?.tertiary || localFallbackColors.text.tertiary}]}>Try a different search.</Text> : null}
+        </View>
+      ) : (
+        <FlatList
+          data={filteredContacts} // <<< USE filteredContacts
+          renderItem={renderContactItem}
+          keyExtractor={(item: Contact) => item.id.toString()}
+          style={[styles.contactsContainer, { backgroundColor: themeColors.background }]} 
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: contentPaddingBottom + 16 }} 
+          ListEmptyComponent={null} // Already handled by the logic above
+          onEndReached={loadMoreUsers}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={loadingUsers && filteredContacts.length > 0 ? <ActivityIndicator size="small" color={themeColors.primary || localFallbackColors.primary} style={{ marginVertical: 20 }}/> : null}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={21}
+          removeClippedSubviews={Platform.OS === 'android'}
+        />
+      )}
     </View>
   );
 };
 
-// Keep your existing styles, ensure they match the components used
+// Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 20 + 10 : 48, // Adjusted for status bar
-    paddingBottom: 12,
-    paddingHorizontal: 16,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  logo: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#24d05a',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#24d05a',
-  },
-  searchContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f1f5f9',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#374151',
-    padding: 0, // Remove default padding for TextInput
-  },
-  filtersContainer: {
-    paddingVertical: 12,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  filterTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    paddingHorizontal: 16,
-    marginBottom: 8,
-  },
-  contactsContainer: {
-    flex: 1,
-    backgroundColor: 'white',
-  },
+  // Styles for the independent search bar (searchContainer, searchBar, etc.) should have been removed previously.
+  // If not, they can be removed now.
+  contactsContainer: { flex: 1 },
   contactItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  contactInfo: {
-    flex: 1,
-    flexDirection: 'column',
-  },
-  contactName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 4,
- 
-    // color: '#64748b', // This line seems to be a duplicate or misplaced. Consider removing or correcting it.
-                       // If '#64748b' was intended for the status, it's now used below.
-  },
-  contactStatus: { // Add this new style definition
-    fontSize: 14,
-    color: '#64748b',
-  },
-  callButtons: {
-    flexDirection: 'row',
-    marginLeft: 16,
-  },
-  callButton: {
-    width: 44, // Increased size for easier touch
-    height: 44, // Increased size
-    borderRadius: 22, // Half of width/height
-    backgroundColor: '#24d05a',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 10, // Increased spacing
-  },
-  callOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  callStatus: {
-    fontSize: 20,
-    color: 'white',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  endCallButton: {
-    backgroundColor: '#ff3b30', // Standard red for end call
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 25, // Rounded
-    marginTop: 40,
+    paddingHorizontal: 0, 
+    borderBottomWidth: 1,
   },
-  endCallText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
+  contactInfo: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  avatarPlaceholder: { 
+    width: 48, height: 48, borderRadius: 24, marginRight: 12,
+    justifyContent: 'center', alignItems: 'center',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8fafc',
+  avatarText: { color: 'white', fontSize: 18, fontWeight: 'bold'},
+  contactName: { fontSize: 16, fontWeight: '600', marginBottom: 2 },
+  contactStatus: { fontSize: 13 },
+  callButtons: { flexDirection: 'row', marginLeft: 16 },
+  callButton: {
+    width: 40, height: 40, borderRadius: 20,
+    justifyContent: 'center', alignItems: 'center',
   },
-  loadingText: {
-    fontSize: 14,
-    color: '#374151',
-    marginTop: 12,
+  callOverlay: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    backgroundColor: 'rgba(0,0,0,0.9)' 
   },
-  errorContainer: {
-    padding: 16,
-    backgroundColor: '#fee2e2',
-    borderRadius: 8,
-    marginHorizontal: 16,
-    marginVertical: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  callStatus: { 
+    fontSize: 18, 
+    color: 'white', 
+    marginBottom: 20 
   },
-  errorText: {
-    color: '#dc2626',
-    fontSize: 14,
-    flex: 1, // Allow text to wrap
-    marginRight: 8,
+  endCallButton: { 
+    marginTop: 30, 
+    paddingVertical: 12, 
+    paddingHorizontal: 30, 
+    backgroundColor: 'red', 
+    borderRadius: 25 
   },
-  retryButton: {
-    backgroundColor: '#dc2626',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+  endCallText: { 
+    color: 'white', 
+    fontSize: 16 
   },
-  retryButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    marginTop: 50, // Give some space from filters
-  },
-  emptyText: {
-    color: '#9ca3af',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  localVideo: { // For video calls
-    width: 120,
-    height: 180,
-    position: 'absolute',
-    top: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 20 : 60,
+  localVideo: { 
+    width: 120, 
+    height: 180, 
+    position: 'absolute', 
+    top: 40, 
     right: 20,
-    zIndex: 1001, // Above remote video
     borderRadius: 8,
-    overflow: 'hidden', // Important for borderRadius to work on SurfaceView
-    borderWidth: 2,
-    borderColor: '#24d05a',
+    overflow: 'hidden',
   },
-  remoteVideo: { // For video calls
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 1000, // Below local video and controls
-    backgroundColor: 'black', // Fallback background
-  },
-  // Styles for IncomingCallScreen
-  incomingCallOverlay: {
+  remoteVideo: { 
+    width: '100%', 
+    height: '100%', 
     position: 'absolute',
     top: 0,
     left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    zIndex: -1, 
+  },
+  incomingCallOverlay: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 1001, // Higher zIndex to overlay everything
+    zIndex: 1000, 
   },
   incomingCallText: {
-    fontSize: 22,
-    color: 'white',
-    marginBottom: 10,
-    fontWeight: 'bold',
+    fontSize: 20,
+    marginBottom: 8,
+    textAlign: 'center',
   },
   incomingCallerName: {
-    fontSize: 28,
-    color: '#24d05a',
-    marginBottom: 40,
+    fontSize: 24,
     fontWeight: 'bold',
+    marginBottom: 40,
+    textAlign: 'center',
   },
   incomingCallButtons: {
     flexDirection: 'row',
@@ -1450,27 +1119,37 @@ const styles = StyleSheet.create({
     width: '80%',
   },
   acceptCallButton: {
-    backgroundColor: '#24d05a',
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 30,
-  },
-  acceptCallText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   rejectCallButton: {
-    backgroundColor: '#ff0000',
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 30,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  rejectCallText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
+  errorContainerFeedback: { 
+    padding: 16, borderRadius: 8, marginHorizontal: 16, marginVertical: 16,
+    alignItems: 'center',
   },
+  errorTextFeedback: { 
+    fontSize: 14, textAlign: 'center', marginBottom: 12,
+  },
+  retryButtonFeedback: { 
+    paddingVertical: 10, paddingHorizontal: 24, borderRadius: 20, borderWidth: 1,
+  },
+  retryButtonTextFeedback: { 
+    fontSize: 14, fontWeight: '600',
+  },
+  emptyContainer: {
+    flex: 1, justifyContent: 'center', alignItems: 'center',
+    padding: 20, marginTop: 50,
+  },
+  emptyText: { fontSize: 16, textAlign: 'center', marginBottom: 8 },
 });
 
 export default TipCallScreen;

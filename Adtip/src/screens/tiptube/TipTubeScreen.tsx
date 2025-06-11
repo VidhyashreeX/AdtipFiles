@@ -1,567 +1,419 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {
   View,
   Text,
-  Image,
-  TouchableOpacity,
   ScrollView,
+  TouchableOpacity,
+  Image,
   StyleSheet,
   ActivityIndicator,
-  Dimensions,
-  Modal,
-  Pressable,
   RefreshControl,
-  FlatList, // Import FlatList
-} from "react-native";
-import Video from "react-native-video"; // Import react-native-video
-import { useAuth } from "../../contexts/AuthContext"; // Assuming AuthContext works similarly
-import { useNavigation } from "@react-navigation/native"; // For React Navigation
-import { useTheme } from "../../contexts/ThemeContext";
-import { useTabNavigator } from "../../contexts/TabNavigatorContext";
-import ApiService from "../../services/ApiService";
+  Modal,
+  FlatList,
+  Dimensions,
+} from 'react-native';
+import {useNavigation, useFocusEffect} from '@react-navigation/native'; // Added useFocusEffect
+import Video from 'react-native-video';
+import axios from 'axios';
 
-// Components
-import Header from "../../components/common/Header";
+import {useTheme} from '../../contexts/ThemeContext';
+import {useTabNavigator} from '../../contexts/TabNavigatorContext';
+import {useAuth} from '../../contexts/AuthContext';
+import ApiService from '../../services/ApiService';
+import Header from '../../components/common/Header';
+import VideoCardSkeleton from '../../components/skeletons/VideoCardSkeleton';
+import RelatedVideoCardSkeleton from '../../components/skeletons/RelatedVideoCardSkeleton';
+import MemoizedRelatedVideoCard from '../../components/tiptube/MemoizedRelatedVideoCard';
 
-// Get screen width for responsive image/video sizing
-const { width: screenWidth } = Dimensions.get("window");
-
-// Add icons for categories (using emoji or SVG for demo, but typically you'd use a dedicated icon library)
-const categories = [
-  { name: "All", icon: "🏠" },
-  { name: "Tech", icon: "💻" },
-  { name: "Beauty", icon: "💄" },
-  { name: "Gaming", icon: "🎮" },
-  { name: "Food", icon: "🍔" },
-  { name: "Travel", icon: "✈️" },
-  { name: "Finance", icon: "💰" },
-  { name: "Fashion", icon: "👗" },
-  { name: "Music", icon: "🎵" },
-  { name: "Sports", icon: "🏀" },
-  { name: "Education", icon: "📚" },
-];
-const categoryToIdMap: { [key: string]: number } = {
-  All: 0,
-  Tech: 1,
-  Beauty: 2,
-  Gaming: 3,
-  Food: 4,
-  Travel: 5,
-  Finance: 6,
-  Fashion: 7,
-  Music: 8,
-  Sports: 9,
-  Education: 10,
-};
-
+// Define interfaces (ensure these match your data structure)
 interface Video {
   id: number;
   title: string;
   thumbnail?: string;
   videoUrl?: string;
-  duration?: number;
+  duration: number;
   views: number;
   posted: string;
-  channelId: number;
   avatar?: string;
   creatorName: string;
   isVerified?: boolean;
+  channelId: number | string;
   price?: number;
 }
 
-const formatDuration = (duration: number | string | undefined) => {
-  if (duration === undefined || duration === null) return "0:00";
-  const totalSeconds = typeof duration === "string" ? parseInt(duration, 10) : duration;
-  if (isNaN(totalSeconds)) return "0:00";
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
-  }
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+const categories = [
+  {name: 'All', icon: '🌍'}, {name: 'Gaming', icon: '🎮'}, {name: 'Music', icon: '🎵'},
+  {name: 'Education', icon: '📚'}, {name: 'Sports', icon: '⚽️'}, {name: 'Tech', icon: '💻'},
+  {name: 'News', icon: '📰'}, {name: 'Comedy', icon: '😂'},
+];
+
+const categoryToIdMap: {[key: string]: number} = {
+  All: 0, Gaming: 1, Music: 2, Education: 3, Sports: 4, Tech: 5, News: 6, Comedy: 7,
 };
 
-// Sidebar menu definitions (Icons won't render directly as SVG components without specific libraries like react-native-svg)
-// For React Native, you'd typically use a dedicated icon library (e.g., react-native-vector-icons)
-// I'll keep them as placeholders but they won't render as SVGs unless you implement an SVG component system.
-const mainMenu = [
-  { key: "Home", label: "Home", icon: "" }, // Placeholder for icon
-  { key: "TipTube", label: "TipTube", icon: "" },
-  { key: "TipShort", label: "TipShort", icon: "" },
-  { key: "TipCall", label: "TipCall", icon: "" },
-];
+const formatDuration = (seconds: number): string => {
+  if (isNaN(seconds) || seconds < 0) return '00:00';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const pad = (num: number) => (num < 10 ? '0' + num : num);
+  return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+};
 
-const marketplaceMenu = [
-  { key: "TipShop", label: "Tip Shop", icon: "" },
-  { key: "Analysis", label: "Analysis", icon: "" },
-  { key: "Follow", label: "Follow", icon: "" },
-  { key: "MyWallet", label: "My Wallet", icon: "" },
-  { key: "BecomeSeller", label: "Become Seller", icon: "" },
-  { key: "PostAdvertisers", label: "Post Advertisers", icon: "" },
-  { key: "PremiumContent", label: "Premium Content", icon: "" },
-];
-
-// Utility function to shuffle an array (add this at the top of the file or import from utils)
-function shuffleArray<T>(array: T[]): T[] {
+const shuffleArray = <T,>(array: T[]): T[] => {
   const newArray = [...array];
   for (let i = newArray.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
   }
   return newArray;
-}
+};
 
 const TipTubeScreen = () => {
-  const { isDarkMode, colors } = useTheme();
-  const { contentPaddingBottom } = useTabNavigator();
+  const {isDarkMode, colors} = useTheme();
+  const {contentPaddingBottom} = useTabNavigator();
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [videos, setVideos] = useState<Video[]>([]);
   const [offset, setOffset] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showPlayerModal, setShowPlayerModal] = useState(false);
   const [currentVideo, setCurrentVideo] = useState<Video | null>(null);
   const [search, setSearch] = useState("");
   const [previewingVideoId, setPreviewingVideoId] = useState<number | null>(null);
-  const scrollViewRef = useRef<ScrollView>(null);
-  const { user } = useAuth();
+  const {user} = useAuth();
   const navigation = useNavigation<any>();
 
-  // State for "Up Next" videos in the player modal
+  const scrollViewRef = useRef<ScrollView>(null);
+  const upNextFlatListRef = useRef<FlatList<Video>>(null); // Ref for Up Next FlatList
+
   const [upNextVideos, setUpNextVideos] = useState<Video[]>([]);
-  const [upNextOffset, setUpNextOffset] = useState(1);
-  const [hasMoreUpNext, setHasMoreUpNext] = useState(true);
-  const [loadingUpNext, setLoadingUpNext] = useState(false);
+  // loadingUpNext can signify processing the list or waiting for main video to load
+  const [loadingUpNext, setLoadingUpNext] = useState(false); 
+  const [mainVideoLoaded, setMainVideoLoaded] = useState(false);
+
+  const mainListAbortControllerRef = useRef<AbortController | null>(null);
 
   const styles = createStyles(colors, isDarkMode);
 
+  // Define renderInitialSkeleton here, as it uses styles and is called in an early return.
+  const renderInitialSkeleton = () => (
+    <View style={styles.videoGrid}>{Array(6).fill(0).map((_, index) => <VideoCardSkeleton key={`skeleton-${index}`} />)}</View>
+  );
+
   const transformVideoData = useCallback((apiVideo: any): Video => ({
-    id: apiVideo.id || 0,
-    title: apiVideo.name || "",
+    // ... same as before
+    id: apiVideo.id || 0, title: apiVideo.name || apiVideo.title || "Untitled Video",
     thumbnail: apiVideo.video_Thumbnail !== "undefined" ? apiVideo.video_Thumbnail : undefined,
-    videoUrl: apiVideo.video_link,
+    videoUrl: apiVideo.video_link || apiVideo.videoUrl,
     duration: parseInt(apiVideo.play_duration || apiVideo.duration || "0", 10),
-    views: apiVideo.total_views || 0,
-    posted: apiVideo.createddate || "Recently",
+    views: apiVideo.total_views || 0, posted: apiVideo.createddate || "Recently",
     avatar: apiVideo.channel_profile !== "null" ? apiVideo.channel_profile : undefined,
-    creatorName: apiVideo.channelName || "Unknown Creator",
-    isVerified: false,
+    creatorName: apiVideo.channelName || "Unknown Creator", isVerified: false,
     channelId: apiVideo.video_channel || apiVideo.channelId || apiVideo.createdby || 0,
     price: apiVideo.price ? parseFloat(apiVideo.price) : undefined,
   }), []);
 
-  const fetchVideos = useCallback(
-    // ... (existing fetchVideos function remains largely the same)
-    async (isReset: boolean = false) => {
-      if (loading && !isReset && !refreshing) {
-        return;
-      }
-      if (!isReset) {
-        setLoading(true);
-      }
-      const pageToFetch = isReset ? 1 : offset;
-      try {
-        const userIdForApi = user?.id ? user.id : 0; 
-        const categoryId = categoryToIdMap[selectedCategory] || 0;
-        const apiRes = await ApiService.getVideos(userIdForApi, categoryId, pageToFetch);
-        let newVideosData: Video[] = [];
-        if (apiRes && Array.isArray(apiRes.data)) {
-          newVideosData = apiRes.data.map(transformVideoData);
-        }
-        if (isReset) {
-          setVideos(shuffleArray(newVideosData));
-          setOffset(2);
-        } else {
-          setVideos((prevVideos) => [...prevVideos, ...newVideosData]);
-          if (newVideosData.length > 0) {
-            setOffset((prevOffset) => prevOffset + 1);
-          }
-        }
-        const nextPageHasData = newVideosData.length > 0; // Simplified check
-        setHasMore(nextPageHasData);
-
-      } catch (err) {
-        console.error("[TipTubeScreen] Failed to fetch videos:", err);
-        setHasMore(false); 
-      } finally {
-        if (!isReset) {
-          setLoading(false);
-        }
-      }
-    },
-    [selectedCategory, offset, user, transformVideoData, loading, refreshing] 
-  );
-
-  const fetchUpNextVideos = useCallback(async (isReset: boolean = false) => {
-    if (loadingUpNext && !isReset) {
-        console.log('[TipTubeScreen] Fetch Up Next: Already loading and not a reset. Skipping.');
-        return;
-    }
-    if (!currentVideo && !isReset) { // Allow reset even if currentVideo is briefly null during transition
-        console.log('[TipTubeScreen] Fetch Up Next: No current video. Skipping.');
-        return;
-    }
-
-    setLoadingUpNext(true);
-    const pageToFetch = isReset ? 1 : upNextOffset;
-    console.log(`[TipTubeScreen] Fetching Up Next videos. Reset: ${isReset}, Page: ${pageToFetch}`);
-
+  const fetchVideos = useCallback(async (isReset: boolean, pageToFetch: number, signal?: AbortSignal) => {
+    // ... same as before (fetches for the main list)
     try {
-        const userIdForApi = user?.id ? user.id : 0;
-        // For "Up Next", fetch from "All" or a specific related category. Here, using "All".
-        const categoryIdForUpNext = 0; 
+      const userIdForApi = user?.id ? user.id : 0;
+      const categoryId = categoryToIdMap[selectedCategory] || 0;
+      const apiRes = await ApiService.getVideos(userIdForApi, categoryId, pageToFetch, search, signal);
+      let newVideosData: Video[] = [];
+      if (apiRes && Array.isArray(apiRes.data)) {
+        newVideosData = apiRes.data.map(transformVideoData);
+      }
 
-        const apiRes = await ApiService.getVideos(userIdForApi, categoryIdForUpNext, pageToFetch);
-        let newVideosData: Video[] = [];
+      if (signal?.aborted) {
+        console.log('[TipTubeScreen FetchVideos] Request aborted before state update.');
+        return;
+      }
 
-        if (apiRes && Array.isArray(apiRes.data)) {
-            newVideosData = apiRes.data
-                .map(transformVideoData)
-                // Ensure the currently playing video is not in the "Up Next" list immediately
-                .filter(v => currentVideo ? v.id !== currentVideo.id : true);
-        } else {
-            console.warn(`[TipTubeScreen] Up Next API response data is not an array or apiRes is null for page ${pageToFetch}`, apiRes);
+      if (isReset) {
+        setVideos(shuffleArray(newVideosData)); // Shuffle main list on reset
+        setOffset(pageToFetch + 1);
+      } else {
+        setVideos((prevVideos) => [...prevVideos, ...newVideosData]);
+        if (newVideosData.length > 0) {
+          setOffset(pageToFetch + 1);
         }
-        
-        if (isReset) {
-            setUpNextVideos(newVideosData);
-            setUpNextOffset(2); 
-        } else {
-            // Filter out duplicates that might already be in upNextVideos if API returns overlapping results
-            const uniqueNewVideos = newVideosData.filter(
-              (newVid) => !upNextVideos.find((existingVid) => existingVid.id === newVid.id) && (currentVideo ? newVid.id !== currentVideo.id : true)
-            );
-            setUpNextVideos(prevVideos => [...prevVideos, ...uniqueNewVideos]);
-            if (uniqueNewVideos.length > 0) {
-                setUpNextOffset(prevOffset => prevOffset + 1);
-            }
-        }
-        setHasMoreUpNext(newVideosData.length > 0); // If API returns empty, assume no more for now
-
-    } catch (err) {
-        console.error("[TipTubeScreen] Failed to fetch Up Next videos:", err);
-        setHasMoreUpNext(false); 
-    } finally {
-        setLoadingUpNext(false);
+      }
+      setHasMore(newVideosData.length > 0);
+    } catch (err: any) {
+      if (axios.isCancel(err) || err.name === 'AbortError') {
+        console.log("[TipTubeScreen FetchVideos] Request canceled/aborted:", err.message);
+      } else {
+        console.error("[TipTubeScreen] Failed to fetch videos:", err);
+        setHasMore(false);
+      }
     }
-  }, [currentVideo, upNextOffset, user, transformVideoData, loadingUpNext, upNextVideos]);
+  }, [selectedCategory, search, user?.id, transformVideoData]);
 
+  useEffect(() => { // Initial Load & Category/Search Changes for main list
+    // ... same as before ...
+    console.log(`[TipTubeScreen] Initial load or category/search. Category: ${selectedCategory}, Search: ${search}`);
+    mainListAbortControllerRef.current?.abort();
+    mainListAbortControllerRef.current = new AbortController();
+    const signal = mainListAbortControllerRef.current.signal;
+
+    setInitialLoading(true);
+    setVideos([]);
+    setHasMore(true);
+    setOffset(1);
+
+    fetchVideos(true, 1, signal).finally(() => {
+      if (!signal.aborted) setInitialLoading(false);
+      else console.log('[TipTubeScreen InitialLoadEffect] Initial fetch aborted.');
+    });
+    return () => {
+        mainListAbortControllerRef.current?.abort();
+    }
+  }, [selectedCategory, search, fetchVideos]);
 
   const handleRefresh = useCallback(async () => {
-    // ... (existing handleRefresh function)
+    // ... same as before ...
     console.log('[TipTubeScreen] Refresh triggered.');
+    mainListAbortControllerRef.current?.abort();
+    mainListAbortControllerRef.current = new AbortController();
+    const signal = mainListAbortControllerRef.current.signal;
+
     setRefreshing(true);
-    await fetchVideos(true); 
-    setRefreshing(false);
+    setHasMore(true);
+    await fetchVideos(true, 1, signal);
+    if (!signal.aborted) setRefreshing(false);
+    else console.log('[TipTubeScreen Refresh] Refresh fetch aborted.');
   }, [fetchVideos]);
 
-  useEffect(() => {
-    // ... (existing useEffect for category change)
-    console.log(`[TipTubeScreen] Category changed to: ${selectedCategory}. Resetting and fetching videos.`);
-    setVideos([]); 
-    setHasMore(true); 
-    setOffset(1); 
-    fetchVideos(true); 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategory, search]); 
+  const handleScroll = useCallback(({nativeEvent}: {nativeEvent: any}) => {
+    // ... same as before ...
+    const {layoutMeasurement, contentOffset, contentSize} = nativeEvent;
+    const paddingToBottom = 250;
 
-  useEffect(() => {
-    // ... (existing useEffect for infinite scroll)
-    if (offset > 1 && hasMore && !loading && !refreshing) { 
-      fetchVideos(false); 
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [offset, hasMore, loading, refreshing]); 
+    if (
+      layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom &&
+      !initialLoading && !loading && hasMore && !refreshing
+    ) {
+      console.log(`[TipTubeScreen] Scroll reached near bottom. Attempting to load page: ${offset}`);
+      setLoading(true); 
 
-  // Effect to load/reset "Up Next" videos when the player modal opens or currentVideo changes
-  useEffect(() => {
-    if (showPlayerModal && currentVideo) {
-        console.log("[TipTubeScreen] Player modal opened or current video changed. Fetching initial Up Next videos for video ID:", currentVideo.id);
-        // Resetting states for the "Up Next" list
-        setUpNextVideos([]);
-        setHasMoreUpNext(true);
-        setUpNextOffset(1); // Start from page 1 for the new "Up Next" list
-        // setLoadingUpNext(false); // Ensure loading is false before triggering fetch
-        // Directly call fetchUpNextVideos with reset true
-        // Wrapped in a timeout to allow state to clear if needed, though usually not necessary with useCallback
-        setTimeout(() => fetchUpNextVideos(true), 0);
-    } else if (!showPlayerModal) {
-        // Optionally clear upNextVideos when modal closes to save memory
-        // setUpNextVideos([]); 
-    }
-  // fetchUpNextVideos is a dependency, ensure it's stable or correctly handles its own deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps 
-  }, [showPlayerModal, currentVideo]); // Removed fetchUpNextVideos from here, will call it directly.
-
-  const handleScroll = useCallback(
-    // ... (existing handleScroll function)
-    ({ nativeEvent }: { nativeEvent: any }) => {
-      const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-      const paddingToBottom = 250; 
-      if (
-        contentOffset.y > 0 &&
-        contentSize.height > layoutMeasurement.height &&
-        layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom &&
-        !loading &&
-        hasMore
-      ) {
-        setOffset((prevOffset) => prevOffset + 1);
+      if (!mainListAbortControllerRef.current || mainListAbortControllerRef.current.signal.aborted) {
+        mainListAbortControllerRef.current = new AbortController();
       }
-    },
-    [loading, hasMore]
+      const signal = mainListAbortControllerRef.current.signal;
+
+      fetchVideos(false, offset, signal).finally(() => {
+        if (!signal.aborted) setLoading(false);
+        else console.log('[TipTubeScreen ScrollPagination] Pagination fetch aborted.');
+      });
+    }
+  }, [initialLoading, loading, hasMore, refreshing, offset, fetchVideos]);
+
+  const handleMainVideoLoad = useCallback(() => {
+    console.log("[TipTubeScreen] Main video onLoad triggered.");
+    setMainVideoLoaded(true); // This will trigger the UpNextEffect to process the list
+  }, []);
+
+  useEffect(() => { // Effect to prepare "Up Next" videos
+    if (showPlayerModal && currentVideo) {
+      if (!mainVideoLoaded) {
+        // Main video is not yet loaded (or a new video was selected and mainVideoLoaded was reset).
+        // Clear previous Up Next videos and ensure skeletons are not shown yet for "Up Next".
+        console.log("[TipTubeScreen UpNextEffect] Main video not loaded. Clearing UpNext. No skeletons for Up Next yet.");
+        setUpNextVideos([]);
+        setLoadingUpNext(false); // Explicitly set to false
+        return;
+      }
+
+      // Main video IS loaded (mainVideoLoaded is true).
+      // This block will execute after `onLoad` of the main video.
+      console.log("[TipTubeScreen UpNextEffect] Main video loaded. Processing Up Next list. Skeletons will show now.");
+      setLoadingUpNext(true); // Indicate processing for Up Next list, skeletons will appear now.
+      
+      // Process the list. This is synchronous and should be fast.
+      // If it were async, skeletons would show for longer.
+      const filteredAndShuffled = shuffleArray(videos.filter(v => v.id !== currentVideo.id));
+      setUpNextVideos(filteredAndShuffled);
+      setLoadingUpNext(false); // Done processing, skeletons will be replaced.
+
+    } else if (!showPlayerModal) {
+      // Modal closed, clear Up Next and reset states
+      setUpNextVideos([]);
+      setLoadingUpNext(false);
+      setMainVideoLoaded(false);
+    }
+  }, [showPlayerModal, currentVideo, videos, mainVideoLoaded]); // Depends on main 'videos' list and mainVideoLoaded
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        console.log('[TipTubeScreen] Screen lost focus or unmounted: Aborting main list fetch.');
+        mainListAbortControllerRef.current?.abort();
+        if (showPlayerModal) {
+            setMainVideoLoaded(false); 
+        }
+      };
+    }, [showPlayerModal])
   );
 
   const openPlayer = (video: Video) => {
+    if (currentVideo?.id !== video.id) {
+        setMainVideoLoaded(false); // Reset for the new video, UpNextEffect will wait for onLoad
+    }
     setCurrentVideo(video);
     setShowPlayerModal(true);
   };
+
   const closePlayer = () => {
     setShowPlayerModal(false);
     setCurrentVideo(null);
+    setMainVideoLoaded(false);
+    setUpNextVideos([]);
+    setLoadingUpNext(false);
   };
 
   const renderVideoCard = (video: Video) => (
-    // ... (existing renderVideoCard function)
-    <TouchableOpacity
-      key={video.id}
-      style={styles.videoCard}
-      onPress={() => openPlayer(video)}
-      onPressIn={() => setPreviewingVideoId(video.id)}
-      onPressOut={() => setPreviewingVideoId(null)}
-    >
+    // ... same as before ...
+    <TouchableOpacity key={video.id} style={styles.videoCard} onPress={() => openPlayer(video)} onPressIn={() => setPreviewingVideoId(video.id)} onPressOut={() => setPreviewingVideoId(null)}>
       <View style={styles.thumbnailContainer}>
-        {video.price && video.price > 0 && (
-          <View style={styles.priceBadge}>
-            <Text style={styles.priceBadgeText}>₹{video.price}</Text>
-          </View>
-        )}
+        {video.price && video.price > 0 && (<View style={styles.priceBadge}><Text style={styles.priceBadgeText}>₹{video.price}</Text></View>)}
         {previewingVideoId === video.id && video.videoUrl ? (
-          <Video
-            source={{ uri: video.videoUrl }}
-            style={styles.videoThumbnail}
-            resizeMode="cover"
-            repeat
-            muted
-            paused={previewingVideoId !== video.id}
-            playInBackground={false}
-            playWhenInactive={false}
-            ignoreSilentSwitch="obey"
-          />
+          <Video source={{uri: video.videoUrl}} style={styles.videoThumbnail} resizeMode="cover" repeat muted paused={previewingVideoId !== video.id} playInBackground={false} playWhenInactive={false} ignoreSilentSwitch="obey" />
         ) : (
-          <Image
-            source={{ uri: video.thumbnail || "https://via.placeholder.com/16:9" }}
-            style={styles.thumbnailImage}
-            resizeMode="cover"
-          />
+          <Image source={{uri: video.thumbnail || "https://via.placeholder.com/300x169.png?text=No+Thumbnail"}} style={styles.thumbnailImage} resizeMode="cover" />
         )}
-        <View style={styles.durationOverlay}>
-          <Text style={styles.durationText}>{formatDuration(video.duration)}</Text>
-        </View>
+        <View style={styles.durationOverlay}><Text style={styles.durationText}>{formatDuration(video.duration)}</Text></View>
       </View>
       <View style={styles.cardContent}>
         <View style={styles.creatorInfo}>
-          <Image
-            source={{ uri: video.avatar || "https://via.placeholder.com/32" }}
-            style={styles.avatar}
-          />
+          <Image source={{uri: video.avatar || "https://via.placeholder.com/32.png?text=N/A"}} style={styles.avatar} />
           <View style={styles.creatorText}>
-            <TouchableOpacity
-              onPress={() => {
-                closePlayer(); // Close modal before navigating
-                navigation.navigate("Channel", { channelId: video.channelId });
-              }}
-            >
-              <Text style={styles.creatorName} numberOfLines={1}>
-                {video.creatorName}
-              </Text>
+            <TouchableOpacity onPress={() => { closePlayer(); navigation.navigate("Channel", {channelId: video.channelId}); }}>
+              <Text style={styles.creatorName} numberOfLines={1}>{video.creatorName}</Text>
             </TouchableOpacity>
-            <Text style={styles.videoStats}>
-              {video.views.toLocaleString()} views • {video.posted}
-            </Text>
+            <Text style={styles.videoStats}>{video.views.toLocaleString()} views • {video.posted}</Text>
           </View>
         </View>
-        <Text style={styles.videoTitle} numberOfLines={2}>
-          {video.title}
-        </Text>
+        <Text style={styles.videoTitle} numberOfLines={2}>{video.title}</Text>
       </View>
     </TouchableOpacity>
   );
 
-  const renderRelatedVideoCard = ({ item }: { item: Video }) => (
-    <TouchableOpacity
-        style={styles.relatedVideoCard}
-        onPress={() => {
-            console.log(`[TipTubeScreen] Up Next video pressed: ${item.title}, ID: ${item.id}`);
-            setCurrentVideo(item); // This will trigger the useEffect to reload Up Next for the new video
-        }}
-    >
-        <Image
-            source={{ uri: item.thumbnail || "https://via.placeholder.com/120x67" }}
-            style={styles.relatedVideoThumbnail}
-            resizeMode="cover"
-        />
-        <View style={styles.relatedVideoContent}>
-            <Text style={styles.relatedVideoTitle} numberOfLines={2}>
-                {item.title}
-            </Text>
-            <Text style={styles.relatedVideoCreator}>{item.creatorName}</Text>
-            <Text style={styles.relatedVideoStats}>
-                {item.views.toLocaleString()} views • {item.posted}
-            </Text>
-        </View>
-    </TouchableOpacity>
-  );
+  const renderRelatedVideoItem = useCallback(({item}: {item: Video}) => (
+    <MemoizedRelatedVideoCard 
+      item={item} 
+      onPress={() => {
+        console.log("Clicked Up Next item, new video ID:", item.id);
+        setMainVideoLoaded(false); // New video needs to load, reset mainVideoLoaded
+        setCurrentVideo(item);     // Set as current
+        upNextFlatListRef.current?.scrollToOffset({ animated: false, offset: 0 });
+      }} 
+    />
+  ), [setCurrentVideo]);
+
+
+  if (initialLoading && !refreshing) {
+    // ... same as before ...
+    return (
+      <View style={styles.container}>
+        <Header title="TipTube" showTipShortsIcon />
+        <ScrollView contentContainerStyle={[styles.scrollViewContent, {paddingBottom: contentPaddingBottom}]} showsVerticalScrollIndicator={false}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroller}>
+            {categories.map((cat) => (<TouchableOpacity key={cat.name} style={styles.categoryButton} disabled={true}><Text style={styles.categoryButtonText}>{cat.icon} {cat.name}</Text></TouchableOpacity>))}
+          </ScrollView>
+          {renderInitialSkeleton()}
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* ... (Header and main ScrollView with categories and video grid) ... */}
       <Header title="TipTube" showTipShortsIcon />
       <ScrollView
+        // ... same as before ...
         ref={scrollViewRef}
         onScroll={handleScroll}
-        scrollEventThrottle={16} 
+        scrollEventThrottle={16}
         contentContainerStyle={[styles.scrollViewContent, {paddingBottom: contentPaddingBottom}]}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
       >
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroller}>
-          {categories.map((cat) => (
-            <TouchableOpacity
-              key={cat.name}
-              onPress={() => setSelectedCategory(cat.name)}
-              style={[
-                styles.categoryButton,
-                selectedCategory === cat.name && styles.selectedCategoryButton,
-              ]}
-            >
-              <Text style={[
-                styles.categoryButtonText,
-                selectedCategory === cat.name && styles.selectedCategoryButtonText,
-              ]}>
-                {cat.icon} {cat.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {categories.map((cat) => (<TouchableOpacity key={cat.name} onPress={() => setSelectedCategory(cat.name)} style={[styles.categoryButton, selectedCategory === cat.name && styles.selectedCategoryButton]}><Text style={[styles.categoryButtonText, selectedCategory === cat.name && styles.selectedCategoryButtonText]}>{cat.icon} {cat.name}</Text></TouchableOpacity>))}
         </ScrollView>
-
-        <View style={styles.videoGrid}>
-          {videos.map(renderVideoCard)}
-        </View>
-
-        {loading && videos.length > 0 && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[styles.loadingText, {color: colors.text.secondary}]}>Loading more...</Text>
-          </View>
-        )}
-        {loading && videos.length === 0 && !refreshing && (
-             <View style={[styles.loadingContainer, {flex: 1, justifyContent: 'center', paddingTop: 50}]}>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={[styles.loadingText, {color: colors.text.secondary}]}>Loading videos...</Text>
-            </View>
-        )}
-        {!loading && !hasMore && videos.length === 0 && !refreshing && (
-          <View style={styles.noVideosContainer}>
-            <Text style={[styles.noVideosText, {color: colors.text.secondary}]}>No videos found for this category.</Text>
-          </View>
-        )}
+        {videos.length === 0 && loading && !refreshing && !initialLoading ? (<View style={[styles.loadingContainer, {flex: 1, justifyContent: 'center', paddingTop: 50}]}><ActivityIndicator size="large" color={colors.primary} /><Text style={[styles.loadingText, {color: colors.text.secondary}]}>Loading videos...</Text></View>) : (<View style={styles.videoGrid}>{videos.map(renderVideoCard)}</View>)}
+        {loading && videos.length > 0 && (<View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /><Text style={[styles.loadingText, {color: colors.text.secondary}]}>Loading more...</Text></View>)}
+        {!loading && !initialLoading && !hasMore && videos.length === 0 && !refreshing && (<View style={styles.noVideosContainer}><Text style={[styles.noVideosText, {color: colors.text.secondary}]}>No videos found.</Text></View>)}
       </ScrollView>
-
-      {/* Video Player Modal */}
-      <Modal
-        visible={showPlayerModal}
-        animationType="slide"
-        presentationStyle="fullScreen" // Consider "overFullScreen" for more control if needed
-        onRequestClose={closePlayer}
-      >
+      <Modal visible={showPlayerModal} animationType="slide" presentationStyle="fullScreen" onRequestClose={closePlayer}>
         <View style={styles.playerModalContainer}>
           {currentVideo && (
             <>
-              <Video
-                source={{ uri: currentVideo.videoUrl }}
-                style={styles.mainVideoPlayer}
-                controls={true}
-                paused={!showPlayerModal}
+              <Video 
+                source={{uri: currentVideo.videoUrl!}} 
+                style={styles.mainVideoPlayer} 
+                controls={true} 
+                // Video starts playing when modal is shown AND mainVideoLoaded is true
+                paused={!showPlayerModal || !mainVideoLoaded} 
                 resizeMode="contain"
-                onFullscreenPlayerWillPresent={() => console.log('Fullscreen entered')}
-                onFullscreenPlayerDidDismiss={() => console.log('Fullscreen exited')}
+                onLoad={handleMainVideoLoad} // <<< This triggers mainVideoLoaded = true
+                onError={(e) => console.error("Main Video Error:", e)}
+                bufferConfig={{
+                  minBufferMs: 15000, maxBufferMs: 50000,
+                  bufferForPlaybackMs: 2500, bufferForPlaybackAfterRebufferMs: 5000
+                }}
               />
               <View style={styles.mainVideoInfo}>
                 <Text style={styles.mainVideoTitle}>{currentVideo.title}</Text>
                 <View style={styles.mainVideoCreatorSection}>
-                  <Image
-                    source={{ uri: currentVideo.avatar || "https://via.placeholder.com/40" }}
-                    style={styles.mainVideoAvatar}
-                  />
+                  <Image source={{uri: currentVideo.avatar || "https://via.placeholder.com/40.png?text=N/A"}} style={styles.mainVideoAvatar} />
                   <View style={styles.mainVideoCreatorText}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        closePlayer(); // Close modal before navigating
-                        navigation.navigate("Channel", { channelId: currentVideo.channelId });
-                      }}
-                    >
-                      <Text style={styles.mainVideoCreatorName}>{currentVideo.creatorName}</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.mainVideoStats}>
-                      {currentVideo.views.toLocaleString()} views • {currentVideo.posted}
-                    </Text>
+                    <TouchableOpacity onPress={() => { closePlayer(); navigation.navigate("Channel", {channelId: currentVideo.channelId}); }}><Text style={styles.mainVideoCreatorName}>{currentVideo.creatorName}</Text></TouchableOpacity>
+                    <Text style={styles.mainVideoStats}>{currentVideo.views.toLocaleString()} views • {currentVideo.posted}</Text>
                   </View>
-                  <TouchableOpacity style={styles.subscribeButton}>
-                    <Text style={styles.subscribeButtonText}>Subscribe</Text>
-                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.subscribeButton}><Text style={styles.subscribeButtonText}>Subscribe</Text></TouchableOpacity>
                 </View>
-                {/* Simplified like/dislike/share for RN, no SVG icons here without a library */}
-                <View style={styles.actionButtons}>
-                  <TouchableOpacity style={styles.actionButton}>
-                    <Text style={styles.actionButtonText}>👍 Like</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.actionButton}>
-                    <Text style={styles.actionButtonText}>👎 Dislike</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.actionButton}>
-                    <Text style={styles.actionButtonText}>🔗 Share</Text>
-                  </TouchableOpacity>
-                </View>
-                <TouchableOpacity onPress={closePlayer} style={styles.backButton}>
-                  <Text style={styles.backButtonText}>Back to Feed</Text>
-                </TouchableOpacity>
+                <TouchableOpacity onPress={closePlayer} style={styles.backButton}><Text style={styles.backButtonText}>Back to Feed</Text></TouchableOpacity>
               </View>
 
-              {/* Up Next Section with FlatList */}
               <View style={styles.relatedVideosSection}>
                 <Text style={styles.relatedVideosTitle}>Up Next</Text>
-                <FlatList
-                  data={upNextVideos}
-                  renderItem={renderRelatedVideoCard}
-                  keyExtractor={(item, index) => `${item.id}-${index}`} // Ensure unique keys
-                  onEndReached={() => {
-                    if (hasMoreUpNext && !loadingUpNext) {
-                      console.log("[TipTubeScreen] Reached end of Up Next list. Fetching more.");
-                      fetchUpNextVideos(false); // Fetch next page, not a reset
+                {/* 
+                  Show skeletons if:
+                  1. Main video has loaded (`mainVideoLoaded` is true).
+                  2. We are currently "processing" the upNextVideos list (`loadingUpNext` is true).
+                  3. The `upNextVideos` array is still empty (before it's populated).
+                */}
+                {mainVideoLoaded && loadingUpNext && upNextVideos.length === 0 ? (
+                  <View>
+                    {Array(5).fill(0).map((_, i) => <RelatedVideoCardSkeleton key={`upnext-skel-${i}`} />)}
+                  </View>
+                ) : (
+                  <FlatList
+                    ref={upNextFlatListRef}
+                    data={upNextVideos} 
+                    renderItem={renderRelatedVideoItem}
+                    keyExtractor={(item) => `upnext-${item.id.toString()}`}
+                    initialNumToRender={5}
+                    windowSize={10}
+                    ListEmptyComponent={
+                      // Show "No other videos" only if main video has loaded and we are not in the loadingUpNext phase
+                      mainVideoLoaded && !loadingUpNext && upNextVideos.length === 0 ? 
+                      <Text style={[styles.noVideosText, {textAlign: 'center', paddingVertical: 20}]}>No other videos available.</Text> : null
                     }
-                  }}
-                  onEndReachedThreshold={0.5} // Trigger when 50% of the last item is visible
-                  ListFooterComponent={
-                    loadingUpNext ? (
-                      <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
-                    ) : null
-                  }
-                  ListEmptyComponent={
-                    !loadingUpNext && upNextVideos.length === 0 ? (
-                        <Text style={[styles.noVideosText, {color: colors.text.secondary, textAlign: 'center', paddingVertical: 20}]}>No more videos up next.</Text>
-                    ) : null
-                  }
-                />
+                  />
+                )}
               </View>
             </>
+          )}
+          {/* Fallback if currentVideo is somehow null but modal is open */}
+          {!currentVideo && showPlayerModal && (
+            <View style={{flex:1, justifyContent: 'center', alignItems: 'center'}}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={{color: colors.text.primary, marginTop: 10}}>Loading video...</Text>
+            </View>
           )}
         </View>
       </Modal>
@@ -569,290 +421,61 @@ const TipTubeScreen = () => {
   );
 };
 
-// In createStyles, ensure your loadingText and noVideosText use theme colors
-const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },  scrollViewContent: {
-    paddingHorizontal: 16,
-  },
-  categoryScroller: {
-    marginBottom: 20,
-    height: 40, // Fixed height for category scroller
-  },
-  categoryButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: isDarkMode ? colors.gray[700] : colors.gray[200],
-    marginRight: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  selectedCategoryButton: {
-    backgroundColor: "#00C896", // adtip-teal (keep consistent for both modes)
-  },
-  categoryButtonText: {
-    color: isDarkMode ? colors.gray[300] : colors.text.secondary,
-    fontWeight: "500",
-  },
-  selectedCategoryButtonText: {
-    color: "#fff", // White for both light and dark mode
-  },
-  videoGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between", // Distribute items
-    gap: 16, // Simulates Tailwind's gap for flex wrap
-  },
-  videoCard: {
-    width: (screenWidth - 16 * 2 - 16 * 1) / 2, // 2 columns for small screens (32 is horizontal padding, 16 is gap)
-    // Adjust based on column count and screen size for md, lg
-    // For simplicity, we'll keep 2 columns.
-    // For more complex responsive grid, use Dimensions.get('window').width and calculate columns
-    backgroundColor: colors.card,
-    borderRadius: 12, // rounded-xl
-    shadowColor: isDarkMode ? "#000" : "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: isDarkMode ? 0.3 : 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-    marginBottom: 16, // gap-6
-    overflow: "hidden", // Important for rounded corners
-  },  thumbnailContainer: {
-    aspectRatio: 16 / 9,
-    backgroundColor: isDarkMode ? colors.gray[700] : colors.gray[200],
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    overflow: "hidden",
-    position: "relative",
-  },
-  priceBadge: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    backgroundColor: "#00C896", // adtip-teal
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 9999, // rounded-full
-    zIndex: 10,
-  },
-  priceBadgeText: {
-    color: "#fff",
-    fontSize: 10, // text-xs
-    fontWeight: "600", // font-semibold
-  },
-  videoThumbnail: {
-    width: "100%",
-    height: "100%",
-  },
-  thumbnailImage: {
-    width: "100%",
-    height: "100%",
-  },
-  durationOverlay: {
-    position: "absolute",
-    bottom: 8,
-    right: 8,
-    backgroundColor: "rgba(0,0,0,0.8)", // black/80
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4, // rounded
-  },
-  durationText: {
-    color: "#fff",
-    fontSize: 10, // text-xs
-  },
-  cardContent: {
-    padding: 12,
-    flex: 1, // Allows content to expand
-  },
-  creatorInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16, // rounded-full
-    marginRight: 12,
-  },
-  creatorText: {
-    flex: 1,
-  },
-  creatorName: {
-    fontSize: 14, // text-sm
-    fontWeight: "600", // font-semibold
-    color: "#00C896", // adtip-teal
-  },
-  videoStats: {
-    fontSize: 10, // text-xs
-    color: colors.text.tertiary,
-  },
-  videoTitle: {
-    fontSize: 16, // text-base
-    fontWeight: "500", // font-medium
-    color: colors.text.primary,
-    marginBottom: 4,
-  },
-  loadingContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 32,
-  },
-  loadingText: {
-    // color: "#00C896", // Before: adtip-teal. Now themed in JSX.
-    fontWeight: "500",
-    marginTop: 8,
-  },
-  noVideosContainer: {
-    flex: 1, // Make it take space if it's the only thing
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 48,
-    minHeight: 200, // Ensure it's visible
-  },
-  noVideosText: {
-    // color: colors.text.tertiary, // Before. Now themed in JSX.
-    fontSize: 16,
-  },
+const screenWidth = Dimensions.get('window').width;
+const CARD_MARGIN_HORIZONTAL = 16;
+const CARD_GAP = 16;
+const NUM_COLUMNS = 2;
+const cardWidth = (screenWidth - CARD_MARGIN_HORIZONTAL * 2 - CARD_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
 
-  // Player Modal Styles
-  playerModalContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
-    // If mainVideoInfo and relatedVideosSection are in a column, this container needs to manage their layout.
-    // If relatedVideosSection is intended to scroll independently of mainVideoInfo,
-    // ensure mainVideoInfo doesn't take up all the space.
-  },
-  mainVideoPlayer: {
-    width: "100%",
-    aspectRatio: 16 / 9, // aspect-video
-    backgroundColor: "#000", // bg-black
-  },
-  mainVideoInfo: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-    // This section should not have flex: 1 if relatedVideosSection is below it and needs to scroll
-  },
-  mainVideoTitle: {
-    fontSize: 20, // text-xl
-    fontWeight: "bold",
-    color: colors.text.primary,
-    marginBottom: 8,
-  },
-  mainVideoCreatorSection: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  mainVideoAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  mainVideoCreatorText: {
-    flex: 1,
-  },
-  mainVideoCreatorName: {
-    fontSize: 16, // text-base
-    fontWeight: "600",
-    color: colors.text.primary,
-  },
-  mainVideoStats: {
-    fontSize: 12, // text-xs
-    color: colors.text.tertiary,
-  },
-  subscribeButton: {
-    backgroundColor: "#00C896", // adtip-teal
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 9999, // rounded-full
-    marginLeft: "auto",
-  },
-  subscribeButtonText: {
-    color: "#fff",
-    fontWeight: "500",
-    fontSize: 14, // text-sm
-  },
-  actionButtons: {
-    flexDirection: "row",
-    gap: 12, // gap-3
-    marginTop: 8,
-    marginBottom: 12,
-  },
-  actionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 9999, // rounded-full
-  },
-  actionButtonText: {
-    color: colors.text.secondary,
-    fontWeight: "500",
-    marginLeft: 4, // for icon spacing
-  },  backButton: {
-    backgroundColor: isDarkMode ? colors.gray[700] : colors.gray[200],
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 9999, // rounded-full
-    alignSelf: "flex-start", // align to start
-    marginTop: 16,
-  },
-  backButtonText: {
-    color: colors.text.secondary,
-    fontWeight: "500",
-  },
-  relatedVideosSection: {
-    flex: 1, // This allows the FlatList to take remaining space and scroll
-    paddingHorizontal: 16, // Add horizontal padding if not already there
-    paddingTop: 8, // Some padding at the top
-  },
-  relatedVideosTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 12,
-    color: colors.text.primary,
-  },
-  relatedVideoCard: {
-    flexDirection: "row",
-    backgroundColor: colors.card, // Or transparent if you want it to blend
-    borderRadius: 8,
-    marginBottom: 12,
-    overflow: "hidden", // If using shadows or specific borders
-  },
-  relatedVideoThumbnail: {
-    width: 120, // Adjust as needed
-    height: 67, // Maintain 16:9 or desired aspect ratio
-    flexShrink: 0,
-    backgroundColor: colors.surface, // Placeholder color
-  },
-  relatedVideoContent: {
-    flex: 1,
-    padding: 8,
-    justifyContent: "center", // Or 'space-between'
-  },
-  relatedVideoTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text.primary,
-    marginBottom: 2,
-  },
-  relatedVideoCreator: {
-    fontSize: 12,
-    color: colors.text.secondary,
-    marginBottom: 1,
-  },
-  relatedVideoStats: {
-    fontSize: 10,
-    color: colors.text.tertiary,
-  },
+const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  scrollViewContent: { paddingHorizontal: CARD_MARGIN_HORIZONTAL, paddingTop: 16, },
+  categoryScroller: { marginBottom: 16, paddingHorizontal: 0, marginLeft: -CARD_MARGIN_HORIZONTAL, marginRight: -CARD_MARGIN_HORIZONTAL, paddingLeft: CARD_MARGIN_HORIZONTAL },
+  categoryButton: { paddingVertical: 8, paddingHorizontal: 16, marginRight: 8, borderRadius: 20, backgroundColor: colors.cardSecondary, borderWidth: 1, borderColor: colors.border },
+  selectedCategoryButton: { backgroundColor: colors.primary, borderColor: colors.primary },
+  categoryButtonText: { fontSize: 14, fontWeight: '600', color: colors.text.secondary },
+  selectedCategoryButtonText: { color: colors.white },
+  videoGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  videoCard: { width: cardWidth, marginBottom: CARD_GAP, backgroundColor: colors.card, borderRadius: 12, shadowColor: colors.shadow, shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.08, shadowRadius: 4, elevation: 3, overflow: 'hidden' },
+  thumbnailContainer: { width: '100%', aspectRatio: 16 / 9, backgroundColor: colors.border },
+  thumbnailImage: { flex: 1 }, videoThumbnail: { flex: 1 },
+  durationOverlay: { position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  durationText: { color: colors.white, fontSize: 10, fontWeight: 'bold' },
+  priceBadge: { position: 'absolute', top: 8, left: 8, backgroundColor: colors.primary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 5, zIndex: 1 },
+  priceBadgeText: { color: colors.white, fontSize: 11, fontWeight: 'bold' },
+  cardContent: { padding: 10 },
+  creatorInfo: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  avatar: { width: 32, height: 32, borderRadius: 16, marginRight: 8, backgroundColor: colors.border },
+  creatorText: { flex: 1 },
+  creatorName: { fontSize: 13, fontWeight: '600', color: colors.text.primary },
+  videoStats: { fontSize: 11, color: colors.text.tertiary },
+  videoTitle: { fontSize: 14, fontWeight: '500', color: colors.text.primary, marginTop: 4, lineHeight: 18 },
+  loadingContainer: { paddingVertical: 20, alignItems: 'center', justifyContent: 'center' },
+  loadingText: { marginTop: 8, fontSize: 14, color: colors.text.secondary },
+  noVideosContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
+  noVideosText: { fontSize: 16, color: colors.text.secondary },
+  playerModalContainer: { flex: 1, backgroundColor: colors.background },
+  mainVideoPlayer: { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000' },
+  mainVideoInfo: { padding: 16 },
+  mainVideoTitle: { fontSize: 20, fontWeight: 'bold', color: colors.text.primary, marginBottom: 8 },
+  mainVideoCreatorSection: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  mainVideoAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 12, backgroundColor: colors.border },
+  mainVideoCreatorText: { flex: 1 },
+  mainVideoCreatorName: { fontSize: 16, fontWeight: '600', color: colors.text.primary },
+  mainVideoStats: { fontSize: 13, color: colors.text.tertiary },
+  subscribeButton: { backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  subscribeButtonText: { color: colors.white, fontWeight: 'bold', fontSize: 14 },
+  actionButtons: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.borderLight, paddingVertical: 10 },
+  backButton: { alignItems: 'center', paddingVertical: 12, backgroundColor: colors.cardSecondary, borderRadius: 8, marginTop: 10 },
+  backButtonText: { fontSize: 16, color: colors.primary, fontWeight: '600' },
+  relatedVideosSection: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
+  relatedVideosTitle: { fontSize: 18, fontWeight: 'bold', color: colors.text.primary, marginBottom: 12 },
+  relatedVideoCard: { flexDirection: 'row', marginBottom: 12, backgroundColor: colors.card, borderRadius: 8, overflow: 'hidden' },
+  relatedVideoThumbnail: { width: 120, height: 67, backgroundColor: colors.border },
+  relatedVideoContent: { flex: 1, padding: 10, justifyContent: 'center' },
+  relatedVideoTitle: { fontSize: 14, fontWeight: '500', color: colors.text.primary, marginBottom: 2 },
+  relatedVideoCreator: { fontSize: 12, color: colors.text.secondary },
+  relatedVideoStats: { fontSize: 11, color: colors.text.tertiary, marginTop: 2 },
 });
 
-export default TipTubeScreen;
+export default React.memo(TipTubeScreen);

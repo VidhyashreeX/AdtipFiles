@@ -5,11 +5,10 @@ import { useTheme } from '../../contexts/ThemeContext';
 
 const StoryItemSkeleton: React.FC<{ isAddStory?: boolean }> = ({ isAddStory }) => {
   const { colors, isDarkMode } = useTheme();
-  const skeletonBackgroundColor = isDarkMode ? colors.gray?.[700] || '#3A3A3C' : colors.gray?.[200] || '#E1E1E1';
-  const skeletonHighlightColor = isDarkMode ? colors.gray?.[600] || '#4A4A4C' : colors.gray?.[50] || '#F0F0F0';
+  const skeletonBackgroundColor = isDarkMode ? colors.gray[700] : colors.gray[200];
+  const skeletonHighlightColor = isDarkMode ? colors.gray[600] : colors.gray[50];
 
   if (isAddStory) {
-    // Simplified placeholder for "Add Story"
     return (
       <SkeletonPlaceholder backgroundColor={skeletonBackgroundColor} highlightColor={skeletonHighlightColor} speed={1000}>
         <View style={styles.addStoryContainer}>

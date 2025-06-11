@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView, Platform } from 'react-native';
 import SkeletonPlaceholder from 'react-native-skeleton-placeholder';
-import { useTheme } from '../../contexts/ThemeContext'; // Adjust path if necessary
-import { useTabNavigator } from '../../contexts/TabNavigatorContext'; // For contentPaddingBottom
+import { useTheme } from '../../contexts/ThemeContext'; 
+import { useTabNavigator } from '../../contexts/TabNavigatorContext'; 
 
 const ProfilePageSkeleton: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
@@ -12,12 +12,11 @@ const ProfilePageSkeleton: React.FC = () => {
     const tabNavigator = useTabNavigator();
     contentPaddingBottom = tabNavigator.contentPaddingBottom;
   } catch (error) {
-    // Default padding if context is not available (e.g. in a storybook or test)
     contentPaddingBottom = Platform.OS === 'ios' ? 80 : 60; 
   }
 
-  const skeletonBackgroundColor = isDarkMode ? colors.gray?.[800] || '#3A3A3C' : colors.gray?.[200] || '#E1E1E1';
-  const skeletonHighlightColor = isDarkMode ? colors.gray?.[700] || '#4A4A4C' : colors.gray?.[50] || '#F0F0F0';
+  const skeletonBackgroundColor = isDarkMode ? colors.gray[800] : colors.gray[200];
+  const skeletonHighlightColor = isDarkMode ? colors.gray[700] : colors.gray[50];
 
   return (
     <ScrollView 
@@ -92,23 +91,20 @@ const ProfilePageSkeleton: React.FC = () => {
   );
 };
 
-// Styles for ProfilePageSkeleton (approximating ProfileScreen styles)
 const styles = StyleSheet.create({
   gradientHeaderPlaceholder: { 
     height: 120, 
     borderBottomLeftRadius: 24, 
     borderBottomRightRadius: 24, 
-    // backgroundColor will be handled by SkeletonPlaceholder
   },
   avatarContainerPlaceholder: { 
     alignItems: 'center', 
-    marginTop: -48, // To overlap with gradientHeaderPlaceholder
+    marginTop: -48, 
   },
   avatarPlaceholder: { 
     width: 90, 
     height: 90, 
     borderRadius: 45,
-    // backgroundColor for the circle itself
   },
   userInfoContainerPlaceholder: { 
     alignItems: 'center', 
@@ -121,14 +117,13 @@ const styles = StyleSheet.create({
   bioPlaceholder: { width: '75%', height: 14, borderRadius: 4, marginBottom: 6 },
   bioPlaceholderLine2: { width: '65%', height: 14, borderRadius: 4, marginBottom: 10 },
   locationPlaceholder: { width: '45%', height: 14, borderRadius: 4 },
-  
   statsContainerPlaceholder: { 
     flexDirection: 'row', 
     borderRadius: 16, 
     marginHorizontal: 16, 
     marginBottom: 16, 
-    paddingVertical: 10, // Reduced padding for skeleton
-    elevation: 1, // Minimal shadow for card structure
+    paddingVertical: 10, 
+    elevation: 1, 
   },
   statItemPlaceholderContainer: {
     flex: 1,
@@ -148,11 +143,9 @@ const styles = StyleSheet.create({
   },
   statDividerPlaceholder: {
     width: 1,
-    height: '60%', // Relative height
+    height: '60%', 
     alignSelf: 'center',
-    // backgroundColor will be handled by SkeletonPlaceholder
   },
-  
   actionButtonsPlaceholder: { 
     flexDirection: 'row', 
     marginHorizontal: 16, 
@@ -170,21 +163,19 @@ const styles = StyleSheet.create({
     height: 44, 
     borderRadius: 16,
   },
-  
   postsGridPlaceholder: { 
     flexDirection: 'row', 
     flexWrap: 'wrap', 
-    paddingHorizontal: 12, // Match ProfileScreen's post container
+    paddingHorizontal: 12, 
     marginBottom: 16,
     justifyContent: 'space-between',
   },
   postItemPlaceholder: { 
-    width: '31.5%', // Adjust for spacing, (100 - (spacing*2)) / 3
+    width: '31.5%', 
     aspectRatio: 1, 
     borderRadius: 8, 
-    marginBottom: (100 * 0.035 * 0.5), // ~1.75% of width for margin between items
+    marginBottom: (100 * 0.035 * 0.5), 
   },
-  
   menuContainerPlaceholder: { 
     borderRadius: 20, 
     marginHorizontal: 12, 
@@ -198,7 +189,7 @@ const styles = StyleSheet.create({
     height: 20, 
     borderRadius: 4, 
     marginBottom: 16,
-    marginLeft: 4, // Match ProfileScreen menu title style
+    marginLeft: 4, 
   },
   menuItemPlaceholder: { 
     flexDirection: 'row', 

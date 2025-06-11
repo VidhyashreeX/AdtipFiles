@@ -38,33 +38,37 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({children}) => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const {user} = useAuth();
 
-  // Function to fetch wallet balance
   const refreshBalance = useCallback(async () => {
     try {
       if (!user || !user.id) {
+        // Optionally set balance to '0.00' and isPremium to false if user logs out
+        // setBalance('0.00');
+        // setIsPremium(false);
         return;
       }
 
       setIsLoading(true);
 
-      // Get wallet balance
       const walletBalance = await WalletService.getWalletBalance(user.id);
       setBalance(walletBalance);
 
-      // Check premium status (if needed)
       const premiumStatus = await WalletService.checkPremiumStatus(user.id);
       setIsPremium(premiumStatus.isPremium);
     } catch (error) {
-      console.error('Error fetching wallet balance:', error);
+      console.error('Error fetching wallet balance in Context:', error);
+      // Potentially set to cached or default values on error
+      // const cachedBalance = await AsyncStorage.getItem('@wallet_balance') || '0.00';
+      // setBalance(cachedBalance);
+      // setIsPremium(false); // Or cached premium status
     } finally {
       setIsLoading(false);
     }
   }, [user]);
 
-  // Load wallet balance when user changes
-  useEffect(() => {
-    refreshBalance();
-  }, [refreshBalance]);
+  // Removed useEffect that called refreshBalance automatically
+  // useEffect(() => {
+  //   refreshBalance();
+  // }, [refreshBalance]);
 
   return (
     <WalletContext.Provider

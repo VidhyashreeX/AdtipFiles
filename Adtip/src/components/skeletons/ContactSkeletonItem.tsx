@@ -1,67 +1,90 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import SkeletonPlaceholder from './SkeletonPlaceholder'; // Correctly import SkeletonPlaceholder
-import { useTheme } from '../../contexts/ThemeContext'; // Ensure this path is correct
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet, Animated } from 'react-native';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const ContactSkeletonItem: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
-  // Define a base color for the skeleton shapes themselves, the shimmer will overlay this
-  const shapeBackgroundColor = isDarkMode ? colors.gray?.[600] || 'rgba(255,255,255,0.15)' : colors.gray?.[300] || 'rgba(0,0,0,0.1)';
+  const baseSkeletonColor = isDarkMode ? colors.gray?.[700] || '#4A5568' : colors.gray?.[200] || '#E2E8F0'; // Fallback colors
+  const pulseAnimation = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnimation, {
+          toValue: 1,
+          duration: 800, // Slightly adjusted duration
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnimation, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, [pulseAnimation]);
+
+  const animatedStyle = {
+    opacity: pulseAnimation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.5, 1], // Pulse between 50% and 100% opacity
+    }),
+  };
 
   return (
-    <View>
-      <View style={[styles.contactItemCard, { backgroundColor: colors.card || (isDarkMode ? '#2C2C2E' : '#FFFFFF') }]}>
-        <View style={styles.contactInfo}>
-          <View style={[styles.skeletonName, { backgroundColor: shapeBackgroundColor }]} />
-          <View style={[styles.skeletonStatus, { backgroundColor: shapeBackgroundColor }]} />
+    <View style={[styles.contactItem, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
+      <View style={styles.contactInfo}>
+        <Animated.View style={[styles.avatarPlaceholder, { backgroundColor: baseSkeletonColor }, animatedStyle]} />
+        <View style={styles.textBlock}>
+          <Animated.View style={[styles.textLine, { width: '70%', backgroundColor: baseSkeletonColor }, animatedStyle]} />
+          <Animated.View style={[styles.textLine, { width: '50%', marginTop: 8, backgroundColor: baseSkeletonColor }, animatedStyle]} />
         </View>
-        <View style={styles.callButtons}>
-          <View style={[styles.skeletonButton, { backgroundColor: shapeBackgroundColor }]} />
-          <View style={[styles.skeletonButton, { backgroundColor: shapeBackgroundColor }]} />
-        </View>
+      </View>
+      <View style={styles.callButtons}>
+        <Animated.View style={[styles.callButtonPlaceholder, { backgroundColor: baseSkeletonColor }, animatedStyle]} />
+        <Animated.View style={[styles.callButtonPlaceholder, { backgroundColor: baseSkeletonColor, marginLeft: 12 }, animatedStyle]} />
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  contactItemCard: { // This is the overall card that will shimmer
+  contactItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    height: 78,
-    marginBottom: 8,
-    borderRadius: 8,
-    borderBottomWidth: 1, // If you want a border on the card itself
-    // borderBottomColor: colors.borderLight, // Apply if needed, ensure colors is available or pass from theme
+    paddingVertical: 12, // Adjusted padding
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
   },
   contactInfo: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 12,
+  },
+  textBlock: {
     flexDirection: 'column',
-    // backgroundColor: 'transparent', // Ensure children backgrounds are visible
+    justifyContent: 'center',
   },
-  skeletonName: {
-    width: '70%',
-    height: 20,
+  textLine: {
+    height: 14, // Adjusted height
     borderRadius: 4,
-    marginBottom: 8,
-  },
-  skeletonStatus: {
-    width: '50%',
-    height: 14,
-    borderRadius: 4,
+    marginBottom: 6, // Adjusted margin
   },
   callButtons: {
     flexDirection: 'row',
     marginLeft: 16,
-    // backgroundColor: 'transparent',
   },
-  skeletonButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    marginLeft: 10,
+  callButtonPlaceholder: {
+    width: 40, // Adjusted size
+    height: 40,
+    borderRadius: 20,
   },
 });
 

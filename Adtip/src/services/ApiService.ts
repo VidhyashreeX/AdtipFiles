@@ -1,5 +1,5 @@
 // src/services/ApiService.ts
-import axios, {AxiosRequestConfig, AxiosResponse} from 'axios';
+import axios, { AxiosRequestConfig, AxiosResponse, AbortSignal } from 'axios'; // Import AbortSignal
 import {API_BASE_URL} from '../constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ApiEndpoints from '../constants/apiEndpoints';
@@ -156,7 +156,11 @@ export default class ApiService {
         ...config,
       });
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
+      if (axios.isCancel(error)) {
+        console.log(`ApiService.get to ${url} canceled.`);
+        throw error; // Re-throw the original cancellation error
+      }
       throw this.handleError(error);
     }
   }
@@ -179,7 +183,11 @@ export default class ApiService {
         config,
       );
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
+      if (axios.isCancel(error)) {
+        console.log(`ApiService.post to ${url} canceled.`);
+        throw error; // Re-throw the original cancellation error
+      }
       throw this.handleError(error);
     }
   }
@@ -198,7 +206,11 @@ export default class ApiService {
     try {
       const response: AxiosResponse<T> = await apiClient.put(url, data, config);
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
+      if (axios.isCancel(error)) {
+        console.log(`ApiService.put to ${url} canceled.`);
+        throw error; // Re-throw the original cancellation error
+      }
       throw this.handleError(error);
     }
   }
@@ -221,7 +233,11 @@ export default class ApiService {
         config,
       );
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
+      if (axios.isCancel(error)) {
+        console.log(`ApiService.patch to ${url} canceled.`);
+        throw error; // Re-throw the original cancellation error
+      }
       throw this.handleError(error);
     }
   }
@@ -238,7 +254,11 @@ export default class ApiService {
     try {
       const response: AxiosResponse<T> = await apiClient.delete(url, config);
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
+      if (axios.isCancel(error)) {
+        console.log(`ApiService.delete to ${url} canceled.`);
+        throw error; // Re-throw the original cancellation error
+      }
       throw this.handleError(error);
     }
   }
@@ -272,7 +292,11 @@ export default class ApiService {
         ...config,
       });
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
+      if (axios.isCancel(error)) {
+        console.log(`ApiService.uploadFile to ${url} canceled.`);
+        throw error; // Re-throw the original cancellation error
+      }
       throw this.handleError(error);
     }
   }
@@ -284,12 +308,12 @@ export default class ApiService {
   private static handleError(error: any): Error {
     if (axios.isAxiosError(error)) {
       // Detailed logging to diagnose the exact issue
-      console.log('API Error Details:', {
+      console.log('API Error Details (handleError):', {
         isAxiosError: true,
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
-        message: error.message,
+        message: error.message, // This would be "canceled" if it's an unhandled cancellation
         config: {
           url: error.config?.url,
           method: error.config?.method,
@@ -304,20 +328,20 @@ export default class ApiService {
         return new Error(serverMessage || error.message);
       } else if (error.request) {
         // The request was made but no response was received
-        console.log('Request was made but no response received:', error.request);
-        // Check if we're using the emulator and if the API is on localhost
+        console.log('Request was made but no response received (handleError):', error.request);
         const isEmulator = error.config?.baseURL?.includes('10.0.2.2');
         if (isEmulator) {
           return new Error('Network error while connecting to local server. Ensure your server is running and accessible.');
         }
         return new Error('Network error. Check your connection and try again.');
       } else {
-        // Something happened in setting up the request
-        return new Error(`Error setting up request: ${error.message}`);
+        // Something happened in setting up the request that wasn't a direct cancellation handled above
+        // This path should be less common for cancellations now.
+        return new Error(`Error setting up request (handleError): ${error.message}`);
       }
     }
     // Not an Axios error
-    console.log('Non-Axios error:', error);
+    console.log('Non-Axios error (handleError):', error);
     return error instanceof Error ? error : new Error(String(error));
   }
 
@@ -394,41 +418,31 @@ export default class ApiService {
   /**
    * Get wallet balance
    * @param userId - User ID
+   * @param config - Optional Axios request configuration (can include AbortSignal)
    */
   static async getWalletBalance(
     userId: string | number,
+    config?: AxiosRequestConfig, // Add config parameter
   ): Promise<WalletBalanceResponse> {
     try {
-      // Add logging to debug the API call
       console.log(`Fetching wallet balance for user ID: ${userId}`);
-      console.log(
-        `Using endpoint: ${ApiEndpoints.HOME_ENDPOINTS.GET_WALLET_BALANCE}/${userId}`,
-      );
+      const formattedUserId = String(userId).trim(); // Ensure userId is a string
 
-      // Make sure userId is properly formatted
-      const formattedUserId = userId.toString().trim();
-
-      // Get the token to check if it's available
-      let token = await AsyncStorage.getItem('accessToken');
-      if (!token) {
-        token = await AsyncStorage.getItem('@auth_token'); // Fallback to old key format
-      }
-      console.log('Auth token available:', !!token);
-
-      if (!token) {
-        console.warn('No authentication token found. API request might fail.');
-      }
-
-      // Make the API call
-      console.log('Making API request to get wallet balance...');
+      // Make the API call, passing the config which may include the signal
       const response = await this.get<WalletBalanceResponse>(
         `${ApiEndpoints.HOME_ENDPOINTS.GET_WALLET_BALANCE}/${formattedUserId}`,
+        undefined, // No specific query parameters for this URL structure
+        config,    // Pass the config object
       );
       console.log('Wallet balance API response:', JSON.stringify(response));
       return response;
     } catch (error) {
+      if (axios.isCancel(error)) {
+        console.log('ApiService.getWalletBalance request canceled');
+        // Return a specific structure or rethrow for cancellation
+        return { status: 0, message: 'Request canceled', availableBalance: '0.00' };
+      }
       console.error('Error in getWalletBalance:', error);
-      // Return a default response to prevent app crashes
       return {
         status: 0,
         message: 'Failed to fetch wallet balance',
@@ -440,12 +454,30 @@ export default class ApiService {
   /**
    * Get list of posts
    * @param data - Request data containing category, page, limit, and logged-in user ID
+   * @param config - Optional Axios request configuration (can include AbortSignal)
    */
-  static async listPosts(data: PostListRequest): Promise<PostListResponse> {
-    return this.post<PostListResponse>(
-      ApiEndpoints.HOME_ENDPOINTS.LIST_POSTS,
-      data,
-    );
+  static async listPosts(
+    data: PostListRequest,
+    config?: AxiosRequestConfig, // Add config parameter
+  ): Promise<PostListResponse> {
+    try {
+      // this.post will now re-throw original cancellation errors
+      return await this.post<PostListResponse>(
+        ApiEndpoints.HOME_ENDPOINTS.LIST_POSTS,
+        data,
+        config, // Pass the config object
+      );
+    } catch (error: any) {
+      if (axios.isCancel(error)) {
+        console.log('ApiService.listPosts request canceled (handling specific cancellation).');
+        // Return a defined structure for cancellations, so HomeScreen doesn't treat it as an unhandled error.
+        return { status: false, message: 'Request canceled by client', data: [], pagination: { current_page: 0, total_page: 0, total_count: 0 } };
+      }
+      // For other errors (which would have been processed by handleError in this.post)
+      console.error('ApiService.listPosts error (not a direct cancellation):', error.message);
+      // Re-throw the error to be caught by the calling function in HomeScreen
+      throw error;
+    }
   }
 
   /**
@@ -485,15 +517,53 @@ export default class ApiService {
    * @param userId - User ID
    * @param categoryId - Category ID (0 for all categories)
    * @param offset - Page offset
+   * @param search - Optional search query
+   * @param signal - Optional AbortSignal for cancellation
    */
   static async getVideos(
     userId: string | number,
     categoryId: number,
     offset: number,
-  ): Promise<any> {
-    return this.get(
-      `${ApiEndpoints.TIP_TUBE_ENDPOINTS.GET_VIDEOS}/${userId}/${categoryId}/${offset}`,
-    );
+    search?: string, // Added search parameter
+    signal?: AbortSignal // Added signal parameter
+  ): Promise<any> { // Replace 'any' with your actual Video API response type
+    try {
+      // Construct parameters, ensuring search is handled if present
+      const params: any = {};
+      if (search) {
+        params.search_query = search; // Or however your API expects search
+      }
+
+      // The endpoint structure might vary based on your API design.
+      // This example assumes query parameters for search, and path params for others.
+      // Adjust ApiEndpoints.TIP_TUBE_ENDPOINTS.GET_VIDEOS if it needs to be dynamic with search.
+      // For simplicity, if GET_VIDEOS is a base path, and others are query params:
+      // const response = await apiClient.get(ApiEndpoints.TIP_TUBE_ENDPOINTS.GET_VIDEOS, {
+      //   params: { userId, categoryId, page: offset, search_query: search },
+      //   signal, // Pass the signal to axios
+      // });
+
+      // If using path parameters as before:
+      let url = `${ApiEndpoints.TIP_TUBE_ENDPOINTS.GET_VIDEOS}/${userId}/${categoryId}/${offset}`;
+      // If search needs to be part of the URL or specific query param handling:
+      // if (search) url += `?search_query=${encodeURIComponent(search)}`; // Example
+
+      const response = await apiClient.get(url, {
+        params: search ? { search_query: search } : undefined, // Example if search is a query param
+        signal, // Pass the signal to axios
+      });
+      return response.data;
+    } catch (error) {
+      if (axios.isCancel(error)) {
+        console.log('ApiService.getVideos request canceled');
+        throw error; // Re-throw so the caller knows it was cancelled
+      }
+      // Assuming this.handleError is defined and handles other errors
+      // throw this.handleError(error);
+      // For now, rethrow directly if handleError is not static or accessible
+      console.error('ApiService.getVideos error:', error);
+      throw error;
+    }
   }
 
   /**
@@ -699,18 +769,30 @@ export default class ApiService {
   /**
    * Like or unlike a post
    * @param data - Like request data containing userId, postId, and is_liked status
+   * @param config - Optional Axios request configuration (can include AbortSignal)
    */
-  static async likePost(data: LikePostRequest): Promise<LikePostResponse> {
+  static async likePost(
+    data: LikePostRequest,
+    config?: AxiosRequestConfig, // Add config parameter
+  ): Promise<LikePostResponse> {
     console.log('[API] Sending like request:', JSON.stringify(data, null, 2));
     try {
+      // this.post will now re-throw original cancellation errors
       const response = await this.post<LikePostResponse>(
-        '/api/save-user-post-like',
+        '/api/save-user-post-like', // Ensure this endpoint is correct
         data,
+        config, // Pass the config object
       );
       console.log('[API] Like response:', JSON.stringify(response, null, 2));
       return response;
-    } catch (error) {
-      console.error('[API] Like request failed:', error);
+    } catch (error: any) {
+      if (axios.isCancel(error)) {
+        console.log('ApiService.likePost request canceled (handling specific cancellation).');
+        // Return a defined structure for cancellations
+        return { status: false, message: 'Request canceled by client', is_liked: data.is_liked };
+      }
+      console.error('[API] Like request failed (ApiService.likePost):', error.message);
+      // Re-throw other errors (which would have been processed by handleError in this.post)
       throw error;
     }
   }

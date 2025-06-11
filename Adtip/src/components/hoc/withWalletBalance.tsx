@@ -1,5 +1,5 @@
 // src/components/hoc/withWalletBalance.tsx
-import React from 'react';
+import React, { memo } from 'react';
 import {useWallet} from '../../contexts/WalletContext';
 
 /**
@@ -9,17 +9,15 @@ import {useWallet} from '../../contexts/WalletContext';
  * @param WrappedComponent - The screen component to wrap
  */
 export const withWalletBalance = <P extends object>(
-  WrappedComponent: React.ComponentType<P>,
-): React.FC<P> => {
-  const WithWalletBalance: React.FC<P> = props => {
-    const {balance} = useWallet();
-
-    // Merge the wallet balance into the component's props
-    return <WrappedComponent {...props} walletBalance={balance} />;
-  };
-
-  // Set display name for easier debugging
-  WithWalletBalance.displayName = `withWalletBalance(${WrappedComponent.displayName || WrappedComponent.name || 'Component'})`;
-
-  return WithWalletBalance;
+  Component: React.ComponentType<P & { walletBalance?: string }>,
+) => {
+  const WrappedComponent = memo((props: P) => { // Memoize the wrapped component
+    const { balance } = useWallet();
+    
+    return <Component {...props} walletBalance={balance} />;
+  });
+  
+  WrappedComponent.displayName = `withWalletBalance(${Component.displayName || Component.name})`;
+  
+  return WrappedComponent;
 };

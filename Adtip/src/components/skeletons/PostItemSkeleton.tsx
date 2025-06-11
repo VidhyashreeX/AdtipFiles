@@ -5,8 +5,10 @@ import { useTheme } from '../../contexts/ThemeContext';
 
 const PostItemSkeleton: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
-  const skeletonBackgroundColor = isDarkMode ? colors.gray?.[800] || '#2C2C2E' : colors.gray?.[100] || '#F3F4F6';
-  const skeletonHighlightColor = isDarkMode ? colors.gray?.[700] || '#3A3A3C' : colors.gray?.[50] || '#FAFAFA';
+  // Dark mode: darker base, slightly lighter highlight.
+  // Light mode: light base, very light highlight.
+  const skeletonBackgroundColor = isDarkMode ? colors.gray[800] : colors.gray[100];
+  const skeletonHighlightColor = isDarkMode ? colors.gray[700] : colors.gray[50];
 
   return (
     <SkeletonPlaceholder backgroundColor={skeletonBackgroundColor} highlightColor={skeletonHighlightColor} speed={1000}>
@@ -43,8 +45,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginVertical: 8,
     marginHorizontal: 16,
-    paddingBottom: 12, // To match PostItem's structure a bit
-    // Elevation/shadow can be added if needed, but skeleton usually keeps it flat
+    paddingBottom: 12,
   },
   header: {
     flexDirection: 'row',
@@ -87,8 +88,7 @@ const styles = StyleSheet.create({
   },
   media: {
     width: '100%',
-    height: 250, // Approximate height for post media
-    // borderRadius might be needed if your media has rounded corners
+    height: 250,
   },
   actionsContainer: {
     flexDirection: 'row',
