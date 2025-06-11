@@ -23,6 +23,10 @@ import CategoryItem from '../../components/home/CategoryItem';
 import PostItem from '../../components/home/PostItem';
 import EarnCard from '../../components/home/EarnCard';
 import CommentScreen from './CommentScreen'; // Add this import
+import StoryItemSkeleton from '../../components/skeletons/StoryItemSkeleton';
+import CategoryItemSkeleton from '../../components/skeletons/CategoryItemSkeleton';
+import EarnCardSkeleton from '../../components/skeletons/EarnCardSkeleton';
+import PostItemSkeleton from '../../components/skeletons/PostItemSkeleton';
 
 // Services
 import WalletService from '../../services/WalletService';
@@ -38,7 +42,7 @@ import {useTabNavigator} from '../../contexts/TabNavigatorContext';
 import {API_BASE_URL} from '../../constants/api';
 
 // Types
-import {NavigationProps} from '../../types/navigation';
+import { AppNavigationProps as NavigationProps } from '../../types/navigation'; // Changed to AppNavigationProps and aliased
 
 interface HomeScreenProps {
   walletBalance?: string; // Optional wallet balance coming from HOC
@@ -211,6 +215,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
   const [visiblePostIds, setVisiblePostIds] = useState<number[]>([]);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [selectedCommentPostId, setSelectedCommentPostId] = useState<number | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true); // New state for initial full skeleton
 
   // Viewability configuration
   const viewabilityConfig = useRef<ViewabilityConfig>({
@@ -304,6 +309,90 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
 
   // Only fetch posts if not already loading or at end
   const fetchPosts = async (page = 1, loadMore = false) => {
+    if (!user) { 
+      setInitialLoading(false); // Ensure loading stops if no user
+      return; 
+    }
+    if (loading.posts || loading.loadingMore) { return; }
+    if (loadMore && (pagination.current_page >= pagination.total_page)) { return; }
+    try {
+      if (loadMore) {
+        setLoading(prev => ({...prev, loadingMore: true}));
+      } else {
+        setLoading(prev => ({...prev, posts: true}));
+        setError(null);
+      }
+      const requestData = {
+        category: selectedCategoryState ? parseInt(selectedCategoryState, 10) : 0,
+        page: page,
+        limit: 10,
+        loggined_user_id: Number(user.id),
+      };
+      const result = await ApiService.listPosts(requestData);
+      if (result?.data && Array.isArray(result.data)) {
+        let formattedPosts = result.data.map((rawPost: any) => ({
+          id: rawPost.id,
+          user_id: rawPost.user_id,
+          title: rawPost.title || '',
+          content: rawPost.content || '',
+          media_url: getFullImageUrl(rawPost.media_url),
+          media_type: rawPost.media_type || 'image',
+          user_name: rawPost.user_name || 'User',
+          user_profile_image: getFullImageUrl(rawPost.user_profile_image),
+          likeCount: rawPost.likeCount || rawPost.like_count || 0,
+          commentCount: rawPost.commentCount || rawPost.comment_count || 0,
+          is_promoted: rawPost.is_promoted || 0,
+          created_at: rawPost.created_at || new Date().toISOString(),
+          is_premium: !!rawPost.is_premium,
+          is_liked: !!rawPost.is_liked,
+          last_active: rawPost.last_active || null,
+        }));
+
+        if (result.pagination) {
+          setPagination(result.pagination);
+        } else if (loadMore) {
+          setPagination(prev => ({...prev, current_page: page}));
+        }
+
+        if (loadMore) {
+          setPosts(prevPosts => {
+            const existingIds = new Set(prevPosts.map(post => post.id));
+            const newPosts = formattedPosts.filter(post => !existingIds.has(post.id));
+            return [...prevPosts, ...newPosts];
+          });
+        } else {
+          // Shuffle posts on initial load or refresh
+          setPosts(shuffleArray(formattedPosts));
+        }
+
+        const newLikedPosts: {[key: number]: boolean} = {};
+        formattedPosts.forEach((post: Post) => {
+          if (post.is_liked) {
+            newLikedPosts[post.id] = true;
+          }
+        });
+        setLikedPosts(prev => ({...prev, ...newLikedPosts}));
+      } else {
+        if (!loadMore) {
+          setPosts([]);
+          setError('No posts available at the moment.');
+        }
+      }
+    } catch (err) {
+      console.error('Posts fetch error:', err);
+      setError('Failed to load posts. Please try again later.');
+    } finally {
+      if (loadMore) {
+        setLoading(prev => ({...prev, loadingMore: false}));
+      } else {
+        setLoading(prev => ({...prev, posts: false}));
+      }
+      setInitialLoading(false); // Set initial loading to false after first fetch attempt
+    }
+  };
+  
+  // Only fetch posts if not already loading or at end
+  const fetchPostsV2 = async (page = 1, loadMore = false) => {
     if (!user) { return; }
     if (loading.posts || loading.loadingMore) { return; }
     if (loadMore && (pagination.current_page >= pagination.total_page)) { return; }
@@ -379,12 +468,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
       } else {
         setLoading(prev => ({...prev, posts: false}));
       }
+      setInitialLoading(false); // Set initial loading to false after first fetch attempt
     }
   };
 
   const handleRefresh = async () => {
     setRefreshing(true);
     setError(null); 
+    // setInitialLoading(true); // Optional: if you want skeleton on pull-to-refresh of empty list
 
     try {
       if (user && typeof refreshUserData === 'function') {
@@ -404,8 +495,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
       setError('Failed to refresh content. Please try again.');
     } finally {
       setRefreshing(false); 
+      // initialLoading will be set to false by fetchPosts
     }
   };
+
   const handleLoadMore = () => {
     // Prevent multiple simultaneous requests or unnecessary requests
     if (loading.loadingMore || loading.posts || refreshing) {
@@ -569,6 +662,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
   // Remove useFocusEffect for posts/wallet fetch, use useEffect for initial load and category change
   useEffect(() => {
     if (!user) {
+      setInitialLoading(false); // Stop initial loading if no user
       return;
     }
     
@@ -577,8 +671,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
     
     // Fetch wallet and posts on mount or when user/category changes
     const fetchInitialData = async () => {
+      setInitialLoading(true); // Set initial loading true before fetching
       await fetchWalletAmount();
-      await fetchPosts(1, false);
+      await fetchPosts(1, false); // This will set initialLoading to false in its finally block
     };
     fetchInitialData();
     
@@ -597,6 +692,35 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posts.length]); // Only run when posts.length changes, not on every post change
+
+  // Skeleton rendering for the entire initial screen
+  const renderInitialSkeleton = () => (
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={[styles.postsContainerStyle, {paddingBottom: contentPaddingBottom}]}
+    >
+      {/* Stories Skeleton */}
+      <View style={styles.storiesSection}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.storiesContainer} contentContainerStyle={styles.storiesContentContainer}>
+          <StoryItemSkeleton isAddStory={true} />
+          {Array(5).fill(0).map((_, i) => <StoryItemSkeleton key={`story_sk_${i}`} />)}
+        </ScrollView>
+      </View>
+      {/* Categories Skeleton */}
+      <View style={styles.categoriesSection}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesContainer} contentContainerStyle={styles.categoriesContentContainer}>
+          {Array(5).fill(0).map((_, i) => <CategoryItemSkeleton key={`cat_sk_${i}`} />)}
+        </ScrollView>
+      </View>
+      {/* Earn Cards Skeleton */}
+      <View style={styles.earnCardsSection}>
+        <EarnCardSkeleton />
+        <EarnCardSkeleton />
+      </View>
+      {/* Posts Skeleton */}
+      {Array(3).fill(0).map((_, i) => <PostItemSkeleton key={`post_sk_${i}`} />)}
+    </ScrollView>
+  );
 
   // Render functions
   const renderStories = () => (
@@ -706,6 +830,21 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
       </View>
     );
   };
+  // Main render
+  if (initialLoading && !refreshing) { // Show full skeleton on initial load
+    return (
+      <View style={[styles.container, {backgroundColor: colors.background}]}>
+        <Header
+          title="Home"
+          showLogo={true}
+          showWallet={true}
+          // walletAmount can be undefined or a placeholder during skeleton
+        />
+        {renderInitialSkeleton()}
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
       <Header
@@ -722,7 +861,20 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance}) => {
         onEndReachedThreshold={0.4} // Trigger at 40% from the end
         ListFooterComponent={renderFooter}
         ListHeaderComponent={renderListHeader}
-        ListEmptyComponent={renderListEmpty} // Ensure this handles the refreshing state appropriately if needed
+        ListEmptyComponent={ // Modified to not show ActivityIndicator if initialLoading was true
+          !loading.posts && !refreshing ? ( // Only show empty/error if not actively loading posts
+            error ? (
+              <View style={styles.errorContainer}>
+                <Text style={[styles.emptyText, {color: colors.text.secondary}]}>{error}</Text>
+              </View>
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Icon name="inbox" size={50} color={colors.gray?.[400] || '#A0AEC0'} />
+                <Text style={[styles.emptyText, {color: colors.text.secondary}]}>No posts yet</Text>
+              </View>
+            )
+          ) : null // Return null if loading.posts is true (FlatList's own loader or refresh control will show)
+        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -778,8 +930,8 @@ const styles = StyleSheet.create({
   },
   storiesSection: {
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
+    // borderBottomWidth: 1, // Optional for skeleton
+    // borderBottomColor: '#EEEEEE', // Optional for skeleton
   },
   storiesContainer: {
     paddingLeft: 16,
@@ -787,30 +939,23 @@ const styles = StyleSheet.create({
   storiesContentContainer: {
     paddingRight: 16,
   },
-  categoriesContentContainer: {
-    paddingRight: 8,
-  },
-  buttonText: {
-    color: 'white',
-    fontWeight: '600',
-  },
   categoriesSection: {
     paddingVertical: 12,
   },
   categoriesContainer: {
     paddingLeft: 16,
+    paddingRight: 8, // Ensure this matches original
+  },
+  categoriesContentContainer: { // Added for consistency
     paddingRight: 8,
   },
   earnCardsSection: {
     padding: 16,
   },
-  postsContainer: {
-    paddingTop: 8,
-    // flex: 1, // Removed flex:1 as it restricts scrolling
-  },  postsContainerStyle: {
+  postsContainerStyle: { // Used by both FlatList and Skeleton ScrollView
     paddingTop: 8,
   },
-  loadingContainer: {
+  loadingContainer: { // For FlatList's ListEmptyComponent when loading.posts is true
     padding: 20,
     alignItems: 'center',
     justifyContent: 'center',
@@ -820,32 +965,18 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  errorText: {
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  retryButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
+    minHeight: 200, // Give some space for the error message
   },
   emptyContainer: {
     padding: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 200, // Give some space for the empty message
   },
   emptyText: {
     fontSize: 16,
     marginVertical: 12,
-  },
-  createPostButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    marginTop: 12,
+    textAlign: 'center',
   },
   footerLoader: {
     paddingVertical: 20,

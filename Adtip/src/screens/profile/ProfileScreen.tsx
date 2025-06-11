@@ -19,6 +19,7 @@ import Icon from 'react-native-vector-icons/Feather';
 // Components
 import Header from '../../components/common/Header';
 import LastSeen from '../../components/common/LastSeen';
+import ProfilePageSkeleton from '../../components/skeletons/ProfilePageSkeleton'; // Add this import
 
 // Context
 import { useTheme } from '../../contexts/ThemeContext';
@@ -76,7 +77,7 @@ interface Post {
 const ProfileScreen: React.FC = () => {
   const route = useRoute();
   const { userId } = (route.params as ProfileParams) || {};
-  const { colors, isDarkMode } = useTheme();
+  const { colors, isDarkMode } = useTheme(); // Ensure useTheme is used
   const navigation = useNavigation<NavigationProp>();
 
   // Add a try/catch block to handle missing context
@@ -410,25 +411,23 @@ const ProfileScreen: React.FC = () => {
   // Effects
   useEffect(() => {
     fetchUserData();
-  }, [userId]);
+  }, [userId]); // Assuming fetchUserData is memoized or stable
 
   // Render functions
-  if (loading && !refreshing) {
+  if (loading && !refreshing && !user) { // Show skeleton only on initial load when user data is not yet available
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Header
-          title={isOwnProfile ? 'Profile' : 'Profile'}
+          title={isOwnProfile ? 'Profile' : 'Profile'} // Keep header static or use placeholder text
           showLogo={true}
           showNotifications={isOwnProfile || false}
         />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <ProfilePageSkeleton />
       </View>
     );
   }
 
-  if (!user && !loading) {
+  if (!user && !loading) { // Error or user not found state
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Header
@@ -447,6 +446,9 @@ const ProfileScreen: React.FC = () => {
       </View>
     );
   }
+  
+  // If loading during a refresh, user data might still be present, so don't show full skeleton
+  // The RefreshControl will show its own indicator.
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

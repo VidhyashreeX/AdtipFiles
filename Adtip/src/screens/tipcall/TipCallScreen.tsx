@@ -37,8 +37,26 @@ import ApiService from '../../services/ApiService';
 import AgoraRtmHelper, { RtmEventType, RtmLocalInvitation, RtmRemoteInvitation, RtmLocalInvitationProps } from '../../services/AgoraRtmHelper'; // Added RtmLocalInvitationProps
 import {AgoraHelper} from '../../services/AgoraHelper';
 import IncomingCallScreenComponent from '../../components/tipcall/IncomingCallScreen'; // Renamed to avoid conflict
+import ContactSkeletonItem from '../../components/skeletons/ContactSkeletonItem'; // Add this import
+import { UserListRequest } from '../../types/api'; // <-- Add this import
 
-// Define navigation stack param list
+// Define a basic colors object for use in styles (customize as needed)
+const colors = {
+  primary: '#24d05a',
+  card: '#fff',
+  borderLight: '#e5e7eb',
+  background: '#f8fafc',
+  text: {
+    primary: '#374151',
+    secondary: '#64748b',
+    tertiary: '#9ca3af',
+  },
+  inputBackground: '#f1f5f9',
+  errorBackground: '#fee2e2',
+  errorText: '#dc2626',
+};
+
+ // Define navigation stack param list
 type RootStackParamList = {
   TipCall: { initialCallNotificationData?: any } | undefined; // Updated to allow params
   Login: undefined;
@@ -981,122 +999,103 @@ const TipCallScreen: React.FC = () => {
   }, [loading, contacts.length, totalRecords, page, fetchUsers]);
 
 
-  const renderContactItem = ({item}: {item: Contact}) => (
-    <View style={styles.contactItem}>
+  // Memoize renderContactItem for performance
+  const renderContactItem = useCallback(({item}: {item: Contact}) => (
+    <View style={[styles.contactItem, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
       <View style={styles.contactInfo}>
-        <Text style={styles.contactName}>{item.name || `User ${item.id}`}</Text>
-        <Text style={styles.contactStatus}>
+        <Text style={[styles.contactName, { color: colors.text.primary }]}>{item.name || `User ${item.id}`}</Text>
+        <Text style={[styles.contactStatus, { color: colors.text.secondary }]}>
           {item.online_status ? 'Online' : `Last seen: ${item.last_seen || 'N/A'}`}
         </Text>
       </View>
       <View style={styles.callButtons}>
-        <TouchableOpacity style={styles.callButton} onPress={() => startVoiceCall(item)}>
+        <TouchableOpacity style={[styles.callButton, {backgroundColor: colors.primary}]} onPress={() => startVoiceCall(item)}>
           <Icon name="phone" size={20} color="white" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.callButton} onPress={() => startVideoCall(item)}>
+        <TouchableOpacity style={[styles.callButton, {backgroundColor: colors.primary}]} onPress={() => startVideoCall(item)}>
           <Icon name="video" size={20} color="white" />
         </TouchableOpacity>
       </View>
     </View>
-  );
+  ), [colors, startVoiceCall, startVideoCall]); // Add dependencies
 
-  useEffect(() => {
-    const initialData = route.params?.initialCallNotificationData as any; // Cast as needed
-    if (initialData && initialData.isFromNotification && !incomingCallData && !inCall && isRtmReady && isRtcEngineReady) { // Check readiness
-      console.log('[TipCallScreen] Received initial call data from notification:', initialData);
-      // This is not a full RtmRemoteInvitation, so you can't directly use rtmHelper.acceptCallInvitation
-      // You need to simulate the state of receiving an invitation.
-      // The key challenge is that RTM invitations are live objects.
-      // For a call from notification, you might directly proceed to the "accepting" phase
-      // if the user confirms, or show a simplified incoming call UI.
-
-      // Simplified: Show an incoming call UI based on this data.
-      // The `onAccept` for this UI would then directly try to join the RTC channel.
-      setIncomingCallData({
-        // This is a mock/partial RtmRemoteInvitation.
-        // You won't be able to call rtmInvitation.accept() on this.
-        // So, acceptIncomingCall needs to handle this case.
-        rtmInvitation: { 
-            getCallerId: () => initialData.callerRtcUid, // Or a dedicated caller RTM ID if different
-            getContent: () => JSON.stringify({ // Reconstruct content
-                channelName: initialData.channelName,
-                callType: initialData.callType,
-                callerName: initialData.callerName,
-                rtcToken: initialData.rtcToken,
-                callerRtcUid: initialData.callerRtcUid,
-            }),
-            // Mock other methods if acceptIncomingCall tries to use them, or modify acceptIncomingCall
-        } as any, // Cast to RtmRemoteInvitation, but be careful
-        callerName: initialData.callerName,
-        callType: initialData.callType,
-        channelName: initialData.channelName,
-        rtcToken: initialData.rtcToken,
-        callerRtcUid: initialData.callerRtcUid,
-        // Add a flag to indicate this is from a notification and not a live RTM invite
-        isFromNotification: true,
-      });
-    }
-  }, [route.params?.initialCallNotificationData, inCall, incomingCallData, isRtmReady, isRtcEngineReady]); // Added readiness states
-
-  // --- New effect for handling remote invitations with cleanup ---
-  useEffect(() => {
-    if (isRtmReady && rtmHelperRef.current) {
-      const handler = (remoteInvitation: RtmRemoteInvitation) => {
-        console.log('[RTM] Remote invitation received:', remoteInvitation);
-        try {
-          const invitationContentString = remoteInvitation.content;
-          if (invitationContentString) {
-            const parsedContent = JSON.parse(invitationContentString);
-            console.log('[RTM] Parsed remote invitation content:', parsedContent);
-            setIncomingCallData({
-              rtmInvitation: remoteInvitation,
-              callerName: parsedContent.callerName || `User ${remoteInvitation.getCallerId()}`,
-              callType: parsedContent.callType,
-              channelName: parsedContent.channelName,
-              rtcToken: parsedContent.rtcToken,
-              callerRtcUid: parsedContent.callerRtcUid,
-            });
-          } else {
-            console.error('[RTM] Received remote invitation with empty or null content.');
-          }
-        } catch (e) {
-          console.error('[RTM] Error parsing remote invitation content:', e);
-        }
-      };
-      console.log('[RTM] Setting up remoteInvitationReceived listener');
-      rtmHelperRef.current.on('remoteInvitationReceived', handler);
-      console.log('[RTM] remoteInvitationReceived listener setup SUCCESSFUL');
-      return () => {
-        console.log('[RTM] Removing remoteInvitationReceived listener');
-        rtmHelperRef.current?.off('remoteInvitationReceived', handler);
-      };
-    }
-  }, [isRtmReady, rtmHelperRef.current]);
-
-
-  if (!isRtcEngineReady || !isRtmReady) { // Show a general loading/initializing screen
-      if (loading && contacts.length === 0 && !inCall && !incomingCallData) { // Keep existing contacts loading
-        return (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#24d05a" />
-            <Text style={styles.loadingText}>Loading Contacts...</Text>
+  // Initializing services loading state
+  if (!isRtcEngineReady || !isRtmReady) {
+    return (
+      <View style={[styles.container, {paddingBottom: contentPaddingBottom, backgroundColor: colors.background }]}>
+        {/* Header Skeleton/Placeholder */}
+        <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
+          <View style={styles.logoContainer}>
+            <View style={[styles.logo, {backgroundColor: colors.primary}]}><Icon name="phone-call" size={16} color="white" /></View>
+            <Text style={[styles.title, {color: colors.primary}]}>TipCall</Text>
           </View>
-        );
-      }
-      // Show a generic initializing screen if engines are not ready yet
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#24d05a" />
-          <Text style={styles.loadingText}>Initializing call services...</Text>
         </View>
-      );
+        {/* Search Bar Skeleton/Placeholder */}
+        <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
+          <View style={[styles.searchBar, {backgroundColor: colors.inputBackground}]}>
+            <Icon name="search" size={18} color={colors.text.tertiary} style={styles.searchIcon} />
+            <TextInput
+              placeholder="Search contacts..."
+              placeholderTextColor={colors.text.tertiary}
+              style={[styles.searchInput, {color: colors.text.primary}]}
+              value={""} // Dummy value
+              editable={false} // Non-interactive
+            />
+          </View>
+        </View>
+        {/* Filters Title Skeleton/Placeholder */}
+        <View style={[styles.filtersContainer, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
+          <Text style={[styles.filterTitle, { color: colors.text.primary }]}>Users</Text>
+        </View>
+        {/* Contacts List Skeleton */}
+        <FlatList
+          data={Array(5).fill(0).map((_, i) => ({ id: `skeleton-init-${i}` }))} // Render 5 skeleton items
+          renderItem={() => <ContactSkeletonItem />}
+          keyExtractor={(item) => item.id}
+          style={[styles.contactsContainer, { backgroundColor: colors.background }]}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8 }}
+        />
+      </View>
+    );
   }
   
-  if (loading && contacts.length === 0 && !inCall && !incomingCallData) {
+  // Data loading state with Skeleton (this remains the same)
+  if (loading && contacts.length === 0 && !inCall && !incomingCallData && !error) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#24d05a" />
-        <Text style={styles.loadingText}>Loading Contacts...</Text>
+      <View style={[styles.container, {paddingBottom: contentPaddingBottom, backgroundColor: colors.background }]}>
+        {/* Header */}
+        <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
+          <View style={styles.logoContainer}>
+            <View style={[styles.logo, {backgroundColor: colors.primary}]}><Icon name="phone-call" size={16} color="white" /></View>
+            <Text style={[styles.title, {color: colors.primary}]}>TipCall</Text>
+          </View>
+        </View>
+        {/* Search Bar */}
+        <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
+          <View style={[styles.searchBar, {backgroundColor: colors.inputBackground}]}>
+            <Icon name="search" size={18} color={colors.text.tertiary} style={styles.searchIcon} />
+            <TextInput
+              placeholder="Search contacts..."
+              placeholderTextColor={colors.text.tertiary}
+              style={[styles.searchInput, {color: colors.text.primary}]}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onSubmitEditing={() => fetchUsers(1)}
+            />
+          </View>
+        </View>
+        {/* Filters Title */}
+        <View style={[styles.filtersContainer, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
+          <Text style={[styles.filterTitle, { color: colors.text.primary }]}>Users</Text>
+        </View>
+        {/* Contacts List Skeleton */}
+        <FlatList
+          data={Array(5).fill(0).map((_, i) => ({ id: `skeleton-load-${i}` }))}
+          renderItem={() => <ContactSkeletonItem />}
+          keyExtractor={(item) => item.id}
+          style={[styles.contactsContainer, { backgroundColor: colors.background }]}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8 }}
+        />
       </View>
     );
   }
@@ -1127,21 +1126,22 @@ const TipCallScreen: React.FC = () => {
   }
 
   return (
-    <View style={[styles.container, {paddingBottom: contentPaddingBottom}]}>
-      <View style={styles.header}>
+    <View style={[styles.container, {paddingBottom: contentPaddingBottom, backgroundColor: colors.background}]}>
+      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
         <View style={styles.logoContainer}>
-          <View style={styles.logo}><Icon name="phone-call" size={16} color="white" /></View>
-          <Text style={styles.title}>TipCall</Text>
+          <View style={[styles.logo, {backgroundColor: colors.primary}]}><Icon name="phone-call" size={16} color="white" /></View>
+          <Text style={[styles.title, {color: colors.primary}]}>TipCall</Text>
         </View>
         {/* ... other header actions ... */}
       </View>
 
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Icon name="search" size={18} color="#9ca3af" style={styles.searchIcon} />
+      <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
+        <View style={[styles.searchBar, {backgroundColor: colors.inputBackground}]}>
+          <Icon name="search" size={18} color={colors.text.tertiary} style={styles.searchIcon} />
           <TextInput
             placeholder="Search contacts..."
-            style={styles.searchInput}
+            placeholderTextColor={colors.text.tertiary}
+            style={[styles.searchInput, {color: colors.text.primary}]}
             value={searchQuery}
             onChangeText={setSearchQuery}
             onSubmitEditing={() => fetchUsers(1)}
@@ -1149,15 +1149,14 @@ const TipCallScreen: React.FC = () => {
         </View>
       </View>
       
-      {/* Filters (Simplified for brevity, you can re-add your complex filters) */}
-      <View style={styles.filtersContainer}>
-        <Text style={styles.filterTitle}>Users</Text>
+      <View style={[styles.filtersContainer, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
+        <Text style={[styles.filterTitle, { color: colors.text.primary }]}>Users</Text>
       </View>
 
-      {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => fetchUsers(1)}>
+      {error && !loading && ( // Show error only if not loading
+        <View style={[styles.errorContainer, { backgroundColor: colors.errorBackground || '#fee2e2'}]}>
+          <Text style={[styles.errorText, { color: colors.errorText || '#dc2626'}]}>{error}</Text>
+          <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.errorText || '#dc2626'}]} onPress={() => fetchUsers(1)}>
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
@@ -1167,17 +1166,26 @@ const TipCallScreen: React.FC = () => {
         data={contacts}
         renderItem={renderContactItem}
         keyExtractor={(item: Contact) => item.id.toString()}
-        style={styles.contactsContainer}
+        style={[styles.contactsContainer, { backgroundColor: colors.background }]}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8 }} // Add padding for items
         ListEmptyComponent={
-          !loading ? (
+          !loading && !error ? ( // Show empty only if not loading and no error
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No contacts found.</Text>
+              <Text style={[styles.emptyText, { color: colors.text.secondary }]}>No contacts found.</Text>
             </View>
           ) : null
         }
         onEndReached={loadMoreUsers}
         onEndReachedThreshold={0.5}
-        ListFooterComponent={loading && contacts.length > 0 ? <ActivityIndicator size="small" color="#24d05a" /> : null}
+        ListFooterComponent={loading && contacts.length > 0 ? <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }}/> : null}
+        // Performance optimizations for FlatList
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={21}
+        removeClippedSubviews={Platform.OS === 'android'} // Test this carefully
+        // getItemLayout={(data, index) => ( // Uncomment and adjust if item height is fixed
+        //   { length: 78 + 8, offset: (78 + 8) * index, index } // height + marginBottom
+        // )}
       />
     </View>
   );
