@@ -36,8 +36,9 @@ export const TIP_CALLS_ENDPOINTS = {
   GET_USERS: '/api/users',
   GET_ALL_USERS: '/api/allusers',
   CALL: '/api/call',
-  GET_AGORA_TOKEN: '/api/get-agora-token',
-  GET_RTM_TOKEN: '/api/get-rtm-token', // Add this line
+  GET_AGORA_TOKEN_CALLER: '/api/get-agora-token/caller', // Renamed and updated
+  GET_AGORA_TOKEN_CALLEE: '/api/get-agora-token/callee', // Added for callee
+  GET_RTM_TOKEN: '/api/get-rtm-token',
   MISSED_CALLS: '/api/missed-calls',
   UPDATE_FCM_TOKEN: '/api/update-fcm-token',
 };

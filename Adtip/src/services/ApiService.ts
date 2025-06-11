@@ -18,7 +18,8 @@ import {
   UserListRequest,
   UserListResponse,
   ReferralDetailsResponse,
-  AgoraTokenRequest,
+  AgoraCallerTokenRequest, // Updated type
+  AgoraCalleeTokenRequest, // Added type
   AgoraTokenResponse,
   AgoraCallRequest,
   FcmTokenRequest,
@@ -57,7 +58,7 @@ export interface LikeShortResponse {
 const PUBLIC_ENDPOINTS = [
   ApiEndpoints.AUTH_ENDPOINTS.OTP_LOGIN,          // Example: "/api/otplogin"
   ApiEndpoints.AUTH_ENDPOINTS.OTP_VERIFY,         // Example: "/api/otpverify"
-  ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_AGORA_TOKEN, // Example: "/api/get-agora-token"
+  // ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_AGORA_TOKEN, // Removed: Assuming token endpoints are protected
 ];
 
 // Create axios instance with default configuration
@@ -554,23 +555,44 @@ export default class ApiService {
   // ===== AGORA API SERVICES =====
 
   /**
-   * Get Agora token for a channel
+   * Get Agora token for a caller
    * @param data - Request data containing uid
    */
-  static async getAgoraToken(
-    data: AgoraTokenRequest,
+  static async getAgoraTokenForCaller( // Renamed from getAgoraToken
+    data: AgoraCallerTokenRequest,
   ): Promise<AgoraTokenResponse> {
-    console.log('[FCM-API] getAgoraToken called with data:', JSON.stringify(data, null, 2));
+    console.log('[API] getAgoraTokenForCaller called with data:', JSON.stringify(data, null, 2));
     try {
       const response = await this.post<AgoraTokenResponse>(
-        ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_AGORA_TOKEN,
+        ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_AGORA_TOKEN_CALLER, // Updated endpoint
         data,
       );
-      console.log('[FCM-API] getAgoraToken response:', JSON.stringify(response, null, 2));
+      console.log('[API] getAgoraTokenForCaller response:', JSON.stringify(response, null, 2));
       return response;
     } catch (error) {
-      console.error('[FCM-API] getAgoraToken error:', error);
-      throw error;
+      console.error('[API] getAgoraTokenForCaller error:', error);
+      throw error; // Re-throw to be handled by the caller
+    }
+  }
+
+  /**
+   * Get Agora token for a callee
+   * @param data - Request data containing uid and channelName
+   */
+  static async getAgoraTokenForCallee(
+    data: AgoraCalleeTokenRequest,
+  ): Promise<AgoraTokenResponse> {
+    console.log('[API] getAgoraTokenForCallee called with data:', JSON.stringify(data, null, 2));
+    try {
+      const response = await this.post<AgoraTokenResponse>(
+        ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_AGORA_TOKEN_CALLEE, // New endpoint
+        data,
+      );
+      console.log('[API] getAgoraTokenForCallee response:', JSON.stringify(response, null, 2));
+      return response;
+    } catch (error) {
+      console.error('[API] getAgoraTokenForCallee error:', error);
+      throw error; // Re-throw to be handled by the caller
     }
   }
 

@@ -94,15 +94,20 @@ export interface AgoraCallRequest {
   callId?: number;
 }
 
-export interface AgoraTokenRequest {
+export interface AgoraCallerTokenRequest { // Renamed from AgoraTokenRequest
   uid: number;
+}
+
+export interface AgoraCalleeTokenRequest { // Added for callee
+  uid: number;
+  channelName: string;
 }
 
 export interface AgoraTokenResponse {
   token: string;
   channelName: string;
   uid: number;
-  expiresAt: string; // Added this line
+  expiresAt: string;
 }
 
 export interface FcmTokenRequest {
