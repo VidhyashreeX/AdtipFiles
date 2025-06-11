@@ -413,9 +413,15 @@ class AgoraRtmHelper {
       }
 
       this.rtmEngine.removeAllListeners(); // Call on the instance
-      // For agora-react-native-rtm@1.5.1, use destroy method
-      await this.rtmEngine.destroy(); // Call on the instance
-      
+
+      // Only call destroy if it exists
+      if (typeof (this.rtmEngine as any).destroy === 'function') {
+        await (this.rtmEngine as any).destroy();
+        console.log('[RTM] Agora RTM engine destroyed');
+      } else {
+        console.warn('[RTM] destroy() not available on RtmEngine, skipping destroy.');
+      }
+
       this.rtmEngine = null;
       this.eventListeners.clear();
       console.log('[RTM] Agora RTM engine released');

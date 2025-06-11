@@ -665,6 +665,7 @@ const TipCallScreen: React.FC = () => {
           console.log('[RTM] Successfully logged into RTM.');
           setIsRtmReady(true);
           if (rtmHelperRef.current) {
+            console.log('[RTM] Registering remoteInvitationReceived listener');
             rtmHelperRef.current.on('remoteInvitationReceived', (remoteInvitation: RtmRemoteInvitation) => {
               console.log('[RTM] Remote invitation received:', remoteInvitation);
               try {
@@ -1036,6 +1037,41 @@ const TipCallScreen: React.FC = () => {
       });
     }
   }, [route.params?.initialCallNotificationData, inCall, incomingCallData, isRtmReady, isRtcEngineReady]); // Added readiness states
+
+  // --- New effect for handling remote invitations with cleanup ---
+  useEffect(() => {
+    if (isRtmReady && rtmHelperRef.current) {
+      const handler = (remoteInvitation: RtmRemoteInvitation) => {
+        console.log('[RTM] Remote invitation received:', remoteInvitation);
+        try {
+          const invitationContentString = remoteInvitation.content;
+          if (invitationContentString) {
+            const parsedContent = JSON.parse(invitationContentString);
+            console.log('[RTM] Parsed remote invitation content:', parsedContent);
+            setIncomingCallData({
+              rtmInvitation: remoteInvitation,
+              callerName: parsedContent.callerName || `User ${remoteInvitation.getCallerId()}`,
+              callType: parsedContent.callType,
+              channelName: parsedContent.channelName,
+              rtcToken: parsedContent.rtcToken,
+              callerRtcUid: parsedContent.callerRtcUid,
+            });
+          } else {
+            console.error('[RTM] Received remote invitation with empty or null content.');
+          }
+        } catch (e) {
+          console.error('[RTM] Error parsing remote invitation content:', e);
+        }
+      };
+      console.log('[RTM] Setting up remoteInvitationReceived listener');
+      rtmHelperRef.current.on('remoteInvitationReceived', handler);
+      return () => {
+        console.log('[RTM] Removing remoteInvitationReceived listener');
+        rtmHelperRef.current?.off('remoteInvitationReceived', handler);
+      };
+    }
+  }, [isRtmReady, rtmHelperRef.current]);
+
 
   if (!isRtcEngineReady || !isRtmReady) { // Show a general loading/initializing screen
       if (loading && contacts.length === 0 && !inCall && !incomingCallData) { // Keep existing contacts loading

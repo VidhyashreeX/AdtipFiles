@@ -67,7 +67,7 @@ declare module 'agora-react-native-rtm' {
     // Instance method to initialize the client with App ID
     createClient(appId: string): Promise<void>; 
 
-    destroy(): Promise<void>;
+    destroy?(): Promise<void>;
     login(loginInfo: LoginInfo): Promise<void>;
     logout(): Promise<void>;
     renewToken(token: string): Promise<void>;
