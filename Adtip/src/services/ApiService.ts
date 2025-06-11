@@ -520,25 +520,35 @@ export default class ApiService {
   // ===== TIP-CALLS SERVICES =====
 
   /**
-   * Get users
+   * Get users (potentially filtered - this was your existing method)
    * @param data - Request data for filtering users
    */
   static async getUsers(data: UserListRequest): Promise<UserListResponse> {
+    console.log('[API] Fetching users with data:', JSON.stringify(data, null, 2));
     return this.post<UserListResponse>(
-      ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_USERS,
+      ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_USERS, // Uses /api/users
       data,
     );
   }
 
   /**
-   * Get all users
-   * @param data - Request data for filtering all users
+   * Get all users with minimal filtering, primarily for call list.
+   * Uses the /api/allusers endpoint.
+   * @param data - Request data, typically including pagination and logged_user_id
    */
-  static async getAllUsers(data: UserListRequest): Promise<UserListResponse> {
-    return this.post<UserListResponse>(
-      ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_ALL_USERS,
-      data,
-    );
+  static async getAllUsersList(data: UserListRequest): Promise<UserListResponse> {
+    console.log('[API] Fetching all users list with data:', JSON.stringify(data, null, 2));
+    try {
+      const response = await this.post<UserListResponse>(
+        ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_ALL_USERS, // This should point to '/api/allusers'
+        data,
+      );
+      console.log('[API] getAllUsersList response:', JSON.stringify(response, null, 2));
+      return response;
+    } catch (error) {
+      console.error('[API] getAllUsersList error:', error);
+      throw this.handleError(error); // Ensure handleError is accessible or called correctly
+    }
   }
 
   // ===== AGORA API SERVICES =====
@@ -636,6 +646,7 @@ export default class ApiService {
     );
   }
 
+  // ===== RTM TOKEN SERVICE =====
   /**
    * Get Agora RTM token for messaging
    * @param data - Request data containing uid

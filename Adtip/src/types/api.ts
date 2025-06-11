@@ -192,7 +192,7 @@ export interface UserListRequest {
   sortBy: Record<string, any>;
 }
 
-export interface Contact { // Assuming Contact is also defined here or imported
+export interface Contact {
   id: number;
   name?: string | null;
   emailId?: string | null;
@@ -200,9 +200,8 @@ export interface Contact { // Assuming Contact is also defined here or imported
   dnd: boolean;
   updated_date: string;
   last_active: string | null;
-  // ... other contact properties
-  languages: any[]; // Replace 'any' with your Language interface if available here
-  interests: any[]; // Replace 'any' with your Interest interface if available here
+  languages: Array<{ id: number; name: string; isPrimary: boolean }>; // Updated inline or use a shared Language type
+  interests: Array<{ id: number; name: string; isPrimary: boolean }>; // Updated inline or use a shared Interest type
   product_count: number;
   post_count: number;
   is_following: number;
@@ -217,9 +216,9 @@ export interface Contact { // Assuming Contact is also defined here or imported
 
 export interface UserListResponse {
   status: boolean;
-  message: string; // <--- Make sure this line exists
+  message: string;
   error?: string;
-  data: Contact[]; // Or the correct type for your user data items
+  data: Contact[];
   pagination: {
     page: number;
     limit: number;

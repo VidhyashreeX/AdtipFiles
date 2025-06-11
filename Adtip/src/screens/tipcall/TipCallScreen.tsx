@@ -529,27 +529,33 @@ const TipCallScreen: React.FC = () => {
     return true; // iOS permissions are typically handled via Info.plist
   }, []);
 
-  const fetchUsers = useCallback(async (pageNum: number = 1, append: boolean = false) => {
+  const fetchUsers = useCallback(async (pageNum: number = 1, append: boolean = false, currentSearchQuery: string = searchQuery) => {
     if (!user || !user.id) {
       redirectToLogin();
       return;
     }
     setLoading(true);
-    setError(null);
+    if (!append) { // Reset error only when fetching new list, not appending
+        setError(null);
+    }
+
     try {
-      const response = await ApiService.getUsers({
-        id: user.id, // Assuming this is the current user's ID
+      const payload: UserListRequest = {
+        id: 0, // As per /api/allusers sample request
         page: pageNum,
-        limit: 15,
-        language: selectedLanguage === '1' ? [] : [parseInt(selectedLanguage)],
-        interest: selectedCategory === '1' ? [] : [parseInt(selectedCategory)],
-        user_id: user.id, // Add this line to satisfy the required property
-        search_by_name: searchQuery,
-        loggined_user_id: user.id,
-        sortBy: {},
-      });
-      if (response.data) {
-        // Ensure all items are of type Contact
+        limit: 15, // Current limit in your code; sample for /api/allusers was 50. Adjust if needed.
+        language: [], // Empty array for /api/allusers
+        interest: [], // Empty array for /api/allusers
+        user_id: null, // As per /api/allusers sample request
+        search_by_name: currentSearchQuery, // Use current search query
+        loggined_user_id: user.id, // Dynamically set based on the logged-in user
+        sortBy: {}, // As per /api/allusers sample request
+      };
+
+      // Call getAllUsersList which uses the /api/allusers endpoint
+      const response = await ApiService.getAllUsersList(payload);
+
+      if (response.data && response.status) {
         const contactsData: Contact[] = response.data.map((item: any) => ({
           id: item.id,
           name: item.name ?? null,
@@ -558,8 +564,8 @@ const TipCallScreen: React.FC = () => {
           dnd: item.dnd ?? false,
           updated_date: item.updated_date ?? '',
           last_active: item.last_active ?? null,
-          languages: item.languages ?? [],
-          interests: item.interests ?? [],
+          languages: item.languages?.map((lang: any) => ({ id: lang.id, name: lang.name, isPrimary: lang.isPrimary ?? false })) ?? [],
+          interests: item.interests?.map((int: any) => ({ id: int.id, name: int.name, isPrimary: int.isPrimary ?? false })) ?? [],
           product_count: item.product_count ?? 0,
           post_count: item.post_count ?? 0,
           is_following: item.is_following ?? 0,
@@ -576,17 +582,21 @@ const TipCallScreen: React.FC = () => {
         setTotalRecords(response.pagination.totalRecords);
       } else {
         setError(response.message || 'Failed to fetch users.');
+        if (!append) setContacts([]); // Clear contacts if initial fetch failed
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred.');
+      setError(err.message || 'An error occurred while fetching users.');
+      if (!append) setContacts([]); // Clear contacts on error
     } finally {
       setLoading(false);
     }
-  }, [selectedCategory, selectedLanguage, searchQuery, user, redirectToLogin]);
+  }, [searchQuery, user, redirectToLogin]); // Updated dependencies
 
   useEffect(() => {
-    fetchUsers(1);
-  }, [fetchUsers]);
+    // Fetch users when the component mounts or when searchQuery changes.
+    // The `fetchUsers` function itself now depends on `searchQuery`.
+    fetchUsers(1, false, searchQuery);
+  }, [fetchUsers, searchQuery]); // searchQuery is a direct dependency here to re-trigger fetch
 
 
   // Add this debug effect
