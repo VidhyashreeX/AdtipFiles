@@ -115,6 +115,7 @@ dependencies {    // The version of react-native is set by the React Native Grad
 
     // Add this line for Firebase Messaging
     implementation 'com.google.firebase:firebase-messaging:23.1.2'
+    implementation project(':rnwebrtc')
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")

@@ -10,8 +10,6 @@ const cardWidth = (screenWidth - CARD_MARGIN_HORIZONTAL * 2 - CARD_GAP * (NUM_CO
 
 const VideoCardSkeleton: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
-  // This base color is for the animated parts of the skeleton
-  const baseSkeletonColor = isDarkMode ? colors.gray[700] : colors.gray[200];
   const pulseAnimation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -19,38 +17,79 @@ const VideoCardSkeleton: React.FC = () => {
       Animated.sequence([
         Animated.timing(pulseAnimation, {
           toValue: 1,
-          duration: 700,
+          duration: 1500,
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnimation, {
           toValue: 0,
-          duration: 700,
+          duration: 1500,
           useNativeDriver: true,
         }),
       ]),
     ).start();
   }, [pulseAnimation]);
 
-  const animatedStyle = {
+  const pulseStyle = {
     opacity: pulseAnimation.interpolate({
       inputRange: [0, 1],
-      outputRange: [0.6, 1], 
+      outputRange: [0.4, 1], 
     }),
   };
 
   return (
-    <View style={[styles.videoCard, { backgroundColor: colors.card, shadowColor: colors.black }]}>
-      <Animated.View style={[styles.thumbnailPlaceholder, { backgroundColor: baseSkeletonColor }, animatedStyle]} />
+    <View style={[styles.videoCard, { backgroundColor: colors.card, shadowColor: colors.text.primary }]}>
+      {/* Static thumbnail background */}
+      <View 
+        style={[
+          styles.thumbnailPlaceholder, 
+          { backgroundColor: colors.skeleton.background }
+        ]} 
+      />
+      
       <View style={styles.contentPlaceholder}>
         <View style={styles.avatarRow}>
-          <Animated.View style={[styles.avatarPlaceholder, { backgroundColor: baseSkeletonColor }, animatedStyle]} />
+          {/* Static avatar */}
+          <View 
+            style={[
+              styles.avatarPlaceholder, 
+              { backgroundColor: colors.skeleton.background }
+            ]} 
+          />
+          
           <View style={styles.textLinesPlaceholder}>
-            <Animated.View style={[styles.textLine, { width: '70%', backgroundColor: baseSkeletonColor }, animatedStyle]} />
-            <Animated.View style={[styles.textLine, { width: '50%', backgroundColor: baseSkeletonColor, marginTop: 4 }, animatedStyle]} />
+            {/* Animated text lines */}
+            <Animated.View 
+              style={[
+                styles.textLine, 
+                { width: '70%', backgroundColor: colors.skeleton.background }, 
+                pulseStyle
+              ]} 
+            />
+            <Animated.View 
+              style={[
+                styles.textLine, 
+                { width: '50%', backgroundColor: colors.skeleton.background, marginTop: 4 }, 
+                pulseStyle
+              ]} 
+            />
           </View>
         </View>
-        <Animated.View style={[styles.titleLine, { width: '90%', backgroundColor: baseSkeletonColor, marginTop: 8 }, animatedStyle]} />
-        <Animated.View style={[styles.titleLine, { width: '60%', backgroundColor: baseSkeletonColor, marginTop: 4 }, animatedStyle]} />
+        
+        {/* Animated title lines */}
+        <Animated.View 
+          style={[
+            styles.titleLine, 
+            { width: '90%', backgroundColor: colors.skeleton.background, marginTop: 8 }, 
+            pulseStyle
+          ]} 
+        />
+        <Animated.View 
+          style={[
+            styles.titleLine, 
+            { width: '60%', backgroundColor: colors.skeleton.background, marginTop: 4 }, 
+            pulseStyle
+          ]} 
+        />
       </View>
     </View>
   );
@@ -60,7 +99,7 @@ const styles = StyleSheet.create({
   videoCard: {
     width: cardWidth,
     borderRadius: 12,
-    marginBottom: CARD_GAP,
+    marginBottom: 16,
     overflow: 'hidden',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05, 
@@ -91,12 +130,12 @@ const styles = StyleSheet.create({
   },
   textLine: {
     height: 10,
-    borderRadius: 4,
+    borderRadius: 5,
     marginBottom: 6,
   },
   titleLine: {
     height: 12,
-    borderRadius: 4,
+    borderRadius: 6,
     marginBottom: 6,
   },
 });

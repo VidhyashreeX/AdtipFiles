@@ -4,7 +4,7 @@
  * @format
  */
 
-import React, { useEffect, useState } from 'react'; // Ensure useState and useEffect are imported
+import React, { useEffect, useState } from 'react';
 import {
   SafeAreaView,
   StatusBar,
@@ -15,8 +15,10 @@ import {
   Platform,
   PixelRatio,
   Linking,
-  Text, // Import Text component
+  Text,
+  AppRegistry, // Add AppRegistry import
 } from 'react-native';
+import { register } from '@videosdk.live/react-native-sdk'; // Add VideoSDK import
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {
@@ -236,6 +238,11 @@ function App(): React.JSX.Element {
   
   const isLandscape = width > height;
   
+  // Add VideoSDK initialization effect
+  useEffect(() => {
+    console.log('[App] VideoSDK service registered successfully');
+  }, []);
+  
   return (
     <SafeAreaProvider>
       <SafeAreaViewRN 
@@ -251,9 +258,9 @@ function App(): React.JSX.Element {
             }
           ]}
         >
-          <ThemeProvider> {/* ThemeProvider wraps everything that needs theme context */}
+          <ThemeProvider>
             <ThemeAwareStatusBar />
-            <AuthProvider> {/* AuthProvider wraps components needing auth context, including AppNavigator */}
+            <AuthProvider>
               <WalletProvider>
                 <ShortsProvider>
                   <SidebarProvider>
@@ -294,5 +301,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
   }
 });
+
+// Register VideoSDK service before the component definitions
+register();
+
+const { name: appName } = require('./app.json');
+AppRegistry.registerComponent(appName, () => App);
 
 export default App;

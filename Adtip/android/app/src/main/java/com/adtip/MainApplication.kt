@@ -11,6 +11,7 @@ import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import com.facebook.soloader.SoLoader
+import live.videosdk.rnwebrtc.WebRTCModulePackage
 // Commented out PubScale integration - June 2, 2025
 //import com.adtip.app.adtip_app.PubscaleOfferwallSdkPackage
 
@@ -25,6 +26,14 @@ class MainApplication : Application(), ReactApplication {
             }
 
         override fun getJSMainModuleName(): String = "index"
+        override fun getPackages(): List<ReactPackage> {
+            @Suppress("UnnecessaryLocalVariable")
+            val packages = PackageList(this).packages
+            // Packages that cannot be autolinked yet can be added manually here, for example:
+            // packages.add(MyReactNativePackage())
+            packages.add(WebRTCModulePackage())
+            return packages
+        }
 
         override fun getUseDeveloperSupport(): Boolean = BuildConfig.DEBUG
 

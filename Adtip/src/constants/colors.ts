@@ -23,6 +23,11 @@ export const COLORS = {
   warning: '#FFF3CD',
   success: '#00C853',
   info: '#3b82f6',
+  // Skeleton colors for light mode
+  skeleton: {
+    background: '#f1f5f9',
+    highlight: '#ffffff',
+  },
   gray: {
     50: '#f9fafb',
     100: '#f3f4f6',
@@ -44,9 +49,9 @@ export const getThemeColors = (isDarkMode: boolean) => {
   if (isDarkMode) {
     return {
       ...COLORS,
-      background: '#121212',
-      surface: '#1e1e1e',
-      card: '#2d2d2d',
+      background: '#0f172a', // Use a proper dark background
+      surface: '#1e293b',
+      card: '#334155',
       text: {
         primary: '#f8fafc',
         secondary: '#e2e8f0',
@@ -54,7 +59,12 @@ export const getThemeColors = (isDarkMode: boolean) => {
         light: '#94a3b8',
       },
       border: '#475569',
-      borderLight: '#334155',
+      borderLight: '#64748b',
+      // Skeleton colors for dark mode
+      skeleton: {
+        background: '#475569',
+        highlight: '#64748b',
+      },
     };
   }
   return COLORS;

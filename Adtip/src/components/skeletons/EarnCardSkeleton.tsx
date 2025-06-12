@@ -1,35 +1,63 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import SkeletonPlaceholder from 'react-native-skeleton-placeholder';
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet, Animated } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 
 const EarnCardSkeleton: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
-  const skeletonBackgroundColor = isDarkMode ? colors.gray[700] : colors.gray[200];
-  const skeletonHighlightColor = isDarkMode ? colors.gray[600] : colors.gray[50];
+  const pulseAnimation = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnimation, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnimation, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, [pulseAnimation]);
+
+  const pulseStyle = {
+    opacity: pulseAnimation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.4, 1],
+    }),
+  };
 
   return (
-    <SkeletonPlaceholder backgroundColor={skeletonBackgroundColor} highlightColor={skeletonHighlightColor} speed={1000}>
+    <View style={[styles.containerWrapper, { backgroundColor: colors.card }]}>
       <View style={styles.container}>
-        <View style={styles.icon} />
+        {/* Static icon */}
+        <View style={[styles.icon, { backgroundColor: colors.skeleton.background }]} />
+        
         <View style={styles.textContainer}>
-          <View style={styles.title} />
-          <View style={styles.description} />
+          {/* Animated text lines */}
+          <Animated.View style={[styles.title, { backgroundColor: colors.skeleton.background }, pulseStyle]} />
+          <Animated.View style={[styles.description, { backgroundColor: colors.skeleton.background }, pulseStyle]} />
         </View>
       </View>
-    </SkeletonPlaceholder>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  containerWrapper: {
+    borderRadius: 12,
+    marginBottom: 12,
+    height: 80,
+  },
   container: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderRadius: 12,
-    marginBottom: 12,
-    height: 80, // Approx height of EarnCard
-    // backgroundColor will be handled by SkeletonPlaceholder
+    height: 80,
   },
   icon: {
     width: 40,
@@ -43,13 +71,13 @@ const styles = StyleSheet.create({
   title: {
     width: '60%',
     height: 16,
-    borderRadius: 4,
+    borderRadius: 8,
     marginBottom: 8,
   },
   description: {
     width: '80%',
     height: 12,
-    borderRadius: 4,
+    borderRadius: 6,
   },
 });
 

@@ -226,14 +226,16 @@ const Header: React.FC<HeaderProps> = ({
                 <Icon name="play-circle" size={sizes.iconSize} color={colors.text.secondary} />
               </TouchableOpacity>
             )}
-            {isSearchActive ? (
-              <TouchableOpacity onPress={handleCloseSearch} style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}>
-                <Icon name="x" size={sizes.iconSize} color={colors.text.primary} />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity onPress={handleSearchIconPress} style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}>
-                <Icon name="search" size={sizes.iconSize} color={colors.text.secondary} />
-              </TouchableOpacity>
+            {showSearch && ( // Ensure showSearch wraps this logic
+              isSearchActive ? (
+                <TouchableOpacity onPress={handleCloseSearch} style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}>
+                  <Icon name="x" size={sizes.iconSize} color={colors.text.primary} />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity onPress={handleSearchIconPress} style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}>
+                  <Icon name="search" size={sizes.iconSize} color={colors.text.secondary} />
+                </TouchableOpacity>
+              )
             )}
             {showNotifications && (
               <TouchableOpacity

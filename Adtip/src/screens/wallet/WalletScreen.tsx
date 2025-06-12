@@ -21,10 +21,7 @@ import RazorpayCheckout from 'react-native-razorpay';
 
 // Components
 import Header from '../../components/common/Header';
-// IMPORTANT: Rename or replace this. WalletBalance is for the main balance card.
-// You need a component for individual transaction rows.
 import TransactionItemDisplay from '../../components/wallet/WalletBalance'; 
-// import ActualTransactionRow from '../../components/wallet/ActualTransactionRow'; // Example
 
 // Skeleton Components
 import BalanceCardSkeleton from '../../components/skeletons/BalanceCardSkeleton';
@@ -34,177 +31,263 @@ import TransactionListSkeleton from '../../components/skeletons/TransactionListS
 // Context and services
 import {useTheme} from '../../contexts/ThemeContext';
 import {useAuth} from '../../contexts/AuthContext';
-import useWallet from '../../hooks/useWallet';
 import ApiService from '../../services/ApiService';
+import WalletService from '../../services/WalletService';
 import {ENDPOINTS} from '../../constants/api';
 
 const WITHDRAWAL_THRESHOLD = {
   REGULAR: 100,
   PREMIUM: 50,
 };
-const RAZORPAY_KEY_ID = 'your_razorpay_key_id'; // Replace with your actual Razorpay key
-
-type WalletStackParamList = {
-  WithdrawalForm: {
-    balance: number;
-    minimumWithdrawal: number;
-    onSuccess: () => void;
-  };
-  Packages: undefined;
-};
+const RAZORPAY_KEY_ID = 'your_razorpay_key_id';
 
 const WalletScreen = () => {
   const navigation = useNavigation<any>();
   const {colors, isDarkMode} = useTheme();
   const {user} = useAuth();
   
-  const {
-    balance, 
-    transactions, // Earnings transactions from useWallet
-    isLoading: isLoadingWalletData, // Covers balance, premium status, earnings
-    isRefreshing, 
-    refreshWallet,
-    isPremium: isUserPremium,
-  } = useWallet();
+  // Single loading state for all data
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
-  const [activeTab, setActiveTab] = useState<'earnings' | 'withdrawals'>('earnings');
+  // Wallet data states
+  const [balance, setBalance] = useState<string>('0.00');
+  const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [transactions, setTransactions] = useState<any[]>([]);
   const [withdrawRequests, setWithdrawRequests] = useState<any[]>([]);
-  const [isLoadingWithdrawals, setIsLoadingWithdrawals] = useState(false);
+  
+  // Tab and UI states
+  const [activeTab, setActiveTab] = useState<'earnings' | 'withdrawals'>('earnings');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [isAmountModalVisible, setIsAmountModalVisible] = useState(false);
   const [amountToAdd, setAmountToAdd] = useState('');
-
-  const withdrawalAbortControllerRef = useRef<AbortController | null>(null);
   
-  const minimumWithdrawal = isUserPremium 
+  // Error states
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [premiumError, setPremiumError] = useState<string | null>(null);
+  const [transactionsError, setTransactionsError] = useState<string | null>(null);
+  const [withdrawalsError, setWithdrawalsError] = useState<string | null>(null);
+  
+  // Data fetch status tracking
+  const [dataFetched, setDataFetched] = useState({
+    balance: false,
+    premium: false,
+    transactions: false,
+    withdrawals: false,
+  });
+
+  const abortControllerRef = useRef<AbortController | null>(null);
+  
+  const minimumWithdrawal = isPremium 
     ? WITHDRAWAL_THRESHOLD.PREMIUM 
     : WITHDRAWAL_THRESHOLD.REGULAR;
   
   const currentBalance = typeof balance === 'string' ? parseFloat(balance) : (typeof balance === 'number' ? balance : 0);
   const canWithdraw = currentBalance >= minimumWithdrawal;
 
-  const fetchWithdrawalRequestsStable = useCallback(async (signal?: AbortSignal) => {
+  // Single coordinated fetch function
+  const fetchAllWalletData = useCallback(async (isRefresh = false) => {
     if (!user || !user.id) {
-      setIsLoadingWithdrawals(false); // Ensure loading is off if no user
+      console.log('WalletScreen: No user, skipping data fetch');
+      setIsInitialLoading(false);
+      setIsRefreshing(false);
       return;
     }
 
-    setIsLoadingWithdrawals(true); // Set loading true at the start of an attempt
+    // Abort any ongoing requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
+    if (isRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setIsInitialLoading(true);
+    }
+
+    console.log(`WalletScreen: ${isRefresh ? 'Refreshing' : 'Initial loading'} wallet data`);
+
     try {
-      console.log('API Call: Fetching withdrawal requests...');
-      const response = await ApiService.get(`${ENDPOINTS.WITHDRAWAL_REQUESTS}/${user.id}`, { signal });
-      
-      if (signal?.aborted) {
-        console.log('Fetch withdrawal requests aborted during API call.');
-        return; // Don't update state if aborted
+      // Reset error states
+      setBalanceError(null);
+      setPremiumError(null);
+      setTransactionsError(null);
+      setWithdrawalsError(null);
+
+      // Create array of promises for parallel execution
+      const promises: Promise<any>[] = [];
+      const promiseMap: string[] = [];
+
+      // Only fetch data that hasn't been fetched yet (unless it's a refresh)
+      if (!dataFetched.balance || isRefresh) {
+        promises.push(WalletService.getWalletBalance(user.id));
+        promiseMap.push('balance');
       }
-      setWithdrawRequests(response?.data || []);
+
+      if (!dataFetched.premium || isRefresh) {
+        promises.push(WalletService.checkPremiumStatus(user.id));
+        promiseMap.push('premium');
+      }
+
+      if (!dataFetched.transactions || isRefresh) {
+        promises.push(WalletService.getTransactionHistory(user.id));
+        promiseMap.push('transactions');
+      }
+
+      if ((!dataFetched.withdrawals || isRefresh) && activeTab === 'withdrawals') {
+        promises.push(
+          ApiService.get(`${ENDPOINTS.WITHDRAWAL_REQUESTS}/${user.id}`, undefined, { signal })
+        );
+        promiseMap.push('withdrawals');
+      }
+
+      // Execute all promises with allSettled to handle individual failures
+      const results = await Promise.allSettled(promises);
+
+      // Process results individually
+      results.forEach((result, index) => {
+        const dataType = promiseMap[index];
+        
+        if (signal.aborted) {
+          console.log('WalletScreen: Request aborted during processing');
+          return;
+        }
+
+        if (result.status === 'fulfilled') {
+          switch (dataType) {
+            case 'balance':
+              setBalance(result.value);
+              setDataFetched(prev => ({ ...prev, balance: true }));
+              console.log('WalletScreen: Balance fetched successfully');
+              break;
+            
+            case 'premium':
+              setIsPremium(result.value.isPremium);
+              setDataFetched(prev => ({ ...prev, premium: true }));
+              console.log('WalletScreen: Premium status fetched successfully');
+              break;
+            
+            case 'transactions':
+              setTransactions(result.value);
+              setDataFetched(prev => ({ ...prev, transactions: true }));
+              console.log('WalletScreen: Transactions fetched successfully');
+              break;
+            
+            case 'withdrawals':
+              setWithdrawRequests(result.value?.data || []);
+              setDataFetched(prev => ({ ...prev, withdrawals: true }));
+              console.log('WalletScreen: Withdrawals fetched successfully');
+              break;
+          }
+        } else {
+          // Handle individual API failures
+          console.error(`WalletScreen: ${dataType} fetch failed:`, result.reason);
+          
+          switch (dataType) {
+            case 'balance':
+              setBalanceError('Failed to load balance');
+              break;
+            case 'premium':
+              setPremiumError('Failed to load premium status');
+              break;
+            case 'transactions':
+              setTransactionsError('Failed to load transactions');
+              break;
+            case 'withdrawals':
+              setWithdrawalsError('Failed to load withdrawals');
+              break;
+          }
+        }
+      });
+
     } catch (error: any) {
-      if (error.name === 'AbortError') {
-        console.log('Fetch withdrawal requests API call successfully aborted by signal.');
-      } else {
-        console.error('Error fetching withdrawal requests:', error);
-        setWithdrawRequests([]); // Clear on error
+      if (error.name !== 'AbortError') {
+        console.error('WalletScreen: Unexpected error during data fetch:', error);
       }
     } finally {
-      // Only set loading to false if the call wasn't aborted by an unmount/unfocus
-      // If signal is present and aborted, it means the abort was intentional before completion.
-      if (!(signal?.aborted)) {
-         setIsLoadingWithdrawals(false);
+      if (!signal.aborted) {
+        setIsInitialLoading(false);
+        setIsRefreshing(false);
       }
     }
-  }, [user]); // Stable based on user
+  }, [user, activeTab, dataFetched]);
 
+  // Fetch withdrawals when tab changes to withdrawals (only if not already fetched)
+  const fetchWithdrawalsOnTabChange = useCallback(async () => {
+    if (!user || !user.id || dataFetched.withdrawals) {
+      return;
+    }
+
+    console.log('WalletScreen: Fetching withdrawals for tab change');
+    
+    try {
+      setWithdrawalsError(null);
+      const response = await ApiService.get(`${ENDPOINTS.WITHDRAWAL_REQUESTS}/${user.id}`);
+      setWithdrawRequests(response?.data || []);
+      setDataFetched(prev => ({ ...prev, withdrawals: true }));
+    } catch (error: any) {
+      console.error('WalletScreen: Error fetching withdrawals on tab change:', error);
+      setWithdrawalsError('Failed to load withdrawals');
+    }
+  }, [user, dataFetched.withdrawals]);
+
+  // Effect for tab changes
+  useEffect(() => {
+    if (activeTab === 'withdrawals') {
+      fetchWithdrawalsOnTabChange();
+    }
+  }, [activeTab, fetchWithdrawalsOnTabChange]);
+
+  // Focus effect - only fetch if no data has been fetched yet
   useFocusEffect(
     useCallback(() => {
       let isMounted = true;
-      console.log('WalletScreen focused.');
+      console.log('WalletScreen focused');
 
-      if (user && user.id) {
-        console.log('WalletScreen Focus: Calling refreshWallet (for balance, premium, earnings).');
-        refreshWallet().catch(error => {
-          if (isMounted) console.error("Error during refreshWallet on focus:", error);
-        });
-
-        // If withdrawals tab is active and we don't have data and not currently loading them, fetch.
-        if (activeTab === 'withdrawals' && withdrawRequests.length === 0 && !isLoadingWithdrawals) {
-          console.log('WalletScreen Focus: Active withdrawals tab, no data, not loading. Fetching withdrawals.');
-          
-          if (withdrawalAbortControllerRef.current) {
-            withdrawalAbortControllerRef.current.abort(); // Abort previous if any
+      // Only fetch if we haven't fetched any data yet
+      const hasAnyData = Object.values(dataFetched).some(fetched => fetched);
+      
+      if (!hasAnyData) {
+        console.log('WalletScreen: No data fetched yet, initiating fetch');
+        fetchAllWalletData(false).catch(error => {
+          if (isMounted) {
+            console.error('WalletScreen: Error during focus fetch:', error);
           }
-          withdrawalAbortControllerRef.current = new AbortController();
-          
-          fetchWithdrawalRequestsStable(withdrawalAbortControllerRef.current.signal)
-            .catch(error => {
-              if (isMounted && error.name !== 'AbortError') {
-                console.error("Error fetching withdrawals on focus:", error);
-              }
-            });
-        }
+        });
+      } else {
+        console.log('WalletScreen: Data already fetched, skipping fetch');
+        setIsInitialLoading(false);
       }
 
       return () => {
-        console.log('WalletScreen unfocused. Aborting pending withdrawal fetch.');
+        console.log('WalletScreen unfocused');
         isMounted = false;
-        if (withdrawalAbortControllerRef.current) {
-          withdrawalAbortControllerRef.current.abort();
-          withdrawalAbortControllerRef.current = null; // Clear the ref
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
         }
       };
-    }, [user, refreshWallet, activeTab, withdrawRequests.length, isLoadingWithdrawals, fetchWithdrawalRequestsStable])
+    }, [fetchAllWalletData, dataFetched])
   );
-  
-  useEffect(() => {
-    let isMounted = true;
-    if (user && user.id && activeTab === 'withdrawals') {
-      // If tab switched to withdrawals, and no data, and not currently loading: fetch.
-      if (withdrawRequests.length === 0 && !isLoadingWithdrawals) {
-        console.log('WalletScreen Tab Switch: Active tab is withdrawals, no data, not loading. Fetching.');
-        
-        if (withdrawalAbortControllerRef.current) {
-          withdrawalAbortControllerRef.current.abort(); // Abort previous from focus if any
-        }
-        withdrawalAbortControllerRef.current = new AbortController();
-        
-        fetchWithdrawalRequestsStable(withdrawalAbortControllerRef.current.signal)
-          .catch(error => {
-            if (isMounted && error.name !== 'AbortError') {
-              console.error("Error fetching withdrawals on tab switch:", error);
-            }
-          });
-      }
-    }
-    return () => {
-      isMounted = false;
-      // No specific abort here, useFocusEffect handles unfocus.
-      // If a fetch was started by this effect and tab changes again quickly before focus changes,
-      // the new call to fetchWithdrawalRequestsStable would abort the previous one.
-    };
-  }, [activeTab, user, withdrawRequests.length, isLoadingWithdrawals, fetchWithdrawalRequestsStable]);
 
+  // Manual refresh handler
   const handleRefresh = useCallback(async () => {
-    console.log('WalletScreen: Manual refresh triggered.');
+    console.log('WalletScreen: Manual refresh triggered');
     if (!user || !user.id) return;
 
-    const refreshPromises = [refreshWallet()];
+    // Reset data fetched status for refresh
+    setDataFetched({
+      balance: false,
+      premium: false,
+      transactions: false,
+      withdrawals: false,
+    });
 
-    if (activeTab === 'withdrawals') {
-      if (withdrawalAbortControllerRef.current) {
-        withdrawalAbortControllerRef.current.abort();
-      }
-      withdrawalAbortControllerRef.current = new AbortController();
-      refreshPromises.push(
-        fetchWithdrawalRequestsStable(withdrawalAbortControllerRef.current.signal)
-      );
-    }
-    try {
-      await Promise.all(refreshPromises);
-    } catch (error) {
-      console.error("Error during manual refresh:", error);
-    }
-  }, [user, refreshWallet, activeTab, fetchWithdrawalRequestsStable]);
-  
+    await fetchAllWalletData(true);
+  }, [user, fetchAllWalletData]);
+
   const openAmountModal = () => {
     setAmountToAdd('');
     setIsAmountModalVisible(true);
@@ -273,7 +356,9 @@ const WalletScreen = () => {
             const verificationResponse = await ApiService.verifyRazorpayPayment(verificationPayload);
 
             if (verificationResponse && verificationResponse.status === 'success') {
-              await refreshWallet(); 
+              // Refresh only balance after successful payment
+              setDataFetched(prev => ({ ...prev, balance: false }));
+              await fetchAllWalletData(true);
               Alert.alert('Success', verificationResponse.message || `Added ₹${amount} to your wallet.`);
             } else {
               Alert.alert('Payment Verification Failed', verificationResponse.message || 'Could not verify the payment. Please contact support.');
@@ -317,8 +402,9 @@ const WalletScreen = () => {
       balance: currentBalance,
       minimumWithdrawal,
       onSuccess: () => {
-        refreshWallet(); // This will re-fetch earnings
-        fetchWithdrawalRequests(); // Also re-fetch withdrawals
+        // Refresh both balance and withdrawals after successful withdrawal
+        setDataFetched(prev => ({ ...prev, balance: false, withdrawals: false }));
+        fetchAllWalletData(true);
       }
     });
   };
@@ -328,10 +414,21 @@ const WalletScreen = () => {
   };
 
   const renderBalanceCard = () => {
-    // Show skeleton if useWallet is loading AND balance is still at its initial '0.00' state
-    if (isLoadingWalletData && balance === '0.00') {
+    if (isInitialLoading && balance === '0.00') {
       return <BalanceCardSkeleton />;
     }
+
+    if (balanceError) {
+      return (
+        <View style={[styles.errorCard, {backgroundColor: colors.card}]}>
+          <Text style={[styles.errorText, {color: colors.error}]}>{balanceError}</Text>
+          <TouchableOpacity onPress={() => handleRefresh()} style={[styles.retryButton, {borderColor: colors.primary}]}>
+            <Text style={[styles.retryButtonText, {color: colors.primary}]}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     return (
       <LinearGradient
         colors={isDarkMode ? ['#4A00E0', '#8E2DE2'] : ['#C1FFA1', '#A1FFA1']} 
@@ -367,41 +464,49 @@ const WalletScreen = () => {
   };
 
   const renderPlanCard = () => {
-    // Show skeleton if useWallet is loading AND premium status is not yet determined
-    if (isLoadingWalletData && typeof isUserPremium === 'undefined') {
-        return <PlanCardSkeleton />;
+    if (isInitialLoading && !dataFetched.premium) {
+      return <PlanCardSkeleton />;
     }
+
+    if (premiumError) {
+      return (
+        <View style={[styles.errorCard, {backgroundColor: colors.card}]}>
+          <Text style={[styles.errorText, {color: colors.error}]}>{premiumError}</Text>
+        </View>
+      );
+    }
+
     return (
       <View style={[styles.planContainer]}>
         <LinearGradient
           colors={isDarkMode 
-            ? isUserPremium ? ['#2C3E50', '#4CA1AF'] : ['#232526', '#414345'] 
-            : isUserPremium ? ['#EAFBE3', '#E0F5D9'] : ['#F5F7FA', '#E8EAED']
+            ? isPremium ? ['#2C3E50', '#4CA1AF'] : ['#232526', '#414345'] 
+            : isPremium ? ['#EAFBE3', '#E0F5D9'] : ['#F5F7FA', '#E8EAED']
           }
           style={styles.planCard}
         >
           <View style={styles.planCardHeader}>
-            <Icon name="star" size={20} color={isDarkMode ? colors.text.primary : isUserPremium ? "#07BC4C" : "#333"} />
-            <Text style={[styles.planTitle, {color: isDarkMode ? colors.text.primary : isUserPremium ? "#07BC4C" : "#333"}]}>
-              {isUserPremium ? 'Premium Plan' : 'Standard Plan'}
+            <Icon name="star" size={20} color={isDarkMode ? colors.text.primary : isPremium ? "#07BC4C" : "#333"} />
+            <Text style={[styles.planTitle, {color: isDarkMode ? colors.text.primary : isPremium ? "#07BC4C" : "#333"}]}>
+              {isPremium ? 'Premium Plan' : 'Standard Plan'}
             </Text>
           </View>
           <Text style={[styles.planExpiry, {color: isDarkMode ? colors.text.secondary : '#666'}]}>
-            {isUserPremium ? 'Enjoy exclusive benefits!' : 'Upgrade for more features.'}
+            {isPremium ? 'Enjoy exclusive benefits!' : 'Upgrade for more features.'}
           </Text>
           <View style={styles.planStatusContainer}>
-            <View style={[styles.planStatusBadge, {backgroundColor: isUserPremium ? (isDarkMode ? colors.success : '#D4EDDA') : (isDarkMode ? colors.gray[600] : colors.gray[200])}]}>
-              <Text style={[styles.planStatusText, {color: isUserPremium ? (isDarkMode ? colors.text.primary : colors.successDark) : (isDarkMode ? colors.text.secondary : colors.text.tertiary)}]}>
-                {isUserPremium ? 'Active' : 'Inactive'}
+            <View style={[styles.planStatusBadge, {backgroundColor: isPremium ? (isDarkMode ? colors.success : '#D4EDDA') : (isDarkMode ? colors.gray[600] : colors.gray[200])}]}>
+              <Text style={[styles.planStatusText, {color: isPremium ? (isDarkMode ? colors.text.primary : colors.successDark) : (isDarkMode ? colors.text.secondary : colors.text.tertiary)}]}>
+                {isPremium ? 'Active' : 'Inactive'}
               </Text>
             </View>
-            {isUserPremium && (
+            {isPremium && (
               <Text style={[styles.planActiveText, {color: isDarkMode ? colors.text.secondary : colors.text.tertiary}]}>
                 Minimum Withdrawal: ₹{WITHDRAWAL_THRESHOLD.PREMIUM}
               </Text>
             )}
           </View>
-          {!isUserPremium && (
+          {!isPremium && (
             <TouchableOpacity onPress={navigateToPremium} style={styles.upgradeButton}>
               <LinearGradient colors={['#11998e', '#38ef7d']} style={styles.upgradeButtonGradient}>
                 <Icon name="zap" size={18} color="#FFF" style={styles.upgradeButtonIcon} />
@@ -411,10 +516,10 @@ const WalletScreen = () => {
           )}
           <TouchableOpacity
             onPress={navigateToPremium}
-            style={[styles.viewPlansButton, { marginTop: isUserPremium ? 16 : 8 }]}
+            style={[styles.viewPlansButton, { marginTop: isPremium ? 16 : 8 }]}
           >
             <Text style={[styles.viewPlansButtonText, {color: isDarkMode ? colors.primary : '#11998e'}]}>
-              {isUserPremium ? 'View Plan Details' : 'View All Plans'}
+              {isPremium ? 'View Plan Details' : 'View All Plans'}
             </Text>
             <Icon name="chevron-right" size={16} color={isDarkMode ? colors.primary : '#11998e'} style={{marginLeft: 4}} />
           </TouchableOpacity>
@@ -425,32 +530,52 @@ const WalletScreen = () => {
 
   const renderTransactionContent = () => {
     if (activeTab === 'earnings') {
-      // Show skeleton if useWallet is loading AND no earnings transactions are loaded yet
-      if (isLoadingWalletData && transactions.length === 0) {
+      if (isInitialLoading && transactions.length === 0) {
         return <TransactionListSkeleton count={5} />;
       }
-      if (transactions.length === 0 && !isLoadingWalletData) {
+      
+      if (transactionsError) {
+        return (
+          <View style={styles.errorContainer}>
+            <Text style={[styles.errorText, {color: colors.error}]}>{transactionsError}</Text>
+            <TouchableOpacity onPress={() => handleRefresh()} style={[styles.retryButton, {borderColor: colors.primary}]}>
+              <Text style={[styles.retryButtonText, {color: colors.primary}]}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      }
+      
+      if (transactions.length === 0 && dataFetched.transactions) {
         return <Text style={[styles.emptyText, {color: colors.text.secondary}]}>No earnings to display</Text>;
       }
+      
       return transactions
         .filter(tx => tx.type === 'credit')
         .map((transaction, index) => (
-          // Replace TransactionItemDisplay with your actual component for a transaction row
           <TransactionItemDisplay key={`earn-${index}`} transaction={transaction} />
-          // <ActualTransactionRow key={`earn-${index}`} transaction={transaction} />
         ));
-    } else { // activeTab === 'withdrawals'
-      // Show skeleton if withdrawals are loading AND no withdrawal requests are loaded yet
-      if (isLoadingWithdrawals && withdrawRequests.length === 0) {
+    } else {
+      if (!dataFetched.withdrawals && withdrawRequests.length === 0) {
         return <TransactionListSkeleton count={5} />;
       }
-      if (withdrawRequests.length === 0 && !isLoadingWithdrawals) {
+      
+      if (withdrawalsError) {
+        return (
+          <View style={styles.errorContainer}>
+            <Text style={[styles.errorText, {color: colors.error}]}>{withdrawalsError}</Text>
+            <TouchableOpacity onPress={() => fetchWithdrawalsOnTabChange()} style={[styles.retryButton, {borderColor: colors.primary}]}>
+              <Text style={[styles.retryButtonText, {color: colors.primary}]}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      }
+      
+      if (withdrawRequests.length === 0 && dataFetched.withdrawals) {
         return <Text style={[styles.emptyText, {color: colors.text.secondary}]}>No withdrawal requests</Text>;
       }
+      
       return withdrawRequests.map((request, index) => (
-        // Replace TransactionItemDisplay with your actual component for a transaction row
         <TransactionItemDisplay key={`withdraw-${index}`} transaction={request} isWithdrawal={true} />
-        // <ActualTransactionRow key={`withdraw-${index}`} transaction={request} isWithdrawal={true} />
       ));
     }
   };
@@ -463,7 +588,7 @@ const WalletScreen = () => {
         keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
-            refreshing={isRefreshing || isLoadingWithdrawals} // Show refresh indicator if either is loading
+            refreshing={isRefreshing}
             onRefresh={handleRefresh}
             colors={[colors.primary]}
             tintColor={colors.primary}
@@ -512,7 +637,7 @@ const WalletScreen = () => {
           <TouchableOpacity 
             style={StyleSheet.absoluteFill} 
             onPress={() => setIsAmountModalVisible(false)}
-            activeOpacity={1} // Ensure it captures press
+            activeOpacity={1}
           />
           <LinearGradient
             colors={isDarkMode ? [colors.surface, colors.background] : ['#E0EAFC', '#CFDEF3']}
@@ -554,8 +679,6 @@ const WalletScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  // ... (Your existing styles should largely work)
-  // Ensure your skeleton components have appropriate dimensions matching your actual cards/rows.
   container: {
     flex: 1,
   },
@@ -630,17 +753,16 @@ const styles = StyleSheet.create({
     opacity: 0.6, 
   },
   disabledButtonText: {
-    // color will be inherited or can be set if needed
+    opacity: 0.6,
   },
   planContainer: {
     marginHorizontal: 16, 
     marginBottom: 20,
-    // backgroundColor applied by skeleton or LinearGradient
   },
   planCard: {
     padding: 20,
     borderRadius: 16,
-    overflow: 'hidden', // For LinearGradient border radius
+    overflow: 'hidden',
     elevation: 3, 
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -750,6 +872,33 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 10, 
   },
+  errorCard: {
+    padding: 20,
+    borderRadius: 16, 
+    marginHorizontal: 16, 
+    marginTop: 16, 
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  errorContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  errorText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  retryButton: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  retryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
@@ -760,8 +909,8 @@ const styles = StyleSheet.create({
     width: '90%',
     padding: 24, 
     borderRadius: 16, 
-    elevation: 5, // For Android shadow
-    shadowColor: '#000', // For iOS shadow
+    elevation: 5,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,

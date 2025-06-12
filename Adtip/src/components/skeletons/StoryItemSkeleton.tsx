@@ -1,30 +1,52 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import SkeletonPlaceholder from 'react-native-skeleton-placeholder';
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet, Animated } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 
 const StoryItemSkeleton: React.FC<{ isAddStory?: boolean }> = ({ isAddStory }) => {
   const { colors, isDarkMode } = useTheme();
-  const skeletonBackgroundColor = isDarkMode ? colors.gray[700] : colors.gray[200];
-  const skeletonHighlightColor = isDarkMode ? colors.gray[600] : colors.gray[50];
+  const pulseAnimation = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnimation, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnimation, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, [pulseAnimation]);
+
+  const pulseStyle = {
+    opacity: pulseAnimation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.4, 1],
+    }),
+  };
 
   if (isAddStory) {
     return (
-      <SkeletonPlaceholder backgroundColor={skeletonBackgroundColor} highlightColor={skeletonHighlightColor} speed={1000}>
-        <View style={styles.addStoryContainer}>
-          <View style={styles.addStoryCircle} />
-        </View>
-      </SkeletonPlaceholder>
+      <View style={styles.addStoryContainer}>
+        {/* Static add story circle */}
+        <View style={[styles.addStoryCircle, { backgroundColor: colors.skeleton.background }]} />
+      </View>
     );
   }
 
   return (
-    <SkeletonPlaceholder backgroundColor={skeletonBackgroundColor} highlightColor={skeletonHighlightColor} speed={1000}>
-      <View style={styles.container}>
-        <View style={styles.avatar} />
-        <View style={styles.username} />
-      </View>
-    </SkeletonPlaceholder>
+    <View style={styles.container}>
+      {/* Static avatar */}
+      <View style={[styles.avatar, { backgroundColor: colors.skeleton.background }]} />
+      
+      {/* Animated username */}
+      <Animated.View style={[styles.username, { backgroundColor: colors.skeleton.background }, pulseStyle]} />
+    </View>
   );
 };
 
@@ -32,7 +54,7 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     marginRight: 12,
-    width: 70, // Approx width of StoryItem
+    width: 70,
   },
   avatar: {
     width: 60,
@@ -43,7 +65,7 @@ const styles = StyleSheet.create({
   username: {
     width: 50,
     height: 10,
-    borderRadius: 4,
+    borderRadius: 5,
   },
   addStoryContainer: {
     alignItems: 'center',
@@ -54,7 +76,6 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    // backgroundColor will be handled by SkeletonPlaceholder
   },
 });
 

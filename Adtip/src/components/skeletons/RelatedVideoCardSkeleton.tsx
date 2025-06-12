@@ -1,47 +1,68 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import SkeletonPlaceholder from 'react-native-skeleton-placeholder';
-import { useTheme } from '../../contexts/ThemeContext'; // Adjust path if necessary
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet, Animated } from 'react-native';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const RelatedVideoCardSkeleton: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
-  // Ensure you have these skeleton colors in your theme or use fallback values
-  const placeholderColor = isDarkMode ? (colors.skeletonDark || '#333333') : (colors.skeletonLight || '#E1E9EE');
-  const highlightColor = isDarkMode ? (colors.skeletonHighlightDark || '#555555') : (colors.skeletonHighlightLight || '#F2F8FC');
+  const pulseAnimation = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnimation, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnimation, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, [pulseAnimation]);
+
+  const pulseStyle = {
+    opacity: pulseAnimation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.4, 1],
+    }),
+  };
 
   return (
     <View style={[styles.relatedVideoCard, { backgroundColor: colors.card }]}>
-      <SkeletonPlaceholder backgroundColor={placeholderColor} highlightColor={highlightColor}>
-        <View style={styles.itemContainer}>
-          <View style={styles.thumbnail} />
-          <View style={styles.textContainer}>
-            <View style={{ width: '90%', height: 16, borderRadius: 4, marginBottom: 8 }} />
-            <View style={{ width: '60%', height: 12, borderRadius: 4, marginBottom: 6 }} />
-            <View style={{ width: '70%', height: 10, borderRadius: 4 }} />
-          </View>
+      <View style={styles.itemContainer}>
+        {/* Static thumbnail */}
+        <View style={[styles.thumbnail, { backgroundColor: colors.skeleton.background }]} />
+        
+        <View style={styles.textContainer}>
+          {/* Animated text lines */}
+          <Animated.View style={[{ width: '90%', height: 16, borderRadius: 8, marginBottom: 8, backgroundColor: colors.skeleton.background }, pulseStyle]} />
+          <Animated.View style={[{ width: '60%', height: 12, borderRadius: 6, marginBottom: 6, backgroundColor: colors.skeleton.background }, pulseStyle]} />
+          <Animated.View style={[{ width: '70%', height: 10, borderRadius: 5, backgroundColor: colors.skeleton.background }, pulseStyle]} />
         </View>
-      </SkeletonPlaceholder>
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  relatedVideoCard: { // Style to match your actual relatedVideoCard container
+  relatedVideoCard: {
     flexDirection: 'row',
     marginBottom: 12,
     borderRadius: 8,
-    overflow: 'hidden', // Important if your card has rounded corners
+    overflow: 'hidden',
   },
   itemContainer: {
     flexDirection: 'row',
     width: '100%',
   },
-  thumbnail: { // Dimensions to match your relatedVideoThumbnail
+  thumbnail: {
     width: 120,
     height: 67,
-    // No backgroundColor needed here, SkeletonPlaceholder handles it
   },
-  textContainer: { // Style to match your relatedVideoContent
+  textContainer: {
     flex: 1,
     padding: 10,
     justifyContent: 'center',

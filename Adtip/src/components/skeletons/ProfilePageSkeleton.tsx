@@ -1,11 +1,11 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView, Platform } from 'react-native';
-import SkeletonPlaceholder from 'react-native-skeleton-placeholder';
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet, ScrollView, Platform, Animated } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext'; 
 import { useTabNavigator } from '../../contexts/TabNavigatorContext'; 
 
 const ProfilePageSkeleton: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
+  const pulseAnimation = useRef(new Animated.Value(0)).current;
   
   let contentPaddingBottom = 0;
   try {
@@ -15,8 +15,29 @@ const ProfilePageSkeleton: React.FC = () => {
     contentPaddingBottom = Platform.OS === 'ios' ? 80 : 60; 
   }
 
-  const skeletonBackgroundColor = isDarkMode ? colors.gray[800] : colors.gray[200];
-  const skeletonHighlightColor = isDarkMode ? colors.gray[700] : colors.gray[50];
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnimation, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnimation, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, [pulseAnimation]);
+
+  const pulseStyle = {
+    opacity: pulseAnimation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.4, 1],
+    }),
+  };
 
   return (
     <ScrollView 
@@ -24,69 +45,67 @@ const ProfilePageSkeleton: React.FC = () => {
       contentContainerStyle={{ paddingBottom: contentPaddingBottom }}
       showsVerticalScrollIndicator={false}
     >
-      <SkeletonPlaceholder backgroundColor={skeletonBackgroundColor} highlightColor={skeletonHighlightColor} speed={1000}>
-        {/* Gradient Header Placeholder */}
-        <View style={styles.gradientHeaderPlaceholder} />
+      {/* Static Gradient Header */}
+      <View style={[styles.gradientHeaderPlaceholder, { backgroundColor: colors.skeleton.background }]} />
 
-        {/* Avatar Placeholder */}
-        <View style={styles.avatarContainerPlaceholder}>
-          <View style={styles.avatarPlaceholder} />
+      {/* Static Avatar */}
+      <View style={styles.avatarContainerPlaceholder}>
+        <View style={[styles.avatarPlaceholder, { backgroundColor: colors.skeleton.background }]} />
+      </View>
+
+      {/* User Info with animated text */}
+      <View style={styles.userInfoContainerPlaceholder}>
+        <Animated.View style={[styles.namePlaceholder, { backgroundColor: colors.skeleton.background }, pulseStyle]} />
+        <Animated.View style={[styles.handlePlaceholder, { backgroundColor: colors.skeleton.background }, pulseStyle]} />
+        <Animated.View style={[styles.bioPlaceholder, { backgroundColor: colors.skeleton.background }, pulseStyle]} />
+        <Animated.View style={[styles.bioPlaceholderLine2, { backgroundColor: colors.skeleton.background }, pulseStyle]} />
+        <Animated.View style={[styles.locationPlaceholder, { backgroundColor: colors.skeleton.background }, pulseStyle]} />
+      </View>
+
+      {/* Stats with static containers and animated text */}
+      <View style={[styles.statsContainerPlaceholder, { backgroundColor: colors.card }]}>
+        <View style={styles.statItemPlaceholderContainer}>
+          <Animated.View style={[styles.statValuePlaceholder, { backgroundColor: colors.skeleton.background }, pulseStyle]} />
+          <Animated.View style={[styles.statLabelPlaceholder, { backgroundColor: colors.skeleton.background }, pulseStyle]} />
         </View>
-
-        {/* User Info Placeholder */}
-        <View style={styles.userInfoContainerPlaceholder}>
-          <View style={styles.namePlaceholder} />
-          <View style={styles.handlePlaceholder} />
-          <View style={styles.bioPlaceholder} />
-          <View style={styles.bioPlaceholderLine2} />
-          <View style={styles.locationPlaceholder} />
+        <View style={[styles.statDividerPlaceholder, { backgroundColor: colors.skeleton.background }]} />
+        <View style={styles.statItemPlaceholderContainer}>
+          <Animated.View style={[styles.statValuePlaceholder, { backgroundColor: colors.skeleton.background }, pulseStyle]} />
+          <Animated.View style={[styles.statLabelPlaceholder, { backgroundColor: colors.skeleton.background }, pulseStyle]} />
         </View>
+        <View style={[styles.statDividerPlaceholder, { backgroundColor: colors.skeleton.background }]} />
+        <View style={styles.statItemPlaceholderContainer}>
+          <Animated.View style={[styles.statValuePlaceholder, { backgroundColor: colors.skeleton.background }, pulseStyle]} />
+          <Animated.View style={[styles.statLabelPlaceholder, { backgroundColor: colors.skeleton.background }, pulseStyle]} />
+        </View>
+      </View>
 
-        {/* Stats Placeholder */}
-        <View style={[styles.statsContainerPlaceholder, { backgroundColor: colors.card }]}>
-          <View style={styles.statItemPlaceholderContainer}>
-            <View style={styles.statValuePlaceholder} />
-            <View style={styles.statLabelPlaceholder} />
+      {/* Static Action Buttons */}
+      <View style={styles.actionButtonsPlaceholder}>
+        <View style={[styles.editButtonPlaceholder, { backgroundColor: colors.skeleton.background }]} />
+        <View style={[styles.settingsButtonPlaceholder, { backgroundColor: colors.skeleton.background }]} />
+      </View>
+
+      {/* Static Posts Grid */}
+      <View style={styles.postsGridPlaceholder}>
+        {Array(6).fill(0).map((_, index) => (
+          <View key={`post_sk_${index}`} style={[styles.postItemPlaceholder, { backgroundColor: colors.skeleton.background }]} />
+        ))}
+      </View>
+
+      {/* Menu with static containers and animated text */}
+      <View style={[styles.menuContainerPlaceholder, { backgroundColor: colors.card }]}>
+        <Animated.View style={[styles.menuTitlePlaceholder, { backgroundColor: colors.skeleton.background }, pulseStyle]} />
+        {Array(3).fill(0).map((_, index) => (
+          <View key={`menu_sk_${index}`} style={styles.menuItemPlaceholder}>
+            <View style={[styles.menuIconPlaceholder, { backgroundColor: colors.skeleton.background }]} />
+            <View style={styles.menuTextPlaceholderContainer}>
+              <Animated.View style={[styles.menuTextLine1Placeholder, { backgroundColor: colors.skeleton.background }, pulseStyle]} />
+              <Animated.View style={[styles.menuTextLine2Placeholder, { backgroundColor: colors.skeleton.background }, pulseStyle]} />
+            </View>
           </View>
-          <View style={styles.statDividerPlaceholder} />
-          <View style={styles.statItemPlaceholderContainer}>
-            <View style={styles.statValuePlaceholder} />
-            <View style={styles.statLabelPlaceholder} />
-          </View>
-          <View style={styles.statDividerPlaceholder} />
-          <View style={styles.statItemPlaceholderContainer}>
-            <View style={styles.statValuePlaceholder} />
-            <View style={styles.statLabelPlaceholder} />
-          </View>
-        </View>
-
-        {/* Action Buttons Placeholder */}
-        <View style={styles.actionButtonsPlaceholder}>
-            <View style={styles.editButtonPlaceholder} />
-            <View style={styles.settingsButtonPlaceholder} />
-        </View>
-
-        {/* Posts Grid Placeholder */}
-        <View style={styles.postsGridPlaceholder}>
-          {Array(6).fill(0).map((_, index) => (
-            <View key={`post_sk_${index}`} style={styles.postItemPlaceholder} />
-          ))}
-        </View>
-
-        {/* Menu Placeholder */}
-        <View style={[styles.menuContainerPlaceholder, { backgroundColor: colors.card }]}>
-            <View style={styles.menuTitlePlaceholder} />
-            {Array(3).fill(0).map((_, index) => (
-                <View key={`menu_sk_${index}`} style={styles.menuItemPlaceholder}>
-                    <View style={styles.menuIconPlaceholder} />
-                    <View style={styles.menuTextPlaceholderContainer}>
-                        <View style={styles.menuTextLine1Placeholder} />
-                        <View style={styles.menuTextLine2Placeholder} />
-                    </View>
-                </View>
-            ))}
-        </View>
-      </SkeletonPlaceholder>
+        ))}
+      </View>
     </ScrollView>
   );
 };
@@ -112,11 +131,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 16,
   },
-  namePlaceholder: { width: '50%', height: 22, borderRadius: 4, marginBottom: 10 },
-  handlePlaceholder: { width: '35%', height: 16, borderRadius: 4, marginBottom: 10 },
-  bioPlaceholder: { width: '75%', height: 14, borderRadius: 4, marginBottom: 6 },
-  bioPlaceholderLine2: { width: '65%', height: 14, borderRadius: 4, marginBottom: 10 },
-  locationPlaceholder: { width: '45%', height: 14, borderRadius: 4 },
+  namePlaceholder: { width: '50%', height: 22, borderRadius: 11, marginBottom: 10 },
+  handlePlaceholder: { width: '35%', height: 16, borderRadius: 8, marginBottom: 10 },
+  bioPlaceholder: { width: '75%', height: 14, borderRadius: 7, marginBottom: 6 },
+  bioPlaceholderLine2: { width: '65%', height: 14, borderRadius: 7, marginBottom: 10 },
+  locationPlaceholder: { width: '45%', height: 14, borderRadius: 7 },
   statsContainerPlaceholder: { 
     flexDirection: 'row', 
     borderRadius: 16, 
@@ -133,13 +152,13 @@ const styles = StyleSheet.create({
   statValuePlaceholder: {
     width: '40%',
     height: 18,
-    borderRadius: 4,
+    borderRadius: 9,
     marginBottom: 6,
   },
   statLabelPlaceholder: {
     width: '60%',
     height: 13,
-    borderRadius: 4,
+    borderRadius: 7,
   },
   statDividerPlaceholder: {
     width: 1,
@@ -187,7 +206,7 @@ const styles = StyleSheet.create({
   menuTitlePlaceholder: { 
     width: '30%', 
     height: 20, 
-    borderRadius: 4, 
+    borderRadius: 10, 
     marginBottom: 16,
     marginLeft: 4, 
   },
@@ -208,13 +227,13 @@ const styles = StyleSheet.create({
   menuTextLine1Placeholder: { 
     width: '60%', 
     height: 16, 
-    borderRadius: 4, 
+    borderRadius: 8, 
     marginBottom: 8,
   },
   menuTextLine2Placeholder: { 
     width: '80%', 
     height: 13, 
-    borderRadius: 4,
+    borderRadius: 7,
   },
 });
 

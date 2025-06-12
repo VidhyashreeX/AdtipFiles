@@ -1,24 +1,49 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import SkeletonPlaceholder from 'react-native-skeleton-placeholder';
-import { useTheme } from '../../contexts/ThemeContext'; // Adjust path if necessary
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet, Animated } from 'react-native';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const TransactionRowSkeleton: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
-  const placeholderColor = isDarkMode ? colors.skeletonDark : colors.skeletonLight;
-  const highlightColor = isDarkMode ? colors.skeletonHighlightDark : colors.skeletonHighlightLight;
+  const pulseAnimation = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnimation, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnimation, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, [pulseAnimation]);
+
+  const pulseStyle = {
+    opacity: pulseAnimation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.4, 1],
+    }),
+  };
 
   return (
     <View style={[styles.transactionRow, { borderBottomColor: colors.borderLight }]}>
-      <SkeletonPlaceholder backgroundColor={placeholderColor} highlightColor={highlightColor}>
-        <View style={styles.item}>
-          <View style={{ flex: 1, marginRight: 16 }}>
-            <View style={{ width: '80%', height: 18, borderRadius: 4, marginBottom: 8 }} />
-            <View style={{ width: '60%', height: 14, borderRadius: 4 }} />
-          </View>
-          <View style={{ width: 80, height: 20, borderRadius: 4 }} />
+      <View style={styles.item}>
+        <View style={{ flex: 1, marginRight: 16 }}>
+          {/* Animated text lines */}
+          <Animated.View style={[{ width: '80%', height: 18, borderRadius: 9, marginBottom: 8, backgroundColor: colors.skeleton.background }, pulseStyle]} />
+          <Animated.View style={[{ width: '60%', height: 14, borderRadius: 7, backgroundColor: colors.skeleton.background }, pulseStyle]} />
         </View>
-      </SkeletonPlaceholder>
+        <View style={{ alignItems: 'flex-end' }}>
+          {/* Animated amount and date */}
+          <Animated.View style={[{ width: 80, height: 18, borderRadius: 9, marginBottom: 4, backgroundColor: colors.skeleton.background }, pulseStyle]} />
+          <Animated.View style={[{ width: 60, height: 12, borderRadius: 6, backgroundColor: colors.skeleton.background }, pulseStyle]} />
+        </View>
+      </View>
     </View>
   );
 };
@@ -26,12 +51,11 @@ const TransactionRowSkeleton: React.FC = () => {
 const styles = StyleSheet.create({
   transactionRow: {
     paddingVertical: 16,
-    paddingHorizontal: 8, // Match TransactionItem if it has horizontal padding
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
   },
   item: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
 });

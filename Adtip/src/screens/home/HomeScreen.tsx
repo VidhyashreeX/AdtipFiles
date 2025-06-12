@@ -153,7 +153,7 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}) => {
-  const {colors} = useTheme();
+  const {colors, isDarkMode} = useTheme(); // Make sure to get isDarkMode as well
   const {user, refreshUserData} = useAuth();
   const navigation = useNavigation<AppNavigationProps>();
   const {contentPaddingBottom} = useTabNavigator();
@@ -514,17 +514,20 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   };
 
   const renderInitialSkeletonView = () => (
-    <ScrollView
-        style={styles.scrollView}
+    <View style={[styles.container, {backgroundColor: colors.background}]}>
+      <Header title="Home" showLogo={true} showWallet={true} walletAmount={walletAmount} />
+      <ScrollView
+        style={[styles.scrollView, {backgroundColor: colors.background}]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.postsContainerStyle, {paddingBottom: contentPaddingBottom}]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
-    >
-      <StoriesRow stories={[]} onStoryPress={() => {}} onAddStoryPress={() => {}} isLoading={true} />
-      <CategoriesRow categories={staticCategories} selectedCategory={null} onCategoryPress={() => {}} isLoading={true} />
-      <EarnCardsRow onWatchAndEarn={() => {}} onReferAndEarn={() => {}} isLoading={true} />
-      {Array(3).fill(0).map((_, index) => <PostItemSkeleton key={`post-skel-${index}`} />)}
-    </ScrollView>
+      >
+        <StoriesRow stories={[]} onStoryPress={() => {}} onAddStoryPress={() => {}} isLoading={true} />
+        <CategoriesRow categories={staticCategories} selectedCategory={null} onCategoryPress={() => {}} isLoading={true} />
+        <EarnCardsRow onWatchAndEarn={() => {}} onReferAndEarn={() => {}} isLoading={true} />
+        {Array(3).fill(0).map((_, index) => <PostItemSkeleton key={`post-skel-${index}`} />)}
+      </ScrollView>
+    </View>
   );
 
   // For debugging, log the value just before render
@@ -552,11 +555,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
         initialNumToRender={5}
         maxToRenderPerBatch={10}
         windowSize={21}
-        viewabilityConfig={viewabilityConfig} // Now uses the useMemo version
-        onViewableItemsChanged={onViewableItemsChanged} // Now uses the useCallback version
+        viewabilityConfig={viewabilityConfig}
+        onViewableItemsChanged={onViewableItemsChanged}
         contentContainerStyle={[styles.postsContainerStyle, {paddingBottom: contentPaddingBottom}]}
         maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 10 }}
         onScrollBeginDrag={() => Keyboard.dismiss()}
+        style={[styles.scrollView, {backgroundColor: colors.background}]} // Add explicit background here too
       />
       {commentModalVisible && selectedCommentPostId !== null && (
         <CommentScreen visible={commentModalVisible} postId={selectedCommentPostId} onClose={handleCloseCommentModal} />
@@ -565,33 +569,93 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   );
 };
 
+// Update your styles function to ensure proper background colors
 const createHomeScreenStyles = (colors: any) => StyleSheet.create({
-  container: { flex: 1 },
-  scrollView: { flex: 1 },
-  storiesSection: { paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderLight },
-  storiesContainer: { paddingLeft: 16 },
-  storiesContentContainer: { paddingRight: 16 },
-  categoriesSection: { paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderLight },
-  categoriesContainer: { paddingLeft: 16 },
-  categoriesContentContainer: { paddingRight: 16 },
+  container: { 
+    flex: 1,
+    backgroundColor: colors.background, // Ensure this is set
+  },
+  scrollView: { 
+    flex: 1,
+    backgroundColor: colors.background, // Ensure this is set
+  },
+  storiesSection: { 
+    paddingVertical: 12, 
+    borderBottomWidth: StyleSheet.hairlineWidth, 
+    borderBottomColor: colors.borderLight,
+    backgroundColor: colors.background, // Add explicit background
+  },
+  storiesContainer: { 
+    paddingLeft: 16,
+    backgroundColor: colors.background, // Add explicit background
+  },
+  storiesContentContainer: { 
+    paddingRight: 16,
+  },
+  categoriesSection: { 
+    paddingVertical: 12, 
+    borderBottomWidth: StyleSheet.hairlineWidth, 
+    borderBottomColor: colors.borderLight,
+    backgroundColor: colors.background, // Add explicit background
+  },
+  categoriesContainer: { 
+    paddingLeft: 16,
+    backgroundColor: colors.background, // Add explicit background
+  },
+  categoriesContentContainer: { 
+    paddingRight: 16,
+  },
   earnCardsSection: {
-    flexDirection: 'column', // stack vertically
-    gap: 12, // for RN 0.71+, otherwise use marginBottom below
+    flexDirection: 'column',
+    gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderLight,
+    backgroundColor: colors.background, // Add explicit background
   },
   earnCard: {
     width: '100%',
-    marginBottom: 12, // space between cards
+    marginBottom: 12,
   },
-  postsContainerStyle: { paddingTop: 0 },
-  loadingContainer: { flex:1, padding: 20, alignItems: 'center', justifyContent: 'center' },
-  errorContainer: { flex:1, padding: 20, alignItems: 'center', justifyContent: 'center', minHeight: 200 },
-  emptyContainer: { flex:1, padding: 40, alignItems: 'center', justifyContent: 'center', minHeight: 200 },
-  emptyText: { fontSize: 16, marginVertical: 12, textAlign: 'center' },
-  footerLoader: { paddingVertical: 20, alignItems: 'center' },
+  postsContainerStyle: { 
+    paddingTop: 0,
+    backgroundColor: colors.background, // Add explicit background
+  },
+  loadingContainer: { 
+    flex: 1, 
+    padding: 20, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    backgroundColor: colors.background, // Add explicit background
+  },
+  errorContainer: { 
+    flex: 1, 
+    padding: 20, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    minHeight: 200,
+    backgroundColor: colors.background, // Add explicit background
+  },
+  emptyContainer: { 
+    flex: 1, 
+    padding: 40, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    minHeight: 200,
+    backgroundColor: colors.background, // Add explicit background
+  },
+  emptyText: { 
+    fontSize: 16, 
+    marginVertical: 12, 
+    textAlign: 'center',
+    color: colors.text.secondary, // Ensure text color is theme-aware
+  },
+  footerLoader: { 
+    paddingVertical: 20, 
+    alignItems: 'center',
+    backgroundColor: colors.background, // Add explicit background
+  },
 });
 
 export default HomeScreen;
