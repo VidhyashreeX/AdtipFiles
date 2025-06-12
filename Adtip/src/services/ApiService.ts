@@ -18,10 +18,6 @@ import {
   UserListRequest,
   UserListResponse,
   ReferralDetailsResponse,
-  AgoraCallerTokenRequest, // Updated type
-  AgoraCalleeTokenRequest, // Added type
-  AgoraTokenResponse,
-  AgoraCallRequest,
   FcmTokenRequest,
   MissedCallsResponse,
   VideoSDKGenerateTokenRequest,
@@ -33,7 +29,6 @@ import {
   VideoSDKValidateMeetingRequest,
   VideoSDKValidateMeetingResponse,
 } from '../types/api';
-import { RtmTokenRequest, RtmTokenResponse } from './AgoraRtmHelper';
 
 // Interfaces moved from inside the class
 export interface LikePostRequest {
@@ -629,151 +624,6 @@ export default class ApiService {
       throw this.handleError(error); // Ensure handleError is accessible or called correctly
     }
   }
-
-  // ===== AGORA API SERVICES =====
-
-  /**
-   * Get Agora token for a caller
-   * @param data - Request data containing uid
-   */
-  static async getAgoraTokenForCaller( // Renamed from getAgoraToken
-    data: AgoraCallerTokenRequest,
-  ): Promise<AgoraTokenResponse> {
-    console.log('[API] getAgoraTokenForCaller called with data:', JSON.stringify(data, null, 2));
-    try {
-      const response = await this.post<AgoraTokenResponse>(
-        ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_AGORA_TOKEN_CALLER, // Updated endpoint
-        data,
-      );
-      console.log('[API] getAgoraTokenForCaller response:', JSON.stringify(response, null, 2));
-      return response;
-    } catch (error) {
-      console.error('[API] getAgoraTokenForCaller error:', error);
-      throw error; // Re-throw to be handled by the caller
-    }
-  }
-
-  /**
-   * Get Agora token for a callee
-   * @param data - Request data containing uid and channelName
-   */
-  static async getAgoraTokenForCallee(
-    data: AgoraCalleeTokenRequest,
-  ): Promise<AgoraTokenResponse> {
-    console.log('[API] getAgoraTokenForCallee called with data:', JSON.stringify(data, null, 2));
-    try {
-      const response = await this.post<AgoraTokenResponse>(
-        ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_AGORA_TOKEN_CALLEE, // New endpoint
-        data,
-      );
-      console.log('[API] getAgoraTokenForCallee response:', JSON.stringify(response, null, 2));
-      return response;
-    } catch (error) {
-      console.error('[API] getAgoraTokenForCallee error:', error);
-      throw error; // Re-throw to be handled by the caller
-    }
-  }
-
-  /**
-   * Handle call actions (start, end, missed)
-   * @param data - Call action data
-   */
-  static async handleCall(
-    data: AgoraCallRequest,
-  ): Promise<ApiResponse<any>> {
-    console.log('[FCM-API] handleCall request:', JSON.stringify(data, null, 2));
-    try {
-      const response = await this.post<ApiResponse<any>>(
-        ApiEndpoints.TIP_CALLS_ENDPOINTS.CALL,
-        data,
-      );
-      console.log('[FCM-API] handleCall response:', JSON.stringify(response, null, 2));
-      return response;
-    } catch (error) {
-      console.error('[FCM-API] handleCall error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update FCM token for push notifications
-   * @param data - FCM token data containing user ID and token
-   */
-  static async updateFcmToken(
-    data: FcmTokenRequest,
-  ): Promise<ApiResponse<any>> {
-    console.log('[FCM-API] updateFcmToken request:', JSON.stringify({
-      userId: data.userId,
-      fcmToken: data.fcmToken.substring(0, 10) + '...' // Log partial token for security
-    }, null, 2));
-    
-    try {
-      const response = await this.post<ApiResponse<any>>(
-        ApiEndpoints.TIP_CALLS_ENDPOINTS.UPDATE_FCM_TOKEN,
-        data,
-      );
-      console.log('[FCM-API] updateFcmToken response:', JSON.stringify(response, null, 2));
-      return response;
-    } catch (error) {
-      console.error('[FCM-API] updateFcmToken error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get missed calls for a user
-   * @param userId - User ID
-   */
-  static async getMissedCalls(
-    userId: string | number,
-  ): Promise<ApiResponse<MissedCallsResponse>> {
-    return this.get<ApiResponse<MissedCallsResponse>>(
-      `${ApiEndpoints.TIP_CALLS_ENDPOINTS.MISSED_CALLS}/${userId}`,
-    );
-  }
-
-  // ===== REFERRAL SERVICES =====
-
-  /**
-   * Get referral details
-   * @param userId - User ID
-   */
-  static async getReferralDetails(
-    userId: string | number,
-  ): Promise<ReferralDetailsResponse> {
-    return this.get<ReferralDetailsResponse>(
-      `${ApiEndpoints.REFERRAL_ENDPOINTS.GET_REFERRAL_DETAILS}/${userId}`,
-    );
-  }
-
-  // ===== RTM TOKEN SERVICE =====
-  /**
-   * Get Agora RTM token for messaging
-   * @param data - Request data containing uid
-   */
-  static async getRtmToken(
-    data: RtmTokenRequest,
-  ): Promise<RtmTokenResponse> {
-    console.log('[RTM-API] Fetching RTM token for uid:', data.uid);
-    try {
-      const response = await this.post<RtmTokenResponse>(
-        ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_RTM_TOKEN,
-        data,
-      );
-      console.log('[RTM-API] RTM token response:', JSON.stringify(response, null, 2));
-      
-      if (!response || !response.token || typeof response.token !== 'string') {
-        console.error('[RTM-API] Invalid RTM token response:', response);
-        throw new Error('Invalid RTM token received from server');
-      }
-      
-      return response;
-    } catch (error) {
-      console.error('[RTM-API] Error fetching RTM token:', error);
-      throw error;
-    }
-  }
-
   /**
    * Like or unlike a post
    * @param data - Like request data containing userId, postId, and is_liked status

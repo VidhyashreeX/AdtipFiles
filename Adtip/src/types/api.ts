@@ -85,31 +85,6 @@ export interface UserDetailsRequest {
   referal_code: string;
 }
 
-// Agora Call types
-export interface AgoraCallRequest {
-  callerId: string | number;
-  receiverId: string | number;
-  action: 'start' | 'end' | 'missed-video-call' | 'missed-audio-call';
-  callType: 'video-call' | 'audio-call';
-  callId?: number;
-}
-
-export interface AgoraCallerTokenRequest { // Renamed from AgoraTokenRequest
-  uid: number;
-}
-
-export interface AgoraCalleeTokenRequest { // Added for callee
-  uid: number;
-  channelName: string;
-}
-
-export interface AgoraTokenResponse {
-  token: string;
-  channelName: string;
-  uid: number;
-  expiresAt: string;
-}
-
 export interface FcmTokenRequest {
   userId: string | number;
   fcmToken: string;

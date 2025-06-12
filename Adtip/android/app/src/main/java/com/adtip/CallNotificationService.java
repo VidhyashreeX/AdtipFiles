@@ -41,9 +41,7 @@ public class CallNotificationService extends FirebaseMessagingService {
     }
     
     private void sendCallNotification(Map<String, String> data) {
-        String callerAppUserId = data.get("caller_app_user_id"); // New key
-        String calleeAgoraUid = data.get("callee_agora_uid");   // New key
-        String agoraToken = data.get("agora_token");           // New key
+        String callerAppUserId = data.get("caller_app_user_id"); // New key         // New key
         String channelName = data.get("channelName");
         String callType = data.get("call_type");               // New key ("audio" or "video")
         
@@ -56,11 +54,9 @@ public class CallNotificationService extends FirebaseMessagingService {
         
         Log.d(TAG, "Preparing call notification with data: " +
                 "callerAppUserId=" + callerAppUserId + ", " +
-                "calleeAgoraUid=" + calleeAgoraUid + ", " +
                 "channelName=" + channelName + ", " +
                 "callType=" + callType + ", " +
-                "callerName=" + callerName + ", " +
-                "agoraToken present: " + (agoraToken != null && !agoraToken.isEmpty()));
+                "callerName=" + callerName);
 
         Intent intent = new Intent(this, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -69,8 +65,6 @@ public class CallNotificationService extends FirebaseMessagingService {
         intent.putExtra("callerName", callerName);
         intent.putExtra("channelName", channelName);
         intent.putExtra("callType", callType); // Will be "audio" or "video"
-        intent.putExtra("calleeAgoraUid", calleeAgoraUid);
-        intent.putExtra("agoraToken", agoraToken);
         intent.putExtra("isIncomingCall", true);
         
         PendingIntent pendingIntent = PendingIntent.getActivity(
