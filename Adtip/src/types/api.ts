@@ -273,3 +273,76 @@ export interface LikeShortResponse {
   message: string;
   data?: any;
 }
+
+// VideoSDK API Types
+export interface VideoSDKGenerateTokenRequest {
+  // Backend might infer user or require specific permissions/userId
+  // For now, let's assume backend handles apiKey and permissions internally
+  // meetingId?: string; // Optional: if token is specific to a meeting being joined
+  // participantName?: string; // Optional: for display name in VideoSDK
+}
+
+export interface VideoSDKGenerateTokenResponse {
+  success: boolean;
+  token: string;
+  message: string;
+}
+
+export interface VideoSDKCreateMeetingRequest {
+  // The 'token' in your example is likely an auth token for your backend to call VideoSDK,
+  // not something the client sends for this specific request if your backend handles VideoSDK auth.
+  // If your backend requires the client's auth token for its own security, it's handled by interceptors.
+  region?: string; // e.g., "us", "eu", "sg"
+  // customRoomId?: string; // Optional: if you want to specify a room ID
+  // webhook?: { endpoint: string; events: string[] }; // Optional
+}
+
+export interface VideoSDKMeetingData {
+  apiKey: string;
+  webhook: { events: string[] };
+  disabled: boolean;
+  autoCloseConfig: { type: string };
+  createdAt: string;
+  updatedAt: string;
+  roomId: string;
+  links: { get_room: string; get_session: string };
+  id: string; // VideoSDK's internal ID for the room object
+}
+
+export interface VideoSDKCreateMeetingResponse {
+  success: boolean;
+  data: VideoSDKMeetingData;
+  message: string;
+}
+
+export interface VideoSDKDeactivateRoomRequest {
+  // Similar to create meeting, the 'token' is likely for backend-to-VideoSDK auth.
+  roomId: string;
+}
+
+export interface VideoSDKDeactivateRoomResponse {
+  success: boolean;
+  data: VideoSDKMeetingData; // Response structure is similar to create meeting
+  message: string;
+}
+
+export interface VideoSDKValidateMeetingRequest {
+    roomId: string;
+}
+
+export interface VideoSDKValidateMeetingResponse {
+    success: boolean;
+    data?: {
+        roomId: string;
+        valid: boolean;
+        meeting?: VideoSDKMeetingData; // Optional: if backend returns full meeting details
+    };
+    message: string;
+}
+
+
+// Update AgoraCallRequest if it's also used for VideoSDK call actions via your backend
+// This type is already in your TipCallScreen.tsx, ensure it's consistent or defined centrally.
+// export type VideoSDKCallRequest = { ... } // This is defined in TipCallScreen.tsx
+// For ApiService, we can use AgoraCallRequest if the backend /api/call endpoint handles both
+// or create a more generic CallActionRequest. For now, assuming AgoraCallRequest is adaptable.

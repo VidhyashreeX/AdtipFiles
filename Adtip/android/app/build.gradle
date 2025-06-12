@@ -108,14 +108,20 @@ android {
     }
 }
 
-dependencies {    // The version of react-native is set by the React Native Gradle Plugin
+dependencies {
+    // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    
     // Commented out PubScale integration - June 2, 2025
     // implementation 'com.pubscale.sdkone:offerwall:1.0.10' // Using the version we know exists
 
-    // Add this line for Firebase Messaging
+    // Firebase Messaging
     implementation 'com.google.firebase:firebase-messaging:23.1.2'
+    
+    // VideoSDK Dependencies
     implementation project(':rnwebrtc')
+    implementation project(':rnfgservice')        // MISSING - ADDED
+    implementation project(':rnincallmanager')    // MISSING - ADDED
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")

@@ -24,6 +24,14 @@ import {
   AgoraCallRequest,
   FcmTokenRequest,
   MissedCallsResponse,
+  VideoSDKGenerateTokenRequest,
+  VideoSDKGenerateTokenResponse,
+  VideoSDKCreateMeetingRequest,
+  VideoSDKCreateMeetingResponse,
+  VideoSDKDeactivateRoomRequest,
+  VideoSDKDeactivateRoomResponse,
+  VideoSDKValidateMeetingRequest,
+  VideoSDKValidateMeetingResponse,
 } from '../types/api';
 import { RtmTokenRequest, RtmTokenResponse } from './AgoraRtmHelper';
 
@@ -813,6 +821,103 @@ export default class ApiService {
     } catch (error) {
       console.error('[API] Short like request failed:', error);
       throw error;
+    }
+  }
+
+  // ===== VideoSDK API SERVICES (via your backend) =====
+
+  /**
+   * Generate a VideoSDK participant token via the backend.
+   * @param data - Optional request data (e.g., permissions, user info if backend requires)
+   */
+  static async generateVideoSDKParticipantToken(
+    data?: VideoSDKGenerateTokenRequest,
+  ): Promise<VideoSDKGenerateTokenResponse> {
+    console.log('[API] Requesting VideoSDK participant token from backend:', data);
+    try {
+      const response = await this.post<VideoSDKGenerateTokenResponse>(
+        ApiEndpoints.TIP_CALLS_ENDPOINTS.VIDEOSDK_GENERATE_TOKEN,
+        data,
+      );
+      console.log('[API] VideoSDK participant token response:', JSON.stringify(response, null, 2));
+      if (!response.success || !response.token) {
+        throw new Error(response.message || 'Failed to generate VideoSDK token from backend.');
+      }
+      return response;
+    } catch (error) {
+      console.error('[API] Error generating VideoSDK participant token:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Create a VideoSDK meeting room via the backend.
+   * @param data - Request data (e.g., region)
+   */
+  static async createVideoSDKMeeting(
+    data?: VideoSDKCreateMeetingRequest,
+  ): Promise<VideoSDKCreateMeetingResponse> {
+    console.log('[API] Requesting to create VideoSDK meeting via backend:', data);
+    try {
+      const response = await this.post<VideoSDKCreateMeetingResponse>(
+        ApiEndpoints.TIP_CALLS_ENDPOINTS.VIDEOSDK_CREATE_MEETING,
+        data,
+      );
+      console.log('[API] Create VideoSDK meeting response:', JSON.stringify(response, null, 2));
+      if (!response.success || !response.data || !response.data.roomId) {
+        throw new Error(response.message || 'Failed to create VideoSDK meeting via backend.');
+      }
+      return response;
+    } catch (error) {
+      console.error('[API] Error creating VideoSDK meeting:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Deactivate a VideoSDK meeting room via the backend.
+   * @param data - Request data containing roomId
+   */
+  static async deactivateVideoSDKRoom(
+    data: VideoSDKDeactivateRoomRequest,
+  ): Promise<VideoSDKDeactivateRoomResponse> {
+    console.log('[API] Requesting to deactivate VideoSDK room via backend:', data);
+    try {
+      const response = await this.post<VideoSDKDeactivateRoomResponse>(
+        ApiEndpoints.TIP_CALLS_ENDPOINTS.VIDEOSDK_DEACTIVATE_ROOM,
+        data,
+      );
+      console.log('[API] Deactivate VideoSDK room response:', JSON.stringify(response, null, 2));
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to deactivate VideoSDK room via backend.');
+      }
+      return response;
+    } catch (error) {
+      console.error('[API] Error deactivating VideoSDK room:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Validate a VideoSDK meeting room via the backend.
+   * @param data - Request data containing roomId
+   */
+  static async validateVideoSDKMeeting(
+    data: VideoSDKValidateMeetingRequest,
+  ): Promise<VideoSDKValidateMeetingResponse> {
+    console.log('[API] Requesting to validate VideoSDK meeting via backend:', data);
+    try {
+      // Assuming this might be a GET or POST, using POST for consistency here
+      const response = await this.post<VideoSDKValidateMeetingResponse>(
+        ApiEndpoints.TIP_CALLS_ENDPOINTS.VIDEOSDK_VALIDATE_MEETING,
+        data,
+      );
+      console.log('[API] Validate VideoSDK meeting response:', JSON.stringify(response, null, 2));
+      // No specific data check here, success flag is primary
+      return response;
+    } catch (error) {
+      console.error('[API] Error validating VideoSDK meeting:', error);
+      throw this.handleError(error);
     }
   }
 }
