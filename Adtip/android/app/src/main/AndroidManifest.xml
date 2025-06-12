@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
 
     <!-- BASIC NETWORK PERMISSIONS -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -48,7 +47,10 @@
     <!-- For Android 10 (API 29) and above, prefer Scoped Storage.
          READ_EXTERNAL_STORAGE / WRITE_EXTERNAL_STORAGE are largely for legacy access or specific use cases. -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" tools:ignore="ScopedStorage" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
+                     android:maxSdkVersion="28" 
+                     tools:ignore="ScopedStorage"
+                     tools:replace="android:maxSdkVersion" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" tools:targetApi="tiramisu" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:targetApi="tiramisu" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:targetApi="tiramisu" />
@@ -84,18 +86,13 @@
              Consider setting to false if fully migrated to Scoped Storage. -->
         <meta-data
             android:name="android.app.extract_native_libs"
-            android:value="true" /> <!-- Often needed for RN -->
-        <!-- android:requestLegacyExternalStorage="true" is generally discouraged for new apps or updates.
-             If you must use it, understand the implications.
-        <meta-data
-            android:name="android:requestLegacyExternalStorage"
-            android:value="true" /> -->
+            android:value="true" />
 
-        <!-- AdMob App ID -->
+        <!-- AdMob App ID - Override library's empty value -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-1099807384885107~8206076548" />
-            <!-- tools:replace="android:value" removed as it should be unique -->
+            android:value="ca-app-pub-1099807384885107~8206076548"
+            tools:replace="android:value" />
 
         <!-- VIDEOSDK FOREGROUND SERVICE CONFIGURATION -->
         <meta-data
@@ -106,7 +103,7 @@
             android:value="Whenever meeting started notification will appear." />
         <meta-data
             android:name="live.videosdk.rnfgservice.notification_color"
-            android:resource="@color/red" /> <!-- Ensure @color/red is defined in your colors.xml -->
+            android:resource="@color/red" />
 
         <activity
             android:name=".MainActivity"
@@ -115,14 +112,13 @@
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize"
             android:exported="true"
-            android:showWhenLocked="true"  <!-- For incoming call UI -->
-            android:turnScreenOn="true">   <!-- For incoming call UI -->
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"> 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Deep Linking (Existing) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -180,12 +176,11 @@
             android:name="io.wazo.callkeep.RNCallKeepBackgroundMessagingService"
             android:exported="false" />
 
-
         <!-- Firebase messaging default notification channel -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="adtip_call_channel" /> <!-- Use a unique channel ID -->
-            <!-- tools:replace="android:value" removed, should be unique -->
+            android:value="adtip_call_channel"
+            tools:replace="android:value" />
 
     </application>
 
