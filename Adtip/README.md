@@ -95,3 +95,11 @@ To learn more about React Native, take a look at the following resources:
 - [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
 - [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
 - [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+
+
+# React Native CallKeep Build Issues
+If you encounter build issues related to `react-native-callkeep`, you may need to make some adjustments to your project setup. Here are the steps to resolve common issues:
+Go to the following file:
+\adtip-reactnative\Adtip\node_modules\react-native-callkeep\android\src\main\java\io\wazo\callkeep RNCallKeepModule.java
+Change the names or comment out or remove the duplicate methods(OVERLOADED FUNCTIONS - not supported by React Native):
+startCall and displayIncomingCall
