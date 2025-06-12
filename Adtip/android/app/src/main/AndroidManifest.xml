@@ -7,25 +7,22 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
-    <!-- AGORA VOICE/VIDEO CALL PERMISSIONS -->
+    <!-- VIDEOSDK & GENERAL CALL PERMISSIONS (Consolidated) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <!-- For Android 14 (API 34) and above, if using microphone/camera in a foreground service -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" tools:targetApi="upsideDownCake"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" tools:targetApi="upsideDownCake"/>
-    <uses-permission android:name="android.permission.BROADCAST_STICKY" />
+    <uses-permission android:name="android.permission.BROADCAST_STICKY" /> <!-- Consider if truly needed -->
 
     <!-- VIDEOSDK SPECIFIC PERMISSIONS -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.ACTION_MANAGE_OVERLAY_PERMISSION" />
+    <!-- ACTION_MANAGE_OVERLAY_PERMISSION is for navigating user to settings, not a direct permission -->
 
-    <!-- BLUETOOTH PERMISSIONS (For routing audio to Bluetooth devices) -->
-    <!-- Legacy Bluetooth permissions (up to Android 11) -->
+    <!-- BLUETOOTH PERMISSIONS -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-    <!-- Required for Android 12 (API level 31) and higher for Bluetooth scanning/connecting -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
                      android:usesPermissionFlags="neverForLocation"
@@ -38,17 +35,20 @@
     <!-- PHONE STATE & CALLS -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
-    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.CALL_PHONE" /> <!-- If making outbound PSTN calls -->
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" tools:targetApi="O"/>
 
-    <!-- CALLKEEP PERMISSIONS (MISSING - ADDED) -->
+
+    <!-- CALLKEEP PERMISSIONS -->
     <uses-permission android:name="android.permission.BIND_TELECOM_CONNECTION_SERVICE"/>
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" /> <!-- For incoming call UI -->
+
 
     <!-- STORAGE PERMISSIONS -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
-    <uses-permission 
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
-        android:maxSdkVersion="28" 
-        tools:replace="android:maxSdkVersion" />
+    <!-- For Android 10 (API 29) and above, prefer Scoped Storage.
+         READ_EXTERNAL_STORAGE / WRITE_EXTERNAL_STORAGE are largely for legacy access or specific use cases. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" tools:ignore="ScopedStorage" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" tools:targetApi="tiramisu" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:targetApi="tiramisu" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:targetApi="tiramisu" />
@@ -57,7 +57,6 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" tools:targetApi="tiramisu" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <!-- WAKE LOCK -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -70,44 +69,54 @@
     <uses-permission android:name="android.permission.READ_SMS" />
 
     <application
-        android:name=".MainApplication" 
+        android:name=".MainApplication"
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="false"
         android:theme="@style/AppTheme"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="true"
+        tools:replace="android:allowBackup"> <!-- Added tools:replace for allowBackup if other libs force it true -->
 
-        <!-- Enable Scoped Storage for Android 10+ -->
+        <!-- Enable Scoped Storage for Android 10+ by default,
+             requestLegacyExternalStorage should only be true if absolutely necessary for migration.
+             Consider setting to false if fully migrated to Scoped Storage. -->
+        <meta-data
+            android:name="android.app.extract_native_libs"
+            android:value="true" /> <!-- Often needed for RN -->
+        <!-- android:requestLegacyExternalStorage="true" is generally discouraged for new apps or updates.
+             If you must use it, understand the implications.
         <meta-data
             android:name="android:requestLegacyExternalStorage"
-            android:value="true" />
+            android:value="true" /> -->
 
         <!-- AdMob App ID -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-1099807384885107~8206076548"
-            tools:replace="android:value" />
+            android:value="ca-app-pub-1099807384885107~8206076548" />
+            <!-- tools:replace="android:value" removed as it should be unique -->
 
         <!-- VIDEOSDK FOREGROUND SERVICE CONFIGURATION -->
-        <meta-data 
+        <meta-data
             android:name="live.videosdk.rnfgservice.notification_channel_name"
             android:value="Meeting Notification" />
-        <meta-data 
+        <meta-data
             android:name="live.videosdk.rnfgservice.notification_channel_description"
             android:value="Whenever meeting started notification will appear." />
         <meta-data
             android:name="live.videosdk.rnfgservice.notification_color"
-            android:resource="@color/red" />
+            android:resource="@color/red" /> <!-- Ensure @color/red is defined in your colors.xml -->
 
         <activity
-            android:name=".MainActivity" 
+            android:name=".MainActivity"
             android:label="@string/app_name"
             android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize"
-            android:exported="true">
+            android:exported="true"
+            android:showWhenLocked="true"  <!-- For incoming call UI -->
+            android:turnScreenOn="true">   <!-- For incoming call UI -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -121,18 +130,27 @@
                 <data android:scheme="adtip" android:host="app" />
             </intent-filter>
 
-            <!-- CALLKEEP DEEP LINKING (MISSING - ADDED) -->
+            <!-- CALLKEEP DEEP LINKING (Ensure scheme is unique and handled) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="videocalling" />
+                <data android:scheme="adtipcall" /> <!-- Changed from videocalling to be more specific -->
             </intent-filter>
         </activity>
 
-        <!-- Firebase Messaging Service -->
-        <service
+        <!-- REMOVE the generic FirebaseMessagingService if CallNotificationService handles FCM -->
+        <!-- <service
             android:name="com.google.firebase.messaging.FirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service> -->
+
+        <!-- Your custom service for handling FCM messages and call notifications -->
+        <service
+            android:name=".CallNotificationService"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
@@ -140,14 +158,14 @@
         </service>
 
         <!-- VIDEOSDK FOREGROUND SERVICES -->
-        <service 
-            android:name="live.videosdk.rnfgservice.ForegroundService" 
-            android:foregroundServiceType="mediaProjection" />
-        <service 
+        <service
+            android:name="live.videosdk.rnfgservice.ForegroundService"
+            android:foregroundServiceType="mediaProjection|camera|microphone" tools:targetApi="q"/> <!-- Specify types -->
+        <service
             android:name="live.videosdk.rnfgservice.ForegroundServiceTask" />
 
-        <!-- CALLKEEP SERVICES (MISSING - ADDED) -->
-        <service 
+        <!-- CALLKEEP SERVICES -->
+        <service
             android:name="io.wazo.callkeep.VoiceConnectionService"
             android:label="Adtip Calls"
             android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE"
@@ -157,25 +175,17 @@
                 <action android:name="android.telecom.ConnectionService" />
             </intent-filter>
         </service>
-        
-        <service 
-            android:name="io.wazo.callkeep.RNCallKeepBackgroundMessagingService" 
+
+        <service
+            android:name="io.wazo.callkeep.RNCallKeepBackgroundMessagingService"
             android:exported="false" />
 
-        <!-- For handling incoming call notifications when app is in background -->
-        <service
-            android:name=".CallNotificationService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
 
         <!-- Firebase messaging default notification channel -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="call_channel" 
-            tools:replace="android:value"/>
+            android:value="adtip_call_channel" /> <!-- Use a unique channel ID -->
+            <!-- tools:replace="android:value" removed, should be unique -->
 
     </application>
 
