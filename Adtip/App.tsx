@@ -66,33 +66,39 @@ const AppNavigator = () => {
   useEffect(() => {
     const initMessaging = async () => {
       try {
-        // Wait for Firebase to be ready
         if (firebase.apps.length === 0) {
-          console.warn('[Firebase] No app instance found, waiting...');
-          // Give Firebase time to initialize
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          console.warn('[Firebase] No app instance found, attempting to wait for index.js initialization...');
+          await new Promise(resolve => setTimeout(resolve, 1500)); // Give a bit more time
           if (firebase.apps.length === 0) {
-            console.error('[Firebase] Still no app instance after waiting');
-            return;
+            console.warn('[FCM] Firebase app instance not available after waiting. Push notification features will be disabled.');
+            // Do not return, allow app to continue without FCM
           }
         }
 
-        const msg = messaging();
+        // Proceed only if Firebase app is available
+        if (firebase.apps.length > 0) {
+          const msg = messaging();
 
-        if (Platform.OS === 'android') {
-          await msg.setAutoInitEnabled(true);
+          if (Platform.OS === 'android') {
+            await msg.setAutoInitEnabled(true);
+          }
+
+          await msg.registerDeviceForRemoteMessages();
+          setMessagingReady(true); // Set ready only if registration is successful
+
+          msg.setBackgroundMessageHandler(async remoteMessage => {
+            console.log('[FCM] Background message received:', remoteMessage);
+          });
+
+          console.log('[FCM] Firebase messaging initialized successfully.');
+        } else {
+          // This case is covered by the warning above, but as a fallback:
+          console.warn('[FCM] Skipping Firebase Messaging initialization as Firebase app is not available.');
         }
-
-        await msg.registerDeviceForRemoteMessages();
-        setMessagingReady(true);
-
-        msg.setBackgroundMessageHandler(async remoteMessage => {
-          console.log('[FCM] Background message:', remoteMessage);
-        });
-
-        console.log('[FCM] Firebase messaging initialized');
       } catch (err) {
-        console.error('[FCM] Firebase Messaging init failed:', err);
+        console.warn('[FCM] Firebase Messaging initialization failed. Push notification features will be disabled. Error:', err);
+        // Ensure messagingReady remains false or is explicitly set to false
+        setMessagingReady(false);
       }
     };
 
@@ -104,7 +110,7 @@ const AppNavigator = () => {
   // ✅ Notification Permission + Token
   useEffect(() => {
     const setupNotifications = async () => {
-      if (messagingReady) {
+      if (messagingReady) { // This will only run if messagingReady is true
         try {
           await NotificationService.requestPermissions(messaging());
           const userId = await AsyncStorage.getItem('userId');
@@ -112,8 +118,10 @@ const AppNavigator = () => {
             await NotificationService.registerFcmToken(userId, messaging());
           }
         } catch (e) {
-          console.error('[FCM] Notification setup failed:', e);
+          console.warn('[FCM] Notification setup (permissions/token) failed. Error:', e);
         }
+      } else {
+        console.log('[FCM] Skipping notification permission setup as messaging is not ready.');
       }
     };
     setupNotifications();
@@ -121,9 +129,30 @@ const AppNavigator = () => {
 
   // ✅ Handle notifications (killed + background)
   useEffect(() => {
-    messaging()
-      .getInitialNotification()
-      .then(remoteMessage => {
+    if (messagingReady) { // Only attempt to set up listeners if messaging is ready
+      messaging()
+        .getInitialNotification()
+        .then(remoteMessage => {
+          if (remoteMessage?.data?.isIncomingCall === 'true') {
+            navigationRef.navigate('Main', {
+              screen: 'TipCall',
+              params: {
+                initialCallNotificationData: {
+                  callerName: remoteMessage.data.callerName,
+                  callType: remoteMessage.data.callType,
+                  channelName: remoteMessage.data.channelName,
+                  rtcToken: remoteMessage.data.agoraToken,
+                  callerRtcUid: remoteMessage.data.callerId,
+                  isFromNotification: true,
+                }
+              }
+            });
+          }
+        }).catch(error => {
+          console.warn('[FCM] Error getting initial notification:', error);
+        });
+
+      const unsubscribe = messaging().onNotificationOpenedApp(remoteMessage => {
         if (remoteMessage?.data?.isIncomingCall === 'true') {
           navigationRef.navigate('Main', {
             screen: 'TipCall',
@@ -140,27 +169,17 @@ const AppNavigator = () => {
           });
         }
       });
-
-    const unsubscribe = messaging().onNotificationOpenedApp(remoteMessage => {
-      if (remoteMessage?.data?.isIncomingCall === 'true') {
-        navigationRef.navigate('Main', {
-          screen: 'TipCall',
-          params: {
-            initialCallNotificationData: {
-              callerName: remoteMessage.data.callerName,
-              callType: remoteMessage.data.callType,
-              channelName: remoteMessage.data.channelName,
-              rtcToken: remoteMessage.data.agoraToken,
-              callerRtcUid: remoteMessage.data.callerId,
-              isFromNotification: true,
-            }
-          }
-        });
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
+      // Add a catch for onNotificationOpenedApp if the API supports it, or ensure messagingReady is robust
+      console.log('[FCM] Notification opened app listeners attached.');
+      return () => {
+        unsubscribe();
+        console.log('[FCM] Notification opened app listeners detached.');
+      };
+    } else {
+      console.log('[FCM] Skipping attachment of notification open listeners as messaging is not ready.');
+      return () => {}; // Return an empty unsubscribe function
+    }
+  }, [messagingReady]); // Add messagingReady to dependency array
 
   if (!isInitialized) {
     return (
