@@ -13,6 +13,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
+import ScreenTransition from '../../components/common/ScreenTransition'; // ADD THIS IMPORT
 
 interface ReferralStats {
   totalReferrals: number;
@@ -238,160 +239,162 @@ const ReferralScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView
-      style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Referrals"/>
+    <ScreenTransition animationType="slide">
+      <SafeAreaView
+        style={[styles.container, {backgroundColor: colors.background}]}>
+        <Header title="Referrals"/>
 
-      <FlatList
-        data={activities}
-        renderItem={renderActivity}
-        keyExtractor={item => item.id}
-        ListHeaderComponent={
-          <View>
-            {/* Stats */}
-            <View style={styles.statsContainer}>
-              <View style={styles.statsRow}>
-                {renderStatCard(
-                  'Total Referrals',
-                  stats.totalReferrals.toString(),
-                )}
-                {renderStatCard(
-                  'Total Earnings',
-                  `$${stats.totalEarnings.toFixed(2)}`,
-                )}
+        <FlatList
+          data={activities}
+          renderItem={renderActivity}
+          keyExtractor={item => item.id}
+          ListHeaderComponent={
+            <View>
+              {/* Stats */}
+              <View style={styles.statsContainer}>
+                <View style={styles.statsRow}>
+                  {renderStatCard(
+                    'Total Referrals',
+                    stats.totalReferrals.toString(),
+                  )}
+                  {renderStatCard(
+                    'Total Earnings',
+                    `$${stats.totalEarnings.toFixed(2)}`,
+                  )}
+                </View>
+                <View style={styles.statsRow}>
+                  {renderStatCard(
+                    'This Month',
+                    stats.thisMonthReferrals.toString(),
+                    'referrals',
+                  )}
+                  {renderStatCard(
+                    'Month Earnings',
+                    `$${stats.thisMonthEarnings.toFixed(2)}`,
+                  )}
+                </View>
               </View>
-              <View style={styles.statsRow}>
-                {renderStatCard(
-                  'This Month',
-                  stats.thisMonthReferrals.toString(),
-                  'referrals',
-                )}
-                {renderStatCard(
-                  'Month Earnings',
-                  `$${stats.thisMonthEarnings.toFixed(2)}`,
-                )}
-              </View>
-            </View>
 
-            {/* Pending Earnings */}
-            {stats.pendingEarnings > 0 && (
-              <View
-                style={[
-                  styles.pendingContainer,
-                  {backgroundColor: colors.surface},
-                ]}>
-                <View style={styles.pendingContent}>
-                  <Icon name="clock" size={20} color="#FFEAA7" />
+              {/* Pending Earnings */}
+              {stats.pendingEarnings > 0 && (
+                <View
+                  style={[
+                    styles.pendingContainer,
+                    {backgroundColor: colors.surface},
+                  ]}>
+                  <View style={styles.pendingContent}>
+                    <Icon name="clock" size={20} color="#FFEAA7" />
+                    <Text
+                      style={[styles.pendingText, {color: colors.text.primary}]}>
+                      ${stats.pendingEarnings.toFixed(2)} pending
+                    </Text>
+                  </View>
                   <Text
-                    style={[styles.pendingText, {color: colors.text.primary}]}>
-                    ${stats.pendingEarnings.toFixed(2)} pending
+                    style={[
+                      styles.pendingSubtext,
+                      {color: colors.text.secondary},
+                    ]}>
+                    Will be processed within 24-48 hours
                   </Text>
                 </View>
-                <Text
-                  style={[
-                    styles.pendingSubtext,
-                    {color: colors.text.secondary},
-                  ]}>
-                  Will be processed within 24-48 hours
-                </Text>
-              </View>
-            )}
+              )}
 
-            {/* Referral Code Section */}
-            <View
-              style={[
-                styles.referralSection,
-                {backgroundColor: colors.surface},
-              ]}>
-              <View style={styles.referralHeader}>
-                <Icon name="gift" size={24} color={colors.primary} />
-                <Text
-                  style={[styles.referralTitle, {color: colors.text.primary}]}>
-                  Invite Friends & Earn
-                </Text>
-              </View>
-
-              <Text
-                style={[
-                  styles.referralDescription,
-                  {color: colors.text.secondary},
-                ]}>
-                Share your referral code and earn $2 for each friend who joins,
-                plus 10% of their earnings!
-              </Text>
-
+              {/* Referral Code Section */}
               <View
                 style={[
-                  styles.codeContainer,
-                  {backgroundColor: colors.background},
+                  styles.referralSection,
+                  {backgroundColor: colors.surface},
                 ]}>
-                <Text
-                  style={[styles.codeLabel, {color: colors.text.secondary}]}>
-                  Your Referral Code
-                </Text>
-                <View style={styles.codeRow}>
-                  <Text style={[styles.codeText, {color: colors.primary}]}>
-                    ADTIP123
+                <View style={styles.referralHeader}>
+                  <Icon name="gift" size={24} color={colors.primary} />
+                  <Text
+                    style={[styles.referralTitle, {color: colors.text.primary}]}>
+                    Invite Friends & Earn
                   </Text>
+                </View>
+
+                <Text
+                  style={[
+                    styles.referralDescription,
+                    {color: colors.text.secondary},
+                  ]}>
+                  Share your referral code and earn $2 for each friend who joins,
+                  plus 10% of their earnings!
+                </Text>
+
+                <View
+                  style={[
+                    styles.codeContainer,
+                    {backgroundColor: colors.background},
+                  ]}>
+                  <Text
+                    style={[styles.codeLabel, {color: colors.text.secondary}]}>
+                    Your Referral Code
+                  </Text>
+                  <View style={styles.codeRow}>
+                    <Text style={[styles.codeText, {color: colors.primary}]}>
+                      ADTIP123
+                    </Text>
+                    <TouchableOpacity
+                      onPress={copyReferralCode}
+                      style={styles.copyButton}>
+                      <Icon name="copy" size={16} color={colors.primary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.actionButtons}>
                   <TouchableOpacity
-                    onPress={copyReferralCode}
-                    style={styles.copyButton}>
-                    <Icon name="copy" size={16} color={colors.primary} />
+                    style={[
+                      styles.shareButton,
+                      {backgroundColor: colors.primary},
+                    ]}
+                    onPress={handleShare}>
+                    <Icon name="share-2" size={18} color={colors.white} />
+                    <Text style={[styles.shareButtonText, {color: colors.white}]}>
+                      Share Code
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.linkButton, {borderColor: colors.primary}]}
+                    onPress={copyReferralLink}>
+                    <Icon name="link" size={18} color={colors.primary} />
+                    <Text
+                      style={[styles.linkButtonText, {color: colors.primary}]}>
+                      Copy Link
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
 
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[
-                    styles.shareButton,
-                    {backgroundColor: colors.primary},
-                  ]}
-                  onPress={handleShare}>
-                  <Icon name="share-2" size={18} color={colors.white} />
-                  <Text style={[styles.shareButtonText, {color: colors.white}]}>
-                    Share Code
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.linkButton, {borderColor: colors.primary}]}
-                  onPress={copyReferralLink}>
-                  <Icon name="link" size={18} color={colors.primary} />
-                  <Text
-                    style={[styles.linkButtonText, {color: colors.primary}]}>
-                    Copy Link
-                  </Text>
-                </TouchableOpacity>
+              {/* Activity Header */}
+              <View style={styles.activityHeader}>
+                <Text
+                  style={[styles.activityTitle, {color: colors.text.primary}]}>
+                  Referral Activity
+                </Text>
               </View>
             </View>
-
-            {/* Activity Header */}
-            <View style={styles.activityHeader}>
-              <Text
-                style={[styles.activityTitle, {color: colors.text.primary}]}>
-                Referral Activity
-              </Text>
-            </View>
-          </View>
-        }
-        ListEmptyComponent={
-          !isLoading && activities.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Icon name="users" size={48} color={colors.text.tertiary} />
-              <Text style={[styles.emptyText, {color: colors.text.secondary}]}>
-                No referral activity yet
-              </Text>
-              <Text
-                style={[styles.emptySubtext, {color: colors.text.tertiary}]}>
-                Share your referral code to start earning
-              </Text>
-            </View>
-          ) : null
-        }
-        showsVerticalScrollIndicator={false}
-      />
-    </SafeAreaView>
+          }
+          ListEmptyComponent={
+            !isLoading && activities.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Icon name="users" size={48} color={colors.text.tertiary} />
+                <Text style={[styles.emptyText, {color: colors.text.secondary}]}>
+                  No referral activity yet
+                </Text>
+                <Text
+                  style={[styles.emptySubtext, {color: colors.text.tertiary}]}>
+                  Share your referral code to start earning
+                </Text>
+              </View>
+            ) : null
+          }
+          showsVerticalScrollIndicator={false}
+        />
+      </SafeAreaView>
+    </ScreenTransition>
   );
 };
 

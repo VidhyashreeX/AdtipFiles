@@ -22,6 +22,7 @@ import RazorpayCheckout from 'react-native-razorpay';
 // Components
 import Header from '../../components/common/Header';
 import TransactionItemDisplay from '../../components/wallet/WalletBalance'; 
+import ScreenTransition from '../../components/common/ScreenTransition';
 
 // Skeleton Components
 import BalanceCardSkeleton from '../../components/skeletons/BalanceCardSkeleton';
@@ -581,100 +582,102 @@ const WalletScreen = () => {
   };
 
   return (
-    <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="My Wallet" />
-      <ScrollView
-        contentContainerStyle={styles.contentContainer}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        }>
-        
-        {renderBalanceCard()}
-        {renderPlanCard()}
-
-        <View style={styles.transactionsContainer}>
-          <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
-            Recent Transactions
-          </Text>
-          <View style={[styles.tabsContainer, {borderBottomColor: colors.border}]}>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'earnings' && [styles.activeTab, {borderBottomColor: colors.primary}]]}
-              onPress={() => setActiveTab('earnings')}>
-              <Text style={[styles.tabText, {color: activeTab === 'earnings' ? colors.primary : colors.text.secondary}]}>Earnings</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'withdrawals' && [styles.activeTab, {borderBottomColor: colors.primary}]]}
-              onPress={() => setActiveTab('withdrawals')}>
-              <Text style={[styles.tabText, {color: activeTab === 'withdrawals' ? colors.primary : colors.text.secondary}]}>Withdrawals</Text>
-            </TouchableOpacity>
-          </View>
-          
-          {renderTransactionContent()}
-
-          {activeTab === 'withdrawals' && (
-             <Text style={[styles.withdrawInfo, {color: colors.text.tertiary}]}>
-                Minimum withdrawal: ₹{minimumWithdrawal}. Processing takes 3-5 business days.
-             </Text>
-          )}
-        </View>
-      </ScrollView>
-
-      {/* Modal for Adding Funds */}
-      <Modal
-        transparent={true}
-        visible={isAmountModalVisible}
-        animationType="slide"
-        onRequestClose={() => setIsAmountModalVisible(false)}>
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}>
-          <TouchableOpacity 
-            style={StyleSheet.absoluteFill} 
-            onPress={() => setIsAmountModalVisible(false)}
-            activeOpacity={1}
-          />
-          <LinearGradient
-            colors={isDarkMode ? [colors.surface, colors.background] : ['#E0EAFC', '#CFDEF3']}
-            style={[styles.modalContent]}>
-            <Text style={[styles.modalTitle, {color: colors.text.primary}]}>Add Funds</Text>
-            <TextInput
-              style={[
-                styles.amountInput,
-                {
-                  color: colors.text.primary,
-                  borderColor: colors.border,
-                  backgroundColor: isDarkMode ? colors.inputBackground : '#FFF',
-                },
-              ]}
-              placeholder="Enter amount (e.g., 500)"
-              placeholderTextColor={colors.text.secondary}
-              keyboardType="numeric"
-              value={amountToAdd}
-              onChangeText={setAmountToAdd}
-              autoFocus
+    <ScreenTransition animationType="scale">
+      <View style={[styles.container, {backgroundColor: colors.background}]}>
+        <Header title="My Wallet" />
+        <ScrollView
+          contentContainerStyle={styles.contentContainer}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
             />
-            <View style={styles.modalButtonContainer}>
+          }>
+          
+          {renderBalanceCard()}
+          {renderPlanCard()}
+
+          <View style={styles.transactionsContainer}>
+            <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
+              Recent Transactions
+            </Text>
+            <View style={[styles.tabsContainer, {borderBottomColor: colors.border}]}>
               <TouchableOpacity
-                style={[styles.modalButton, {backgroundColor: colors.border}]}
-                onPress={() => setIsAmountModalVisible(false)}>
-                <Text style={[styles.modalButtonText, {color: colors.text.secondary}]}>Cancel</Text>
+                style={[styles.tab, activeTab === 'earnings' && [styles.activeTab, {borderBottomColor: colors.primary}]]}
+                onPress={() => setActiveTab('earnings')}>
+                <Text style={[styles.tabText, {color: activeTab === 'earnings' ? colors.primary : colors.text.secondary}]}>Earnings</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, {backgroundColor: colors.primary}]}
-                onPress={handleProceedWithAmount}>
-                <Text style={[styles.modalButtonText, {color: '#FFFFFF'}]}>Proceed</Text>
+                style={[styles.tab, activeTab === 'withdrawals' && [styles.activeTab, {borderBottomColor: colors.primary}]]}
+                onPress={() => setActiveTab('withdrawals')}>
+                <Text style={[styles.tabText, {color: activeTab === 'withdrawals' ? colors.primary : colors.text.secondary}]}>Withdrawals</Text>
               </TouchableOpacity>
             </View>
-          </LinearGradient>
-        </KeyboardAvoidingView>
-      </Modal>
-    </View>
+            
+            {renderTransactionContent()}
+
+            {activeTab === 'withdrawals' && (
+               <Text style={[styles.withdrawInfo, {color: colors.text.tertiary}]}>
+                  Minimum withdrawal: ₹{minimumWithdrawal}. Processing takes 3-5 business days.
+               </Text>
+            )}
+          </View>
+        </ScrollView>
+
+        {/* Modal for Adding Funds */}
+        <Modal
+          transparent={true}
+          visible={isAmountModalVisible}
+          animationType="slide"
+          onRequestClose={() => setIsAmountModalVisible(false)}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalOverlay}>
+            <TouchableOpacity 
+              style={StyleSheet.absoluteFill} 
+              onPress={() => setIsAmountModalVisible(false)}
+              activeOpacity={1}
+            />
+            <LinearGradient
+              colors={isDarkMode ? [colors.surface, colors.background] : ['#E0EAFC', '#CFDEF3']}
+              style={[styles.modalContent]}>
+              <Text style={[styles.modalTitle, {color: colors.text.primary}]}>Add Funds</Text>
+              <TextInput
+                style={[
+                  styles.amountInput,
+                  {
+                    color: colors.text.primary,
+                    borderColor: colors.border,
+                    backgroundColor: isDarkMode ? colors.inputBackground : '#FFF',
+                  },
+                ]}
+                placeholder="Enter amount (e.g., 500)"
+                placeholderTextColor={colors.text.secondary}
+                keyboardType="numeric"
+                value={amountToAdd}
+                onChangeText={setAmountToAdd}
+                autoFocus
+              />
+              <View style={styles.modalButtonContainer}>
+                <TouchableOpacity
+                  style={[styles.modalButton, {backgroundColor: colors.border}]}
+                  onPress={() => setIsAmountModalVisible(false)}>
+                  <Text style={[styles.modalButtonText, {color: colors.text.secondary}]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, {backgroundColor: colors.primary}]}
+                  onPress={handleProceedWithAmount}>
+                  <Text style={[styles.modalButtonText, {color: '#FFFFFF'}]}>Proceed</Text>
+                </TouchableOpacity>
+              </View>
+            </LinearGradient>
+          </KeyboardAvoidingView>
+        </Modal>
+      </View>
+    </ScreenTransition>
   );
 };
 

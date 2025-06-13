@@ -14,6 +14,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import Header from '../../components/common/Header';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import LinearGradient from 'react-native-linear-gradient';
+import ScreenTransition from '../../components/common/ScreenTransition'; // ADD THIS IMPORT
 
 type Campaign = {
   id: string;
@@ -288,47 +289,49 @@ const AdPassbookScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header title="My Ad Passbook" />
-      <ScrollView 
-        style={styles.content} 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{paddingBottom: contentPaddingBottom}}
-      >
-        <View style={styles.headerContainer}>
-          <Text style={[styles.title, { color: colors.text.primary }]}>
-            My Ad Campaigns
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.text.secondary }]}>
-            Manage and monitor your campaigns
-          </Text>
-        </View>
-        
-        <TouchableOpacity 
-          style={[styles.createButton, { backgroundColor: colors.primary }]}
-          onPress={navigateToCreateCampaign}
+    <ScreenTransition animationType="scale">
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <Header title="My Ad Passbook" />
+        <ScrollView 
+          style={styles.content} 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{paddingBottom: contentPaddingBottom}}
         >
-          <Icon name="plus" size={18} color={isDarkMode ? '#000' : '#fff'} />
-          <Text style={[styles.createButtonText, { color: isDarkMode ? '#000' : '#fff' }]}>
-            Create New Campaign
-          </Text>
-        </TouchableOpacity>
-        
-        <View style={styles.statsContainer}>
-          {renderStatCard('Total', stats.total.toString(), '#5467FF', 'bar-chart-2')}
-          {renderStatCard('Active', stats.active.toString(), '#10B981', 'activity')}
-          {renderStatCard('Reach', stats.reach, '#8B5CF6', 'users')}
-          {renderStatCard('Spent', stats.spent, '#F59E0B', 'dollar-sign')}
-        </View>
-        
-        <FlatList
-          data={campaigns}
-          renderItem={({item}) => renderCampaignCard(item)}
-          keyExtractor={item => item.id}
-          scrollEnabled={false}
-        />
-      </ScrollView>
-    </SafeAreaView>
+          <View style={styles.headerContainer}>
+            <Text style={[styles.title, { color: colors.text.primary }]}>
+              My Ad Campaigns
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.text.secondary }]}>
+              Manage and monitor your campaigns
+            </Text>
+          </View>
+          
+          <TouchableOpacity 
+            style={[styles.createButton, { backgroundColor: colors.primary }]}
+            onPress={navigateToCreateCampaign}
+          >
+            <Icon name="plus" size={18} color={isDarkMode ? '#000' : '#fff'} />
+            <Text style={[styles.createButtonText, { color: isDarkMode ? '#000' : '#fff' }]}>
+              Create New Campaign
+            </Text>
+          </TouchableOpacity>
+          
+          <View style={styles.statsContainer}>
+            {renderStatCard('Total', stats.total.toString(), '#5467FF', 'bar-chart-2')}
+            {renderStatCard('Active', stats.active.toString(), '#10B981', 'activity')}
+            {renderStatCard('Reach', stats.reach, '#8B5CF6', 'users')}
+            {renderStatCard('Spent', stats.spent, '#F59E0B', 'dollar-sign')}
+          </View>
+          
+          <FlatList
+            data={campaigns}
+            renderItem={({item}) => renderCampaignCard(item)}
+            keyExtractor={item => item.id}
+            scrollEnabled={false}
+          />
+        </ScrollView>
+      </SafeAreaView>
+    </ScreenTransition>
   );
 };
 

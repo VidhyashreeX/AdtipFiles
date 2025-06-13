@@ -14,6 +14,13 @@ import {
   RefreshControl,
   StyleSheet,
 } from 'react-native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { useTabNavigator } from '../../contexts/TabNavigatorContext';
+import Header from '../../components/common/Header';
+import ScreenTransition from '../../components/common/ScreenTransition'; // ADD THIS IMPORT
 import {
   useMeeting,
   useParticipant,
@@ -22,17 +29,11 @@ import {
   usePubSub,
   Constants,
 } from '@videosdk.live/react-native-sdk';
-import {useTheme} from '../../contexts/ThemeContext';
 import ContactSkeletonItem from '../../components/skeletons/ContactSkeletonItem';
 import { UserListRequest } from '../../types/api';
-import {useAuth} from '../../contexts/AuthContext';
-import {useTabNavigator} from '../../contexts/TabNavigatorContext';
-import {useNavigation, useRoute, RouteProp} from '@react-navigation/native';
-import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import ApiService from '../../services/ApiService';
 import Icon from 'react-native-vector-icons/Feather';
 import messaging from '@react-native-firebase/messaging';
-import Header from '../../components/common/Header';
 import {
   initiateVideoSDKCall,
 } from '../../helpers/CallHelper';
@@ -562,155 +563,157 @@ export default function TipCallScreen() {
 
   // Render method for TipCallScreen
   return (
-    <View style={localStyles.container}>
-      <Header title="Tip Call" onBackPress={() => navigation.goBack()} />
-      
-      {/* Filters UI */}
-      <View style={localStyles.filtersContainer}>
-        <View style={localStyles.filterItem}>
-          <Text style={localStyles.filterLabel}>Language:</Text>
-          <View style={localStyles.filterButtons}>
-            {LANGUAGES.map((lang) => (
-              <TouchableOpacity
-                key={lang.id}
-                style={[
-                  localStyles.filterButton,
-                  languageFilter === lang.id && localStyles.selectedFilterButton
-                ]}
-                onPress={() => handleLanguageFilterChange(lang.id)}
-              >
-                <Text style={localStyles.filterButtonText}>{lang.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+    <ScreenTransition animationType="fade">
+      <View style={localStyles.container}>
+        <Header title="Tip Call" onBackPress={() => navigation.goBack()} />
         
-        <View style={localStyles.filterItem}>
-          <Text style={localStyles.filterLabel}>Category:</Text>
-          <View style={localStyles.filterButtons}>
-            {CATEGORIES.map((category) => (
-              <TouchableOpacity
-                key={category.id}
-                style={[
-                  localStyles.filterButton,
-                  categoryFilter === category.id && localStyles.selectedFilterButton
-                ]}
-                onPress={() => handleCategoryFilterChange(category.id)}
-              >
-                <Text style={localStyles.filterButtonText}>{category.name}</Text>
-              </TouchableOpacity>
-            ))}
+        {/* Filters UI */}
+        <View style={localStyles.filtersContainer}>
+          <View style={localStyles.filterItem}>
+            <Text style={localStyles.filterLabel}>Language:</Text>
+            <View style={localStyles.filterButtons}>
+              {LANGUAGES.map((lang) => (
+                <TouchableOpacity
+                  key={lang.id}
+                  style={[
+                    localStyles.filterButton,
+                    languageFilter === lang.id && localStyles.selectedFilterButton
+                  ]}
+                  onPress={() => handleLanguageFilterChange(lang.id)}
+                >
+                  <Text style={localStyles.filterButtonText}>{lang.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          
+          <View style={localStyles.filterItem}>
+            <Text style={localStyles.filterLabel}>Category:</Text>
+            <View style={localStyles.filterButtons}>
+              {CATEGORIES.map((category) => (
+                <TouchableOpacity
+                  key={category.id}
+                  style={[
+                    localStyles.filterButton,
+                    categoryFilter === category.id && localStyles.selectedFilterButton
+                  ]}
+                  onPress={() => handleCategoryFilterChange(category.id)}
+                >
+                  <Text style={localStyles.filterButtonText}>{category.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         </View>
-      </View>
 
-      {/* Contacts List UI */}
-      {loading ? (
-        <View style={localStyles.loadingContainer}>
-          <ActivityIndicator size="large" color={localFallbackColors.primary} />
-          <Text style={localStyles.loadingText}>Loading contacts...</Text>
-        </View>
-      ) : error ? (
-        <View style={localStyles.errorContainer}>
-          <Text style={localStyles.errorText}>{error}</Text>
-          <TouchableOpacity style={localStyles.retryButton} onPress={() => fetchContacts()}>
-            <Text style={localStyles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      ) : contacts.length === 0 ? (
-        <View style={localStyles.emptyContainer}>
-          <Text style={localStyles.emptyText}>No contacts found.</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={contacts}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={({item}) => {
-            const isAvailable = item.is_available && !item.dnd;
-            return (
-              <TouchableOpacity
-                style={[localStyles.contactItem, {borderColor: isAvailable ? colors.success || localFallbackColors.success : colors.borderLight || localFallbackColors.borderLight}]}
-              >
-                <View style={localStyles.contactInfo}>
-                  <View style={[localStyles.avatarPlaceholder, {backgroundColor: isAvailable ? colors.success || localFallbackColors.success : colors.gray[500] || localFallbackColors.gray[500]}]}>
-                    {item.name ? (
-                      <Text style={localStyles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
-                    ) : (
-                      <Icon name="user" size={24} color="white" />
-                    )}
+        {/* Contacts List UI */}
+        {loading ? (
+          <View style={localStyles.loadingContainer}>
+            <ActivityIndicator size="large" color={localFallbackColors.primary} />
+            <Text style={localStyles.loadingText}>Loading contacts...</Text>
+          </View>
+        ) : error ? (
+          <View style={localStyles.errorContainer}>
+            <Text style={localStyles.errorText}>{error}</Text>
+            <TouchableOpacity style={localStyles.retryButton} onPress={() => fetchContacts()}>
+              <Text style={localStyles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : contacts.length === 0 ? (
+          <View style={localStyles.emptyContainer}>
+            <Text style={localStyles.emptyText}>No contacts found.</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={contacts}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={({item}) => {
+              const isAvailable = item.is_available && !item.dnd;
+              return (
+                <TouchableOpacity
+                  style={[localStyles.contactItem, {borderColor: isAvailable ? colors.success || localFallbackColors.success : colors.borderLight || localFallbackColors.borderLight}]}
+                >
+                  <View style={localStyles.contactInfo}>
+                    <View style={[localStyles.avatarPlaceholder, {backgroundColor: isAvailable ? colors.success || localFallbackColors.success : colors.gray[500] || localFallbackColors.gray[500]}]}>
+                      {item.name ? (
+                        <Text style={localStyles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+                      ) : (
+                        <Icon name="user" size={24} color="white" />
+                      )}
+                    </View>
+                    <View style={localStyles.contactDetails}>
+                      <Text style={[localStyles.contactName, {color: colors.text?.primary || localFallbackColors.text.primary}]}>{item.name || 'Unknown'}</Text>
+                      <Text style={[localStyles.contactStatus, {color: colors.text?.secondary || localFallbackColors.text.secondary}]}>
+                        {isAvailable ? 'Available' : item.dnd ? 'Do Not Disturb' : 'Offline'}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={localStyles.contactDetails}>
-                    <Text style={[localStyles.contactName, {color: colors.text?.primary || localFallbackColors.text.primary}]}>{item.name || 'Unknown'}</Text>
-                    <Text style={[localStyles.contactStatus, {color: colors.text?.secondary || localFallbackColors.text.secondary}]}>
-                      {isAvailable ? 'Available' : item.dnd ? 'Do Not Disturb' : 'Offline'}
-                    </Text>
-                  </View>
-                </View>
-                
-                {isAvailable && (
-                  <View style={localStyles.callButtons}>
-                    <TouchableOpacity 
-                      style={[localStyles.callButton, {backgroundColor: colors.success || localFallbackColors.success}]}
-                      onPress={() => handleVideoSDKCall(item, 'video')}
-                    >
-                      <Icon name="video" size={20} color="white" />
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={[localStyles.callButton, {backgroundColor: colors.primary || localFallbackColors.primary}]}
-                      onPress={() => handleVideoSDKCall(item, 'voice')}
-                    >
-                      <Icon name="phone" size={20} color="white" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          }}
-          contentContainerStyle={{paddingBottom: 100}}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              colors={[localFallbackColors.primary]}
-            />
-          }
-        />
-      )}
-
-      {/* Only show custom incoming call UI if CallKeep is not handling it */}
-      {incomingCallNotification && (
-        <IncomingCallScreen
-          callerName={incomingCallNotification.callerName}
-          callType={incomingCallNotification.callType}
-          onAccept={() => {
-            console.log('[TipCall] Accepting incoming call from custom UI, navigating to Meeting screen.');
-            navigation.navigate('Meeting', {
-              meetingId: incomingCallNotification.meetingId,
-              token: incomingCallNotification.videosdkToken,
-              callType: incomingCallNotification.callType,
-              displayName: user?.name || "Me",
-              isInitiator: false,
-              recipientName: incomingCallNotification.callerName,
-            });
-            setIncomingCallNotification(null);
-          }}
-          onReject={async () => {
-            console.log('[TipCall] Rejecting incoming call from custom UI.');
-            if (user && incomingCallNotification.callerId && incomingCallNotification.meetingId) {
-              await NotificationService.updateCallStatus(
-                incomingCallNotification.callerId,
-                user.id.toString(),
-                'rejected',
-                incomingCallNotification.callType,
-                incomingCallNotification.meetingId
+                  
+                  {isAvailable && (
+                    <View style={localStyles.callButtons}>
+                      <TouchableOpacity 
+                        style={[localStyles.callButton, {backgroundColor: colors.success || localFallbackColors.success}]}
+                        onPress={() => handleVideoSDKCall(item, 'video')}
+                      >
+                        <Icon name="video" size={20} color="white" />
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity 
+                        style={[localStyles.callButton, {backgroundColor: colors.primary || localFallbackColors.primary}]}
+                        onPress={() => handleVideoSDKCall(item, 'voice')}
+                      >
+                        <Icon name="phone" size={20} color="white" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </TouchableOpacity>
               );
+            }}
+            contentContainerStyle={{paddingBottom: 100}}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                colors={[localFallbackColors.primary]}
+              />
             }
-            setIncomingCallNotification(null);
-          }}
-        />
-      )}
-    </View>
+          />
+        )}
+
+        {/* Only show custom incoming call UI if CallKeep is not handling it */}
+        {incomingCallNotification && (
+          <IncomingCallScreen
+            callerName={incomingCallNotification.callerName}
+            callType={incomingCallNotification.callType}
+            onAccept={() => {
+              console.log('[TipCall] Accepting incoming call from custom UI, navigating to Meeting screen.');
+              navigation.navigate('Meeting', {
+                meetingId: incomingCallNotification.meetingId,
+                token: incomingCallNotification.videosdkToken,
+                callType: incomingCallNotification.callType,
+                displayName: user?.name || "Me",
+                isInitiator: false,
+                recipientName: incomingCallNotification.callerName,
+              });
+              setIncomingCallNotification(null);
+            }}
+            onReject={async () => {
+              console.log('[TipCall] Rejecting incoming call from custom UI.');
+              if (user && incomingCallNotification.callerId && incomingCallNotification.meetingId) {
+                await NotificationService.updateCallStatus(
+                  incomingCallNotification.callerId,
+                  user.id.toString(),
+                  'rejected',
+                  incomingCallNotification.callType,
+                  incomingCallNotification.meetingId
+                );
+              }
+              setIncomingCallNotification(null);
+            }}
+          />
+        )}
+      </View>
+    </ScreenTransition>
   );
 }
 

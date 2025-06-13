@@ -19,7 +19,8 @@ import Icon from 'react-native-vector-icons/Feather';
 // Components
 import Header from '../../components/common/Header';
 import LastSeen from '../../components/common/LastSeen';
-import ProfilePageSkeleton from '../../components/skeletons/ProfilePageSkeleton'; // Add this import
+import ProfilePageSkeleton from '../../components/skeletons/ProfilePageSkeleton';
+import ScreenTransition from '../../components/common/ScreenTransition'; // ADD THIS IMPORT
 
 // Context
 import { useTheme } from '../../contexts/ThemeContext';
@@ -79,7 +80,7 @@ interface Post {
 const ProfileScreen: React.FC = () => {
   const route = useRoute();
   const { userId } = (route.params as ProfileParams) || {};
-  const { colors, isDarkMode } = useTheme(); // Ensure useTheme is used
+  const { colors, isDarkMode } = useTheme();
   const navigation = useNavigation<NavigationProp>();
 
   // Add a try/catch block to handle missing context
@@ -416,193 +417,196 @@ const ProfileScreen: React.FC = () => {
   }, [userId]); // Assuming fetchUserData is memoized or stable
 
   // Render functions
-  if (loading && !refreshing && !user) { // Show skeleton only on initial load when user data is not yet available
+  if (loading && !refreshing && !user) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Header
-          title={isOwnProfile ? 'Profile' : 'Profile'} // Keep header static or use placeholder text
-          showLogo={false} // MODIFIED
-          showNotifications={isOwnProfile || false}
-        />
-        <ProfilePageSkeleton />
-      </View>
+      <ScreenTransition animationType="scale">
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+          <Header
+            title={isOwnProfile ? 'Profile' : 'Profile'}
+            showLogo={false}
+            showNotifications={isOwnProfile || false}
+          />
+          <ProfilePageSkeleton />
+        </View>
+      </ScreenTransition>
     );
   }
 
-  if (!user && !loading) { // Error or user not found state
+  if (!user && !loading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Header
-          title={isOwnProfile ? 'Profile' : 'Profile'}
-          showLogo={false} // MODIFIED
-          showNotifications={isOwnProfile || false}
-        />
-        <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: colors.text.primary }]}>
-            User not found or there was an error loading the profile.
-          </Text>
-          <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
-            <Text style={{ color: colors.primary }}>Retry</Text>
-          </TouchableOpacity>
+      <ScreenTransition animationType="scale">
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+          <Header
+            title={isOwnProfile ? 'Profile' : 'Profile'}
+            showLogo={false}
+            showNotifications={isOwnProfile || false}
+          />
+          <View style={styles.errorContainer}>
+            <Text style={[styles.errorText, { color: colors.text.primary }]}>
+              User not found or there was an error loading the profile.
+            </Text>
+            <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
+              <Text style={{ color: colors.primary }}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </ScreenTransition>
     );
   }
-  
-  // If loading during a refresh, user data might still be present, so don't show full skeleton
-  // The RefreshControl will show its own indicator.
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header
-        title={isOwnProfile ? 'Profile' : user?.name || 'Profile'}
-        showLogo={false} // MODIFIED
-        showNotifications={isOwnProfile || false}
-      />
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: contentPaddingBottom }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        }
-      >
-        {/* Gradient Header */}
-        <LinearGradient
-          colors={['#4080FF', '#9747FF']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.gradientHeader}
+    <ScreenTransition animationType="scale">
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Header
+          title={isOwnProfile ? 'Profile' : user?.name || 'Profile'}
+          showLogo={false}
+          showNotifications={isOwnProfile || false}
+        />
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={{ paddingBottom: contentPaddingBottom }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
         >
-          {isOwnProfile && (
-            <TouchableOpacity style={styles.cameraButton}>
-              <Icon name="camera" size={20} color="#fff" />
-            </TouchableOpacity>
-          )}
-        </LinearGradient>
-        {/* Avatar */}
-        <View style={styles.avatarContainer}>
-          <LinearGradient colors={['#4080FF', '#9747FF']} style={styles.avatarGradient}>
-            <View style={[styles.avatarWrapper, { backgroundColor: colors.card }]}>
-              {user?.profile_image ? (
-                <Image
-                  source={{ uri: getFullImageUrl(user.profile_image) }}
-                  style={styles.avatarImage}
-                />
-              ) : (
-                <Text style={styles.avatarInitials}>{getUserInitials()}</Text>
-              )}
-              {isOwnProfile && (
-                <TouchableOpacity style={styles.avatarCameraButton}>
-                  <Icon name="camera" size={14} color="#fff" />
-                </TouchableOpacity>
-              )}
-            </View>
+          {/* Gradient Header */}
+          <LinearGradient
+            colors={['#4080FF', '#9747FF']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.gradientHeader}
+          >
+            {isOwnProfile && (
+              <TouchableOpacity style={styles.cameraButton}>
+                <Icon name="camera" size={20} color="#fff" />
+              </TouchableOpacity>
+            )}
           </LinearGradient>
-        </View>
-        {/* Name, Username, Bio, Location */}
-        <View style={styles.userInfoContainer}>
-          <Text style={[styles.userName, { color: colors.text.primary }]}>
-            {user?.name || 'John Doe'}
-          </Text>
-          <LastSeen
-            lastActiveTime={user?.last_active || null}
-            isOnline={user?.is_online || false}
-            style={styles.lastSeen}
-          />
-          <Text style={[styles.userHandle, { color: colors.text.secondary }]}>
-            @{user?.username || 'johndoe'}
-          </Text>
-          <Text style={[styles.userBio, { color: colors.text.secondary }]}>
-            {user?.bio || '🎬 Video enthusiast earning daily rewards 💰\nWatch, Learn, Earn with every view! 🚀'}
-          </Text>
-          <View style={styles.locationContainer}>
-            <Icon name="map-pin" size={14} color={colors.text.tertiary} />
-            <Text style={[styles.locationText, { color: colors.text.tertiary }]}>
-              {user?.address || user?.location || 'San Francisco, CA'}
-            </Text>
-          </View>
-        </View>
-        {/* Stats Row */}
-        <View style={[styles.statsContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
-          <TouchableOpacity style={styles.statItem} onPress={handlePostsPress}>
-            <Text style={[styles.statValue, { color: colors.text.primary }]}>{posts.length}</Text>
-            <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Posts</Text>
-          </TouchableOpacity>
-          <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
-          <TouchableOpacity style={styles.statItem} onPress={handleFollowersPress}>
-            <Text style={[styles.statValue, { color: colors.text.primary }]}>
-              {stats.followers.toLocaleString()}
-            </Text>
-            <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Followers</Text>
-          </TouchableOpacity>
-          <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
-          <TouchableOpacity style={styles.statItem} onPress={handleFollowingsPress}>
-            <Text style={[styles.statValue, { color: colors.text.primary }]}>{stats.following}</Text>
-            <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Following</Text>
-          </TouchableOpacity>
-        </View>
-        {/* Edit Profile & Settings Buttons */}
-        {isOwnProfile && (
-          <View style={styles.actionButtonsContainer}>
-            <TouchableOpacity style={styles.editProfileButton} onPress={handleEditProfile}>
-              <Icon name="edit-2" size={18} color="#fff" style={{ marginRight: 8 }} />
-              <Text style={styles.editButtonText}>Edit Profile</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.settingsButton, { backgroundColor: isDarkMode ? colors.gray[700] : colors.gray[200] }]}
-              onPress={handleSettings}
-            >
-              <Icon name="settings" size={22} color={colors.text.secondary} />
-            </TouchableOpacity>
-          </View>
-        )}
-        {/* Posts Grid */}
-        <View style={styles.postsContainer}>
-          {posts.map((post) => (
-            <TouchableOpacity
-              key={post.id}
-              style={styles.postItem}
-              onPress={() => handlePostPress(post.id)}
-            >
-              <Image source={{ uri: getFullImageUrl(post.media_url) }} style={styles.postImage} resizeMode="cover" />
-            </TouchableOpacity>
-          ))}
-        </View>
-        {/* Menu Section */}
-        <View style={[styles.menuContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
-          <Text style={[styles.menuTitle, { color: colors.text.primary }]}>Menu</Text>
-          {menuItems.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.menuItem}
-              onPress={item.onPress}
-              activeOpacity={0.85}
-            >
-              <View style={styles.menuItemLeft}>
-                <View
-                  style={[styles.menuIconContainer, { backgroundColor: isDarkMode ? colors.background : colors.gray[100] }]}
-                >
-                  <Icon name={item.icon} size={22} color={colors.text.secondary} />
-                </View>
-                <View style={styles.menuItemTextContainer}>
-                  <Text style={[styles.menuItemTitle, { color: colors.text.primary }]}>{item.title}</Text>
-                  <Text style={[styles.menuItemSubtitle, { color: colors.text.tertiary }]}>{item.subtitle}</Text>
-                </View>
+          {/* Avatar */}
+          <View style={styles.avatarContainer}>
+            <LinearGradient colors={['#4080FF', '#9747FF']} style={styles.avatarGradient}>
+              <View style={[styles.avatarWrapper, { backgroundColor: colors.card }]}>
+                {user?.profile_image ? (
+                  <Image
+                    source={{ uri: getFullImageUrl(user.profile_image) }}
+                    style={styles.avatarImage}
+                  />
+                ) : (
+                  <Text style={styles.avatarInitials}>{getUserInitials()}</Text>
+                )}
+                {isOwnProfile && (
+                  <TouchableOpacity style={styles.avatarCameraButton}>
+                    <Icon name="camera" size={14} color="#fff" />
+                  </TouchableOpacity>
+                )}
               </View>
-              <View style={styles.menuItemRight}>
-                {item.active && <View style={styles.activeIndicator} />}
-                <Icon name="chevron-right" size={20} color={colors.text.tertiary} />
-              </View>
+            </LinearGradient>
+          </View>
+          {/* Name, Username, Bio, Location */}
+          <View style={styles.userInfoContainer}>
+            <Text style={[styles.userName, { color: colors.text.primary }]}>
+              {user?.name || 'John Doe'}
+            </Text>
+            <LastSeen
+              lastActiveTime={user?.last_active || null}
+              isOnline={user?.is_online || false}
+              style={styles.lastSeen}
+            />
+            <Text style={[styles.userHandle, { color: colors.text.secondary }]}>
+              @{user?.username || 'johndoe'}
+            </Text>
+            <Text style={[styles.userBio, { color: colors.text.secondary }]}>
+              {user?.bio || '🎬 Video enthusiast earning daily rewards 💰\nWatch, Learn, Earn with every view! 🚀'}
+            </Text>
+            <View style={styles.locationContainer}>
+              <Icon name="map-pin" size={14} color={colors.text.tertiary} />
+              <Text style={[styles.locationText, { color: colors.text.tertiary }]}>
+                {user?.address || user?.location || 'San Francisco, CA'}
+              </Text>
+            </View>
+          </View>
+          {/* Stats Row */}
+          <View style={[styles.statsContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+            <TouchableOpacity style={styles.statItem} onPress={handlePostsPress}>
+              <Text style={[styles.statValue, { color: colors.text.primary }]}>{posts.length}</Text>
+              <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Posts</Text>
             </TouchableOpacity>
-          ))}
-        </View>
-      </ScrollView>
-    </View>
+            <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
+            <TouchableOpacity style={styles.statItem} onPress={handleFollowersPress}>
+              <Text style={[styles.statValue, { color: colors.text.primary }]}>
+                {stats.followers.toLocaleString()}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Followers</Text>
+            </TouchableOpacity>
+            <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
+            <TouchableOpacity style={styles.statItem} onPress={handleFollowingsPress}>
+              <Text style={[styles.statValue, { color: colors.text.primary }]}>{stats.following}</Text>
+              <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Following</Text>
+            </TouchableOpacity>
+          </View>
+          {/* Edit Profile & Settings Buttons */}
+          {isOwnProfile && (
+            <View style={styles.actionButtonsContainer}>
+              <TouchableOpacity style={styles.editProfileButton} onPress={handleEditProfile}>
+                <Icon name="edit-2" size={18} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.editButtonText}>Edit Profile</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.settingsButton, { backgroundColor: isDarkMode ? colors.gray[700] : colors.gray[200] }]}
+                onPress={handleSettings}
+              >
+                <Icon name="settings" size={22} color={colors.text.secondary} />
+              </TouchableOpacity>
+            </View>
+          )}
+          {/* Posts Grid */}
+          <View style={styles.postsContainer}>
+            {posts.map((post) => (
+              <TouchableOpacity
+                key={post.id}
+                style={styles.postItem}
+                onPress={() => handlePostPress(post.id)}
+              >
+                <Image source={{ uri: getFullImageUrl(post.media_url) }} style={styles.postImage} resizeMode="cover" />
+              </TouchableOpacity>
+            ))}
+          </View>
+          {/* Menu Section */}
+          <View style={[styles.menuContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+            <Text style={[styles.menuTitle, { color: colors.text.primary }]}>Menu</Text>
+            {menuItems.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.menuItem}
+                onPress={item.onPress}
+                activeOpacity={0.85}
+              >
+                <View style={styles.menuItemLeft}>
+                  <View
+                    style={[styles.menuIconContainer, { backgroundColor: isDarkMode ? colors.background : colors.gray[100] }]}
+                  >
+                    <Icon name={item.icon} size={22} color={colors.text.secondary} />
+                  </View>
+                  <View style={styles.menuItemTextContainer}>
+                    <Text style={[styles.menuItemTitle, { color: colors.text.primary }]}>{item.title}</Text>
+                    <Text style={[styles.menuItemSubtitle, { color: colors.text.tertiary }]}>{item.subtitle}</Text>
+                  </View>
+                </View>
+                <View style={styles.menuItemRight}>
+                  {item.active && <View style={styles.activeIndicator} />}
+                  <Icon name="chevron-right" size={20} color={colors.text.tertiary} />
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+    </ScreenTransition>
   );
 };
 

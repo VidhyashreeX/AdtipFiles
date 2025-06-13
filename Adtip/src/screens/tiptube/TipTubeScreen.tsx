@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback, useRef} from 'react';
+import React, {useState, useEffect, useCallback, useRef, useMemo} from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,7 @@ import Header from '../../components/common/Header';
 import VideoCardSkeleton from '../../components/skeletons/VideoCardSkeleton';
 import RelatedVideoCardSkeleton from '../../components/skeletons/RelatedVideoCardSkeleton';
 import MemoizedRelatedVideoCard from '../../components/tiptube/MemoizedRelatedVideoCard';
+import ScreenTransition from '../../components/common/ScreenTransition'; // ADD THIS IMPORT
 
 // Define interfaces
 interface Video {
@@ -566,6 +567,32 @@ const TipTubeScreen = () => {
   // EARLY RETURN AFTER ALL HOOKS
   if (initialLoading && !refreshing) {
     return (
+      <ScreenTransition animationType="slide">
+        <View style={styles.container}>
+          <Header 
+            title="TipTube" 
+            showTipShortsIcon 
+            showSearch={true}
+            onSearchQueryChange={handleHeaderQueryChange}
+            onSearchSubmit={handleHeaderSearchAPISubmit}
+          />
+          <ScrollView contentContainerStyle={[styles.scrollViewContent, {paddingBottom: contentPaddingBottom}]} showsVerticalScrollIndicator={false}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroller}>
+              {categories.map((cat) => (
+                <TouchableOpacity key={cat.name} style={styles.categoryButton} disabled={true}>
+                  <Text style={styles.categoryButtonText}>{cat.icon} {cat.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            {renderInitialSkeleton()}
+          </ScrollView>
+        </View>
+      </ScreenTransition>
+    );
+  }
+
+  return (
+    <ScreenTransition animationType="slide">
       <View style={styles.container}>
         <Header 
           title="TipTube" 
@@ -574,188 +601,166 @@ const TipTubeScreen = () => {
           onSearchQueryChange={handleHeaderQueryChange}
           onSearchSubmit={handleHeaderSearchAPISubmit}
         />
-        <ScrollView contentContainerStyle={[styles.scrollViewContent, {paddingBottom: contentPaddingBottom}]} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          ref={scrollViewRef}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          contentContainerStyle={[styles.scrollViewContent, {paddingBottom: contentPaddingBottom}]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
+        >
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroller}>
             {categories.map((cat) => (
-              <TouchableOpacity key={cat.name} style={styles.categoryButton} disabled={true}>
-                <Text style={styles.categoryButtonText}>{cat.icon} {cat.name}</Text>
+              <TouchableOpacity 
+                key={cat.name} 
+                onPress={() => setSelectedCategory(cat.name)} 
+                style={[styles.categoryButton, selectedCategory === cat.name && styles.selectedCategoryButton]}
+              >
+                <Text style={[styles.categoryButtonText, selectedCategory === cat.name && styles.selectedCategoryButtonText]}>
+                  {cat.icon} {cat.name}
+                </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
-          {renderInitialSkeleton()}
-        </ScrollView>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      <Header 
-        title="TipTube" 
-        showTipShortsIcon 
-        showSearch={true}
-        onSearchQueryChange={handleHeaderQueryChange}
-        onSearchSubmit={handleHeaderSearchAPISubmit}
-      />
-      <ScrollView
-        ref={scrollViewRef}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        contentContainerStyle={[styles.scrollViewContent, {paddingBottom: contentPaddingBottom}]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
-      >
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroller}>
-          {categories.map((cat) => (
-            <TouchableOpacity 
-              key={cat.name} 
-              onPress={() => setSelectedCategory(cat.name)} 
-              style={[styles.categoryButton, selectedCategory === cat.name && styles.selectedCategoryButton]}
-            >
-              <Text style={[styles.categoryButtonText, selectedCategory === cat.name && styles.selectedCategoryButtonText]}>
-                {cat.icon} {cat.name}
+          
+          {filteredVideos.length === 0 && !loading && !refreshing && !initialLoading ? (
+            <View style={styles.noVideosContainer}>
+              <Text style={[styles.noVideosText, {color: colors.text.secondary}]}>
+                {searchQuery ? `No videos found for "${searchQuery}".` : "No videos found."}
               </Text>
-            </TouchableOpacity>
-          ))}
+              {searchQuery && (
+                <Text style={[styles.noVideosText, {fontSize: 14, color: colors.text.tertiary, marginTop: 8}]}>
+                  Try a different search term.
+                </Text>
+              )}
+            </View>
+          ) : filteredVideos.length === 0 && loading && !refreshing && !initialLoading ? (
+            <View style={[styles.loadingContainer, {flex: 1, justifyContent: 'center', paddingTop: 50}]}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={[styles.loadingText, {color: colors.text.secondary}]}>Loading videos...</Text>
+            </View>
+          ) : (
+            <View style={styles.videoGrid}>
+              {filteredVideos.map(renderVideoCard)}
+            </View>
+          )}
+          
+          {loading && filteredVideos.length > 0 && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={[styles.loadingText, {color: colors.text.secondary}]}>Loading more...</Text>
+            </View>
+          )}
         </ScrollView>
         
-        {filteredVideos.length === 0 && !loading && !refreshing && !initialLoading ? (
-          <View style={styles.noVideosContainer}>
-            <Text style={[styles.noVideosText, {color: colors.text.secondary}]}>
-              {searchQuery ? `No videos found for "${searchQuery}".` : "No videos found."}
-            </Text>
-            {searchQuery && (
-              <Text style={[styles.noVideosText, {fontSize: 14, color: colors.text.tertiary, marginTop: 8}]}>
-                Try a different search term.
-              </Text>
-            )}
-          </View>
-        ) : filteredVideos.length === 0 && loading && !refreshing && !initialLoading ? (
-          <View style={[styles.loadingContainer, {flex: 1, justifyContent: 'center', paddingTop: 50}]}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[styles.loadingText, {color: colors.text.secondary}]}>Loading videos...</Text>
-          </View>
-        ) : (
-          <View style={styles.videoGrid}>
-            {filteredVideos.map(renderVideoCard)}
-          </View>
-        )}
-        
-        {loading && filteredVideos.length > 0 && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[styles.loadingText, {color: colors.text.secondary}]}>Loading more...</Text>
-          </View>
-        )}
-      </ScrollView>
-      
-      <Modal 
-        visible={showPlayerModal} 
-        animationType="none"
-        presentationStyle="fullScreen"
-        onRequestClose={closePlayer}
-      >
-        <StatusBar backgroundColor="#000" barStyle="light-content" translucent={true} />
-        <View style={styles.youtubeModalContainer}>
-          <Animated.View style={[styles.youtubeModalContent, modalAnimatedStyle]}>
-            {currentVideo ? (
-              <>
-                <Animated.View style={[
-                  styles.youtubeVideoContainer, 
-                  videoPlayerAnimatedStyle,
-                ]}>
-                  <Video
-                    key={currentVideo.id}
-                    source={{uri: currentVideo.videoUrl ?? ''}}
-                    style={styles.youtubeVideoPlayer}
-                    controls={true}
-                    paused={!showPlayerModal || !isVideoReady}
-                    resizeMode={"contain"}
-                    onReadyForDisplay={handleVideoReadyForDisplay}
-                    onError={(error) => {
-                      console.error('[TipTubeScreen] Video player error:', error);
-                      setIsVideoReady(false);
-                    }}
-                    onEnd={() => {
-                      console.log('[TipTubeScreen] Video ended (default controls)');
-                      setHasVideoEnded(true);
-                    }}
-                    repeat={false}
-                    playInBackground={false}
-                    playWhenInactive={false}
-                    reportBandwidth={true}
-                    bufferConfig={{
-                      minBufferMs: 5000,
-                      maxBufferMs: 20000,
-                      bufferForPlaybackMs: 2500,
-                      bufferForPlaybackAfterRebufferMs: 5000
-                    }}
-                    ref={videoPlayerRef}
-                  />
-                  
-                  <TouchableOpacity 
-                    style={styles.simpleModalBackButton}
-                    onPress={closePlayer}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.simpleModalBackButtonText}>←</Text>
-                  </TouchableOpacity>
+        <Modal 
+          visible={showPlayerModal} 
+          animationType="none"
+          presentationStyle="fullScreen"
+          onRequestClose={closePlayer}
+        >
+          <StatusBar backgroundColor="#000" barStyle="light-content" translucent={true} />
+          <View style={styles.youtubeModalContainer}>
+            <Animated.View style={[styles.youtubeModalContent, modalAnimatedStyle]}>
+              {currentVideo ? (
+                <>
+                  <Animated.View style={[
+                    styles.youtubeVideoContainer, 
+                    videoPlayerAnimatedStyle,
+                  ]}>
+                    <Video
+                      key={currentVideo.id}
+                      source={{uri: currentVideo.videoUrl ?? ''}}
+                      style={styles.youtubeVideoPlayer}
+                      controls={true}
+                      paused={!showPlayerModal || !isVideoReady}
+                      resizeMode={"contain"}
+                      onReadyForDisplay={handleVideoReadyForDisplay}
+                      onError={(error) => {
+                        console.error('[TipTubeScreen] Video player error:', error);
+                        setIsVideoReady(false);
+                      }}
+                      onEnd={() => {
+                        console.log('[TipTubeScreen] Video ended (default controls)');
+                        setHasVideoEnded(true);
+                      }}
+                      repeat={false}
+                      playInBackground={false}
+                      playWhenInactive={false}
+                      reportBandwidth={true}
+                      bufferConfig={{
+                        minBufferMs: 5000,
+                        maxBufferMs: 20000,
+                        bufferForPlaybackMs: 2500,
+                        bufferForPlaybackAfterRebufferMs: 5000
+                      }}
+                      ref={videoPlayerRef}
+                    />
+                    
+                    <TouchableOpacity 
+                      style={styles.simpleModalBackButton}
+                      onPress={closePlayer}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.simpleModalBackButtonText}>←</Text>
+                    </TouchableOpacity>
 
-                  {!isVideoReady && (
-                    <View style={styles.youtubeLoadingOverlay}>
-                      <ActivityIndicator size="large" color="#fff" />
-                    </View>
-                  )}
-                </Animated.View>
-                
-                <Animated.View style={[styles.youtubeContentSection, contentAnimatedStyle]}>
-                  <ScrollView 
-                    style={styles.youtubeScrollContent}
-                    showsVerticalScrollIndicator={false}
-                    bounces={false}
-                  >
-                    <View style={styles.youtubeVideoInfo}>
-                      <Text style={styles.youtubeVideoTitle} numberOfLines={2}>
-                        {currentVideo.title}
-                      </Text>
-                      <View style={styles.youtubeVideoMeta}>
-                        <Text style={styles.youtubeVideoStats}>
-                          {currentVideo.views.toLocaleString()} views • {currentVideo.posted}
-                        </Text>
+                    {!isVideoReady && (
+                      <View style={styles.youtubeLoadingOverlay}>
+                        <ActivityIndicator size="large" color="#fff" />
                       </View>
-                    </View>
-
-                    <View style={styles.youtubeUpNextSection}>
-                      <Text style={styles.youtubeUpNextTitle}>Up next</Text>
-                      {isVideoReady && loadingUpNext && upNextVideos.length === 0 ? (
-                        <View>
-                          {Array(3).fill(0).map((_, i) => (
-                            <RelatedVideoCardSkeleton key={`upnext-skel-${i}`} />
-                          ))}
+                    )}
+                  </Animated.View>
+                  
+                  <Animated.View style={[styles.youtubeContentSection, contentAnimatedStyle]}>
+                    <ScrollView 
+                      style={styles.youtubeScrollContent}
+                      showsVerticalScrollIndicator={false}
+                      bounces={false}
+                    >
+                      <View style={styles.youtubeVideoInfo}>
+                        <Text style={styles.youtubeVideoTitle} numberOfLines={2}>
+                          {currentVideo.title}
+                        </Text>
+                        <View style={styles.youtubeVideoMeta}>
+                          <Text style={styles.youtubeVideoStats}>
+                            {currentVideo.views.toLocaleString()} views • {currentVideo.posted}
+                          </Text>
                         </View>
-                      ) : (
-                        <FlatList
-                          ref={upNextFlatListRef}
-                          data={upNextVideos.slice(0, 10)}
-                          renderItem={renderRelatedVideoItem}
-                          keyExtractor={(item) => `upnext-${item.id.toString()}`}
-                          scrollEnabled={false}
-                          showsVerticalScrollIndicator={false}
-                        />
-                      )}
-                    </View>
-                    <View style={styles.youtubeBottomSpacing} />
-                  </ScrollView>
-                </Animated.View>
-              </>
-            ) : (
-              <View style={styles.youtubeLoadingContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
-              </View>
-            )}
-          </Animated.View>
-        </View>
-      </Modal>
-    </View>
+                      </View>
+
+                      <View style={styles.youtubeUpNextSection}>
+                        <Text style={styles.youtubeUpNextTitle}>Up next</Text>
+                        {isVideoReady && loadingUpNext && upNextVideos.length === 0 ? (
+                          <View>
+                            {Array(3).fill(0).map((_, i) => (
+                              <RelatedVideoCardSkeleton key={`upnext-skel-${i}`} />
+                            ))}
+                          </View>
+                        ) : (
+                          <FlatList
+                            ref={upNextFlatListRef}
+                            data={upNextVideos.slice(0, 10)}
+                            renderItem={renderRelatedVideoItem}
+                            keyExtractor={(item) => `upnext-${item.id.toString()}`}
+                            scrollEnabled={false}
+                            showsVerticalScrollIndicator={false}
+                          />
+                        )}
+                      </View>
+                      <View style={styles.youtubeBottomSpacing} />
+                    </ScrollView>
+                  </Animated.View>
+                </>
+              ) : (
+                <View style={styles.youtubeLoadingContainer}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+              )}
+            </Animated.View>
+          </View>
+        </Modal>
+      </View>
+    </ScreenTransition>
   );
 };
 

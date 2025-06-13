@@ -1,5 +1,5 @@
 // src/screens/home/HomeScreen.tsx
-import React, {useState, useEffect, useCallback, useRef, useMemo} from 'react'; // Added useMemo
+import React, {useState, useEffect, useCallback, useRef, useMemo} from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   RefreshControl,
   ScrollView,
   Platform,
-  ViewabilityConfig, // Keep this import for the type
+  ViewabilityConfig,
   ViewToken,
   Keyboard,
   TouchableOpacity,
@@ -33,6 +33,7 @@ import StoryItem from '../../components/home/StoryItem';
 import CategoryItem from '../../components/home/CategoryItem';
 import EarnCard from '../../components/home/EarnCard';
 import CommentScreen from './CommentScreen';
+import ScreenTransition from '../../components/common/ScreenTransition'; // ADD THIS IMPORT
 
 // Skeleton Components
 import StorySkeleton from '../../components/skeletons/StoryItemSkeleton';
@@ -153,7 +154,7 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}) => {
-  const {colors, isDarkMode} = useTheme(); // Make sure to get isDarkMode as well
+  const {colors, isDarkMode} = useTheme();
   const {user, refreshUserData} = useAuth();
   const navigation = useNavigation<AppNavigationProps>();
   const {contentPaddingBottom} = useTabNavigator();
@@ -514,20 +515,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   };
 
   const renderInitialSkeletonView = () => (
-    <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Home" showLogo={false} showWallet={true} walletAmount={walletAmount} />
-      <ScrollView
-        style={[styles.scrollView, {backgroundColor: colors.background}]}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.postsContainerStyle, {paddingBottom: contentPaddingBottom}]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
-      >
-        <StoriesRow stories={[]} onStoryPress={() => {}} onAddStoryPress={() => {}} isLoading={true} />
-        <CategoriesRow categories={staticCategories} selectedCategory={null} onCategoryPress={() => {}} isLoading={true} />
-        <EarnCardsRow onWatchAndEarn={() => {}} onReferAndEarn={() => {}} isLoading={true} />
-        {Array(3).fill(0).map((_, index) => <PostItemSkeleton key={`post-skel-${index}`} />)}
-      </ScrollView>
-    </View>
+    <ScreenTransition animationType="slide">
+      <View style={[styles.container, {backgroundColor: colors.background}]}>
+        <Header title="Home" showLogo={false} showWallet={true} walletAmount={walletAmount} />
+        <ScrollView
+          style={[styles.scrollView, {backgroundColor: colors.background}]}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.postsContainerStyle, {paddingBottom: contentPaddingBottom}]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
+        >
+          <StoriesRow stories={[]} onStoryPress={() => {}} onAddStoryPress={() => {}} isLoading={true} />
+          <CategoriesRow categories={staticCategories} selectedCategory={null} onCategoryPress={() => {}} isLoading={true} />
+          <EarnCardsRow onWatchAndEarn={() => {}} onReferAndEarn={() => {}} isLoading={true} />
+          {Array(3).fill(0).map((_, index) => <PostItemSkeleton key={`post-skel-${index}`} />)}
+        </ScrollView>
+      </View>
+    </ScreenTransition>
   );
 
   // For debugging, log the value just before render
@@ -539,33 +542,35 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   }
 
   return (
-    <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Home" showLogo={false} showWallet={true} walletAmount={walletAmount} />
-      <FlatList
-        data={posts}
-        renderItem={renderPostItem}
-        keyExtractor={(item, index) => `post-${item.id}-${index}`}
-        ListHeaderComponent={renderListHeader}
-        ListFooterComponent={renderFooter}
-        ListEmptyComponent={renderListEmpty}
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.5}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
-        showsVerticalScrollIndicator={false}
-        initialNumToRender={5}
-        maxToRenderPerBatch={10}
-        windowSize={21}
-        viewabilityConfig={viewabilityConfig}
-        onViewableItemsChanged={onViewableItemsChanged}
-        contentContainerStyle={[styles.postsContainerStyle, {paddingBottom: contentPaddingBottom}]}
-        maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 10 }}
-        onScrollBeginDrag={() => Keyboard.dismiss()}
-        style={[styles.scrollView, {backgroundColor: colors.background}]} // Add explicit background here too
-      />
-      {commentModalVisible && selectedCommentPostId !== null && (
-        <CommentScreen visible={commentModalVisible} postId={selectedCommentPostId} onClose={handleCloseCommentModal} />
-      )}
-    </View>
+    <ScreenTransition animationType="slide">
+      <View style={[styles.container, {backgroundColor: colors.background}]}>
+        <Header title="Home" showLogo={false} showWallet={true} walletAmount={walletAmount} />
+        <FlatList
+          data={posts}
+          renderItem={renderPostItem}
+          keyExtractor={(item, index) => `post-${item.id}-${index}`}
+          ListHeaderComponent={renderListHeader}
+          ListFooterComponent={renderFooter}
+          ListEmptyComponent={renderListEmpty}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={5}
+          maxToRenderPerBatch={10}
+          windowSize={21}
+          viewabilityConfig={viewabilityConfig}
+          onViewableItemsChanged={onViewableItemsChanged}
+          contentContainerStyle={[styles.postsContainerStyle, {paddingBottom: contentPaddingBottom}]}
+          maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 10 }}
+          onScrollBeginDrag={() => Keyboard.dismiss()}
+          style={[styles.scrollView, {backgroundColor: colors.background}]}
+        />
+        {commentModalVisible && selectedCommentPostId !== null && (
+          <CommentScreen visible={commentModalVisible} postId={selectedCommentPostId} onClose={handleCloseCommentModal} />
+        )}
+      </View>
+    </ScreenTransition>
   );
 };
 

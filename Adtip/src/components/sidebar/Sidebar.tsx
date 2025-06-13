@@ -259,16 +259,27 @@ const Sidebar: React.FC = () => {
   ], []);
 
   const handleNavigate = useCallback((screenName: keyof MainNavigatorParamList) => {
+    // Start sidebar closing animation immediately
     closeSidebar();
-    // Delay navigation slightly to allow sidebar to start closing
+    
+    // Use a shorter delay for more responsive navigation
     setTimeout(() => {
       try {
-        NavigationService.navigate('Main', { screen: screenName as any });
+        // Navigate with potential screen-specific parameters if needed
+        if (screenName === 'Profile') {
+          NavigationService.navigate('Main', { 
+            screen: screenName as any,
+            params: { userId: undefined } // Current user profile
+          });
+        } else {
+          NavigationService.navigate('Main', { screen: screenName as any });
+        }
       } catch (error) {
         console.warn('Navigation error:', error, 'navigating to screen:', screenName);
+        // Fallback to home if navigation fails
         NavigationService.navigate('Main', { screen: 'TabHome' as any });
       }
-    }, 150);
+    }, 100); // Reduced delay for more responsive feel
   }, [closeSidebar]);
 
   const panGesture = Gesture.Pan()
