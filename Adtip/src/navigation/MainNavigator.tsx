@@ -43,6 +43,7 @@ import CommentsScreen from '../screens/home/CommentScreen';
 import FollowersList from '../screens/profile/FollowersList'; // Import FollowersList
 import FollowingsList from '../screens/profile/FollowingsList'; // Import FollowingsList
 import ExploreScreen from '../screens/explore/ExploreScreen';
+import{ VideoPlayerModalScreen } from '../screens/tiptube/TipTubeScreen'; // Import VideoPlayerModalScreen
 
 // Create stack navigator
 const Stack = createNativeStackNavigator<Record<string, any> & {
@@ -349,6 +350,17 @@ const MainNavigator = () => {
       <Stack.Screen name="FollowersList" component={EnhancedFollowersList} />
       <Stack.Screen name="FollowingsList" component={EnhancedFollowingsList} />
       <Stack.Screen name="Explore" component={EnhancedExploreScreen} />
+      
+      {/* Video player modal screen */}
+      <Stack.Screen 
+        name="VideoPlayerModal" 
+        component={VideoPlayerModalScreen}
+        options={{
+          presentation: 'modal',
+          gestureEnabled: true,
+          animationTypeForReplace: 'push',
+        }}
+      />
     </Stack.Navigator>
   );
 };

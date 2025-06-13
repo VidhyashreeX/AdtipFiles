@@ -24,6 +24,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import messaging from '@react-native-firebase/messaging';
 import firebase from '@react-native-firebase/app';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 // Contexts
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -238,7 +239,9 @@ function App(): React.JSX.Element {
               <WalletProvider>
                 <ShortsProvider>
                   <SidebarProvider>
-                    <AppNavigator />
+                    <GestureHandlerRootView style={{ flex: 1 }}>
+                      <AppNavigator />
+                    </GestureHandlerRootView>
                   </SidebarProvider>
                 </ShortsProvider>
               </WalletProvider>
