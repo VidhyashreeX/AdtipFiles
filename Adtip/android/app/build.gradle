@@ -1,5 +1,5 @@
 apply plugin: "com.android.application"
-apply plugin: 'com.google.gms.google-services'
+// apply plugin: 'com.google.gms.google-services' // Moved to the end
 apply plugin: 'com.google.firebase.crashlytics'
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
@@ -116,8 +116,15 @@ dependencies {
     // Commented out PubScale integration - June 2, 2025
     // implementation 'com.pubscale.sdkone:offerwall:1.0.10' // Using the version we know exists
 
-    // Firebase Messaging
-    implementation 'com.google.firebase:firebase-messaging:23.1.2'
+    // Firebase BoM - Recommended
+    implementation platform('com.google.firebase:firebase-bom:33.15.0') // Or the latest version
+
+    // Firebase Analytics - Recommended for most Firebase setups
+    implementation 'com.google.firebase:firebase-analytics'
+
+    // Firebase Messaging (version managed by BoM)
+    implementation 'com.google.firebase:firebase-messaging' 
+    // implementation 'com.google.firebase:firebase-messaging:23.1.2' // Remove specific version
     
     // VideoSDK Dependencies
     implementation project(':rnwebrtc')
@@ -132,4 +139,7 @@ dependencies {
 }
 
 apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")
+
+// Apply the Google services plugin at the very end of the file
+apply plugin: 'com.google.gms.google-services'
 
