@@ -515,7 +515,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
   const renderInitialSkeletonView = () => (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Home" showLogo={true} showWallet={true} walletAmount={walletAmount} />
+      <Header title="Home" showLogo={false} showWallet={true} walletAmount={walletAmount} />
       <ScrollView
         style={[styles.scrollView, {backgroundColor: colors.background}]}
         showsVerticalScrollIndicator={false}
@@ -540,7 +540,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Home" showLogo={true} showWallet={true} walletAmount={walletAmount} />
+      <Header title="Home" showLogo={false} showWallet={true} walletAmount={walletAmount} />
       <FlatList
         data={posts}
         renderItem={renderPostItem}

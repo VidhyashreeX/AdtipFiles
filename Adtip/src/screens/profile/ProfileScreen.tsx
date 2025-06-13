@@ -40,6 +40,8 @@ type RootStackParamList = {
   PostDetail: { postId: number };
   TipShorts: undefined;
   Earnings: undefined;
+  Packages: undefined; // Ensure this matches the target route name
+  ChoosePackages: undefined; // Keep if other parts of ProfileScreen might use it, or remove if not
 };
 
 // Define navigation type
@@ -363,7 +365,7 @@ const ProfileScreen: React.FC = () => {
       icon: 'award',
       title: 'Premium Content',
       subtitle: 'Unlock exclusive videos',
-      onPress: () => console.log('Navigate to premium content'),
+      onPress: () => navigation.navigate('Packages'), // Changed to 'Packages'
       active: true,
     },
     {
@@ -419,7 +421,7 @@ const ProfileScreen: React.FC = () => {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Header
           title={isOwnProfile ? 'Profile' : 'Profile'} // Keep header static or use placeholder text
-          showLogo={true}
+          showLogo={false} // MODIFIED
           showNotifications={isOwnProfile || false}
         />
         <ProfilePageSkeleton />
@@ -432,7 +434,7 @@ const ProfileScreen: React.FC = () => {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Header
           title={isOwnProfile ? 'Profile' : 'Profile'}
-          showLogo={true}
+          showLogo={false} // MODIFIED
           showNotifications={isOwnProfile || false}
         />
         <View style={styles.errorContainer}>
@@ -454,7 +456,7 @@ const ProfileScreen: React.FC = () => {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Header
         title={isOwnProfile ? 'Profile' : user?.name || 'Profile'}
-        showLogo={true}
+        showLogo={false} // MODIFIED
         showNotifications={isOwnProfile || false}
       />
       <ScrollView

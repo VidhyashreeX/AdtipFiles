@@ -65,17 +65,33 @@ const OTPScreen = ({ navigation, route }) => {
     
     try {
       // Verify OTP
-      const userData = await verifyOtp(mobileNumber, otp, id);
+      // The verifyOtp function from useAuth is expected to return the full API response structure
+      // which includes: { status, message, accessToken, data: [{...userProfileData}] }
+      const apiResponse = await verifyOtp(mobileNumber, otp, id);
       
-      // Navigate based on first time status
-      if (isFirstTime || userData.is_first_time) {
-        navigation.navigate('UserDetails');
+      if (apiResponse && apiResponse.data && apiResponse.data.length > 0) {
+        const userProfileData = apiResponse.data[0];
+
+        // Check the isSaveUserDetails field to determine navigation
+        if (userProfileData.isSaveUserDetails === 1) {
+          // User details are already saved, redirect to HomeScreen (via Main navigator)
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Main' }],
+          });
+        } else if (userProfileData.isSaveUserDetails === 0) {
+          // User details are not saved, redirect to UserDetailsScreen
+          navigation.navigate('UserDetails');
+        } else {
+          // Fallback if isSaveUserDetails is not 0 or 1, though the prompt implies it will be.
+          // Defaulting to UserDetailsScreen as a safety measure, or you can show an error.
+          console.warn('isSaveUserDetails is not 0 or 1, defaulting to UserDetailsScreen. Value:', userProfileData.isSaveUserDetails);
+          navigation.navigate('UserDetails');
+        }
       } else {
-        // Reset navigation stack and go to main app
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'Main' }],
-        });
+        // Handle cases where the expected data structure is not returned
+        console.error('OTP verification response did not contain expected user data:', apiResponse);
+        setError('Failed to process login. Please try again.');
       }
     } catch (err) {
       // Handle error

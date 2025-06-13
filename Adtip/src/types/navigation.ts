@@ -64,6 +64,19 @@ export type MainNavigatorParamList = {
   Earnings: undefined;
   Analytics: undefined;
   Notifications: undefined;
+  Packages: undefined; // Added if it was missing and PackagesScreen is a route
+  ChoosePackages: undefined; // Added this line
+  Checkout: { package: { id: string; name: string; price: number; bestValue?: boolean }, billing: any, totalPrice: number }; // Ensure Checkout is correctly typed
+  FollowersList: { followers: any[]; userId?: number };
+  FollowingsList: { followings: any[]; userId?: number };
+  CreateChannel: undefined;
+  PromotePost: undefined;
+  VideoPreview: undefined;
+  Shorts: undefined;
+  TrackOrder: undefined;
+  Support: undefined;
+  CreateCampaign: undefined;
+  Explore: undefined;
   // Add other screens specific to MainNavigator
 };
 
