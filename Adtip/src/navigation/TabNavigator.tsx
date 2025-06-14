@@ -10,6 +10,7 @@ import TipTubeScreen from '../screens/tiptube/TipTubeScreen';
 import TipCallScreen from '../screens/tipcall/TipCallScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import CreateContentModal from '../screens/content/CreateContentModal';
+import TipShortsEnhanced from '../screens/tipshorts/TipShortsEnhanced';
 
 // Import theme and contexts
 import {useTheme} from '../contexts/ThemeContext';

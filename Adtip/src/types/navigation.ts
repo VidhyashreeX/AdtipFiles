@@ -57,7 +57,12 @@ export type MainNavigatorParamList = {
   Search: undefined;
   Wallet: undefined;
   Settings: undefined;
-  TipShorts: undefined;
+  // Update TipShorts type definition to support enhanced features
+  TipShorts: { 
+    shortId?: string;
+    initialIndex?: number;
+    preloadedShorts?: any[];
+  };
   PlayToEarn: undefined;
   WatchToEarn: undefined;
   AdPassbook: undefined;

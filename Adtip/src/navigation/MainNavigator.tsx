@@ -15,7 +15,8 @@ import CreatePostScreen from '../screens/content/CreatePostScreen';
 import SelectCategoryScreen from '../screens/content/SelectCategoryScreen';
 import TipTubeUploadScreen from '../screens/content/TipTubeUploadScreen';
 import TipShortsUploadScreen from '../screens/content/TipShortsUploadScreen';
-import TipShorts from '../screens/tipshorts/tipshorts';
+// Replace TipShorts import with TipShortsEnhanced
+import TipShortsEnhanced from '../screens/tipshorts/TipShortsEnhanced';
 import VideoPreviewScreen from '../screens/media/VideoPreviewScreen';
 import VideoScreen from '../screens/media/VideoScreen';
 import ShortsScreen from '../screens/media/ShortsScreen';
@@ -280,7 +281,8 @@ const MainNavigator = () => {
   const EnhancedVideoPreviewScreen = withWalletBalance(VideoPreviewScreen);
   const EnhancedVideoScreen = withWalletBalance(VideoScreen);
   const EnhancedShortsScreen = withWalletBalance(ShortsScreen);
-  const EnhancedTipShortsScreen = withWalletBalance(TipShorts);
+  // Replace TipShorts with TipShortsEnhanced
+  const EnhancedTipShortsScreen = withWalletBalance(TipShortsEnhanced);
   const EnhancedChannelScreen = withWalletBalance(ChannelScreen);
   const EnhancedCreateChannelScreen = withWalletBalance(CreateChannelScreen);
   const EnhancedPackagesScreen = withWalletBalance(PackagesScreen);
@@ -365,7 +367,16 @@ const MainNavigator = () => {
       {/* Media viewing with custom transitions */}
       <Stack.Screen name="VideoPreview" component={EnhancedVideoPreviewScreen} />
       <Stack.Screen name="Video" component={EnhancedVideoScreen} />
-      <Stack.Screen name="TipShorts" component={EnhancedTipShortsScreen} />
+      {/* Replace TipShorts screen with TipShortsEnhanced - keep ultra-smooth transition */}
+      <Stack.Screen 
+        name="TipShorts" 
+        component={EnhancedTipShortsScreen}
+        options={{
+          ...fastTransitionConfig, // Use fastest transition for smooth Reels experience
+          gestureEnabled: true,
+          gestureDirection: 'vertical' as const, // Allow vertical gesture for better UX
+        }}
+      />
       <Stack.Screen name="Shorts" component={EnhancedShortsScreen} />
       
       {/* Comments with slide up */}

@@ -131,6 +131,14 @@ dependencies {
     implementation project(':rnfgservice')        // MISSING - ADDED
     implementation project(':rnincallmanager')    // MISSING - ADDED
 
+    // ADD EXOPLAYER DEPENDENCIES - REQUIRED FOR ENHANCED TIPSHORTS
+    implementation 'com.google.android.exoplayer:exoplayer:2.19.1'
+    implementation 'com.google.android.exoplayer:exoplayer-core:2.19.1'
+    implementation 'com.google.android.exoplayer:exoplayer-ui:2.19.1'
+    implementation 'com.google.android.exoplayer:exoplayer-hls:2.19.1'
+    implementation 'com.google.android.exoplayer:exoplayer-smoothstreaming:2.19.1'
+    implementation 'com.google.android.exoplayer:exoplayer-dash:2.19.1'
+
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {

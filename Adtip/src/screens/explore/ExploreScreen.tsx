@@ -117,7 +117,10 @@ const ExploreScreen: React.FC = () => {
           if (item.type === 'post') {
             navigation.navigate('VideoPreview', { postId: item.id });
           } else {
-            navigation.navigate('TipShorts', { shortId: item.id });
+            navigation.navigate('TipShorts', { 
+              shortId: item.id,
+              initialIndex: 0, // If you want to start at a specific video
+            });
           }
         }}
         activeOpacity={0.8}

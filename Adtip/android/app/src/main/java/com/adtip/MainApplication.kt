@@ -12,28 +12,28 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import com.facebook.soloader.SoLoader
 
-// VideoSDK Imports (MISSING - ADDED)
+// VideoSDK Imports
 import live.videosdk.rnwebrtc.WebRTCModulePackage
 import live.videosdk.rnfgservice.ForegroundServicePackage
 import live.videosdk.rnincallmanager.InCallManagerPackage
 
-// Commented out PubScale integration - June 2, 2025
-// import com.adtip.app.adtip_app.PubscaleOfferwallSdkPackage
+// ExoPlayer Package Import - ENSURE THIS IS CORRECT
+import com.adtip.app.adtip_app.ExoPlayerPackage
 
 class MainApplication : Application(), ReactApplication {
 
   override val reactNativeHost: ReactNativeHost =
     object : DefaultReactNativeHost(this) {
       override fun getPackages(): List<ReactPackage> {
-        val packages = PackageList(this).packages
+        val packages = PackageList(this).packages.toMutableList()
         
         // Add manually linked VideoSDK packages
         packages.add(WebRTCModulePackage())
-        packages.add(ForegroundServicePackage())          // MISSING - ADDED
-        packages.add(InCallManagerPackage())              // MISSING - ADDED
+        packages.add(ForegroundServicePackage())
+        packages.add(InCallManagerPackage())
         
-        // Commented out PubScale integration - June 2, 2025
-        // packages.add(PubscaleOfferwallSdkPackage()) // Uncomment if needed later
+        // Add ExoPlayer Package - CRITICAL FOR TIPSHORTS ENHANCED
+        packages.add(ExoPlayerPackage())
         
         return packages
       }
@@ -53,7 +53,6 @@ class MainApplication : Application(), ReactApplication {
     super.onCreate()
     SoLoader.init(this, OpenSourceMergedSoMapping)
     if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
-      // Load native entry point for New Architecture
       load()
     }
   }
