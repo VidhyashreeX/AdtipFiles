@@ -7,6 +7,7 @@ import com.google.android.exoplayer2.source.hls.HlsMediaSource
 import com.google.android.exoplayer2.source.ProgressiveMediaSource
 import com.google.android.exoplayer2.upstream.DefaultDataSource
 import com.google.android.exoplayer2.upstream.cache.CacheDataSource
+import com.facebook.react.module.annotations.ReactModule
 
 @ReactModule(name = "ExoPlayerPreloader")
 class ExoPlayerPreloader(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
