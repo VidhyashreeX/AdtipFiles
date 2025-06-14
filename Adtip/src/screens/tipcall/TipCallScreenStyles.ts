@@ -814,4 +814,47 @@ export const styles = StyleSheet.create({
     marginTop: 5,
     gap: 10,
   },
+
+  // Add new styles for the enhanced contact display
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#4CAF50',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  
+  contactLanguages: {
+    fontSize: 11,
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  
+  contactInterests: {
+    fontSize: 11,
+    marginTop: 1,
+    fontStyle: 'italic',
+  },
+  
+  contactsHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  
+  contactsCount: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  
+  emptySubText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+  },
 });

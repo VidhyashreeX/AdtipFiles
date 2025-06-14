@@ -133,7 +133,7 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   return newArray;
 };
 
-// Enhanced AnimatedVideoCard with shared element ID
+// Enhanced AnimatedVideoCard with shared transition tag
 const AnimatedVideoCard = React.memo<{
   video: Video | null;
   onPress: (layout: CardLayout) => void;
@@ -154,7 +154,6 @@ const AnimatedVideoCard = React.memo<{
   const shadowOpacity = useSharedValue(0.08);
   const elevation = useSharedValue(3);
 
-  // Refs for precise layout measurement
   const cardRef = useAnimatedRef<View>();
   const thumbnailRef = useAnimatedRef<View>();
   const [cardLayout, setCardLayout] = useState<CardLayout>({ x: 0, y: 0, width: 0, height: 0 });
@@ -230,14 +229,16 @@ const AnimatedVideoCard = React.memo<{
   // Layout handlers
   const handleCardLayout = useCallback((event: LayoutChangeEvent) => {
     const { x, y, width, height } = event.nativeEvent.layout;
-    setCardLayout({ x, y, width, height });
+    // Account for scroll position and header
+    setCardLayout({ x: x + CARD_MARGIN_HORIZONTAL, y: y + 100, width, height });
   }, []);
 
   const handleThumbnailLayout = useCallback((event: LayoutChangeEvent) => {
     const { x, y, width, height } = event.nativeEvent.layout;
+    // Calculate absolute position from card layout
     setThumbnailLayout({ 
       x: cardLayout.x + x, 
-      y: cardLayout.y + y, 
+      y: cardLayout.y + y,
       width, 
       height 
     });
@@ -284,8 +285,6 @@ const AnimatedVideoCard = React.memo<{
       style={[styles.videoCard, cardAnimatedStyle]}
       onLayout={handleCardLayout}
       ref={cardRef}
-      // Add shared element ID for React Navigation
-      sharedTransitionTag={`video-card-${video.id}`}
     >
       <TouchableOpacity
         onPress={handlePress}
@@ -293,14 +292,14 @@ const AnimatedVideoCard = React.memo<{
         onPressOut={handlePressOut}
         activeOpacity={0.98}
       >
+        {/* Add shared transition tag to thumbnail container */}
         <Animated.View 
           style={styles.thumbnailContainer}
           onLayout={handleThumbnailLayout}
           ref={thumbnailRef}
-          // Shared element for thumbnail
-          sharedTransitionTag={`video-thumbnail-${video.id}`}
+          sharedTransitionTag={`video-thumbnail-${video?.id}`} // React Navigation shared element
         >
-          {video.price && video.price > 0 && (
+          {video?.price && video.price > 0 && (
             <Animated.View 
               entering={ZoomIn.delay(index * STAGGER_DELAY + 200).duration(200)}
               style={styles.priceBadge}
@@ -308,7 +307,7 @@ const AnimatedVideoCard = React.memo<{
               <Text style={styles.priceBadgeText}>₹{video.price}</Text>
             </Animated.View>
           )}
-          {isPreview && video.videoUrl ? (
+          {isPreview && video?.videoUrl ? (
             <Video
               source={{uri: video.videoUrl}}
               style={styles.videoThumbnail}
@@ -318,17 +317,10 @@ const AnimatedVideoCard = React.memo<{
               paused={!isPreview}
               playInBackground={false}
               playWhenInactive={false}
-              ignoreSilentSwitch="obey"
-              bufferConfig={{
-                minBufferMs: 1000,
-                maxBufferMs: 3000,
-                bufferForPlaybackMs: 250,
-                bufferForPlaybackAfterRebufferMs: 500
-              }}
             />
           ) : (
             <Image
-              source={{uri: video.thumbnail || "https://via.placeholder.com/300x169.png?text=No+Thumbnail"}}
+              source={{uri: video?.thumbnail || "https://via.placeholder.com/300x169.png?text=No+Thumbnail"}}
               style={styles.thumbnailImage}
               resizeMode="cover"
             />
@@ -337,7 +329,7 @@ const AnimatedVideoCard = React.memo<{
             entering={FadeIn.delay(index * STAGGER_DELAY + 250).duration(200)}
             style={styles.durationOverlay}
           >
-            <Text style={styles.durationText}>{formatDuration(video.duration)}</Text>
+            <Text style={styles.durationText}>{formatDuration(video?.duration || 0)}</Text>
           </Animated.View>
         </Animated.View>
         <View style={styles.cardContent}>
@@ -362,7 +354,7 @@ const AnimatedVideoCard = React.memo<{
   );
 });
 
-// Separate Video Player Modal Screen with improved gestures
+// Simplified VideoPlayerModalScreen with proper dark mode fade-out fix
 const VideoPlayerModalScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -372,144 +364,120 @@ const VideoPlayerModalScreen: React.FC = () => {
   const [isVideoReady, setIsVideoReady] = useState(false);
   const videoPlayerRef = useRef<VideoRef | null>(null);
 
+  // Animation values - separate backdrop and content opacity
+  const backdropOpacity = useSharedValue(0);
+  const contentOpacity = useSharedValue(0);
+
   // Handle Android back button
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        navigation.goBack();
+        handleClose();
         return true;
       };
-
       const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => subscription.remove();
-    }, [navigation])
+    }, [])
   );
 
-  // Animation values for modal
-  const videoOpacity = useSharedValue(0);
-  const contentTranslateY = useSharedValue(300);
-  const headerOpacity = useSharedValue(0);
-  const videoTranslateY = useSharedValue(0); // Add for video drag
-
-  // Entrance animations
+  // Fade-in animation on mount
   useEffect(() => {
-    // Start video animation
-    videoOpacity.value = withDelay(
-      100,
-      withTiming(1, {
-        duration: 300,
-        easing: Easing.out(Easing.quad),
-      })
-    );
+    // Backdrop fades in first
+    backdropOpacity.value = withTiming(1, {
+      duration: 200,
+      easing: Easing.out(Easing.quad),
+    });
+    
+    // Content fades in slightly after
+    contentOpacity.value = withDelay(100, withTiming(1, {
+      duration: 300,
+      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+    }));
+  }, []);
 
-    // Show header
-    headerOpacity.value = withDelay(
-      200,
-      withTiming(1, {
-        duration: 250,
-        easing: Easing.out(Easing.quad),
-      })
-    );
+  // Fixed fade-out on close - backdrop stays visible until navigation completes
+  const handleClose = useCallback(() => {
+    // First fade out content quickly
+    contentOpacity.value = withTiming(0, {
+      duration: 200,
+      easing: Easing.bezier(0.4, 0.0, 1, 1),
+    });
+    
+    // Keep backdrop visible longer to prevent white flash
+    backdropOpacity.value = withDelay(150, withTiming(0, {
+      duration: 200,
+      easing: Easing.bezier(0.4, 0.0, 1, 1),
+    }, () => {
+      // Navigate back only after backdrop animation completes
+      runOnJS(navigation.goBack)();
+    }));
+  }, [navigation, backdropOpacity, contentOpacity]);
 
-    // Show content when video is ready
-    if (isVideoReady) {
-      contentTranslateY.value = withSpring(0, {
-        damping: 18,
-        stiffness: 120,
-        mass: 0.9,
-      });
-    }
-  }, [isVideoReady]);
+  // Drag gesture for video area
+  const dragY = useSharedValue(0);
 
-  // Animated styles
-  const videoAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: videoOpacity.value,
-    transform: [{ translateY: videoTranslateY.value }],
-  }), []);
-
-  const contentAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: contentTranslateY.value }],
-  }), []);
-
-  const headerAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: headerOpacity.value,
-  }), []);
-
-  // IMPROVED PAN GESTURE - ONLY FOR VIDEO AREA
-  const videoPanGesture = Gesture.Pan()
-    .onStart(() => {
-      'worklet';
-      // Only start gesture if dragging down
-    })
+  const dragGesture = Gesture.Pan()
     .onUpdate((event) => {
       'worklet';
-      // Only allow downward drag on the video area
       if (event.translationY > 0) {
-        const progress = Math.min(event.translationY / (SCREEN_HEIGHT * 0.4), 1);
-        const dampingFactor = 1 - Math.min(progress * 0.3, 0.3);
+        dragY.value = event.translationY * 0.8;
         
-        // Apply translation to video with damping
-        videoTranslateY.value = event.translationY * dampingFactor;
-        
-        // Reduce video opacity slightly
-        videoOpacity.value = interpolate(
+        // Reduce content opacity during drag
+        const progress = Math.min(event.translationY / (SCREEN_HEIGHT * 0.3), 1);
+        contentOpacity.value = interpolate(
           progress,
           [0, 1],
-          [1, 0.85],
+          [1, 0.5],
           Extrapolate.CLAMP
         );
         
-        // Also affect content section slightly
-        contentTranslateY.value = Math.min(event.translationY * 0.3, 100);
+        // Keep backdrop more opaque to prevent white flash
+        backdropOpacity.value = interpolate(
+          progress,
+          [0, 1],
+          [1, 0.8],
+          Extrapolate.CLAMP
+        );
       }
     })
     .onEnd((event) => {
       'worklet';
-      const shouldClose = event.translationY > SCREEN_HEIGHT * 0.2 || 
-                         event.velocityY > 1000;
-      
-      if (shouldClose) {
-        // Animate out and close
-        videoTranslateY.value = withTiming(SCREEN_HEIGHT, {
-          duration: 300,
-          easing: Easing.bezier(0.4, 0.0, 1, 1),
-        });
-        videoOpacity.value = withTiming(0, {
-          duration: 300,
-          easing: Easing.bezier(0.4, 0.0, 1, 1),
-        });
-        runOnJS(navigation.goBack)();
+      if (event.translationY > SCREEN_HEIGHT * 0.2 || event.velocityY > 1000) {
+        // Close modal with smooth transition
+        runOnJS(handleClose)();
       } else {
-        // Bounce back to original position
-        videoTranslateY.value = withSpring(0, {
-          damping: 20,
-          stiffness: 150,
-          mass: 0.8,
-        });
-        videoOpacity.value = withSpring(1, {
-          damping: 20,
-          stiffness: 150,
-        });
-        contentTranslateY.value = withSpring(0, {
-          damping: 20,
-          stiffness: 150,
-        });
+        // Bounce back
+        dragY.value = withSpring(0, { damping: 15, stiffness: 200 });
+        contentOpacity.value = withSpring(1, { damping: 15, stiffness: 200 });
+        backdropOpacity.value = withSpring(1, { damping: 15, stiffness: 200 });
       }
     });
+
+  // Separate animated styles for backdrop and content
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: backdropOpacity.value,
+    backgroundColor: isDarkMode ? '#000000' : '#000000', // Always black backdrop for consistency
+  }), [isDarkMode]);
+
+  const contentStyle = useAnimatedStyle(() => ({
+    opacity: contentOpacity.value,
+    transform: [{ translateY: dragY.value }],
+  }), []);
 
   const styles = useMemo(() => createModalStyles(colors, isDarkMode), [colors, isDarkMode]);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: 'transparent' }}>
       <StatusBar backgroundColor="transparent" barStyle="light-content" translucent />
       
-      <View style={{ flex: 1 }}>
-        {/* Video Player with drag-to-close gesture - ONLY ON VIDEO AREA */}
-        <GestureDetector gesture={videoPanGesture}>
-          <Animated.View 
-            style={[styles.videoContainer, videoAnimatedStyle]}
-            sharedTransitionTag={`video-thumbnail-${video.id}`}
-          >
+      {/* Fixed Backdrop - Prevents white flash */}
+      <Animated.View style={[StyleSheet.absoluteFillObject, backdropStyle]} />
+      
+      {/* Content Layer */}
+      <Animated.View style={[{ flex: 1 }, contentStyle]}>
+        {/* Video Player */}
+        <GestureDetector gesture={dragGesture}>
+          <View style={styles.videoContainer}>
             <Video
               key={video.id}
               source={{uri: video.videoUrl ?? ''}}
@@ -519,12 +487,11 @@ const VideoPlayerModalScreen: React.FC = () => {
               resizeMode="contain"
               onReadyForDisplay={() => setIsVideoReady(true)}
               onError={(error) => {
-                console.error('[VideoPlayerModal] Video player error:', error);
+                console.error('[VideoPlayerModal] Video error:', error);
               }}
               repeat={false}
               playInBackground={false}
               playWhenInactive={false}
-              reportBandwidth={true}
               bufferConfig={{
                 minBufferMs: 1500,
                 maxBufferMs: 6000,
@@ -539,22 +506,22 @@ const VideoPlayerModalScreen: React.FC = () => {
                 <ActivityIndicator size="large" color="#fff" />
               </View>
             )}
-          </Animated.View>
+          </View>
         </GestureDetector>
 
-        {/* Header - NO GESTURE DETECTION */}
-        <Animated.View style={[styles.modalHeader, headerAnimatedStyle]}>
+        {/* Close Button */}
+        <View style={styles.modalHeader}>
           <TouchableOpacity 
             style={styles.modalCloseButton}
-            onPress={() => navigation.goBack()}
+            onPress={handleClose}
             activeOpacity={0.7}
           >
             <Text style={styles.modalCloseButtonText}>✕</Text>
           </TouchableOpacity>
-        </Animated.View>
+        </View>
         
-        {/* Content Section - NO GESTURE DETECTION, SCROLLABLE */}
-        <Animated.View style={[styles.contentSection, contentAnimatedStyle]}>
+        {/* Content Section */}
+        <View style={styles.contentSection}>
           <ScrollView 
             style={styles.scrollContent}
             showsVerticalScrollIndicator={false}
@@ -575,7 +542,6 @@ const VideoPlayerModalScreen: React.FC = () => {
             <View style={styles.upNextSection}>
               <Text style={styles.upNextTitle}>Up next</Text>
               
-              {/* SCROLLABLE UP NEXT VIDEOS */}
               <ScrollView
                 showsVerticalScrollIndicator={true}
                 nestedScrollEnabled={true}
@@ -584,16 +550,14 @@ const VideoPlayerModalScreen: React.FC = () => {
                 scrollEventThrottle={16}
                 bounces={true}
               >
-                {upNextVideos.slice(0, 20).map((item, index) => (
-                  <Animated.View
+                {upNextVideos.slice(0, 15).map((item, index) => (
+                  <View
                     key={`upnext-${item.id}`}
-                    entering={SlideInUp.delay(index * 30).duration(200)}
                     style={styles.upNextVideoItem}
                   >
                     <MemoizedRelatedVideoCard 
                       item={item} 
                       onPress={() => {
-                        // Navigate to new video
                         navigation.replace('VideoPlayerModal', {
                           video: item,
                           cardLayout: null,
@@ -601,28 +565,18 @@ const VideoPlayerModalScreen: React.FC = () => {
                         });
                       }} 
                     />
-                  </Animated.View>
-                ))}
-                
-                {/* Show more indicator if there are more videos */}
-                {upNextVideos.length > 20 && (
-                  <View style={styles.showMoreContainer}>
-                    <Text style={styles.showMoreText}>
-                      +{upNextVideos.length - 20} more videos
-                    </Text>
                   </View>
-                )}
+                ))}
               </ScrollView>
             </View>
-            <View style={styles.bottomSpacing} />
           </ScrollView>
-        </Animated.View>
-      </View>
+        </View>
+      </Animated.View>
     </GestureHandlerRootView>
   );
 };
 
-// Updated Modal-specific styles with scrollable up-next
+// Simplified modal styles - removed unnecessary complexity
 const createModalStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
   videoContainer: {
     position: 'absolute',
@@ -631,19 +585,18 @@ const createModalStyles = (colors: any, isDarkMode: boolean) => StyleSheet.creat
     right: 0,
     height: SCREEN_WIDTH * 9 / 16,
     backgroundColor: '#000',
-    zIndex: 10, // Ensure video is above content for gesture detection
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
   },
   modalHeader: {
     position: 'absolute',
     top: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 10 : 54,
     right: 20,
-    zIndex: 1000,
+    zIndex: 100,
   },
   modalCloseButton: {
     backgroundColor: 'rgba(0,0,0,0.8)',
@@ -652,11 +605,6 @@ const createModalStyles = (colors: any, isDarkMode: boolean) => StyleSheet.creat
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
   },
   modalCloseButtonText: {
     color: '#fff',
@@ -675,63 +623,63 @@ const createModalStyles = (colors: any, isDarkMode: boolean) => StyleSheet.creat
     flex: 1,
   },
   videoInfo: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     borderBottomWidth: 0.5,
     borderBottomColor: isDarkMode ? '#272727' : '#e0e0e0',
   },
   videoTitle: {
-    fontSize: 16,
-    fontWeight: '400',
+    fontSize: 18,
+    fontWeight: '600',
     color: isDarkMode ? '#f1f1f1' : '#0f0f0f',
-    lineHeight: 22,
-    marginBottom: 4,
+    lineHeight: 24,
+    marginBottom: 8,
   },
   videoMeta: {
-    marginBottom: 12,
+    marginBottom: 8,
   },
   videoStats: {
-    fontSize: 13,
+    fontSize: 14,
     color: isDarkMode ? '#aaa' : '#606060',
   },
   upNextSection: {
-    paddingHorizontal: 12,
-    paddingTop: 16,
-    flex: 1, // Allow section to expand
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    flex: 1,
   },
   upNextTitle: {
-    fontSize: 15,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '600',
     color: isDarkMode ? '#f1f1f1' : '#0f0f0f',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  // NEW STYLES FOR SCROLLABLE UP NEXT
   upNextScrollView: {
     flex: 1,
-    maxHeight: SCREEN_HEIGHT * 0.6, // Limit height to 60% of screen
   },
   upNextScrollContent: {
-    paddingBottom: 20,
+    paddingBottom: 32,
   },
   upNextVideoItem: {
-    marginBottom: 8,
-  },
-  showMoreContainer: {
-    paddingVertical: 16,
-    alignItems: 'center',
-    borderTopWidth: 0.5,
-    borderTopColor: isDarkMode ? '#272727' : '#e0e0e0',
-    marginTop: 12,
-  },
-  showMoreText: {
-    fontSize: 14,
-    color: isDarkMode ? '#aaa' : '#606060',
-    fontStyle: 'italic',
-  },
-  bottomSpacing: {
-    height: 32,
+    marginBottom: 12,
   },
 });
+
+// Update MainNavigator.tsx for simple modal presentation
+// In MainNavigator.tsx, use these options:
+/*
+<Stack.Screen 
+  name="VideoPlayerModal" 
+  component={EnhancedVideoPlayerModalScreen}
+  options={{
+    presentation: 'transparentModal', // Changed to transparentModal
+    headerShown: false,
+    gestureEnabled: false,
+    animation: 'none', // No navigation animation to prevent conflicts
+    animationDuration: 0,
+    contentStyle: { backgroundColor: 'transparent' }, // Transparent to show our backdrop
+  }}
+/>
+*/
 
 // Main TipTube Screen (simplified without modal logic)
 const TipTubeScreen = () => {

@@ -251,10 +251,7 @@ export interface LikeShortResponse {
 
 // VideoSDK API Types
 export interface VideoSDKGenerateTokenRequest {
-  // Backend might infer user or require specific permissions/userId
-  // For now, let's assume backend handles apiKey and permissions internally
-  // meetingId?: string; // Optional: if token is specific to a meeting being joined
-  // participantName?: string; // Optional: for display name in VideoSDK
+  // Empty body - backend handles apiKey and permissions
 }
 
 export interface VideoSDKGenerateTokenResponse {
@@ -264,12 +261,8 @@ export interface VideoSDKGenerateTokenResponse {
 }
 
 export interface VideoSDKCreateMeetingRequest {
-  // The 'token' in your example is likely an auth token for your backend to call VideoSDK,
-  // not something the client sends for this specific request if your backend handles VideoSDK auth.
-  // If your backend requires the client's auth token for its own security, it's handled by interceptors.
-  region?: string; // e.g., "us", "eu", "sg"
-  // customRoomId?: string; // Optional: if you want to specify a room ID
-  // webhook?: { endpoint: string; events: string[] }; // Optional
+  token: string; // Token from generateVideoSDKParticipantToken response
+  region?: string; // Optional region, defaults to "us"
 }
 
 export interface VideoSDKMeetingData {
@@ -281,7 +274,7 @@ export interface VideoSDKMeetingData {
   updatedAt: string;
   roomId: string;
   links: { get_room: string; get_session: string };
-  id: string; // VideoSDK's internal ID for the room object
+  id: string;
 }
 
 export interface VideoSDKCreateMeetingResponse {
@@ -315,6 +308,19 @@ export interface VideoSDKValidateMeetingResponse {
     message: string;
 }
 
+// Add the UpdateUser API types
+export interface UpdateUserRequest {
+  id: number;
+  dnd?: number; // 1 for DND on, 0 for DND off
+  // Add other optional fields that might be part of updateuser API
+  is_available?: number;
+}
+
+export interface UpdateUserResponse {
+  status: boolean;
+  message: string;
+  data?: any;
+}
 
 // Update AgoraCallRequest if it's also used for VideoSDK call actions via your backend
 // This type is already in your TipCallScreen.tsx, ensure it's consistent or defined centrally.

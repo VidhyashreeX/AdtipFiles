@@ -181,26 +181,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const postsAbortControllerRef = useRef<AbortController | null>(null);
   const likeAbortControllerRef = useRef<AbortController | null>(null);
 
-  // Use useMemo for stable object reference for viewabilityConfig
-  const viewabilityConfig = useMemo<ViewabilityConfig>(() => ({ // Explicitly type with imported ViewabilityConfig
-    itemVisiblePercentThreshold: 50,
-    minimumViewTime: 300,
+  // Optimized viewability config for instant video control
+  const viewabilityConfig = useMemo<ViewabilityConfig>(() => ({
+    itemVisiblePercentThreshold: 50, // Reduced for faster triggering
+    minimumViewTime: 100, // Much shorter for instant response
+    waitForInteraction: false,
   }), []);
 
-  // Use useCallback for stable function reference for onViewableItemsChanged
+  // Instant visibility tracking
   const onViewableItemsChanged = useCallback(({viewableItems}: {viewableItems: ViewToken[]}) => {
     const currentVisibleIds = viewableItems
       .filter(item => item.isViewable && item.item)
-      .map(viewToken => viewToken.item.id as number); // Assuming item.id is number
+      .map(viewToken => viewToken.item.id as number);
 
-    // This logic updates the state with IDs that become visible.
-    // Consider if you need to remove IDs that are no longer visible.
-    setVisiblePostIds(prevVisibleIds => {
-      const newVisibleIdsSet = new Set(prevVisibleIds);
-      currentVisibleIds.forEach(id => newVisibleIdsSet.add(id));
-      return Array.from(newVisibleIdsSet);
-    });
-  }, []); // setVisiblePostIds is stable, so dependency array is empty
+    // Update visible posts instantly
+    setVisiblePostIds(currentVisibleIds);
+  }, []);
 
   const getFullImageUrl = useCallback((url?: string | null) => {
     if (!url || url === 'null' || url === 'undefined') return null;

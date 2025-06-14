@@ -13,6 +13,8 @@ import {
   SafeAreaView,
   RefreshControl,
   StyleSheet,
+  Image,
+  TextInput,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -20,7 +22,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import Header from '../../components/common/Header';
-import ScreenTransition from '../../components/common/ScreenTransition'; // ADD THIS IMPORT
+import ScreenTransition from '../../components/common/ScreenTransition';
 import {
   useMeeting,
   useParticipant,
@@ -30,35 +32,24 @@ import {
   Constants,
 } from '@videosdk.live/react-native-sdk';
 import ContactSkeletonItem from '../../components/skeletons/ContactSkeletonItem';
-import { UserListRequest } from '../../types/api';
+import { UserListRequest, UpdateUserRequest, UpdateUserResponse } from '../../types/api';
 import ApiService from '../../services/ApiService';
 import Icon from 'react-native-vector-icons/Feather';
 import messaging from '@react-native-firebase/messaging';
 import {
   initiateVideoSDKCall,
 } from '../../helpers/CallHelper';
-
-// Import the separated styles
-import { styles as importedStyles, localFallbackColors } from './TipCallScreenStyles';
 import CallKeepService from '../../services/CallKeepService';
-import { v4 as uuidv4 } from 'react-native-uuid';
+import v4 from 'react-native-uuid';
 
 // Define navigation stack param list
 type RootStackParamList = {
   TipCall: { initialCallNotificationData?: any } | undefined;
   Login: undefined;
   Profile: { userId: number };
-  Call: { // This 'Call' route might be deprecated or renamed if 'Meeting' replaces it
+  Meeting: {
     meetingId: string;
-    callerId?: string | number;
-    callerName?: string;
-    callType: 'voice' | 'video';
-    videosdkToken?: string | null;
-    isCaller?: boolean;
-  };
-  Meeting: { // New Route for the actual meeting screen
-    meetingId: string;
-    token: string; // Participant's token
+    token: string;
     callType: 'voice' | 'video';
     displayName: string;
     isInitiator?: boolean;
@@ -66,13 +57,10 @@ type RootStackParamList = {
   };
 };
 
-// Define navigation prop type
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
-
-// Add this missing type definition
 type TipCallScreenRouteProp = RouteProp<RootStackParamList, 'TipCall'>;
 
-// Define interfaces for API response and data
+// Enhanced interfaces
 interface Language {
   id: string;
   name: string;
@@ -111,299 +99,450 @@ interface Contact {
   online_status: boolean;
 }
 
-interface UserListApiResponse {
-  status: boolean;
-  message: string;
-  error?: string;
-  data: Contact[];
-  pagination: {
-    page: number;
-    limit: number;
-    totalRecords: number;
-  };
-}
-
 // Constants for filters
 const LANGUAGES: Language[] = [
-  {id: '1', name: 'All'},
+  {id: '0', name: 'All'}, // Changed from '1' to '0'
+  {id: '12', name: 'English'},
   {id: '2', name: 'Hindi'},
   {id: '3', name: 'Bengali'},
-  {id: '4', name: 'Marathi'},
-  {id: '5', name: 'Telugu'},
+  {id: '4', name: 'Telugu'},
+  {id: '5', name: 'Marathi'},
+  {id: '6', name: 'Tamil'},
+  {id: '7', name: 'Gujarati'},
+  {id: '8', name: 'Kannada'},
 ];
 
 const CATEGORIES: Category[] = [
-  {id: '1', name: 'All'},
+  {id: '0', name: 'All'}, // Changed from '1' to '0'
   {id: '2', name: 'Look for jobs'},
-  {id: '3', name: 'Prepare for govt job'},
-  {id: '4', name: 'Prepare for UPSC'},
+  {id: '101', name: 'Prepare for govt job'}, // Changed from '1' to '101' to avoid duplicate
+  {id: '3', name: 'Prepare for UPSC'},
+  {id: '11', name: 'Prepare for jobs'},
+  {id: '5', name: 'To learn English'},
+  {id: '6', name: 'To learn Hindi'},
+  {id: '7', name: 'To learn software'},
+  {id: '8', name: 'To learn AI'},
+  {id: '13', name: 'To learn something new'},
+  {id: '20', name: 'Sports'},
+  {id: '29', name: 'Spirituality and Religion'},
+  {id: '48', name: 'Astrology'},
 ];
 
-// Define the type for call request payloads
-export type VideoSDKCallRequest = {
-  callerId: string;
-  receiverId: string;
-  action: 'start' | 'end' | 'missed-video-call' | 'missed-audio-call';
-  callType: 'audio-call' | 'video-call';
-  meetingId?: string;
-  customData?: {
-    videosdk_token?: string;
-    caller_name?: string;
-  }
-};
-
-// NotificationService for handling FCM notifications
-const NotificationService = {
-  requestPermissions: async (messagingInstance: any) => {
-    try {
-      console.log('[FCM] Requesting notification permissions...');
-      if (Platform.OS === 'ios') {
-        const authStatus = await messagingInstance.requestPermission();
-        const enabled =
-          authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-          authStatus === messaging.AuthorizationStatus.PROVISIONAL;
-
-        console.log('[FCM] iOS notification permissions:', enabled ? 'GRANTED' : 'DENIED');
-        
-        if (!enabled) {
-            Alert.alert("Permissions Denied", "Cannot receive call notifications without permission.");
+// Enhanced Filter Chip Component
+const FilterChip: React.FC<{
+  label: string;
+  isSelected: boolean;
+  onPress: () => void;
+  colors: any;
+  isDarkMode: boolean;
+}> = ({ label, isSelected, onPress, colors, isDarkMode }) => (
+  <TouchableOpacity
+    style={[
+      styles.filterChip,
+      {
+        backgroundColor: isSelected 
+          ? colors.primary 
+          : isDarkMode 
+            ? colors.card 
+            : '#F8F9FA',
+        borderColor: isSelected 
+          ? colors.primary 
+          : isDarkMode 
+            ? colors.border 
+            : '#E9ECEF',
+      }
+    ]}
+    onPress={onPress}
+    activeOpacity={0.7}
+  >
+    <Text
+      style={[
+        styles.filterChipText,
+        {
+          color: isSelected 
+            ? '#FFFFFF' 
+            : colors.text.primary,
+          fontWeight: isSelected ? '600' : '500',
         }
-      } else if (Platform.OS === 'android') {
-        // For Android 13+
-        if (Platform.Version >= 33) {
-          const status = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
-          if (status !== PermissionsAndroid.RESULTS.GRANTED) {
-            Alert.alert("Permissions Denied", "Cannot receive call notifications without permission.");
-          }
-        }
-        console.log('[FCM] Android permissions handled by manifest or requested if API 33+');
-      }
-    } catch (error) {
-      console.error('[FCM] Failed to request notification permissions:', error);
-    }
-  },
-  
-  extractCallData: (remoteMessage: any) => {
-    console.log('[FCM] Extracting call data from notification payload:', JSON.stringify(remoteMessage.data, null, 2));
-    if (remoteMessage.data) {
-      const {
-        meetingId,
-        caller_app_user_id,
-        call_type,
-        caller_name,
-        videosdk_token
-      } = remoteMessage.data;
-      
-      console.log('[FCM] Notification data fields:', { meetingId, caller_app_user_id, call_type, caller_name, videosdk_token });
-      
-      if (caller_app_user_id && meetingId && (call_type === "audio" || call_type === "video") && videosdk_token) {
-        const extractedData = {
-          callerId: caller_app_user_id, 
-          callerName: caller_name || "Unknown Caller", 
-          meetingId: meetingId,
-          callType: call_type === "video" ? "video" : "voice", 
-          videosdkToken: videosdk_token,
-          // Add a unique call ID for CallKeep
-          callKeepId: uuidv4(),
-        };
-        console.log('[FCM] Successfully extracted call data:', JSON.stringify(extractedData, null, 2));
-        return extractedData;
-      } else {
-        console.warn('[FCM] Missing essential fields in call notification data:', remoteMessage.data);
-      }
-    }
-    console.log('[FCM] Failed to extract call data from notification');
-    return null;
-  },
-  
-  updateCallStatus: async (
-    callerId: string,
-    receiverId: string,
-    action: 'accepted' | 'rejected' | 'missed-video-call' | 'missed-audio-call',
-    callType: 'video' | 'audio',
-    meetingId?: string, // Meeting ID might be relevant for some actions
-  ) => {
-    let apiAction: VideoSDKCallRequest['action'];
-    if (action === 'accepted') {
-      apiAction = 'start'; // Or a specific "accepted" action if your backend differentiates
-    } else if (action === 'rejected') {
-      apiAction = 'end'; // Or a specific "rejected" action
-    } else {
-      apiAction = action;
-    }
-    
-    console.log(`[FCM] Updating call status - Action: ${action} (API action: ${apiAction}), CallType: ${callType}`);
-    console.log(`[FCM] Call parties - Caller: ${callerId}, Receiver: ${receiverId}, Meeting: ${meetingId}`);
-    
-    try {
-      const payload: VideoSDKCallRequest = {
-        callerId: callerId,
-        receiverId: receiverId,
-        action: apiAction,
-        callType: callType === 'video' ? 'video-call' : 'audio-call',
-        meetingId: meetingId, // Include meetingId if your backend uses it for status updates
-      };
-      
-      console.log('[FCM] Call status update payload:', JSON.stringify(payload, null, 2));
-      const response = await ApiService.handleCall(payload); // Ensure ApiService.handleCall can send this
-      console.log('[FCM] Call status update response:', JSON.stringify(response, null, 2));
-      
-      // If 'accepted' leads to call creation and returns a callId from backend:
-      if (action === 'accepted' && response && response.data && typeof response.data.callId === 'number') {
-        return { callId: response.data.callId };
-      }
-      return response; 
-    } catch (error) {
-      console.error(`[FCM] Error updating call status to ${action}:`, error);
-      return null;
-    }
-  },
-};
+      ]}
+    >
+      {label}
+    </Text>
+  </TouchableOpacity>
+);
 
-// IncomingCallScreen component
-interface IncomingCallScreenProps {
-  callerName: string;
-  callType: 'voice' | 'video';
-  onAccept: () => void;
-  onReject: () => void;
-}
-
-const IncomingCallScreen: React.FC<IncomingCallScreenProps> = ({
-  callerName,
-  callType,
-  onAccept,
-  onReject,
-}) => {
-  const {colors} = useTheme();
+// Enhanced Contact Card Component
+const ContactCard: React.FC<{
+  contact: Contact;
+  onVideoCall: () => void;
+  onVoiceCall: () => void;
+  colors: any;
+  isDarkMode: boolean;
+}> = ({ contact, onVideoCall, onVoiceCall, colors, isDarkMode }) => {
+  const isAvailable = contact.is_available && !contact.dnd && contact.online_status;
+  const avatarColor = isAvailable ? colors.success : colors.gray?.[400] || '#9CA3AF';
+  
   return (
-    <View style={[localStyles.incomingCallOverlay, {backgroundColor: colors.background || localFallbackColors.backgroundOpac}]}>
-      <Text style={[localStyles.incomingCallText, {color: colors.text?.light || localFallbackColors.text.light}]}>Incoming {callType} call from:</Text>
-      <Text style={[localStyles.incomingCallerName, {color: colors.text?.light || localFallbackColors.text.light}]}>{callerName}</Text>
-      <View style={localStyles.incomingCallButtons}>
-        <TouchableOpacity style={[localStyles.acceptCallButton, {backgroundColor: colors.success || localFallbackColors.success}]} onPress={onAccept}>
-          <Icon name="phone" size={24} color={colors.white || localFallbackColors.white} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[localStyles.rejectCallButton, {backgroundColor: colors.error || localFallbackColors.danger}]} onPress={onReject}>
-          <Icon name="phone-off" size={24} color={colors.white || localFallbackColors.white} />
-        </TouchableOpacity>
+    <View style={[
+      styles.contactCard,
+      {
+        backgroundColor: isDarkMode ? colors.card : '#FFFFFF',
+        borderColor: isDarkMode ? colors.border : '#F1F3F4',
+        shadowColor: isDarkMode ? '#000000' : '#000000',
+        shadowOpacity: isDarkMode ? 0.3 : 0.08,
+      }
+    ]}>
+      <View style={styles.contactCardContent}>
+        {/* Avatar Section */}
+        <View style={styles.avatarSection}>
+          <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
+            {contact.name ? (
+              <Text style={styles.avatarText}>
+                {contact.name.charAt(0).toUpperCase()}
+              </Text>
+            ) : (
+              <Icon name="user" size={20} color="#FFFFFF" />
+            )}
+            {/* Online Status Indicator */}
+            {contact.online_status && (
+              <View style={styles.onlineIndicator} />
+            )}
+          </View>
+        </View>
+
+        {/* Contact Info Section */}
+        <View style={styles.contactInfo}>
+          <Text style={[styles.contactName, { color: colors.text.primary }]} numberOfLines={1}>
+            {contact.name || 'Unknown User'}
+          </Text>
+          
+          {/* Show User ID for search results */}
+          <Text style={[styles.contactId, { color: colors.text.tertiary }]} numberOfLines={1}>
+            ID: {contact.id}
+          </Text>
+          
+          <Text style={[styles.contactStatus, { color: colors.text.secondary }]} numberOfLines={1}>
+            {contact.online_status ? (
+              contact.last_seen === 'just now' ? '🟢 Online' : `Last seen ${contact.last_seen}`
+            ) : (
+              contact.dnd ? '🔕 Do Not Disturb' : '⚫ Offline'
+            )}
+          </Text>
+
+          {/* Languages */}
+          {contact.languages && contact.languages.length > 0 && (
+            <View style={styles.tagContainer}>
+              <Icon name="globe" size={10} color={colors.text.tertiary} />
+              <Text style={[styles.tagText, { color: colors.text.tertiary }]} numberOfLines={1}>
+                {contact.languages.slice(0, 2).map(lang => lang.name).join(', ')}
+                {contact.languages.length > 2 && ` +${contact.languages.length - 2}`}
+              </Text>
+            </View>
+          )}
+
+          {/* Interests */}
+          {contact.interests && contact.interests.length > 0 && (
+            <View style={styles.tagContainer}>
+              <Icon name="heart" size={10} color={colors.text.tertiary} />
+              <Text style={[styles.tagText, { color: colors.text.tertiary }]} numberOfLines={1}>
+                {contact.interests.slice(0, 2).map(interest => interest.name).join(', ')}
+                {contact.interests.length > 2 && ` +${contact.interests.length - 2}`}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Action Buttons */}
+        {isAvailable && (
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.videoButton, { backgroundColor: colors.primary }]}
+              onPress={onVideoCall}
+              activeOpacity={0.8}
+            >
+              <Icon name="video" size={16} color="#FFFFFF" />
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.actionButton, styles.voiceButton, { backgroundColor: colors.success }]}
+              onPress={onVoiceCall}
+              activeOpacity={0.8}
+            >
+              <Icon name="phone" size={16} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {!isAvailable && (
+          <View style={styles.unavailableContainer}>
+            <Text style={[styles.unavailableText, { color: colors.text.tertiary }]}>
+              Unavailable
+            </Text>
+          </View>
+        )}
       </View>
     </View>
   );
 };
 
-// Main TipCallScreen component
+// Enhanced Loading Skeleton Component
+const ContactsSkeleton: React.FC<{ colors: any; isDarkMode: boolean }> = ({ colors, isDarkMode }) => (
+  <View style={styles.skeletonContainer}>
+    {Array.from({ length: 8 }).map((_, index) => (
+      <ContactSkeletonItem key={index} />
+    ))}
+  </View>
+);
+
+// Update the main component to use Header search properly
 export default function TipCallScreen() {
   const route = useRoute<TipCallScreenRouteProp>();
   const navigation = useNavigation<NavigationProp>();
-  const { colors } = useTheme();
+  const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
-  const tabNavigator = useTabNavigator();
 
-  const [callType, setCallType] = useState<'voice' | 'video'>('video');
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [languageFilter, setLanguageFilter] = useState<string>('1');
-  const [categoryFilter, setCategoryFilter] = useState<string>('1');
-  const [tabIndex, setTabIndex] = useState<number>(0);
+  
+  const [languageFilter, setLanguageFilter] = useState<string>('0');
+  const [categoryFilter, setCategoryFilter] = useState<string>('0');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  
+  // Add DND state
+  const [isDndEnabled, setIsDndEnabled] = useState<boolean>(false);
+  const [isDndLoading, setIsDndLoading] = useState<boolean>(false);
 
   const initialCallData = route.params?.initialCallNotificationData;
-  const [incomingCallNotification, setIncomingCallNotification] = useState<any>(null); // Renamed for clarity
+  const [incomingCallNotification, setIncomingCallNotification] = useState<any>(null);
 
+  // Initialize DND state from user data
   useEffect(() => {
-    const requestPermissions = async () => {
-      await NotificationService.requestPermissions(messaging);
-    };
-    requestPermissions();
+    if (user && typeof user.dnd === 'boolean') {
+      setIsDndEnabled(user.dnd);
+    }
+  }, [user]);
+
+  // Live search filter function - only for client-side filtering
+  const applySearchFilter = useCallback((query: string, contactsToFilter: Contact[]): Contact[] => {
+    if (!query.trim()) {
+      return contactsToFilter;
+    }
+    
+    const lowerCaseQuery = query.toLowerCase();
+    return contactsToFilter.filter(contact => 
+      contact.name?.toLowerCase().includes(lowerCaseQuery) ||
+      contact.id.toString().includes(query) ||
+      contact.emailId?.toLowerCase().includes(lowerCaseQuery)
+    );
   }, []);
 
-  // Handle initial call data from notification when app opens
+  // Apply search filter only when search query changes
   useEffect(() => {
-    if (initialCallData) {
-      console.log('[TipCall] Initial call data from notification (app opened):', initialCallData);
-      // The initialCallData should already be processed by NotificationService.extractCallData if it came from a killed state notification
-      // For now, assuming initialCallData is already the extracted format.
-      const { meetingId: initMeetingId, callerId, callerName, callType: initCallType, videosdkToken: initToken } = initialCallData;
+    console.log('[TipCall] Applying search filter. Contacts:', contacts.length, 'Search:', searchQuery);
+    const filtered = applySearchFilter(searchQuery, contacts);
+    setFilteredContacts(filtered);
+    console.log('[TipCall] Filtered contacts:', filtered.length);
+  }, [contacts, searchQuery, applySearchFilter]);
 
-      if (initMeetingId && initToken) {
-         // Display an alert to accept/reject, then navigate
-        Alert.alert(
-          "Incoming Call",
-          `${callerName || 'Someone'} is calling for a ${initCallType} call.`,
-          [
-            { text: "Reject", onPress: () => console.log("Initial call rejected"), style: "cancel" },
-            {
-              text: "Accept",
-              onPress: () => {
-                console.log('[TipCall] Accepting initial call, navigating to Meeting screen.');
-                navigation.navigate('Meeting', {
-                  meetingId: initMeetingId,
-                  token: initToken, // This is the callee's token
-                  callType: initCallType === 'video-call' || initCallType === 'video' ? 'video' : 'voice',
-                  displayName: user?.name || "Me", // Callee's display name
-                  isInitiator: false,
-                  recipientName: callerName, // The caller is the "recipient" from callee's perspective
-                });
-              },
-            },
-          ]
-        );
-      } else {
-        console.warn('[TipCall] Initial call data missing meetingId or videosdkToken.');
-      }
-      // Clear initialCallData from route params after processing to prevent re-triggering
-      navigation.setParams({ initialCallNotificationData: undefined });
-    }
-  }, [initialCallData, navigation, user]);
+  // Search handler - for header search functionality
+  const handleSearch = useCallback((query: string) => {
+    console.log('[TipCall] Search query:', query);
+    setSearchQuery(query);
+  }, []);
 
+  // Clear search handler
+  const handleClearSearch = useCallback(() => {
+    console.log('[TipCall] Clearing search');
+    setSearchQuery('');
+  }, []);
+
+  // Fetch contacts function - removed dependencies to prevent auto-calls
   const fetchContacts = useCallback(async (showLoading = true) => {
+    console.log('[TipCall] fetchContacts called with showLoading:', showLoading);
+    
     if (showLoading) {
       setLoading(true);
     }
     setError(null);
     
     try {
-      const response = await ApiService.getUserList();
-      console.log('[Contacts] Fetched contacts:', response);
+      if (!user || !user.id) {
+        throw new Error('User not authenticated');
+      }
+
+      const requestData: UserListRequest = {
+        id: 0,
+        page: 1,
+        limit: 50,
+        language: languageFilter === '0' ? [] : [parseInt(languageFilter)],
+        interest: categoryFilter === '0' ? [] : [parseInt(categoryFilter)],
+        user_id: null,
+        search_by_name: "",
+        loggined_user_id: user.id,
+        sortBy: {}
+      };
+
+      console.log('[TipCall] Fetching contacts with payload:', JSON.stringify(requestData, null, 2));
       
-      if (response && response.data) {
-        setContacts(response.data);
+      const response = await ApiService.getAllUsersList(requestData);
+      console.log('[TipCall] Contacts API response status:', response?.status);
+      console.log('[TipCall] Contacts API response data length:', response?.data?.length);
+      
+      if (response && response.status && response.data && Array.isArray(response.data)) {
+        const allContacts = response.data.filter(contact => contact.id !== user.id);
+        console.log('[TipCall] Setting contacts. Total:', response.data.length, 'Filtered:', allContacts.length);
+        setContacts(allContacts);
       } else {
-        console.warn('[Contacts] No data found in response:', response);
+        console.warn('[TipCall] No valid data found in response:', response);
         setContacts([]);
       }
     } catch (err) {
-      console.error('[Contacts] Error fetching contacts:', err);
+      console.error('[TipCall] Error fetching contacts:', err);
       setError('Failed to load contacts. Please try again later.');
+      setContacts([]);
     } finally {
       if (showLoading) {
         setLoading(false);
       }
     }
-  }, []);
+  }, []); // Remove all dependencies to prevent auto-calls
 
+  // Initial fetch - only when component mounts and user is available
   useEffect(() => {
-    fetchContacts();
-  }, [fetchContacts]);
+    if (user && user.id) {
+      console.log('[TipCall] Initial fetch triggered');
+      fetchContacts();
+    }
+  }, [user?.id]); // Only depend on user.id, not the entire user object
 
   const handleRefresh = useCallback(() => {
+    console.log('[TipCall] Refresh triggered');
     setRefreshing(true);
-    fetchContacts(false);
-    setTimeout(() => setRefreshing(false), 1000);
-  }, [fetchContacts]);
+    
+    // Create a new fetchContacts call with current filter values
+    const fetchWithCurrentFilters = async () => {
+      try {
+        if (!user || !user.id) {
+          throw new Error('User not authenticated');
+        }
 
+        const requestData: UserListRequest = {
+          id: 0,
+          page: 1,
+          limit: 50,
+          language: languageFilter === '0' ? [] : [parseInt(languageFilter)],
+          interest: categoryFilter === '0' ? [] : [parseInt(categoryFilter)],
+          user_id: null,
+          search_by_name: "",
+          loggined_user_id: user.id,
+          sortBy: {}
+        };
+
+        const response = await ApiService.getAllUsersList(requestData);
+        
+        if (response && response.status && response.data && Array.isArray(response.data)) {
+          const allContacts = response.data.filter(contact => contact.id !== user.id);
+          setContacts(allContacts);
+        } else {
+          setContacts([]);
+        }
+      } catch (err) {
+        console.error('[TipCall] Error refreshing contacts:', err);
+        setError('Failed to refresh contacts.');
+      }
+    };
+
+    fetchWithCurrentFilters().finally(() => {
+      setRefreshing(false);
+    });
+  }, [user, languageFilter, categoryFilter]);
+
+  // Filter change handlers - these will trigger API calls
   const handleLanguageFilterChange = useCallback((languageId: string) => {
+    console.log('[TipCall] Language filter changed to:', languageId);
     setLanguageFilter(languageId);
-    console.log('[Contacts] Language filter changed to:', languageId);
-  }, []);
+    
+    // Manually fetch with new language filter
+    const fetchWithNewLanguage = async () => {
+      try {
+        if (!user || !user.id) return;
+
+        setLoading(true);
+        const requestData: UserListRequest = {
+          id: 0,
+          page: 1,
+          limit: 50,
+          language: languageId === '0' ? [] : [parseInt(languageId)],
+          interest: categoryFilter === '0' ? [] : [parseInt(categoryFilter)],
+          user_id: null,
+          search_by_name: "",
+          loggined_user_id: user.id,
+          sortBy: {}
+        };
+
+        const response = await ApiService.getAllUsersList(requestData);
+        
+        if (response && response.status && response.data && Array.isArray(response.data)) {
+          const allContacts = response.data.filter(contact => contact.id !== user.id);
+          setContacts(allContacts);
+        } else {
+          setContacts([]);
+        }
+      } catch (err) {
+        console.error('[TipCall] Error fetching contacts with language filter:', err);
+        setError('Failed to load contacts with selected language.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchWithNewLanguage();
+  }, [user, categoryFilter]);
 
   const handleCategoryFilterChange = useCallback((categoryId: string) => {
+    console.log('[TipCall] Category filter changed to:', categoryId);
     setCategoryFilter(categoryId);
-    console.log('[Contacts] Category filter changed to:', categoryId);
-  }, []);
+    
+    // Manually fetch with new category filter
+    const fetchWithNewCategory = async () => {
+      try {
+        if (!user || !user.id) return;
 
-  // SINGLE handleVideoSDKCall function (FIXED DUPLICATE DECLARATION)
+        setLoading(true);
+        const requestData: UserListRequest = {
+          id: 0,
+          page: 1,
+          limit: 50,
+          language: languageFilter === '0' ? [] : [parseInt(languageFilter)],
+          interest: categoryId === '0' ? [] : [parseInt(categoryId)],
+          user_id: null,
+          search_by_name: "",
+          loggined_user_id: user.id,
+          sortBy: {}
+        };
+
+        const response = await ApiService.getAllUsersList(requestData);
+        
+        if (response && response.status && response.data && Array.isArray(response.data)) {
+          const allContacts = response.data.filter(contact => contact.id !== user.id);
+          setContacts(allContacts);
+        } else {
+          setContacts([]);
+        }
+      } catch (err) {
+        console.error('[TipCall] Error fetching contacts with category filter:', err);
+        setError('Failed to load contacts with selected interest.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchWithNewCategory();
+  }, [user, languageFilter]);
+
   const handleVideoSDKCall = useCallback(async (recipient: Contact, callTypeToInitiate: 'voice' | 'video') => {
     if (!user || !user.id || !recipient || !recipient.id) {
       Alert.alert("Error", "User or recipient information is missing.");
@@ -414,10 +553,8 @@ export default function TipCallScreen() {
     setError(null);
 
     try {
-      // Generate a unique call ID for CallKeep
-      const callKeepId = uuidv4();
+      const callKeepId = v4.v4();
       
-      // Start outgoing call in CallKeep first
       const callKeepService = CallKeepService.getInstance();
       await callKeepService.startOutgoingCall(
         callKeepId,
@@ -425,19 +562,18 @@ export default function TipCallScreen() {
         callTypeToInitiate
       );
 
-      // Then initiate the actual VideoSDK call
       const result = await initiateVideoSDKCall(
         user.id.toString(),
         user.name || "Caller",
         recipient.id.toString(),
         recipient.name || "Recipient",
-        callTypeToInitiate
+        callTypeToInitiate,
+        "us"
       );
 
       if (result.success && result.meetingId && result.token) {
-        console.log(`[TipCall] Call initiated. Navigating to Meeting screen. Meeting ID: ${result.meetingId}`);
+        console.log(`[TipCall] Call initiated successfully. Meeting ID: ${result.meetingId}`);
         
-        // Mark call as connected in CallKeep
         await callKeepService.setCallConnected(callKeepId);
         
         navigation.navigate('Meeting', {
@@ -449,7 +585,6 @@ export default function TipCallScreen() {
           recipientName: recipient.name || "Participant",
         });
       } else {
-        // End CallKeep call if VideoSDK call failed
         await callKeepService.endCall(callKeepId);
         Alert.alert('Call Failed', result.error || 'Could not initiate the call. Please try again.');
       }
@@ -459,266 +594,616 @@ export default function TipCallScreen() {
     }
   }, [user, navigation]);
 
-  const handleIncomingCallFromNotification = useCallback(async (callData: any) => {
-    console.log('[TipCall] Handling incoming call data from foreground notification:', callData);
-    
+  const handleDndToggle = useCallback(async () => {
+    if (!user || !user.id) {
+      return;
+    }
+
+    setIsDndLoading(true);
+    const newDndState = !isDndEnabled;
+
     try {
-      const callKeepService = CallKeepService.getInstance();
-      
-      // Display incoming call through CallKeep instead of custom UI
-      await callKeepService.displayIncomingCall(
-        callData.callKeepId,
-        callData.callerName,
-        callData.callType,
-        callData
-      );
-      
-      // Don't show the custom incoming call UI anymore
-      // setIncomingCallNotification(callData);
-      
-    } catch (error) {
-      console.error('[TipCall] Error displaying CallKeep incoming call:', error);
-      // Fallback to custom UI if CallKeep fails
-      setIncomingCallNotification(callData);
-    }
-  }, []);
+      const updateData: UpdateUserRequest = {
+        id: user.id,
+        dnd: newDndState ? 1 : 0,
+      };
 
-  // Initialize CallKeep service
-  useEffect(() => {
-    const initializeCallKeep = async () => {
-      try {
-        const callKeepService = CallKeepService.getInstance();
-        await callKeepService.initialize();
-        
-        // Set up callbacks
-        callKeepService.setCallbacks({
-          onIncomingCallAnswer: (callData) => {
-            console.log('[TipCall] CallKeep answered call:', callData);
-            // Navigate to meeting screen
-            navigation.navigate('Meeting', {
-              meetingId: callData.meetingId,
-              token: callData.videosdkToken,
-              callType: callData.callType,
-              displayName: user?.name || "Me",
-              isInitiator: false,
-              recipientName: callData.callerName,
-            });
-          },
-          onCallEnd: (callId) => {
-            console.log('[TipCall] CallKeep ended call:', callId);
-            // Handle call end if needed
-          },
-          onCallRejection: async (callData) => {
-            console.log('[TipCall] CallKeep rejected call:', callData);
-            // Send rejection to backend
-            if (user && callData.callerId && callData.meetingId) {
-              await NotificationService.updateCallStatus(
-                callData.callerId,
-                user.id.toString(),
-                'rejected',
-                callData.callType,
-                callData.meetingId
-              );
-            }
-          },
-        });
-        
-        console.log('[TipCall] CallKeep initialized successfully');
-      } catch (error) {
-        console.error('[TipCall] Failed to initialize CallKeep:', error);
-        Alert.alert('Call Service Error', 'Failed to initialize call service. Calls may not work properly.');
-      }
-    };
+      console.log('[TipCall] Updating DND status:', updateData);
+      const response = await ApiService.updateUser(updateData);
 
-    initializeCallKeep();
-    
-    // Cleanup on unmount
-    return () => {
-      CallKeepService.getInstance().cleanup();
-    };
-  }, [navigation, user]);
-
-  // Handle initial call data from notification when app opens
-  useEffect(() => {
-    if (initialCallData) {
-      console.log('[TipCall] Initial call data from notification (app opened):', initialCallData);
-      
-      const { meetingId: initMeetingId, callerId, callerName, callType: initCallType, videosdkToken: initToken } = initialCallData;
-
-      if (initMeetingId && initToken) {
-        // For app launch from notification, show CallKeep incoming call
-        const callData = {
-          ...initialCallData,
-          callKeepId: uuidv4(),
-        };
-        
-        handleIncomingCallFromNotification(callData);
+      if (response.status) {
+        setIsDndEnabled(newDndState);
+        console.log('[TipCall] DND status updated successfully:', newDndState);
       } else {
-        console.warn('[TipCall] Initial call data missing meetingId or videosdkToken.');
+        console.error('[TipCall] Failed to update DND status:', response.message);
       }
-      
-      navigation.setParams({ initialCallNotificationData: undefined });
+    } catch (error: any) {
+      console.error('[TipCall] Error updating DND status:', error);
+    } finally {
+      setIsDndLoading(false);
     }
-  }, [initialCallData, navigation, user, handleIncomingCallFromNotification]);
+  }, [user, isDndEnabled]);
 
-  // Render method for TipCallScreen
+  // Render contact item
+  const renderContactItem = ({ item }: { item: Contact }) => (
+    <ContactCard
+      contact={item}
+      onVideoCall={() => handleVideoSDKCall(item, 'video')}
+      onVoiceCall={() => handleVideoSDKCall(item, 'voice')}
+      colors={colors}
+      isDarkMode={isDarkMode}
+    />
+  );
+
+  // Render empty state
+  const renderEmptyState = () => (
+    <View style={styles.emptyStateContainer}>
+      <View style={[styles.emptyStateIcon, { backgroundColor: colors.primary + '20' }]}>
+        <Icon name="users" size={40} color={colors.primary} />
+      </View>
+      <Text style={[styles.emptyStateTitle, { color: colors.text.primary }]}>
+        {searchQuery ? 'No contacts found' : 'No contacts available'}
+      </Text>
+      <Text style={[styles.emptyStateMessage, { color: colors.text.secondary }]}>
+        {searchQuery 
+          ? `No contacts match "${searchQuery}". Try a different search term.`
+          : 'No contacts are currently available with the selected filters. Try adjusting your language or interest filters.'
+        }
+      </Text>
+    </View>
+  );
+
+  // Render error state
+  const renderErrorState = () => (
+    <View style={styles.errorStateContainer}>
+      <View style={[styles.errorStateIcon, { backgroundColor: '#FEE2E2' }]}>
+        <Icon name="wifi-off" size={40} color="#EF4444" />
+      </View>
+      <Text style={[styles.errorStateTitle, { color: colors.text.primary }]}>
+        Connection Error
+      </Text>
+      <Text style={[styles.errorStateMessage, { color: colors.text.secondary }]}>
+        {error}
+      </Text>
+      <TouchableOpacity
+        style={[styles.retryButton, { backgroundColor: colors.primary }]}
+        onPress={() => fetchContacts()}
+        activeOpacity={0.8}
+      >
+        <Icon name="refresh-cw" size={16} color="#FFFFFF" />
+        <Text style={styles.retryButtonText}>Try Again</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  console.log('[TipCall] Render state:', {
+    loading,
+    error: !!error,
+    contactsLength: contacts.length,
+    filteredContactsLength: filteredContacts.length,
+    searchQuery,
+    languageFilter,
+    categoryFilter
+  });
+
   return (
     <ScreenTransition animationType="fade">
-      <View style={localStyles.container}>
-        <Header title="Tip Call" onBackPress={() => navigation.goBack()} />
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar backgroundColor={colors.background} barStyle={isDarkMode ? "light-content" : "dark-content"} />
         
-        {/* Filters UI */}
-        <View style={localStyles.filtersContainer}>
-          <View style={localStyles.filterItem}>
-            <Text style={localStyles.filterLabel}>Language:</Text>
-            <View style={localStyles.filterButtons}>
+        {/* Updated Header with DND button in the same row */}
+        <Header 
+          title="Tip Call" 
+          onBackPress={() => navigation.goBack()}
+          showWallet={false}
+          showNotifications={false} // Disable built-in notifications to use custom
+          showSearch={false} // Disable built-in search since we're handling it in rightComponent
+          searchPlaceholder="Search contacts by name or ID..."
+          onSearchQueryChange={handleSearch} // Live search handler
+          onSearchSubmit={handleSearch} // Search submit handler
+          onSearchClear={handleClearSearch} // Clear search handler
+          rightComponent={
+            <View style={styles.headerRightContainer}>
+              {/* Search Icon - added to the left */}
+              <TouchableOpacity
+                onPress={() => {
+                  // You can implement search modal here or use a different approach
+                  console.log('[TipCall] Search icon pressed');
+                }}
+                style={[styles.headerIconButton, { marginRight: 12 }]}
+              >
+                <Icon name="search" size={20} color={colors.text.secondary} />
+              </TouchableOpacity>
+
+              {/* Notifications Icon - moved right */}
+              <TouchableOpacity
+                onPress={() => navigation.navigate('Notifications' as never)}
+                style={[styles.headerIconButton, { marginRight: 8 }]}
+              >
+                <Icon name="bell" size={20} color={colors.text.secondary} />
+                <View style={[styles.notificationBadge, { backgroundColor: colors.primary }]} />
+              </TouchableOpacity>
+
+              {/* DND Button - rightmost */}
+              <TouchableOpacity
+                style={[
+                  styles.dndButtonHeader,
+                  {
+                    backgroundColor: isDndEnabled 
+                      ? colors.danger || '#EF4444' 
+                      : colors.success || '#22C55E',
+                    opacity: isDndLoading ? 0.6 : 1,
+                  }
+                ]}
+                onPress={handleDndToggle}
+                disabled={isDndLoading}
+                activeOpacity={0.8}
+              >
+                {isDndLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Icon 
+                      name={isDndEnabled ? "bell-off" : "bell"} 
+                      size={14} 
+                      color="#FFFFFF" 
+                    />
+                    <Text style={styles.dndButtonHeaderText}>
+                      {isDndEnabled ? 'DND' : 'Available'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          }
+        />
+
+        {/* Enhanced Filters Section */}
+        <View style={[styles.filtersSection, { backgroundColor: colors.background }]}>
+          {/* Language Filter */}
+          <View style={styles.filterGroup}>
+            <Text style={[styles.filterGroupTitle, { color: colors.text.primary }]}>
+              Languages
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterScrollContainer}
+              style={styles.filterScrollView}
+            >
               {LANGUAGES.map((lang) => (
-                <TouchableOpacity
+                <FilterChip
                   key={lang.id}
-                  style={[
-                    localStyles.filterButton,
-                    languageFilter === lang.id && localStyles.selectedFilterButton
-                  ]}
+                  label={lang.name}
+                  isSelected={languageFilter === lang.id}
                   onPress={() => handleLanguageFilterChange(lang.id)}
-                >
-                  <Text style={localStyles.filterButtonText}>{lang.name}</Text>
-                </TouchableOpacity>
+                  colors={colors}
+                  isDarkMode={isDarkMode}
+                />
               ))}
-            </View>
+            </ScrollView>
           </View>
-          
-          <View style={localStyles.filterItem}>
-            <Text style={localStyles.filterLabel}>Category:</Text>
-            <View style={localStyles.filterButtons}>
+
+          {/* Category Filter */}
+          <View style={styles.filterGroup}>
+            <Text style={[styles.filterGroupTitle, { color: colors.text.primary }]}>
+              Interests
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterScrollContainer}
+              style={styles.filterScrollView}
+            >
               {CATEGORIES.map((category) => (
-                <TouchableOpacity
+                <FilterChip
                   key={category.id}
-                  style={[
-                    localStyles.filterButton,
-                    categoryFilter === category.id && localStyles.selectedFilterButton
-                  ]}
+                  label={category.name}
+                  isSelected={categoryFilter === category.id}
                   onPress={() => handleCategoryFilterChange(category.id)}
-                >
-                  <Text style={localStyles.filterButtonText}>{category.name}</Text>
-                </TouchableOpacity>
+                  colors={colors}
+                  isDarkMode={isDarkMode}
+                />
               ))}
-            </View>
+            </ScrollView>
           </View>
         </View>
 
-        {/* Contacts List UI */}
-        {loading ? (
-          <View style={localStyles.loadingContainer}>
-            <ActivityIndicator size="large" color={localFallbackColors.primary} />
-            <Text style={localStyles.loadingText}>Loading contacts...</Text>
-          </View>
-        ) : error ? (
-          <View style={localStyles.errorContainer}>
-            <Text style={localStyles.errorText}>{error}</Text>
-            <TouchableOpacity style={localStyles.retryButton} onPress={() => fetchContacts()}>
-              <Text style={localStyles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : contacts.length === 0 ? (
-          <View style={localStyles.emptyContainer}>
-            <Text style={localStyles.emptyText}>No contacts found.</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={contacts}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={({item}) => {
-              const isAvailable = item.is_available && !item.dnd;
-              return (
-                <TouchableOpacity
-                  style={[localStyles.contactItem, {borderColor: isAvailable ? colors.success || localFallbackColors.success : colors.borderLight || localFallbackColors.borderLight}]}
-                >
-                  <View style={localStyles.contactInfo}>
-                    <View style={[localStyles.avatarPlaceholder, {backgroundColor: isAvailable ? colors.success || localFallbackColors.success : colors.gray[500] || localFallbackColors.gray[500]}]}>
-                      {item.name ? (
-                        <Text style={localStyles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
-                      ) : (
-                        <Icon name="user" size={24} color="white" />
-                      )}
-                    </View>
-                    <View style={localStyles.contactDetails}>
-                      <Text style={[localStyles.contactName, {color: colors.text?.primary || localFallbackColors.text.primary}]}>{item.name || 'Unknown'}</Text>
-                      <Text style={[localStyles.contactStatus, {color: colors.text?.secondary || localFallbackColors.text.secondary}]}>
-                        {isAvailable ? 'Available' : item.dnd ? 'Do Not Disturb' : 'Offline'}
-                      </Text>
-                    </View>
-                  </View>
-                  
-                  {isAvailable && (
-                    <View style={localStyles.callButtons}>
-                      <TouchableOpacity 
-                        style={[localStyles.callButton, {backgroundColor: colors.success || localFallbackColors.success}]}
-                        onPress={() => handleVideoSDKCall(item, 'video')}
-                      >
-                        <Icon name="video" size={20} color="white" />
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity 
-                        style={[localStyles.callButton, {backgroundColor: colors.primary || localFallbackColors.primary}]}
-                        onPress={() => handleVideoSDKCall(item, 'voice')}
-                      >
-                        <Icon name="phone" size={20} color="white" />
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            }}
-            contentContainerStyle={{paddingBottom: 100}}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
-                colors={[localFallbackColors.primary]}
-              />
-            }
-          />
-        )}
-
-        {/* Only show custom incoming call UI if CallKeep is not handling it */}
-        {incomingCallNotification && (
-          <IncomingCallScreen
-            callerName={incomingCallNotification.callerName}
-            callType={incomingCallNotification.callType}
-            onAccept={() => {
-              console.log('[TipCall] Accepting incoming call from custom UI, navigating to Meeting screen.');
-              navigation.navigate('Meeting', {
-                meetingId: incomingCallNotification.meetingId,
-                token: incomingCallNotification.videosdkToken,
-                callType: incomingCallNotification.callType,
-                displayName: user?.name || "Me",
-                isInitiator: false,
-                recipientName: incomingCallNotification.callerName,
-              });
-              setIncomingCallNotification(null);
-            }}
-            onReject={async () => {
-              console.log('[TipCall] Rejecting incoming call from custom UI.');
-              if (user && incomingCallNotification.callerId && incomingCallNotification.meetingId) {
-                await NotificationService.updateCallStatus(
-                  incomingCallNotification.callerId,
-                  user.id.toString(),
-                  'rejected',
-                  incomingCallNotification.callType,
-                  incomingCallNotification.meetingId
-                );
+        {/* Content Section */}
+        <View style={styles.contentSection}>
+          {loading ? (
+            <ContactsSkeleton colors={colors} isDarkMode={isDarkMode} />
+          ) : error ? (
+            renderErrorState()
+          ) : filteredContacts.length === 0 ? (
+            renderEmptyState()
+          ) : (
+            <FlatList
+              data={filteredContacts}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={renderContactItem}
+              contentContainerStyle={styles.contactsList}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleRefresh}
+                  colors={[colors.primary]}
+                  tintColor={colors.primary}
+                  progressBackgroundColor={colors.card}
+                />
               }
-              setIncomingCallNotification(null);
-            }}
-          />
-        )}
+              showsVerticalScrollIndicator={false}
+              ListHeaderComponent={() => (
+                <View style={styles.contactsHeader}>
+                  <Text style={[styles.contactsCount, { color: colors.text.secondary }]}>
+                    {searchQuery ? (
+                      <>
+                        {filteredContacts.length} result{filteredContacts.length !== 1 ? 's' : ''} for "{searchQuery}"
+                        {isDndEnabled && (
+                          <Text style={[styles.dndStatusText, { color: colors.danger || '#EF4444' }]}>
+                            {' • DND Active'}
+                          </Text>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {filteredContacts.length} contact{filteredContacts.length !== 1 ? 's' : ''} available
+                        {isDndEnabled && (
+                          <Text style={[styles.dndStatusText, { color: colors.danger || '#EF4444' }]}>
+                            {' • DND Active'}
+                          </Text>
+                        )}
+                      </>
+                    )}
+                  </Text>
+                </View>
+              )}
+            />
+          )}
+        </View>
       </View>
     </ScreenTransition>
   );
 }
 
-// localStyles definition
-const localStyles = StyleSheet.create({
-  ...importedStyles,
-  // Add any additional styles here if needed
+// Updated styles - add header-specific DND button styles and remove separate container
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  
+  // Header styles
+  headerRightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  
+  headerIconButton: {
+    padding: 6,
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+  notificationBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
+  },
+  
+  // Original DND button (remove or keep as backup)
+  dndButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    minWidth: 80,
+    justifyContent: 'center',
+    gap: 4,
+  },
+  
+  // New header-specific DND button styles
+  dndButtonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 70,
+    justifyContent: 'center',
+    gap: 3,
+  },
+  
+  dndButtonHeaderText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  
+  dndButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  
+  dndStatusText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  
+  // Remove DND container since it's now in header
+  // dndContainer: {
+  //   flexDirection: 'row',
+  //   justifyContent: 'flex-end',
+  //   paddingHorizontal: 16,
+  //   paddingVertical: 8,
+  //   borderBottomWidth: StyleSheet.hairlineWidth,
+  //   borderBottomColor: '#E5E7EB',
+  // },
+  
+  // Filter Sections
+  filtersSection: {
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E7EB',
+  },
+  
+  filterGroup: {
+    marginBottom: 16,
+  },
+  
+  filterGroupTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    marginHorizontal: 16,
+  },
+  
+  filterScrollView: {
+    paddingHorizontal: 16,
+  },
+  
+  filterScrollContainer: {
+    paddingRight: 16,
+  },
+  
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: 8,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  
+  filterChipText: {
+    fontSize: 14,
+  },
+
+  // Content Section
+  contentSection: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+
+  // Contact Cards
+  contactCard: {
+    marginHorizontal: 16,
+    marginVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  
+  contactCardContent: {
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  // Avatar Section
+  avatarSection: {
+    marginRight: 12,
+  },
+  
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  
+  avatarText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#22C55E',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+
+  // Contact Info
+  contactInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  
+  contactName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  
+  contactId: {
+    fontSize: 11,
+    marginBottom: 2,
+    fontFamily: 'monospace',
+  },
+  
+  contactStatus: {
+    fontSize: 13,
+    marginBottom: 6,
+  },
+  
+  tagContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  
+  tagText: {
+    fontSize: 11,
+    marginLeft: 4,
+    flex: 1,
+  },
+
+  // Action Buttons
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  
+  actionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+  videoButton: {
+    // Specific styles for video button
+  },
+  
+  voiceButton: {
+    // Specific styles for voice button
+  },
+
+  // Unavailable State
+  unavailableContainer: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(156, 163, 175, 0.1)',
+  },
+  
+  unavailableText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+
+  // Contacts List
+  contactsList: {
+    paddingVertical: 8,
+  },
+  
+  contactsHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  
+  contactsCount: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+
+  // Skeleton
+  skeletonContainer: {
+    padding: 16,
+  },
+
+  // Empty State
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  
+  emptyStateIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  
+  emptyStateMessage: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  // Error State
+  errorStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  
+  errorStateIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  
+  errorStateTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  
+  errorStateMessage: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    gap: 8,
+  },
+  
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });

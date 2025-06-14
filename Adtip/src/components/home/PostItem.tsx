@@ -70,31 +70,51 @@ const PostItem: React.FC<PostItemProps> = ({
   const [videoDuration, setVideoDuration] = useState(0);
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoError, setVideoError] = useState(false);
+  const [wasManuallyPaused, setWasManuallyPaused] = useState(false); // Track manual pause
 
-  // --- Video Playback Logic ---
+  // Enhanced Video Playback Logic - INSTANT play/pause on visibility change
   useEffect(() => {
     if (media_type === 'video') {
       if (isVisible) {
-        setIsPlaying(true);
+        // INSTANT play when visible (only if not manually paused)
+        if (!wasManuallyPaused) {
+          setIsPlaying(true);
+        }
         setVideoError(false);
       } else {
+        // INSTANT pause when out of view
         setIsPlaying(false);
+        // Reset manual pause state when video goes out of view completely
+        setWasManuallyPaused(false);
       }
     }
-  }, [isVisible, media_type]);
+  }, [isVisible, media_type, wasManuallyPaused]);
 
+  // Enhanced toggle play/pause with manual state tracking
   const togglePlayPause = useCallback(() => {
-    setIsPlaying(prev => !prev);
+    const newPlayingState = !isPlaying;
+    setIsPlaying(newPlayingState);
+    
+    // Track if user manually paused the video
+    if (!newPlayingState && isVisible) {
+      setWasManuallyPaused(true);
+    } else if (newPlayingState) {
+      setWasManuallyPaused(false);
+    }
+    
     setShowControls(true);
-    setTimeout(() => setShowControls(false), 2000);
-  }, []);
+    // Reduced control timeout for better responsiveness
+    setTimeout(() => setShowControls(false), 1500);
+  }, [isPlaying, isVisible]);
 
   const toggleMute = useCallback(() => {
     setIsMuted(prev => !prev);
     setShowControls(true);
-    setTimeout(() => setShowControls(false), 2000);
+    // Reduced control timeout for better responsiveness
+    setTimeout(() => setShowControls(false), 1500);
   }, []);
 
+  // Optimized video load handlers
   const handleVideoLoadStart = useCallback(() => {
     setVideoLoading(true);
   }, []);
@@ -102,7 +122,11 @@ const PostItem: React.FC<PostItemProps> = ({
   const handleVideoLoad = useCallback((meta: any) => {
     setVideoDuration(meta.duration);
     setVideoLoading(false);
-  }, []);
+    // Auto-play immediately after load if visible and not manually paused
+    if (isVisible && !wasManuallyPaused) {
+      setIsPlaying(true);
+    }
+  }, [isVisible, wasManuallyPaused]);
 
   const handleVideoProgress = useCallback((progress: any) => {
     setVideoProgress(progress.currentTime);
@@ -110,6 +134,7 @@ const PostItem: React.FC<PostItemProps> = ({
 
   const handleVideoEnd = useCallback(() => {
     setIsPlaying(false);
+    setWasManuallyPaused(false);
   }, []);
 
   const handleVideoError = useCallback((error: any) => {
@@ -117,7 +142,20 @@ const PostItem: React.FC<PostItemProps> = ({
     setVideoError(true);
     setIsPlaying(false);
     setVideoLoading(false);
+    setWasManuallyPaused(false);
   }, []);
+
+  // Instant error reset when video comes back into view
+  useEffect(() => {
+    if (media_type === 'video' && isVisible && videoError) {
+      setVideoError(false);
+      setVideoLoading(true);
+      // Try to play immediately if visible
+      if (!wasManuallyPaused) {
+        setIsPlaying(true);
+      }
+    }
+  }, [isVisible, media_type, videoError, wasManuallyPaused]);
 
   const handleLikePress = () => {
     onLike(id);
@@ -188,36 +226,56 @@ const PostItem: React.FC<PostItemProps> = ({
                   style={styles.postMedia}
                   resizeMode="cover"
                   repeat={true}
-                  paused={!isPlaying}
+                  paused={!isPlaying} // Instant pause/play response
                   muted={isMuted}
                   onLoadStart={handleVideoLoadStart}
                   onLoad={handleVideoLoad}
                   onProgress={handleVideoProgress}
                   onEnd={handleVideoEnd}
                   onError={handleVideoError}
+                  // OPTIMIZED BUFFER CONFIG FOR INSTANT PLAYBACK
                   bufferConfig={{
-                    minBufferMs: 15000,
-                    maxBufferMs: 50000,
-                    bufferForPlaybackMs: 2500,
-                    bufferForPlaybackAfterRebufferMs: 5000,
+                    minBufferMs: 2000,     // Reduced from 15000
+                    maxBufferMs: 8000,     // Reduced from 50000
+                    bufferForPlaybackMs: 500,      // Reduced from 2500
+                    bufferForPlaybackAfterRebufferMs: 1000, // Reduced from 5000
                   }}
+                  // Additional props for instant response
+                  playInBackground={false}
+                  playWhenInactive={false}
+                  ignoreSilentSwitch="ignore" // Play even when phone is on silent
+                  mixWithOthers="duck" // Duck other audio when playing
                 />
+                
                 {videoLoading && (
                   <View style={styles.videoOverlay}>
                     <ActivityIndicator size="large" color={colors.primary} />
                   </View>
                 )}
-                {/* Play/Pause Button */}
-                {(showControls || !isPlaying) && !videoLoading && (
+                
+                {/* Instant control overlay - no delays */}
+                {(showControls || !isPlaying || !isVisible) && !videoLoading && (
                   <TouchableOpacity onPress={togglePlayPause} style={styles.videoControlOverlay}>
-                    <Icon name={isPlaying ? 'pause-circle' : 'play-circle'} size={50} color="white" />
+                    <Icon 
+                      name={isPlaying && isVisible ? 'pause-circle' : 'play-circle'} 
+                      size={50} 
+                      color="white" 
+                    />
                   </TouchableOpacity>
                 )}
-                {/* Mute Button */}
-                {(showControls || !isPlaying) && !videoLoading && (
+                
+                {/* Instant mute button */}
+                {(showControls || !isPlaying) && !videoLoading && isVisible && (
                   <TouchableOpacity onPress={toggleMute} style={styles.muteButton}>
                     <Icon name={isMuted ? 'volume-x' : 'volume-2'} size={24} color="white" />
                   </TouchableOpacity>
+                )}
+                
+                {/* Instant out of view indicator */}
+                {!isVisible && (
+                  <View style={styles.outOfViewOverlay}>
+                    <Text style={styles.outOfViewText}>Video paused</Text>
+                  </View>
                 )}
               </View>
             </TouchableWithoutFeedback>
@@ -227,7 +285,17 @@ const PostItem: React.FC<PostItemProps> = ({
              <View style={styles.errorMedia}>
                 <Icon name="alert-triangle" size={50} color={colors.danger || '#FF0000'} />
                 <Text style={[styles.errorText, {color: colors.text.secondary}]}>Video failed to load.</Text>
-                <TouchableOpacity onPress={() => {setVideoError(false); setIsPlaying(true);}} style={styles.retryButton}>
+                <TouchableOpacity 
+                  onPress={() => {
+                    setVideoError(false); 
+                    setVideoLoading(true);
+                    if (isVisible) {
+                      setIsPlaying(true);
+                      setWasManuallyPaused(false);
+                    }
+                  }} 
+                  style={styles.retryButton}
+                >
                   <Text style={{color: colors.primary}}>Tap to Retry</Text>
                 </TouchableOpacity>
              </View>
@@ -295,6 +363,7 @@ const PostItem: React.FC<PostItemProps> = ({
   );
 };
 
+// Add new styles for the out-of-view overlay
 const styles = StyleSheet.create({
   postContainer: {
     backgroundColor: '#FFFFFF',
@@ -369,6 +438,21 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 15,
     padding: 5,
+  },
+  // NEW STYLE: Out of view overlay
+  outOfViewOverlay: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  outOfViewText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '500',
   },
   errorMedia: {
     ...StyleSheet.absoluteFillObject,

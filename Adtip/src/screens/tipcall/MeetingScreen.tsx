@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
+  AppState,
 } from 'react-native';
 import {
   useMeeting,
@@ -17,7 +18,6 @@ import {
   MeetingProvider,
   RTCView,
   MediaStream,
-  Constants,
   usePubSub,
 } from '@videosdk.live/react-native-sdk';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -42,6 +42,25 @@ type RootStackParamList = {
 
 type MeetingScreenRouteProp = RouteProp<RootStackParamList, 'Meeting'>;
 type MeetingNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+// Define meeting states (since Constants.MeetingStates doesn't exist)
+const MEETING_STATES = {
+  CONNECTING: 'CONNECTING',
+  CONNECTED: 'CONNECTED',
+  FAILED: 'FAILED',
+  DISCONNECTED: 'DISCONNECTED',
+  CLOSING: 'CLOSING',
+  CLOSED: 'CLOSED',
+} as const;
+
+// Define recording states
+const RECORDING_STATES = {
+  RECORDING_STARTING: 'RECORDING_STARTING',
+  RECORDING_STARTED: 'RECORDING_STARTED',
+  RECORDING_STOPPING: 'RECORDING_STOPPING',
+  RECORDING_STOPPED: 'RECORDING_STOPPED',
+  RECORDING_FAILED: 'RECORDING_FAILED',
+} as const;
 
 // ParticipantView component
 const ParticipantView: React.FC<{
@@ -172,16 +191,13 @@ const MeetingContainerInternal: React.FC<{
   const [joined, setJoined] = useState<"IDLE" | "JOINING" | "JOINED">("IDLE");
   const [error, setError] = useState<string | null>(null);
   const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
-  const [audioDevices, setAudioDevices] = useState<any[]>([]);
-  const [videoDevices, setVideoDevices] = useState<any[]>([]);
-  const [selectedAudioDevice, setSelectedAudioDevice] = useState<string | null>(null);
-  const [selectedVideoDevice, setSelectedVideoDevice] = useState<string | null>(null);
   const [meetingConnectionState, setMeetingConnectionState] = useState<string>("IDLE");
-  const [recordingState, setRecordingState] = useState<string>("IDLE");
-  const [hlsState, setHlsState] = useState<string>("IDLE");
+  const [recordingState, setRecordingState] = useState<string>("RECORDING_STOPPED");
   const [networkQuality, setNetworkQuality] = useState<{
     [participantId: string]: { quality: number };
   }>({});
+  const [reconnectAttempts, setReconnectAttempts] = useState<number>(0);
+  const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
 
   const {
     join,
@@ -193,29 +209,29 @@ const MeetingContainerInternal: React.FC<{
     localMicOn,
     localWebcamOn,
     localScreenShareOn,
-    meetingId: currentMeetingIdFromSDK,
-    getAudioDevices,
-    getVideoDevices,
-    changeAudioDevice,
-    changeVideoDevice,
     startRecording,
     stopRecording,
-    setQuality,
   } = useMeeting({
     onMeetingJoined: () => {
       console.log('[MeetingScreen] Event: onMeetingJoined');
       setJoined("JOINED");
-      setMeetingConnectionState(Constants.MeetingStates.CONNECTED);
+      setMeetingConnectionState(MEETING_STATES.CONNECTED);
       setError(null);
-      loadDevices();
+      setReconnectAttempts(0);
+      setIsReconnecting(false);
       
       // Notify CallKeep that call is connected
-      const callKeepService = CallKeepService.getInstance();
-      callKeepService.setCallConnected();
+      try {
+        const callKeepService = CallKeepService.getInstance();
+        callKeepService.setCallConnected();
+      } catch (callKeepError) {
+        console.error('[MeetingScreen] CallKeep error:', callKeepError);
+      }
     },
     onMeetingLeft: () => {
       console.log('[MeetingScreen] Event: onMeetingLeft');
-      setMeetingConnectionState(Constants.MeetingStates.DISCONNECTED);
+      setMeetingConnectionState(MEETING_STATES.DISCONNECTED);
+      setIsReconnecting(false);
       onEndCallInternal();
     },
     onParticipantJoined: (participant) => {
@@ -230,79 +246,142 @@ const MeetingContainerInternal: React.FC<{
     },
     onError: (errorData) => {
       console.error('[MeetingScreen] Event: onError - Code:', errorData.code, 'Message:', errorData.message);
-      setError(`Error: ${errorData.message} (Code: ${errorData.code})`);
-      setMeetingConnectionState(Constants.MeetingStates.FAILED);
       
-      // Handle specific error types
-      switch (errorData.code) {
-        case Constants.ErrorCodes.ERR_INVALID_TOKEN:
-          Alert.alert("Error", "Invalid token. Please try rejoining.");
-          break;
-        case Constants.ErrorCodes.ERR_MEETING_NOT_JOINED:
-          Alert.alert("Error", "You are not joined in the meeting. Please try rejoining.");
-          break;
-        case Constants.ErrorCodes.ERR_NO_INTERNET:
-          Alert.alert("Network Error", "No internet connection. Please check your network and try again.");
-          break;
-        default:
-          Alert.alert("Meeting Error", errorData.message);
+      // Handle WebSocket connection errors
+      if (errorData.message && errorData.message.toLowerCase().includes('websocket')) {
+        console.log('[MeetingScreen] WebSocket error detected, attempting to handle gracefully');
+        setError(`Connection issue: ${errorData.message}`);
+        setIsReconnecting(true);
+        
+        // Don't immediately fail - try to reconnect
+        if (reconnectAttempts < 3) {
+          console.log(`[MeetingScreen] Attempting reconnect ${reconnectAttempts + 1}/3`);
+          setReconnectAttempts(prev => prev + 1);
+          
+          // Delay reconnect attempt
+          setTimeout(() => {
+            if (joined !== "JOINED") {
+              console.log('[MeetingScreen] Retrying connection...');
+              joinMeeting();
+            }
+          }, 2000 * (reconnectAttempts + 1)); // Exponential backoff
+        } else {
+          console.log('[MeetingScreen] Max reconnect attempts reached');
+          setMeetingConnectionState(MEETING_STATES.FAILED);
+          setIsReconnecting(false);
+          Alert.alert(
+            "Connection Failed", 
+            "Unable to establish stable connection. Please try again.",
+            [
+              { text: "Retry", onPress: () => {
+                setReconnectAttempts(0);
+                setError(null);
+                joinMeeting();
+              }},
+              { text: "End Call", onPress: onEndCallInternal }
+            ]
+          );
+        }
+      } else {
+        // Handle other errors normally
+        setError(`Error: ${errorData.message} (Code: ${errorData.code})`);
+        setMeetingConnectionState(MEETING_STATES.FAILED);
+        setIsReconnecting(false);
+        Alert.alert("Meeting Error", errorData.message);
       }
     },
-    onMeetingStateChanged: (state) => {
-      console.log('[MeetingScreen] Event: onMeetingStateChanged - New State:', state);
-      setMeetingConnectionState(state);
-      if (state === Constants.MeetingStates.FAILED || state === Constants.MeetingStates.DISCONNECTED) {
-        setError(state === Constants.MeetingStates.FAILED ? "Meeting connection failed." : "Meeting disconnected.");
+    onMeetingStateChanged: (data) => {
+      console.log('[MeetingScreen] Event: onMeetingStateChanged - New State:', data.state);
+      setMeetingConnectionState(data.state);
+      
+      // Handle different connection states
+      switch (data.state) {
+        case MEETING_STATES.CONNECTING:
+          console.log('[MeetingScreen] Meeting is connecting...');
+          setError(null);
+          break;
+          
+        case MEETING_STATES.CONNECTED:
+          console.log('[MeetingScreen] Meeting connected successfully');
+          setError(null);
+          setReconnectAttempts(0);
+          setIsReconnecting(false);
+          break;
+          
+        case MEETING_STATES.FAILED:
+          console.log('[MeetingScreen] Meeting connection failed');
+          setError("Meeting connection failed.");
+          setIsReconnecting(false);
+          break;
+          
+        case MEETING_STATES.DISCONNECTED:
+          console.log('[MeetingScreen] Meeting disconnected');
+          setError("Meeting disconnected.");
+          setIsReconnecting(false);
+          break;
+          
+        default:
+          console.log(`[MeetingScreen] Unknown meeting state: ${data.state}`);
       }
     },
     onRecordingStateChanged: (data) => {
       console.log('[MeetingScreen] Event: onRecordingStateChanged - New State:', data.status);
       setRecordingState(data.status);
       
-      if (data.status === Constants.RecordingStates.RECORDING_STARTED) {
+      if (data.status === RECORDING_STATES.RECORDING_STARTED) {
         Alert.alert("Recording", "Recording has started.");
-      } else if (data.status === Constants.RecordingStates.RECORDING_STOPPED) {
+      } else if (data.status === RECORDING_STATES.RECORDING_STOPPED) {
         Alert.alert("Recording", "Recording has stopped.");
-      } else if (data.status === Constants.RecordingStates.RECORDING_FAILED) {
-        Alert.alert("Recording Error", `Recording failed: ${data.error?.message || 'Unknown error'}`);
+      } else if (data.status === RECORDING_STATES.RECORDING_FAILED) {
+        Alert.alert("Recording Error", "Recording failed");
       }
     },
-    onHlsStateChanged: (data) => {
-      console.log('[MeetingScreen] Event: onHlsStateChanged - New State:', data.status);
-      setHlsState(data.status);
+    // Add connection management callbacks
+    onWebcamRequested: (data) => {
+      console.log('[MeetingScreen] Webcam requested:', data);
     },
-    onMicStreamEnabled: () => {
-      console.log('[MeetingScreen] Event: onMicStreamEnabled (Local Mic ON)');
-    },
-    onMicStreamDisabled: () => {
-      console.log('[MeetingScreen] Event: onMicStreamDisabled (Local Mic OFF)');
-    },
-    onWebcamStreamEnabled: () => {
-      console.log('[MeetingScreen] Event: onWebcamStreamEnabled (Local Webcam ON)');
-    },
-    onWebcamStreamDisabled: () => {
-      console.log('[MeetingScreen] Event: onWebcamStreamDisabled (Local Webcam OFF)');
-    },
-    onScreenShareStreamEnabled: () => {
-      console.log('[MeetingScreen] Event: onScreenShareStreamEnabled (Local Screen Share ON)');
-    },
-    onScreenShareStreamDisabled: () => {
-      console.log('[MeetingScreen] Event: onScreenShareStreamDisabled (Local Screen Share OFF)');
+    onMicRequested: (data) => {
+      console.log('[MeetingScreen] Mic requested:', data);
     },
   });
+
+  // Handle app state changes to manage connection
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: string) => {
+      console.log(`[MeetingScreen] App state changed to: ${nextAppState}`);
+      
+      if (nextAppState === 'active' && joined === "JOINED") {
+        // App became active, check connection
+        console.log('[MeetingScreen] App became active, checking meeting connection');
+      } else if (nextAppState === 'background' && joined === "JOINED") {
+        // App went to background during call
+        console.log('[MeetingScreen] App went to background during call');
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    return () => {
+      subscription?.remove();
+    };
+  }, [joined]);
 
   const { publish: publishNetworkQuality } = usePubSub("NETWORK_QUALITY", {
     onMessageReceived: (message) => {
       try {
-        if (message && message.senderId && message.message && typeof message.message.quality === 'number') {
+        if (message && message.senderId && message.message && typeof message.message === 'object') {
+          const quality = message.message.quality || 5;
           setNetworkQuality(prev => ({
             ...prev,
-            [message.senderId]: { quality: message.message.quality }
+            [message.senderId]: { quality }
           }));
         }
       } catch (error) {
         console.error('[MeetingScreen] Error processing network quality message:', error);
       }
+    },
+    onError: (error) => {
+      console.error('[MeetingScreen] PubSub error:', error);
     },
   });
 
@@ -318,139 +397,128 @@ const MeetingContainerInternal: React.FC<{
     return { score: averageQuality, text: qualityText };
   }, [networkQuality]);
 
-  const loadDevices = useCallback(async () => {
-    try {
-      if (getAudioDevices && getVideoDevices) {
-        console.log('[MeetingScreen] Loading available devices...');
-        const audio = await getAudioDevices();
-        const video = await getVideoDevices();
-        
-        setAudioDevices(audio || []);
-        setVideoDevices(video || []);
-        
-        if (audio && audio.length > 0 && !selectedAudioDevice) {
-          setSelectedAudioDevice(audio[0].deviceId);
-        }
-        if (video && video.length > 0 && !selectedVideoDevice) {
-          setSelectedVideoDevice(video[0].deviceId);
-        }
-      }
-    } catch (error) {
-      console.error('[MeetingScreen] Error loading devices:', error);
-    }
-  }, [getAudioDevices, getVideoDevices, selectedAudioDevice, selectedVideoDevice]);
-
   const joinMeeting = useCallback(() => {
-    if (joined === "IDLE" || meetingConnectionState === Constants.MeetingStates.FAILED || meetingConnectionState === Constants.MeetingStates.DISCONNECTED) {
+    if (joined === "IDLE" || meetingConnectionState === MEETING_STATES.FAILED || meetingConnectionState === MEETING_STATES.DISCONNECTED) {
       console.log('[MeetingScreen] Joining meeting...');
       setJoined("JOINING");
       setError(null);
-      setMeetingConnectionState(Constants.MeetingStates.CONNECTING);
-      join();
+      setMeetingConnectionState(MEETING_STATES.CONNECTING);
+      setIsReconnecting(false);
+      
+      try {
+        join();
+      } catch (joinError) {
+        console.error('[MeetingScreen] Error joining meeting:', joinError);
+        setError('Failed to join meeting');
+        setMeetingConnectionState(MEETING_STATES.FAILED);
+        setJoined("IDLE");
+      }
     }
   }, [join, joined, meetingConnectionState]);
 
   const leaveMeetingAndNotify = useCallback(() => {
     console.log('[MeetingScreen] Leaving meeting...');
-    leave();
-  }, [leave]);
-
-  const handleAudioDeviceChange = useCallback(async (deviceId: string) => {
+    setIsReconnecting(false);
     try {
-      if (changeAudioDevice) {
-        await changeAudioDevice(deviceId);
-        setSelectedAudioDevice(deviceId);
-        console.log('[MeetingScreen] Audio device changed to:', deviceId);
-      }
-    } catch (error) {
-      console.error('[MeetingScreen] Error changing audio device:', error);
-      Alert.alert('Audio Device Error', 'Failed to change audio device.');
+      leave();
+    } catch (leaveError) {
+      console.error('[MeetingScreen] Error leaving meeting:', leaveError);
+      // Still call onEndCallInternal even if leave fails
+      onEndCallInternal();
     }
-  }, [changeAudioDevice]);
+  }, [leave, onEndCallInternal]);
 
-  const handleVideoDeviceChange = useCallback(async (deviceId: string) => {
+  const handleMicToggle = useCallback(() => {
     try {
-      if (changeVideoDevice) {
-        await changeVideoDevice(deviceId);
-        setSelectedVideoDevice(deviceId);
-        console.log('[MeetingScreen] Video device changed to:', deviceId);
-      }
+      toggleMic();
     } catch (error) {
-      console.error('[MeetingScreen] Error changing video device:', error);
-      Alert.alert('Video Device Error', 'Failed to change video device.');
+      console.error('[MeetingScreen] Error toggling mic:', error);
+      Alert.alert('Error', 'Failed to toggle microphone');
     }
-  }, [changeVideoDevice]);
+  }, [toggleMic]);
 
-  const handleStartRecording = useCallback(async () => {
-    if (!startRecording) {
+  const handleCameraToggle = useCallback(() => {
+    try {
+      toggleWebcam();
+    } catch (error) {
+      console.error('[MeetingScreen] Error toggling camera:', error);
+      Alert.alert('Error', 'Failed to toggle camera');
+    }
+  }, [toggleWebcam]);
+
+  const handleScreenShareToggle = useCallback(() => {
+    try {
+      toggleScreenShare();
+    } catch (error) {
+      console.error('[MeetingScreen] Error toggling screen share:', error);
+      Alert.alert('Error', 'Failed to toggle screen share');
+    }
+  }, [toggleScreenShare]);
+
+  const handleStartRecording = useCallback(() => {
+    if (startRecording) {
+      try {
+        startRecording();
+      } catch (error) {
+        console.error('[MeetingScreen] Error starting recording:', error);
+        Alert.alert('Error', 'Failed to start recording.');
+      }
+    } else {
       Alert.alert('Feature Not Available', 'Recording is not available.');
-      return;
     }
-    
-    try {
-      const recordingConfig = {
-        layout: { type: 'GRID', priority: 'SPEAKER', gridSize: 4 },
-        theme: 'DARK',
-        mode: callType === 'video' ? Constants.RecordingModes.VIDEO_AND_AUDIO : Constants.RecordingModes.AUDIO,
-        quality: Constants.RecordingQuality.HIGH,
-      };
-      await startRecording(undefined, recordingConfig);
-    } catch (error) {
-      console.error('[MeetingScreen] Error starting recording:', error);
-      Alert.alert('Error', 'Failed to start recording.');
-    }
-  }, [startRecording, callType]);
+  }, [startRecording]);
 
-  const handleStopRecording = useCallback(async () => {
-    if (!stopRecording) {
-      return;
-    }
-    
-    try {
-      await stopRecording();
-    } catch (error) {
-      console.error('[MeetingScreen] Error stopping recording:', error);
-      Alert.alert('Error', 'Failed to stop recording.');
+  const handleStopRecording = useCallback(() => {
+    if (stopRecording) {
+      try {
+        stopRecording();
+      } catch (error) {
+        console.error('[MeetingScreen] Error stopping recording:', error);
+        Alert.alert('Error', 'Failed to stop recording.');
+      }
     }
   }, [stopRecording]);
 
-  const adjustVideoQuality = useCallback(async (qualityPreset: "low" | "medium" | "high" | null) => {
-    if (setQuality) {
-      try {
-        console.log(`[MeetingScreen] Attempting to set quality to: ${qualityPreset}`);
-        await setQuality(qualityPreset);
-        Alert.alert("Video Quality", `Video quality set to ${qualityPreset || 'auto'}.`);
-      } catch (error) {
-        console.error("[MeetingScreen] Error setting video quality:", error);
-        Alert.alert("Error", "Could not set video quality.");
-      }
-    } else {
-      console.warn("[MeetingScreen] setQuality function is not available.");
-    }
-  }, [setQuality]);
-
-  // Auto-join meeting on mount
+  // Auto-join meeting on mount with error handling
   useEffect(() => {
-    joinMeeting();
+    let joinTimeout: NodeJS.Timeout;
+    
+    const attemptJoin = () => {
+      console.log('[MeetingScreen] Attempting to join meeting on mount');
+      joinMeeting();
+      
+      // Set a timeout to detect if join is taking too long
+      joinTimeout = setTimeout(() => {
+        if (joined === "JOINING") {
+          console.log('[MeetingScreen] Join attempt timed out');
+          setError('Connection timeout - please try again');
+          setJoined("IDLE");
+          setMeetingConnectionState(MEETING_STATES.FAILED);
+        }
+      }, 30000); // 30 second timeout
+    };
+    
+    attemptJoin();
     
     return () => {
+      if (joinTimeout) {
+        clearTimeout(joinTimeout);
+      }
+      
       if (joined === "JOINED" || joined === "JOINING") {
         console.log('[MeetingScreen] Leaving meeting on component unmount...');
-        leave();
+        try {
+          leave();
+        } catch (error) {
+          console.error('[MeetingScreen] Error leaving on unmount:', error);
+        }
       }
     };
-  }, [joinMeeting, leave, joined]);
-
-  // Load devices after joining
-  useEffect(() => {
-    if (joined === "JOINED") {
-      loadDevices();
-    }
-  }, [joined, loadDevices]);
+  }, []); // Empty dependency array for mount only
 
   const networkInfo = checkNetworkQuality();
 
-  // Error state
+  // Error state with reconnection info
   if (error && joined !== "JOINED") {
     return (
       <SafeAreaView style={localStyles.callOverlay}>
@@ -458,7 +526,16 @@ const MeetingContainerInternal: React.FC<{
           <Text style={localStyles.errorText}>Meeting Error: {error}</Text>
           <Text style={localStyles.errorText}>Connection State: {meetingConnectionState}</Text>
           
-          {(meetingConnectionState === Constants.MeetingStates.FAILED || meetingConnectionState === Constants.MeetingStates.DISCONNECTED) && (
+          {isReconnecting && (
+            <>
+              <ActivityIndicator size="small" color="orange" style={{ marginVertical: 10 }} />
+              <Text style={localStyles.joiningText}>
+                Reconnecting... (Attempt {reconnectAttempts}/3)
+              </Text>
+            </>
+          )}
+          
+          {!isReconnecting && (meetingConnectionState === MEETING_STATES.FAILED || meetingConnectionState === MEETING_STATES.DISCONNECTED) && (
             <TouchableOpacity style={localStyles.retryButton} onPress={joinMeeting}>
               <Text style={localStyles.retryButtonText}>Retry Join</Text>
             </TouchableOpacity>
@@ -472,21 +549,29 @@ const MeetingContainerInternal: React.FC<{
     );
   }
 
-  // Connecting/Joining state
+  // Connecting/Joining state with reconnection info
   if (joined !== "JOINED") {
     return (
       <SafeAreaView style={localStyles.callOverlay}>
         <View style={localStyles.joiningContainer}>
           <ActivityIndicator size="large" color={localFallbackColors.primary} />
           <Text style={localStyles.joiningText}>
-            {meetingConnectionState === Constants.MeetingStates.CONNECTING ? "Connecting to meeting..." : 
-             meetingConnectionState === Constants.MeetingStates.FAILED ? "Failed to connect." : 
+            {isReconnecting ? "Reconnecting..." :
+             meetingConnectionState === MEETING_STATES.CONNECTING ? "Connecting to meeting..." : 
+             meetingConnectionState === MEETING_STATES.FAILED ? "Failed to connect." : 
              "Preparing to join..."}
           </Text>
           <Text style={localStyles.joiningText}>Status: {meetingConnectionState}</Text>
+          
+          {isReconnecting && (
+            <Text style={localStyles.joiningText}>
+              Attempt {reconnectAttempts}/3
+            </Text>
+          )}
+          
           {error && <Text style={localStyles.errorTextSmall}>{error}</Text>}
           
-          {(meetingConnectionState === Constants.MeetingStates.FAILED && joined !== "JOINED") && (
+          {(meetingConnectionState === MEETING_STATES.FAILED && joined !== "JOINED" && !isReconnecting) && (
             <TouchableOpacity style={[localStyles.retryButton, { marginTop: 20 }]} onPress={joinMeeting}>
               <Text style={localStyles.retryButtonText}>Retry Join</Text>
             </TouchableOpacity>
@@ -506,8 +591,8 @@ const MeetingContainerInternal: React.FC<{
         </Text>
         <Text style={[
           localStyles.connectionStatus,
-          meetingConnectionState === Constants.MeetingStates.CONNECTED ? localStyles.connected : 
-          meetingConnectionState === Constants.MeetingStates.CONNECTING ? localStyles.connecting : 
+          meetingConnectionState === MEETING_STATES.CONNECTED ? localStyles.connected : 
+          meetingConnectionState === MEETING_STATES.CONNECTING ? localStyles.connecting : 
           localStyles.disconnected
         ]}>
           Connection: {meetingConnectionState}
@@ -523,14 +608,9 @@ const MeetingContainerInternal: React.FC<{
           Avg. Network: {networkInfo.text} ({networkInfo.score}/5)
         </Text>
         
-        {(recordingState !== Constants.RecordingStates.RECORDING_IDLE && 
-          recordingState !== Constants.RecordingStates.RECORDING_STOPPED) && (
+        {(recordingState !== RECORDING_STATES.RECORDING_STOPPED && 
+          recordingState !== 'RECORDING_STOPPED') && (
           <Text style={localStyles.recordingStatusText}>Recording: {recordingState}</Text>
-        )}
-        
-        {(hlsState !== Constants.HlsStates.HLS_IDLE && 
-          hlsState !== Constants.HlsStates.HLS_STOPPED) && (
-          <Text style={localStyles.hlsStatusText}>HLS: {hlsState}</Text>
         )}
         
         {error && <Text style={localStyles.errorTextSmall}>{error}</Text>}
@@ -547,7 +627,7 @@ const MeetingContainerInternal: React.FC<{
       <View style={localStyles.callControls}>
         <TouchableOpacity
           style={[localStyles.controlButton, { backgroundColor: localMicOn ? 'rgba(255,255,255,0.2)' : 'red' }]}
-          onPress={toggleMic}
+          onPress={handleMicToggle}
         >
           <Icon name={localMicOn ? "mic" : "mic-off"} size={20} color="white" />
         </TouchableOpacity>
@@ -556,14 +636,14 @@ const MeetingContainerInternal: React.FC<{
           <>
             <TouchableOpacity
               style={[localStyles.controlButton, { backgroundColor: localWebcamOn ? 'rgba(255,255,255,0.2)' : 'red' }]}
-              onPress={toggleWebcam}
+              onPress={handleCameraToggle}
             >
               <Icon name={localWebcamOn ? "video" : "video-off"} size={20} color="white" />
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[localStyles.controlButton, { backgroundColor: localScreenShareOn ? 'green' : 'rgba(255,255,255,0.2)' }]}
-              onPress={toggleScreenShare}
+              onPress={handleScreenShareToggle}
             >
               <Icon name={localScreenShareOn ? "cast" : "share-2"} size={18} color="white" />
             </TouchableOpacity>
@@ -575,99 +655,30 @@ const MeetingContainerInternal: React.FC<{
         </TouchableOpacity>
       </View>
 
-      {/* Advanced Controls */}
-      <View style={localStyles.advancedControls}>
-        {/* Video Quality Controls */}
-        {callType === 'video' && setQuality && (
-          <View style={localStyles.deviceSelector}>
-            <Text style={localStyles.deviceSelectorLabel}>Video Quality:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {(["low", "medium", "high", null] as Array<"low" | "medium" | "high" | null>).map((q) => (
-                <TouchableOpacity
-                  key={q || 'auto'}
-                  style={localStyles.deviceButton}
-                  onPress={() => adjustVideoQuality(q)}
-                >
-                  <Text style={localStyles.deviceButtonText}>
-                    {q ? q.charAt(0).toUpperCase() + q.slice(1) : 'Auto'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Audio Device Selector */}
-        {audioDevices.length > 1 && changeAudioDevice && (
-          <View style={localStyles.deviceSelector}>
-            <Text style={localStyles.deviceSelectorLabel}>Audio In:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {audioDevices.map((device) => (
-                <TouchableOpacity
-                  key={device.deviceId}
-                  style={[
-                    localStyles.deviceButton,
-                    selectedAudioDevice === device.deviceId && localStyles.selectedDeviceButton
-                  ]}
-                  onPress={() => handleAudioDeviceChange(device.deviceId)}
-                >
-                  <Text style={localStyles.deviceButtonText}>
-                    {device.label || `Audio ${device.deviceId.slice(0, 5)}`}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Video Device Selector */}
-        {callType === 'video' && videoDevices.length > 1 && changeVideoDevice && (
-          <View style={localStyles.deviceSelector}>
-            <Text style={localStyles.deviceSelectorLabel}>Camera:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {videoDevices.map((device) => (
-                <TouchableOpacity
-                  key={device.deviceId}
-                  style={[
-                    localStyles.deviceButton,
-                    selectedVideoDevice === device.deviceId && localStyles.selectedDeviceButton
-                  ]}
-                  onPress={() => handleVideoDeviceChange(device.deviceId)}
-                >
-                  <Text style={localStyles.deviceButtonText}>
-                    {device.label || `Cam ${device.deviceId.slice(0, 5)}`}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Recording Controls */}
-        {(startRecording || stopRecording) && (
-          <View style={localStyles.recordingControls}>
-            {startRecording && (recordingState === Constants.RecordingStates.RECORDING_IDLE || recordingState === Constants.RecordingStates.RECORDING_STOPPED) && (
-              <TouchableOpacity
-                style={[localStyles.controlButton, { backgroundColor: 'blue' }]}
-                onPress={handleStartRecording}
-              >
-                <Icon name="play-circle" size={20} color="white" />
-                <Text style={localStyles.controlButtonTextSmall}>Rec</Text>
-              </TouchableOpacity>
-            )}
-            
-            {stopRecording && (recordingState === Constants.RecordingStates.RECORDING_STARTED || recordingState === Constants.RecordingStates.RECORDING_STARTING) && (
-              <TouchableOpacity
-                style={[localStyles.controlButton, { backgroundColor: 'orange' }]}
-                onPress={handleStopRecording}
-              >
-                <Icon name="stop-circle" size={20} color="white" />
-                <Text style={localStyles.controlButtonTextSmall}>Stop</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      </View>
+      {/* Recording Controls */}
+      {(startRecording || stopRecording) && (
+        <View style={localStyles.recordingControls}>
+          {startRecording && (recordingState === RECORDING_STATES.RECORDING_STOPPED || recordingState === 'RECORDING_STOPPED') && (
+            <TouchableOpacity
+              style={[localStyles.controlButton, { backgroundColor: 'blue' }]}
+              onPress={handleStartRecording}
+            >
+              <Icon name="play-circle" size={20} color="white" />
+              <Text style={localStyles.controlButtonTextSmall}>Rec</Text>
+            </TouchableOpacity>
+          )}
+          
+          {stopRecording && (recordingState === RECORDING_STATES.RECORDING_STARTED || recordingState === RECORDING_STATES.RECORDING_STARTING) && (
+            <TouchableOpacity
+              style={[localStyles.controlButton, { backgroundColor: 'orange' }]}
+              onPress={handleStopRecording}
+            >
+              <Icon name="stop-circle" size={20} color="white" />
+              <Text style={localStyles.controlButtonTextSmall}>Stop</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -716,7 +727,7 @@ const MeetingScreen: React.FC = () => {
     if (meetingId) {
       try {
         const deactivated = await deactivateVideoSDKRoomViaBackend(meetingId);
-        console.log(`[MeetingScreen] Room deactivation status for ${meetingId}: ${deactivated}`);
+        console.log(`[MeetingScreen] Room deactivation status for ${meetingId}:`, deactivated);
       } catch (error) {
         console.error('[MeetingScreen] Error deactivating room:', error);
       }
@@ -758,7 +769,7 @@ const MeetingScreen: React.FC = () => {
         participantId: Math.random().toString(36).substring(7),
       }}
       token={token}
-      joinWithoutCameraAndMic={false}
+      joinWithoutUserInteraction={false}
     >
       <MeetingContainerInternal
         onEndCallInternal={handleEndCall}
@@ -777,32 +788,11 @@ const localStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  deviceSelector: {
-    marginBottom: 10,
-  },
-  deviceSelectorLabel: {
-    color: 'white',
-    fontSize: 12,
-    marginBottom: 5,
-  },
-  deviceButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
-    marginRight: 8,
-  },
-  selectedDeviceButton: {
-    backgroundColor: localFallbackColors.primary,
-  },
-  deviceButtonText: {
-    color: 'white',
-    fontSize: 12,
-  },
   recordingControls: {
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 10,
+    paddingHorizontal: 16,
   },
   controlButtonTextSmall: {
     color: 'white',
@@ -817,10 +807,172 @@ const localStyles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
   },
-  hlsStatusText: {
-    color: 'blue',
+  callOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+  },
+  statusBar: {
+    padding: 16,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  callStatusText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  connectionStatus: {
+    color: 'white',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  connected: {
+    color: 'green',
+  },
+  disconnected: {
+    color: 'red',
+  },
+  activeSpeakerText: {
+    color: 'yellow',
     fontSize: 12,
     textAlign: 'center',
+    marginBottom: 2,
+  },
+  networkQualityText: {
+    color: 'lightblue',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  recordingStatusText: {
+    color: 'red',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  videoContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  callControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    gap: 15,
+  },
+  controlButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  endCallButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'red',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  joiningContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  joiningText: {
+    color: 'white',
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  retryButton: {
+    backgroundColor: localFallbackColors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 5,
+    marginTop: 10,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  endCallButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  participantContainer: {
+    flex: 1,
+    margin: 2,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#1a1a1a',
+    minHeight: 150,
+  },
+  activeSpeakerBorder: {
+    borderWidth: 3,
+    borderColor: 'yellow',
+  },
+  participantVideo: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  noVideoContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#333',
+  },
+  noMediaText: {
+    color: 'white',
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  participantInfo: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  micIndicator: {
+    marginRight: 4,
+  },
+  screenShareIndicator: {
+    marginRight: 4,
+  },
+  activeSpeakerIndicator: {
+    marginRight: 4,
+  },
+  participantName: {
+    color: 'white',
+    fontSize: 12,
+    flex: 1,
   },
 });
 

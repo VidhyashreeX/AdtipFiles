@@ -40,14 +40,33 @@ import AdPassbookScreen from '../screens/adPassbook/AdPassbookScreen';
 import SupportScreen from '../screens/support/SupportScreen';
 import CreateCampaignScreen from '../screens/adPassbook/CreateCampaignScreen';
 import CommentsScreen from '../screens/home/CommentScreen';
-import FollowersList from '../screens/profile/FollowersList'; // Import FollowersList
-import FollowingsList from '../screens/profile/FollowingsList'; // Import FollowingsList
+import FollowersList from '../screens/profile/FollowersList';
+import FollowingsList from '../screens/profile/FollowingsList';
 import ExploreScreen from '../screens/explore/ExploreScreen';
-import{ VideoPlayerModalScreen } from '../screens/tiptube/TipTubeScreen'; // Import VideoPlayerModalScreen
+import { VideoPlayerModalScreen } from '../screens/tiptube/TipTubeScreen';
 
-// Create stack navigator
+// Add TipCall imports
+import TipCallScreen from '../screens/tipcall/TipCallScreen';
+import MeetingScreen from '../screens/tipcall/MeetingScreen';
+
+// Create stack navigator with proper typing
 const Stack = createNativeStackNavigator<Record<string, any> & {
   Checkout: { package: { id: string; name: string; price: number; bestValue?: boolean } };
+  VideoPlayerModal: { 
+    video: any; 
+    cardLayout: any; 
+    upNextVideos: any[] 
+  };
+  // Add TipCall and Meeting screen types
+  TipCall: { initialCallNotificationData?: any } | undefined;
+  Meeting: {
+    meetingId: string;
+    token: string;
+    callType: 'voice' | 'video';
+    displayName: string;
+    isInitiator?: boolean;
+    recipientName?: string;
+  };
 }>();
 
 // Custom transition configuration with Reanimated easing
@@ -224,6 +243,30 @@ const standardFastTransitionConfig = {
   },
 };
 
+// Call-specific transition config for immediate navigation
+const callTransitionConfig = {
+  headerShown: false,
+  animation: 'fade' as const,
+  animationDuration: 150, // Very fast for calls
+  gestureEnabled: false, // Disable gestures during calls
+  transitionSpec: {
+    open: {
+      animation: 'timing',
+      config: {
+        duration: 150,
+        easing: Easing.out(Easing.ease),
+      },
+    },
+    close: {
+      animation: 'timing',
+      config: {
+        duration: 100,
+        easing: Easing.in(Easing.ease),
+      },
+    },
+  },
+};
+
 /**
  * Main application stack navigator (when user is authenticated)
  */
@@ -257,11 +300,15 @@ const MainNavigator = () => {
   const EnhancedSupportScreen = withWalletBalance(SupportScreen);
   const EnhancedCreateCampaignScreen = withWalletBalance(CreateCampaignScreen);
   const EnhancedCommentsScreen = withWalletBalance(CommentsScreen);
-  const EnhancedFollowersList = withWalletBalance(FollowersList); // Enhance FollowersList
-  const EnhancedFollowingsList = withWalletBalance(FollowingsList); // Enhance FollowingsList
-  const EnhancedExploreScreen = withWalletBalance(ExploreScreen); // Enhance ExploreScreen
-
-  // Note: We don't wrap WalletScreen because it already has its own direct wallet balance implementation
+  const EnhancedFollowersList = withWalletBalance(FollowersList);
+  const EnhancedFollowingsList = withWalletBalance(FollowingsList);
+  const EnhancedExploreScreen = withWalletBalance(ExploreScreen);
+  
+  // CREATE THE ENHANCED VIDEO PLAYER MODAL SCREEN
+  const EnhancedVideoPlayerModalScreen = withWalletBalance(VideoPlayerModalScreen);
+  
+  // Add TipCall screens with wallet balance HOC
+  const EnhancedTipCallScreen = withWalletBalance(TipCallScreen);
 
   return (
     <Stack.Navigator
@@ -279,6 +326,18 @@ const MainNavigator = () => {
         name="Home" 
         component={withFastLoading(HomeScreen, { priority: 'high' })}
         options={fastTransitionConfig}
+      />
+      
+      {/* TipCall screens - Add these */}
+      <Stack.Screen 
+        name="TipCall" 
+        component={EnhancedTipCallScreen}
+        options={standardFastTransitionConfig}
+      />
+      <Stack.Screen 
+        name="Meeting" 
+        component={MeetingScreen}
+        options={callTransitionConfig} // Use special call transition for immediate response
       />
       
       {/* Content creation with slide up animation */}
@@ -351,14 +410,17 @@ const MainNavigator = () => {
       <Stack.Screen name="FollowingsList" component={EnhancedFollowingsList} />
       <Stack.Screen name="Explore" component={EnhancedExploreScreen} />
       
-      {/* Video player modal screen */}
+      {/* FIXED VIDEO PLAYER MODAL SCREEN */}
       <Stack.Screen 
         name="VideoPlayerModal" 
-        component={VideoPlayerModalScreen}
+        component={EnhancedVideoPlayerModalScreen}
         options={{
-          presentation: 'modal',
-          gestureEnabled: true,
-          animationTypeForReplace: 'push',
+          presentation: 'transparentModal',
+          headerShown: false,
+          gestureEnabled: false,
+          animation: 'none',
+          animationDuration: 0,
+          contentStyle: { backgroundColor: 'transparent' },
         }}
       />
     </Stack.Navigator>

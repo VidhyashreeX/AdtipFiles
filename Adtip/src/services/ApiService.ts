@@ -614,14 +614,14 @@ export default class ApiService {
     console.log('[API] Fetching all users list with data:', JSON.stringify(data, null, 2));
     try {
       const response = await this.post<UserListResponse>(
-        ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_ALL_USERS, // This should point to '/api/allusers'
+        '/api/allusers', // Ensure this matches your API endpoint
         data,
       );
       console.log('[API] getAllUsersList response:', JSON.stringify(response, null, 2));
       return response;
     } catch (error) {
       console.error('[API] getAllUsersList error:', error);
-      throw this.handleError(error); // Ensure handleError is accessible or called correctly
+      throw this.handleError(error);
     }
   }
   /**
@@ -678,18 +678,21 @@ export default class ApiService {
 
   /**
    * Generate a VideoSDK participant token via the backend.
-   * @param data - Optional request data (e.g., permissions, user info if backend requires)
+   * This token is used to create meetings and join them.
    */
-  static async generateVideoSDKParticipantToken(
-    data?: VideoSDKGenerateTokenRequest,
-  ): Promise<VideoSDKGenerateTokenResponse> {
-    console.log('[API] Requesting VideoSDK participant token from backend:', data);
+  static async generateVideoSDKParticipantToken(): Promise<VideoSDKGenerateTokenResponse> {
+    console.log('[API] Requesting VideoSDK participant token from backend');
     try {
       const response = await this.post<VideoSDKGenerateTokenResponse>(
         ApiEndpoints.TIP_CALLS_ENDPOINTS.VIDEOSDK_GENERATE_TOKEN,
-        data,
+        {}, // Empty body as per API specification
       );
-      console.log('[API] VideoSDK participant token response:', JSON.stringify(response, null, 2));
+      console.log('[API] VideoSDK participant token response:', {
+        success: response.success,
+        hasToken: !!response.token,
+        message: response.message
+      });
+      
       if (!response.success || !response.token) {
         throw new Error(response.message || 'Failed to generate VideoSDK token from backend.');
       }
@@ -702,18 +705,36 @@ export default class ApiService {
 
   /**
    * Create a VideoSDK meeting room via the backend.
-   * @param data - Request data (e.g., region)
+   * Requires the token from generateVideoSDKParticipantToken.
+   * @param videoSDKToken - Token from generateVideoSDKParticipantToken response
+   * @param region - Optional region (defaults to "us")
    */
   static async createVideoSDKMeeting(
-    data?: VideoSDKCreateMeetingRequest,
+    videoSDKToken: string,
+    region: string = "us"
   ): Promise<VideoSDKCreateMeetingResponse> {
-    console.log('[API] Requesting to create VideoSDK meeting via backend:', data);
+    const requestData: VideoSDKCreateMeetingRequest = {
+      token: videoSDKToken,
+      region: region
+    };
+    
+    console.log('[API] Creating VideoSDK meeting via backend:', {
+      hasToken: !!videoSDKToken,
+      region: region
+    });
+    
     try {
       const response = await this.post<VideoSDKCreateMeetingResponse>(
         ApiEndpoints.TIP_CALLS_ENDPOINTS.VIDEOSDK_CREATE_MEETING,
-        data,
+        requestData,
       );
-      console.log('[API] Create VideoSDK meeting response:', JSON.stringify(response, null, 2));
+      
+      console.log('[API] Create VideoSDK meeting response:', {
+        success: response.success,
+        roomId: response.data?.roomId,
+        message: response.message
+      });
+      
       if (!response.success || !response.data || !response.data.roomId) {
         throw new Error(response.message || 'Failed to create VideoSDK meeting via backend.');
       }
@@ -767,6 +788,25 @@ export default class ApiService {
       return response;
     } catch (error) {
       console.error('[API] Error validating VideoSDK meeting:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Update user profile information including DND status
+   * @param data - Update user request data
+   */
+  static async updateUser(data: UpdateUserRequest): Promise<UpdateUserResponse> {
+    console.log('[API] Updating user with data:', JSON.stringify(data, null, 2));
+    try {
+      const response = await this.post<UpdateUserResponse>(
+        '/api/updateuser',
+        data,
+      );
+      console.log('[API] Update user response:', JSON.stringify(response, null, 2));
+      return response;
+    } catch (error) {
+      console.error('[API] Error updating user:', error);
       throw this.handleError(error);
     }
   }
