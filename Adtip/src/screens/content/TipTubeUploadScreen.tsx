@@ -29,6 +29,7 @@ import CategoryChip from '../../components/common/CategoryChip';
 // Context and services
 import {useTheme} from '../../contexts/ThemeContext';
 import ApiService from '../../services/ApiService';
+import VideoCompressionService, {CompressedVideoResult} from '../../services/VideoCompressionService';
 import {ENDPOINTS} from '../../constants/api';
 
 // Define the expected route parameters
@@ -61,6 +62,9 @@ const TipTubeUploadScreen = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [processingVideo, setProcessingVideo] = useState(false);
   const [error, setError] = useState('');
+  const [compressedVideo, setCompressedVideo] = useState<CompressedVideoResult | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [compressionProgress, setCompressionProgress] = useState(0);
 
   // Check if we have a video from route params
   useEffect(() => {
@@ -122,11 +126,11 @@ const TipTubeUploadScreen = () => {
         const video = result.assets[0];
 
         // Check video duration and size
-        if (video.fileSize && video.fileSize > 100 * 1024 * 1024) {
-          // 100 MB limit
+        if (video.fileSize && video.fileSize > 500 * 1024 * 1024) {
+          // 500 MB limit before compression
           Alert.alert(
             'File Too Large',
-            'Please select a video smaller than 100 MB',
+            'Please select a video smaller than 500 MB',
           );
           return;
         }
@@ -138,8 +142,8 @@ const TipTubeUploadScreen = () => {
           size: video.fileSize,
         });
 
-        // Navigate to preview if needed
-        // navigation.navigate('VideoPreview', { videoSource: video });
+        // Start compression process
+        await compressSelectedVideo(video.uri!);
       }
     } catch (err) {
       console.error('Error picking video:', err);
@@ -147,25 +151,88 @@ const TipTubeUploadScreen = () => {
     }
   };
 
-  // Pick custom thumbnail
+  // Compress selected video
+  const compressSelectedVideo = async (uri: string) => {
+    try {
+      setIsCompressing(true);
+      setCompressionProgress(0);
+      setError('');
+
+      // Mock progress updates
+      VideoCompressionService.onCompressionProgress(setCompressionProgress);
+
+      // Compress video for TipTube with adaptive streaming
+      const compressedResult = await VideoCompressionService.compressForTipTube(uri);
+      
+      setCompressedVideo(compressedResult);
+      setIsCompressing(false);
+
+      Alert.alert(
+        'Compression Complete',
+        `Video compressed successfully!\nOriginal size: ${((videoSource?.size || 0) / (1024 * 1024)).toFixed(1)} MB\nCompressed size: ${(compressedResult.totalSize / (1024 * 1024)).toFixed(1)} MB\nCompression ratio: ${compressedResult.compressionRatio.toFixed(1)}x`,
+      );
+    } catch (error) {
+      console.error('Error compressing video:', error);
+      setIsCompressing(false);
+      setError('Failed to compress video. Please try again.');
+    }
+  };
+
+  // Pick thumbnail for video
   const pickThumbnail = async () => {
     try {
-      ImagePicker.openPicker({
-        width: 1280,
-        height: 720,
-        cropping: true,
+      // Check permissions first
+      const permissionStatus =
+        Platform.OS === 'ios'
+          ? await check(PERMISSIONS.IOS.PHOTO_LIBRARY)
+          : await check(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
+
+      if (permissionStatus !== RESULTS.GRANTED) {
+        const requestResult =
+          Platform.OS === 'ios'
+            ? await request(PERMISSIONS.IOS.PHOTO_LIBRARY)
+            : await request(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
+
+        if (requestResult !== RESULTS.GRANTED) {
+          Alert.alert(
+            'Permission Denied',
+            'You need to grant permission to access your media library',
+          );
+          return;
+        }
+      }
+
+      // Launch image library for thumbnail
+      const result = await launchImageLibrary({
         mediaType: 'photo',
-        compressImageQuality: 0.8,
-      }).then(image => {
-        setThumbnail({
-          uri:
-            Platform.OS === 'ios' ? image.sourceURL || image.path : image.path,
-          type: image.mime,
-          name: image.path.split('/').pop(),
-        });
+        selectionLimit: 1,
+        includeBase64: false,
+        maxHeight: 720,
+        maxWidth: 1280,
+        quality: 0.8,
       });
-    } catch (err) {
-      console.error('Error picking thumbnail:', err);
+
+      if (result.didCancel) {
+        return;
+      }
+
+      if (result.errorCode) {
+        Alert.alert('Error', result.errorMessage || 'Failed to select thumbnail');
+        return;
+      }
+
+      if (result.assets && result.assets.length > 0) {
+        const image = result.assets[0];
+        setThumbnail({
+          uri: image.uri,
+          type: image.type,
+          name: image.fileName || 'thumbnail.jpg',
+          size: image.fileSize,
+        });
+      }
+    } catch (error) {
+      console.error('Error picking thumbnail:', error);
+      Alert.alert('Error', 'Failed to select thumbnail');
     }
   };
 
@@ -178,7 +245,7 @@ const TipTubeUploadScreen = () => {
     });
   };
 
-  // Handle upload
+  // Handle upload with compressed video
   const handleUpload = async () => {
     // Validate input
     if (!title.trim()) {
@@ -186,8 +253,8 @@ const TipTubeUploadScreen = () => {
       return;
     }
 
-    if (!videoSource) {
-      Alert.alert('Missing Video', 'Please select a video to upload');
+    if (!compressedVideo) {
+      Alert.alert('Missing Video', 'Please select and compress a video first');
       return;
     }
 
@@ -207,12 +274,30 @@ const TipTubeUploadScreen = () => {
         formData.append('categoryId', selectedCategory.id);
       }
 
-      // Append video file
+      // Append main video file (best quality available)
       formData.append('video', {
-        uri: videoSource.uri,
-        type: videoSource.type || 'video/mp4',
-        name: videoSource.name || 'video.mp4',
+        uri: compressedVideo.compressedUri,
+        type: 'video/mp4',
+        name: 'video.mp4',
       } as any);
+
+      // Append HLS manifest if available
+      if (compressedVideo.hlsManifestUri) {
+        formData.append('hlsManifest', {
+          uri: compressedVideo.hlsManifestUri,
+          type: 'application/x-mpegURL',
+          name: 'playlist.m3u8',
+        } as any);
+      }
+
+      // Append quality versions
+      Object.entries(compressedVideo.qualities).forEach(([quality, videoData]) => {
+        formData.append(`video_${quality}`, {
+          uri: videoData.uri,
+          type: 'video/mp4',
+          name: `video_${quality}.mp4`,
+        } as any);
+      });
 
       // Append thumbnail if selected
       if (thumbnail) {
@@ -223,7 +308,7 @@ const TipTubeUploadScreen = () => {
         } as any);
       }
 
-      // Upload video
+      // Upload video with adaptive streaming data
       await ApiService.uploadFile(
         ENDPOINTS.UPLOAD_VIDEO,
         formData,
@@ -238,9 +323,17 @@ const TipTubeUploadScreen = () => {
       // Check processing status
       setTimeout(() => {
         setProcessingVideo(false);
+        
+        // Cleanup temporary compressed files
+        const tempUris = Object.values(compressedVideo.qualities).map(q => q.uri);
+        if (compressedVideo.hlsManifestUri) {
+          tempUris.push(compressedVideo.hlsManifestUri);
+        }
+        VideoCompressionService.cleanupTempFiles(tempUris);
+
         Alert.alert(
           'Upload Successful',
-          'Your video has been uploaded and will be available once processing is complete',
+          'Your video has been uploaded with adaptive streaming and will be available once processing is complete',
           [{text: 'OK', onPress: () => navigation.goBack()}],
         );
       }, 2000);
@@ -295,7 +388,12 @@ const TipTubeUploadScreen = () => {
           </Text>
           {videoSource.size && (
             <Text style={[styles.videoSize, {color: colors.text.tertiary}]}>
-              {(videoSource.size / (1024 * 1024)).toFixed(2)} MB
+              Original: {(videoSource.size / (1024 * 1024)).toFixed(2)} MB
+            </Text>
+          )}
+          {compressedVideo && (
+            <Text style={[styles.videoSize, {color: colors.success}]}>
+              Compressed: {(compressedVideo.totalSize / (1024 * 1024)).toFixed(2)} MB
             </Text>
           )}
         </View>
@@ -317,7 +415,7 @@ const TipTubeUploadScreen = () => {
   };
 
   const uploadButtonOpacity =
-    isUploading || processingVideo || !videoSource || !title.trim() ? 0.5 : 1;
+    isUploading || processingVideo || isCompressing || !compressedVideo || !title.trim() ? 0.5 : 1;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -480,6 +578,36 @@ const TipTubeUploadScreen = () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Compression loading overlay */}
+      {isCompressing && (
+        <View
+          style={[
+            styles.loadingOverlay,
+            {backgroundColor: colors.background + 'E6'},
+          ]}>
+          <View
+            style={[styles.loadingContainer, {backgroundColor: colors.card}]}>
+            <Text
+              style={[styles.loadingText, {color: colors.text.primary}]}>
+              Compressing video...
+            </Text>
+            <Progress.Bar
+              progress={compressionProgress / 100}
+              width={200}
+              color={colors.primary}
+              unfilledColor={colors.gray[200]}
+              borderWidth={0}
+              height={8}
+              style={styles.progressBar}
+            />
+            <Text
+              style={[styles.percentText, {color: colors.text.secondary}]}>
+              {Math.round(compressionProgress)}%
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* Upload loading overlay */}
       {(isUploading || processingVideo) && (

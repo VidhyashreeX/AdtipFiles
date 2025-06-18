@@ -27,6 +27,7 @@ import Header from '../../components/common/Header';
 // Context and services
 import {useTheme} from '../../contexts/ThemeContext';
 import ApiService from '../../services/ApiService';
+import VideoCompressionService from '../../services/VideoCompressionService';
 import {ENDPOINTS} from '../../constants/api';
 
 const RECORDING_MAX_DURATION = 60; // Max 60 seconds for shorts
@@ -53,6 +54,9 @@ const TipShortsUploadScreen = () => {
   const [addEffect, setAddEffect] = useState(false);
   const [selectedMusic, setSelectedMusic] = useState<any>(null);
   const [selectedEffect, setSelectedEffect] = useState<any>(null);
+  const [compressedVideoUri, setCompressedVideoUri] = useState<string | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [compressionProgress, setCompressionProgress] = useState(0);
 
   // Check if there's a video from route params
   useEffect(() => {
@@ -143,6 +147,9 @@ const TipShortsUploadScreen = () => {
           name: video.fileName,
           duration: video.duration,
         });
+
+        // Compress the recorded video
+        await compressRecordedVideo(video.uri!);
       }
     } catch (error) {
       console.error('Error recording video:', error);
@@ -184,6 +191,33 @@ const TipShortsUploadScreen = () => {
     });
   };
 
+  // Compress recorded video for shorts
+  const compressRecordedVideo = async (uri: string) => {
+    try {
+      setIsCompressing(true);
+      setCompressionProgress(0);
+
+      // Mock progress updates
+      VideoCompressionService.onCompressionProgress(setCompressionProgress);
+
+      // Compress video for TipShorts (optimized for short videos)
+      const compressedUri = await VideoCompressionService.compressForTipShorts(uri, {
+        quality: 'medium',
+        maxSize: 25, // 25MB max for shorts
+      });
+
+      setCompressedVideoUri(compressedUri);
+      setIsCompressing(false);
+
+      // Optional: Show compression success
+      console.log('Short video compressed successfully');
+    } catch (error) {
+      console.error('Error compressing short video:', error);
+      setIsCompressing(false);
+      Alert.alert('Compression Error', 'Failed to compress video. You can still publish the original.');
+    }
+  };
+
   // Publish short
   const handlePublish = async () => {
     if (!videoSource) {
@@ -207,9 +241,12 @@ const TipShortsUploadScreen = () => {
         formData.append('effect_id', selectedEffect.id);
       }
 
+      // Use compressed video if available, otherwise use original
+      const videoUri = compressedVideoUri || videoSource.uri;
+      
       // Append video
       formData.append('video', {
-        uri: videoSource.uri,
+        uri: videoUri,
         type: videoSource.type || 'video/mp4',
         name: videoSource.name || 'short.mp4',
       } as any);
@@ -230,6 +267,11 @@ const TipShortsUploadScreen = () => {
       // Simulate processing time
       setTimeout(() => {
         setIsProcessing(false);
+
+        // Cleanup compressed file if it exists
+        if (compressedVideoUri) {
+          VideoCompressionService.cleanupTempFiles([compressedVideoUri]);
+        }
 
         Alert.alert(
           'Upload Successful',
@@ -442,6 +484,36 @@ const TipShortsUploadScreen = () => {
       />
 
       {renderContent()}
+
+      {/* Compression loading overlay */}
+      {isCompressing && (
+        <View
+          style={[
+            styles.loadingOverlay,
+            {backgroundColor: colors.background + 'E6'},
+          ]}>
+          <View
+            style={[styles.loadingContainer, {backgroundColor: colors.card}]}>
+            <Text
+              style={[styles.loadingText, {color: colors.text.primary}]}>
+              Compressing short...
+            </Text>
+            <Progress.Bar
+              progress={compressionProgress / 100}
+              width={200}
+              color={colors.primary}
+              unfilledColor={colors.gray[200]}
+              borderWidth={0}
+              height={8}
+              style={styles.progressBar}
+            />
+            <Text
+              style={[styles.percentText, {color: colors.text.secondary}]}>
+              {Math.round(compressionProgress)}%
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* Upload loading overlay */}
       {(isPublishing || isProcessing) && (

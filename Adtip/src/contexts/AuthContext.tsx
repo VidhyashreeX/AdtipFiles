@@ -150,53 +150,52 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     }
   };
   // Verify OTP
-  const verifyOtp = async (
-    mobileNumber: string,
-    otp: string,
-    id: string,
-  ): Promise<User> => {
-    setLoading(true); // Operation loading
-    setError(null);
-
+  const verifyOtp = async (mobileNumber: string, otp: string, id: string) => {
     try {
-      type VerifyOtpApiResponse = ApiResponse<User[]> & { accessToken?: string };
-      const verifyResponse = await ApiService.post<VerifyOtpApiResponse>(ENDPOINTS.OTP_VERIFY, {
+      setLoading(true);
+      
+      const response = await ApiService.verifyOtp({
         mobile_number: mobileNumber,
-        otp,
-        id,
+        otp: otp,
+        id: id,
       });
 
+      console.log('AuthContext - OTP verification response:', response);
 
-      if (verifyResponse.status !== 200 || !verifyResponse.data || !Array.isArray(verifyResponse.data) || verifyResponse.data.length === 0) {
-        throw new Error(verifyResponse.message || 'OTP verification failed');
+      // Handle both response formats
+      let userData = null;
+      if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+        userData = response.data[0];
+      } else if (response.id) {
+        userData = response;
       }
-      
-      const userData = verifyResponse.data[0];
-      if (verifyResponse.accessToken) { 
-        await AsyncStorage.setItem('accessToken', verifyResponse.accessToken);
-      } else {
-        console.warn('[AuthContext] AccessToken not found in verifyOtp response');
-      }
-      await AsyncStorage.setItem('user', JSON.stringify(userData));
 
+      if (userData && userData.id) {
+        // Store user data
+        setUser(userData);
+        
+        // Store user ID and token
+        await AsyncStorage.setItem('userId', userData.id.toString());
+        await AsyncStorage.setItem('user', JSON.stringify(userData));
+        
+        if (response.accessToken) {
+          await AsyncStorage.setItem('accessToken', response.accessToken);
+        }
 
-      setUser(userData);
-      
-      if (userData.is_first_time === 0) {
+        // Set authentication state - App.tsx will handle navigation based on isSaveUserDetails
         setIsAuthenticated(true);
-        LastSeenService.startTracking(); 
+        
+        console.log('AuthContext - User authenticated, isSaveUserDetails:', userData.isSaveUserDetails);
+        
+        return response;
+      } else {
+        throw new Error('Invalid response format');
       }
-
-      checkChannelStatus(userData.id);
-
-      return userData;
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'OTP verification failed';
-      setError(errorMessage);
-      throw err;
+    } catch (error) {
+      console.error('AuthContext - OTP verification error:', error);
+      throw error;
     } finally {
-      setLoading(false); // Operation loading
+      setLoading(false);
     }
   };
   // Logout
@@ -348,23 +347,21 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
   };
 
   // Provide context value
+  const contextValue: AuthContextType = {
+    user, // Add this
+    isAuthenticated,
+    isInitialized,
+    loading,
+    login,
+    verifyOtp,
+    logout,
+    refreshUserData,
+    updateUserDetails,
+    completeOnboarding,
+  };
+
   return (
-    <AuthContext.Provider
-      value={{
-        isAuthenticated,
-        user,
-        loading, // This is for operations
-        error,
-        isInitialized, // <-- Provide this
-        login,
-        verifyOtp,
-        logout,
-        updateUserDetails,
-        refreshUserData,
-        hasChannel,
-        createChannel,
-        completeOnboarding,
-      }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

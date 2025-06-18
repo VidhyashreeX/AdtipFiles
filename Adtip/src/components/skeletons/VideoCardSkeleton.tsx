@@ -2,13 +2,11 @@ import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Dimensions, Animated } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext'; 
 
-const { width: screenWidth } = Dimensions.get('window');
-const CARD_MARGIN_HORIZONTAL = 16;
-const CARD_GAP = 16;
-const NUM_COLUMNS = 2;
-const cardWidth = (screenWidth - CARD_MARGIN_HORIZONTAL * 2 - CARD_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const HORIZONTAL_PADDING = 16;
+const THUMBNAIL_HEIGHT = (SCREEN_WIDTH * 9) / 16; // 16:9 aspect ratio, full width
 
-const VideoCardSkeleton: React.FC = () => {
+const VideoCardSkeleton: React.FC<{ isYouTubeLayout?: boolean }> = ({ isYouTubeLayout = false }) => {
   const { colors, isDarkMode } = useTheme();
   const pulseAnimation = useRef(new Animated.Value(0)).current;
 
@@ -36,8 +34,74 @@ const VideoCardSkeleton: React.FC = () => {
     }),
   };
 
+  // YouTube-style skeleton
+  if (isYouTubeLayout) {
+    return (
+      <View style={styles.youtubeSkeletonContainer}>
+        {/* Full-width thumbnail */}
+        <View 
+          style={[
+            styles.youtubeThumbnailPlaceholder, 
+            { backgroundColor: colors.skeleton.background }
+          ]} 
+        />
+        
+        {/* Video info section */}
+        <View style={styles.youtubeInfoContainer}>
+          {/* Avatar */}
+          <View 
+            style={[
+              styles.youtubeAvatarPlaceholder, 
+              { backgroundColor: colors.skeleton.background }
+            ]} 
+          />
+          
+          {/* Title and details */}
+          <View style={styles.youtubeTextContainer}>
+            {/* Title lines */}
+            <Animated.View 
+              style={[
+                styles.youtubeTitleLine1, 
+                { backgroundColor: colors.skeleton.background }, 
+                pulseStyle
+              ]} 
+            />
+            <Animated.View 
+              style={[
+                styles.youtubeTitleLine2, 
+                { backgroundColor: colors.skeleton.background }, 
+                pulseStyle
+              ]} 
+            />
+            
+            {/* Channel name */}
+            <Animated.View 
+              style={[
+                styles.youtubeChannelName, 
+                { backgroundColor: colors.skeleton.background }, 
+                pulseStyle
+              ]} 
+            />
+            
+            {/* Stats line */}
+            <Animated.View 
+              style={[
+                styles.youtubeStatsLine, 
+                { backgroundColor: colors.skeleton.background }, 
+                pulseStyle
+              ]} 
+            />
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // Original grid-style skeleton for backward compatibility
+  const cardWidth = (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - 16) / 2; // 2 columns with gap
+  
   return (
-    <View style={[styles.videoCard, { backgroundColor: colors.card, shadowColor: colors.text.primary }]}>
+    <View style={[styles.videoCard, { backgroundColor: colors.card, shadowColor: colors.text.primary, width: cardWidth }]}>
       {/* Static thumbnail background */}
       <View 
         style={[
@@ -96,8 +160,56 @@ const VideoCardSkeleton: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  // YouTube-style skeleton styles
+  youtubeSkeletonContainer: {
+    backgroundColor: 'transparent',
+    marginBottom: 16,
+  },
+  youtubeThumbnailPlaceholder: {
+    width: SCREEN_WIDTH, // Full screen width
+    height: THUMBNAIL_HEIGHT,
+  },
+  youtubeInfoContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: HORIZONTAL_PADDING,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  youtubeAvatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  youtubeTextContainer: {
+    flex: 1,
+  },
+  youtubeTitleLine1: {
+    width: '95%',
+    height: 16,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  youtubeTitleLine2: {
+    width: '75%',
+    height: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  youtubeChannelName: {
+    width: '40%',
+    height: 14,
+    borderRadius: 7,
+    marginBottom: 4,
+  },
+  youtubeStatsLine: {
+    width: '60%',
+    height: 12,
+    borderRadius: 6,
+  },
+  
+  // Original grid skeleton styles
   videoCard: {
-    width: cardWidth,
     borderRadius: 12,
     marginBottom: 16,
     overflow: 'hidden',

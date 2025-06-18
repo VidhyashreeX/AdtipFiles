@@ -37,7 +37,7 @@ export interface OtpVerifyResponse {
   emailId: string;
   gender: string;
   dob: string;
-  profile_image: string;
+  profile_image: string | null;
   message_id: string;
   mobile_number: string;
   otp: string;
@@ -48,18 +48,45 @@ export interface OtpVerifyResponse {
   longitude: string;
   latitude: string;
   pincode: string | null;
+  current_otp_verified: string | null;
+  created_date: string;
+  updated_date: string;
   isOtpVerified: number;
-  isSaveUserDetails: number;
+  isSaveUserDetails: number; // This is the key field for navigation
+  is_active: string | null;
+  createdby: string | null;
+  access_type: number;
+  online_status: boolean;
+  device_token: string;
+  is_block: string | null;
+  is_mute: string | null;
+  referal_code: string;
+  referal_earnings: number;
+  referred_by: string | null;
+  username: string | null;
+  referred_count: number;
   is_first_time: number;
   bio: string | null;
+  premium_plan_id: number;
+  content_creator_plan_id: number;
+  is_available: boolean;
+  dnd: boolean;
   premium: number;
   country_code: string;
   country: string;
+  fcm_token: string;
+  fcm_token_updation_date?: string;
+  device_id?: string | null;
+  platform?: string | null;
   languages: any[];
   interests: any[];
   is_premium: boolean;
-  // Add other fields as needed
 }
+
+// Update the API response type to handle both formats
+export type OtpVerifyApiResponse = 
+  | (ApiResponse<OtpVerifyResponse[]> & { accessToken: string }) // Array format
+  | (OtpVerifyResponse & { accessToken?: string }); // Direct object format
 
 export interface LogoutRequest {
   id: string;

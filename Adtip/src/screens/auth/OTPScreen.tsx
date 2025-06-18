@@ -64,35 +64,17 @@ const OTPScreen = ({ navigation, route }) => {
     Keyboard.dismiss();
     
     try {
-      // Verify OTP
-      // The verifyOtp function from useAuth is expected to return the full API response structure
-      // which includes: { status, message, accessToken, data: [{...userProfileData}] }
+      // Verify OTP - This should update the AuthContext state
       const apiResponse = await verifyOtp(mobileNumber, otp, id);
       
-      if (apiResponse && apiResponse.data && apiResponse.data.length > 0) {
-        const userProfileData = apiResponse.data[0];
-
-        // Check the isSaveUserDetails field to determine navigation
-        if (userProfileData.isSaveUserDetails === 1) {
-          // User details are already saved, redirect to HomeScreen (via Main navigator)
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Main' }],
-          });
-        } else if (userProfileData.isSaveUserDetails === 0) {
-          // User details are not saved, redirect to UserDetailsScreen
-          navigation.navigate('UserDetails');
-        } else {
-          // Fallback if isSaveUserDetails is not 0 or 1, though the prompt implies it will be.
-          // Defaulting to UserDetailsScreen as a safety measure, or you can show an error.
-          console.warn('isSaveUserDetails is not 0 or 1, defaulting to UserDetailsScreen. Value:', userProfileData.isSaveUserDetails);
-          navigation.navigate('UserDetails');
-        }
-      } else {
-        // Handle cases where the expected data structure is not returned
-        console.error('OTP verification response did not contain expected user data:', apiResponse);
-        setError('Failed to process login. Please try again.');
-      }
+      console.log('OTP verification response:', apiResponse);
+      
+      // The AuthContext should handle the authentication state and user data
+      // No need to manually navigate here - let AuthContext and App.tsx handle it
+      // The App.tsx will automatically switch to the appropriate navigator based on:
+      // - isAuthenticated state
+      // - user.isSaveUserDetails value
+      
     } catch (err) {
       // Handle error
       console.error('OTP verification error:', err);

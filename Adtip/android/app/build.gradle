@@ -139,6 +139,8 @@ dependencies {
     implementation 'com.google.android.exoplayer:exoplayer-smoothstreaming:2.19.1'
     implementation 'com.google.android.exoplayer:exoplayer-dash:2.19.1'
 
+    implementation project(':react-native-fs')
+
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {

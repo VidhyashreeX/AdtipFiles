@@ -44,7 +44,9 @@ import CommentsScreen from '../screens/home/CommentScreen';
 import FollowersList from '../screens/profile/FollowersList';
 import FollowingsList from '../screens/profile/FollowingsList';
 import ExploreScreen from '../screens/explore/ExploreScreen';
-import { VideoPlayerModalScreen } from '../screens/tiptube/TipTubeScreen';
+
+// FIXED IMPORT - Import as default export instead of named export
+import { VideoPlayerModalScreen } from '../screens/tiptube';
 
 // Add TipCall imports
 import TipCallScreen from '../screens/tipcall/TipCallScreen';

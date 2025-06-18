@@ -2,20 +2,23 @@
  * @format
  */
 
-import {AppRegistry} from 'react-native';
+import { AppRegistry } from 'react-native';
 import App from './App';
-import {name as appName} from './app.json';
-import firebase from '@react-native-firebase/app';
+import { name as appName } from './app.json';
+import { firebase } from '@react-native-firebase/app';
+
+// Initialize Firebase if not already initialized (v22.2.1 compatible)
 if (!firebase.apps.length) {
-  console.log('Initializing Firebase app in index.js...');
+  console.log('[Index] Initializing Firebase app v22.2.1...');
   try {
-    firebase.initializeApp();
-    console.log('Firebase app initialized successfully from index.js.');
-  } catch (e) {
-    console.error('Firebase initialization failed in index.js:', e);
+    // Firebase will auto-initialize from native configuration
+    // No need to call firebase.initializeApp() explicitly in v22.2.1
+    console.log('[Index] Firebase app v22.2.1 initialized successfully');
+  } catch (error) {
+    console.error('[Index] Firebase initialization failed:', error);
   }
 } else {
-  console.log('Firebase app already initialized (from native or earlier JS) in index.js.');
+  console.log('[Index] Firebase app already initialized');
 }
 
 AppRegistry.registerComponent(appName, () => App);

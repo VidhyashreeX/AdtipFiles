@@ -1,8 +1,10 @@
 // src/services/ApiService.ts
-import axios, { AxiosRequestConfig, AxiosResponse, AbortSignal } from 'axios'; // Import AbortSignal
-import {API_BASE_URL} from '../constants/api';
+import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
+import { API_BASE_URL } from '../constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ApiEndpoints from '../constants/apiEndpoints';
+import { Platform } from 'react-native';
+import messaging, { AuthorizationStatus } from '@react-native-firebase/messaging';
 import {
   ApiResponse,
   OtpLoginRequest,
@@ -28,6 +30,9 @@ import {
   VideoSDKDeactivateRoomResponse,
   VideoSDKValidateMeetingRequest,
   VideoSDKValidateMeetingResponse,
+  UpdateUserRequest,
+  UpdateUserResponse,
+  OtpVerifyApiResponse,
 } from '../types/api';
 
 // Interfaces moved from inside the class
@@ -37,7 +42,6 @@ export interface LikePostRequest {
   is_liked: boolean;
 }
 
-// Update the LikePostResponse interface to match actual API response
 export interface LikePostResponse {
   status: boolean;
   message: string;
@@ -57,17 +61,71 @@ export interface LikeShortResponse {
   data?: any;
 }
 
+// Firebase-specific interfaces
+export interface UpdateFcmTokenRequest {
+  userId: string;
+  fcmToken: string;
+  platform?: 'ios' | 'android';
+  apnsToken?: string; // For iOS
+  deviceId?: string;
+}
+
+export interface UpdateFcmTokenResponse {
+  success: boolean;
+  message: string;
+  data?: any;
+}
+
+export interface SendNotificationRequest {
+  recipientId: string;
+  title: string;
+  body: string;
+  data?: Record<string, any>;
+  type?: 'call' | 'message' | 'general';
+}
+
+export interface SendNotificationResponse {
+  success: boolean;
+  message: string;
+  messageId?: string;
+}
+
+export interface CallNotificationRequest {
+  recipientId: string;
+  callerId: string;
+  callerName: string;
+  callType: 'voice' | 'video' | 'audio-call' | 'video-call';
+  meetingId?: string;
+  channelName?: string;
+  rtcToken?: string;
+}
+
+export interface HandleCallRequest {
+  callerId: string;
+  receiverId: string;
+  action: 'calling' | 'accepted' | 'declined' | 'ended' | 'missed';
+  callType: 'voice' | 'video' | 'audio-call' | 'video-call';
+  channelName?: string;
+  duration?: number;
+  meetingId?: string;
+}
+
+export interface HandleCallResponse {
+  success: boolean;
+  message: string;
+  data?: any;
+}
+
 // Define public endpoints that don't require authentication
 const PUBLIC_ENDPOINTS = [
-  ApiEndpoints.AUTH_ENDPOINTS.OTP_LOGIN,          // Example: "/api/otplogin"
-  ApiEndpoints.AUTH_ENDPOINTS.OTP_VERIFY,         // Example: "/api/otpverify"
-  // ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_AGORA_TOKEN, // Removed: Assuming token endpoints are protected
+  ApiEndpoints.AUTH_ENDPOINTS.OTP_LOGIN,
+  ApiEndpoints.AUTH_ENDPOINTS.OTP_VERIFY,
 ];
 
 // Create axios instance with default configuration
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000, // Increase to 60 seconds
+  timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -78,11 +136,7 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   async config => {
     try {
-      // Check if the URL is a public endpoint that doesn't need authentication
-      // Use a more precise check: config.url should exactly match one of the public endpoints.
-      // Axios config.url is the path relative to the baseURL.
       const isPublicEndpoint = PUBLIC_ENDPOINTS.some(endpoint => {
-        // Ensure both config.url and endpoint are treated consistently (e.g., leading slash)
         const requestPath = config.url;
         return requestPath === endpoint;
       });
@@ -91,10 +145,9 @@ apiClient.interceptors.request.use(
         console.log(`Request to public endpoint: ${config.url}. No Authorization header will be added.`);
       } else {
         console.log(`Request to protected endpoint: ${config.url}. Attempting to add Authorization header.`);
-        // Check both token storage keys - the app uses 'accessToken', but our service was checking '@auth_token'
         let token = await AsyncStorage.getItem('accessToken');
         if (!token) {
-          token = await AsyncStorage.getItem('@auth_token'); // Fallback to old key format
+          token = await AsyncStorage.getItem('@auth_token');
         }
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
@@ -117,20 +170,16 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   response => response,
   error => {
-    // Handle common errors here
     if (error.response) {
-      // Server responded with an error
       if (error.response.status === 401) {
         // Unauthorized - token expired or invalid
-        // Could handle logout or token refresh here
+        console.warn('API: Unauthorized access - token may be expired');
       }
 
       if (error.response.status === 429) {
-        // Rate limited
         console.warn('API rate limit exceeded. Please try again later.');
       }
     } else if (error.request) {
-      // Request made but no response received
       console.error('Network error. Please check your connection.');
     }
 
@@ -139,14 +188,53 @@ apiClient.interceptors.response.use(
 );
 
 /**
- * API Service for handling network requests
+ * API Service for handling network requests with Firebase v22.2.1 integration
  */
 export default class ApiService {
   /**
+   * Get current FCM token with Firebase v22.2.1 compatibility
+   */
+  private static async getCurrentFCMToken(): Promise<string | null> {
+    try {
+      // Check if messaging is supported
+      if (!messaging.isSupported()) {
+        console.warn('[ApiService] Firebase Messaging not supported');
+        return null;
+      }
+
+      // Check permissions first
+      const authStatus = await messaging().hasPermission();
+      if (authStatus !== AuthorizationStatus.AUTHORIZED && 
+          authStatus !== AuthorizationStatus.PROVISIONAL) {
+        console.warn('[ApiService] FCM permissions not granted');
+        return null;
+      }
+
+      const token = await messaging().getToken();
+      return token;
+    } catch (error) {
+      console.error('[ApiService] Error getting FCM token:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get APNs token for iOS (Firebase v22.2.1)
+   */
+  private static async getAPNSToken(): Promise<string | null> {
+    if (Platform.OS !== 'ios') return null;
+    
+    try {
+      const apnsToken = await messaging().getAPNSToken();
+      return apnsToken;
+    } catch (error) {
+      console.error('[ApiService] Error getting APNs token:', error);
+      return null;
+    }
+  }
+
+  /**
    * Make a GET request
-   * @param url - Endpoint URL (will be appended to base URL)
-   * @param params - Query parameters
-   * @param config - Additional axios config
    */
   static async get<T = any>(
     url: string,
@@ -162,7 +250,7 @@ export default class ApiService {
     } catch (error: any) {
       if (axios.isCancel(error)) {
         console.log(`ApiService.get to ${url} canceled.`);
-        throw error; // Re-throw the original cancellation error
+        throw error;
       }
       throw this.handleError(error);
     }
@@ -170,9 +258,6 @@ export default class ApiService {
 
   /**
    * Make a POST request
-   * @param url - Endpoint URL (will be appended to base URL)
-   * @param data - Request body data
-   * @param config - Additional axios config
    */
   static async post<T = any>(
     url: string,
@@ -189,7 +274,7 @@ export default class ApiService {
     } catch (error: any) {
       if (axios.isCancel(error)) {
         console.log(`ApiService.post to ${url} canceled.`);
-        throw error; // Re-throw the original cancellation error
+        throw error;
       }
       throw this.handleError(error);
     }
@@ -197,9 +282,6 @@ export default class ApiService {
 
   /**
    * Make a PUT request
-   * @param url - Endpoint URL (will be appended to base URL)
-   * @param data - Request body data
-   * @param config - Additional axios config
    */
   static async put<T = any>(
     url: string,
@@ -212,7 +294,7 @@ export default class ApiService {
     } catch (error: any) {
       if (axios.isCancel(error)) {
         console.log(`ApiService.put to ${url} canceled.`);
-        throw error; // Re-throw the original cancellation error
+        throw error;
       }
       throw this.handleError(error);
     }
@@ -220,9 +302,6 @@ export default class ApiService {
 
   /**
    * Make a PATCH request
-   * @param url - Endpoint URL (will be appended to base URL)
-   * @param data - Request body data
-   * @param config - Additional axios config
    */
   static async patch<T = any>(
     url: string,
@@ -239,7 +318,7 @@ export default class ApiService {
     } catch (error: any) {
       if (axios.isCancel(error)) {
         console.log(`ApiService.patch to ${url} canceled.`);
-        throw error; // Re-throw the original cancellation error
+        throw error;
       }
       throw this.handleError(error);
     }
@@ -247,8 +326,6 @@ export default class ApiService {
 
   /**
    * Make a DELETE request
-   * @param url - Endpoint URL (will be appended to base URL)
-   * @param config - Additional axios config
    */
   static async delete<T = any>(
     url: string,
@@ -260,7 +337,7 @@ export default class ApiService {
     } catch (error: any) {
       if (axios.isCancel(error)) {
         console.log(`ApiService.delete to ${url} canceled.`);
-        throw error; // Re-throw the original cancellation error
+        throw error;
       }
       throw this.handleError(error);
     }
@@ -268,10 +345,6 @@ export default class ApiService {
 
   /**
    * Upload a file
-   * @param url - Endpoint URL (will be appended to base URL)
-   * @param formData - FormData containing file and additional data
-   * @param onProgress - Progress callback (percentage)
-   * @param config - Additional axios config
    */
   static async uploadFile<T = any>(
     url: string,
@@ -298,7 +371,7 @@ export default class ApiService {
     } catch (error: any) {
       if (axios.isCancel(error)) {
         console.log(`ApiService.uploadFile to ${url} canceled.`);
-        throw error; // Re-throw the original cancellation error
+        throw error;
       }
       throw this.handleError(error);
     }
@@ -306,17 +379,15 @@ export default class ApiService {
 
   /**
    * Standard error handler
-   * @param error - Error object
    */
   private static handleError(error: any): Error {
     if (axios.isAxiosError(error)) {
-      // Detailed logging to diagnose the exact issue
       console.log('API Error Details (handleError):', {
         isAxiosError: true,
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
-        message: error.message, // This would be "canceled" if it's an unhandled cancellation
+        message: error.message,
         config: {
           url: error.config?.url,
           method: error.config?.method,
@@ -326,11 +397,9 @@ export default class ApiService {
       });
       
       if (error.response) {
-        // The server responded with an error status
         const serverMessage = error.response.data?.message || error.response.statusText;
         return new Error(serverMessage || error.message);
       } else if (error.request) {
-        // The request was made but no response was received
         console.log('Request was made but no response received (handleError):', error.request);
         const isEmulator = error.config?.baseURL?.includes('10.0.2.2');
         if (isEmulator) {
@@ -338,12 +407,9 @@ export default class ApiService {
         }
         return new Error('Network error. Check your connection and try again.');
       } else {
-        // Something happened in setting up the request that wasn't a direct cancellation handled above
-        // This path should be less common for cancellations now.
         return new Error(`Error setting up request (handleError): ${error.message}`);
       }
     }
-    // Not an Axios error
     console.log('Non-Axios error (handleError):', error);
     return error instanceof Error ? error : new Error(String(error));
   }
@@ -351,55 +417,103 @@ export default class ApiService {
   // ===== AUTHENTICATION SERVICES =====
 
   /**
-   * Send OTP for login
-   * @param data - Request data containing mobile number and user type
+   * Send OTP for login with automatic FCM token registration
    */
   static async sendLoginOtp(
     data: OtpLoginRequest,
   ): Promise<ApiResponse<OtpLoginResponse[]>> {
+    const fcmToken = await this.getCurrentFCMToken();
+    const apnsToken = await this.getAPNSToken();
+
+    const requestData = {
+      ...data,
+      fcmToken,
+      apnsToken,
+      platform: Platform.OS,
+    };
+
     return this.post<ApiResponse<OtpLoginResponse[]>>(
       ApiEndpoints.AUTH_ENDPOINTS.OTP_LOGIN,
-      data,
+      requestData,
     );
   }
 
   /**
-   * Verify OTP
-   * @param data - Request data containing mobile number, OTP, and ID
-   */ static async verifyOtp(
+   * Verify OTP with FCM token registration
+   */
+  static async verifyOtp(
     data: OtpVerifyRequest,
-  ): Promise<ApiResponse<OtpVerifyResponse[]> & {accessToken: string}> {
-    const response = await this.post<
-      ApiResponse<OtpVerifyResponse[]> & {accessToken: string}
-    >(ApiEndpoints.AUTH_ENDPOINTS.OTP_VERIFY, data);
+  ): Promise<OtpVerifyApiResponse> {
+    const fcmToken = await this.getCurrentFCMToken();
+    const apnsToken = await this.getAPNSToken();
+
+    const requestData = {
+      ...data,
+      fcmToken,
+      apnsToken,
+      platform: Platform.OS,
+    };
+
+    const response = await this.post<OtpVerifyApiResponse>(
+      ApiEndpoints.AUTH_ENDPOINTS.OTP_VERIFY, 
+      requestData
+    );
 
     // Store the token for future requests
-    if (response.accessToken) {
-      await AsyncStorage.setItem('accessToken', response.accessToken);
+    const accessToken = response.accessToken || (response as any).accessToken;
+    if (accessToken) {
+      await AsyncStorage.setItem('accessToken', accessToken);
     }
 
     return response;
   }
 
   /**
-   * Logout user
-   * @param userId - User ID
+   * Logout user with FCM token cleanup
    */
   static async logout(userId: string): Promise<any> {
-    const data: LogoutRequest = {id: userId};
-    return this.post(ApiEndpoints.AUTH_ENDPOINTS.LOGOUT, data);
+    const fcmToken = await this.getCurrentFCMToken();
+    
+    const data: LogoutRequest & { fcmToken?: string; platform?: string } = {
+      id: userId,
+      fcmToken,
+      platform: Platform.OS,
+    };
+
+    const response = await this.post(ApiEndpoints.AUTH_ENDPOINTS.LOGOUT, data);
+
+    // Clear local tokens
+    await AsyncStorage.multiRemove(['accessToken', '@auth_token', 'userId', 'fcmToken']);
+    
+    // Delete FCM token
+    try {
+      await messaging().deleteToken();
+    } catch (error) {
+      console.warn('[ApiService] Error deleting FCM token during logout:', error);
+    }
+
+    return response;
   }
 
   /**
-   * Save or update user details
-   * @param data - User details data
+   * Save or update user details with FCM token
    */
   static async saveUserDetails(
     data: UserDetailsRequest,
   ): Promise<ApiResponse<OtpVerifyResponse[]>> {
+    const fcmToken = await this.getCurrentFCMToken();
+    const apnsToken = await this.getAPNSToken();
+
+    const requestData = {
+      ...data,
+      fcmToken,
+      apnsToken,
+      platform: Platform.OS,
+    };
+
     return this.post<ApiResponse<OtpVerifyResponse[]>>(
       ApiEndpoints.AUTH_ENDPOINTS.SAVE_USER_DETAILS,
-      data,
+      requestData,
     );
   }
 
@@ -410,39 +524,135 @@ export default class ApiService {
     return this.get(ApiEndpoints.AUTH_ENDPOINTS.PING);
   }
 
+  // ===== FIREBASE FCM SERVICES =====
+
   /**
-   * Ping the server to check if it's alive
+   * Update FCM token on server (Firebase v22.2.1 compatible)
    */
-  public ping(): Promise<any> {
-    return ApiService.get(ApiEndpoints.AUTH_ENDPOINTS.PING);
+  static async updateFcmToken(data: UpdateFcmTokenRequest): Promise<UpdateFcmTokenResponse> {
+    console.log('[ApiService] Updating FCM token on server:', {
+      userId: data.userId,
+      platform: data.platform || Platform.OS,
+      hasFcmToken: !!data.fcmToken,
+      hasApnsToken: !!data.apnsToken,
+    });
+
+    try {
+      // If no FCM token provided, get current one
+      const fcmToken = data.fcmToken || await this.getCurrentFCMToken();
+      const apnsToken = data.apnsToken || await this.getAPNSToken();
+
+      const requestData: UpdateFcmTokenRequest = {
+        ...data,
+        fcmToken: fcmToken || '',
+        platform: data.platform || Platform.OS,
+        apnsToken,
+        deviceId: await AsyncStorage.getItem('deviceId') || undefined,
+      };
+
+      const response = await this.post<UpdateFcmTokenResponse>(
+        '/api/update-fcm-token', // Adjust endpoint as needed
+        requestData,
+      );
+
+      console.log('[ApiService] FCM token update response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error updating FCM token:', error);
+      throw this.handleError(error);
+    }
   }
+
+  /**
+   * Send notification via server
+   */
+  static async sendNotification(data: SendNotificationRequest): Promise<SendNotificationResponse> {
+    console.log('[ApiService] Sending notification:', data);
+    try {
+      const response = await this.post<SendNotificationResponse>(
+        '/api/send-notification',
+        data,
+      );
+      console.log('[ApiService] Send notification response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error sending notification:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Send call notification
+   */
+  static async sendCallNotification(data: CallNotificationRequest): Promise<SendNotificationResponse> {
+    console.log('[ApiService] Sending call notification:', data);
+    try {
+      const notificationData = {
+        recipientId: data.recipientId,
+        title: `Incoming ${data.callType} call`,
+        body: `${data.callerName} is calling you`,
+        data: {
+          isIncomingCall: 'true',
+          callType: data.callType,
+          callerId: data.callerId,
+          callerName: data.callerName,
+          meetingId: data.meetingId,
+          channelName: data.channelName,
+          rtcToken: data.rtcToken,
+        },
+        type: 'call' as const,
+      };
+
+      const response = await this.sendNotification(notificationData);
+      console.log('[ApiService] Call notification sent:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error sending call notification:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Handle call status updates
+   */
+  static async handleCall(data: HandleCallRequest): Promise<HandleCallResponse> {
+    console.log('[ApiService] Handling call status:', data);
+    try {
+      const response = await this.post<HandleCallResponse>(
+        '/api/handle-call',
+        data,
+      );
+      console.log('[ApiService] Handle call response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error handling call:', error);
+      throw this.handleError(error);
+    }
+  }
+
   // ===== HOME PAGE SERVICES =====
 
   /**
    * Get wallet balance
-   * @param userId - User ID
-   * @param config - Optional Axios request configuration (can include AbortSignal)
    */
   static async getWalletBalance(
     userId: string | number,
-    config?: AxiosRequestConfig, // Add config parameter
+    config?: AxiosRequestConfig,
   ): Promise<WalletBalanceResponse> {
     try {
       console.log(`Fetching wallet balance for user ID: ${userId}`);
-      const formattedUserId = String(userId).trim(); // Ensure userId is a string
+      const formattedUserId = String(userId).trim();
 
-      // Make the API call, passing the config which may include the signal
       const response = await this.get<WalletBalanceResponse>(
         `${ApiEndpoints.HOME_ENDPOINTS.GET_WALLET_BALANCE}/${formattedUserId}`,
-        undefined, // No specific query parameters for this URL structure
-        config,    // Pass the config object
+        undefined,
+        config,
       );
       console.log('Wallet balance API response:', JSON.stringify(response));
       return response;
     } catch (error) {
       if (axios.isCancel(error)) {
         console.log('ApiService.getWalletBalance request canceled');
-        // Return a specific structure or rethrow for cancellation
         return { status: 0, message: 'Request canceled', availableBalance: '0.00' };
       }
       console.error('Error in getWalletBalance:', error);
@@ -456,36 +666,34 @@ export default class ApiService {
 
   /**
    * Get list of posts
-   * @param data - Request data containing category, page, limit, and logged-in user ID
-   * @param config - Optional Axios request configuration (can include AbortSignal)
    */
   static async listPosts(
     data: PostListRequest,
-    config?: AxiosRequestConfig, // Add config parameter
+    config?: AxiosRequestConfig,
   ): Promise<PostListResponse> {
     try {
-      // this.post will now re-throw original cancellation errors
       return await this.post<PostListResponse>(
         ApiEndpoints.HOME_ENDPOINTS.LIST_POSTS,
         data,
-        config, // Pass the config object
+        config,
       );
     } catch (error: any) {
       if (axios.isCancel(error)) {
         console.log('ApiService.listPosts request canceled (handling specific cancellation).');
-        // Return a defined structure for cancellations, so HomeScreen doesn't treat it as an unhandled error.
-        return { status: false, message: 'Request canceled by client', data: [], pagination: { current_page: 0, total_page: 0, total_count: 0 } };
+        return { 
+          status: false, 
+          message: 'Request canceled by client', 
+          data: [], 
+          pagination: { current_page: 0, total_page: 0, total_count: 0 } 
+        };
       }
-      // For other errors (which would have been processed by handleError in this.post)
       console.error('ApiService.listPosts error (not a direct cancellation):', error.message);
-      // Re-throw the error to be caught by the calling function in HomeScreen
       throw error;
     }
   }
 
   /**
    * Check if user has premium subscription
-   * @param userId - User ID
    */
   static async checkPremium(
     userId: string | number,
@@ -497,7 +705,6 @@ export default class ApiService {
 
   /**
    * Get ad passbook
-   * @param userId - User ID
    */
   static async getAdPassbook(userId: string | number): Promise<any> {
     return this.get(`${ApiEndpoints.HOME_ENDPOINTS.GET_AD_PASSBOOK}/${userId}`);
@@ -505,7 +712,6 @@ export default class ApiService {
 
   /**
    * Get channel by user ID
-   * @param userId - User ID
    */
   static async getChannelByUserId(userId: string | number): Promise<any> {
     return this.get(
@@ -517,53 +723,32 @@ export default class ApiService {
 
   /**
    * Get videos
-   * @param userId - User ID
-   * @param categoryId - Category ID (0 for all categories)
-   * @param offset - Page offset
-   * @param search - Optional search query
-   * @param signal - Optional AbortSignal for cancellation
    */
   static async getVideos(
     userId: string | number,
     categoryId: number,
     offset: number,
-    search?: string, // Added search parameter
-    signal?: AbortSignal // Added signal parameter
-  ): Promise<any> { // Replace 'any' with your actual Video API response type
+    search?: string,
+    signal?: AbortSignal
+  ): Promise<any> {
     try {
-      // Construct parameters, ensuring search is handled if present
       const params: any = {};
       if (search) {
-        params.search_query = search; // Or however your API expects search
+        params.search_query = search;
       }
 
-      // The endpoint structure might vary based on your API design.
-      // This example assumes query parameters for search, and path params for others.
-      // Adjust ApiEndpoints.TIP_TUBE_ENDPOINTS.GET_VIDEOS if it needs to be dynamic with search.
-      // For simplicity, if GET_VIDEOS is a base path, and others are query params:
-      // const response = await apiClient.get(ApiEndpoints.TIP_TUBE_ENDPOINTS.GET_VIDEOS, {
-      //   params: { userId, categoryId, page: offset, search_query: search },
-      //   signal, // Pass the signal to axios
-      // });
-
-      // If using path parameters as before:
       let url = `${ApiEndpoints.TIP_TUBE_ENDPOINTS.GET_VIDEOS}/${userId}/${categoryId}/${offset}`;
-      // If search needs to be part of the URL or specific query param handling:
-      // if (search) url += `?search_query=${encodeURIComponent(search)}`; // Example
 
       const response = await apiClient.get(url, {
-        params: search ? { search_query: search } : undefined, // Example if search is a query param
-        signal, // Pass the signal to axios
+        params: search ? { search_query: search } : undefined,
+        signal,
       });
       return response.data;
     } catch (error) {
       if (axios.isCancel(error)) {
         console.log('ApiService.getVideos request canceled');
-        throw error; // Re-throw so the caller knows it was cancelled
+        throw error;
       }
-      // Assuming this.handleError is defined and handles other errors
-      // throw this.handleError(error);
-      // For now, rethrow directly if handleError is not static or accessible
       console.error('ApiService.getVideos error:', error);
       throw error;
     }
@@ -571,7 +756,6 @@ export default class ApiService {
 
   /**
    * Get channel analytics
-   * @param channelId - Channel ID
    */
   static async getChannelAnalytics(channelId: string | number): Promise<any> {
     return this.get(
@@ -583,7 +767,6 @@ export default class ApiService {
 
   /**
    * Get shorts
-   * @param userId - User ID
    */
   static async getShorts(userId: string | number): Promise<any> {
     return this.get(
@@ -594,27 +777,24 @@ export default class ApiService {
   // ===== TIP-CALLS SERVICES =====
 
   /**
-   * Get users (potentially filtered - this was your existing method)
-   * @param data - Request data for filtering users
+   * Get users (potentially filtered)
    */
   static async getUsers(data: UserListRequest): Promise<UserListResponse> {
     console.log('[API] Fetching users with data:', JSON.stringify(data, null, 2));
     return this.post<UserListResponse>(
-      ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_USERS, // Uses /api/users
+      ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_USERS,
       data,
     );
   }
 
   /**
-   * Get all users with minimal filtering, primarily for call list.
-   * Uses the /api/allusers endpoint.
-   * @param data - Request data, typically including pagination and logged_user_id
+   * Get all users with minimal filtering
    */
   static async getAllUsersList(data: UserListRequest): Promise<UserListResponse> {
     console.log('[API] Fetching all users list with data:', JSON.stringify(data, null, 2));
     try {
       const response = await this.post<UserListResponse>(
-        '/api/allusers', // Ensure this matches your API endpoint
+        '/api/allusers',
         data,
       );
       console.log('[API] getAllUsersList response:', JSON.stringify(response, null, 2));
@@ -624,40 +804,35 @@ export default class ApiService {
       throw this.handleError(error);
     }
   }
+
   /**
    * Like or unlike a post
-   * @param data - Like request data containing userId, postId, and is_liked status
-   * @param config - Optional Axios request configuration (can include AbortSignal)
    */
   static async likePost(
     data: LikePostRequest,
-    config?: AxiosRequestConfig, // Add config parameter
+    config?: AxiosRequestConfig,
   ): Promise<LikePostResponse> {
     console.log('[API] Sending like request:', JSON.stringify(data, null, 2));
     try {
-      // this.post will now re-throw original cancellation errors
       const response = await this.post<LikePostResponse>(
-        '/api/save-user-post-like', // Ensure this endpoint is correct
+        '/api/save-user-post-like',
         data,
-        config, // Pass the config object
+        config,
       );
       console.log('[API] Like response:', JSON.stringify(response, null, 2));
       return response;
     } catch (error: any) {
       if (axios.isCancel(error)) {
         console.log('ApiService.likePost request canceled (handling specific cancellation).');
-        // Return a defined structure for cancellations
         return { status: false, message: 'Request canceled by client', is_liked: data.is_liked };
       }
       console.error('[API] Like request failed (ApiService.likePost):', error.message);
-      // Re-throw other errors (which would have been processed by handleError in this.post)
       throw error;
     }
   }
 
   /**
    * Like or unlike a short video
-   * @param data - Like request data containing reelId, userId, like status, and reelCreatorId
    */
   static async likeShortVideo(data: LikeShortRequest): Promise<LikeShortResponse> {
     console.log('[API] Sending short like request:', JSON.stringify(data, null, 2));
@@ -674,18 +849,17 @@ export default class ApiService {
     }
   }
 
-  // ===== VideoSDK API SERVICES (via your backend) =====
+  // ===== VideoSDK API SERVICES =====
 
   /**
-   * Generate a VideoSDK participant token via the backend.
-   * This token is used to create meetings and join them.
+   * Generate a VideoSDK participant token via the backend
    */
   static async generateVideoSDKParticipantToken(): Promise<VideoSDKGenerateTokenResponse> {
     console.log('[API] Requesting VideoSDK participant token from backend');
     try {
       const response = await this.post<VideoSDKGenerateTokenResponse>(
         ApiEndpoints.TIP_CALLS_ENDPOINTS.VIDEOSDK_GENERATE_TOKEN,
-        {}, // Empty body as per API specification
+        {},
       );
       console.log('[API] VideoSDK participant token response:', {
         success: response.success,
@@ -704,10 +878,7 @@ export default class ApiService {
   }
 
   /**
-   * Create a VideoSDK meeting room via the backend.
-   * Requires the token from generateVideoSDKParticipantToken.
-   * @param videoSDKToken - Token from generateVideoSDKParticipantToken response
-   * @param region - Optional region (defaults to "us")
+   * Create a VideoSDK meeting room via the backend
    */
   static async createVideoSDKMeeting(
     videoSDKToken: string,
@@ -746,8 +917,7 @@ export default class ApiService {
   }
 
   /**
-   * Deactivate a VideoSDK meeting room via the backend.
-   * @param data - Request data containing roomId
+   * Deactivate a VideoSDK meeting room via the backend
    */
   static async deactivateVideoSDKRoom(
     data: VideoSDKDeactivateRoomRequest,
@@ -770,21 +940,18 @@ export default class ApiService {
   }
 
   /**
-   * Validate a VideoSDK meeting room via the backend.
-   * @param data - Request data containing roomId
+   * Validate a VideoSDK meeting room via the backend
    */
   static async validateVideoSDKMeeting(
     data: VideoSDKValidateMeetingRequest,
   ): Promise<VideoSDKValidateMeetingResponse> {
     console.log('[API] Requesting to validate VideoSDK meeting via backend:', data);
     try {
-      // Assuming this might be a GET or POST, using POST for consistency here
       const response = await this.post<VideoSDKValidateMeetingResponse>(
         ApiEndpoints.TIP_CALLS_ENDPOINTS.VIDEOSDK_VALIDATE_MEETING,
         data,
       );
       console.log('[API] Validate VideoSDK meeting response:', JSON.stringify(response, null, 2));
-      // No specific data check here, success flag is primary
       return response;
     } catch (error) {
       console.error('[API] Error validating VideoSDK meeting:', error);
@@ -794,7 +961,6 @@ export default class ApiService {
 
   /**
    * Update user profile information including DND status
-   * @param data - Update user request data
    */
   static async updateUser(data: UpdateUserRequest): Promise<UpdateUserResponse> {
     console.log('[API] Updating user with data:', JSON.stringify(data, null, 2));

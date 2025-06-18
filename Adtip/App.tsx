@@ -8,12 +8,9 @@ import {
   View,
   ActivityIndicator,
   useWindowDimensions,
-  PixelRatio,
   Text,
-  AppRegistry,
   Platform,
 } from 'react-native';
-import { register } from '@videosdk.live/react-native-sdk';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import {
@@ -21,9 +18,6 @@ import {
   SafeAreaView as SafeAreaViewRN,
   useSafeAreaInsets
 } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import messaging from '@react-native-firebase/messaging';
-import firebase from '@react-native-firebase/app';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 // Contexts
@@ -32,20 +26,27 @@ import { WalletProvider } from './src/contexts/WalletContext';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { ShortsProvider } from './src/contexts/ShortsContext';
 import { SidebarProvider } from './src/contexts/SidebarContext';
+import { VideoSDKProvider } from './src/contexts/VideoSDKContext';
 
 // Components & Navigators
 import Sidebar from './src/components/sidebar/Sidebar';
 import MainNavigator from './src/navigation/MainNavigator';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import { navigationRef } from './src/navigation/NavigationService';
-import NotificationService from './src/services/NotificationService';
+
+// Services
+import FirebaseService from './src/services/FirebaseService';
+import VideoSDKService from './src/services/videosdk/VideoSDKService';
 
 // Constants
 import { COLORS } from './src/constants/colors';
 
+// Import required screens
+import UserDetailsScreen from './src/screens/auth/UserDetailsScreen';
+
 const Stack = createNativeStackNavigator();
 
-// ✅ Theme-aware StatusBar
+// Theme-aware StatusBar
 const ThemeAwareStatusBar = () => {
   const { isDarkMode } = useTheme();
   return (
@@ -57,132 +58,84 @@ const ThemeAwareStatusBar = () => {
   );
 };
 
-// ✅ AppNavigator with Firebase Messaging Setup
+// AppNavigator with Services
 const AppNavigator = () => {
-  const { isAuthenticated, isInitialized } = useAuth();
-  const [messagingReady, setMessagingReady] = useState(false);
+  const { isAuthenticated, isInitialized, user } = useAuth();
+  const [firebaseReady, setFirebaseReady] = useState(false);
+  const [videoSDKReady, setVideoSDKReady] = useState(false);
   const insets = useSafeAreaInsets();
   const { isDarkMode, colors } = useTheme();
 
+  // Initialize Firebase Service
   useEffect(() => {
-    const initMessaging = async () => {
-      try {
-        if (firebase.apps.length === 0) {
-          console.warn('[Firebase] No app instance found, attempting to wait for index.js initialization...');
-          await new Promise(resolve => setTimeout(resolve, 1500)); // Give a bit more time
-          if (firebase.apps.length === 0) {
-            console.warn('[FCM] Firebase app instance not available after waiting. Push notification features will be disabled.');
-            // Do not return, allow app to continue without FCM
-          }
-        }
-
-        // Proceed only if Firebase app is available
-        if (firebase.apps.length > 0) {
-          const msg = messaging();
-
-          if (Platform.OS === 'android') {
-            await msg.setAutoInitEnabled(true);
-          }
-
-          await msg.registerDeviceForRemoteMessages();
-          setMessagingReady(true); // Set ready only if registration is successful
-
-          msg.setBackgroundMessageHandler(async remoteMessage => {
-            console.log('[FCM] Background message received:', remoteMessage);
-          });
-
-          console.log('[FCM] Firebase messaging initialized successfully.');
+    const initFirebase = async () => {
+      if (isInitialized) {
+        console.log('[App] Initializing Firebase service...');
+        const firebaseService = FirebaseService.getInstance();
+        const success = await firebaseService.initializeMessaging();
+        setFirebaseReady(success);
+        
+        if (success) {
+          console.log('[App] Firebase service initialized successfully');
         } else {
-          // This case is covered by the warning above, but as a fallback:
-          console.warn('[FCM] Skipping Firebase Messaging initialization as Firebase app is not available.');
+          console.warn('[App] Firebase service initialization failed, continuing without FCM');
+          setFirebaseReady(true); // Allow app to continue
         }
-      } catch (err) {
-        console.warn('[FCM] Firebase Messaging initialization failed. Push notification features will be disabled. Error:', err);
-        // Ensure messagingReady remains false or is explicitly set to false
-        setMessagingReady(false);
       }
     };
 
-    if (isInitialized) {
-      initMessaging();
-    }
+    initFirebase();
   }, [isInitialized]);
 
-  // ✅ Notification Permission + Token
+  // Initialize VideoSDK Service
   useEffect(() => {
-    const setupNotifications = async () => {
-      if (messagingReady) { // This will only run if messagingReady is true
-        try {
-          await NotificationService.requestPermissions(messaging());
-          const userId = await AsyncStorage.getItem('userId');
-          if (userId) {
-            await NotificationService.registerFcmToken(userId, messaging());
-          }
-        } catch (e) {
-          console.warn('[FCM] Notification setup (permissions/token) failed. Error:', e);
-        }
+    const initVideoSDK = async () => {
+      console.log('[App] Initializing VideoSDK service...');
+      const videoSDKService = VideoSDKService.getInstance();
+      const success = await videoSDKService.initialize();
+      setVideoSDKReady(success);
+      
+      if (success) {
+        console.log('[App] VideoSDK service initialized successfully');
       } else {
-        console.log('[FCM] Skipping notification permission setup as messaging is not ready.');
+        console.warn('[App] VideoSDK service initialization failed, continuing without video calls');
+        setVideoSDKReady(true); // Allow app to continue
       }
     };
-    setupNotifications();
-  }, [messagingReady, isAuthenticated]);
 
-  // ✅ Handle notifications (killed + background)
+    initVideoSDK();
+  }, []);
+
+  // Setup notifications when Firebase is ready and user is authenticated
   useEffect(() => {
-    if (messagingReady) { // Only attempt to set up listeners if messaging is ready
-      messaging()
-        .getInitialNotification()
-        .then(remoteMessage => {
-          if (remoteMessage?.data?.isIncomingCall === 'true') {
-            navigationRef.navigate('Main', {
-              screen: 'TipCall',
-              params: {
-                initialCallNotificationData: {
-                  callerName: remoteMessage.data.callerName,
-                  callType: remoteMessage.data.callType,
-                  channelName: remoteMessage.data.channelName,
-                  rtcToken: remoteMessage.data.agoraToken,
-                  callerRtcUid: remoteMessage.data.callerId,
-                  isFromNotification: true,
-                }
-              }
-            });
-          }
-        }).catch(error => {
-          console.warn('[FCM] Error getting initial notification:', error);
-        });
+    const setupNotifications = async () => {
+      if (firebaseReady && isAuthenticated) {
+        console.log('[App] Setting up notifications...');
+        const firebaseService = FirebaseService.getInstance();
+        await firebaseService.setupNotifications();
+      }
+    };
 
-      const unsubscribe = messaging().onNotificationOpenedApp(remoteMessage => {
-        if (remoteMessage?.data?.isIncomingCall === 'true') {
-          navigationRef.navigate('Main', {
-            screen: 'TipCall',
-            params: {
-              initialCallNotificationData: {
-                callerName: remoteMessage.data.callerName,
-                callType: remoteMessage.data.callType,
-                channelName: remoteMessage.data.channelName,
-                rtcToken: remoteMessage.data.agoraToken,
-                callerRtcUid: remoteMessage.data.callerId,
-                isFromNotification: true,
-              }
-            }
-          });
-        }
-      });
-      // Add a catch for onNotificationOpenedApp if the API supports it, or ensure messagingReady is robust
-      console.log('[FCM] Notification opened app listeners attached.');
-      return () => {
-        unsubscribe();
-        console.log('[FCM] Notification opened app listeners detached.');
-      };
-    } else {
-      console.log('[FCM] Skipping attachment of notification open listeners as messaging is not ready.');
-      return () => {}; // Return an empty unsubscribe function
+    setupNotifications();
+  }, [firebaseReady, isAuthenticated]);
+
+  // Setup notification listeners
+  useEffect(() => {
+    if (firebaseReady) {
+      console.log('[App] Setting up notification listeners...');
+      const firebaseService = FirebaseService.getInstance();
+      const unsubscribe = firebaseService.setupNotificationListeners();
+
+      // Execute any delayed navigation
+      firebaseService.executeDelayedNavigation();
+
+      return unsubscribe;
     }
-  }, [messagingReady]); // Add messagingReady to dependency array
+  }, [firebaseReady]);
 
-  if (!isInitialized) {
+  const allServicesReady = firebaseReady && videoSDKReady;
+
+  if (!isInitialized || !allServicesReady) {
     return (
       <SafeAreaViewRN style={[
         styles.loadingContainer,
@@ -190,7 +143,9 @@ const AppNavigator = () => {
       ]}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={[styles.loadingText, { color: colors.text?.primary }]}>
-          Initializing...
+          {!isInitialized ? 'Initializing...' : 
+           !firebaseReady ? 'Setting up notifications...' :
+           !videoSDKReady ? 'Initializing video services...' : 'Loading...'}
         </Text>
       </SafeAreaViewRN>
     );
@@ -200,10 +155,15 @@ const AppNavigator = () => {
     <NavigationContainer ref={navigationRef}>
       <View style={{ flex: 1, paddingTop: insets.top }}>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {isAuthenticated ? (
-            <Stack.Screen name="Main" component={MainNavigator} />
-          ) : (
+          {!isAuthenticated ? (
+            // User not authenticated - show auth flow
             <Stack.Screen name="Auth" component={AuthNavigator} />
+          ) : user?.isSaveUserDetails === 0 ? (
+            // User authenticated but profile incomplete - show user details
+            <Stack.Screen name="UserDetails" component={UserDetailsScreen} />
+          ) : (
+            // User fully authenticated with complete profile - show main app
+            <Stack.Screen name="Main" component={MainNavigator} />
           )}
         </Stack.Navigator>
         <Sidebar />
@@ -212,14 +172,10 @@ const AppNavigator = () => {
   );
 };
 
-// ✅ Root App Component
+// Root App Component
 function App(): React.JSX.Element {
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
-
-  useEffect(() => {
-    console.log('[App] VideoSDK registered');
-  }, []);
 
   return (
     <SafeAreaProvider>
@@ -237,13 +193,15 @@ function App(): React.JSX.Element {
             <ThemeAwareStatusBar />
             <AuthProvider>
               <WalletProvider>
-                <ShortsProvider>
-                  <SidebarProvider>
-                    <GestureHandlerRootView style={{ flex: 1 }}>
-                      <AppNavigator />
-                    </GestureHandlerRootView>
-                  </SidebarProvider>
-                </ShortsProvider>
+                <VideoSDKProvider>
+                  <ShortsProvider>
+                    <SidebarProvider>
+                      <GestureHandlerRootView style={{ flex: 1 }}>
+                        <AppNavigator />
+                      </GestureHandlerRootView>
+                    </SidebarProvider>
+                  </ShortsProvider>
+                </VideoSDKProvider>
               </WalletProvider>
             </AuthProvider>
           </ThemeProvider>
@@ -253,7 +211,7 @@ function App(): React.JSX.Element {
   );
 }
 
-// ✅ Styles
+// Styles
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
