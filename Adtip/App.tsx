@@ -37,6 +37,7 @@ import { navigationRef } from './src/navigation/NavigationService';
 // Services
 import FirebaseService from './src/services/FirebaseService';
 import VideoSDKService from './src/services/videosdk/VideoSDKService';
+import CallKeepService from './src/services/CallKeepService';
 
 // Constants
 import { COLORS } from './src/constants/colors';
@@ -63,6 +64,7 @@ const AppNavigator = () => {
   const { isAuthenticated, isInitialized, user } = useAuth();
   const [firebaseReady, setFirebaseReady] = useState(false);
   const [videoSDKReady, setVideoSDKReady] = useState(false);
+  const [callKeepReady, setCallKeepReady] = useState(false);
   const insets = useSafeAreaInsets();
   const { isDarkMode, colors } = useTheme();
 
@@ -106,6 +108,53 @@ const AppNavigator = () => {
     initVideoSDK();
   }, []);
 
+  // Initialize CallKeep Service
+  useEffect(() => {
+    const initializeCallKeep = async () => {
+      try {
+        console.log('[App] Initializing CallKeep service...');
+        
+        // ✅ FIXED: Get instance properly
+        const callKeepService = CallKeepService.getInstance();
+        
+        // Initialize CallKeep
+        const callKeepConfig = {
+          ios: {
+            appName: 'AdTip',
+            maximumCallsPerCallGroup: 1,
+            maximumCallGroups: 1,
+            supportsVideo: true,
+            includesCallsInRecents: true,
+          },
+          android: {
+            alertTitle: 'Permissions required',
+            alertDescription: 'This application needs to access your phone accounts',
+            cancelButton: 'Cancel',
+            okButton: 'OK',
+            imageName: 'phone_account_icon',
+            additionalPermissions: [],
+            selfManaged: false,
+          },
+        };
+
+        const success = await callKeepService.initialize(callKeepConfig);
+        setCallKeepReady(success);
+        
+        if (success) {
+          console.log('[App] CallKeep initialized successfully');
+        } else {
+          console.warn('[App] CallKeep initialization failed, continuing without call management');
+          setCallKeepReady(true); // Allow app to continue
+        }
+      } catch (error) {
+        console.error('[App] Failed to initialize CallKeep:', error);
+        setCallKeepReady(true); // Allow app to continue
+      }
+    };
+
+    initializeCallKeep();
+  }, []);
+
   // Setup notifications when Firebase is ready and user is authenticated
   useEffect(() => {
     const setupNotifications = async () => {
@@ -133,7 +182,7 @@ const AppNavigator = () => {
     }
   }, [firebaseReady]);
 
-  const allServicesReady = firebaseReady && videoSDKReady;
+  const allServicesReady = firebaseReady && videoSDKReady && callKeepReady;
 
   if (!isInitialized || !allServicesReady) {
     return (
@@ -145,7 +194,8 @@ const AppNavigator = () => {
         <Text style={[styles.loadingText, { color: colors.text?.primary }]}>
           {!isInitialized ? 'Initializing...' : 
            !firebaseReady ? 'Setting up notifications...' :
-           !videoSDKReady ? 'Initializing video services...' : 'Loading...'}
+           !videoSDKReady ? 'Initializing video services...' :
+           !callKeepReady ? 'Setting up call management...' : 'Loading...'}
         </Text>
       </SafeAreaViewRN>
     );

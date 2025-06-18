@@ -40,7 +40,7 @@ import {
   initiateVideoSDKCall,
 } from '../../helpers/CallHelper';
 import CallKeepService from '../../services/CallKeepService';
-import v4 from 'react-native-uuid';
+import uuid from 'react-native-uuid';
 
 // Define navigation stack param list
 type RootStackParamList = {
@@ -553,28 +553,24 @@ export default function TipCallScreen() {
     setError(null);
 
     try {
-      const callKeepId = v4.v4();
+      // ✅ FIXED: Use react-native-uuid instead of uuid
+      const callKeepId = uuid.v4() as string;
       
       const callKeepService = CallKeepService.getInstance();
       await callKeepService.startOutgoingCall(
         callKeepId,
         recipient.name || "Contact",
-        callTypeToInitiate
+        callTypeToInitiate === 'video' // hasVideo parameter
       );
 
       const result = await initiateVideoSDKCall(
-        user.id.toString(),
-        user.name || "Caller",
         recipient.id.toString(),
-        recipient.name || "Recipient",
         callTypeToInitiate,
-        "us"
+        user.name || "User"
       );
 
       if (result.success && result.meetingId && result.token) {
         console.log(`[TipCall] Call initiated successfully. Meeting ID: ${result.meetingId}`);
-        
-        await callKeepService.setCallConnected(callKeepId);
         
         navigation.navigate('Meeting', {
           meetingId: result.meetingId,

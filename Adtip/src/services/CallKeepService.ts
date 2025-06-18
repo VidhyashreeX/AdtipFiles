@@ -1,10 +1,30 @@
 import RNCallKeep from 'react-native-callkeep';
 import { Platform } from 'react-native';
-import messaging from '@react-native-firebase/messaging';
+import uuid from 'react-native-uuid';
+
+export interface CallKeepConfig {
+  ios: {
+    appName: string;
+    maximumCallsPerCallGroup?: number;
+    maximumCallGroups?: number;
+    supportsVideo?: boolean;
+    includesCallsInRecents?: boolean;
+  };
+  android: {
+    alertTitle: string;
+    alertDescription: string;
+    cancelButton: string;
+    okButton: string;
+    imageName?: string;
+    additionalPermissions?: string[];
+    selfManaged?: boolean;
+  };
+}
 
 class CallKeepService {
   private static instance: CallKeepService;
-  private initialized = false;
+  private isInitialized: boolean = false;
+  private config: CallKeepConfig | null = null;
 
   private constructor() {}
 
@@ -15,106 +35,286 @@ class CallKeepService {
     return CallKeepService.instance;
   }
 
-  public async initialize(): Promise<void> {
-    if (this.initialized) return;
-
+  /**
+   * Initialize CallKeep with configuration
+   */
+  public async initialize(config: CallKeepConfig): Promise<boolean> {
     try {
-      const options = {
-        ios: {
-          appName: 'AdTip',
-          maximumCallGroups: 1,
-          maximumCallsPerCallGroup: 1,
-          supportsVideo: true,
-          includesCallsInRecents: true,
-          imageName: 'sim_icon', // Your app icon name
-        },
-        android: {
-          alertTitle: 'Permissions required',
-          alertDescription: 'This application needs to access your phone accounts',
-          cancelButton: 'Cancel',
-          okButton: 'OK',
-          imageName: 'sim_icon',
-          additionalPermissions: [],
-          selfManaged: false,
-        },
-      };
+      if (this.isInitialized) {
+        console.log('[CallKeep] Already initialized');
+        return true;
+      }
 
-      await RNCallKeep.setup(options);
+      this.config = config;
+
+      // Setup CallKeep
+      await RNCallKeep.setup({
+        ios: config.ios,
+        android: config.android,
+      });
+
+      // Register event listeners
       this.setupEventListeners();
-      this.initialized = true;
-      
+
+      this.isInitialized = true;
       console.log('[CallKeep] Service initialized successfully');
+      
+      return true;
     } catch (error) {
       console.error('[CallKeep] Initialization failed:', error);
+      this.isInitialized = false;
+      return false;
     }
   }
 
+  /**
+   * Setup event listeners for CallKeep
+   */
   private setupEventListeners(): void {
+    RNCallKeep.addEventListener('didReceiveStartCallAction', this.onDidReceiveStartCallAction);
     RNCallKeep.addEventListener('answerCall', this.onAnswerCallAction);
     RNCallKeep.addEventListener('endCall', this.onEndCallAction);
-    RNCallKeep.addEventListener('didPerformSetMutedCallAction', this.onToggleMute);
-    RNCallKeep.addEventListener('didPerformDTMFAction', this.onDTMFAction);
-    RNCallKeep.addEventListener('didReceiveStartCallAction', this.onStartCallAction);
-    RNCallKeep.addEventListener('didToggleHoldCallAction', this.onToggleHold);
+    RNCallKeep.addEventListener('didActivateAudioSession', this.onDidActivateAudioSession);
+    RNCallKeep.addEventListener('didDeactivateAudioSession', this.onDidDeactivateAudioSession);
+    RNCallKeep.addEventListener('didDisplayIncomingCall', this.onDidDisplayIncomingCall);
+    RNCallKeep.addEventListener('didPerformSetMutedCallAction', this.onDidPerformSetMutedCallAction);
+    RNCallKeep.addEventListener('didToggleHoldCallAction', this.onDidToggleHoldCallAction);
+    RNCallKeep.addEventListener('didPerformDTMFAction', this.onDidPerformDTMFAction);
+    RNCallKeep.addEventListener('didLoadWithEvents', this.onDidLoadWithEvents);
   }
 
-  private onAnswerCallAction = ({ callUUID }: { callUUID: string }) => {
-    console.log('[CallKeep] Answer call action:', callUUID);
-    // Handle answer call
-  };
-
-  private onEndCallAction = ({ callUUID }: { callUUID: string }) => {
-    console.log('[CallKeep] End call action:', callUUID);
-    // Handle end call
-  };
-
-  private onToggleMute = ({ muted, callUUID }: { muted: boolean; callUUID: string }) => {
-    console.log('[CallKeep] Toggle mute:', muted, callUUID);
-    // Handle mute toggle
-  };
-
-  private onDTMFAction = ({ digits, callUUID }: { digits: string; callUUID: string }) => {
-    console.log('[CallKeep] DTMF action:', digits, callUUID);
-    // Handle DTMF
-  };
-
-  private onStartCallAction = ({ handle, callUUID }: { handle: string; callUUID: string }) => {
-    console.log('[CallKeep] Start call action:', handle, callUUID);
-    // Handle start call
-  };
-
-  private onToggleHold = ({ hold, callUUID }: { hold: boolean; callUUID: string }) => {
-    console.log('[CallKeep] Toggle hold:', hold, callUUID);
-    // Handle hold toggle
-  };
-
-  public displayIncomingCall(uuid: string, handle: string, localizedCallerName: string, handleType: string = 'generic', hasVideo: boolean = false): void {
-    RNCallKeep.displayIncomingCall(uuid, handle, localizedCallerName, handleType, hasVideo);
+  /**
+   * Start an outgoing call with auto-generated UUID if not provided
+   */
+  public async startOutgoingCall(
+    callUUID?: string, 
+    handle?: string, 
+    contactName?: string, 
+    hasVideo?: boolean
+  ): Promise<string> {
+    try {
+      // ✅ FIXED: Generate UUID if not provided
+      const finalCallUUID = callUUID || (uuid.v4() as string);
+      const finalHandle = handle || 'Unknown Contact';
+      
+      console.log('[CallKeep] Starting outgoing call:', { 
+        callUUID: finalCallUUID, 
+        handle: finalHandle, 
+        contactName, 
+        hasVideo 
+      });
+      
+      await RNCallKeep.startCall(
+        finalCallUUID, 
+        finalHandle, 
+        contactName || finalHandle, 
+        'generic', 
+        hasVideo || false
+      );
+      
+      console.log('[CallKeep] Outgoing call started successfully');
+      return finalCallUUID;
+    } catch (error) {
+      console.error('[CallKeep] Error starting outgoing call:', error);
+      throw error;
+    }
   }
 
-  public endCall(uuid: string): void {
-    RNCallKeep.endCall(uuid);
+  /**
+   * Display incoming call with auto-generated UUID if not provided
+   */
+  public async displayIncomingCall(
+    callUUID?: string,
+    handle?: string,
+    localizedCallerName?: string,
+    handleType?: string,
+    hasVideo?: boolean
+  ): Promise<string> {
+    try {
+      // ✅ FIXED: Generate UUID if not provided
+      const finalCallUUID = callUUID || (uuid.v4() as string);
+      const finalHandle = handle || 'Unknown Caller';
+      
+      console.log('[CallKeep] Displaying incoming call:', { 
+        callUUID: finalCallUUID, 
+        handle: finalHandle, 
+        localizedCallerName, 
+        hasVideo 
+      });
+      
+      await RNCallKeep.displayIncomingCall(
+        finalCallUUID,
+        finalHandle,
+        localizedCallerName || finalHandle,
+        handleType || 'generic',
+        hasVideo || false
+      );
+      
+      console.log('[CallKeep] Incoming call displayed successfully');
+      return finalCallUUID;
+    } catch (error) {
+      console.error('[CallKeep] Error displaying incoming call:', error);
+      throw error;
+    }
   }
 
-  public endAllCalls(): void {
-    RNCallKeep.endAllCalls();
+  /**
+   * Generate a new call UUID
+   */
+  public generateCallUUID(): string {
+    return uuid.v4() as string;
   }
 
-  public setMutedCall(uuid: string, muted: boolean): void {
-    RNCallKeep.setMutedCall(uuid, muted);
+  /**
+   * End a call
+   */
+  public async endCall(callUUID: string): Promise<void> {
+    try {
+      console.log('[CallKeep] Ending call:', callUUID);
+      
+      await RNCallKeep.endCall(callUUID);
+      
+      console.log('[CallKeep] Call ended successfully');
+    } catch (error) {
+      console.error('[CallKeep] Error ending call:', error);
+      throw error;
+    }
   }
 
-  public cleanup(): void {
+  /**
+   * Answer a call
+   */
+  public async answerCall(callUUID: string): Promise<void> {
+    try {
+      console.log('[CallKeep] Answering call:', callUUID);
+      
+      await RNCallKeep.answerIncomingCall(callUUID);
+      
+      console.log('[CallKeep] Call answered successfully');
+    } catch (error) {
+      console.error('[CallKeep] Error answering call:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Reject a call
+   */
+  public async rejectCall(callUUID: string): Promise<void> {
+    try {
+      console.log('[CallKeep] Rejecting call:', callUUID);
+      
+      await RNCallKeep.rejectCall(callUUID);
+      
+      console.log('[CallKeep] Call rejected successfully');
+    } catch (error) {
+      console.error('[CallKeep] Error rejecting call:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Set call muted
+   */
+  public async setMutedCall(callUUID: string, muted: boolean): Promise<void> {
+    try {
+      await RNCallKeep.setMutedCall(callUUID, muted);
+      console.log(`[CallKeep] Call ${muted ? 'muted' : 'unmuted'}`);
+    } catch (error) {
+      console.error('[CallKeep] Error setting muted call:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Set call on hold
+   */
+  public async setOnHold(callUUID: string, hold: boolean): Promise<void> {
+    try {
+      await RNCallKeep.setOnHold(callUUID, hold);
+      console.log(`[CallKeep] Call ${hold ? 'on hold' : 'resumed'}`);
+    } catch (error) {
+      console.error('[CallKeep] Error setting call on hold:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if CallKeep is available
+   */
+  public isCallKeepAvailable(): boolean {
+    return Platform.OS === 'ios' || Platform.OS === 'android';
+  }
+
+  /**
+   * Get initialization status
+   */
+  public getInitializationStatus(): boolean {
+    return this.isInitialized;
+  }
+
+  // Event handlers
+  private onDidReceiveStartCallAction = (data: any) => {
+    console.log('[CallKeep] onDidReceiveStartCallAction:', data);
+  };
+
+  private onAnswerCallAction = (data: any) => {
+    console.log('[CallKeep] onAnswerCallAction:', data);
+  };
+
+  private onEndCallAction = (data: any) => {
+    console.log('[CallKeep] onEndCallAction:', data);
+  };
+
+  private onDidActivateAudioSession = (data: any) => {
+    console.log('[CallKeep] onDidActivateAudioSession:', data);
+  };
+
+  private onDidDeactivateAudioSession = (data: any) => {
+    console.log('[CallKeep] onDidDeactivateAudioSession:', data);
+  };
+
+  private onDidDisplayIncomingCall = (data: any) => {
+    console.log('[CallKeep] onDidDisplayIncomingCall:', data);
+  };
+
+  private onDidPerformSetMutedCallAction = (data: any) => {
+    console.log('[CallKeep] onDidPerformSetMutedCallAction:', data);
+  };
+
+  private onDidToggleHoldCallAction = (data: any) => {
+    console.log('[CallKeep] onDidToggleHoldCallAction:', data);
+  };
+
+  private onDidPerformDTMFAction = (data: any) => {
+    console.log('[CallKeep] onDidPerformDTMFAction:', data);
+  };
+
+  private onDidLoadWithEvents = (data: any) => {
+    console.log('[CallKeep] onDidLoadWithEvents:', data);
+  };
+
+  /**
+   * Cleanup and reset service
+   */
+  public reset(): void {
+    // Remove event listeners
+    RNCallKeep.removeEventListener('didReceiveStartCallAction');
     RNCallKeep.removeEventListener('answerCall');
     RNCallKeep.removeEventListener('endCall');
+    RNCallKeep.removeEventListener('didActivateAudioSession');
+    RNCallKeep.removeEventListener('didDeactivateAudioSession');
+    RNCallKeep.removeEventListener('didDisplayIncomingCall');
     RNCallKeep.removeEventListener('didPerformSetMutedCallAction');
-    RNCallKeep.removeEventListener('didPerformDTMFAction');
-    RNCallKeep.removeEventListener('didReceiveStartCallAction');
     RNCallKeep.removeEventListener('didToggleHoldCallAction');
-    
-    this.initialized = false;
-    console.log('[CallKeep] Service cleaned up');
+    RNCallKeep.removeEventListener('didPerformDTMFAction');
+    RNCallKeep.removeEventListener('didLoadWithEvents');
+
+    this.isInitialized = false;
+    this.config = null;
+    console.log('[CallKeep] Service reset');
   }
 }
 
+// ✅ FIXED: Export the class, not the instance
 export default CallKeepService;
