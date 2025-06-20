@@ -21,7 +21,6 @@ import RazorpayCheckout from 'react-native-razorpay';
 
 // Components
 import Header from '../../components/common/Header';
-import TransactionItemDisplay from '../../components/wallet/WalletBalance'; 
 import ScreenTransition from '../../components/common/ScreenTransition';
 
 // Skeleton Components
@@ -35,6 +34,8 @@ import {useAuth} from '../../contexts/AuthContext';
 import ApiService from '../../services/ApiService';
 import WalletService from '../../services/WalletService';
 import {ENDPOINTS} from '../../constants/api';
+import UserPremiumPlans from './UserPremiumPlans';
+import { useWallet } from '../../contexts/WalletContext';
 
 const WITHDRAWAL_THRESHOLD = {
   REGULAR: 100,
@@ -46,6 +47,7 @@ const WalletScreen = () => {
   const navigation = useNavigation<any>();
   const {colors, isDarkMode} = useTheme();
   const {user} = useAuth();
+  const { refreshBalance } = useWallet();
   
   // Single loading state for all data
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -139,7 +141,7 @@ const WalletScreen = () => {
 
       if ((!dataFetched.withdrawals || isRefresh) && activeTab === 'withdrawals') {
         promises.push(
-          ApiService.get(`${ENDPOINTS.WITHDRAWAL_REQUESTS}/${user.id}`, undefined, { signal })
+          ApiService.get(`/api/withdrawal-requests/${user.id}`, undefined, { signal })
         );
         promiseMap.push('withdrawals');
       }
@@ -225,7 +227,7 @@ const WalletScreen = () => {
     
     try {
       setWithdrawalsError(null);
-      const response = await ApiService.get(`${ENDPOINTS.WITHDRAWAL_REQUESTS}/${user.id}`);
+      const response = await ApiService.get(`/api/withdrawal-requests/${user.id}`);
       setWithdrawRequests(response?.data || []);
       setDataFetched(prev => ({ ...prev, withdrawals: true }));
     } catch (error: any) {
@@ -242,8 +244,13 @@ const WalletScreen = () => {
   }, [activeTab, fetchWithdrawalsOnTabChange]);
 
   // Focus effect - only fetch if no data has been fetched yet
+  useEffect(() => {
+    if (refreshBalance) refreshBalance();
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
+      if (refreshBalance) refreshBalance();
       let isMounted = true;
       console.log('WalletScreen focused');
 
@@ -270,11 +277,12 @@ const WalletScreen = () => {
           abortControllerRef.current = null;
         }
       };
-    }, [fetchAllWalletData, dataFetched])
+    }, [fetchAllWalletData, dataFetched, refreshBalance])
   );
 
   // Manual refresh handler
   const handleRefresh = useCallback(async () => {
+    if (refreshBalance) await refreshBalance();
     console.log('WalletScreen: Manual refresh triggered');
     if (!user || !user.id) return;
 
@@ -287,107 +295,10 @@ const WalletScreen = () => {
     });
 
     await fetchAllWalletData(true);
-  }, [user, fetchAllWalletData]);
+  }, [user, fetchAllWalletData, refreshBalance]);
 
-  const openAmountModal = () => {
-    setAmountToAdd('');
-    setIsAmountModalVisible(true);
-  };
-
-  const handleProceedWithAmount = () => {
-    const numericAmount = parseFloat(amountToAdd);
-    if (isNaN(numericAmount) || numericAmount <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid amount to add.');
-      return;
-    }
-    if (numericAmount < 10) {
-      Alert.alert('Invalid Amount', 'Minimum amount to add is ₹10.');
-      return;
-    }
-    setIsAmountModalVisible(false);
-    initiateRazorpayPayment(numericAmount);
-  };
-
-  const initiateRazorpayPayment = async (amount: number) => {
-    if (!user || !user.id) {
-      Alert.alert('Error', 'User information not available. Please try again.');
-      return;
-    }
-    
-    setIsProcessingPayment(true);
-    
-    try {
-      const orderPayload = {
-        amount: amount, 
-        currency: 'INR',
-        userId: user.id,
-      };
-      const orderData = await ApiService.createRazorpayOrder(orderPayload);
-
-      if (!orderData || !orderData.order_id) {
-        throw new Error('Failed to create payment order. No order_id received.');
-      }
-
-      const options = {
-        description: 'Add funds to Adtip wallet',
-        image: 'https://your-app-icon-url.png', 
-        currency: orderData.currency || 'INR',
-        key: RAZORPAY_KEY_ID, 
-        amount: orderData.amount,
-        name: 'Adtip',
-        order_id: orderData.order_id,
-        prefill: {
-          email: user?.emailId || '',
-          contact: user?.mobile_number || '', 
-          name: user?.name || '',
-        },
-        theme: {color: colors.primary}
-      };
-      
-      RazorpayCheckout.open(options)
-        .then(async (data: any) => {
-          try {
-            const verificationPayload = {
-              razorpay_payment_id: data.razorpay_payment_id,
-              razorpay_order_id: data.razorpay_order_id,
-              razorpay_signature: data.razorpay_signature,
-              amount: amount, 
-              userId: user.id,
-            };
-            const verificationResponse = await ApiService.verifyRazorpayPayment(verificationPayload);
-
-            if (verificationResponse && verificationResponse.status === 'success') {
-              // Refresh only balance after successful payment
-              setDataFetched(prev => ({ ...prev, balance: false }));
-              await fetchAllWalletData(true);
-              Alert.alert('Success', verificationResponse.message || `Added ₹${amount} to your wallet.`);
-            } else {
-              Alert.alert('Payment Verification Failed', verificationResponse.message || 'Could not verify the payment. Please contact support.');
-            }
-          } catch (verificationError: any) {
-            console.error('Payment verification error:', verificationError);
-            Alert.alert('Payment Verification Error', verificationError.message || 'An error occurred while verifying your payment.');
-          } finally {
-            setIsProcessingPayment(false);
-          }
-        })
-        .catch((error: any) => {
-          console.error('Razorpay Checkout error:', error);
-          let errorMessage = 'Payment failed. Please try again.';
-          if (error.code === 2) errorMessage = 'Payment cancelled.';
-          else if (error.description) errorMessage = error.description;
-          Alert.alert('Payment Error', errorMessage);
-          setIsProcessingPayment(false);
-        });
-    } catch (err: any) {
-      console.error('Order creation or processing error:', err);
-      Alert.alert('Error', err.message || 'Failed to initialize payment process.');
-      setIsProcessingPayment(false);
-    }
-  };
-  
   const handleAddMoney = () => {
-    openAmountModal();
+    navigation.navigate('AddFundsScreen');
   };
 
   const handleWithdraw = () => {
@@ -478,54 +389,7 @@ const WalletScreen = () => {
     }
 
     return (
-      <View style={[styles.planContainer]}>
-        <LinearGradient
-          colors={isDarkMode 
-            ? isPremium ? ['#2C3E50', '#4CA1AF'] : ['#232526', '#414345'] 
-            : isPremium ? ['#EAFBE3', '#E0F5D9'] : ['#F5F7FA', '#E8EAED']
-          }
-          style={styles.planCard}
-        >
-          <View style={styles.planCardHeader}>
-            <Icon name="star" size={20} color={isDarkMode ? colors.text.primary : isPremium ? "#07BC4C" : "#333"} />
-            <Text style={[styles.planTitle, {color: isDarkMode ? colors.text.primary : isPremium ? "#07BC4C" : "#333"}]}>
-              {isPremium ? 'Premium Plan' : 'Standard Plan'}
-            </Text>
-          </View>
-          <Text style={[styles.planExpiry, {color: isDarkMode ? colors.text.secondary : '#666'}]}>
-            {isPremium ? 'Enjoy exclusive benefits!' : 'Upgrade for more features.'}
-          </Text>
-          <View style={styles.planStatusContainer}>
-            <View style={[styles.planStatusBadge, {backgroundColor: isPremium ? (isDarkMode ? colors.success : '#D4EDDA') : (isDarkMode ? colors.gray[600] : colors.gray[200])}]}>
-              <Text style={[styles.planStatusText, {color: isPremium ? (isDarkMode ? colors.text.primary : colors.successDark) : (isDarkMode ? colors.text.secondary : colors.text.tertiary)}]}>
-                {isPremium ? 'Active' : 'Inactive'}
-              </Text>
-            </View>
-            {isPremium && (
-              <Text style={[styles.planActiveText, {color: isDarkMode ? colors.text.secondary : colors.text.tertiary}]}>
-                Minimum Withdrawal: ₹{WITHDRAWAL_THRESHOLD.PREMIUM}
-              </Text>
-            )}
-          </View>
-          {!isPremium && (
-            <TouchableOpacity onPress={navigateToPremium} style={styles.upgradeButton}>
-              <LinearGradient colors={['#11998e', '#38ef7d']} style={styles.upgradeButtonGradient}>
-                <Icon name="zap" size={18} color="#FFF" style={styles.upgradeButtonIcon} />
-                <Text style={styles.upgradeButtonText}>Upgrade to Premium</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            onPress={navigateToPremium}
-            style={[styles.viewPlansButton, { marginTop: isPremium ? 16 : 8 }]}
-          >
-            <Text style={[styles.viewPlansButtonText, {color: isDarkMode ? colors.primary : '#11998e'}]}>
-              {isPremium ? 'View Plan Details' : 'View All Plans'}
-            </Text>
-            <Icon name="chevron-right" size={16} color={isDarkMode ? colors.primary : '#11998e'} style={{marginLeft: 4}} />
-          </TouchableOpacity>
-        </LinearGradient>
-      </View>
+      <UserPremiumPlans />
     );
   };
 
@@ -553,7 +417,11 @@ const WalletScreen = () => {
       return transactions
         .filter(tx => tx.type === 'credit')
         .map((transaction, index) => (
-          <TransactionItemDisplay key={`earn-${index}`} transaction={transaction} />
+          <View key={`earn-${index}`} style={{padding: 12, borderBottomWidth: 1, borderColor: '#eee'}}>
+            <Text style={{fontWeight: 'bold'}}>+₹{transaction.amount}</Text>
+            <Text>{transaction.description || transaction.type}</Text>
+            <Text style={{fontSize: 12, color: '#888'}}>{transaction.date}</Text>
+          </View>
         ));
     } else {
       if (!dataFetched.withdrawals && withdrawRequests.length === 0) {
@@ -576,7 +444,11 @@ const WalletScreen = () => {
       }
       
       return withdrawRequests.map((request, index) => (
-        <TransactionItemDisplay key={`withdraw-${index}`} transaction={request} isWithdrawal={true} />
+        <View key={`withdraw-${index}`} style={{padding: 12, borderBottomWidth: 1, borderColor: '#eee'}}>
+          <Text style={{fontWeight: 'bold'}}>-₹{request.amount}</Text>
+          <Text>{request.description || 'Withdrawal'}</Text>
+          <Text style={{fontSize: 12, color: '#888'}}>{request.date}</Text>
+        </View>
       ));
     }
   };
@@ -651,7 +523,7 @@ const WalletScreen = () => {
                   {
                     color: colors.text.primary,
                     borderColor: colors.border,
-                    backgroundColor: isDarkMode ? colors.inputBackground : '#FFF',
+                    backgroundColor: isDarkMode ? colors.background : '#FFF',
                   },
                 ]}
                 placeholder="Enter amount (e.g., 500)"
@@ -669,7 +541,7 @@ const WalletScreen = () => {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modalButton, {backgroundColor: colors.primary}]}
-                  onPress={handleProceedWithAmount}>
+                  onPress={() => setIsAmountModalVisible(false)}>
                   <Text style={[styles.modalButtonText, {color: '#FFFFFF'}]}>Proceed</Text>
                 </TouchableOpacity>
               </View>

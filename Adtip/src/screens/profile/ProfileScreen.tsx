@@ -9,12 +9,14 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
+  Modal,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Feather';
+import ImageViewer from '@react-native-oh-tpl/react-native-image-zoom-viewer';
 
 // Components
 import Header from '../../components/common/Header';
@@ -35,8 +37,8 @@ type RootStackParamList = {
   EditProfile: undefined;
   Settings: undefined;
   CreateChannel: undefined;
-  FollowersList: { followers: any[] };
-  FollowingsList: { followings: any[] };
+  FollowersList: { userId?: number };
+  FollowingsList: { userId?: number };
   Comments: { postId: number };
   PostDetail: { postId: number };
   TipShorts: undefined;
@@ -110,6 +112,8 @@ const ProfileScreen: React.FC = () => {
   });
   const [isFollowing, setIsFollowing] = useState(false);
   const [showFullMenu, setShowFullMenu] = useState(false);
+  const [showImageViewer, setShowImageViewer] = useState(false);
+  const [imageViewerIndex, setImageViewerIndex] = useState(0);
 
   // Default profile image
   const DEFAULT_PROFILE_IMAGE = 'https://via.placeholder.com/150';
@@ -131,6 +135,7 @@ const ProfileScreen: React.FC = () => {
       setLoading(true);
       const token = await AsyncStorage.getItem('accessToken');
       let userData: User | null = null;
+      let userApiFailed = false;
 
       if (isOwnProfile && currentUser) {
         userData = currentUser;
@@ -145,23 +150,48 @@ const ProfileScreen: React.FC = () => {
         });
 
         if (!response.ok) {
-          console.error('Error response:', await response.text());
-          setUser(null);
-          setLoading(false);
-          return;
-        }
-
-        const result = await response.json();
-        if (result.success && result.data) {
-          userData = result.data;
+          userApiFailed = true;
         } else {
-          setUser(null);
-          setLoading(false);
-          return;
+          const result = await response.json();
+          if (result.success && result.data) {
+            userData = result.data;
+          } else {
+            userApiFailed = true;
+          }
+        }
+      }
+
+      // If user API failed, try to get user info from posts API
+      if (!userData && userApiFailed) {
+        const postsResponse = await fetch(
+          `${API_BASE_URL}/api/users/${userId}/posts?page=1&limit=1&loggined_user_id=${currentUser?.id}`,
+          {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+        if (postsResponse.ok) {
+          const postsResult = await postsResponse.json();
+          if (postsResult?.data && postsResult.data.length > 0) {
+            const firstPost = postsResult.data[0];
+            userData = {
+              id: firstPost.user_id,
+              name: firstPost.name,
+              profile_image: firstPost.user_profile_image,
+              address: firstPost.address,
+            };
+          }
         }
       }
 
       setUser(userData);
+
+      let fetchedFollowers: any[] = [];
+      let fetchedFollowings: any[] = [];
 
       // Fetch followers
       const followersResponse = await fetch(`${API_BASE_URL}/api/follow/followers/${userId}`, {
@@ -176,13 +206,16 @@ const ProfileScreen: React.FC = () => {
       if (followersResponse.ok) {
         const followersResult = await followersResponse.json();
         if (followersResult.status && followersResult.data) {
-          setFollowers(
-            followersResult.data.map((follower: any) => ({
-              ...follower,
-              profile_image: getFullImageUrl(follower.profile_image),
-            })),
-          );
+          fetchedFollowers = followersResult.data.map((follower: any) => ({
+            ...follower,
+            profile_image: getFullImageUrl(follower.profile_image),
+          }));
+          setFollowers(fetchedFollowers);
+        } else {
+          setFollowers([]);
         }
+      } else {
+        setFollowers([]);
       }
 
       // Fetch followings
@@ -198,19 +231,22 @@ const ProfileScreen: React.FC = () => {
       if (followingsResponse.ok) {
         const followingsResult = await followingsResponse.json();
         if (followingsResult.status && followingsResult.data) {
-          setFollowings(
-            followingsResult.data.map((following: any) => ({
-              ...following,
-              profile_image: getFullImageUrl(following.profile_image),
-            })),
-          );
+          fetchedFollowings = followingsResult.data.map((following: any) => ({
+            ...following,
+            profile_image: getFullImageUrl(following.profile_image),
+          }));
+          setFollowings(fetchedFollowings);
+        } else {
+          setFollowings([]);
         }
+      } else {
+        setFollowings([]);
       }
 
-      // Update stats
+      // Update stats with correct counts
       setStats({
-        followers: followers.length,
-        following: followings.length,
+        followers: fetchedFollowers.length,
+        following: fetchedFollowings.length,
         likes: posts.reduce((sum, post) => sum + (post.likeCount || 0), 0),
       });
 
@@ -303,11 +339,11 @@ const ProfileScreen: React.FC = () => {
   };
 
   const handleFollowersPress = () => {
-    navigation.navigate('FollowersList', { followers });
+    navigation.navigate('FollowersList', { userId: user?.id ? Number(user.id) : undefined });
   };
 
   const handleFollowingsPress = () => {
-    navigation.navigate('FollowingsList', { followings });
+    navigation.navigate('FollowingsList', { userId: user?.id ? Number(user.id) : undefined });
   };
 
   const handlePostsPress = () => {
@@ -327,7 +363,8 @@ const ProfileScreen: React.FC = () => {
   };
 
   const handlePostPress = (postId: number) => {
-    navigation.navigate('PostDetail', { postId });
+    setImageViewerIndex(postId - 1);
+    setShowImageViewer(true);
   };
 
   const handleFollow = async (followUserId: number) => {
@@ -424,7 +461,6 @@ const ProfileScreen: React.FC = () => {
           <Header
             title={isOwnProfile ? 'Profile' : 'Profile'}
             showLogo={false}
-            showNotifications={isOwnProfile || false}
           />
           <ProfilePageSkeleton />
         </View>
@@ -439,11 +475,10 @@ const ProfileScreen: React.FC = () => {
           <Header
             title={isOwnProfile ? 'Profile' : 'Profile'}
             showLogo={false}
-            showNotifications={isOwnProfile || false}
           />
           <View style={styles.errorContainer}>
             <Text style={[styles.errorText, { color: colors.text.primary }]}>
-              User not found or there was an error loading the profile.
+              User not found, or no public posts yet.
             </Text>
             <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
               <Text style={{ color: colors.primary }}>Retry</Text>
@@ -460,7 +495,6 @@ const ProfileScreen: React.FC = () => {
         <Header
           title={isOwnProfile ? 'Profile' : user?.name || 'Profile'}
           showLogo={false}
-          showNotifications={isOwnProfile || false}
         />
         <ScrollView
           style={styles.scrollView}
@@ -549,6 +583,85 @@ const ProfileScreen: React.FC = () => {
               <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Following</Text>
             </TouchableOpacity>
           </View>
+          {/* Action Buttons for Other Users */}
+          {!isOwnProfile && (
+            <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 16 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  marginHorizontal: 8,
+                  backgroundColor: isFollowing ? colors.gray[400] : colors.primary,
+                  borderRadius: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingVertical: 12,
+                }}
+                onPress={async () => {
+                  const token = await AsyncStorage.getItem('accessToken');
+                  const action = isFollowing ? 'unfollow' : 'follow';
+                  const payload = {
+                    followingId: user?.id,
+                    followerId: currentUser?.id,
+                    action,
+                  };
+                  try {
+                    const response = await fetch(`${API_BASE_URL}/api/follow-user`, {
+                      method: 'POST',
+                      headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                      },
+                      body: JSON.stringify(payload),
+                    });
+                    if (response.ok) {
+                      setIsFollowing(!isFollowing);
+                      setStats((prev) => ({
+                        ...prev,
+                        followers: prev.followers + (isFollowing ? -1 : 1),
+                      }));
+                    }
+                  } catch (e) {
+                    // Optionally show error
+                  }
+                }}
+                activeOpacity={0.85}
+              >
+                <Icon name={isFollowing ? 'user-x' : 'user-plus'} size={18} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>{isFollowing ? 'Unfollow' : 'Follow'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: colors.primary,
+                  marginRight: 8,
+                }}
+                onPress={() => {/* TODO: Implement call logic */}}
+                activeOpacity={0.85}
+              >
+                <Icon name="phone" size={22} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: colors.primary,
+                }}
+                onPress={() => {/* TODO: Implement video call logic */}}
+                activeOpacity={0.85}
+              >
+                <Icon name="video" size={22} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          )}
           {/* Edit Profile & Settings Buttons */}
           {isOwnProfile && (
             <View style={styles.actionButtonsContainer}>
@@ -566,11 +679,11 @@ const ProfileScreen: React.FC = () => {
           )}
           {/* Posts Grid */}
           <View style={styles.postsContainer}>
-            {posts.map((post) => (
+            {posts.map((post, index) => (
               <TouchableOpacity
                 key={post.id}
                 style={styles.postItem}
-                onPress={() => handlePostPress(post.id)}
+                onPress={() => { setImageViewerIndex(index); setShowImageViewer(true); }}
               >
                 <Image source={{ uri: getFullImageUrl(post.media_url) }} style={styles.postImage} resizeMode="cover" />
               </TouchableOpacity>
@@ -605,6 +718,26 @@ const ProfileScreen: React.FC = () => {
             ))}
           </View>
         </ScrollView>
+        {showImageViewer && (
+          <Modal visible={showImageViewer} transparent={true} onRequestClose={() => setShowImageViewer(false)}>
+            <ImageViewer
+              imageUrls={posts.map(post => ({ url: getFullImageUrl(post.media_url) }))}
+              index={imageViewerIndex}
+              enableSwipeDown
+              onSwipeDown={() => setShowImageViewer(false)}
+              onCancel={() => setShowImageViewer(false)}
+              saveToLocalByLongPress={false}
+              renderIndicator={(currentIndex, allSize) => (
+                <View style={{position: 'absolute', top: 40, left: 0, right: 0, alignItems: 'center', zIndex: 10}}>
+                  <Text style={{color: '#fff', fontWeight: 'bold'}}>{currentIndex} / {allSize}</Text>
+                </View>
+              )}
+            />
+            <TouchableOpacity style={{ position: 'absolute', top: 40, right: 24, zIndex: 20 }} onPress={() => setShowImageViewer(false)}>
+              <Icon name="x" size={32} color="#fff" />
+            </TouchableOpacity>
+          </Modal>
+        )}
       </View>
     </ScreenTransition>
   );

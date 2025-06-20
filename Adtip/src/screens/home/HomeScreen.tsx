@@ -13,6 +13,7 @@ import {
   ViewToken,
   Keyboard,
   TouchableOpacity,
+  Modal,
 } from 'react-native';
 import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -34,6 +35,7 @@ import CategoryItem from '../../components/home/CategoryItem';
 import EarnCard from '../../components/home/EarnCard';
 import CommentScreen from './CommentScreen';
 import ScreenTransition from '../../components/common/ScreenTransition'; // ADD THIS IMPORT
+import UserProfileScreen from '../profile/UserProfileScreen';
 
 // Skeleton Components
 import StorySkeleton from '../../components/skeletons/StoryItemSkeleton';
@@ -177,6 +179,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [selectedCommentPostId, setSelectedCommentPostId] = useState<number | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [showUserProfileModal, setShowUserProfileModal] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
 
   const postsAbortControllerRef = useRef<AbortController | null>(null);
   const likeAbortControllerRef = useRef<AbortController | null>(null);
@@ -451,7 +455,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const handleCloseCommentModal = () => { setCommentModalVisible(false); setSelectedCommentPostId(null); };
   const handleShare = (postId: number) => console.log('Share post:', postId);
   const handlePostPress = (postId: number) => console.log('Post pressed:', postId);
-  const handleUserPress = (userId: number) => navigation.navigate('Main', { screen: 'Profile', params: { userId } });
+  const handleUserPress = (userId: number) => {
+    setSelectedUserId(userId);
+    setShowUserProfileModal(true);
+  };
   const handleFollow = async (userId: number) => { console.log('Follow user:', userId); };
 
   const renderListHeader = () => (
@@ -564,6 +571,23 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
         />
         {commentModalVisible && selectedCommentPostId !== null && (
           <CommentScreen visible={commentModalVisible} postId={selectedCommentPostId} onClose={handleCloseCommentModal} />
+        )}
+        {showUserProfileModal && selectedUserId && (
+          <Modal
+            visible={showUserProfileModal}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={() => setShowUserProfileModal(false)}
+          >
+            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.2)' }}>
+              <View style={{ flex: 1, marginTop: 40, backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' }}>
+                <UserProfileScreen userId={selectedUserId} />
+                <TouchableOpacity style={{ position: 'absolute', top: 16, right: 16, zIndex: 10 }} onPress={() => setShowUserProfileModal(false)}>
+                  <Icon name="x" size={28} color={colors.text.primary} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
         )}
       </View>
     </ScreenTransition>

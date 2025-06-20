@@ -13,7 +13,6 @@ export interface HeaderProps {
   showLogo?: boolean;
   showWallet?: boolean;
   walletAmount?: string;
-  showNotifications?: boolean;
   leftComponent?: React.ReactNode;
   centerComponent?: React.ReactNode;
   rightComponent?: React.ReactNode;
@@ -34,7 +33,6 @@ const Header: React.FC<HeaderProps> = ({
   title,
   showLogo,
   showWallet = true,
-  showNotifications = true,
   walletAmount,
   leftComponent,
   centerComponent,
@@ -48,7 +46,7 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   const navigation = useNavigation();
   const {colors} = useTheme();
-  const {balance} = useWallet(); 
+  const {balance, isLoading} = useWallet(); 
   const {toggleSidebar} = useSidebar();
   const {width: screenWidth} = useWindowDimensions();
   const insets = useSafeAreaInsets(); 
@@ -62,8 +60,6 @@ const Header: React.FC<HeaderProps> = ({
   
   // Memoize navigation functions
   const navigateToWallet = useCallback(() => navigation.navigate('Wallet' as never), [navigation]);
-  const navigateToNotifications = useCallback(() => navigation.navigate('Notifications' as never), [navigation]);
-  const navigateToTipShorts = useCallback(() => navigation.navigate('TipShorts' as never), [navigation]);
 
   // Memoize search handlers
   const handleSearchIconPress = useCallback(() => {
@@ -103,8 +99,6 @@ const Header: React.FC<HeaderProps> = ({
     typeof showLogo === 'boolean' ? showLogo : defaultShowLogo
   , [showLogo, defaultShowLogo]);
   
-  const shouldShowTipShortsIconProp = useMemo(() => !!showTipShortsIcon, [showTipShortsIcon]);
-
   const renderNodeSafely = (node: React.ReactNode, defaultStyle?: any): React.ReactNode => {
     if (node === null || node === undefined || typeof node === 'boolean') {
       return null; // React handles these by rendering nothing
@@ -218,14 +212,6 @@ const Header: React.FC<HeaderProps> = ({
                 <Icon name={rightIcon} size={sizes.iconSize} color={colors.text.secondary} />
               </TouchableOpacity>
             )}
-            {shouldShowTipShortsIconProp && (
-              <TouchableOpacity
-                onPress={navigateToTipShorts}
-                style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}
-              >
-                <Icon name="play-circle" size={sizes.iconSize} color={colors.text.secondary} />
-              </TouchableOpacity>
-            )}
             {showSearch && ( // Ensure showSearch wraps this logic
               isSearchActive ? (
                 <TouchableOpacity onPress={handleCloseSearch} style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}>
@@ -237,31 +223,15 @@ const Header: React.FC<HeaderProps> = ({
                 </TouchableOpacity>
               )
             )}
-            {showNotifications && (
-              <TouchableOpacity
-                onPress={navigateToNotifications}
-                style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}
-              >
-                <Icon name="bell" size={sizes.iconSize} color={colors.text.secondary} />
-                <View
-                  style={[
-                    styles.notificationBadge,
-                    {
-                      backgroundColor: colors.primary,
-                      width: sizes.iconSize * 0.3, height: sizes.iconSize * 0.3,
-                      borderRadius: sizes.iconSize * 0.15,
-                      top: sizes.iconSize * 0.3, right: sizes.iconSize * 0.3,
-                    },
-                  ]}
-                />
-              </TouchableOpacity>
-            )}
             {showWallet && (
               <TouchableOpacity
                 onPress={navigateToWallet}
-                style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}
+                style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2, flexDirection: 'row', alignItems: 'center'}]}
               >
                 <Icon name="credit-card" size={sizes.iconSize} color={colors.primary} />
+                <Text style={{ marginLeft: 4, color: colors.primary, fontWeight: 'bold', fontSize: sizes.iconSize * 0.95 }}>
+                  ₹{isLoading ? '...' : balance}
+                </Text>
               </TouchableOpacity>
             )}
           </>

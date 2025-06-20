@@ -7,7 +7,8 @@
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest"
+    "test": "jest",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.821.0",
@@ -25,6 +26,7 @@
     "@react-native-firebase/firestore": "^22.2.1",
     "@react-native-firebase/messaging": "^22.2.1",
     "@react-native-firebase/storage": "^22.2.1",
+    "@react-native-oh-tpl/react-native-image-zoom-viewer": "^3.0.1-0.0.1",
     "@react-navigation/bottom-tabs": "^7.3.14",
     "@react-navigation/native": "^7.1.10",
     "@react-navigation/native-stack": "^7.3.14",
@@ -37,6 +39,8 @@
     "lottie-react-native": "^7.2.2",
     "lucide-react-native": "^0.513.0",
     "nativewind": "^4.1.23",
+    "patch-package": "^8.0.0",
+    "postinstall-postinstall": "^2.1.0",
     "react": "19.0.0",
     "react-native": "0.79.2",
     "react-native-callkeep": "github:react-native-webrtc/react-native-callkeep#4b1fa98a685f6502d151875138b7c81baf1ec680",

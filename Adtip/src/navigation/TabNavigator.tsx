@@ -1,9 +1,11 @@
 import React, {useState, useCallback, useMemo} from 'react'; // Add useMemo
-import {StyleSheet, View, TouchableOpacity, Platform} from 'react-native';
+import {StyleSheet, View, TouchableOpacity, Platform, Text} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {BlurView} from '@react-native-community/blur';
 import Icon from 'react-native-vector-icons/Feather';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useWallet} from '../contexts/WalletContext';
+import {useNavigation} from '@react-navigation/native';
 
 import HomeScreen from '../screens/home/HomeScreen';
 import TipTubeScreen from '../screens/tiptube/TipTubeScreen';
@@ -26,6 +28,8 @@ const Tab = createBottomTabNavigator();
 const TabNavigator = () => {
   const {colors, isDarkMode} = useTheme();
   const insets = useSafeAreaInsets();
+  const {balance, isLoading} = useWallet();
+  const navigation = useNavigation<any>();
 
   // Memoize enhanced components to prevent recreation
   const EnhancedHomeScreen = useMemo(() => withWalletBalance(HomeScreen), []);

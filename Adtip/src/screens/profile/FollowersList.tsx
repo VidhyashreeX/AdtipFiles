@@ -113,7 +113,7 @@ const FollowersList: React.FC = () => {
 
   // Render item for FlatList
   const renderFollowerItem = ({ item }: { item: Follower }) => (
-    <View style={styles.itemContainer}>
+    <TouchableOpacity style={styles.itemContainer} onPress={() => (navigation as any).navigate('Profile', { userId: Number(item.id) })}>
       {item.profile_image ? (
         <Image
           source={{ uri: getFullImageUrl(item.profile_image) }}
@@ -134,7 +134,7 @@ const FollowersList: React.FC = () => {
           {item.is_followed ? 'Following' : 'Follow'}
         </Text>
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -144,7 +144,7 @@ const FollowersList: React.FC = () => {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Icon name="arrow-left" size={24} color={colors.text.primary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text.primary }]}>My Followers</Text>
+        <Text style={[styles.headerTitle, { color: colors.text.primary }]}>Followers</Text>
       </View>
 
       {/* List of followers */}

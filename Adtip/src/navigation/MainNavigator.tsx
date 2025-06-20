@@ -52,6 +52,12 @@ import { VideoPlayerModalScreen } from '../screens/tiptube';
 import TipCallScreen from '../screens/tipcall/TipCallScreen';
 import MeetingScreen from '../screens/tipcall/MeetingScreen';
 
+// Add AddFundsScreen import
+import AddFundsScreen from '../screens/wallet/AddFundsScreen';
+
+// Add UpgradePremiumScreen import
+import UpgradePremiumScreen from '../screens/wallet/UpgradePremiumScreen';
+
 // Create stack navigator with proper typing
 const Stack = createNativeStackNavigator<Record<string, any> & {
   Checkout: { package: { id: string; name: string; price: number; bestValue?: boolean } };
@@ -95,7 +101,7 @@ const customTransitionConfig = {
       },
     },
   },
-  cardStyleInterpolator: ({ current, next, layouts }) => {
+  cardStyleInterpolator: ({ current, next, layouts }: { current: any; next: any; layouts: any }) => {
     const translateX = current.progress.interpolate({
       inputRange: [0, 1],
       outputRange: [layouts.screen.width, 0],
@@ -405,6 +411,7 @@ const MainNavigator = () => {
       <Stack.Screen name="Analytics" component={EnhancedAnalyticsScreen} />
       <Stack.Screen name="Profile" component={EnhancedProfileScreen} />
       <Stack.Screen name="Wallet" component={WalletScreen} />
+      <Stack.Screen name="AddFundsScreen" component={AddFundsScreen} />
       <Stack.Screen name="TrackOrder" component={EnhancedTrackOrderScreen} />
       <Stack.Screen name="Search" component={EnhancedSearchScreen} />
       <Stack.Screen name="Notifications" component={EnhancedNotificationScreen} />
@@ -436,6 +443,9 @@ const MainNavigator = () => {
           contentStyle: { backgroundColor: 'transparent' },
         }}
       />
+
+      {/* Add UpgradePremiumScreen */}
+      <Stack.Screen name="UpgradePremiumScreen" component={UpgradePremiumScreen} />
     </Stack.Navigator>
   );
 };

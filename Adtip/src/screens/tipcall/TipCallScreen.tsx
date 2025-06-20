@@ -32,7 +32,7 @@ import {
   Constants,
 } from '@videosdk.live/react-native-sdk';
 import ContactSkeletonItem from '../../components/skeletons/ContactSkeletonItem';
-import { UserListRequest, UpdateUserRequest, UpdateUserResponse } from '../../types/api';
+import { UserListRequest, UpdateUserRequest, UpdateUserResponse, Contact } from '../../types/api';
 import ApiService from '../../services/ApiService';
 import Icon from 'react-native-vector-icons/Feather';
 import messaging from '@react-native-firebase/messaging';
@@ -41,6 +41,7 @@ import {
 } from '../../helpers/CallHelper';
 import CallKeepService from '../../services/CallKeepService';
 import uuid from 'react-native-uuid';
+import { useWallet } from '../../contexts/WalletContext';
 
 // Define navigation stack param list
 type RootStackParamList = {
@@ -60,72 +61,37 @@ type RootStackParamList = {
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type TipCallScreenRouteProp = RouteProp<RootStackParamList, 'TipCall'>;
 
-// Enhanced interfaces
-interface Language {
-  id: string;
-  name: string;
-}
-
-interface Category {
-  id: string;
-  name: string;
-}
-
-interface Interest {
-  id: number;
-  name: string;
-  isPrimary: boolean;
-}
-
-interface Contact {
-  id: number;
-  name?: string | null;
-  emailId?: string | null;
-  is_available: boolean;
-  dnd: boolean;
-  updated_date: string;
-  last_active: string | null;
-  languages: Language[];
-  interests: Interest[];
-  product_count: number;
-  post_count: number;
-  is_following: number;
-  following_count: number;
-  followers_count: number;
-  is_blocked: boolean;
-  social_links: string[];
-  is_active: boolean;
-  last_seen: string;
-  online_status: boolean;
-}
+// Add local types for filter constants only
+interface Language { id: number; name: string; }
+interface Category { id: number; name: string; }
 
 // Constants for filters
 const LANGUAGES: Language[] = [
-  {id: '0', name: 'All'}, // Changed from '1' to '0'
-  {id: '12', name: 'English'},
-  {id: '2', name: 'Hindi'},
-  {id: '3', name: 'Bengali'},
-  {id: '4', name: 'Telugu'},
-  {id: '5', name: 'Marathi'},
-  {id: '6', name: 'Tamil'},
-  {id: '7', name: 'Gujarati'},
-  {id: '8', name: 'Kannada'},
+  {id: 0, name: 'All'},
+  {id: 12, name: 'English'},
+  {id: 2, name: 'Hindi'},
+  {id: 3, name: 'Bengali'},
+  {id: 4, name: 'Telugu'},
+  {id: 5, name: 'Marathi'},
+  {id: 6, name: 'Tamil'},
+  {id: 7, name: 'Gujarati'},
+  {id: 8, name: 'Kannada'},
 ];
 
 const CATEGORIES: Category[] = [
-  {id: '0', name: 'All'}, // Changed from '1' to '0'
-  {id: '2', name: 'Look for jobs'},
-  {id: '101', name: 'Prepare for govt job'}, // Changed from '1' to '101' to avoid duplicate
-  {id: '3', name: 'Prepare for UPSC'},
-  {id: '11', name: 'Prepare for jobs'},
-  {id: '5', name: 'To learn English'},
-  {id: '6', name: 'To learn Hindi'},
-  {id: '7', name: 'To learn software'},
-  {id: '8', name: 'To learn AI'},
-  {id: '13', name: 'To learn something new'},
-  {id: '20', name: 'Sports'},
-  {id: '29', name: 'Spirituality and Religion'},
-  {id: '48', name: 'Astrology'},
+  {id: 0, name: 'All'},
+  {id: 2, name: 'Look for jobs'},
+  {id: 101, name: 'Prepare for govt job'},
+  {id: 3, name: 'Prepare for UPSC'},
+  {id: 11, name: 'Prepare for jobs'},
+  {id: 5, name: 'To learn English'},
+  {id: 6, name: 'To learn Hindi'},
+  {id: 7, name: 'To learn software'},
+  {id: 8, name: 'To learn AI'},
+  {id: 13, name: 'To learn something new'},
+  {id: 20, name: 'Sports'},
+  {id: 29, name: 'Spirituality and Religion'},
+  {id: 48, name: 'Astrology'},
 ];
 
 // Enhanced Filter Chip Component
@@ -300,6 +266,7 @@ export default function TipCallScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
+  const { balance, isLoading } = useWallet();
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
@@ -348,9 +315,8 @@ export default function TipCallScreen() {
   }, [contacts, searchQuery, applySearchFilter]);
 
   // Search handler - for header search functionality
-  const handleSearch = useCallback((query: string) => {
-    console.log('[TipCall] Search query:', query);
-    setSearchQuery(query);
+  const handleSearch = useCallback((query: any) => {
+    setSearchQuery(typeof query === 'string' ? query : '');
   }, []);
 
   // Clear search handler
@@ -687,69 +653,60 @@ export default function TipCallScreen() {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar backgroundColor={colors.background} barStyle={isDarkMode ? "light-content" : "dark-content"} />
         
-        {/* Updated Header with DND button in the same row */}
         <Header 
           title="Tip Call" 
-          onBackPress={() => navigation.goBack()}
           showWallet={false}
-          showNotifications={false} // Disable built-in notifications to use custom
-          showSearch={false} // Disable built-in search since we're handling it in rightComponent
-          searchPlaceholder="Search contacts by name or ID..."
-          onSearchQueryChange={handleSearch} // Live search handler
-          onSearchSubmit={handleSearch} // Search submit handler
-          onSearchClear={handleClearSearch} // Clear search handler
+          showSearch={false}
+          onSearchQueryChange={handleSearch}
+          onSearchSubmit={handleSearch}
           rightComponent={
-            <View style={styles.headerRightContainer}>
-              {/* Search Icon - added to the left */}
-              <TouchableOpacity
-                onPress={() => {
-                  // You can implement search modal here or use a different approach
-                  console.log('[TipCall] Search icon pressed');
-                }}
-                style={[styles.headerIconButton, { marginRight: 12 }]}
-              >
-                <Icon name="search" size={20} color={colors.text.secondary} />
-              </TouchableOpacity>
-
-              {/* Notifications Icon - moved right */}
-              <TouchableOpacity
-                onPress={() => navigation.navigate('Notifications' as never)}
-                style={[styles.headerIconButton, { marginRight: 8 }]}
-              >
-                <Icon name="bell" size={20} color={colors.text.secondary} />
-                <View style={[styles.notificationBadge, { backgroundColor: colors.primary }]} />
-              </TouchableOpacity>
-
-              {/* DND Button - rightmost */}
-              <TouchableOpacity
-                style={[
-                  styles.dndButtonHeader,
-                  {
-                    backgroundColor: isDndEnabled 
-                      ? colors.danger || '#EF4444' 
-                      : colors.success || '#22C55E',
-                    opacity: isDndLoading ? 0.6 : 1,
-                  }
-                ]}
-                onPress={handleDndToggle}
-                disabled={isDndLoading}
-                activeOpacity={0.8}
-              >
-                {isDndLoading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Icon 
-                      name={isDndEnabled ? "bell-off" : "bell"} 
-                      size={14} 
-                      color="#FFFFFF" 
-                    />
-                    <Text style={styles.dndButtonHeaderText}>
-                      {isDndEnabled ? 'DND' : 'Available'}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
+            <View style={[styles.headerRow, { justifyContent: 'flex-end', alignItems: 'center', flex: 1 }]}> 
+              <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 0, minWidth: 0, maxWidth: 110 }}>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8, paddingLeft: 2, flexShrink: 0 }}
+                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate('Wallet' as never)}
+                >
+                  <Icon name="credit-card" size={20} color={colors.primary} />
+                  <Text style={{ marginLeft: 4, color: colors.primary, fontWeight: 'bold', fontSize: 16, maxWidth: 60 }} numberOfLines={1} ellipsizeMode="tail">
+                    ₹{isLoading ? balance : balance}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    // You can implement search modal here or use a different approach
+                    console.log('[TipCall] Search icon pressed');
+                  }}
+                  style={[styles.headerIconButton, { marginRight: 4 }]}
+                >
+                  <Icon name="search" size={20} color={colors.text.secondary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.dndButtonHeader,
+                    {
+                      backgroundColor: isDndEnabled 
+                        ? '#EF4444'
+                        : (colors.success || '#22C55E'),
+                      opacity: isDndLoading ? 0.6 : 1,
+                      marginRight: 4,
+                      paddingHorizontal: 6,
+                      minWidth: 0,
+                    }
+                  ]}
+                  onPress={handleDndToggle}
+                  disabled={isDndLoading}
+                  activeOpacity={0.8}
+                >
+                  {isDndLoading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Icon name={isDndEnabled ? "bell-off" : "bell"} size={16} color="#FFFFFF" />
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           }
         />
@@ -771,8 +728,8 @@ export default function TipCallScreen() {
                 <FilterChip
                   key={lang.id}
                   label={lang.name}
-                  isSelected={languageFilter === lang.id}
-                  onPress={() => handleLanguageFilterChange(lang.id)}
+                  isSelected={languageFilter === lang.id.toString()}
+                  onPress={() => handleLanguageFilterChange(lang.id.toString())}
                   colors={colors}
                   isDarkMode={isDarkMode}
                 />
@@ -795,8 +752,8 @@ export default function TipCallScreen() {
                 <FilterChip
                   key={category.id}
                   label={category.name}
-                  isSelected={categoryFilter === category.id}
-                  onPress={() => handleCategoryFilterChange(category.id)}
+                  isSelected={categoryFilter === category.id.toString()}
+                  onPress={() => handleCategoryFilterChange(category.id.toString())}
                   colors={colors}
                   isDarkMode={isDarkMode}
                 />
@@ -836,7 +793,7 @@ export default function TipCallScreen() {
                       <>
                         {filteredContacts.length} result{filteredContacts.length !== 1 ? 's' : ''} for "{searchQuery}"
                         {isDndEnabled && (
-                          <Text style={[styles.dndStatusText, { color: colors.danger || '#EF4444' }]}>
+                          <Text style={[styles.dndStatusText, { color: '#EF4444' }]}>
                             {' • DND Active'}
                           </Text>
                         )}
@@ -845,7 +802,7 @@ export default function TipCallScreen() {
                       <>
                         {filteredContacts.length} contact{filteredContacts.length !== 1 ? 's' : ''} available
                         {isDndEnabled && (
-                          <Text style={[styles.dndStatusText, { color: colors.danger || '#EF4444' }]}>
+                          <Text style={[styles.dndStatusText, { color: '#EF4444' }]}>
                             {' • DND Active'}
                           </Text>
                         )}
@@ -1201,5 +1158,11 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
   },
 });

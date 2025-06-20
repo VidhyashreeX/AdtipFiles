@@ -101,7 +101,7 @@ const FollowingsList: React.FC = () => {
 
   // Render item for FlatList
   const renderFollowingItem = ({ item }: { item: Following }) => (
-    <View style={styles.itemContainer}>
+    <TouchableOpacity style={styles.itemContainer} onPress={() => (navigation as any).navigate('Profile', { userId: Number(item.id) })}>
       {item.profile_image ? (
         <Image
           source={{ uri: getFullImageUrl(item.profile_image) }}
@@ -118,7 +118,7 @@ const FollowingsList: React.FC = () => {
         {item.name || 'Unknown'}
       </Text>
       <Text style={styles.followingText}>following</Text>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
