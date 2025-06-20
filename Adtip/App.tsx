@@ -19,6 +19,7 @@ import {
   useSafeAreaInsets
 } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { getApps } from '@react-native-firebase/app';
 
 // Contexts
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -73,6 +74,15 @@ const AppNavigator = () => {
     const initFirebase = async () => {
       if (isInitialized) {
         console.log('[App] Initializing Firebase service...');
+        
+        // Check if Firebase apps are available using v22.2.1 API
+        const apps = getApps();
+        if (apps.length === 0) {
+          console.warn('[App] No Firebase apps found. Firebase features may be limited.');
+        } else {
+          console.log(`[App] Found ${apps.length} Firebase app(s)`);
+        }
+        
         const firebaseService = FirebaseService.getInstance();
         const success = await firebaseService.initializeMessaging();
         setFirebaseReady(success);
@@ -114,7 +124,6 @@ const AppNavigator = () => {
       try {
         console.log('[App] Initializing CallKeep service...');
         
-        // ✅ FIXED: Get instance properly
         const callKeepService = CallKeepService.getInstance();
         
         // Initialize CallKeep

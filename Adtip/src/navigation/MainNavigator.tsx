@@ -50,7 +50,7 @@ import { VideoPlayerModalScreen } from '../screens/tiptube';
 
 // Add TipCall imports
 import TipCallScreen from '../screens/tipcall/TipCallScreen';
-import MeetingScreen from '../screens/tipcall/MeetingScreen';
+import MeetingScreen from '../screens/videosdk/MeetingScreen';
 
 // Add AddFundsScreen import
 import AddFundsScreen from '../screens/wallet/AddFundsScreen';
@@ -66,7 +66,7 @@ const Stack = createNativeStackNavigator<Record<string, any> & {
     cardLayout: any; 
     upNextVideos: any[] 
   };
-  // Add TipCall and Meeting screen types
+  // Updated TipCall and Meeting screen types
   TipCall: { initialCallNotificationData?: any } | undefined;
   Meeting: {
     meetingId: string;

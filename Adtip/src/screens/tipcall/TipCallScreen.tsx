@@ -548,21 +548,22 @@ export default function TipCallScreen() {
       Alert.alert("Error", "User or recipient information is missing.");
       return;
     }
-    
+
     console.log(`[TipCall] Initiating ${callTypeToInitiate} call to ${recipient.name || recipient.id}`);
     setError(null);
 
     try {
-      // ✅ FIXED: Use react-native-uuid instead of uuid
+      // Start CallKeep integration
       const callKeepId = uuid.v4() as string;
-      
       const callKeepService = CallKeepService.getInstance();
+      
       await callKeepService.startOutgoingCall(
         callKeepId,
         recipient.name || "Contact",
-        callTypeToInitiate === 'video' // hasVideo parameter
+        callTypeToInitiate === 'video'
       );
 
+      // Enhanced call initiation with proper backend coordination
       const result = await initiateVideoSDKCall(
         recipient.id.toString(),
         callTypeToInitiate,
@@ -572,6 +573,7 @@ export default function TipCallScreen() {
       if (result.success && result.meetingId && result.token) {
         console.log(`[TipCall] Call initiated successfully. Meeting ID: ${result.meetingId}`);
         
+        // Fixed navigation - Meeting screen is in the same Main stack
         navigation.navigate('Meeting', {
           meetingId: result.meetingId,
           token: result.token,
@@ -581,9 +583,11 @@ export default function TipCallScreen() {
           recipientName: recipient.name || "Participant",
         });
       } else {
+        // End CallKeep call on failure
         await callKeepService.endCall(callKeepId);
         Alert.alert('Call Failed', result.error || 'Could not initiate the call. Please try again.');
       }
+
     } catch (error: any) {
       console.error('[TipCall] Error in handleVideoSDKCall:', error);
       Alert.alert('Call Error', error.message || 'An unexpected error occurred.');

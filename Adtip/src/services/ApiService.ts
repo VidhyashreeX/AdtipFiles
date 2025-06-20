@@ -116,6 +116,30 @@ export interface HandleCallResponse {
   data?: any;
 }
 
+export interface InitiateCallRequest {
+  calleeInfo: {
+    platform: 'ANDROID' | 'IOS';
+    token: string;
+  };
+  callerInfo: {
+    name: string;
+    token: string;
+  };
+  videoSDKInfo: {
+    meetingId: string;
+    token: string;
+  };
+}
+
+export interface InitiateCallResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    callId?: string;
+    meetingId?: string;
+  };
+}
+
 // Define public endpoints that don't require authentication
 const PUBLIC_ENDPOINTS = [
   ApiEndpoints.AUTH_ENDPOINTS.OTP_LOGIN,
@@ -192,26 +216,25 @@ apiClient.interceptors.response.use(
  */
 export default class ApiService {
   /**
-   * Get current FCM token with Firebase v22.2.1 compatibility
+   * Get current FCM token - Firebase v22.2.1 compatible
    */
-  private static async getCurrentFCMToken(): Promise<string | null> {
+  static async getCurrentFCMToken(): Promise<string | null> {
     try {
-      // Check if messaging is supported
-      if (!messaging.isSupported()) {
+      // Firebase v22.2.1 - isSupported is now a static method on the messaging module
+      if (!messaging().isSupported) {
         console.warn('[ApiService] Firebase Messaging not supported');
         return null;
       }
 
-      // Check permissions first
       const authStatus = await messaging().hasPermission();
-      if (authStatus !== AuthorizationStatus.AUTHORIZED && 
+      if (authStatus !== AuthorizationStatus.AUTHORIZED &&
           authStatus !== AuthorizationStatus.PROVISIONAL) {
         console.warn('[ApiService] FCM permissions not granted');
         return null;
       }
 
       const token = await messaging().getToken();
-      return token;
+      return token || null; // Convert undefined to null for consistency
     } catch (error) {
       console.error('[ApiService] Error getting FCM token:', error);
       return null;
@@ -226,7 +249,7 @@ export default class ApiService {
     
     try {
       const apnsToken = await messaging().getAPNSToken();
-      return apnsToken;
+      return apnsToken || null; // Convert undefined to null for consistency
     } catch (error) {
       console.error('[ApiService] Error getting APNs token:', error);
       return null;
@@ -427,8 +450,8 @@ export default class ApiService {
 
     const requestData = {
       ...data,
-      fcmToken,
-      apnsToken,
+      fcmToken: fcmToken || undefined, // Convert null to undefined for API consistency
+      apnsToken: apnsToken || undefined,
       platform: Platform.OS,
     };
 
@@ -449,8 +472,8 @@ export default class ApiService {
 
     const requestData = {
       ...data,
-      fcmToken,
-      apnsToken,
+      fcmToken: fcmToken || undefined,
+      apnsToken: apnsToken || undefined,
       platform: Platform.OS,
     };
 
@@ -506,8 +529,8 @@ export default class ApiService {
 
     const requestData = {
       ...data,
-      fcmToken,
-      apnsToken,
+      fcmToken: fcmToken || undefined,
+      apnsToken: apnsToken || undefined,
       platform: Platform.OS,
     };
 
@@ -544,14 +567,14 @@ export default class ApiService {
 
       const requestData: UpdateFcmTokenRequest = {
         ...data,
-        fcmToken: fcmToken || '',
+        fcmToken: fcmToken || '', // Provide empty string if null
         platform: data.platform || Platform.OS,
-        apnsToken,
+        apnsToken: apnsToken || undefined,
         deviceId: await AsyncStorage.getItem('deviceId') || undefined,
       };
 
       const response = await this.post<UpdateFcmTokenResponse>(
-        '/api/update-fcm-token', // Adjust endpoint as needed
+        '/api/update-fcm-token',
         requestData,
       );
 
@@ -973,6 +996,38 @@ export default class ApiService {
       return response;
     } catch (error) {
       console.error('[API] Error updating user:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Initiate call with VideoSDK integration
+   */
+  static async initiateCall(data: InitiateCallRequest): Promise<InitiateCallResponse> {
+    console.log('[ApiService] Initiating call:', {
+      calleePlatform: data.calleeInfo.platform,
+      callerName: data.callerInfo.name,
+      meetingId: data.videoSDKInfo.meetingId,
+      hasCalleeToken: !!data.calleeInfo.token,
+      hasCallerToken: !!data.callerInfo.token,
+      hasVideoSDKToken: !!data.videoSDKInfo.token,
+    });
+
+    try {
+      const response = await this.post<InitiateCallResponse>(
+        '/api/initiate-call',
+        data,
+      );
+
+      console.log('[ApiService] Initiate call response:', {
+        success: response.success,
+        message: response.message,
+        hasData: !!response.data,
+      });
+
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error initiating call:', error);
       throw this.handleError(error);
     }
   }

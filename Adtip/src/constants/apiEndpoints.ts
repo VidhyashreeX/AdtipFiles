@@ -36,6 +36,7 @@ export const TIP_CALLS_ENDPOINTS = {
   GET_USERS: '/api/users',
   GET_ALL_USERS: '/api/allusers',
   CALL: '/api/call',
+  INITIATE_CALL: '/api/initiate-call', // Add this new endpoint
   GET_AGORA_TOKEN_CALLER: '/api/get-agora-token/caller',
   GET_AGORA_TOKEN_CALLEE: '/api/get-agora-token/callee',
   GET_RTM_TOKEN: '/api/get-rtm-token',

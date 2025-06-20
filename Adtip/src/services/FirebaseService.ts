@@ -3,7 +3,7 @@ import messaging, {
   FirebaseMessagingTypes, 
   AuthorizationStatus 
 } from '@react-native-firebase/messaging';
-import { firebase } from '@react-native-firebase/app';
+import { getApps, getApp } from '@react-native-firebase/app';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NotificationService from './NotificationService';
 import { navigationRef } from '../navigation/NavigationService';
@@ -45,12 +45,12 @@ class FirebaseService {
 
   private async _initializeMessaging(): Promise<boolean> {
     try {
-      // Check if Firebase app is available
-      if (firebase.apps.length === 0) {
+      // Check if Firebase app is available using v22.2.1 modular API
+      if (getApps().length === 0) {
         console.warn('[Firebase] No app instance found, waiting for initialization...');
         await this._waitForFirebaseApp();
         
-        if (firebase.apps.length === 0) {
+        if (getApps().length === 0) {
           console.warn('[FCM] Firebase app instance not available. Push notification features will be disabled.');
           return false;
         }
@@ -58,9 +58,12 @@ class FirebaseService {
 
       const msg = messaging();
 
-      // Check if Firebase Messaging is supported (v22.2.1 static method)
-      if (!messaging.isSupported()) {
-        console.warn('[FCM] Firebase Messaging is not supported on this platform');
+      // Firebase v22.2.1 - Check if messaging is supported
+      try {
+        await msg.hasPermission();
+        console.log('[FCM] Firebase Messaging is supported');
+      } catch (error) {
+        console.warn('[FCM] Firebase Messaging is not supported on this platform:', error);
         return false;
       }
 
@@ -88,12 +91,12 @@ class FirebaseService {
   }
 
   /**
-   * Wait for Firebase app to be available
+   * Wait for Firebase app to be available (v22.2.1 compatible)
    */
   private async _waitForFirebaseApp(maxWaitTime: number = 5000): Promise<void> {
     const startTime = Date.now();
     
-    while (firebase.apps.length === 0 && (Date.now() - startTime) < maxWaitTime) {
+    while (getApps().length === 0 && (Date.now() - startTime) < maxWaitTime) {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
   }
@@ -137,7 +140,7 @@ class FirebaseService {
     }
 
     try {
-      // Enhanced permission request with v22.2.1 - removed unsupported options
+      // Enhanced permission request with v22.2.1
       const authStatus = await messaging().requestPermission({
         sound: true,
         alert: true,
@@ -253,31 +256,68 @@ class FirebaseService {
   }
 
   /**
-   * Handle navigation based on notification data
+   * Handle notification navigation based on notification data
    */
   private _handleNotificationNavigation(remoteMessage: FirebaseMessagingTypes.RemoteMessage): void {
     try {
       if (remoteMessage?.data?.isIncomingCall === 'true') {
-        const callData: CallNotificationData = {
+        // Enhanced call notification handling for VideoSDK
+        const callData = {
           callerName: remoteMessage.data.callerName || 'Unknown',
           callType: remoteMessage.data.callType || 'voice',
-          channelName: remoteMessage.data.channelName || '',
-          rtcToken: remoteMessage.data.agoraToken || '',
-          callerRtcUid: remoteMessage.data.callerId || '',
+          meetingId: remoteMessage.data.meetingId,
+          token: remoteMessage.data.videoSDKToken,
           isFromNotification: true,
         };
 
-        // Navigate to TipCall screen
-        if (navigationRef.isReady()) {
-          navigationRef.navigate('Main', {
-            screen: 'TipCall',
-            params: {
-              initialCallNotificationData: callData
-            }
-          });
+        console.log('[FCM] Processing VideoSDK call notification:', {
+          callerName: callData.callerName,
+          callType: callData.callType,
+          hasMeetingId: !!callData.meetingId,
+          hasToken: !!callData.token,
+        });
+
+        // Navigate to meeting through Main navigator
+        if (callData.meetingId && callData.token) {
+          if (navigationRef.isReady()) {
+            // Fixed navigation - go through Main navigator to Meeting screen
+            navigationRef.navigate('Main', {
+              screen: 'Meeting',
+              params: {
+                meetingId: callData.meetingId,
+                token: callData.token,
+                callType: callData.callType as 'voice' | 'video',
+                displayName: 'Me',
+                isInitiator: false,
+                recipientName: callData.callerName,
+              }
+            });
+          } else {
+            // Store for delayed navigation with proper structure
+            this._storeDelayedNavigation('Meeting', {
+              screen: 'Meeting',
+              params: {
+                meetingId: callData.meetingId,
+                token: callData.token,
+                callType: callData.callType,
+                displayName: 'Me',
+                isInitiator: false,
+                recipientName: callData.callerName,
+              }
+            });
+          }
         } else {
-          // Store navigation data for when navigation is ready
-          this._storeDelayedNavigation('TipCall', callData);
+          // Fallback to TipCall screen
+          if (navigationRef.isReady()) {
+            navigationRef.navigate('Main', {
+              screen: 'TipCall',
+              params: {
+                initialCallNotificationData: callData
+              }
+            });
+          } else {
+            this._storeDelayedNavigation('TipCall', callData);
+          }
         }
       }
 
@@ -300,23 +340,6 @@ class FirebaseService {
   }
 
   /**
-   * Store navigation data for delayed execution
-   */
-  private async _storeDelayedNavigation(screen: string, data: any): Promise<void> {
-    try {
-      const navigationData = {
-        screen,
-        data,
-        timestamp: Date.now()
-      };
-      await AsyncStorage.setItem('delayedNavigation', JSON.stringify(navigationData));
-      console.log('[FCM] Stored delayed navigation data');
-    } catch (error) {
-      console.warn('[FCM] Error storing delayed navigation:', error);
-    }
-  }
-
-  /**
    * Execute delayed navigation if exists
    */
   public async executeDelayedNavigation(): Promise<void> {
@@ -334,6 +357,9 @@ class FirebaseService {
                 initialCallNotificationData: navigationData.data
               }
             });
+          } else if (navigationData.screen === 'Meeting') {
+            // Handle Meeting navigation properly
+            navigationRef.navigate('Main', navigationData.data);
           }
         }
         
@@ -355,10 +381,9 @@ class FirebaseService {
     }
 
     try {
-      // Enhanced token retrieval with v22.2.1 - vapidKey is web-only
       const token = await messaging().getToken();
       console.log('[FCM] Current FCM token:', token);
-      return token;
+      return token || null;
     } catch (error) {
       console.warn('[FCM] Error getting FCM token:', error);
       return null;
@@ -434,7 +459,7 @@ class FirebaseService {
     try {
       const apnsToken = await messaging().getAPNSToken();
       console.log('[FCM] APNs token:', apnsToken);
-      return apnsToken;
+      return apnsToken || null;
     } catch (error) {
       console.warn('[FCM] Error getting APNs token:', error);
       return null;
@@ -455,6 +480,25 @@ class FirebaseService {
     } catch (error) {
       console.warn('[FCM] Error setting notification categories:', error);
     }
+  }
+
+  /**
+   * Get current Firebase app instance (v22.2.1 compatible)
+   */
+  public getCurrentApp() {
+    try {
+      return getApp();
+    } catch (error) {
+      console.warn('[FCM] Error getting current app:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get all Firebase app instances (v22.2.1 compatible)
+   */
+  public getAllApps() {
+    return getApps();
   }
 
   /**
