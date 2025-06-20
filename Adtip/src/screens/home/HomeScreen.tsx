@@ -447,8 +447,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   }, [user?.id, likedPosts]);
 
   const handleCreatePost = () => navigation.navigate('Main', { screen: 'CreatePost' });
-  const handleWatchAndEarn = () => navigation.navigate('Main', { screen: 'WatchToEarn' });
-  const handleReferAndEarn = () => navigation.navigate('Main', { screen: 'Referral' });
+  const handleWatchAndEarn = () => navigation.navigate('Main', { screen: 'TipShorts' }); // Changed from 'WatchToEarn' to 'TipShorts'
+  const handleReferAndEarn = () => navigation.navigate('Main', { screen: 'Referral' }); // This was already correct
   const handleStoryPress = (storyId: string) => console.log('Story pressed:', storyId);
   const handleCategoryPress = (categoryId: string) => { if (selectedCategoryState !== categoryId) setSelectedCategoryState(categoryId); };
   const handleComment = (postId: number) => { setSelectedCommentPostId(postId); setCommentModalVisible(true); };

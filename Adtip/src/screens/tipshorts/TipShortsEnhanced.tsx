@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,9 @@ import {
   SafeAreaView,
   Platform,
   NativeModules,
-  Alert,
-  AppState,
   BackHandler,
+  ViewabilityConfig,
+  ViewToken,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -23,33 +23,35 @@ import Animated, {
   withSpring,
   withTiming,
   withSequence,
-  withDelay,
   runOnJS,
   useAnimatedScrollHandler,
+  interpolate,
+  Extrapolate,
+  withDelay,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Icon from 'react-native-vector-icons/Feather';
-import Video from 'react-native-video'; // Fallback to react-native-video
+import Video from 'react-native-video';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import ApiService from '../../services/ApiService';
 import { ENDPOINTS } from '../../constants/api';
 import { useShorts } from '../../contexts/ShortsContext';
+import VideoPreloaderService from '../../services/VideoPreloaderService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 10;
 
-// Try to get native components, fallback if not available
+// Native components with fallback
 let ExoPlayerView: any = null;
-let ExoPlayerPreloader: any = null;
 
 try {
   const { requireNativeComponent } = require('react-native');
   ExoPlayerView = requireNativeComponent('ExoPlayerView');
-  ExoPlayerPreloader = NativeModules.ExoPlayerPreloader;
 } catch (error) {
-  console.warn('ExoPlayer native components not available, falling back to react-native-video');
+  console.warn('ExoPlayer not available, using react-native-video');
 }
 
 interface ShortVideo {
@@ -95,41 +97,198 @@ interface PublicShot {
   total_channel_followers: number;
 }
 
-// Animated Like Button Component
+// Optimized Video Player Component with instant response
+const OptimizedVideoPlayer = memo(({
+  source,
+  isActive,
+  isPaused,
+  isMuted,
+  onLoad,
+  onProgress,
+  onEnd,
+  style,
+}: {
+  source: { uri: string };
+  isActive: boolean;
+  isPaused: boolean;
+  isMuted: boolean;
+  onLoad?: (data: any) => void;
+  onProgress?: (data: any) => void;
+  onEnd?: () => void;
+  style?: any;
+}) => {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [wasManuallyPaused, setWasManuallyPaused] = useState(false);
+
+  // Enhanced logic similar to HomeScreen PostItem
+  const shouldPlay = isActive && !isPaused && isLoaded && !hasError;
+
+  // Effect for automatic play/pause based on visibility (like HomeScreen)
+  useEffect(() => {
+    if (isActive && isLoaded && !hasError) {
+      // Auto-play when video becomes active (unless manually paused)
+      if (!wasManuallyPaused) {
+        // Video should play automatically
+      }
+    } else {
+      // Auto-pause when video goes out of view
+      setWasManuallyPaused(false); // Reset manual pause state when out of view
+    }
+  }, [isActive, isLoaded, hasError, wasManuallyPaused]);
+
+  const handleLoad = useCallback((data: any) => {
+    setIsLoaded(true);
+    setHasError(false);
+    onLoad?.(data);
+  }, [onLoad]);
+
+  const handleError = useCallback((error: any) => {
+    console.warn('Video load error:', error);
+    setHasError(true);
+    setIsLoaded(false);
+  }, []);
+
+  const handleProgress = useCallback((data: any) => {
+    if (isActive && onProgress) {
+      onProgress(data);
+    }
+  }, [isActive, onProgress]);
+
+  // Use ExoPlayer if available for better performance
+  if (ExoPlayerView && !hasError) {
+    return (
+      <ExoPlayerView
+        source={source}
+        paused={!shouldPlay}
+        muted={isMuted}
+        repeat={true}
+        resizeMode="cover"
+        style={[StyleSheet.absoluteFill, style]}
+        onLoad={handleLoad}
+        onProgress={handleProgress}
+        onError={handleError}
+        onEnd={onEnd}
+      />
+    );
+  }
+
+  // Fallback to react-native-video with optimized config
+  return (
+    <Video
+      source={source}
+      paused={!shouldPlay}
+      muted={isMuted}
+      repeat={true}
+      resizeMode="cover"
+      style={[StyleSheet.absoluteFill, style]}
+      onLoad={handleLoad}
+      onProgress={handleProgress}
+      onError={handleError}
+      onEnd={onEnd}
+      bufferConfig={{
+        minBufferMs: 1500,
+        maxBufferMs: 5000,
+        bufferForPlaybackMs: 1000,
+        bufferForPlaybackAfterRebufferMs: 1500,
+      }}
+      ignoreSilentSwitch="ignore"
+      playInBackground={false}
+      playWhenInactive={false}
+      mixWithOthers="duck" // Duck other audio when playing
+    />
+  );
+});
+
+// Enhanced Play/Pause Overlay Indicator
+const PlayPauseOverlay = memo(({
+  isPlaying,
+  isVisible,
+}: {
+  isPlaying: boolean;
+  isVisible: boolean;
+}) => {
+  const scale = useSharedValue(0);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (isVisible) {
+      // Show play/pause indicator
+      scale.value = withSequence(
+        withTiming(1.2, { duration: 150 }),
+        withSpring(1, { damping: 8, stiffness: 100 })
+      );
+      opacity.value = withTiming(1, { duration: 150 });
+
+      // Hide after delay
+      const timer = setTimeout(() => {
+        opacity.value = withTiming(0, { duration: 300 });
+        scale.value = withTiming(0.8, { duration: 300 });
+      }, 800);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isVisible, isPlaying]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  if (!isVisible) return null;
+
+  return (
+    <Animated.View style={[styles.playPauseOverlay, animatedStyle]}>
+      <View style={styles.playPauseBackground}>
+        <Icon 
+          name={isPlaying ? "pause" : "play"} 
+          size={48} 
+          color="#FFFFFF" 
+        />
+      </View>
+    </Animated.View>
+  );
+});
+
+// Enhanced Animated Like Button with improved response
 const AnimatedLikeButton = memo(({
   isLiked,
   onPress,
   likeCount,
   disabled = false,
-  size = 48,
 }: {
   isLiked: boolean;
   onPress: () => void;
   likeCount: number;
   disabled?: boolean;
-  size?: number;
 }) => {
   const scale = useSharedValue(1);
-  const heartColor = useSharedValue(isLiked ? 1 : 0);
+  const heartScale = useSharedValue(1);
 
-  const animatedStyles = useAnimatedStyle(() => ({
+  const buttonAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
+  }));
+
+  const heartAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: heartScale.value }],
   }));
 
   const handlePress = useCallback(() => {
     if (disabled) return;
 
-    // Animate scale
+    // Instant feedback - no delay
     scale.value = withSequence(
-      withTiming(0.8, { duration: 100 }),
-      withSpring(1.2, { damping: 8, stiffness: 100 }),
-      withSpring(1, { damping: 8, stiffness: 100 })
+      withTiming(0.85, { duration: 50 }), // Faster response
+      withSpring(1.05, { damping: 8, stiffness: 150 }),
+      withSpring(1, { damping: 8, stiffness: 150 })
     );
 
     if (!isLiked) {
-      heartColor.value = withTiming(1, { duration: 300 });
-    } else {
-      heartColor.value = withTiming(0, { duration: 200 });
+      // Heart burst animation for new likes
+      heartScale.value = withSequence(
+        withTiming(1.5, { duration: 100 }),
+        withSpring(1, { damping: 6, stiffness: 100 })
+      );
     }
 
     runOnJS(onPress)();
@@ -140,119 +299,92 @@ const AnimatedLikeButton = memo(({
       style={styles.actionButton} 
       onPress={handlePress}
       disabled={disabled}
-      activeOpacity={0.7}
+      activeOpacity={0.7} // Faster visual feedback
     >
       <Animated.View style={[
-        { 
-          width: size, 
-          height: size,
-          backgroundColor: isLiked ? '#FF6B6B' : 'rgba(255,255,255,0.2)',
-          borderRadius: size / 2,
+        {
+          width: 48,
+          height: 48,
+          backgroundColor: isLiked ? '#FF3040' : 'rgba(255,255,255,0.2)',
+          borderRadius: 24,
           justifyContent: 'center',
           alignItems: 'center',
-        }, 
-        animatedStyles
+          borderWidth: 1,
+          borderColor: isLiked ? '#FF3040' : 'rgba(255,255,255,0.3)',
+        },
+        buttonAnimatedStyle
       ]}>
-        <Icon 
-          name={isLiked ? "heart" : "heart"} 
-          size={size * 0.5} 
-          color="#FFFFFF" 
-        />
+        <Animated.View style={heartAnimatedStyle}>
+          <Icon 
+            name="heart" 
+            size={24} 
+            color="#FFFFFF"
+            fill={isLiked ? "#FFFFFF" : "transparent"}
+          />
+        </Animated.View>
       </Animated.View>
       
-      <Text style={styles.actionText}>{likeCount}</Text>
+      <Text style={styles.actionText}>
+        {likeCount > 999 ? `${(likeCount / 1000).toFixed(1)}K` : likeCount}
+      </Text>
     </TouchableOpacity>
-  );
-});
-
-// Enhanced Video Player Component with fallback
-const EnhancedVideoPlayer = memo(({
-  source,
-  isActive,
-  isPaused,
-  isMuted,
-  onLoad,
-  onProgress,
-  style,
-  preload = false,
-}: {
-  source: { uri: string };
-  isActive: boolean;
-  isPaused: boolean;
-  isMuted: boolean;
-  onLoad?: () => void;
-  onProgress?: (data: any) => void;
-  style?: any;
-  preload?: boolean;
-}) => {
-  const opacity = useSharedValue(0);
-  
-  useEffect(() => {
-    if (isActive) {
-      opacity.value = withTiming(1, { duration: 300 });
-    }
-  }, [isActive]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
-
-  // Use ExoPlayer if available, otherwise fallback to react-native-video
-  if (ExoPlayerView) {
-    return (
-      <Animated.View style={[style, animatedStyle]}>
-        <ExoPlayerView
-          source={source}
-          paused={isPaused || !isActive}
-          muted={isMuted}
-          preload={preload}
-          style={StyleSheet.absoluteFill}
-          onLoad={onLoad}
-          onProgress={onProgress}
-        />
-      </Animated.View>
-    );
-  }
-
-  // Fallback to react-native-video
-  return (
-    <Animated.View style={[style, animatedStyle]}>
-      <Video
-        source={source}
-        paused={isPaused || !isActive}
-        muted={isMuted}
-        repeat
-        resizeMode="cover"
-        style={StyleSheet.absoluteFill}
-        onLoad={onLoad}
-        onProgress={onProgress}
-      />
-    </Animated.View>
   );
 });
 
 // Progress Bar Component
 const VideoProgressBar = memo(({ 
   progress = 0, 
-  duration = 0 
+  isActive = false,
 }: { 
   progress: number; 
-  duration: number; 
+  isActive: boolean;
 }) => {
   const progressWidth = useSharedValue(0);
+  const opacity = useSharedValue(0);
 
   useEffect(() => {
-    progressWidth.value = withTiming(progress * SCREEN_WIDTH, { duration: 100 });
-  }, [progress]);
+    if (isActive && progress > 0) {
+      progressWidth.value = withTiming(progress * SCREEN_WIDTH, { duration: 100 });
+      opacity.value = withTiming(0.8, { duration: 300 });
+    } else {
+      opacity.value = withTiming(0, { duration: 300 });
+    }
+  }, [progress, isActive]);
 
   const progressStyle = useAnimatedStyle(() => ({
     width: progressWidth.value,
   }));
 
+  const containerStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
   return (
-    <View style={styles.progressContainer}>
+    <Animated.View style={[styles.progressContainer, containerStyle]}>
       <View style={styles.progressBackground} />
       <Animated.View style={[styles.progressFill, progressStyle]} />
+    </Animated.View>
+  );
+});
+
+// Skeleton Component
+const ShortsSkeleton: React.FC = memo(() => {
+  const pulseAnimation = useSharedValue(0);
+
+  useEffect(() => {
+    pulseAnimation.value = withSequence(
+      withTiming(1, { duration: 1000 }),
+      withTiming(0.3, { duration: 1000 })
+    );
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(pulseAnimation.value, [0, 1], [0.3, 0.8], Extrapolate.CLAMP),
+  }));
+
+  return (
+    <View style={styles.skeletonContainer}>
+      <Animated.View style={[styles.skeletonVideo, animatedStyle]} />
     </View>
   );
 });
@@ -263,59 +395,90 @@ const TipShortsEnhanced = () => {
   const navigation = useNavigation();
   const { user } = useAuth();
   const { isGloballyMuted, isGloballyPlaying, toggleGlobalPlayPause, toggleGlobalMute } = useShorts();
+  const insets = useSafeAreaInsets();
 
-  // States
+  // Core states
   const [activeIndex, setActiveIndex] = useState(0);
   const [shorts, setShorts] = useState<ShortVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Interaction states
   const [likedShorts, setLikedShorts] = useState<{ [key: string]: boolean }>({});
   const [likingShorts, setLikingShorts] = useState<{ [key: string]: boolean }>({});
+  
+  // Pagination states
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
+  
+  // Video states
   const [videoProgress, setVideoProgress] = useState<{ [key: string]: number }>({});
+  const [loadedVideos, setLoadedVideos] = useState<Set<string>>(new Set());
+  const [visibleVideoIds, setVisibleVideoIds] = useState<string[]>([]);
+  const [showPlayPause, setShowPlayPause] = useState(false);
 
   // Refs
   const flatListRef = useRef<FlatList>(null);
   const scrollY = useSharedValue(0);
-  const isScrolling = useSharedValue(false);
-  const preloadedVideos = useRef<Set<string>>(new Set());
+  const apiCallsRef = useRef(0);
+  const lastFetchTime = useRef(0);
+  const videoPreloader = VideoPreloaderService.getInstance();
 
-  // Preload next videos (only if ExoPlayer is available)
-  const preloadNextVideos = useCallback((currentIndex: number) => {
-    if (!ExoPlayerPreloader) return;
+  // Viewability config for instant video control (like HomeScreen)
+  const viewabilityConfig: ViewabilityConfig = {
+    itemVisiblePercentThreshold: 60, // Video must be 60% visible
+    minimumViewTime: 50, // Very short for instant response
+    waitForInteraction: false,
+  };
 
-    const nextIndexes = [currentIndex + 1, currentIndex + 2];
+  // Instant visibility tracking like HomeScreen
+  const onViewableItemsChanged = useCallback(({viewableItems}: {viewableItems: ViewToken[]}) => {
+    const currentVisibleIds = viewableItems
+      .filter(item => item.isViewable && item.item)
+      .map(viewToken => viewToken.item.id as string);
+
+    setVisibleVideoIds(currentVisibleIds);
+
+    // Auto-set active index based on most visible item
+    if (viewableItems.length > 0) {
+      const mostVisibleItem = viewableItems.reduce((prev, current) => 
+        (current.percentVisible || 0) > (prev.percentVisible || 0) ? current : prev
+      );
+      
+      if (mostVisibleItem.item) {
+        const newActiveIndex = shorts.findIndex(short => short.id === mostVisibleItem.item.id);
+        if (newActiveIndex !== -1 && newActiveIndex !== activeIndex) {
+          setActiveIndex(newActiveIndex);
+        }
+      }
+    }
+  }, [shorts, activeIndex]);
+
+  // Handle video load and start preloading next
+  const handleVideoLoad = useCallback((videoId: string) => {
+    setLoadedVideos(prev => new Set([...prev, videoId]));
     
-    nextIndexes.forEach(index => {
-      if (shorts[index] && !preloadedVideos.current.has(shorts[index].id)) {
-        ExoPlayerPreloader.preloadVideo(shorts[index].videoUrl);
-        preloadedVideos.current.add(shorts[index].id);
-      }
+    // Start preloading next video after current starts playing
+    const currentVideoIndex = shorts.findIndex(short => short.id === videoId);
+    if (currentVideoIndex !== -1) {
+      videoPreloader.preloadNextVideo(currentVideoIndex, shorts);
+    }
+  }, [shorts, videoPreloader]);
+
+  // Enhanced tap gesture with play/pause indicator
+  const tapGesture = Gesture.Tap()
+    .numberOfTaps(1)
+    .onEnd(() => {
+      runOnJS(() => {
+        toggleGlobalPlayPause();
+        setShowPlayPause(true);
+        setTimeout(() => setShowPlayPause(false), 100);
+      })();
     });
-  }, [shorts]);
 
-  // Scroll handler with preloading
-  const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      scrollY.value = event.contentOffset.y;
-      isScrolling.value = true;
-      
-      const currentIndex = Math.round(event.contentOffset.y / SCREEN_HEIGHT);
-      
-      if (currentIndex !== activeIndex) {
-        runOnJS(setActiveIndex)(currentIndex);
-        runOnJS(preloadNextVideos)(currentIndex);
-      }
-    },
-    onEndDrag: () => {
-      isScrolling.value = false;
-    },
-  });
-
-  // Gesture for double tap to like
+  // Double tap gesture for like
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
@@ -329,8 +492,21 @@ const TipShortsEnhanced = () => {
       }
     });
 
-  // Fetch shorts from API
+  // Combined gesture
+  const combinedGesture = Gesture.Exclusive(doubleTapGesture, tapGesture);
+
+  // Optimized scroll handler
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
+  // Optimized API call with minimal network usage
   const fetchShorts = useCallback(async (reset = false) => {
+    const now = Date.now();
+    if (now - lastFetchTime.current < 1000 && !reset) return;
+    
     if (isFetchingMore && !reset) return;
 
     try {
@@ -339,16 +515,22 @@ const TipShortsEnhanced = () => {
         setShorts([]);
         setPage(1);
         setHasMore(true);
-        preloadedVideos.current.clear();
+        setLoadedVideos(new Set());
+        setVisibleVideoIds([]);
+        apiCallsRef.current = 0;
+        videoPreloader.clearAll();
       } else {
         setIsFetchingMore(true);
       }
       setError(null);
+      lastFetchTime.current = now;
 
       const userId = user?.id || '50816';
       const currentPage = reset ? 1 : page;
       const apiUrl = `${ENDPOINTS.GET_SHORTS}/${userId}?page=${currentPage}&limit=${PAGE_SIZE}`;
 
+      console.log(`[TipShorts] API Call #${++apiCallsRef.current}: Fetching page ${currentPage}`);
+      
       const response = await ApiService.get(apiUrl);
 
       if (!response || (!response.data && response.status !== 200)) {
@@ -367,7 +549,7 @@ const TipShortsEnhanced = () => {
           title: shot.name || 'Untitled Short',
           thumbnail: shot.video_Thumbnail && shot.video_Thumbnail !== 'undefined'
             ? shot.video_Thumbnail
-            : 'https://via.placeholder.com/360x640.png?text=No+Thumbnail',
+            : null,
           channel: {
             id: shot.channelId?.toString() || 'unknownChannel',
             name: shot.channelName || 'Unknown Channel',
@@ -398,16 +580,12 @@ const TipShortsEnhanced = () => {
         const newUniqueShorts = mappedShorts.filter(s => !existingIds.has(s.id));
         const result = reset ? newUniqueShorts : [...prev, ...newUniqueShorts];
         
-        // Preload first few videos if ExoPlayer is available
-        if (result.length > 0 && ExoPlayerPreloader) {
+        // Preload first video if this is a reset
+        if (result.length > 0 && reset) {
           setTimeout(() => {
-            result.slice(0, 3).forEach((short) => {
-              if (!preloadedVideos.current.has(short.id)) {
-                ExoPlayerPreloader.preloadVideo(short.videoUrl);
-                preloadedVideos.current.add(short.id);
-              }
-            });
-          }, 100);
+            const firstVideo = result[0];
+            videoPreloader.preloadVideo(firstVideo.id, firstVideo.videoUrl);
+          }, 500);
         }
         
         return result;
@@ -417,24 +595,26 @@ const TipShortsEnhanced = () => {
       if (mappedShorts.length > 0) {
         setPage(prev => prev + 1);
       }
+
+      console.log(`[TipShorts] Successfully loaded ${mappedShorts.length} shorts`);
     } catch (fetchError: any) {
-      console.error('Error fetching shorts:', fetchError);
+      console.error(`[TipShorts] API Error #${apiCallsRef.current}:`, fetchError);
       setError('Failed to load shorts. Please try again.');
     } finally {
       setLoading(false);
       setIsFetchingMore(false);
       setRefreshing(false);
     }
-  }, [page, user, isFetchingMore]);
+  }, [page, user, isFetchingMore, videoPreloader]);
 
-  // Handle like/unlike
+  // Optimized like handler with instant response
   const handleLikeShort = useCallback(async (shortId: string, creatorId: string, currentLikes: number) => {
     if (!user?.id || likingShorts[shortId]) return;
 
     const wasLiked = likedShorts[shortId] || false;
     const newLikedState = !wasLiked;
 
-    // Optimistic update
+    // Instant optimistic update
     setLikedShorts(prev => ({ ...prev, [shortId]: newLikedState }));
     setShorts(prevShorts =>
       prevShorts.map(short =>
@@ -478,7 +658,7 @@ const TipShortsEnhanced = () => {
     }
   }, [user, likedShorts, likingShorts]);
 
-  // Handle refresh
+  // Refresh handler
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     setActiveIndex(0);
@@ -488,14 +668,14 @@ const TipShortsEnhanced = () => {
     fetchShorts(true);
   }, [fetchShorts]);
 
-  // Handle end reached
+  // End reached handler
   const handleEndReached = useCallback(() => {
-    if (!loading && !isFetchingMore && hasMore) {
+    if (!loading && !isFetchingMore && hasMore && shorts.length > 0) {
       fetchShorts(false);
     }
-  }, [loading, isFetchingMore, hasMore, fetchShorts]);
+  }, [loading, isFetchingMore, hasMore, fetchShorts, shorts.length]);
 
-  // Enhanced Short Card Component
+  // Enhanced Short Card Component with fixed positioning
   const EnhancedShortCard = memo(({
     item,
     index,
@@ -505,103 +685,108 @@ const TipShortsEnhanced = () => {
     index: number;
     isActive: boolean;
   }) => {
-    const cardScale = useSharedValue(1);
-    const overlayOpacity = useSharedValue(0);
+    const [showThumbnail, setShowThumbnail] = useState(true);
+    const isVisible = visibleVideoIds.includes(item.id);
 
-    const cardAnimatedStyle = useAnimatedStyle(() => ({
-      transform: [{ scale: cardScale.value }],
-    }));
+    const handleVideoLoadLocal = useCallback(() => {
+      setShowThumbnail(false);
+      handleVideoLoad(item.id);
+    }, [item.id]);
 
-    const overlayAnimatedStyle = useAnimatedStyle(() => ({
-      opacity: overlayOpacity.value,
-    }));
-
-    useEffect(() => {
-      if (isActive) {
-        cardScale.value = withSpring(1, { damping: 15, stiffness: 100 });
-        overlayOpacity.value = withTiming(1, { duration: 300 });
-      } else {
-        cardScale.value = withSpring(0.95, { damping: 15, stiffness: 100 });
-        overlayOpacity.value = withTiming(0.7, { duration: 300 });
+    const handleVideoProgress = useCallback((data: any) => {
+      if (isActive && data.currentTime && data.seekableDuration) {
+        const progress = data.currentTime / data.seekableDuration;
+        setVideoProgress(prev => ({
+          ...prev,
+          [item.id]: Math.min(Math.max(progress, 0), 1)
+        }));
       }
-    }, [isActive]);
+    }, [isActive, item.id]);
 
     return (
-      <GestureDetector gesture={doubleTapGesture}>
-        <Animated.View style={[styles.shortCardContainer, cardAnimatedStyle]}>
-          {/* Video Player */}
-          <EnhancedVideoPlayer
-            source={{ uri: item.videoUrl }}
-            isActive={isActive}
-            isPaused={!isGloballyPlaying}
-            isMuted={isGloballyMuted}
-            style={styles.video}
-            preload={index <= activeIndex + 2}
-            onProgress={(data) => {
-              setVideoProgress(prev => ({
-                ...prev,
-                [item.id]: data.currentTime / data.seekableDuration
-              }));
-            }}
-          />
-
-          {/* Thumbnail overlay while loading */}
-          {item.thumbnail && (
-            <Image
-              source={{ uri: item.thumbnail }}
-              style={[styles.video, { position: 'absolute', zIndex: 1 }]}
-              blurRadius={isActive ? 0 : 10}
+      <View style={styles.shortCardContainer}>
+        {/* Video Player with tap gesture */}
+        <GestureDetector gesture={combinedGesture}>
+          <View style={styles.videoContainer}>
+            <OptimizedVideoPlayer
+              source={{ uri: item.videoUrl }}
+              isActive={isVisible} // Use visibility instead of active index
+              isPaused={!isGloballyPlaying}
+              isMuted={isGloballyMuted}
+              style={styles.video}
+              onLoad={handleVideoLoadLocal}
+              onProgress={handleVideoProgress}
             />
-          )}
 
-          {/* Progress Bar */}
-          <VideoProgressBar 
-            progress={videoProgress[item.id] || 0}
-            duration={1}
-          />
+            {/* Thumbnail overlay while loading */}
+            {showThumbnail && item.thumbnail && (
+              <Image
+                source={{ uri: item.thumbnail }}
+                style={styles.thumbnailOverlay}
+                resizeMode="cover"
+              />
+            )}
 
-          {/* Top Controls */}
-          <View style={styles.topControlsOverlay}>
-            <TouchableOpacity
-              onPress={toggleGlobalPlayPause}
-              style={styles.controlButton}
-            >
-              <Icon name={isGloballyPlaying && isActive ? "pause" : "play"} size={24} color="#FFF" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={toggleGlobalMute}
-              style={styles.controlButton}
-            >
-              <Icon name={isGloballyMuted ? "volume-x" : "volume-2"} size={24} color="#FFF" />
-            </TouchableOpacity>
+            {/* Play/Pause Overlay Indicator */}
+            <PlayPauseOverlay 
+              isPlaying={isGloballyPlaying && isVisible}
+              isVisible={showPlayPause && isActive}
+            />
           </View>
+        </GestureDetector>
 
-          {/* Bottom Content Overlay */}
-          <Animated.View style={[styles.overlay, overlayAnimatedStyle]}>
-            <View style={styles.bottomContent}>
+        {/* Progress Bar */}
+        <VideoProgressBar 
+          progress={videoProgress[item.id] || 0}
+          isActive={isActive}
+        />
+
+        {/* Fixed Persistent Overlays */}
+        <View style={styles.overlayContainer}>
+          {/* Mute button - top right */}
+          <TouchableOpacity
+            onPress={toggleGlobalMute}
+            style={styles.muteButton}
+            activeOpacity={0.7}
+          >
+            <Icon name={isGloballyMuted ? "volume-x" : "volume-2"} size={20} color="#FFF" />
+          </TouchableOpacity>
+
+          {/* Fixed bottom content positioning */}
+          <View style={[styles.bottomContent, { 
+            paddingBottom: Math.max(insets.bottom + 70, 40),
+            bottom: 0, // Fixed to bottom
+          }]}>
+            <View style={styles.leftContent}>
+              {/* Channel info row */}
               <TouchableOpacity 
                 onPress={() => navigation.navigate('Profile' as never, { userId: item.channel.id } as never)}
                 style={styles.channelInfo}
+                activeOpacity={0.7}
               >
                 <Image source={{ uri: item.channel.avatar }} style={styles.channelAvatar} />
-                <View style={styles.channelTextContainer}>
+                <View style={styles.channelDetails}>
                   <Text style={styles.channelName}>@{item.channel.name}</Text>
                   {item.musicName && (
                     <Text style={styles.musicName}>♫ {item.musicName}</Text>
                   )}
                 </View>
-                <TouchableOpacity style={styles.subscribeButton}>
-                  <Text style={styles.subscribeText}>Subscribe</Text>
+                <TouchableOpacity 
+                  style={styles.followButton}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.followText}>Follow</Text>
                 </TouchableOpacity>
               </TouchableOpacity>
               
+              {/* Description */}
               <Text style={styles.description} numberOfLines={2}>
                 {item.description}
               </Text>
             </View>
 
-            {/* Actions */}
-            <View style={styles.actions}>
+            {/* Action Buttons - right side with improved spacing */}
+            <View style={styles.rightActions}>
               <AnimatedLikeButton
                 isLiked={!!likedShorts[item.id]}
                 onPress={() => handleLikeShort(item.id, item.channel.id, item.likes)}
@@ -609,34 +794,50 @@ const TipShortsEnhanced = () => {
                 disabled={!!likingShorts[item.id]}
               />
               
-              <TouchableOpacity style={styles.actionButton}>
-                <Icon name="message-circle" size={28} color="#FFF" />
-                <Text style={styles.actionText}>{item.comments}</Text>
+              <TouchableOpacity 
+                style={styles.actionButton}
+                activeOpacity={0.7}
+              >
+                <View style={styles.actionIconContainer}>
+                  <Icon name="message-circle" size={24} color="#FFF" />
+                </View>
+                <Text style={styles.actionText}>
+                  {item.comments > 999 ? `${(item.comments / 1000).toFixed(1)}K` : item.comments}
+                </Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
                 style={styles.actionButton}
+                activeOpacity={0.7}
                 onPress={async () => {
                   try {
                     await Share.share({
-                      message: `Check out this short by ${item.channel.name}: ${item.videoUrl}`
+                      message: `Check out this amazing short by ${item.channel.name}! 🎥`,
+                      url: item.videoUrl,
                     });
                   } catch (error) {
                     console.error('Error sharing:', error);
                   }
                 }}
               >
-                <Icon name="share-2" size={28} color="#FFF" />
+                <View style={styles.actionIconContainer}>
+                  <Icon name="share-2" size={24} color="#FFF" />
+                </View>
                 <Text style={styles.actionText}>Share</Text>
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.actionButton}>
-                <Icon name="more-horizontal" size={28} color="#FFF" />
+              <TouchableOpacity 
+                style={styles.actionButton}
+                activeOpacity={0.7}
+              >
+                <View style={styles.actionIconContainer}>
+                  <Icon name="more-horizontal" size={24} color="#FFF" />
+                </View>
               </TouchableOpacity>
             </View>
-          </Animated.View>
-        </Animated.View>
-      </GestureDetector>
+          </View>
+        </View>
+      </View>
     );
   });
 
@@ -658,28 +859,26 @@ const TipShortsEnhanced = () => {
     fetchShorts(true);
   }, []);
 
-  // Show warning if ExoPlayer is not available
+  // Cleanup on unmount
   useEffect(() => {
-    if (!ExoPlayerView && __DEV__) {
-      console.warn('ExoPlayer not available - falling back to react-native-video');
-    }
-  }, []);
+    return () => {
+      videoPreloader.clearAll();
+    };
+  }, [videoPreloader]);
 
-  // Render loading state
+  // Render loading state with skeletons
   if (loading && shorts.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background || '#000' }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary || '#FF4057'} />
-          <Text style={[styles.loadingText, { color: colors.text?.primary || '#FFF' }]}>
-            Loading shorts...
-          </Text>
-          {!ExoPlayerView && (
-            <Text style={[styles.fallbackText, { color: colors.text?.secondary || '#AAA' }]}>
-              Using fallback video player
-            </Text>
-          )}
-        </View>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#000000" translucent />
+        <FlatList
+          data={Array(3).fill(null)}
+          keyExtractor={(_, index) => `skeleton-${index}`}
+          renderItem={() => <ShortsSkeleton />}
+          pagingEnabled
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={false}
+        />
       </SafeAreaView>
     );
   }
@@ -687,15 +886,19 @@ const TipShortsEnhanced = () => {
   // Render error state
   if (error && shorts.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background || '#000' }]}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#000000" translucent />
         <View style={styles.errorContainer}>
-          <Icon name="alert-circle" size={48} color={colors.error || '#FF6B6B'} />
-          <Text style={[styles.errorText, { color: colors.error || '#FF6B6B' }]}>{error}</Text>
+          <Icon name="wifi-off" size={64} color="#FF6B6B" />
+          <Text style={styles.errorTitle}>Oops! Something went wrong</Text>
+          <Text style={styles.errorMessage}>{error}</Text>
           <TouchableOpacity
             onPress={() => fetchShorts(true)}
-            style={[styles.retryButton, { backgroundColor: colors.primary || '#FF4057' }]}
+            style={styles.retryButton}
+            activeOpacity={0.7}
           >
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Icon name="refresh-cw" size={20} color="#FFF" style={{ marginRight: 8 }} />
+            <Text style={styles.retryButtonText}>Try Again</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -704,7 +907,7 @@ const TipShortsEnhanced = () => {
 
   // Main render
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: '#000' }]}>
+    <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" translucent />
       
       <Animated.FlatList
@@ -729,6 +932,8 @@ const TipShortsEnhanced = () => {
         directionalLockEnabled
         disableIntervalMomentum
         onScroll={scrollHandler}
+        viewabilityConfig={viewabilityConfig}
+        onViewableItemsChanged={onViewableItemsChanged}
         getItemLayout={(_, index) => ({
           length: SCREEN_HEIGHT,
           offset: SCREEN_HEIGHT * index,
@@ -737,22 +942,29 @@ const TipShortsEnhanced = () => {
         initialScrollIndex={0}
         onRefresh={handleRefresh}
         refreshing={refreshing}
-        windowSize={3}
-        maxToRenderPerBatch={2}
-        initialNumToRender={1}
+        windowSize={5}
+        maxToRenderPerBatch={3}
+        initialNumToRender={2}
         onEndReached={handleEndReached}
-        onEndReachedThreshold={0.7}
+        onEndReachedThreshold={0.8}
         removeClippedSubviews={Platform.OS === 'android'}
         ListFooterComponent={
           isFetchingMore ? (
-            <ActivityIndicator 
-              size="small" 
-              color={colors.primary || '#FF4057'} 
-              style={styles.footerLoader} 
-            />
+            <View style={styles.footerLoader}>
+              <ActivityIndicator size="small" color="#FF3040" />
+            </View>
           ) : null
         }
       />
+
+      {/* Debug info (remove in production) */}
+      {__DEV__ && (
+        <View style={styles.debugInfo}>
+          <Text style={styles.debugText}>
+            API: {apiCallsRef.current} | Active: {activeIndex + 1}/{shorts.length} | Visible: {visibleVideoIds.length}
+          </Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -762,59 +974,105 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  
+  // Skeleton Styles
+  skeletonContainer: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    backgroundColor: '#000',
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#FFF',
+  skeletonVideo: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#1a1a1a',
   },
-  fallbackText: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#AAA',
-  },
+
+  // Error Styles
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 32,
   },
-  errorText: {
-    textAlign: 'center',
+  errorTitle: {
+    color: '#FFF',
+    fontSize: 20,
+    fontWeight: 'bold',
     marginTop: 16,
-    fontSize: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorMessage: {
+    color: '#AAA',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
   },
   retryButton: {
-    marginTop: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF3040',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
   },
   retryButtonText: {
     color: '#FFF',
     fontSize: 16,
     fontWeight: '600',
   },
+
+  // Video Styles
   shortCardContainer: {
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
-    position: 'relative',
     backgroundColor: '#000',
+    position: 'relative',
+  },
+  videoContainer: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
   },
   video: {
     width: '100%',
     height: '100%',
   },
+  thumbnailOverlay: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    zIndex: 1,
+  },
+
+  // Play/Pause Overlay Styles
+  playPauseOverlay: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginTop: -40,
+    marginLeft: -40,
+    zIndex: 100,
+  },
+  playPauseBackground: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+
+  // Progress Bar Styles
   progressContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 2,
+    height: 3,
     zIndex: 10,
   },
   progressBackground: {
@@ -826,58 +1084,68 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     height: '100%',
-    backgroundColor: '#FF4057',
+    backgroundColor: '#FF3040',
+    borderRadius: 1.5,
   },
-  topControlsOverlay: {
+
+  // Overlay Styles
+  overlayContainer: {
     position: 'absolute',
-    top: StatusBar.currentHeight ? StatusBar.currentHeight + 20 : 40,
-    left: 15,
-    right: 15,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    zIndex: 20,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 5,
+    pointerEvents: 'box-none',
   },
-  controlButton: {
-    padding: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  muteButton: {
+    position: 'absolute',
+    top: StatusBar.currentHeight ? StatusBar.currentHeight + 16 : 50,
+    right: 16,
+    width: 40,
+    height: 40,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
-  overlay: {
+  bottomContent: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingBottom: Platform.OS === 'ios' ? 100 : 80,
-    zIndex: 15,
+    pointerEvents: 'box-none',
   },
-  bottomContent: {
+
+  // Content Styles - Fixed positioning
+  leftContent: {
     flex: 1,
     marginRight: 16,
+    pointerEvents: 'auto',
+    justifyContent: 'flex-end', // Align to bottom
   },
   channelInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8, // Reduced margin
   },
   channelAvatar: {
-    width: 40,
+    width: 40, // Slightly smaller
     height: 40,
     borderRadius: 20,
     borderWidth: 2,
     borderColor: '#FFFFFF',
-    marginRight: 12,
+    marginRight: 10, // Reduced margin
   },
-  channelTextContainer: {
+  channelDetails: {
     flex: 1,
   },
   channelName: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: 15, // Slightly smaller
     fontWeight: 'bold',
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
@@ -885,49 +1153,84 @@ const styles = StyleSheet.create({
   },
   musicName: {
     color: '#FFF',
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 11, // Smaller
+    marginTop: 1,
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
-  subscribeButton: {
-    backgroundColor: '#FF4057',
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    marginLeft: 8,
+  followButton: {
+    backgroundColor: '#FF3040',
+    paddingVertical: 6, // Smaller padding
+    paddingHorizontal: 14,
+    borderRadius: 16, // Smaller radius
   },
-  subscribeText: {
+  followText: {
     color: 'white',
-    fontSize: 12,
+    fontSize: 11, // Smaller text
     fontWeight: '600',
   },
   description: {
     color: '#FFF',
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13, // Smaller text
+    lineHeight: 16,
+    marginTop: 4, // Reduced margin
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
-  actions: {
+
+  // Action Styles - Fixed positioning
+  rightActions: {
     alignItems: 'center',
+    pointerEvents: 'auto',
+    justifyContent: 'flex-end', // Align to bottom
+    paddingBottom: 10, // Add some padding from bottom
   },
   actionButton: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 20, // Consistent spacing
+  },
+  actionIconContainer: {
+    width: 48,
+    height: 48,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   actionText: {
     color: '#FFF',
-    fontSize: 12,
-    marginTop: 4,
+    fontSize: 10, // Smaller text
+    marginTop: 3, // Reduced margin
+    fontWeight: '500',
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    textShadowRadius: 3,
   },
+
+  // Footer Styles
   footerLoader: {
-    marginVertical: 20,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+
+  // Debug Styles
+  debugInfo: {
+    position: 'absolute',
+    top: StatusBar.currentHeight ? StatusBar.currentHeight + 60 : 90,
+    right: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    padding: 8,
+    borderRadius: 8,
+  },
+  debugText: {
+    color: '#FFF',
+    fontSize: 9,
   },
 });
 
