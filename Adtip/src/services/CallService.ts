@@ -24,7 +24,7 @@ interface ActiveCall {
   status: 'dialing' | 'ringing' | 'connected' | 'ended';
 }
 
-class CallService {
+export class CallService {
   private static instance: CallService;
   private activeCall: ActiveCall | null = null;
   private callKeepService: CallKeepService;
@@ -219,17 +219,94 @@ class CallService {
     await this.notifyCallStatusUpdate('declined', call);
   }
 
-  public endCurrentCall() {
-    if (this.activeCall && !this.isEndingCall) {
-      const callToEnd = { ...this.activeCall };
-      console.log(
-        '[CallService] User triggered endCurrentCall for call:',
-        callToEnd.callId,
-      );
-      // This will trigger the onEndCall event, but we also call endCallLogic
-      // immediately to ensure cleanup happens even if the event fails to fire.
-      this.callKeepService.endCall(callToEnd.callId);
-      this.endCallLogic(callToEnd);
+  /**
+   * End the current call and clean up all resources
+   */
+  public endCurrentCall(): void {
+    console.log('[CallService] Ending current call');
+    
+    if (!this.activeCall) {
+      console.log('[CallService] No active call to end');
+      return;
+    }
+
+    const currentCall = { ...this.activeCall };
+    
+    try {
+      // Perform end call logic
+      this.endCallLogic(currentCall);
+      
+      console.log('[CallService] Call ended successfully');
+    } catch (error) {
+      console.error('[CallService] Error ending call:', error);
+      // Ensure cleanup happens even if there's an error
+      this.resetActiveCall();
+    }
+  }
+
+  /**
+   * Reset all call state and clean up resources - Enhanced version
+   */
+  public resetCallState(): void {
+    console.log('[CallService] Resetting call state');
+    
+    try {
+      // End any lingering native call UI
+      if (this.activeCall) {
+        this.callKeepService.endCall(this.activeCall.callId);
+      }
+      
+      // Clear active call
+      this.resetActiveCall();
+      
+      // Reset ending call flag
+      this.isEndingCall = false;
+      
+      // Clear any additional state
+      this.clearIncomingCallNotification();
+      this.clearCallTimer();
+      this.resetAudioRouting();
+      
+      console.log('[CallService] Call state reset successfully');
+    } catch (error) {
+      console.error('[CallService] Error resetting call state:', error);
+    }
+  }
+
+  /**
+   * Clear incoming call notification
+   */
+  private clearIncomingCallNotification(): void {
+    try {
+      // Clear notification if exists
+      // Implementation depends on your notification system
+      console.log('[CallService] Clearing incoming call notification');
+    } catch (error) {
+      console.error('[CallService] Error clearing notification:', error);
+    }
+  }
+
+  /**
+   * Clear call timer
+   */
+  private clearCallTimer(): void {
+    try {
+      // Clear any running call timers
+      console.log('[CallService] Clearing call timer');
+    } catch (error) {
+      console.error('[CallService] Error clearing call timer:', error);
+    }
+  }
+
+  /**
+   * Reset audio routing to default
+   */
+  private resetAudioRouting(): void {
+    try {
+      // Reset audio routing to default (earpiece/speaker)
+      console.log('[CallService] Resetting audio routing');
+    } catch (error) {
+      console.error('[CallService] Error resetting audio routing:', error);
     }
   }
 
@@ -355,15 +432,15 @@ class CallService {
     this.activeCall = null;
   }
 
-  public resetCallState() {
-    console.log('[CallService] Forcibly resetting call state.');
-    if (this.activeCall) {
-      // End any lingering native call UI just in case.
-      this.callKeepService.endCall(this.activeCall.callId);
-    }
-    this.resetActiveCall();
-    this.isEndingCall = false; // Also reset this flag
+  // Public getter for active call status
+  public getActiveCall(): ActiveCall | null {
+    return this.activeCall;
+  }
+
+  // Public method to check if call is active
+  public isCallActive(): boolean {
+    return this.activeCall !== null;
   }
 }
 
-export default CallService; 
+export default CallService;

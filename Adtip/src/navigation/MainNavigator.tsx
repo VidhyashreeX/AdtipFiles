@@ -49,7 +49,7 @@ import ExploreScreen from '../screens/explore/ExploreScreen';
 // FIXED IMPORT - Import as default export instead of named export
 import { VideoPlayerModalScreen } from '../screens/tiptube';
 
-// Add TipCall imports
+// Add TipCall imports - Fix the import path
 import TipCallScreen from '../screens/tipcall/TipCallScreen';
 import MeetingScreen from '../screens/videosdk/MeetingScreen';
 
@@ -303,6 +303,7 @@ const MainNavigator = () => {
   
   // Add TipCall screens with wallet balance HOC
   const EnhancedTipCallScreen = withWalletBalance(TipCallScreen);
+  const EnhancedMeetingScreen = withWalletBalance(MeetingScreen); // Add this line
 
   return (
     <Stack.Navigator
@@ -322,7 +323,7 @@ const MainNavigator = () => {
         options={fastTransitionConfig}
       />
       
-      {/* TipCall screens - Add these */}
+      {/* TipCall screens - Fix these */}
       <Stack.Screen 
         name="TipCall" 
         component={EnhancedTipCallScreen}
@@ -330,8 +331,8 @@ const MainNavigator = () => {
       />
       <Stack.Screen 
         name="Meeting" 
-        component={MeetingScreen}
-        options={callTransitionConfig} // Use special call transition for immediate response
+        component={EnhancedMeetingScreen} // Use enhanced version
+        options={callTransitionConfig}
       />
       
       {/* Content creation with slide up animation */}

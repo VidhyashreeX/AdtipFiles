@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { RTCView, MediaStream } from '@videosdk.live/react-native-sdk';
 import { useParticipant } from '@videosdk.live/react-native-sdk';
+import { Mic, MicOff, Video, VideoOff } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -24,8 +25,8 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
   style,
 }) => {
   const { colors } = useTheme();
-  const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
-  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
+  const [videoStream, setVideoStream] = useState<any>(null);
+  const [audioStream, setAudioStream] = useState<any>(null);
 
   // Use VideoSDK's useParticipant hook
   const {
@@ -58,7 +59,7 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
     if (videoStream && webcamOn) {
       return (
         <RTCView
-          streamURL={new MediaStream([videoStream.track]).toURL()}
+          streamURL={videoStream}
           objectFit="cover"
           style={styles.videoStream}
           mirror={isLocal} // Mirror local video
@@ -68,7 +69,7 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
 
     // Show placeholder when video is off
     return (
-      <View style={[styles.videoPlaceholder, { backgroundColor: colors.cardSecondary }]}>
+      <View style={[styles.videoPlaceholder, { backgroundColor: colors.surface }]}>
         <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
           <Text style={styles.avatarText}>
             {displayName ? displayName[0].toUpperCase() : 'U'}
@@ -96,37 +97,36 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
           <Text style={styles.nameText} numberOfLines={1}>
             {displayName || 'Unknown'} {isLocal && '(You)'}
           </Text>
-          
-          {/* Audio/Video status indicators */}
+            {/* Audio/Video status indicators */}
           <View style={styles.statusIndicators}>
             {/* Mic status */}
             <View style={[
               styles.statusIndicator, 
-              { backgroundColor: micOn ? colors.success : colors.error }
+              { backgroundColor: micOn ? '#00D4AA' : '#FF3B30' }
             ]}>
-              <Text style={styles.statusIcon}>
-                {micOn ? '🎤' : '🔇'}
-              </Text>
+              {micOn ? 
+                <Mic size={12} color="#ffffff" /> : 
+                <MicOff size={12} color="#ffffff" />
+              }
             </View>
             
             {/* Camera status (only show for video calls) */}
             <View style={[
               styles.statusIndicator, 
-              { backgroundColor: webcamOn ? colors.success : colors.error }
+              { backgroundColor: webcamOn ? '#00D4AA' : '#FF3B30' }
             ]}>
-              <Text style={styles.statusIcon}>
-                {webcamOn ? '📹' : '📷'}
-              </Text>
+              {webcamOn ? 
+                <Video size={12} color="#ffffff" /> : 
+                <VideoOff size={12} color="#ffffff" />
+              }
             </View>
           </View>
         </View>
-        
-        {/* Active speaker indicator */}
+          {/* Active speaker indicator */}
         {isActiveSpeaker && (
-          <View style={[styles.activeSpeakerIndicator, { borderColor: colors.primary }]}>
-            <Text style={[styles.activeSpeakerText, { color: colors.primary }]}>
-              Speaking
-            </Text>
+          <View style={styles.activeSpeakerIndicator}>
+            <View style={styles.speakerPulse} />
+            <Text style={styles.activeSpeakerText}>Speaking</Text>
           </View>
         )}
       </View>
@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
-    borderRadius: 8,
+    borderRadius: 16,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -180,7 +180,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
     padding: 12,
   },
   infoContainer: {
@@ -200,9 +202,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   statusIndicator: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -211,17 +213,26 @@ const styles = StyleSheet.create({
   },
   activeSpeakerIndicator: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-    borderWidth: 2,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0, 212, 170, 0.9)',
+    gap: 4,
+  },
+  speakerPulse: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ffffff',
   },
   activeSpeakerText: {
     fontSize: 12,
     fontWeight: '600',
+    color: '#ffffff',
   },
 });
 

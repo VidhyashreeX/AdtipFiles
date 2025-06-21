@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text, StyleSheet, View } from 'react-native';
+import { Clock } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 
 interface VideoSDKCallTimerProps {
@@ -22,10 +23,10 @@ const VideoSDKCallTimer: React.FC<VideoSDKCallTimerProps> = ({ duration }) => {
       return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
   };
-
   return (
     <View style={styles.container}>
-      <Text style={[styles.timerText, { color: colors.white || '#ffffff' }]}>
+      <Clock size={14} color="rgba(255,255,255,0.8)" />
+      <Text style={styles.timerText}>
         {formatDuration(duration)}
       </Text>
     </View>
@@ -34,15 +35,19 @@ const VideoSDKCallTimer: React.FC<VideoSDKCallTimerProps> = ({ duration }) => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    gap: 4,
   },
   timerText: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '600',
-    fontFamily: 'monospace', // Use monospace for consistent digit spacing
+    color: 'rgba(255,255,255,0.9)',
+    fontVariant: ['tabular-nums'], // Monospace numbers for consistent width
   },
 });
 

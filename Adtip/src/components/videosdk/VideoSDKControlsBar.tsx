@@ -5,20 +5,36 @@ import {
   Text,
   StyleSheet,
   Dimensions,
+  SafeAreaView,
 } from 'react-native';
+import { 
+  Mic, 
+  MicOff, 
+  Video, 
+  VideoOff, 
+  Volume2, 
+  VolumeX, 
+  PhoneOff, // Change to PhoneOff for end call
+  Users
+} from 'lucide-react-native';
 import { CallSettings, CallType } from '../../types/videosdk';
 import { useTheme } from '../../contexts/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface VideoSDKControlsBarProps {
-  callType: CallType;
-  callSettings: CallSettings;
+  callType: 'voice' | 'video';
+  callSettings: {
+    micEnabled: boolean;
+    webcamEnabled: boolean;
+    speakerEnabled: boolean;
+  };
   onToggleMic: () => void;
   onToggleWebcam: () => void;
   onToggleSpeaker: () => void;
   onEndCall: () => void;
   participantCount: number;
+  isConnecting?: boolean;
 }
 
 const VideoSDKControlsBar: React.FC<VideoSDKControlsBarProps> = ({
@@ -29,140 +45,245 @@ const VideoSDKControlsBar: React.FC<VideoSDKControlsBarProps> = ({
   onToggleSpeaker,
   onEndCall,
   participantCount,
+  isConnecting = false,
 }) => {
   const { colors } = useTheme();
 
   const ControlButton: React.FC<{
     onPress: () => void;
     isActive: boolean;
-    icon: string;
-    activeColor?: string;
-    inactiveColor?: string;
+    icon: React.ReactNode;
+    isEndCall?: boolean;
     testID?: string;
   }> = ({ 
     onPress, 
     isActive, 
     icon, 
-    activeColor, 
-    inactiveColor,
+    isEndCall = false,
     testID 
   }) => (
     <TouchableOpacity
       testID={testID}
       style={[
         styles.controlButton,
-        {
+        isEndCall ? styles.endCallButton : {
           backgroundColor: isActive 
-            ? (activeColor || colors.success || '#4CAF50')
-            : (inactiveColor || colors.error || '#F44336')
+            ? 'rgba(255,255,255,0.25)'
+            : 'rgba(255,255,255,0.1)'
         }
       ]}
       onPress={onPress}
-      activeOpacity={0.8}
+      activeOpacity={0.7}
     >
-      <Text style={styles.controlIcon}>{icon}</Text>
+      {icon}
     </TouchableOpacity>
   );
 
   return (
-    <View style={[styles.controlsContainer, { backgroundColor: 'rgba(0,0,0,0.8)' }]}>
-      {/* Main Controls Row */}
-      <View style={styles.controlsRow}>
-        {/* Mic Control */}
-        <ControlButton
-          testID="mic-button"
-          onPress={onToggleMic}
-          isActive={callSettings.micEnabled}
-          icon={callSettings.micEnabled ? '🎤' : '🔇'}
-        />
+    <SafeAreaView style={styles.container}>
+      <View style={styles.controlsContainer}>
+        <View style={styles.controlsRow}>
+          {/* Mic Button - Always available */}
+          <TouchableOpacity
+            style={[
+              styles.controlButton,
+              { backgroundColor: callSettings.micEnabled ? 'rgba(255,255,255,0.2)' : 'rgba(220,53,69,0.9)' },
+              isConnecting && styles.connectingButton,
+            ]}
+            onPress={onToggleMic}
+            disabled={isConnecting}
+            activeOpacity={0.7}
+          >
+            <View style={styles.controlButtonInner}>
+              {callSettings.micEnabled ? (
+                <Mic size={24} color="#ffffff" />
+              ) : (
+                <MicOff size={24} color="#ffffff" />
+              )}
+            </View>
+          </TouchableOpacity>
 
-        {/* Video Control (only for video calls) */}
-        {callType === 'video' && (
-          <ControlButton
-            testID="camera-button"
-            onPress={onToggleWebcam}
-            isActive={callSettings.webcamEnabled}
-            icon={callSettings.webcamEnabled ? '📹' : '📷'}
-          />
-        )}
+          {/* Video Button - Only for video calls */}
+          {callType === 'video' && (
+            <TouchableOpacity
+              style={[
+                styles.controlButton,
+                { backgroundColor: callSettings.webcamEnabled ? 'rgba(255,255,255,0.2)' : 'rgba(220,53,69,0.9)' },
+                isConnecting && styles.connectingButton,
+              ]}
+              onPress={onToggleWebcam}
+              disabled={isConnecting}
+              activeOpacity={0.7}
+            >
+              <View style={styles.controlButtonInner}>
+                {callSettings.webcamEnabled ? (
+                  <Video size={24} color="#ffffff" />
+                ) : (
+                  <VideoOff size={24} color="#ffffff" />
+                )}
+              </View>
+            </TouchableOpacity>
+          )}
 
-        {/* Speaker Control */}
-        <ControlButton
-          testID="speaker-button"
-          onPress={onToggleSpeaker}
-          isActive={callSettings.speakerEnabled}
-          icon={callSettings.speakerEnabled ? '🔊' : '🔈'}
-        />
+          {/* Speaker Button - Only for voice calls */}
+          {callType === 'voice' && (
+            <TouchableOpacity
+              style={[
+                styles.controlButton,
+                { backgroundColor: callSettings.speakerEnabled ? 'rgba(0,212,170,0.9)' : 'rgba(255,255,255,0.2)' },
+                isConnecting && styles.connectingButton,
+              ]}
+              onPress={onToggleSpeaker}
+              disabled={isConnecting}
+              activeOpacity={0.7}
+            >
+              <View style={styles.controlButtonInner}>
+                {callSettings.speakerEnabled ? (
+                  <Volume2 size={24} color="#ffffff" />
+                ) : (
+                  <VolumeX size={24} color="#ffffff" />
+                )}
+              </View>
+            </TouchableOpacity>
+          )}
 
-        {/* End Call Button */}
-        <TouchableOpacity
-          testID="end-call-button"
-          style={[styles.controlButton, styles.endCallButton]}
-          onPress={onEndCall}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.controlIcon}>📞</Text>
-        </TouchableOpacity>
+          {/* End Call Button - Always available and prominent */}
+          <TouchableOpacity
+            style={[styles.endCallButton, isConnecting && styles.endCallButtonConnecting]}
+            onPress={onEndCall}
+            activeOpacity={0.8}
+          >
+            <View style={styles.endCallButtonInner}>
+              <PhoneOff size={28} color="#ffffff" />
+            </View>
+          </TouchableOpacity>
+
+          {/* Participants Button */}
+          <TouchableOpacity
+            style={[
+              styles.controlButton,
+              { backgroundColor: 'rgba(255,255,255,0.2)' },
+              isConnecting && styles.connectingButton,
+            ]}
+            disabled={isConnecting}
+            activeOpacity={0.7}
+          >
+            <View style={styles.controlButtonInner}>
+              <Users size={22} color="#ffffff" />
+              {participantCount > 1 && (
+                <View style={styles.participantBadge}>
+                  <Text style={styles.participantCount}>{participantCount}</Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
-
-      {/* Call Info */}
-      <View style={styles.callInfo}>
-        <Text style={[styles.participantCount, { color: colors.white || '#ffffff' }]}>
-          {participantCount} participant{participantCount !== 1 ? 's' : ''}
-        </Text>
-        
-        {/* Call Type Indicator */}
-        <Text style={[styles.callTypeText, { color: colors.text?.secondary || '#cccccc' }]}>
-          {callType === 'video' ? '📹 Video Call' : '📞 Voice Call'}
-        </Text>
-      </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  container: {
+    backgroundColor: 'transparent',
+  },
   controlsContainer: {
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: 20,
-    paddingVertical: 20,
-    paddingBottom: 30, // Extra bottom padding for safe area
+    paddingVertical: 24,
+    paddingBottom: 34, // Extra bottom padding for safe area
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  participantInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 24,
   },
   controlsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 15,
-    gap: 20,
+    gap: 24,
   },
   controlButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 4,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.2)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
+    elevation: 4,
+  },
+  controlButtonInner: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
   },
   endCallButton: {
     backgroundColor: '#FF3B30',
-    transform: [{ scale: 1.1 }], // Make end call button slightly larger
+    borderColor: '#FF3B30',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    shadowColor: '#FF3B30',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    transform: [{ scale: 1 }],
   },
-  controlIcon: {
-    fontSize: 28,
-  },
-  callInfo: {
+  endCallButtonInner: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 4,
+    borderRadius: 32,
+  },
+  participantBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#ffffff',
   },
   participantCount: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: '600',
+    color: '#ffffff',
+    textAlign: 'center',
+    lineHeight: 16,
   },
-  callTypeText: {
-    fontSize: 14,
-    fontWeight: '500',
+  // Connecting state styles
+  connectingButton: {
+    opacity: 0.6,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  endCallButtonConnecting: {
+    // Keep end call button fully visible during connecting
+    opacity: 1,
+    backgroundColor: '#FF3B30',
   },
 });
 
