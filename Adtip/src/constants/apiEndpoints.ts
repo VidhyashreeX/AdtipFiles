@@ -36,18 +36,26 @@ export const TIP_CALLS_ENDPOINTS = {
   GET_USERS: '/api/users',
   GET_ALL_USERS: '/api/allusers',
   CALL: '/api/call',
-  INITIATE_CALL: '/api/initiate-call', // Add this new endpoint
+  INITIATE_CALL: '/api/initiate-call',
+  UPDATE_CALL_STATUS: '/api/call/update-call', // Add this new endpoint
   GET_AGORA_TOKEN_CALLER: '/api/get-agora-token/caller',
   GET_AGORA_TOKEN_CALLEE: '/api/get-agora-token/callee',
   GET_RTM_TOKEN: '/api/get-rtm-token',
   MISSED_CALLS: '/api/missed-calls',
   UPDATE_FCM_TOKEN: '/api/update-fcm-token',
+  GET_FCM_TOKENS: '/api/fcm-tokens-of-both-users', // New endpoint added
 
-  // VideoSDK specific endpoints - make sure these match your backend routes
+  // VideoSDK specific endpoints
   VIDEOSDK_GENERATE_TOKEN: '/api/generate-token/videosdk',
   VIDEOSDK_CREATE_MEETING: '/api/create-meeting/videosdk',
   VIDEOSDK_DEACTIVATE_ROOM: '/api/deactivate-room/videosdk',
   VIDEOSDK_VALIDATE_MEETING: '/api/validate-meeting/videosdk',
+};
+
+// Firebase Cloud Functions endpoints
+export const FCM_ENDPOINTS = {
+  INITIATE_CALL: '/api/call/initiate-call',
+  UPDATE_CALL_STATUS: '/api/call/update-call',
 };
 
 // Profile endpoints

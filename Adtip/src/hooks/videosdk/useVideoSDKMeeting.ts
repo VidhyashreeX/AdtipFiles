@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMeeting } from '@videosdk.live/react-native-sdk';
 import { CallSettings, CallStatus, CallMetrics } from '../../types/videosdk';
+import { updateCallStatus } from '../../helpers/CallHelper';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface UseVideoSDKMeetingProps {
   meetingId: string;
@@ -25,9 +27,21 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
     participantCount: 0,
     networkQuality: 'good',
   });
+  const [callId, setCallId] = useState<string>('');
 
   const startTimeRef = useRef<number>(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Get call ID from storage or props
+  useEffect(() => {
+    const getCallId = async () => {
+      const storedCallId = await AsyncStorage.getItem('currentCallId');
+      if (storedCallId) {
+        setCallId(storedCallId);
+      }
+    };
+    getCallId();
+  }, []);
 
   const {
     meetingId,
@@ -47,17 +61,29 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
     name: props.participantName,
     micEnabled: props.micEnabled,
     webcamEnabled: props.webcamEnabled,
-    onMeetingJoined: () => {
+    onMeetingJoined: async () => {
       console.log('[VideoSDKMeeting] Meeting joined successfully');
       setCallStatus('connected');
       startTimeRef.current = Date.now();
       startDurationTimer();
+      
+      // Update call status to 'accepted'
+      await updateCallStatus('accepted', props.participantName, callId);
+      
       props.onMeetingJoined?.();
     },
-    onMeetingLeft: () => {
+    onMeetingLeft: async () => {
       console.log('[VideoSDKMeeting] Meeting left');
       setCallStatus('ended');
       stopDurationTimer();
+      
+      // Update call status to 'ended' with duration
+      const duration = Math.floor((Date.now() - startTimeRef.current) / 1000);
+      await updateCallStatus('ended', props.participantName, callId, duration);
+      
+      // Clean up call ID
+      await AsyncStorage.removeItem('currentCallId');
+      
       props.onMeetingLeft?.();
     },
     onParticipantJoined: (participant) => {
@@ -68,9 +94,13 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
       console.log('[VideoSDKMeeting] Participant left:', participant.displayName);
       updateParticipantCount();
     },
-    onError: (error) => {
+    onError: async (error) => {
       console.error('[VideoSDKMeeting] Meeting error:', error);
       setCallStatus('failed');
+      
+      // Update call status to 'missed' or 'ended' based on error
+      await updateCallStatus('missed', props.participantName, callId);
+      
       props.onError?.(error);
     },
   });
@@ -109,7 +139,11 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
     setCallSettings(prev => ({ ...prev, speakerEnabled: !prev.speakerEnabled }));
   };
 
-  const endCall = () => {
+  const endCall = async () => {
+    // Update call status before leaving
+    const duration = Math.floor((Date.now() - startTimeRef.current) / 1000);
+    await updateCallStatus('ended', props.participantName, callId, duration);
+    
     leave();
   };
 
@@ -138,7 +172,7 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
     
     // Actions
     join,
-    leave: endCall,
+    leave: endCall, // Use enhanced endCall function
     toggleMic: handleToggleMic,
     toggleWebcam: handleToggleWebcam,
     toggleSpeaker: handleToggleSpeaker,

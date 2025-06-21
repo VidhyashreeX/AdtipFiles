@@ -3,6 +3,7 @@ import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import { API_BASE_URL } from '../constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ApiEndpoints from '../constants/apiEndpoints';
+import { FCM_SERVER_URL } from '../constants/api';
 import { Platform } from 'react-native';
 import messaging, { AuthorizationStatus } from '@react-native-firebase/messaging';
 import {
@@ -33,6 +34,8 @@ import {
   UpdateUserRequest,
   UpdateUserResponse,
   OtpVerifyApiResponse,
+  FcmTokensRequest,
+  FcmTokensResponse,
 } from '../types/api';
 
 // Interfaces moved from inside the class
@@ -1028,6 +1031,76 @@ export default class ApiService {
       return response;
     } catch (error) {
       console.error('[ApiService] Error initiating call:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Enhanced initiate call that tries Firebase Cloud Functions first
+   */
+  static async initiateCallWithFirebase(data: InitiateCallRequest): Promise<InitiateCallResponse> {
+    console.log('[ApiService] Initiating call with Firebase integration:', {
+      calleePlatform: data.calleeInfo.platform,
+      callerName: data.callerInfo.name,
+      meetingId: data.videoSDKInfo.meetingId,
+    });
+
+    try {
+      // Try Firebase Cloud Functions first
+      const firebaseResponse = await fetch(`${FCM_SERVER_URL}/api/call/initiate-call`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          callerInfo: data.callerInfo,
+          calleeInfo: data.calleeInfo,
+          videoSDKInfo: data.videoSDKInfo,
+        }),
+        timeout: 30000,
+      });
+
+      const firebaseData = await firebaseResponse.json();
+      
+      if (firebaseResponse.ok) {
+        console.log('[ApiService] Firebase call initiated successfully:', firebaseData);
+        return {
+          success: true,
+          message: firebaseData.message || 'Call initiated successfully',
+          data: firebaseData.data || firebaseData,
+        };
+      } else {
+        console.warn('[ApiService] Firebase call failed, falling back to regular API');
+        throw new Error(firebaseData.error || 'Firebase call failed');
+      }
+    } catch (error) {
+      console.error('[ApiService] Firebase call initiation failed, trying fallback:', error);
+      
+      // Fallback to the existing API method
+      try {
+        return await this.initiateCall(data);
+      } catch (fallbackError) {
+        console.error('[ApiService] Both Firebase and fallback methods failed:', fallbackError);
+        throw new Error('Failed to initiate call. Please check your connection and try again.');
+      }
+    }
+  }
+
+  /**
+   * Get FCM tokens for multiple users
+   */
+  static async getFcmTokensForUsers(data: FcmTokensRequest): Promise<FcmTokensResponse> {
+    console.log('[API] Getting FCM tokens for users:', data.userIds);
+    try {
+      const response = await this.post<FcmTokensResponse>(
+        ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_FCM_TOKENS,
+        data,
+      );
+      console.log('[API] FCM tokens response:', response);
+      return response;
+    } catch (error) {
+      console.error('[API] Error getting FCM tokens:', error);
       throw this.handleError(error);
     }
   }

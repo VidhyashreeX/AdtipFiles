@@ -3,7 +3,10 @@
  */
 
 // Base URL for API calls
-export const API_BASE_URL = 'https://api.adtip.in';
+export const API_BASE_URL = 'https://api.adtip.in'; // Your production URL
+
+// Firebase Cloud Functions URL for call notifications
+export const FCM_SERVER_URL = "https://us-central1-adtip-3873c.cloudfunctions.net/callApi";
 
 // Timeout for API calls (in milliseconds)
 export const API_TIMEOUT = 30000;

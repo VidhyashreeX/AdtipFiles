@@ -7,6 +7,7 @@ import { getApps, getApp } from '@react-native-firebase/app';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NotificationService from './NotificationService';
 import { navigationRef } from '../navigation/NavigationService';
+import FirebaseCallService from './FirebaseCallService';
 
 export interface CallNotificationData {
   callerName: string;
@@ -508,6 +509,64 @@ class FirebaseService {
     this.messagingReady = false;
     this.initializationPromise = null;
     console.log('[FCM] Service reset');
+  }
+
+  /**
+   * Initiate a call with Firebase Cloud Functions integration
+   */
+  public async initiateCall(
+    calleeToken: string,
+    calleePlatform: 'ANDROID' | 'IOS',
+    calleeUserId: string,
+    calleeName: string,
+    callerName: string,
+    meetingId: string,
+    videoSDKToken: string
+  ): Promise<any> {
+    try {
+      const firebaseCallService = FirebaseCallService.getInstance();
+      
+      const callData = await firebaseCallService.prepareCallData(
+        calleeToken,
+        calleePlatform,
+        calleeUserId,
+        calleeName,
+        callerName,
+        meetingId,
+        videoSDKToken
+      );
+
+      return await firebaseCallService.initiateCall(callData);
+    } catch (error) {
+      console.error('[FirebaseService] Error initiating call:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update call status with Firebase Cloud Functions integration
+   */
+  public async updateCallStatus(
+    type: 'calling' | 'accepted' | 'declined' | 'ended' | 'missed',
+    callerName: string,
+    callId?: string,
+    duration?: number
+  ): Promise<any> {
+    try {
+      const firebaseCallService = FirebaseCallService.getInstance();
+      
+      const updateData = await firebaseCallService.prepareCallStatusUpdate(
+        type,
+        callerName,
+        callId,
+        duration
+      );
+
+      return await firebaseCallService.updateCallStatus(updateData);
+    } catch (error) {
+      console.error('[FirebaseService] Error updating call status:', error);
+      throw error;
+    }
   }
 }
 

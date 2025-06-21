@@ -320,7 +320,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
   useEffect(() => {
     if (!user) { setInitialLoading(false); setPosts([]); setStories([]); setPagination({ current_page: 1, total_page: 1, total_count: 0 }); return; }
-    postsAbortControllerRef.current?.abort('New user/category effect run');
+    postsAbortControllerRef.current?.abort();
     postsAbortControllerRef.current = new AbortController();
     const postsSignal = postsAbortControllerRef.current.signal;
     setInitialLoading(true); setError(null); setPosts([]); setStories([]); setPagination(prev => ({ ...prev, current_page: 1, total_page: 1, total_count: 0 }));
@@ -329,7 +329,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
       else { setInitialLoading(false); setLoading(prev => ({...prev, posts: false}));}
     };
     fetchInitialData();
-    return () => { postsAbortControllerRef.current?.abort('Effect cleanup for user/category change'); };
+    return () => { postsAbortControllerRef.current?.abort(); };
   }, [user?.id, selectedCategoryState, fetchPosts]);
 
   useFocusEffect(
@@ -337,8 +337,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
       console.log('[HomeScreen] Focused.');
       return () => {
         console.log('[HomeScreen] Unfocused/Unmounted (useFocusEffect cleanup): Aborting API calls.');
-        postsAbortControllerRef.current?.abort('Screen unfocused or unmounted');
-        likeAbortControllerRef.current?.abort('Screen unfocused or unmounted');
+        postsAbortControllerRef.current?.abort();
+        likeAbortControllerRef.current?.abort();
       };
     }, [])
   );
@@ -349,8 +349,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     setRefreshing(true);
     setError(null);
     // Abort previous post and like fetches
-    postsAbortControllerRef.current?.abort('Refresh initiated');
-    likeAbortControllerRef.current?.abort('Refresh initiated');
+    postsAbortControllerRef.current?.abort();
+    likeAbortControllerRef.current?.abort();
 
     // Create new controller for this refresh operation
     const currentPostsCtrl = new AbortController();

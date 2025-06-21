@@ -38,6 +38,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import messaging from '@react-native-firebase/messaging';
 import {
   initiateVideoSDKCall,
+  updateCallStatus,
 } from '../../helpers/CallHelper';
 import CallKeepService from '../../services/CallKeepService';
 import uuid from 'react-native-uuid';
@@ -563,7 +564,7 @@ export default function TipCallScreen() {
         callTypeToInitiate === 'video'
       );
 
-      // Enhanced call initiation with proper backend coordination
+      // Enhanced call initiation with Firebase Cloud Functions
       const result = await initiateVideoSDKCall(
         recipient.id.toString(),
         callTypeToInitiate,
@@ -571,21 +572,17 @@ export default function TipCallScreen() {
       );
 
       if (result.success && result.meetingId && result.token) {
-        console.log(`[TipCall] Call initiated successfully. Meeting ID: ${result.meetingId}`);
-        
-        // Fixed navigation - Meeting screen is in the same Main stack
+        // Navigate to meeting screen
         navigation.navigate('Meeting', {
           meetingId: result.meetingId,
           token: result.token,
           callType: callTypeToInitiate,
           displayName: user.name || "Me",
           isInitiator: true,
-          recipientName: recipient.name || "Participant",
+          recipientName: recipient.name || "Contact",
         });
       } else {
-        // End CallKeep call on failure
-        await callKeepService.endCall(callKeepId);
-        Alert.alert('Call Failed', result.error || 'Could not initiate the call. Please try again.');
+        Alert.alert('Call Failed', result.error || 'Unable to start the call. Please try again.');
       }
 
     } catch (error: any) {

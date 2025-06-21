@@ -354,3 +354,17 @@ export interface UpdateUserResponse {
 // export type VideoSDKCallRequest = { ... } // This is defined in TipCallScreen.tsx
 // For ApiService, we can use AgoraCallRequest if the backend /api/call endpoint handles both
 // or create a more generic CallActionRequest. For now, assuming AgoraCallRequest is adaptable.
+
+export interface FcmTokensRequest {
+  userIds: number[];
+}
+
+export interface FcmTokenResult {
+  status: boolean;
+  userId: number;
+  fcm_token: string;
+}
+
+export interface FcmTokensResponse {
+  results: FcmTokenResult[];
+}
