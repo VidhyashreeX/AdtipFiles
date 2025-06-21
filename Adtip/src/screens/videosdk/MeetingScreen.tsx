@@ -10,6 +10,8 @@ import {
   Animated,
   Vibration,
   ActivityIndicator,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { MeetingProvider } from '@videosdk.live/react-native-sdk';
@@ -25,6 +27,7 @@ import {
 } from '../../components/videosdk';
 import CallService from '../../services/CallService';
 import VideoSDKService from '../../services/videosdk/VideoSDKService';
+import OngoingCallModule from '../../services/OngoingCallModule';
 
 interface MeetingScreenParams {
   meetingId: string;
@@ -49,6 +52,23 @@ const MeetingScreenContent: React.FC<MeetingScreenParams> = ({
   const [controlsOpacity] = useState(new Animated.Value(1));
   const [isEndingCall, setIsEndingCall] = useState(false);
 
+  const onMeetingJoined = () => {
+    console.log('[MeetingScreen] Successfully joined meeting');
+    // Don't show notification if app is already in foreground
+    if (AppState.currentState === 'background') {
+      OngoingCallModule.startOngoingCallNotification(
+        'Ongoing Call',
+        `In call with ${recipientName || 'participant'}`
+      );
+    }
+  };
+
+  const onMeetingLeft = () => {
+    console.log('[MeetingScreen] Left meeting, ending call via CallService and navigating back');
+    OngoingCallModule.stopOngoingCallNotification();
+    CallService.getInstance().endCurrentCall();
+  };
+
   const {
     participants,
     localParticipant,
@@ -61,13 +81,8 @@ const MeetingScreenContent: React.FC<MeetingScreenParams> = ({
     toggleWebcam,
     toggleSpeaker,
   } = useVideoSDKMeeting({
-    onMeetingJoined: () => {
-      console.log('[MeetingScreen] Successfully joined meeting');
-    },
-    onMeetingLeft: () => {
-      console.log('[MeetingScreen] Left meeting, ending call via CallService');
-      // Don't navigate here - let handleEndCall handle navigation
-    },
+    onMeetingJoined: onMeetingJoined,
+    onMeetingLeft: onMeetingLeft,
     onError: (error) => {
       console.error('[MeetingScreen] Meeting error:', error);
       Alert.alert('Call Error', 'Failed to connect to the call. Please try again.');
@@ -92,10 +107,24 @@ const MeetingScreenContent: React.FC<MeetingScreenParams> = ({
 
     joinMeeting();
 
-    // Cleanup on unmount
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'background') {
+        OngoingCallModule.startOngoingCallNotification(
+          'Ongoing Call',
+          `In call with ${recipientName || 'participant'}`
+        );
+      } else if (nextAppState === 'active') {
+        OngoingCallModule.stopOngoingCallNotification();
+      }
+    };
+
+    const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
+
+    // This cleanup function no longer ends the call.
     return () => {
-      console.log('[MeetingScreen] Component unmounting, performing cleanup');
-      performCleanup();
+      console.log('[MeetingScreen] Unmounting. Notification cleanup only.');
+      OngoingCallModule.stopOngoingCallNotification();
+      appStateSubscription.remove();
     };
   }, []);
 
@@ -130,43 +159,8 @@ const MeetingScreenContent: React.FC<MeetingScreenParams> = ({
     }
   }, [showControls, callStatus, isEndingCall]);
 
-  // Comprehensive cleanup function
-  const performCleanup = async () => {
-    try {
-      console.log('[MeetingScreen] Starting comprehensive cleanup');
-      
-      // 1. Leave VideoSDK meeting
-      if (typeof leave === 'function') {
-        console.log('[MeetingScreen] Leaving VideoSDK meeting');
-        await leave();
-      }
-      
-      // 2. Deactivate meeting room if we're the initiator
-      if (isInitiator && meetingId && token) {
-        console.log('[MeetingScreen] Deactivating meeting room as initiator');
-        const videoSDKService = VideoSDKService.getInstance();
-        await videoSDKService.deactivateMeeting(meetingId, token);
-      }
-      
-      // 3. End call via CallService
-      console.log('[MeetingScreen] Ending call via CallService');
-      CallService.getInstance().endCurrentCall();
-      
-      // 4. Reset CallService state
-      console.log('[MeetingScreen] Resetting CallService state');
-      CallService.getInstance().resetCallState();
-      
-      console.log('[MeetingScreen] Cleanup completed successfully');
-    } catch (error) {
-      console.error('[MeetingScreen] Error during cleanup:', error);
-      // Still try to end the call even if cleanup fails
-      CallService.getInstance().endCurrentCall();
-      CallService.getInstance().resetCallState();
-    }
-  };
-
   // Enhanced end call handler
-  const handleEndCall = async () => {
+  const handleEndCall = () => {
     if (isEndingCall) {
       console.log('[MeetingScreen] End call already in progress');
       return;
@@ -178,7 +172,7 @@ const MeetingScreenContent: React.FC<MeetingScreenParams> = ({
       console.log('[MeetingScreen] Ending call initiated');
       
       // Perform all cleanup operations
-      await performCleanup();
+      leave();
       
       // Navigate back to previous screen
       console.log('[MeetingScreen] Navigating back after call end');

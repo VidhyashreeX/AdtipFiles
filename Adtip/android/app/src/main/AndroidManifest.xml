@@ -191,6 +191,8 @@
             android:value="adtip_call_channel"
             tools:replace="android:value" />
 
+        <service android:name="com.adtip.OngoingCallService" />
+
     </application>
 
 </manifest>
