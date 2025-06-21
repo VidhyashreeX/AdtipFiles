@@ -93,15 +93,40 @@ class CallService {
     }
   }
 
-  public handleIncomingCall(callId: string, meetingId: string, token: string, callerName: string, callType: 'voice' | 'video') {
+  /**
+   * Handle an incoming call with a full info object
+   */
+  public handleIncomingCall(callInfo: {
+    callId: string;
+    meetingId: string;
+    token: string;
+    callerName: string;
+    callType: 'voice' | 'video';
+    [key: string]: any;
+  }) {
     if (this.activeCall) {
       console.warn('[CallService] Busy. Declining incoming call.');
-      // Here you would inform the caller that the user is busy
+      // TODO: Optionally notify the caller that the user is busy
       return;
     }
-
-    this.activeCall = { callId, meetingId, token, callerName, recipientId: '', recipientName: '', isInitiator: false, callType, status: 'ringing' };
-    this.callKeepService.displayIncomingCall(callId, callerName, callerName, 'generic', callType === 'video');
+    this.activeCall = {
+      callId: callInfo.callId,
+      meetingId: callInfo.meetingId,
+      token: callInfo.token,
+      callerName: callInfo.callerName,
+      recipientId: '',
+      recipientName: '',
+      isInitiator: false,
+      callType: callInfo.callType,
+      status: 'ringing',
+    };
+    this.callKeepService.displayIncomingCall(
+      callInfo.callId,
+      callInfo.callerName,
+      callInfo.callerName,
+      'generic',
+      callInfo.callType === 'video'
+    );
   }
 
   private onAnswerCall({ callUUID }: { callUUID: string }) {
@@ -111,12 +136,31 @@ class CallService {
     }
   }
 
-  private onEndCall({ callUUID }: { callUUID: string }) {
+  private async onEndCall({ callUUID }: { callUUID: string }) {
     if (this.activeCall && this.activeCall.callId === callUUID) {
+      // Notify caller if this was an incoming call and not answered
+      if (!this.activeCall.isInitiator && this.activeCall.status !== 'connected') {
+        await this.notifyCallerDeclined();
+      }
       this.resetActiveCall();
       if (navigationRef.isReady() && navigationRef.getCurrentRoute()?.name === 'Meeting') {
         navigationRef.goBack();
       }
+    }
+  }
+
+  /**
+   * Notify the caller that the call was declined
+   */
+  private async notifyCallerDeclined() {
+    if (!this.activeCall) return;
+    try {
+      // You may want to use FirebaseCallService or ApiService to notify the caller
+      // For now, just log
+      console.log('[CallService] Notifying caller of declined call:', this.activeCall.callId);
+      // TODO: Implement actual notification to caller (e.g., via FCM or backend)
+    } catch (e) {
+      console.warn('[CallService] Failed to notify caller of declined call:', e);
     }
   }
 
@@ -170,7 +214,7 @@ class CallService {
   private navigateToMeetingScreen() {
     if (!this.activeCall) return;
     const { meetingId, token, callType, callerName, isInitiator, recipientName } = this.activeCall;
-    navigate('Meeting', { meetingId, token, callType, displayName: isInitiator ? recipientName : callerName, isInitiator, recipientName });
+    navigate('Meeting' as any, { meetingId, token, callType, displayName: isInitiator ? recipientName : callerName, isInitiator, recipientName });
   }
 
   private async getCurrentUser(): Promise<{ id: string; name: string } | null> {

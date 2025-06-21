@@ -131,23 +131,38 @@ class FirebaseService {
   private _handleBackgroundCall(remoteMessage: FirebaseMessagingTypes.RemoteMessage): void {
     console.log('[FCM] Processing background call:', remoteMessage.data);
     if (remoteMessage.data) {
-      const { callId, meetingId, token, callerName, callType } = remoteMessage.data;
-      if (typeof callId === 'string' && typeof meetingId === 'string' && typeof token === 'string' && typeof callerName === 'string' && typeof callType === 'string') {
-        // Use Notifee to display the incoming call notification
+      let callInfo = null;
+      if (remoteMessage.data.info) {
+        try {
+          callInfo = JSON.parse(remoteMessage.data.info);
+        } catch (e) {
+          console.warn('[FCM] Failed to parse call info:', e);
+        }
+      }
+      if (callInfo && callInfo.callId && callInfo.meetingId && callInfo.token && callInfo.callerName && callInfo.callType) {
         NotificationService.displayIncomingCallNotification(
-          callId,
-          callerName,
-          callType as 'voice' | 'video'
+          String(callInfo.callId),
+          String(callInfo.callerName),
+          callInfo.callType === 'video' ? 'video' : 'voice'
         );
-
-        // Also, let the CallService know about the incoming call to manage its state
-        CallService.getInstance().handleIncomingCall(
-          callId,
-          meetingId,
-          token,
-          callerName,
-          callType as 'voice' | 'video'
-        );
+        CallService.getInstance().handleIncomingCall({
+          callId: String(callInfo.callId),
+          meetingId: String(callInfo.meetingId),
+          token: String(callInfo.token),
+          callerName: String(callInfo.callerName),
+          callType: callInfo.callType === 'video' ? 'video' : 'voice',
+        });
+      } else {
+        // Fallback to old method
+        const { callId, meetingId, token, callerName, callType } = remoteMessage.data;
+        if (typeof callId === 'string' && typeof meetingId === 'string' && typeof token === 'string' && typeof callerName === 'string' && typeof callType === 'string') {
+          NotificationService.displayIncomingCallNotification(
+            String(callId),
+            String(callerName),
+            callType === 'video' ? 'video' : 'voice'
+          );
+          CallService.getInstance().handleIncomingCall({ callId: String(callId), meetingId: String(meetingId), token: String(token), callerName: String(callerName), callType: callType === 'video' ? 'video' : 'voice' });
+        }
       }
     }
   }
@@ -276,15 +291,28 @@ class FirebaseService {
   private _handleForegroundCall(remoteMessage: FirebaseMessagingTypes.RemoteMessage): void {
     console.log('[FCM] Processing foreground call:', remoteMessage.data);
     if (remoteMessage.data) {
-      const { callId, meetingId, token, callerName, callType } = remoteMessage.data;
-      if (typeof callId === 'string' && typeof meetingId === 'string' && typeof token === 'string' && typeof callerName === 'string' && typeof callType === 'string') {
-        CallService.getInstance().handleIncomingCall(
-          callId,
-          meetingId,
-          token,
-          callerName,
-          callType as 'voice' | 'video'
-        );
+      let callInfo = null;
+      if (remoteMessage.data.info) {
+        try {
+          callInfo = JSON.parse(remoteMessage.data.info);
+        } catch (e) {
+          console.warn('[FCM] Failed to parse call info:', e);
+        }
+      }
+      if (callInfo && callInfo.callId && callInfo.meetingId && callInfo.token && callInfo.callerName && callInfo.callType) {
+        CallService.getInstance().handleIncomingCall({
+          callId: String(callInfo.callId),
+          meetingId: String(callInfo.meetingId),
+          token: String(callInfo.token),
+          callerName: String(callInfo.callerName),
+          callType: callInfo.callType === 'video' ? 'video' : 'voice',
+        });
+      } else {
+        // Fallback to old method
+        const { callId, meetingId, token, callerName, callType } = remoteMessage.data;
+        if (typeof callId === 'string' && typeof meetingId === 'string' && typeof token === 'string' && typeof callerName === 'string' && typeof callType === 'string') {
+          CallService.getInstance().handleIncomingCall({ callId: String(callId), meetingId: String(meetingId), token: String(token), callerName: String(callerName), callType: callType === 'video' ? 'video' : 'voice' });
+        }
       }
     }
   }
@@ -294,18 +322,26 @@ class FirebaseService {
    */
   private _handleNotificationNavigation(remoteMessage: FirebaseMessagingTypes.RemoteMessage): void {
     if (!remoteMessage.data) return;
-
+    let callInfo = null;
+    if (remoteMessage.data.info) {
+      try {
+        callInfo = JSON.parse(remoteMessage.data.info);
+      } catch (e) {
+        console.warn('[FCM] Failed to parse call info:', e);
+      }
+    }
     const navigateTo = (screen: any, params: any) => {
       navigationRef.isReady()
         ? navigationRef.navigate(screen, params)
-        : this.delayedNavigation.push({ screen, params });
+        : this.delayedNavigation?.push?.({ screen, params });
     };
-
-    if (remoteMessage.data.isIncomingCall === 'true') {
-      const callData = NotificationService.extractCallData(remoteMessage);
-      if (callData) {
-        // Navigate to the meeting screen when the notification is tapped.
-        navigateTo('Meeting', { initialCallNotificationData: callData });
+    if (callInfo && callInfo.callId && callInfo.meetingId && callInfo.token && callInfo.callerName && callInfo.callType) {
+      // Navigate to the meeting screen when the notification is tapped.
+      navigateTo('Meeting' as any, { meetingId: String(callInfo.meetingId), token: String(callInfo.token), callType: callInfo.callType === 'video' ? 'video' : 'voice', displayName: String(callInfo.callerName), isInitiator: false, recipientName: String(callInfo.callerName) });
+    } else if (remoteMessage.data.isIncomingCall === 'true') {
+      const { callId, meetingId, token, callerName, callType } = remoteMessage.data;
+      if (typeof callId === 'string' && typeof meetingId === 'string' && typeof token === 'string' && typeof callerName === 'string' && typeof callType === 'string') {
+        navigateTo('Meeting' as any, { meetingId: String(meetingId), token: String(token), callType: callType === 'video' ? 'video' : 'voice', displayName: String(callerName), isInitiator: false, recipientName: String(callerName) });
       }
     } else if (remoteMessage.data.type === 'chat' && typeof remoteMessage.data.chatId === 'string') {
       navigateTo('Chat', { chatId: remoteMessage.data.chatId });
@@ -416,10 +452,10 @@ class FirebaseService {
   /**
    * Check if app has notification permissions (v22.2.1 feature)
    */
-  public async hasPermission(): Promise<AuthorizationStatus> {
+  public async hasPermission() {
     if (!this.messagingReady) {
       console.log('[FCM] Messaging not ready, returning NOT_DETERMINED');
-      return messaging.AuthorizationStatus.NOT_DETERMINED;
+      return (messaging().AuthorizationStatus || 0);
     }
     return await messaging().hasPermission();
   }
