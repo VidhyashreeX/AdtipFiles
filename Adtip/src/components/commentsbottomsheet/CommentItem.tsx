@@ -276,8 +276,8 @@ const CommentItem: React.FC<CommentItemProps> = ({
         ]}>
           {isOwnComment ? (
             <TouchableOpacity onPress={handleDelete} style={styles.menuItem}>
-              <Icon name="trash-2" size={16} color={colors.danger || '#FF0000'} />
-              <Text style={[styles.menuItemText, { color: colors.danger || '#FF0000' }]}>
+              <Icon name="trash-2" size={16} color={colors.error || '#FF0000'} />
+              <Text style={[styles.menuItemText, { color: colors.error || '#FF0000' }]}>
                 Delete
               </Text>
             </TouchableOpacity>

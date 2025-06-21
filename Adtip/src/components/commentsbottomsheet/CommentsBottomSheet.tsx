@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,20 +6,18 @@ import {
   StatusBar,
   Platform,
   Keyboard,
-  KeyboardAvoidingView,
+  TouchableOpacity,
 } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  useAnimatedGestureHandler,
   runOnJS,
   withSpring,
   withTiming,
-  interpolate,
-  Extrapolate,
 } from 'react-native-reanimated';
 import {
-  PanGestureHandler,
+  Gesture,
+  GestureDetector,
   GestureHandlerRootView,
 } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,10 +25,10 @@ import { useTheme } from '../../contexts/ThemeContext';
 import CommentsContent from './CommentsContent';
 import CommentsHeader from './CommentsHeader';
 import { useCommentsAnimation } from './hooks/useCommentsAnimation';
-import { useKeyboardHandler } from './hooks/useKeyboardHandler';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const MAX_TRANSLATE_Y = -SCREEN_HEIGHT + 100;
+const TOP_OFFSET = Platform.OS === 'ios' ? 100 : 80;
+const MAX_TRANSLATE_Y = -SCREEN_HEIGHT + TOP_OFFSET;
 
 interface CommentsBottomSheetProps {
   visible: boolean;
@@ -46,10 +44,9 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
   initialCommentCount = 0,
 }) => {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
-  const panRef = useRef<PanGestureHandler>(null);
-  
-  // Animation hooks
+  const isClosing = useSharedValue(false);
+  const [isPanEnabled, setIsPanEnabled] = useState(true);
+
   const {
     translateY,
     backdropOpacity,
@@ -57,131 +54,92 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
     animateOut,
     snapToPosition,
   } = useCommentsAnimation({
-    onClose,
     maxTranslateY: MAX_TRANSLATE_Y,
   });
 
-  const {
-    keyboardHeight,
-    isKeyboardVisible,
-  } = useKeyboardHandler();
+  const handleClose = useCallback(() => {
+    if (isClosing.value) return;
+    isClosing.value = true;
+    Keyboard.dismiss();
+    // Animate out, and only call onClose when the animation is finished.
+    // This prevents the component from unmounting mid-animation, fixing the lag.
+    animateOut(() => {
+      onClose();
+    });
+  }, [animateOut, onClose, isClosing]);
 
-  // Handle visibility changes
   useEffect(() => {
     if (visible) {
+      isClosing.value = false;
       StatusBar.setBarStyle('light-content', true);
       animateIn();
-    } else {
-      StatusBar.setBarStyle('dark-content', true);
-      animateOut();
     }
-    
-    return () => {
-      if (Platform.OS === 'ios') {
-        StatusBar.setBarStyle('dark-content', true);
-      }
-    };
-  }, [visible, animateIn, animateOut]);
+  }, [visible, animateIn, isClosing]);
 
-  // Gesture handler for drag interactions
-  const gestureHandler = useAnimatedGestureHandler({
-    onStart: (_, context) => {
-      context.startY = translateY.value;
-    },
-    onActive: (event, context) => {
-      // Only allow dragging down to close
+  // Create the pan gesture using Gesture.Pan()
+  const headerPanGesture = Gesture.Pan()
+    .onStart(() => {
+      // No-op
+    })
+    .onUpdate((event) => {
+      // Only allow dragging down to close when pan is enabled
       if (event.translationY > 0) {
-        const newTranslateY = context.startY + event.translationY;
-        translateY.value = Math.max(newTranslateY, MAX_TRANSLATE_Y);
-        
-        // Update backdrop opacity based on position
-        const progress = interpolate(
-          translateY.value,
-          [0, MAX_TRANSLATE_Y],
-          [1, 0],
-          Extrapolate.CLAMP
-        );
-        backdropOpacity.value = progress * 0.5;
+        translateY.value = MAX_TRANSLATE_Y + event.translationY;
       }
-    },
-    onEnd: (event) => {
-      const shouldClose = 
-        event.translationY > 150 || 
-        event.velocityY > 800;
-      
+    })
+    .onEnd((event) => {
+      const shouldClose = event.translationY > 150 || event.velocityY > 800;
       if (shouldClose) {
-        runOnJS(onClose)();
+        runOnJS(handleClose)();
       } else {
-        // Snap back to position
         runOnJS(snapToPosition)(MAX_TRANSLATE_Y);
       }
-    },
-  });
+    });
 
-  // Animated styles
-  const bottomSheetStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        { 
-          translateY: translateY.value - (isKeyboardVisible.value ? keyboardHeight.value * 0.8 : 0)
-        }
-      ],
-    };
-  });
+  const bottomSheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
 
-  const backdropStyle = useAnimatedStyle(() => {
-    return {
-      opacity: backdropOpacity.value,
-    };
-  });
-
-  const handleBackdropPress = useCallback(() => {
-    Keyboard.dismiss();
-    onClose();
-  }, [onClose]);
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(translateY.value < 0 ? 1 : 0, { duration: 300 }),
+  }));
 
   if (!visible) return null;
 
   return (
-    <GestureHandlerRootView style={StyleSheet.absoluteFill}>
+    <GestureHandlerRootView style={StyleSheet.absoluteFillObject}>
       <View style={styles.container}>
-        {/* Backdrop */}
         <Animated.View style={[styles.backdrop, backdropStyle]}>
-          <Animated.View
-            style={StyleSheet.absoluteFill}
-            onTouchEnd={handleBackdropPress}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            onPress={handleClose}
+            activeOpacity={1}
           />
         </Animated.View>
 
-        {/* Bottom Sheet with Keyboard Avoiding */}
-        <KeyboardAvoidingView
-          style={StyleSheet.absoluteFill}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        <Animated.View
+          style={[
+            styles.bottomSheet,
+            { backgroundColor: colors.surface },
+            bottomSheetStyle,
+          ]}
         >
-          <PanGestureHandler ref={panRef} onGestureEvent={gestureHandler}>
-            <Animated.View
-              style={[
-                styles.bottomSheet,
-                {
-                  backgroundColor: colors.surface,
-                  paddingBottom: insets.bottom,
-                },
-                bottomSheetStyle,
-              ]}
-            >
-              <CommentsHeader 
-                onClose={onClose} 
+          {/* Only apply the pan gesture to the header */}
+          <GestureDetector gesture={headerPanGesture}>
+            <View>
+              <CommentsHeader
+                onClose={handleClose}
                 commentCount={initialCommentCount}
               />
-              <CommentsContent
-                postId={postId}
-                initialCommentCount={initialCommentCount}
-                panRef={panRef}
-              />
-            </Animated.View>
-          </PanGestureHandler>
-        </KeyboardAvoidingView>
+            </View>
+          </GestureDetector>
+
+          {/* Content area is now outside the GestureDetector */}
+          <CommentsContent
+            postId={postId}
+            initialCommentCount={initialCommentCount}
+          />
+        </Animated.View>
       </View>
     </GestureHandlerRootView>
   );
@@ -193,7 +151,7 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'black',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   bottomSheet: {
     position: 'absolute',
@@ -204,15 +162,11 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: -4,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
     elevation: 16,
-    overflow: 'hidden',
-    flex: 1,
+    flexDirection: 'column',
   },
 });
 

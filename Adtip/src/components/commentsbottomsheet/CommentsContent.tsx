@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
   View,
   FlatList,
@@ -6,35 +6,31 @@ import {
   RefreshControl,
   Text,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
-import Animated, {
-  useAnimatedScrollHandler,
-  useSharedValue,
-} from 'react-native-reanimated';
-import { PanGestureHandler } from 'react-native-gesture-handler';
+import Animated from 'react-native-reanimated';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import CommentItem from './CommentItem';
 import CommentInput from './CommentInput';
 import { useCommentsData } from './hooks/useCommentsData';
 
-const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
+// Use the built-in Animated.FlatList
+const AnimatedFlatList = Animated.FlatList;
 
 interface CommentsContentProps {
   postId: number;
   initialCommentCount: number;
-  panRef: React.RefObject<PanGestureHandler>;
 }
 
 const CommentsContent: React.FC<CommentsContentProps> = ({
   postId,
   initialCommentCount,
-  panRef,
 }) => {
   const { colors } = useTheme();
   const { user } = useAuth();
   const flatListRef = useRef<FlatList>(null);
-  const scrollY = useSharedValue(0);
 
   const {
     comments,
@@ -55,32 +51,6 @@ const CommentsContent: React.FC<CommentsContentProps> = ({
     cancelReply,
   } = useCommentsData(postId, initialCommentCount);
 
-  // Handle scroll interactions with pan gesture
-  const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      scrollY.value = event.contentOffset.y;
-      
-      // Enable/disable pan gesture based on scroll position
-      if (panRef.current) {
-        // Only enable pan gesture when at the very top
-        const shouldEnablePan = event.contentOffset.y <= 0;
-        panRef.current.setNativeProps({ enabled: shouldEnablePan });
-      }
-    },
-    onScrollBeginDrag: () => {
-      // Disable pan gesture when actively scrolling
-      if (panRef.current) {
-        panRef.current.setNativeProps({ enabled: false });
-      }
-    },
-    onMomentumScrollEnd: (event) => {
-      // Re-enable pan gesture only when at top and scroll ended
-      if (panRef.current && event.contentOffset.y <= 0) {
-        panRef.current.setNativeProps({ enabled: true });
-      }
-    },
-  });
-
   const renderCommentItem = useCallback(({ item, index }) => (
     <CommentItem
       comment={item}
@@ -90,58 +60,41 @@ const CommentsContent: React.FC<CommentsContentProps> = ({
       onDelete={() => deleteComment(item.id)}
       onReport={() => reportComment(item.id, 'inappropriate')}
       currentUserId={user?.id ? Number(user.id) : undefined}
-      showReplies={false}
-      onToggleReplies={() => {
-        console.log('Toggle replies for comment:', item.id);
-      }}
     />
   ), [likeComment, replyToComment, deleteComment, reportComment, user?.id]);
-
-  const renderHeader = useCallback(() => (
-    <View style={[styles.header, { borderBottomColor: colors.border }]}>
-      <Text style={[styles.headerTitle, { color: colors.text.primary }]}>
-        {commentCount} {commentCount === 1 ? 'Comment' : 'Comments'}
-      </Text>
-      {error && (
-        <Text style={[styles.errorText, { color: colors.danger || '#FF0000' }]}>
-          {error}
-        </Text>
-      )}
-    </View>
-  ), [commentCount, error, colors]);
 
   const renderFooter = useCallback(() => {
     if (!loading || refreshing) return null;
     return (
       <View style={styles.footer}>
         <ActivityIndicator size="small" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
-          Loading more comments...
-        </Text>
       </View>
     );
-  }, [loading, refreshing, colors.primary, colors.text.secondary]);
+  }, [loading, refreshing, colors.primary]);
 
   const renderEmpty = useCallback(() => {
     if (loading) {
       return (
         <View style={styles.emptyContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
-            Loading comments...
-          </Text>
         </View>
       );
     }
-
+    if (error) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={[styles.emptyText, { color: colors.error }]}>{error}</Text>
+        </View>
+      );
+    }
     return (
       <View style={styles.emptyContainer}>
         <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
-          No comments yet. Be the first to comment!
+          No comments yet.
         </Text>
       </View>
     );
-  }, [loading, colors.primary, colors.text.secondary]);
+  }, [loading, error, colors]);
 
   const handleLoadMore = useCallback(() => {
     if (hasMore && !loading) {
@@ -149,22 +102,21 @@ const CommentsContent: React.FC<CommentsContentProps> = ({
     }
   }, [hasMore, loading, loadMore]);
 
-  const keyExtractor = useCallback((item, index) => 
-    `comment-${item.id}-${index}`, []
-  );
+  const keyExtractor = useCallback((item) => `comment-${item.id}`, []);
 
   return (
-    <View style={styles.container}>
-      {/* Comments List - Takes all available space */}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
       <AnimatedFlatList
         ref={flatListRef}
         data={comments}
         renderItem={renderCommentItem}
         keyExtractor={keyExtractor}
-        ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
         ListEmptyComponent={renderEmpty}
-        onScroll={scrollHandler}
         scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
@@ -175,93 +127,51 @@ const CommentsContent: React.FC<CommentsContentProps> = ({
           />
         }
         onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.3}
+        onEndReachedThreshold={0.5}
         showsVerticalScrollIndicator={true}
-        bounces={true}
-        overScrollMode="auto"
-        nestedScrollEnabled={true}
-        contentContainerStyle={[
-          styles.contentContainer,
-          comments.length === 0 && styles.emptyContentContainer
-        ]}
         style={styles.flatListStyle}
+        contentContainerStyle={styles.contentContainer}
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        removeClippedSubviews={false}
-        initialNumToRender={10}
-        maxToRenderPerBatch={5}
-        windowSize={10}
+        keyboardDismissMode="interactive"
+        // Add explicit scrolling properties
+        scrollEnabled={true} 
+        bounces={true}
       />
-      
-      {/* Fixed Comment Input at bottom */}
       <CommentInput
         postId={postId}
-        onSubmit={replyingTo ? 
-          (text) => addReply(text, replyingTo.id) : 
-          addComment
-        }
+        onSubmit={replyingTo ? (text) => addReply(text, replyingTo.id) : addComment}
         replyTo={replyingTo}
         onCancelReply={cancelReply}
         onFocus={() => {
-          // Scroll to bottom when input is focused
-          setTimeout(() => {
-            flatListRef.current?.scrollToEnd({ animated: true });
-          }, 300);
+          setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 300);
         }}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
   },
   flatListStyle: {
     flex: 1,
-    backgroundColor: 'transparent',
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    backgroundColor: 'transparent',
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  errorText: {
-    fontSize: 14,
-    marginTop: 4,
-    fontStyle: 'italic',
+    width: '100%',
   },
   contentContainer: {
-    paddingBottom: 20,
-    backgroundColor: 'transparent',
-  },
-  emptyContentContainer: {
-    flexGrow: 1,
-    justifyContent: 'center',
+    paddingBottom: 8,
+    minHeight: '100%',
   },
   footer: {
     paddingVertical: 20,
     alignItems: 'center',
-    backgroundColor: 'transparent',
-  },
-  loadingText: {
-    fontSize: 14,
-    marginTop: 8,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-    minHeight: 300,
-    backgroundColor: 'transparent',
+    padding: 40,
+    minHeight: 200,
   },
   emptyText: {
     fontSize: 16,

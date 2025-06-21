@@ -40,65 +40,41 @@ const CommentInput: React.FC<CommentInputProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
 
-  // Animation values
   const inputHeight = useSharedValue(40);
   const sendButtonScale = useSharedValue(0);
 
   const handleSubmit = useCallback(async () => {
     if (!text.trim() || isSubmitting) return;
-
     setIsSubmitting(true);
     try {
       await onSubmit(text.trim());
       setText('');
-      inputRef.current?.blur();
-      
-      // Animate send button out
       sendButtonScale.value = withSpring(0);
     } catch (error) {
       console.error('Failed to submit comment:', error);
     } finally {
       setIsSubmitting(false);
     }
-  }, [text, isSubmitting, onSubmit]);
+  }, [text, isSubmitting, onSubmit, sendButtonScale]);
 
   const handleFocus = useCallback(() => {
     setIsFocused(true);
     onFocus?.();
-    
-    // Animate input expansion
-    const newHeight = Math.min(text.split('\n').length * 20 + 20, 120);
-    inputHeight.value = withTiming(newHeight);
-    if (text.trim()) {
-      sendButtonScale.value = withSpring(1);
-    }
-  }, [onFocus, text]);
+  }, [onFocus]);
 
   const handleBlur = useCallback(() => {
     setIsFocused(false);
-    inputHeight.value = withTiming(40);
-    if (!text.trim()) {
-      sendButtonScale.value = withSpring(0);
-    }
-  }, [text]);
+  }, []);
 
   const handleTextChange = useCallback((newText: string) => {
     setText(newText);
-    
-    // Auto-expand input based on content
-    const lines = newText.split('\n').length;
-    const newHeight = Math.min(Math.max(lines * 20 + 20, 40), 120);
-    inputHeight.value = withTiming(newHeight);
-    
-    // Show/hide send button
     if (newText.trim() && sendButtonScale.value === 0) {
       sendButtonScale.value = withSpring(1);
     } else if (!newText.trim() && sendButtonScale.value === 1) {
       sendButtonScale.value = withSpring(0);
     }
-  }, []);
+  }, [sendButtonScale]);
 
-  // Animated styles
   const inputContainerStyle = useAnimatedStyle(() => ({
     minHeight: inputHeight.value,
   }));
@@ -109,13 +85,7 @@ const CommentInput: React.FC<CommentInputProps> = ({
   }));
 
   return (
-    <View style={[
-      styles.container, 
-      { 
-        backgroundColor: colors.surface,
-        // Don't add insets.bottom here - let parent handle it
-      }
-    ]}>
+    <View style={[styles.container, { backgroundColor: colors.surface, paddingBottom: insets.bottom > 0 ? 0 : 8 }]}>
       {replyTo && (
         <View style={[styles.replyIndicator, { backgroundColor: colors.background }]}>
           <Text style={[styles.replyText, { color: colors.text.secondary }]}>
@@ -126,46 +96,40 @@ const CommentInput: React.FC<CommentInputProps> = ({
           </TouchableOpacity>
         </View>
       )}
-      
-      <View style={styles.inputContainer}>
-        <Animated.View style={[styles.inputWrapper, inputContainerStyle]}>
-          <TextInput
-            ref={inputRef}
-            style={[
-              styles.textInput,
-              {
-                color: colors.text.primary,
-                backgroundColor: colors.background,
-                borderColor: isFocused ? colors.primary : colors.border,
-              },
-            ]}
-            placeholder="Add a comment..."
-            placeholderTextColor={colors.text.tertiary}
-            value={text}
-            onChangeText={handleTextChange}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            multiline
-            maxLength={500}
-            returnKeyType="default"
-            blurOnSubmit={false}
-            textAlignVertical="top"
-          />
-        </Animated.View>
-
-        <Animated.View style={[styles.sendButton, sendButtonStyle]}>
+      <View style={styles.inputRow}>
+        <TextInput
+          ref={inputRef}
+          style={[
+            styles.textInput,
+            {
+              color: colors.text.primary,
+              backgroundColor: colors.background,
+              borderColor: isFocused ? colors.primary : colors.border,
+            },
+          ]}
+          placeholder="Add a comment..."
+          placeholderTextColor={colors.text.tertiary}
+          value={text}
+          onChangeText={handleTextChange}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          onContentSizeChange={(e) => {
+            const newHeight = Math.max(40, Math.min(e.nativeEvent.contentSize.height, 120));
+            inputHeight.value = withTiming(newHeight, { duration: 100 });
+          }}
+          multiline
+          maxLength={500}
+        />
+        <Animated.View style={[styles.sendButtonContainer, sendButtonStyle]}>
           <TouchableOpacity
             onPress={handleSubmit}
             disabled={!text.trim() || isSubmitting}
-            style={[
-              styles.sendButtonTouchable,
-              { backgroundColor: colors.primary },
-            ]}
+            style={[styles.sendButton, { backgroundColor: colors.primary }]}
           >
             {isSubmitting ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
-              <Icon name="send" size={18} color="white" />
+              <Icon name="arrow-up" size={18} color="white" />
             )}
           </TouchableOpacity>
         </Animated.View>
@@ -177,8 +141,7 @@ const CommentInput: React.FC<CommentInputProps> = ({
 const styles = StyleSheet.create({
   container: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E1E1E1',
-    paddingBottom: 8, // Small fixed padding instead of safe area
+    borderColor: '#E1E1E1',
   },
   replyIndicator: {
     flexDirection: 'row',
@@ -186,40 +149,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E1E1E1',
   },
   replyText: {
     fontSize: 14,
-    fontStyle: 'italic',
   },
   cancelReply: {
     padding: 4,
   },
-  inputContainer: {
+  inputRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  inputWrapper: {
-    flex: 1,
-    marginRight: 12,
+    paddingVertical: 8,
   },
   textInput: {
+    flex: 1,
     borderRadius: 20,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingTop: Platform.OS === 'ios' ? 10 : 8,
+    paddingBottom: Platform.OS === 'ios' ? 10 : 8,
     fontSize: 16,
     borderWidth: 1,
-    textAlignVertical: 'top',
     maxHeight: 120,
+    marginRight: 12,
   },
-  sendButton: {
+  sendButtonContainer: {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  sendButtonTouchable: {
+  sendButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
