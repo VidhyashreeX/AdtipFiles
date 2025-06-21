@@ -32,7 +32,7 @@ import {
   Constants,
 } from '@videosdk.live/react-native-sdk';
 import ContactSkeletonItem from '../../components/skeletons/ContactSkeletonItem';
-import { UserListRequest, UpdateUserRequest, UpdateUserResponse } from '../../types/api';
+import { UserListRequest, UpdateUserRequest, UpdateUserResponse, Contact } from '../../types/api';
 import ApiService from '../../services/ApiService';
 import Icon from 'react-native-vector-icons/Feather';
 import messaging from '@react-native-firebase/messaging';
@@ -40,8 +40,8 @@ import {
   initiateVideoSDKCall,
   updateCallStatus,
 } from '../../helpers/CallHelper';
-import CallKeepService from '../../services/CallKeepService';
 import uuid from 'react-native-uuid';
+import CallService from '../../services/CallService';
 
 // Define navigation stack param list
 type RootStackParamList = {
@@ -56,19 +56,20 @@ type RootStackParamList = {
     isInitiator?: boolean;
     recipientName?: string;
   };
+  Notifications: undefined;
 };
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'TipCall'>;
 type TipCallScreenRouteProp = RouteProp<RootStackParamList, 'TipCall'>;
 
 // Enhanced interfaces
 interface Language {
-  id: string;
+  id: number;
   name: string;
 }
 
 interface Category {
-  id: string;
+  id: number;
   name: string;
 }
 
@@ -78,55 +79,33 @@ interface Interest {
   isPrimary: boolean;
 }
 
-interface Contact {
-  id: number;
-  name?: string | null;
-  emailId?: string | null;
-  is_available: boolean;
-  dnd: boolean;
-  updated_date: string;
-  last_active: string | null;
-  languages: Language[];
-  interests: Interest[];
-  product_count: number;
-  post_count: number;
-  is_following: number;
-  following_count: number;
-  followers_count: number;
-  is_blocked: boolean;
-  social_links: string[];
-  is_active: boolean;
-  last_seen: string;
-  online_status: boolean;
-}
-
 // Constants for filters
 const LANGUAGES: Language[] = [
-  {id: '0', name: 'All'}, // Changed from '1' to '0'
-  {id: '12', name: 'English'},
-  {id: '2', name: 'Hindi'},
-  {id: '3', name: 'Bengali'},
-  {id: '4', name: 'Telugu'},
-  {id: '5', name: 'Marathi'},
-  {id: '6', name: 'Tamil'},
-  {id: '7', name: 'Gujarati'},
-  {id: '8', name: 'Kannada'},
+  {id: 0, name: 'All'},
+  {id: 12, name: 'English'},
+  {id: 2, name: 'Hindi'},
+  {id: 3, name: 'Bengali'},
+  {id: 4, name: 'Telugu'},
+  {id: 5, name: 'Marathi'},
+  {id: 6, name: 'Tamil'},
+  {id: 7, name: 'Gujarati'},
+  {id: 8, name: 'Kannada'},
 ];
 
 const CATEGORIES: Category[] = [
-  {id: '0', name: 'All'}, // Changed from '1' to '0'
-  {id: '2', name: 'Look for jobs'},
-  {id: '101', name: 'Prepare for govt job'}, // Changed from '1' to '101' to avoid duplicate
-  {id: '3', name: 'Prepare for UPSC'},
-  {id: '11', name: 'Prepare for jobs'},
-  {id: '5', name: 'To learn English'},
-  {id: '6', name: 'To learn Hindi'},
-  {id: '7', name: 'To learn software'},
-  {id: '8', name: 'To learn AI'},
-  {id: '13', name: 'To learn something new'},
-  {id: '20', name: 'Sports'},
-  {id: '29', name: 'Spirituality and Religion'},
-  {id: '48', name: 'Astrology'},
+  {id: 0, name: 'All'},
+  {id: 2, name: 'Look for jobs'},
+  {id: 101, name: 'Prepare for govt job'},
+  {id: 3, name: 'Prepare for UPSC'},
+  {id: 11, name: 'Prepare for jobs'},
+  {id: 5, name: 'To learn English'},
+  {id: 6, name: 'To learn Hindi'},
+  {id: 7, name: 'To learn software'},
+  {id: 8, name: 'To learn AI'},
+  {id: 13, name: 'To learn something new'},
+  {id: 20, name: 'Sports'},
+  {id: 29, name: 'Spirituality and Religion'},
+  {id: 48, name: 'Astrology'},
 ];
 
 // Enhanced Filter Chip Component
@@ -141,16 +120,8 @@ const FilterChip: React.FC<{
     style={[
       styles.filterChip,
       {
-        backgroundColor: isSelected 
-          ? colors.primary 
-          : isDarkMode 
-            ? colors.card 
-            : '#F8F9FA',
-        borderColor: isSelected 
-          ? colors.primary 
-          : isDarkMode 
-            ? colors.border 
-            : '#E9ECEF',
+        backgroundColor: isSelected ? colors.primary : isDarkMode ? colors.card : '#F8F9FA',
+        borderColor: isSelected ? colors.primary : isDarkMode ? colors.border : '#E9ECEF',
       }
     ]}
     onPress={onPress}
@@ -160,9 +131,7 @@ const FilterChip: React.FC<{
       style={[
         styles.filterChipText,
         {
-          color: isSelected 
-            ? '#FFFFFF' 
-            : colors.text.primary,
+          color: isSelected ? '#FFFFFF' : colors.text.primary,
           fontWeight: isSelected ? '600' : '500',
         }
       ]}
@@ -308,8 +277,8 @@ export default function TipCallScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   
-  const [languageFilter, setLanguageFilter] = useState<string>('0');
-  const [categoryFilter, setCategoryFilter] = useState<string>('0');
+  const [languageFilter, setLanguageFilter] = useState<number>(0);
+  const [categoryFilter, setCategoryFilter] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>('');
   
   // Add DND state
@@ -378,8 +347,8 @@ export default function TipCallScreen() {
         id: 0,
         page: 1,
         limit: 50,
-        language: languageFilter === '0' ? [] : [parseInt(languageFilter)],
-        interest: categoryFilter === '0' ? [] : [parseInt(categoryFilter)],
+        language: languageFilter === 0 ? [] : [languageFilter],
+        interest: categoryFilter === 0 ? [] : [categoryFilter],
         user_id: null,
         search_by_name: "",
         loggined_user_id: user.id,
@@ -434,8 +403,8 @@ export default function TipCallScreen() {
           id: 0,
           page: 1,
           limit: 50,
-          language: languageFilter === '0' ? [] : [parseInt(languageFilter)],
-          interest: categoryFilter === '0' ? [] : [parseInt(categoryFilter)],
+          language: languageFilter === 0 ? [] : [languageFilter],
+          interest: categoryFilter === 0 ? [] : [categoryFilter],
           user_id: null,
           search_by_name: "",
           loggined_user_id: user.id,
@@ -462,7 +431,7 @@ export default function TipCallScreen() {
   }, [user, languageFilter, categoryFilter]);
 
   // Filter change handlers - these will trigger API calls
-  const handleLanguageFilterChange = useCallback((languageId: string) => {
+  const handleLanguageFilterChange = useCallback((languageId: number) => {
     console.log('[TipCall] Language filter changed to:', languageId);
     setLanguageFilter(languageId);
     
@@ -476,8 +445,8 @@ export default function TipCallScreen() {
           id: 0,
           page: 1,
           limit: 50,
-          language: languageId === '0' ? [] : [parseInt(languageId)],
-          interest: categoryFilter === '0' ? [] : [parseInt(categoryFilter)],
+          language: languageId === 0 ? [] : [languageId],
+          interest: categoryFilter === 0 ? [] : [categoryFilter],
           user_id: null,
           search_by_name: "",
           loggined_user_id: user.id,
@@ -503,7 +472,7 @@ export default function TipCallScreen() {
     fetchWithNewLanguage();
   }, [user, categoryFilter]);
 
-  const handleCategoryFilterChange = useCallback((categoryId: string) => {
+  const handleCategoryFilterChange = useCallback((categoryId: number) => {
     console.log('[TipCall] Category filter changed to:', categoryId);
     setCategoryFilter(categoryId);
     
@@ -517,8 +486,8 @@ export default function TipCallScreen() {
           id: 0,
           page: 1,
           limit: 50,
-          language: languageFilter === '0' ? [] : [parseInt(languageFilter)],
-          interest: categoryId === '0' ? [] : [parseInt(categoryId)],
+          language: languageFilter === 0 ? [] : [languageFilter],
+          interest: categoryId === 0 ? [] : [categoryId],
           user_id: null,
           search_by_name: "",
           loggined_user_id: user.id,
@@ -544,51 +513,12 @@ export default function TipCallScreen() {
     fetchWithNewCategory();
   }, [user, languageFilter]);
 
-  const handleVideoSDKCall = useCallback(async (recipient: Contact, callTypeToInitiate: 'voice' | 'video') => {
-    if (!user || !user.id || !recipient || !recipient.id) {
+  const handleStartCall = useCallback(async (recipient: Contact, callType: 'voice' | 'video') => {
+    if (!user || !recipient.name) {
       Alert.alert("Error", "User or recipient information is missing.");
       return;
     }
-
-    console.log(`[TipCall] Initiating ${callTypeToInitiate} call to ${recipient.name || recipient.id}`);
-    setError(null);
-
-    try {
-      // Start CallKeep integration
-      const callKeepId = uuid.v4() as string;
-      const callKeepService = CallKeepService.getInstance();
-      
-      await callKeepService.startOutgoingCall(
-        callKeepId,
-        recipient.name || "Contact",
-        callTypeToInitiate  // Pass the string 'video' or 'voice' directly
-      );
-
-      // Enhanced call initiation with Firebase Cloud Functions
-      const result = await initiateVideoSDKCall(
-        recipient.id.toString(),
-        callTypeToInitiate,
-        user.name || "User"
-      );
-
-      if (result.success && result.meetingId && result.token) {
-        // Navigate to meeting screen
-        navigation.navigate('Meeting', {
-          meetingId: result.meetingId,
-          token: result.token,
-          callType: callTypeToInitiate,
-          displayName: user.name || "Me",
-          isInitiator: true,
-          recipientName: recipient.name || "Contact",
-        });
-      } else {
-        Alert.alert('Call Failed', result.error || 'Unable to start the call. Please try again.');
-      }
-
-    } catch (error: any) {
-      console.error('[TipCall] Error in handleVideoSDKCall:', error);
-      Alert.alert('Call Error', error.message || 'An unexpected error occurred.');
-    }
+    CallService.getInstance().startOutgoingCall(recipient.id.toString(), recipient.name, callType);
   }, [user, navigation]);
 
   const handleDndToggle = useCallback(async () => {
@@ -625,8 +555,8 @@ export default function TipCallScreen() {
   const renderContactItem = ({ item }: { item: Contact }) => (
     <ContactCard
       contact={item}
-      onVideoCall={() => handleVideoSDKCall(item, 'video')}
-      onVoiceCall={() => handleVideoSDKCall(item, 'voice')}
+      onVideoCall={() => handleStartCall(item, 'video')}
+      onVoiceCall={() => handleStartCall(item, 'voice')}
       colors={colors}
       isDarkMode={isDarkMode}
     />
@@ -691,14 +621,13 @@ export default function TipCallScreen() {
         {/* Updated Header with DND button in the same row */}
         <Header 
           title="Tip Call" 
-          onBackPress={() => navigation.goBack()}
+          leftComponent={
+            <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4 }}>
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
           showWallet={false}
-          showNotifications={false} // Disable built-in notifications to use custom
-          showSearch={false} // Disable built-in search since we're handling it in rightComponent
-          searchPlaceholder="Search contacts by name or ID..."
-          onSearchQueryChange={handleSearch} // Live search handler
-          onSearchSubmit={handleSearch} // Search submit handler
-          onSearchClear={handleClearSearch} // Clear search handler
+          showSearch={false}
           rightComponent={
             <View style={styles.headerRightContainer}>
               {/* Search Icon - added to the left */}
@@ -714,7 +643,7 @@ export default function TipCallScreen() {
 
               {/* Notifications Icon - moved right */}
               <TouchableOpacity
-                onPress={() => navigation.navigate('Notifications' as never)}
+                onPress={() => navigation.navigate('Notifications')}
                 style={[styles.headerIconButton, { marginRight: 8 }]}
               >
                 <Icon name="bell" size={20} color={colors.text.secondary} />

@@ -21,6 +21,10 @@ export interface FirebaseCallData {
     token: string;
     roomId?: string;
   };
+  callInfo: {
+    callType: 'voice' | 'video';
+    callId: string;
+  };
 }
 
 export interface CallStatusUpdate {
@@ -136,7 +140,8 @@ class FirebaseCallService {
     calleeName: string,
     callerName: string,
     meetingId: string,
-    videoSDKToken: string
+    videoSDKToken: string,
+    callInfo: { callType: 'voice' | 'video'; callId: string }
   ): Promise<FirebaseCallData> {
     try {
       const firebaseService = FirebaseService.getInstance();
@@ -164,6 +169,7 @@ class FirebaseCallService {
           meetingId: meetingId,
           token: videoSDKToken,
         },
+        callInfo: callInfo,
       };
     } catch (error) {
       console.error('[FirebaseCallService] Error preparing call data:', error);

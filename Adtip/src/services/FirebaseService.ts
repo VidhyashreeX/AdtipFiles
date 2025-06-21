@@ -7,15 +7,17 @@ import { getApps, getApp } from '@react-native-firebase/app';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NotificationService from './NotificationService';
 import { navigationRef } from '../navigation/NavigationService';
-import FirebaseCallService from './FirebaseCallService';
+import FirebaseCallService, { FirebaseCallData } from './FirebaseCallService';
+import CallService from './CallService';
 
 export interface CallNotificationData {
   callerName: string;
   callType: string;
-  channelName: string;
-  rtcToken: string;
-  callerRtcUid: string;
+  channelName?: string;
+  rtcToken?: string;
+  callerRtcUid?: string;
   isFromNotification: boolean;
+  meetingId?: string;
 }
 
 class FirebaseService {
@@ -127,8 +129,27 @@ class FirebaseService {
    * Handle background call notifications
    */
   private _handleBackgroundCall(remoteMessage: FirebaseMessagingTypes.RemoteMessage): void {
-    // This would integrate with CallKeep or similar service
     console.log('[FCM] Processing background call:', remoteMessage.data);
+    if (remoteMessage.data) {
+      const { callId, meetingId, token, callerName, callType } = remoteMessage.data;
+      if (typeof callId === 'string' && typeof meetingId === 'string' && typeof token === 'string' && typeof callerName === 'string' && typeof callType === 'string') {
+        // Use Notifee to display the incoming call notification
+        NotificationService.displayIncomingCallNotification(
+          callId,
+          callerName,
+          callType as 'voice' | 'video'
+        );
+
+        // Also, let the CallService know about the incoming call to manage its state
+        CallService.getInstance().handleIncomingCall(
+          callId,
+          meetingId,
+          token,
+          callerName,
+          callType as 'voice' | 'video'
+        );
+      }
+    }
   }
 
   /**
@@ -211,6 +232,7 @@ class FirebaseService {
         // Enhanced foreground message handling
         if (remoteMessage?.data?.isIncomingCall === 'true') {
           console.log('[FCM] Incoming call received in foreground');
+          // For foreground, we directly manage the call via CallService
           this._handleForegroundCall(remoteMessage);
         }
 
@@ -252,91 +274,45 @@ class FirebaseService {
    * Handle foreground call notifications
    */
   private _handleForegroundCall(remoteMessage: FirebaseMessagingTypes.RemoteMessage): void {
-    // Show in-app call notification or directly navigate
-    this._handleNotificationNavigation(remoteMessage);
+    console.log('[FCM] Processing foreground call:', remoteMessage.data);
+    if (remoteMessage.data) {
+      const { callId, meetingId, token, callerName, callType } = remoteMessage.data;
+      if (typeof callId === 'string' && typeof meetingId === 'string' && typeof token === 'string' && typeof callerName === 'string' && typeof callType === 'string') {
+        CallService.getInstance().handleIncomingCall(
+          callId,
+          meetingId,
+          token,
+          callerName,
+          callType as 'voice' | 'video'
+        );
+      }
+    }
   }
 
   /**
    * Handle notification navigation based on notification data
    */
   private _handleNotificationNavigation(remoteMessage: FirebaseMessagingTypes.RemoteMessage): void {
-    try {
-      if (remoteMessage?.data?.isIncomingCall === 'true') {
-        // Enhanced call notification handling for VideoSDK
-        const callData = {
-          callerName: remoteMessage.data.callerName || 'Unknown',
-          callType: remoteMessage.data.callType || 'voice',
-          meetingId: remoteMessage.data.meetingId,
-          token: remoteMessage.data.videoSDKToken,
-          isFromNotification: true,
-        };
+    if (!remoteMessage.data) return;
 
-        console.log('[FCM] Processing VideoSDK call notification:', {
-          callerName: callData.callerName,
-          callType: callData.callType,
-          hasMeetingId: !!callData.meetingId,
-          hasToken: !!callData.token,
-        });
+    const navigateTo = (screen: any, params: any) => {
+      navigationRef.isReady()
+        ? navigationRef.navigate(screen, params)
+        : this.delayedNavigation.push({ screen, params });
+    };
 
-        // Navigate to meeting through Main navigator
-        if (callData.meetingId && callData.token) {
-          if (navigationRef.isReady()) {
-            // Fixed navigation - go through Main navigator to Meeting screen
-            navigationRef.navigate('Main', {
-              screen: 'Meeting',
-              params: {
-                meetingId: callData.meetingId,
-                token: callData.token,
-                callType: callData.callType as 'voice' | 'video',
-                displayName: 'Me',
-                isInitiator: false,
-                recipientName: callData.callerName,
-              }
-            });
-          } else {
-            // Store for delayed navigation with proper structure
-            this._storeDelayedNavigation('Meeting', {
-              screen: 'Meeting',
-              params: {
-                meetingId: callData.meetingId,
-                token: callData.token,
-                callType: callData.callType,
-                displayName: 'Me',
-                isInitiator: false,
-                recipientName: callData.callerName,
-              }
-            });
-          }
-        } else {
-          // Fallback to TipCall screen
-          if (navigationRef.isReady()) {
-            navigationRef.navigate('Main', {
-              screen: 'TipCall',
-              params: {
-                initialCallNotificationData: callData
-              }
-            });
-          } else {
-            this._storeDelayedNavigation('TipCall', callData);
-          }
-        }
+    if (remoteMessage.data.isIncomingCall === 'true') {
+      const callData = NotificationService.extractCallData(remoteMessage);
+      if (callData) {
+        // Navigate to the meeting screen when the notification is tapped.
+        navigateTo('Meeting', { initialCallNotificationData: callData });
       }
-
-      // Handle other notification types
-      if (remoteMessage?.data?.type === 'chat') {
-        // Navigate to chat screen
-        if (navigationRef.isReady()) {
-          navigationRef.navigate('Main', {
-            screen: 'Chat',
-            params: {
-              chatId: remoteMessage.data.chatId
-            }
-          });
-        }
-      }
-      
-    } catch (error) {
-      console.warn('[FCM] Error handling notification navigation:', error);
+    } else if (remoteMessage.data.type === 'chat' && typeof remoteMessage.data.chatId === 'string') {
+      navigateTo('Chat', { chatId: remoteMessage.data.chatId });
+    } else if (remoteMessage.data.type === 'new_content' && typeof remoteMessage.data.contentId === 'string') {
+      navigateTo('Content', { contentId: remoteMessage.data.contentId });
+    } else {
+      navigateTo('Home', {});
     }
   }
 
@@ -441,12 +417,11 @@ class FirebaseService {
    * Check if app has notification permissions (v22.2.1 feature)
    */
   public async hasPermission(): Promise<AuthorizationStatus> {
-    try {
-      return await messaging().hasPermission();
-    } catch (error) {
-      console.warn('[FCM] Error checking permission status:', error);
-      return AuthorizationStatus.NOT_DETERMINED;
+    if (!this.messagingReady) {
+      console.log('[FCM] Messaging not ready, returning NOT_DETERMINED');
+      return messaging.AuthorizationStatus.NOT_DETERMINED;
     }
+    return await messaging().hasPermission();
   }
 
   /**
@@ -468,18 +443,11 @@ class FirebaseService {
   }
 
   /**
-   * Set notification categories (iOS only, v22.2.1 feature)
+   * Set notification categories for iOS (v22.2.1 compatible)
    */
   public async setNotificationCategories(categories: any[]): Promise<void> {
-    if (Platform.OS !== 'ios') {
-      return;
-    }
-
-    try {
-      await messaging().setNotificationCategories(categories);
-      console.log('[FCM] Notification categories set successfully');
-    } catch (error) {
-      console.warn('[FCM] Error setting notification categories:', error);
+    if (Platform.OS === 'ios') {
+      // await messaging().setNotificationCategories(categories);
     }
   }
 
@@ -508,65 +476,7 @@ class FirebaseService {
   public reset(): void {
     this.messagingReady = false;
     this.initializationPromise = null;
-    console.log('[FCM] Service reset');
-  }
-
-  /**
-   * Initiate a call with Firebase Cloud Functions integration
-   */
-  public async initiateCall(
-    calleeToken: string,
-    calleePlatform: 'ANDROID' | 'IOS',
-    calleeUserId: string,
-    calleeName: string,
-    callerName: string,
-    meetingId: string,
-    videoSDKToken: string
-  ): Promise<any> {
-    try {
-      const firebaseCallService = FirebaseCallService.getInstance();
-      
-      const callData = await firebaseCallService.prepareCallData(
-        calleeToken,
-        calleePlatform,
-        calleeUserId,
-        calleeName,
-        callerName,
-        meetingId,
-        videoSDKToken
-      );
-
-      return await firebaseCallService.initiateCall(callData);
-    } catch (error) {
-      console.error('[FirebaseService] Error initiating call:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update call status with Firebase Cloud Functions integration
-   */
-  public async updateCallStatus(
-    type: 'calling' | 'accepted' | 'declined' | 'ended' | 'missed',
-    callerName: string,
-    callId?: string,
-    duration?: number
-  ): Promise<any> {
-    try {
-      const firebaseCallService = FirebaseCallService.getInstance();
-      
-      const updateData = await firebaseCallService.prepareCallStatusUpdate(
-        type,
-        callerName,
-        callId,
-        duration
-      );
-
-      return await firebaseCallService.updateCallStatus(updateData);
-    } catch (error) {
-      console.error('[FirebaseService] Error updating call status:', error);
-      throw error;
-    }
+    console.log('[FCM] Firebase service reset');
   }
 }
 

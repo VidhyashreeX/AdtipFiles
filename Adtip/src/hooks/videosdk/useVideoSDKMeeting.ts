@@ -1,15 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
-import { useMeeting } from '@videosdk.live/react-native-sdk';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useMeeting, useParticipant, switchAudioDevice } from '@videosdk.live/react-native-sdk';
 import { CallSettings, CallStatus, CallMetrics } from '../../types/videosdk';
-import { updateCallStatus } from '../../helpers/CallHelper';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface UseVideoSDKMeetingProps {
-  meetingId: string;
-  token: string;
-  participantName: string;
-  micEnabled?: boolean;
-  webcamEnabled?: boolean;
   onMeetingJoined?: () => void;
   onMeetingLeft?: () => void;
   onError?: (error: any) => void;
@@ -18,92 +11,49 @@ export interface UseVideoSDKMeetingProps {
 export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
   const [callStatus, setCallStatus] = useState<CallStatus>('connecting');
   const [callSettings, setCallSettings] = useState<CallSettings>({
-    micEnabled: props.micEnabled ?? false,
-    webcamEnabled: props.webcamEnabled ?? false,
-    speakerEnabled: true,
+    micEnabled: false,
+    webcamEnabled: false,
+    speakerEnabled: true, // Speaker is on by default
   });
   const [metrics, setMetrics] = useState<CallMetrics>({
     duration: 0,
     participantCount: 0,
     networkQuality: 'good',
   });
-  const [callId, setCallId] = useState<string>('');
 
   const startTimeRef = useRef<number>(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Get call ID from storage or props
-  useEffect(() => {
-    const getCallId = async () => {
-      const storedCallId = await AsyncStorage.getItem('currentCallId');
-      if (storedCallId) {
-        setCallId(storedCallId);
-      }
-    };
-    getCallId();
-  }, []);
-
-  const {
-    meetingId,
-    participants,
-    localParticipant,
-    join,
-    leave,
-    toggleMic,
-    toggleWebcam,
-    startRecording,
-    stopRecording,
-    activeSpeakerId,
-    activePresenterId,
-  } = useMeeting({
-    meetingId: props.meetingId,
-    token: props.token,
-    name: props.participantName,
-    micEnabled: props.micEnabled,
-    webcamEnabled: props.webcamEnabled,
-    onMeetingJoined: async () => {
+  const mMeeting = useMeeting({
+    onMeetingJoined: () => {
       console.log('[VideoSDKMeeting] Meeting joined successfully');
       setCallStatus('connected');
       startTimeRef.current = Date.now();
       startDurationTimer();
-      
-      // Update call status to 'accepted'
-      await updateCallStatus('accepted', props.participantName, callId);
-      
       props.onMeetingJoined?.();
     },
-    onMeetingLeft: async () => {
+    onMeetingLeft: () => {
       console.log('[VideoSDKMeeting] Meeting left');
       setCallStatus('ended');
       stopDurationTimer();
-      
-      // Update call status to 'ended' with duration
-      const duration = Math.floor((Date.now() - startTimeRef.current) / 1000);
-      await updateCallStatus('ended', props.participantName, callId, duration);
-      
-      // Clean up call ID
-      await AsyncStorage.removeItem('currentCallId');
-      
       props.onMeetingLeft?.();
     },
-    onParticipantJoined: (participant) => {
-      console.log('[VideoSDKMeeting] Participant joined:', participant.displayName);
-      updateParticipantCount();
-    },
-    onParticipantLeft: (participant) => {
-      console.log('[VideoSDKMeeting] Participant left:', participant.displayName);
-      updateParticipantCount();
-    },
-    onError: async (error) => {
+    onParticipantJoined: () => updateParticipantCount(),
+    onParticipantLeft: () => updateParticipantCount(),
+    onError: (error) => {
       console.error('[VideoSDKMeeting] Meeting error:', error);
       setCallStatus('failed');
-      
-      // Update call status to 'missed' or 'ended' based on error
-      await updateCallStatus('missed', props.participantName, callId);
-      
       props.onError?.(error);
     },
   });
+
+  const { localParticipant } = mMeeting;
+  const { micOn, webcamOn } = useParticipant(localParticipant?.id || '');
+
+  useEffect(() => {
+    setCallSettings(prev => ({ ...prev, micEnabled: micOn, webcamEnabled: webcamOn }));
+  }, [micOn, webcamOn]);
+
 
   const startDurationTimer = () => {
     intervalRef.current = setInterval(() => {
@@ -121,62 +71,46 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
     }
   };
 
-  const updateParticipantCount = () => {
-    setMetrics(prev => ({ ...prev, participantCount: participants.size }));
-  };
+  const updateParticipantCount = useCallback(() => {
+    if (mMeeting.participants) {
+      setMetrics(prev => ({ ...prev, participantCount: mMeeting.participants.size }));
+    }
+  }, [mMeeting.participants]);
 
   const handleToggleMic = () => {
-    toggleMic();
-    setCallSettings(prev => ({ ...prev, micEnabled: !prev.micEnabled }));
+    mMeeting.toggleMic();
   };
 
   const handleToggleWebcam = () => {
-    toggleWebcam();
-    setCallSettings(prev => ({ ...prev, webcamEnabled: !prev.webcamEnabled }));
+    mMeeting.toggleWebcam();
   };
 
   const handleToggleSpeaker = () => {
-    setCallSettings(prev => ({ ...prev, speakerEnabled: !prev.speakerEnabled }));
+    const newSpeakerState = !callSettings.speakerEnabled;
+    switchAudioDevice(newSpeakerState ? 'SPEAKER_PHONE' : 'EARPIECE');
+    setCallSettings(prev => ({ ...prev, speakerEnabled: newSpeakerState }));
   };
 
-  const endCall = async () => {
-    // Update call status before leaving
-    const duration = Math.floor((Date.now() - startTimeRef.current) / 1000);
-    await updateCallStatus('ended', props.participantName, callId, duration);
-    
-    leave();
+  const endCall = () => {
+    mMeeting.leave();
   };
 
   useEffect(() => {
     updateParticipantCount();
-  }, [participants]);
+  }, [mMeeting.participants, updateParticipantCount]);
 
   useEffect(() => {
-    return () => {
-      stopDurationTimer();
-    };
+    return () => stopDurationTimer();
   }, []);
 
   return {
-    // Meeting data
-    meetingId,
-    participants,
-    localParticipant,
-    activeSpeakerId,
-    activePresenterId,
-    
-    // Call state
+    ...mMeeting,
     callStatus,
     callSettings,
     metrics,
-    
-    // Actions
-    join,
-    leave: endCall, // Use enhanced endCall function
+    leave: endCall,
     toggleMic: handleToggleMic,
     toggleWebcam: handleToggleWebcam,
     toggleSpeaker: handleToggleSpeaker,
-    startRecording,
-    stopRecording,
   };
 };

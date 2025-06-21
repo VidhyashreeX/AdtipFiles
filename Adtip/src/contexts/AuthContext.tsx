@@ -4,7 +4,7 @@ import {API_BASE_URL, ENDPOINTS} from '../constants/api';
 import ApiService from '../services/ApiService';
 import {navigationRef} from '../navigation/NavigationService';
 import LastSeenService from '../services/LastSeenService'; // Ensure this import is present
-import { ApiResponse, OtpLoginResponse as ApiOtpResponse, User as ApiUserType } from '../types/api';
+import { ApiResponse, OtpLoginResponse as ApiOtpResponse, OtpVerifyResponse as ApiUserType, OtpVerifyApiResponse } from '../types/api';
 
 // Define user type (using the one from api.ts for consistency)
 export type User = ApiUserType; // Assuming ApiUserType from types/api.ts is the correct User type
@@ -20,7 +20,7 @@ type AuthContextType = {
   error: string | null;
   isInitialized: boolean; // <-- Add this
   login: (mobileNumber: string) => Promise<OtpResponse>;
-  verifyOtp: (mobileNumber: string, otp: string, id: string) => Promise<User>;
+  verifyOtp: (mobileNumber: string, otp: string, id: string) => Promise<OtpVerifyApiResponse>;
   logout: () => Promise<void>;
   updateUserDetails: (userData: Partial<User>) => Promise<void>;
   refreshUserData: () => Promise<void>;
@@ -37,7 +37,7 @@ const AuthContext = createContext<AuthContextType>({
   error: null,
   isInitialized: false, // <-- Default to false
   login: async () => ({}) as OtpResponse,
-  verifyOtp: async () => ({}) as User,
+  verifyOtp: async () => ({}) as OtpVerifyApiResponse,
   logout: async () => {},
   updateUserDetails: async () => {},
   refreshUserData: async () => {},
@@ -78,7 +78,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
           if (userData.is_first_time === 0 || userData.isSaveUserDetails === 1) {
             setIsAuthenticated(true);
           }
-          checkChannelStatus(userData.id);
+          checkChannelStatus(userData.id.toString());
         }
       } catch (err) {
         console.error('Error loading user data:', err);
@@ -150,7 +150,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     }
   };
   // Verify OTP
-  const verifyOtp = async (mobileNumber: string, otp: string, id: string) => {
+  const verifyOtp = async (mobileNumber: string, otp: string, id: string): Promise<OtpVerifyApiResponse> => {
     try {
       setLoading(true);
       
@@ -163,11 +163,11 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       console.log('AuthContext - OTP verification response:', response);
 
       // Handle both response formats
-      let userData = null;
-      if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+      let userData: User | null = null;
+      if ('data' in response && response.data && Array.isArray(response.data) && response.data.length > 0) {
         userData = response.data[0];
-      } else if (response.id) {
-        userData = response;
+      } else if ('id' in response && response.id) {
+        userData = response as User;
       }
 
       if (userData && userData.id) {
@@ -176,6 +176,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         
         // Store user ID and token
         await AsyncStorage.setItem('userId', userData.id.toString());
+        await AsyncStorage.setItem('userName', userData.name || '');
         await AsyncStorage.setItem('user', JSON.stringify(userData));
         
         if (response.accessToken) {
@@ -298,25 +299,27 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
 
   // Refresh user data from API
   const refreshUserData = async (): Promise<void> => {
-    if (!user || !isAuthenticated) {
+    setError(null);
+    const currentUserId = user?.id;
+
+    if (!currentUserId) {
+      console.log('No user to refresh.');
       return;
     }
 
-    setLoading(true); // Operation loading
-
     try {
-      await fetch(`${API_BASE_URL}/api/ping`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${await AsyncStorage.getItem('accessToken')}`,
-        },
-      });
+      setLoading(true);
+      const response = await ApiService.get<User>(`/api/user/${currentUserId}`); // Assuming an endpoint exists
+      
+      setUser(response);
+      await AsyncStorage.setItem('user', JSON.stringify(response));
+      await AsyncStorage.setItem('userName', response.name || '');
 
-      checkChannelStatus(user.id);
     } catch (err) {
-      console.error('Error refreshing user data:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to refresh user data';
+      setError(errorMessage);
     } finally {
-      setLoading(false); // Operation loading
+      setLoading(false);
     }
   };
 
@@ -348,15 +351,18 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
 
   // Provide context value
   const contextValue: AuthContextType = {
-    user, // Add this
     isAuthenticated,
-    isInitialized,
+    user,
     loading,
+    error,
+    isInitialized,
     login,
     verifyOtp,
     logout,
-    refreshUserData,
     updateUserDetails,
+    refreshUserData,
+    hasChannel,
+    createChannel,
     completeOnboarding,
   };
 

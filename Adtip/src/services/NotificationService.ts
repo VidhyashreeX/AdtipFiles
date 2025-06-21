@@ -2,7 +2,8 @@ import { AuthorizationStatus } from '@react-native-firebase/messaging';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ApiService from './ApiService';
-import messaging from '@react-native-firebase/messaging';
+import messaging, { FirebaseMessagingTypes } from '@react-native-firebase/messaging';
+import notifee, { AndroidImportance, AndroidVisibility, EventType } from '@notifee/react-native';
 
 class NotificationService {
   /**
@@ -88,14 +89,14 @@ class NotificationService {
   /**
    * Check current permission status (v22.2.1 feature)
    */
-  static async checkPermissionStatus(): Promise<AuthorizationStatus> {
+  static async checkPermissionStatus(): Promise<import('@react-native-firebase/messaging').AuthorizationStatus | null> {
     try {
       const status = await messaging().hasPermission();
       console.log('[NotificationService] Current permission status:', status);
       return status;
     } catch (error) {
       console.error('[NotificationService] Failed to check permission status:', error);
-      return AuthorizationStatus.NOT_DETERMINED;
+      return null;
     }
   }
 
@@ -140,49 +141,112 @@ class NotificationService {
       return;
     }
 
-    try {
-      const categories = [
-        {
-          id: 'call',
-          actions: [
-            {
-              id: 'accept',
-              title: 'Accept',
-              options: {
-                foreground: true,
+    // setNotificationCategories is not available in all versions, so we check for it
+    if ((messaging() as any).setNotificationCategories) {
+      try {
+        const categories = [
+          {
+            id: 'call',
+            actions: [
+              {
+                id: 'accept',
+                title: 'Accept',
+                options: {
+                  foreground: true,
+                },
               },
-            },
-            {
-              id: 'decline',
-              title: 'Decline',
-              options: {
-                destructive: true,
+              {
+                id: 'decline',
+                title: 'Decline',
+                options: {
+                  destructive: true,
+                },
               },
-            },
-          ],
-        },
-        {
-          id: 'message',
-          actions: [
-            {
-              id: 'reply',
-              title: 'Reply',
-              options: {
-                foreground: true,
+            ],
+          },
+          {
+            id: 'message',
+            actions: [
+              {
+                id: 'reply',
+                title: 'Reply',
+                options: {
+                  foreground: true,
+                },
               },
-            },
-            {
-              id: 'mark_read',
-              title: 'Mark as Read',
-            },
-          ],
-        },
-      ];
+              {
+                id: 'mark_read',
+                title: 'Mark as Read',
+              },
+            ],
+          },
+        ];
 
-      await messaging().setNotificationCategories(categories);
-      console.log('[NotificationService] Notification categories set successfully');
+        await (messaging() as any).setNotificationCategories(categories);
+        console.log('[NotificationService] Notification categories set successfully');
+      } catch (error) {
+        console.error('[NotificationService] Failed to set notification categories:', error);
+      }
+    } else {
+      console.warn('[NotificationService] setNotificationCategories is not supported in this version of @react-native-firebase/messaging.');
+    }
+  }
+
+  static async displayIncomingCallNotification(
+    callId: string,
+    callerName: string,
+    callType: 'voice' | 'video'
+  ) {
+    try {
+      // Create a channel for incoming calls
+      const channelId = await notifee.createChannel({
+        id: 'calls',
+        name: 'Incoming Calls',
+        importance: AndroidImportance.HIGH,
+        sound: 'default', // You can specify a custom sound file
+        vibration: true,
+        vibrationPattern: [300, 500],
+      });
+
+      // Display a notification
+      await notifee.displayNotification({
+        title: `Incoming ${callType === 'video' ? 'Video' : 'Voice'} Call`,
+        body: `${callerName} is calling you.`,
+        data: { callId, callerName, callType },
+        android: {
+          channelId,
+          importance: AndroidImportance.HIGH,
+          visibility: AndroidVisibility.PUBLIC,
+          pressAction: {
+            id: 'default',
+          },
+          actions: [
+            {
+              title: 'Accept',
+              pressAction: {
+                id: 'accept',
+              },
+            },
+            {
+              title: 'Decline',
+              pressAction: {
+                id: 'decline',
+              },
+              // Destructive action (optional)
+            },
+          ],
+          fullScreenAction: {
+            id: 'default', // This is important for making the screen wake up
+          },
+        },
+        ios: {
+          categoryId: 'call',
+          sound: 'default', // or a custom sound
+        }
+      });
+      console.log('[NotificationService] Incoming call notification displayed.');
     } catch (error) {
-      console.error('[NotificationService] Failed to set notification categories:', error);
+      console.error('[NotificationService] Failed to display incoming call notification:', error);
     }
   }
 
@@ -209,7 +273,7 @@ class NotificationService {
   /**
    * Update call status
    */
-  static async updateCallStatus(callerId: string, receiverId: string, status: string, callType: string): Promise<boolean> {
+  static async updateCallStatus(callerId: string, receiverId: string, status: 'calling' | 'accepted' | 'declined' | 'ended' | 'missed', callType: string): Promise<boolean> {
     try {
       await ApiService.handleCall({
         callerId,

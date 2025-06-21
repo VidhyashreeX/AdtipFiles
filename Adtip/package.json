@@ -13,6 +13,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.821.0",
     "@d11/react-native-fast-image": "^8.9.2",
+    "@notifee/react-native": "^9.1.8",
     "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-native-community/blur": "^4.4.1",
     "@react-native-community/datetimepicker": "^8.4.1",

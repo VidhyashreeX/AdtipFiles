@@ -20,6 +20,7 @@ export const COLORS = {
   border: '#d1d5db',
   borderLight: '#e5e7eb',
   error: '#f43f5e',
+  danger: '#ef4444',
   warning: '#FFF3CD',
   success: '#00C853',
   info: '#3b82f6',

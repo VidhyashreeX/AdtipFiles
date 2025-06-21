@@ -38,7 +38,7 @@ import { navigationRef } from './src/navigation/NavigationService';
 // Services
 import FirebaseService from './src/services/FirebaseService';
 import VideoSDKService from './src/services/videosdk/VideoSDKService';
-import CallKeepService from './src/services/CallKeepService';
+import CallService from './src/services/CallService';
 
 // Constants
 import { COLORS } from './src/constants/colors';
@@ -65,7 +65,7 @@ const AppNavigator = () => {
   const { isAuthenticated, isInitialized, user } = useAuth();
   const [firebaseReady, setFirebaseReady] = useState(false);
   const [videoSDKReady, setVideoSDKReady] = useState(false);
-  const [callKeepReady, setCallKeepReady] = useState(false);
+  const [callServiceReady, setCallServiceReady] = useState(false);
   const insets = useSafeAreaInsets();
   const { isDarkMode, colors } = useTheme();
 
@@ -118,50 +118,22 @@ const AppNavigator = () => {
     initVideoSDK();
   }, []);
 
-  // Initialize CallKeep Service
+  // Initialize Call Service
   useEffect(() => {
-    const initializeCallKeep = async () => {
+    const initializeCallService = async () => {
       try {
-        console.log('[App] Initializing CallKeep service...');
-        
-        const callKeepService = CallKeepService.getInstance();
-        
-        // Initialize CallKeep
-        const callKeepConfig = {
-          ios: {
-            appName: 'AdTip',
-            maximumCallsPerCallGroup: 1,
-            maximumCallGroups: 1,
-            supportsVideo: true,
-            includesCallsInRecents: true,
-          },
-          android: {
-            alertTitle: 'Permissions required',
-            alertDescription: 'This application needs to access your phone accounts',
-            cancelButton: 'Cancel',
-            okButton: 'OK',
-            imageName: 'phone_account_icon',
-            additionalPermissions: [],
-            selfManaged: false,
-          },
-        };
-
-        const success = await callKeepService.initialize(callKeepConfig);
-        setCallKeepReady(success);
-        
-        if (success) {
-          console.log('[App] CallKeep initialized successfully');
-        } else {
-          console.warn('[App] CallKeep initialization failed, continuing without call management');
-          setCallKeepReady(true); // Allow app to continue
-        }
+        console.log('[App] Initializing Call service...');
+        const callService = CallService.getInstance();
+        await callService.initialize();
+        setCallServiceReady(true);
+        console.log('[App] Call service initialized successfully');
       } catch (error) {
-        console.error('[App] Failed to initialize CallKeep:', error);
-        setCallKeepReady(true); // Allow app to continue
+        console.error('[App] Failed to initialize CallService:', error);
+        setCallServiceReady(true); // Allow app to continue
       }
     };
 
-    initializeCallKeep();
+    initializeCallService();
   }, []);
 
   // Setup notifications when Firebase is ready and user is authenticated
@@ -191,7 +163,7 @@ const AppNavigator = () => {
     }
   }, [firebaseReady]);
 
-  const allServicesReady = firebaseReady && videoSDKReady && callKeepReady;
+  const allServicesReady = firebaseReady && videoSDKReady && callServiceReady;
 
   if (!isInitialized || !allServicesReady) {
     return (
@@ -204,7 +176,7 @@ const AppNavigator = () => {
           {!isInitialized ? 'Initializing...' : 
            !firebaseReady ? 'Setting up notifications...' :
            !videoSDKReady ? 'Initializing video services...' :
-           !callKeepReady ? 'Setting up call management...' : 'Loading...'}
+           !callServiceReady ? 'Setting up call management...' : 'Loading...'}
         </Text>
       </SafeAreaViewRN>
     );
