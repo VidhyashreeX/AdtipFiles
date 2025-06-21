@@ -1,5 +1,5 @@
 // src/components/common/Header.tsx
-import React, {useState, useRef, useMemo, useCallback} from 'react'; // Add useMemo, useCallback
+import React, {useState, useRef, useMemo, useCallback} from 'react';
 import {View, Text, StyleSheet, TouchableOpacity, Image, useWindowDimensions, Platform, TextInput, Keyboard} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {useNavigation} from '@react-navigation/native';
@@ -20,8 +20,9 @@ export interface HeaderProps {
   onRightIconPress?: () => void;
   showTipShortsIcon?: boolean;
   onSearchSubmit?: (query: string) => void;
-  onSearchQueryChange?: (query: string) => void; // <<< ADD NEW PROP
-  showSearch?: boolean; 
+  onSearchQueryChange?: (query: string) => void;
+  showSearch?: boolean;
+  showPremium?: boolean; // New prop to control premium button visibility
 }
 
 // Utility to help decide default logo visibility
@@ -41,25 +42,27 @@ const Header: React.FC<HeaderProps> = ({
   onRightIconPress,
   showTipShortsIcon,
   onSearchSubmit,
-  onSearchQueryChange, // <<< GET NEW PROP
+  onSearchQueryChange,
   showSearch = true,
+  showPremium = true, // Default to true to show premium button everywhere
 }) => {
   const navigation = useNavigation();
-  const {colors} = useTheme();
-  const {balance, isLoading} = useWallet(); 
+  const {colors, isDarkMode} = useTheme();
+  const {balance, isLoading, isPremium} = useWallet(); 
   const {toggleSidebar} = useSidebar();
   const {width: screenWidth} = useWindowDimensions();
   const insets = useSafeAreaInsets(); 
   const searchInputRef = useRef<TextInput>(null);
 
   const [isSearchActive, setIsSearchActive] = useState(false);
-  const [searchQueryLocal, setSearchQueryLocal] = useState(''); // Renamed to avoid confusion with TipCallScreen's searchQuery
+  const [searchQueryLocal, setSearchQueryLocal] = useState('');
 
   // Memoize expensive calculations
   const sizes = useMemo(() => getResponsiveSizes(screenWidth), [screenWidth]);
   
   // Memoize navigation functions
   const navigateToWallet = useCallback(() => navigation.navigate('Wallet' as never), [navigation]);
+  const navigateToPremium = useCallback(() => navigation.navigate('UpgradePremiumScreen' as never), [navigation]);
 
   // Memoize search handlers
   const handleSearchIconPress = useCallback(() => {
@@ -72,28 +75,25 @@ const Header: React.FC<HeaderProps> = ({
     setIsSearchActive(false);
     setSearchQueryLocal('');
     if (onSearchQueryChange) {
-      onSearchQueryChange(''); // Notify that search is cleared
+      onSearchQueryChange('');
     }
   }, [onSearchQueryChange]);
 
   const handleSearchQueryChangeInternal = useCallback((text: string) => {
     setSearchQueryLocal(text);
     if (onSearchQueryChange) {
-      onSearchQueryChange(text); // <<< CALL THE NEW PROP
+      onSearchQueryChange(text);
     }
   }, [onSearchQueryChange]);
   
-  const handleSearchSubmitInternal = useCallback(() => { // Renamed
+  const handleSearchSubmitInternal = useCallback(() => {
     Keyboard.dismiss();
     if (searchQueryLocal.trim() && onSearchSubmit) {
       onSearchSubmit(searchQueryLocal.trim());
     }
-    // Optionally, if onSearchSubmit is not provided but onSearchQueryChange is,
-    // you might still want to call onSearchQueryChange here if the behavior is desired.
-    // For now, it's distinct.
   }, [searchQueryLocal, onSearchSubmit]);
 
-  // Memoize derived values
+  // Memoized derived values
   const defaultShowLogo = useMemo(() => !isScreenHeader(), []);
   const actualShowLogo = useMemo(() => 
     typeof showLogo === 'boolean' ? showLogo : defaultShowLogo
@@ -101,7 +101,7 @@ const Header: React.FC<HeaderProps> = ({
   
   const renderNodeSafely = (node: React.ReactNode, defaultStyle?: any): React.ReactNode => {
     if (node === null || node === undefined || typeof node === 'boolean') {
-      return null; // React handles these by rendering nothing
+      return null;
     }
     if (Array.isArray(node)) {
       return node.map((child, index) => (
@@ -115,11 +115,30 @@ const Header: React.FC<HeaderProps> = ({
       return <Text style={defaultStyle}>{node.toString()}</Text>;
     }
     if (React.isValidElement(node)) {
-      return node; // It's already a React element
+      return node;
     }
-    // Fallback for other unexpected types, though React.ReactNode should cover most.
     console.warn('Header: Encountered an unexpected child type in renderNodeSafely:', node);
     return null;
+  };
+
+  // Premium button component - only star icon
+  const renderPremiumButton = () => {
+    if (!showPremium) return null;
+
+    return (
+      <TouchableOpacity
+        style={styles.premiumButton}
+        onPress={navigateToPremium}
+        activeOpacity={0.8}
+      >
+        <Icon 
+          name={isPremium ? "star" : "star"} 
+          size={sizes.iconSize} 
+          color={isPremium ? "#FFD700" : colors.text.secondary}
+          fill={isPremium ? "#FFD700" : "transparent"}
+        />
+      </TouchableOpacity>
+    );
   };
 
   return (
@@ -133,7 +152,7 @@ const Header: React.FC<HeaderProps> = ({
         }
       ]}
     >
-      {/* --- LEFT SECTION --- */}
+      {/* --- LEFT SECTION (NO BACK BUTTON) --- */}
       <View style={[styles.leftSection, { marginRight: sizes.iconSpacing / 2 }]}>
         {leftComponent !== undefined ? renderNodeSafely(leftComponent, styles.title) : (
           <>
@@ -177,10 +196,10 @@ const Header: React.FC<HeaderProps> = ({
                   fontSize: sizes.titleSize > 16 ? sizes.titleSize - 2 : sizes.titleSize,
                 }
               ]}
-              placeholder="Search..." // Generic placeholder
+              placeholder="Search..."
               value={searchQueryLocal}
-              onChangeText={handleSearchQueryChangeInternal} // <<< USE INTERNAL HANDLER
-              onSubmitEditing={handleSearchSubmitInternal} // <<< USE INTERNAL HANDLER
+              onChangeText={handleSearchQueryChangeInternal}
+              onSubmitEditing={handleSearchSubmitInternal}
               returnKeyType="search"
               autoFocus={true}
             />
@@ -212,7 +231,7 @@ const Header: React.FC<HeaderProps> = ({
                 <Icon name={rightIcon} size={sizes.iconSize} color={colors.text.secondary} />
               </TouchableOpacity>
             )}
-            {showSearch && ( // Ensure showSearch wraps this logic
+            {showSearch && (
               isSearchActive ? (
                 <TouchableOpacity onPress={handleCloseSearch} style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}>
                   <Icon name="x" size={sizes.iconSize} color={colors.text.primary} />
@@ -223,15 +242,14 @@ const Header: React.FC<HeaderProps> = ({
                 </TouchableOpacity>
               )
             )}
+            {/* Premium Button - Between search and wallet */}
+            {renderPremiumButton()}
             {showWallet && (
               <TouchableOpacity
                 onPress={navigateToWallet}
-                style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2, flexDirection: 'row', alignItems: 'center'}]}
+                style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}
               >
                 <Icon name="credit-card" size={sizes.iconSize} color={colors.primary} />
-                <Text style={{ marginLeft: 4, color: colors.primary, fontWeight: 'bold', fontSize: sizes.iconSize * 0.95 }}>
-                  ₹{isLoading ? '...' : balance}
-                </Text>
               </TouchableOpacity>
             )}
           </>
@@ -306,9 +324,6 @@ const styles = StyleSheet.create({
     padding: 6,
     position: 'relative',
   },
-  notificationBadge: {
-    position: 'absolute',
-  },
   searchInput: {
     flex: 1,
     height: 36,
@@ -324,6 +339,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  
+  // Premium Button Styles - simplified to just contain the star
+  premiumButton: {
+    marginLeft: 8,
+    padding: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
 
-export default React.memo(Header); // Memoize the entire component
+export default React.memo(Header);

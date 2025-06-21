@@ -621,11 +621,6 @@ export default function TipCallScreen() {
         {/* Updated Header with DND button in the same row */}
         <Header 
           title="Tip Call" 
-          leftComponent={
-            <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4 }}>
-              <Icon name="arrow-left" size={24} color={colors.text.primary} />
-            </TouchableOpacity>
-          }
           showWallet={false}
           showSearch={false}
           rightComponent={
