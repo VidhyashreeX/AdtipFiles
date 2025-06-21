@@ -561,7 +561,7 @@ export default function TipCallScreen() {
       await callKeepService.startOutgoingCall(
         callKeepId,
         recipient.name || "Contact",
-        callTypeToInitiate === 'video'
+        callTypeToInitiate  // Pass the string 'video' or 'voice' directly
       );
 
       // Enhanced call initiation with Firebase Cloud Functions

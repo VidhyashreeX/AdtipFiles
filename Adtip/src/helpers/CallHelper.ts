@@ -27,18 +27,36 @@ export const initiateVideoSDKCall = async (
     });
 
     // Step 1: Generate VideoSDK token
-    const tokenResponse = await ApiService.generateVideoSDKParticipantToken();
-    if (!tokenResponse.success || !tokenResponse.token) {
-      throw new Error('Failed to generate VideoSDK token');
+    let tokenResponse;
+    try {
+      tokenResponse = await ApiService.generateVideoSDKParticipantToken();
+      if (!tokenResponse.success || !tokenResponse.token) {
+        throw new Error(`Failed to generate VideoSDK token: ${tokenResponse.message || 'No token returned'}`);
+      }
+    } catch (tokenError: any) {
+      console.error('[CallHelper] Token generation failed:', tokenError);
+      return { 
+        success: false, 
+        error: `Token error: ${tokenError.message || 'Unknown token error'}` 
+      };
     }
 
     const videoSDKToken = tokenResponse.token;
     console.log('[CallHelper] VideoSDK token generated successfully');
 
     // Step 2: Create meeting room
-    const meetingResponse = await ApiService.createVideoSDKMeeting(videoSDKToken);
-    if (!meetingResponse.success || !meetingResponse.data?.roomId) {
-      throw new Error('Failed to create VideoSDK meeting');
+    let meetingResponse;
+    try {
+      meetingResponse = await ApiService.createVideoSDKMeeting(videoSDKToken);
+      if (!meetingResponse.success || !meetingResponse.data?.roomId) {
+        throw new Error(`Failed to create VideoSDK meeting: ${meetingResponse.message || 'No roomId returned'}`);
+      }
+    } catch (meetingError: any) {
+      console.error('[CallHelper] Meeting creation failed:', meetingError);
+      return { 
+        success: false, 
+        error: `Meeting error: ${meetingError.message || 'Unknown meeting error'}` 
+      };
     }
 
     const meetingId = meetingResponse.data.roomId;
