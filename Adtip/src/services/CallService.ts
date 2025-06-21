@@ -14,7 +14,9 @@ interface ActiveCall {
   callId: string;
   meetingId: string;
   token: string;
+  callerId: string;
   callerName: string;
+  callerFcmToken?: string; // The person who started the call
   recipientId: string;
   recipientName: string;
   isInitiator: boolean;
@@ -79,13 +81,27 @@ class CallService {
     }
 
     try {
-      this.callKeepService.startOutgoingCall(callId, recipientName, recipientName, callType === 'video');
+      console.log('[CallService] Starting outgoing call...');
       const { meetingId, token } = await this.createMeeting();
-
-      this.activeCall = { callId, meetingId, token, callerName: currentUser.name, recipientId, recipientName, isInitiator: true, callType, status: 'dialing' };
       
-      await this.notifyRecipient();
+      //this.callKeepService.startOutgoingCall(callId, recipientName, recipientName, callType === 'video');
+
+      this.activeCall = { 
+        callId, 
+        meetingId, 
+        token, 
+        callerId: currentUser.id,
+        callerName: currentUser.name, 
+        recipientId, 
+        recipientName, 
+        isInitiator: true, 
+        callType, 
+        status: 'dialing' 
+      };
+      
+      await this.notifyRecipientOfNewCall();
       this.navigateToMeetingScreen();
+      console.log('[CallService] Outgoing call initiated. Waiting for recipient to answer.');
 
     } catch (error: any) {
       console.error('[CallService] Outgoing call failed:', error);
@@ -102,7 +118,9 @@ class CallService {
     callId: string;
     meetingId: string;
     token: string;
+    callerId: string;
     callerName: string;
+    callerFcmToken: string;
     callType: 'voice' | 'video';
     [key: string]: any;
   }) {
@@ -115,8 +133,10 @@ class CallService {
       callId: callInfo.callId,
       meetingId: callInfo.meetingId,
       token: callInfo.token,
+      callerId: callInfo.callerId,
       callerName: callInfo.callerName,
-      recipientId: '',
+      callerFcmToken: callInfo.callerFcmToken,
+      recipientId: '', // This device is the recipient
       recipientName: '',
       isInitiator: false,
       callType: callInfo.callType,
@@ -131,77 +151,100 @@ class CallService {
     );
   }
 
-  private onAnswerCall({ callUUID }: { callUUID: string }) {
-    if (this.activeCall && this.activeCall.callId === callUUID) {
+  private async onAnswerCall({ callUUID }: { callUUID: string }) {
+    if (this.activeCall && this.activeCall.callId === callUUID && !this.activeCall.isInitiator) {
       this.activeCall.status = 'connected';
+      
+      // Notify the original caller that we have accepted the call.
+      await this.notifyCallStatusUpdate('accepted', this.activeCall);
+
       this.navigateToMeetingScreen();
     }
   }
 
-  private async onEndCall({ callUUID }: { callUUID: string }) {
-    if (this.isEndingCall && this.activeCall?.callId !== callUUID) {
-      // If we are in the process of ending a call, but a different call UUID comes in, ignore.
-      return;
+  public handleCallAccepted(callId: string) {
+    if (this.activeCall && this.activeCall.callId === callId && this.activeCall.isInitiator) {
+      this.activeCall.status = 'connected';
+      RNCallKeep.reportConnectedOutgoingCallWithUUID(callId);
+      this.navigateToMeetingScreen();
     }
+  }
 
-    if (this.activeCall && this.activeCall.callId === callUUID) {
-      this.isEndingCall = true;
-      const callToEnd = { ...this.activeCall }; // Capture state before resetting
-      this.resetActiveCall(); // Reset state immediately to prevent re-entry
-
-      console.log('[CallService] onEndCall triggered for call:', callToEnd.callId);
-
-      try {
-        // Notify caller if this was an incoming call that was declined (not connected)
-        if (!callToEnd.isInitiator && callToEnd.status !== 'connected') {
-          await this.notifyCallerDeclined(callToEnd);
-        }
-
-        // Send the final status to the backend
-        await this.sendCallEndedStatus(callToEnd);
-
-        // Navigate back to TipCallScreen after call ends
-        if (navigationRef.isReady()) {
-          console.log('[CallService] Navigating to TipCallScreen after call end.');
-          navigationRef.navigate('TipCall' as any);
-        }
-      } catch (error) {
-        console.error('[CallService] Error during onEndCall cleanup:', error);
-      } finally {
-        this.isEndingCall = false; // Reset the flag
-        console.log('[CallService] Call cleanup finished for:', callUUID);
+  public handleCallDeclined(callId: string) {
+    if (this.activeCall && this.activeCall.callId === callId) {
+      this.endCurrentCall(); // end call without notifying, because decline notification is separate
+      if(this.activeCall.isInitiator) {
+        Alert.alert("Call Declined", "The other user is busy or declined the call.");
       }
     }
   }
 
+  private async onEndCall({ callUUID }: { callUUID: string }) {
+    if (this.isEndingCall || !this.activeCall || this.activeCall.callId !== callUUID) {
+      return;
+    }
+    this.isEndingCall = true;
+
+    const callToEnd = { ...this.activeCall };
+    console.log('[CallService] onEndCall triggered for call:', callToEnd.callId);
+
+    // Reset state immediately to prevent re-entry
+    this.resetActiveCall(); 
+
+    try {
+      if (callToEnd.status !== 'connected' && !callToEnd.isInitiator) {
+        // Recipient ended a ringing call (i.e., declined)
+        await this.notifyCallStatusUpdate('declined', callToEnd);
+      } else if (callToEnd.status === 'connected') {
+        // Anyone ended a connected call
+        await this.notifyCallStatusUpdate('ended', callToEnd);
+      }
+
+      // Navigate back to TipCallScreen after call ends
+      if (navigationRef.isReady() && navigationRef.getCurrentRoute()?.name === 'Meeting') {
+        console.log('[CallService] Navigating to TipCallScreen after call end.');
+        navigationRef.navigate('TipCall' as any);
+      }
+    } catch (error) {
+      console.error('[CallService] Error during onEndCall cleanup:', error);
+    } finally {
+      this.isEndingCall = false;
+      console.log('[CallService] Call cleanup finished for:', callUUID);
+    }
+  }
+
+  private async notifyCallStatusUpdate(status: 'accepted' | 'declined' | 'ended', call: ActiveCall) {
+    if (!call) return;
+    
+    try {
+        const firebaseCallService = (await import('./FirebaseCallService')).default.getInstance();
+        
+        const updateData = {
+            type: status,
+            callId: call.callId,
+            // The FCM function needs to know who to notify.
+            targetFcmToken: call.callerFcmToken,
+        };
+
+        await firebaseCallService.updateCallStatus(updateData as any); 
+
+    } catch (error) {
+        console.error('[CallService] Failed to notify call status update:', error);
+    }
+  }
+  
   /**
    * Notify the caller that the call was declined
    */
   private async notifyCallerDeclined(call: ActiveCall) {
-    if (!call) return;
-    try {
-      console.log('[CallService] Notifying caller of declined call:', call.callId);
-      // This is a placeholder. Implement a service call to your backend here.
-      // e.g., await FirebaseCallService.getInstance().updateCallStatus({ type: 'declined', ... })
-    } catch (e) {
-      console.warn('[CallService] Failed to notify caller of declined call:', e);
-    }
+    await this.notifyCallStatusUpdate('declined', call);
   }
 
   public endCurrentCall() {
     if (this.activeCall && !this.isEndingCall) {
-      const callId = this.activeCall.callId; // Capture before reset
-      this.resetActiveCall(); // Reset immediately
-      this.isEndingCall = true; // Set flag to prevent re-entry
-      try {
-        console.log('[CallService] End current call sequence started.');
-        this.callKeepService.endCall(callId); // Use captured callId
-      } catch (e) {
-        console.error('[CallService] Error in endCurrentCall while triggering CallKeep:', e);
-        this.onEndCall({ callUUID: callId });
-      } finally {
-        // The flag will be reset inside onEndCall after all async operations
-      }
+      const callId = this.activeCall.callId; 
+      console.log('[CallService] End current call sequence started for', callId);
+      this.callKeepService.endCall(callId); // This will trigger onEndCall
     }
   }
 
@@ -219,36 +262,58 @@ class CallService {
     return { meetingId: meetingRes.data.roomId, token: tokenRes.token };
   }
 
-  private async notifyRecipient() {
+  private async notifyRecipientOfNewCall() {
     if (!this.activeCall || !this.activeCall.isInitiator) return;
 
-    const { recipientId, recipientName, callType, meetingId, token, callId, callerName } = this.activeCall;
-    const currentUser = await this.getCurrentUser();
-    if(!currentUser) {
-      throw new Error("Current user not found. Cannot notify recipient.");
-    }
-
-    const recipientFcmRes = await ApiService.getFcmTokensForUsers({ userIds: [parseInt(currentUser.id), parseInt(recipientId)] });
+    const { recipientId, recipientName, callType, meetingId, token, callId, callerName, callerId } = this.activeCall;
+    
+    const recipientFcmRes = await ApiService.getFcmTokensForUsers({ userIds: [parseInt(callerId), parseInt(recipientId)] });
     const recipientFcm = recipientFcmRes.results.find(r => r.userId === parseInt(recipientId));
     if (!recipientFcm?.fcm_token) {
       throw new Error('Recipient is not available for calls.');
     }
     
-    const callData: FirebaseCallData = {
-        calleeInfo: { platform: 'ANDROID', token: recipientFcm.fcm_token, userId: recipientId, name: recipientName },
-        callerInfo: { name: callerName, token: await this.firebaseService.getFCMToken() || '', userId: currentUser.id, platform: Platform.OS.toUpperCase() as 'ANDROID' | 'IOS' },
-        videoSDKInfo: { meetingId, token, roomId: meetingId },
-        callInfo: { callType, callId }
+    const myFcmToken = await this.firebaseService.getFCMToken();
+
+    const callData = {
+      // Data about the person being called
+      calleeInfo: { platform: 'ANDROID', token: recipientFcm.fcm_token, userId: recipientId, name: recipientName },
+      // Data about the person making the call
+      callerInfo: { name: callerName, token: myFcmToken || '', userId: callerId, platform: Platform.OS.toUpperCase() as 'ANDROID' | 'IOS' },
+      // VideoSDK meeting info
+      videoSDKInfo: { meetingId, token, roomId: meetingId },
+      // General call info
+      callInfo: { callType, callId }
     };
 
     const firebaseCallService = (await import('./FirebaseCallService')).default.getInstance();
-    await firebaseCallService.initiateCall(callData);
+    await firebaseCallService.initiateCall(callData as FirebaseCallData);
   }
 
   private navigateToMeetingScreen() {
     if (!this.activeCall) return;
     const { meetingId, token, callType, callerName, isInitiator, recipientName } = this.activeCall;
-    navigate('Meeting' as any, { meetingId, token, callType, displayName: isInitiator ? recipientName : callerName, isInitiator, recipientName });
+    
+    const displayName = isInitiator ? callerName : recipientName;
+    const targetRecipientName = isInitiator ? recipientName : callerName;
+
+    console.log('[CallService] Navigating to MeetingScreen with params:', {
+      meetingId,
+      token: '...', // Token hidden for logs
+      callType,
+      displayName,
+      isInitiator,
+      recipientName: targetRecipientName
+    });
+
+    navigate('Meeting', {
+      meetingId,
+      token,
+      callType,
+      displayName,
+      isInitiator,
+      recipientName: targetRecipientName
+    });
   }
 
   private async getCurrentUser(): Promise<{ id: string; name: string } | null> {
@@ -263,33 +328,6 @@ class CallService {
   private resetActiveCall() {
     console.log('[CallService] Resetting active call state.');
     this.activeCall = null;
-  }
-
-  /**
-   * Send call ended status to Firebase
-   */
-  private async sendCallEndedStatus(call: ActiveCall) {
-    if (!call) return;
-    try {
-      const firebaseService = FirebaseCallService.getInstance();
-      let callerToken = await FirebaseService.getInstance().getFCMToken();
-      if (!callerToken) callerToken = '';
-      const userId = await AsyncStorage.getItem('userId');
-
-      const payload: import('./FirebaseCallService').CallStatusUpdate = {
-        callerInfo: {
-          token: callerToken,
-          name: call.callerName,
-          userId: userId || undefined,
-        },
-        type: 'ended',
-        callId: call.callId, // Pass the callId to the backend
-      };
-      await firebaseService.updateCallStatus(payload);
-      console.log('[CallService] Sent CALL_ENDED status to Firebase for callId:', call.callId);
-    } catch (e) {
-      console.warn('[CallService] Failed to send CALL_ENDED status:', e);
-    }
   }
 }
 

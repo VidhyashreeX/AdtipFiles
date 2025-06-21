@@ -1,30 +1,24 @@
 import {createNavigationContainerRef} from '@react-navigation/native';
-import type { RootStackParamList } from '../types/navigation'; // Import the updated RootStackParamList
+import { MainNavigatorParamList } from '../types/navigation';
 
 // Type the navigationRef with your RootStackParamList
-export const navigationRef = createNavigationContainerRef<RootStackParamList>();
+export const navigationRef = createNavigationContainerRef<MainNavigatorParamList>();
 
 // Update helper functions to be more type-safe or rely on direct, typed navigationRef usage
-export function navigate<RouteName extends keyof RootStackParamList>(
-  // The type for params needs to be conditional based on whether the route expects params
-  ...args: undefined extends RootStackParamList[RouteName] 
-    ? [RouteName] | [RouteName, RootStackParamList[RouteName]] 
-    // @ts-ignore - This complex conditional type for args can sometimes still need an ignore
-    // depending on the exact overload structure React Navigation's navigate expects.
-    // A simpler approach for the helper might be to type name and params separately.
-    : [RouteName, RootStackParamList[RouteName]]
+export function navigate<RouteName extends keyof MainNavigatorParamList>(
+  name: RouteName,
+  params?: MainNavigatorParamList[RouteName]
 ) {
   if (navigationRef.isReady()) {
-    // @ts-ignore
-    navigationRef.navigate(...args);
+    navigationRef.navigate(name as any, params as any);
   }
 }
 
-export function resetTo<RouteName extends keyof RootStackParamList>(
+export function resetTo<RouteName extends keyof MainNavigatorParamList>(
   routeName: RouteName,
   // This assumes params are optional or match the structure.
   // For routes that are navigators (like 'Main' or 'Auth'), params would be NavigatorScreenParams
-  params?: RootStackParamList[RouteName] 
+  params?: MainNavigatorParamList[RouteName] 
 ) {
   if (navigationRef.isReady()) {
     navigationRef.reset({

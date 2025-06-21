@@ -22,7 +22,8 @@ import ImageViewer from '@react-native-oh-tpl/react-native-image-zoom-viewer';
 import Header from '../../components/common/Header';
 import LastSeen from '../../components/common/LastSeen';
 import ProfilePageSkeleton from '../../components/skeletons/ProfilePageSkeleton';
-import ScreenTransition from '../../components/common/ScreenTransition'; // ADD THIS IMPORT
+import ScreenTransition from '../../components/common/ScreenTransition';
+import CommentScreen from '../home/CommentScreen';
 
 // Context
 import { useTheme } from '../../contexts/ThemeContext';
@@ -39,7 +40,6 @@ type RootStackParamList = {
   CreateChannel: undefined;
   FollowersList: { userId?: number };
   FollowingsList: { userId?: number };
-  Comments: { postId: number };
   PostDetail: { postId: number };
   TipShorts: undefined;
   Earnings: undefined;
@@ -59,10 +59,10 @@ interface ProfileParams {
 interface User {
   id: string | number;
   name?: string;
-  firstName?: string;
-  lastName?: string;
-  username?: string;
-  bio?: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  username?: string | null;
+  bio?: string | null;
   address?: string;
   location?: string;
   profile_image?: string | null;
@@ -114,6 +114,8 @@ const ProfileScreen: React.FC = () => {
   const [showFullMenu, setShowFullMenu] = useState(false);
   const [showImageViewer, setShowImageViewer] = useState(false);
   const [imageViewerIndex, setImageViewerIndex] = useState(0);
+  const [isCommentsVisible, setCommentsVisible] = useState(false);
+  const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
 
   // Default profile image
   const DEFAULT_PROFILE_IMAGE = 'https://via.placeholder.com/150';
@@ -351,15 +353,21 @@ const ProfileScreen: React.FC = () => {
   };
 
   const handleLike = (postId: number) => {
-    console.log('Like post', postId);
+    // Implement like functionality
   };
 
   const handleComment = (postId: number) => {
-    navigation.navigate('Comments', { postId });
+    setSelectedPostId(postId);
+    setCommentsVisible(true);
+  };
+
+  const closeComments = () => {
+    setCommentsVisible(false);
+    setSelectedPostId(null);
   };
 
   const handleShare = (postId: number) => {
-    console.log('Share post', postId);
+    // Implement share functionality
   };
 
   const handlePostPress = (postId: number) => {
@@ -737,6 +745,13 @@ const ProfileScreen: React.FC = () => {
               <Icon name="x" size={32} color="#fff" />
             </TouchableOpacity>
           </Modal>
+        )}
+        {selectedPostId !== null && (
+          <CommentScreen
+            visible={isCommentsVisible}
+            postId={selectedPostId}
+            onClose={closeComments}
+          />
         )}
       </View>
     </ScreenTransition>

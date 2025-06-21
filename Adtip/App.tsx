@@ -20,6 +20,7 @@ import {
 } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { getApps } from '@react-native-firebase/app';
+import messaging from '@react-native-firebase/messaging';
 
 // Contexts
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -28,6 +29,7 @@ import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { ShortsProvider } from './src/contexts/ShortsContext';
 import { SidebarProvider } from './src/contexts/SidebarContext';
 import { VideoSDKProvider } from './src/contexts/VideoSDKContext';
+import { useTabNavigator, TabNavigatorProvider } from './src/contexts/TabNavigatorContext';
 
 // Components & Navigators
 import Sidebar from './src/components/sidebar/Sidebar';
@@ -39,6 +41,7 @@ import { navigationRef } from './src/navigation/NavigationService';
 import FirebaseService from './src/services/FirebaseService';
 import VideoSDKService from './src/services/videosdk/VideoSDKService';
 import CallService from './src/services/CallService';
+import ApiService from './src/services/ApiService';
 
 // Constants
 import { COLORS } from './src/constants/colors';

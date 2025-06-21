@@ -41,7 +41,6 @@ export type MainNavigatorParamList = {
   PostDetail: {postId: number};
   Video: {postId: number};
   Story: {storyId: string};
-  Comments: {postId: number; initialComments: Comment[]; userId: number};
   CreatePost: undefined;
   WatchAndEarn: undefined;
   Referral: undefined;
@@ -82,6 +81,25 @@ export type MainNavigatorParamList = {
   Support: undefined;
   CreateCampaign: undefined;
   Explore: undefined;
+  Meeting: {
+    meetingId: string;
+    token: string;
+    callType: 'voice' | 'video';
+    displayName: string;
+    isInitiator?: boolean;
+    recipientName?: string;
+  };
+  VideoPlayerModal: {
+    video: any;
+    cardLayout: any;
+    upNextVideos: any[];
+  };
+  SelectCategory: undefined;
+  TipTubeUpload: undefined;
+  TipShortsUpload: undefined;
+  Channel: undefined;
+  AddFundsScreen: undefined;
+  UpgradePremiumScreen: undefined;
   // Add other screens specific to MainNavigator
 };
 

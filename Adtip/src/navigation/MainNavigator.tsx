@@ -2,6 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Easing } from 'react-native-reanimated';
 import { withFastLoading } from '../components/hoc/withFastLoading';
+import { MainNavigatorParamList } from '../types/navigation';
 
 // Import navigators
 import TabNavigator from './TabNavigator';
@@ -59,24 +60,7 @@ import AddFundsScreen from '../screens/wallet/AddFundsScreen';
 import UpgradePremiumScreen from '../screens/wallet/UpgradePremiumScreen';
 
 // Create stack navigator with proper typing
-const Stack = createNativeStackNavigator<Record<string, any> & {
-  Checkout: { package: { id: string; name: string; price: number; bestValue?: boolean } };
-  VideoPlayerModal: { 
-    video: any; 
-    cardLayout: any; 
-    upNextVideos: any[] 
-  };
-  // Updated TipCall and Meeting screen types
-  TipCall: { initialCallNotificationData?: any } | undefined;
-  Meeting: {
-    meetingId: string;
-    token: string;
-    callType: 'voice' | 'video';
-    displayName: string;
-    isInitiator?: boolean;
-    recipientName?: string;
-  };
-}>();
+const Stack = createNativeStackNavigator<MainNavigatorParamList>();
 
 // Custom transition configuration with Reanimated easing
 const customTransitionConfig = {
