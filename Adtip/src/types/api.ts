@@ -368,3 +368,82 @@ export interface FcmTokenResult {
 export interface FcmTokensResponse {
   results: FcmTokenResult[];
 }
+
+// Add these to your types/api.ts file
+
+export interface GetCommentsRequest {
+  postId: number;
+  userId: number;
+  page?: number;
+  limit?: number;
+}
+
+export interface GetCommentsResponse {
+  success: boolean;
+  message: string;
+  data: Comment[];
+  pagination?: {
+    current_page: number;
+    total_pages: number;
+    total_count: number;
+    per_page: number;
+  };
+}
+
+export interface SaveCommentRequest {
+  userId: number;
+  postId: number;
+  content: string;
+  parentId?: number | null;
+}
+
+export interface SaveCommentResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    id: number;
+    post_id: number;
+    user_id: number;
+    user_name: string;
+    user_profile_image?: string | null;
+    content: string;
+    like_count: number;
+    reply_count: number;
+    is_liked: boolean;
+    created_at: string;
+    parent_id?: number | null;
+  };
+}
+
+export interface LikeCommentRequest {
+  userId: number;
+  commentId: number;
+  is_liked: boolean;
+}
+
+export interface LikeCommentResponse {
+  success: boolean;
+  message: string;
+  is_liked: boolean;
+}
+
+export interface DeleteCommentRequest {
+  userId: number;
+  commentId: number;
+}
+
+export interface DeleteCommentResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface ReportCommentRequest {
+  userId: number;
+  commentId: number;
+  reason: string;
+}
+
+export interface ReportCommentResponse {
+  success: boolean;
+  message: string;
+}

@@ -19,7 +19,7 @@ import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import axios from 'axios';
-
+import CommentsBottomSheet from '../../components/commentsbottomsheet/CommentsBottomSheet';
 // Contexts & Services
 import {useTheme} from '../../contexts/ThemeContext';
 import {useAuth} from '../../contexts/AuthContext';
@@ -570,7 +570,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           style={[styles.scrollView, {backgroundColor: colors.background}]}
         />
         {commentModalVisible && selectedCommentPostId !== null && (
-          <CommentScreen visible={commentModalVisible} postId={selectedCommentPostId} onClose={handleCloseCommentModal} />
+          <CommentsBottomSheet
+            visible={commentModalVisible}
+            postId={selectedCommentPostId}
+            onClose={handleCloseCommentModal}
+            initialCommentCount={
+              posts.find(p => p.id === selectedCommentPostId)?.comments || 0
+            }
+          />
         )}
         {showUserProfileModal && selectedUserId && (
           <Modal

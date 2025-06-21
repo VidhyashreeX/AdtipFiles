@@ -43,7 +43,12 @@ export const TIP_CALLS_ENDPOINTS = {
   GET_RTM_TOKEN: '/api/get-rtm-token',
   MISSED_CALLS: '/api/missed-calls',
   UPDATE_FCM_TOKEN: '/api/update-fcm-token',
-  GET_FCM_TOKENS: '/api/fcm-tokens-of-both-users', // New endpoint added
+  GET_FCM_TOKENS: '/api/fcm-tokens-of-both-users',
+  SAVE_COMMENT: '/api/save-user-post-comment',
+  GET_COMMENTS: '/api/posts', // Will be used as /api/posts/{postId}/comments
+  LIKE_COMMENT: '/api/like-comment',
+  DELETE_COMMENT: '/api/delete-comment',
+  REPORT_COMMENT: '/api/report-comment', // Add if you have this endpoint
 
   // VideoSDK specific endpoints
   VIDEOSDK_GENERATE_TOKEN: '/api/generate-token/videosdk',

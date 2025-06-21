@@ -1104,4 +1104,163 @@ export default class ApiService {
       throw this.handleError(error);
     }
   }
+
+  // ===== COMMENTS SERVICES =====
+
+  /**
+   * Get comments for a specific post
+   */
+  static async getPostComments(data: GetCommentsRequest): Promise<GetCommentsResponse> {
+    console.log('[API] Fetching comments for post:', data.postId);
+    try {
+      const params = {
+        userId: data.userId,
+        page: data.page || 1,
+        limit: data.limit || 20,
+      };
+
+      const response = await this.get<any>(
+        `${ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_COMMENTS}/${data.postId}/comments`,
+        params,
+      );
+      
+      console.log('[API] Raw comments response:', response);
+
+      // Transform the response to match expected format
+      if (response.status && response.data) {
+        const transformedComments = response.data.map((comment: any) => ({
+          id: comment.id,
+          post_id: comment.postId,
+          user_id: comment.user_id,
+          user_name: comment.user_name,
+          user_profile_image: comment.user_profile, // Map user_profile to user_profile_image
+          content: comment.comment, // Map comment to content
+          like_count: 0, // Default values since API doesn't provide these
+          reply_count: 0,
+          is_liked: false,
+          created_at: comment.created_at,
+          parent_id: null,
+        }));
+
+        const transformedResponse: GetCommentsResponse = {
+          success: true,
+          message: response.message,
+          data: transformedComments,
+          pagination: {
+            current_page: response.pagination?.current_page || 1,
+            total_pages: Math.ceil((response.pagination?.total_comments || 0) / (data.limit || 20)),
+            total_count: response.pagination?.total_comments || 0,
+            per_page: data.limit || 20,
+          }
+        };
+
+        console.log('[API] Transformed comments response:', {
+          success: transformedResponse.success,
+          commentCount: transformedResponse.data?.length || 0,
+          totalCount: transformedResponse.pagination?.total_count || 0,
+        });
+
+        return transformedResponse;
+      } else {
+        throw new Error(response.message || 'Failed to fetch comments');
+      }
+    } catch (error) {
+      console.error('[API] Error fetching comments:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Save a new comment or reply
+   */
+  static async saveComment(data: SaveCommentRequest): Promise<SaveCommentResponse> {
+    console.log('[API] Saving comment:', {
+      postId: data.postId,
+      userId: data.userId,
+      hasContent: !!data.content,
+      isReply: !!data.parentId,
+    });
+    
+    try {
+      const response = await this.post<SaveCommentResponse>(
+        ApiEndpoints.TIP_CALLS_ENDPOINTS.SAVE_COMMENT,
+        data,
+      );
+      
+      console.log('[API] Save comment response:', {
+        success: response.success,
+        message: response.message,
+        hasData: !!response.data,
+      });
+      
+      return response;
+    } catch (error) {
+      console.error('[API] Error saving comment:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Like or unlike a comment
+   */
+  static async likeComment(data: LikeCommentRequest): Promise<LikeCommentResponse> {
+    console.log('[API] Liking comment:', {
+      commentId: data.commentId,
+      userId: data.userId,
+      isLiked: data.is_liked,
+    });
+    
+    try {
+      const response = await this.post<LikeCommentResponse>(
+        ApiEndpoints.TIP_CALLS_ENDPOINTS.LIKE_COMMENT,
+        data,
+      );
+      
+      console.log('[API] Like comment response:', response);
+      return response;
+    } catch (error) {
+      console.error('[API] Error liking comment:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Delete a comment
+   */
+  static async deleteComment(data: DeleteCommentRequest): Promise<DeleteCommentResponse> {
+    console.log('[API] Deleting comment:', data);
+    
+    try {
+      const response = await this.post<DeleteCommentResponse>(
+        ApiEndpoints.TIP_CALLS_ENDPOINTS.DELETE_COMMENT,
+        data,
+      );
+      
+      console.log('[API] Delete comment response:', response);
+      return response;
+    } catch (error) {
+      console.error('[API] Error deleting comment:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Report a comment
+   */
+  static async reportComment(data: ReportCommentRequest): Promise<ReportCommentResponse> {
+    console.log('[API] Reporting comment:', data);
+    
+    try {
+      const response = await this.post<ReportCommentResponse>(
+        ApiEndpoints.TIP_CALLS_ENDPOINTS.REPORT_COMMENT,
+        data,
+      );
+      
+      console.log('[API] Report comment response:', response);
+      return response;
+    } catch (error) {
+      console.error('[API] Error reporting comment:', error);
+      throw this.handleError(error);
+    }
+  }
 }
