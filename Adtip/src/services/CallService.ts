@@ -354,6 +354,16 @@ class CallService {
     console.log('[CallService] Resetting active call state.');
     this.activeCall = null;
   }
+
+  public resetCallState() {
+    console.log('[CallService] Forcibly resetting call state.');
+    if (this.activeCall) {
+      // End any lingering native call UI just in case.
+      this.callKeepService.endCall(this.activeCall.callId);
+    }
+    this.resetActiveCall();
+    this.isEndingCall = false; // Also reset this flag
+  }
 }
 
 export default CallService; 

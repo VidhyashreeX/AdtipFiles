@@ -267,6 +267,10 @@ export default function TipCallScreen() {
   const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
 
+  useEffect(() => {
+    CallService.getInstance().resetCallState();
+  }, []);
+
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState<boolean>(true);

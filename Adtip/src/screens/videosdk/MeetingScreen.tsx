@@ -83,6 +83,12 @@ const MeetingScreenContent: React.FC<MeetingScreenParams> = ({
     };
 
     joinMeeting();
+
+    // Add a cleanup function to leave the meeting when the component unmounts
+    return () => {
+      console.log('[MeetingScreen] Unmounting. Leaving meeting.');
+      leave();
+    };
   }, []);
 
   // Toggle controls visibility
@@ -101,8 +107,7 @@ const MeetingScreenContent: React.FC<MeetingScreenParams> = ({
           text: 'End Call', 
           style: 'destructive',
           onPress: () => {
-            leave();
-            navigation.navigate('TipCall' as never);
+            navigation.goBack();
           }
         },
       ]
