@@ -7,7 +7,7 @@ import CallKeepService from './CallKeepService';
 import FirebaseService from './FirebaseService';
 import VideoSDKService from './videosdk/VideoSDKService';
 import uuid from 'react-native-uuid';
-import { FirebaseCallData } from './FirebaseCallService';
+import { FirebaseCallData, CallStatusUpdate } from './FirebaseCallService';
 import FirebaseCallService from './FirebaseCallService';
 
 interface ActiveCall {
@@ -84,6 +84,8 @@ class CallService {
       console.log('[CallService] Starting outgoing call...');
       const { meetingId, token } = await this.createMeeting();
       
+      const myFcmToken = await this.firebaseService.getFCMToken();
+
       //this.callKeepService.startOutgoingCall(callId, recipientName, recipientName, callType === 'video');
 
       this.activeCall = { 
@@ -91,7 +93,8 @@ class CallService {
         meetingId, 
         token, 
         callerId: currentUser.id,
-        callerName: currentUser.name, 
+        callerName: currentUser.name,
+        callerFcmToken: myFcmToken || undefined,
         recipientId, 
         recipientName, 
         isInitiator: true, 
@@ -180,36 +183,9 @@ class CallService {
   }
 
   private async onEndCall({ callUUID }: { callUUID: string }) {
-    if (this.isEndingCall || !this.activeCall || this.activeCall.callId !== callUUID) {
-      return;
-    }
-    this.isEndingCall = true;
-
-    const callToEnd = { ...this.activeCall };
-    console.log('[CallService] onEndCall triggered for call:', callToEnd.callId);
-
-    // Reset state immediately to prevent re-entry
-    this.resetActiveCall(); 
-
-    try {
-      if (callToEnd.status !== 'connected' && !callToEnd.isInitiator) {
-        // Recipient ended a ringing call (i.e., declined)
-        await this.notifyCallStatusUpdate('declined', callToEnd);
-      } else if (callToEnd.status === 'connected') {
-        // Anyone ended a connected call
-        await this.notifyCallStatusUpdate('ended', callToEnd);
-      }
-
-      // Navigate back to TipCallScreen after call ends
-      if (navigationRef.isReady() && navigationRef.getCurrentRoute()?.name === 'Meeting') {
-        console.log('[CallService] Navigating to TipCallScreen after call end.');
-        navigationRef.navigate('TipCall' as any);
-      }
-    } catch (error) {
-      console.error('[CallService] Error during onEndCall cleanup:', error);
-    } finally {
-      this.isEndingCall = false;
-      console.log('[CallService] Call cleanup finished for:', callUUID);
+    if (this.activeCall && this.activeCall.callId === callUUID) {
+      console.log('[CallService] onEndCall event received for call:', callUUID);
+      await this.endCallLogic({ ...this.activeCall });
     }
   }
 
@@ -219,14 +195,17 @@ class CallService {
     try {
         const firebaseCallService = (await import('./FirebaseCallService')).default.getInstance();
         
-        const updateData = {
+        const updateData: CallStatusUpdate = {
             type: status,
             callId: call.callId,
-            // The FCM function needs to know who to notify.
-            targetFcmToken: call.callerFcmToken,
+            callerInfo: {
+              name: call.callerName,
+              userId: call.callerId,
+              token: call.callerFcmToken || '',
+            }
         };
 
-        await firebaseCallService.updateCallStatus(updateData as any); 
+        await firebaseCallService.updateCallStatus(updateData); 
 
     } catch (error) {
         console.error('[CallService] Failed to notify call status update:', error);
@@ -242,14 +221,60 @@ class CallService {
 
   public endCurrentCall() {
     if (this.activeCall && !this.isEndingCall) {
-      const callId = this.activeCall.callId; 
-      console.log('[CallService] End current call sequence started for', callId);
-      this.callKeepService.endCall(callId); // This will trigger onEndCall
+      const callToEnd = { ...this.activeCall };
+      console.log(
+        '[CallService] User triggered endCurrentCall for call:',
+        callToEnd.callId,
+      );
+      // This will trigger the onEndCall event, but we also call endCallLogic
+      // immediately to ensure cleanup happens even if the event fails to fire.
+      this.callKeepService.endCall(callToEnd.callId);
+      this.endCallLogic(callToEnd);
+    }
+  }
+
+  private async endCallLogic(call: ActiveCall) {
+    if (this.isEndingCall) {
+      console.log(
+        '[CallService] endCallLogic already in progress for call:',
+        call.callId,
+      );
+      return;
+    }
+    this.isEndingCall = true;
+    console.log('[CallService] endCallLogic started for call:', call.callId);
+
+    // Reset state immediately
+    this.resetActiveCall();
+
+    try {
+      if (!call.isInitiator && call.status === 'ringing') {
+        await this.notifyCallStatusUpdate('declined', call);
+      } else {
+        await this.notifyCallStatusUpdate('ended', call);
+      }
+
+      if (
+        navigationRef.isReady() &&
+        navigationRef.getCurrentRoute()?.name === 'Meeting'
+      ) {
+        console.log('[CallService] Navigating to TipCallScreen after call end.');
+        navigationRef.navigate('TipCall' as any);
+      }
+    } catch (error) {
+      console.error('[CallService] Error during endCallLogic:', error);
+    } finally {
+      this.isEndingCall = false;
+      console.log('[CallService] Call cleanup finished for:', call.callId);
     }
   }
 
   private onAppStateChange(nextAppState: any) {
-    if (nextAppState === 'active' && this.activeCall && this.activeCall.status === 'connected') {
+    if (
+      nextAppState === 'active' &&
+      this.activeCall &&
+      this.activeCall.status === 'connected'
+    ) {
         // Potentially resync call state
     }
   }

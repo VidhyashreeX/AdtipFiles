@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FCM_SERVER_URL } from '../constants/api';
 import FirebaseService from './FirebaseService';
+import ApiService from './ApiService';
 
 export interface FirebaseCallData {
   callerInfo: {
@@ -32,6 +33,7 @@ export interface CallStatusUpdate {
     name: string;
     token: string;
     userId?: string;
+    platform?: 'ANDROID' | 'IOS';
   };
   type: 'calling' | 'accepted' | 'declined' | 'ended' | 'missed';
   callId?: string;
@@ -102,30 +104,29 @@ class FirebaseCallService {
         hasToken: !!updateData.callerInfo.token,
       });
 
-      const response = await fetch(`${FCM_SERVER_URL}/api/call/update-call`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
+      const body = {
+        callerInfo: {
+          ...updateData.callerInfo,
+          platform: Platform.OS.toUpperCase(),
         },
-        body: JSON.stringify({
-          callerInfo: updateData.callerInfo,
-          type: updateData.type,
-          callId: updateData.callId,
-          duration: updateData.duration,
-        }),
-      });
+        type: updateData.type,
+        callId: updateData.callId,
+        duration: updateData.duration,
+      };
 
-      const data = await response.json();
-      console.log('[FirebaseCallService] Update call status response:', data);
+      // Use ApiService to ensure auth token is included
+      const response = await ApiService.post(
+        `${FCM_SERVER_URL}/api/call/update-call`,
+        body,
+      );
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to update call status');
-      }
-
-      return data;
+      console.log('[FirebaseCallService] Update call status response:', response);
+      return response;
     } catch (error: any) {
-      console.error('[FirebaseCallService] Update call status error:', error);
+      console.error(
+        '[FirebaseCallService] Update call status error:',
+        error,
+      );
       throw new Error(error.message || 'Failed to update call status');
     }
   }
@@ -200,6 +201,7 @@ class FirebaseCallService {
           name: callerName,
           token: callerToken,
           userId: userId || undefined,
+          platform: Platform.OS.toUpperCase() as 'ANDROID' | 'IOS',
         },
         type: type,
         callId: callId,

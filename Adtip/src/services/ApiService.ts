@@ -36,6 +36,16 @@ import {
   OtpVerifyApiResponse,
   FcmTokensRequest,
   FcmTokensResponse,
+  GetCommentsRequest,
+  GetCommentsResponse,
+  SaveCommentRequest,
+  SaveCommentResponse,
+  LikeCommentRequest,
+  LikeCommentResponse,
+  DeleteCommentRequest,
+  DeleteCommentResponse,
+  ReportCommentRequest,
+  ReportCommentResponse,
 } from '../types/api';
 
 // Interfaces moved from inside the class
@@ -502,7 +512,7 @@ export default class ApiService {
     
     const data: LogoutRequest & { fcmToken?: string; platform?: string } = {
       id: userId,
-      fcmToken,
+      fcmToken: fcmToken || undefined,
       platform: Platform.OS,
     };
 
@@ -571,7 +581,7 @@ export default class ApiService {
       const requestData: UpdateFcmTokenRequest = {
         ...data,
         fcmToken: fcmToken || '', // Provide empty string if null
-        platform: data.platform || Platform.OS,
+        platform: (Platform.OS === 'ios' || Platform.OS === 'android') ? Platform.OS : undefined,
         apnsToken: apnsToken || undefined,
         deviceId: await AsyncStorage.getItem('deviceId') || undefined,
       };
@@ -707,8 +717,6 @@ export default class ApiService {
       if (axios.isCancel(error)) {
         console.log('ApiService.listPosts request canceled (handling specific cancellation).');
         return { 
-          status: false, 
-          message: 'Request canceled by client', 
           data: [], 
           pagination: { current_page: 0, total_page: 0, total_count: 0 } 
         };
@@ -1046,44 +1054,60 @@ export default class ApiService {
     });
 
     try {
-      // Try Firebase Cloud Functions first
-      const firebaseResponse = await fetch(`${FCM_SERVER_URL}/api/call/initiate-call`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({
-          callerInfo: data.callerInfo,
-          calleeInfo: data.calleeInfo,
-          videoSDKInfo: data.videoSDKInfo,
-        }),
-        timeout: 30000,
-      });
+      // Set up a timeout controller
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30-second timeout
 
-      const firebaseData = await firebaseResponse.json();
-      
-      if (firebaseResponse.ok) {
-        console.log('[ApiService] Firebase call initiated successfully:', firebaseData);
-        return {
-          success: true,
-          message: firebaseData.message || 'Call initiated successfully',
-          data: firebaseData.data || firebaseData,
-        };
-      } else {
-        console.warn('[ApiService] Firebase call failed, falling back to regular API');
-        throw new Error(firebaseData.error || 'Firebase call failed');
+      try {
+        // Try Firebase Cloud Functions first
+        const firebaseResponse = await fetch(`${FCM_SERVER_URL}/api/call/initiate-call`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            callerInfo: data.callerInfo,
+            calleeInfo: data.calleeInfo,
+            videoSDKInfo: data.videoSDKInfo,
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        const firebaseData = await firebaseResponse.json();
+        
+        if (firebaseResponse.ok) {
+          console.log('[ApiService] Firebase call initiated successfully:', firebaseData);
+          return {
+            success: true,
+            message: firebaseData.message || 'Call initiated successfully',
+            data: firebaseData.data || firebaseData,
+          };
+        } else {
+          console.warn('[ApiService] Firebase call failed, falling back to regular API');
+          throw new Error(firebaseData.error || 'Firebase call failed');
+        }
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+          console.error('[ApiService] Firebase call initiation timed out.');
+        } else {
+          console.error('[ApiService] Firebase call initiation failed, trying fallback:', error);
+        }
+        
+        // Fallback to the existing API method
+        try {
+          return await this.initiateCall(data);
+        } catch (fallbackError) {
+          console.error('[ApiService] Both Firebase and fallback methods failed:', fallbackError);
+          throw new Error('Failed to initiate call. Please check your connection and try again.');
+        }
       }
     } catch (error) {
-      console.error('[ApiService] Firebase call initiation failed, trying fallback:', error);
-      
-      // Fallback to the existing API method
-      try {
-        return await this.initiateCall(data);
-      } catch (fallbackError) {
-        console.error('[ApiService] Both Firebase and fallback methods failed:', fallbackError);
-        throw new Error('Failed to initiate call. Please check your connection and try again.');
-      }
+      console.error('[ApiService] Error initiating call with Firebase:', error);
+      throw this.handleError(error);
     }
   }
 
