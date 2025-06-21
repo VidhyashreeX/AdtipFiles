@@ -575,7 +575,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             postId={selectedCommentPostId}
             onClose={handleCloseCommentModal}
             initialCommentCount={
-              posts.find(p => p.id === selectedCommentPostId)?.comments || 0
+              posts.find(p => p.id === selectedCommentPostId)?.commentCount || 0
             }
           />
         )}

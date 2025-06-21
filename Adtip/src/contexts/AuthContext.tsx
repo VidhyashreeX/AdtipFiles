@@ -360,6 +360,19 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     completeOnboarding,
   };
 
+  // Add this to the AuthContext component where user state is managed
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      console.log(`🔄 User authenticated, starting ping service for user ${user.id}`);
+      LastSeenService.startTracking();
+      
+      return () => {
+        console.log('🔄 Cleaning up ping service on auth context unmount');
+        LastSeenService.stopTracking();
+      };
+    }
+  }, [isAuthenticated, user?.id]);
+
   return (
     <AuthContext.Provider value={contextValue}>
       {children}

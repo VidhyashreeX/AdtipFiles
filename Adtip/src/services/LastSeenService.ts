@@ -6,7 +6,7 @@ import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns';
  */
 class LastSeenService {
   private pingIntervalId: NodeJS.Timeout | null = null;
-  private pingInterval = 600000; // 10 minute
+  private pingInterval = 600000; // 10 minutes
 
   /**
    * Start tracking user's online presence
@@ -21,6 +21,8 @@ class LastSeenService {
     this.pingIntervalId = setInterval(() => {
       this.ping();
     }, this.pingInterval);
+    
+    console.log(`🔄 Ping service started, will ping every ${this.pingInterval / 60000} minutes`);
   }
   
   /**
@@ -30,40 +32,44 @@ class LastSeenService {
     if (this.pingIntervalId) {
       clearInterval(this.pingIntervalId);
       this.pingIntervalId = null;
+      console.log('🔄 Ping service stopped');
     }
   }
   
   /**
    * Send a ping to update the user's online status
+   * Now public so it can be called directly when needed
    */
-  private ping(): void {
+  public ping(): void {
     try {
+      console.log('🔄 Sending ping to update online status...');
+      
       ApiService.ping()
         .then(response => {
           // Log the complete response
-          console.log('Ping API Response:', response);
+          console.log('🔄 Ping API Response:', response);
           
           // You can also log specific parts of the response if needed
           if (response && response.data) {
-            console.log('Ping successful, last seen updated at:', 
+            console.log('🔄 Ping successful, last seen updated at:', 
               response.data.last_active || response.data.timestamp || new Date().toISOString());
           }
         })
         .catch(error => {
-          console.warn('Error sending ping:', error);
+          console.warn('❌ Error sending ping:', error);
           
           // Log more details about the error
           if (error.response) {
-            console.warn('Server response:', error.response.data);
-            console.warn('Status code:', error.response.status);
+            console.warn('❌ Server response:', error.response.data);
+            console.warn('❌ Status code:', error.response.status);
           } else if (error.request) {
-            console.warn('Request made but no response received');
+            console.warn('❌ Request made but no response received');
           } else {
-            console.warn('Error message:', error.message);
+            console.warn('❌ Error message:', error.message);
           }
         });
     } catch (error) {
-      console.warn('Exception during ping:', error);
+      console.warn('❌ Exception during ping:', error);
     }
   }
   

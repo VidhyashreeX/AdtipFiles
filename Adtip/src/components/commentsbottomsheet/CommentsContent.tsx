@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import {
   View,
   FlatList,
@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
+  Dimensions,
 } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -15,9 +17,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import CommentItem from './CommentItem';
 import CommentInput from './CommentInput';
 import { useCommentsData } from './hooks/useCommentsData';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Use the built-in Animated.FlatList
 const AnimatedFlatList = Animated.FlatList;
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface CommentsContentProps {
   postId: number;
@@ -30,7 +33,11 @@ const CommentsContent: React.FC<CommentsContentProps> = ({
 }) => {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const flatListRef = useRef<FlatList>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [contentHeight, setContentHeight] = useState(SCREEN_HEIGHT - 150);
 
   const {
     comments,
@@ -50,6 +57,39 @@ const CommentsContent: React.FC<CommentsContentProps> = ({
     replyToComment,
     cancelReply,
   } = useCommentsData(postId, initialCommentCount);
+
+  // Setup keyboard listeners
+  useEffect(() => {
+    const keyboardWillShowListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+        setKeyboardVisible(true);
+      }
+    );
+    
+    const keyboardWillHideListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+        setKeyboardVisible(false);
+      }
+    );
+
+    return () => {
+      keyboardWillShowListener.remove();
+      keyboardWillHideListener.remove();
+    };
+  }, []);
+
+  // Calculate content height based on keyboard visibility
+  useEffect(() => {
+    if (keyboardVisible) {
+      setContentHeight(SCREEN_HEIGHT - 150 - keyboardHeight);
+    } else {
+      setContentHeight(SCREEN_HEIGHT - 150);
+    }
+  }, [keyboardVisible, keyboardHeight]);
 
   const renderCommentItem = useCallback(({ item, index }) => (
     <CommentItem
@@ -90,7 +130,7 @@ const CommentsContent: React.FC<CommentsContentProps> = ({
     return (
       <View style={styles.emptyContainer}>
         <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
-          No comments yet.
+          Be the first to comment.
         </Text>
       </View>
     );
@@ -104,47 +144,69 @@ const CommentsContent: React.FC<CommentsContentProps> = ({
 
   const keyExtractor = useCallback((item) => `comment-${item.id}`, []);
 
+  const handleCommentSubmit = useCallback(async (text: string) => {
+    try {
+      await addComment(text);
+      // Scroll to bottom after comment is added
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 300);
+    } catch (error) {
+      console.error('Error submitting comment:', error);
+    }
+  }, [addComment]);
+
+  const handleInputFocus = useCallback(() => {
+    // Scroll to bottom when input is focused
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 300);
+  }, []);
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      <AnimatedFlatList
-        ref={flatListRef}
-        data={comments}
-        renderItem={renderCommentItem}
-        keyExtractor={keyExtractor}
-        ListFooterComponent={renderFooter}
-        ListEmptyComponent={renderEmpty}
-        scrollEventThrottle={16}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={refresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        }
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.5}
-        showsVerticalScrollIndicator={true}
-        style={styles.flatListStyle}
-        contentContainerStyle={styles.contentContainer}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="interactive"
-        // Add explicit scrolling properties
-        scrollEnabled={true} 
-        bounces={true}
-      />
+      <View style={[styles.listContainer, { height: contentHeight }]}>
+        <AnimatedFlatList
+          ref={flatListRef}
+          data={comments}
+          renderItem={renderCommentItem}
+          keyExtractor={keyExtractor}
+          ListFooterComponent={renderFooter}
+          ListEmptyComponent={renderEmpty}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={refresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          showsVerticalScrollIndicator={true}
+          style={styles.flatListStyle}
+          contentContainerStyle={[
+            styles.contentContainer,
+            comments.length === 0 && styles.emptyContentContainer
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          scrollEnabled={true}
+          bounces={true}
+          removeClippedSubviews={false}
+        />
+      </View>
+      
       <CommentInput
         postId={postId}
-        onSubmit={replyingTo ? (text) => addReply(text, replyingTo.id) : addComment}
+        onSubmit={replyingTo ? (text) => addReply(text, replyingTo.id) : handleCommentSubmit}
         replyTo={replyingTo}
         onCancelReply={cancelReply}
-        onFocus={() => {
-          setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 300);
-        }}
+        onFocus={handleInputFocus}
       />
     </KeyboardAvoidingView>
   );
@@ -153,6 +215,10 @@ const CommentsContent: React.FC<CommentsContentProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    flexDirection: 'column',
+  },
+  listContainer: {
+    flex: 1,
   },
   flatListStyle: {
     flex: 1,
@@ -160,7 +226,11 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingBottom: 8,
-    minHeight: '100%',
+    minHeight: 100,
+  },
+  emptyContentContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   footer: {
     paddingVertical: 20,

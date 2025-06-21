@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -26,7 +26,7 @@ import CommentsContent from './CommentsContent';
 import CommentsHeader from './CommentsHeader';
 import { useCommentsAnimation } from './hooks/useCommentsAnimation';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const TOP_OFFSET = Platform.OS === 'ios' ? 100 : 80;
 const MAX_TRANSLATE_Y = -SCREEN_HEIGHT + TOP_OFFSET;
 
@@ -44,8 +44,8 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
   initialCommentCount = 0,
 }) => {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const isClosing = useSharedValue(false);
-  const [isPanEnabled, setIsPanEnabled] = useState(true);
 
   const {
     translateY,
@@ -107,66 +107,63 @@ const CommentsBottomSheet: React.FC<CommentsBottomSheetProps> = ({
   if (!visible) return null;
 
   return (
-    <GestureHandlerRootView style={StyleSheet.absoluteFillObject}>
-      <View style={styles.container}>
-        <Animated.View style={[styles.backdrop, backdropStyle]}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFillObject}
-            onPress={handleClose}
-            activeOpacity={1}
-          />
-        </Animated.View>
+    <View style={StyleSheet.absoluteFillObject}>
+      <Animated.View style={[styles.backdrop, backdropStyle]}>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFillObject}
+          onPress={handleClose}
+          activeOpacity={1}
+        />
+      </Animated.View>
 
-        <Animated.View
-          style={[
-            styles.bottomSheet,
-            { backgroundColor: colors.surface },
-            bottomSheetStyle,
-          ]}
-        >
-          {/* Only apply the pan gesture to the header */}
-          <GestureDetector gesture={headerPanGesture}>
-            <View>
-              <CommentsHeader
-                onClose={handleClose}
-                commentCount={initialCommentCount}
-              />
-            </View>
-          </GestureDetector>
+      <Animated.View
+        style={[
+          styles.bottomSheet,
+          { backgroundColor: colors.surface },
+          bottomSheetStyle,
+        ]}
+      >
+        {/* Only apply the pan gesture to the header */}
+        <GestureDetector gesture={headerPanGesture}>
+          <View>
+            <CommentsHeader
+              onClose={handleClose}
+              commentCount={initialCommentCount}
+            />
+          </View>
+        </GestureDetector>
 
-          {/* Content area is now outside the GestureDetector */}
-          <CommentsContent
-            postId={postId}
-            initialCommentCount={initialCommentCount}
-          />
-        </Animated.View>
-      </View>
-    </GestureHandlerRootView>
+        <CommentsContent
+          postId={postId}
+          initialCommentCount={initialCommentCount}
+        />
+      </Animated.View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 999,
   },
   bottomSheet: {
     position: 'absolute',
     top: SCREEN_HEIGHT,
     left: 0,
     right: 0,
+    width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
-    elevation: 16,
+    elevation: 25,
     flexDirection: 'column',
+    zIndex: 1000,
   },
 });
 

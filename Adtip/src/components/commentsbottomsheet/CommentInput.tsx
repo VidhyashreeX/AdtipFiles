@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   TextInput,
@@ -7,6 +7,7 @@ import {
   Text,
   Platform,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -17,6 +18,8 @@ import Animated, {
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '../../contexts/AuthContext';
+import { API_BASE_URL } from '../../constants/api';
 
 interface CommentInputProps {
   postId: number;
@@ -34,6 +37,7 @@ const CommentInput: React.FC<CommentInputProps> = ({
   onCancelReply,
 }) => {
   const { colors } = useTheme();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
   const [text, setText] = useState('');
@@ -46,6 +50,7 @@ const CommentInput: React.FC<CommentInputProps> = ({
   const handleSubmit = useCallback(async () => {
     if (!text.trim() || isSubmitting) return;
     setIsSubmitting(true);
+    
     try {
       await onSubmit(text.trim());
       setText('');
@@ -84,8 +89,26 @@ const CommentInput: React.FC<CommentInputProps> = ({
     opacity: sendButtonScale.value,
   }));
 
+  const getProfileImage = () => {
+    if (!user?.profile_image || user.profile_image === 'null') {
+      return require('../../assets/images/default-avatar.png');
+    }
+    
+    if (user.profile_image.startsWith('http')) {
+      return { uri: user.profile_image };
+    }
+    
+    return { uri: `${API_BASE_URL}${user.profile_image}` };
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface, paddingBottom: insets.bottom > 0 ? 0 : 8 }]}>
+    <View style={[
+      styles.container, 
+      { 
+        backgroundColor: colors.surface,
+        paddingBottom: Math.max(insets.bottom, 8) 
+      }
+    ]}>
       {replyTo && (
         <View style={[styles.replyIndicator, { backgroundColor: colors.background }]}>
           <Text style={[styles.replyText, { color: colors.text.secondary }]}>
@@ -96,30 +119,39 @@ const CommentInput: React.FC<CommentInputProps> = ({
           </TouchableOpacity>
         </View>
       )}
+      
       <View style={styles.inputRow}>
-        <TextInput
-          ref={inputRef}
-          style={[
-            styles.textInput,
-            {
-              color: colors.text.primary,
-              backgroundColor: colors.background,
-              borderColor: isFocused ? colors.primary : colors.border,
-            },
-          ]}
-          placeholder="Add a comment..."
-          placeholderTextColor={colors.text.tertiary}
-          value={text}
-          onChangeText={handleTextChange}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          onContentSizeChange={(e) => {
-            const newHeight = Math.max(40, Math.min(e.nativeEvent.contentSize.height, 120));
-            inputHeight.value = withTiming(newHeight, { duration: 100 });
-          }}
-          multiline
-          maxLength={500}
+        <Image 
+          source={getProfileImage()} 
+          style={styles.avatar}
         />
+        
+        <Animated.View style={[styles.inputWrapper, inputContainerStyle]}>
+          <TextInput
+            ref={inputRef}
+            style={[
+              styles.textInput,
+              {
+                color: colors.text.primary,
+                backgroundColor: colors.background,
+                borderColor: isFocused ? colors.primary : colors.border,
+              },
+            ]}
+            placeholder="Add a comment..."
+            placeholderTextColor={colors.text.tertiary}
+            value={text}
+            onChangeText={handleTextChange}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            onContentSizeChange={(e) => {
+              const newHeight = Math.max(40, Math.min(e.nativeEvent.contentSize.height, 120));
+              inputHeight.value = withTiming(newHeight, { duration: 100 });
+            }}
+            multiline
+            maxLength={500}
+          />
+        </Animated.View>
+        
         <Animated.View style={[styles.sendButtonContainer, sendButtonStyle]}>
           <TouchableOpacity
             onPress={handleSubmit}
@@ -129,7 +161,7 @@ const CommentInput: React.FC<CommentInputProps> = ({
             {isSubmitting ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
-              <Icon name="arrow-up" size={18} color="white" />
+              <Icon name="send" size={18} color="white" />
             )}
           </TouchableOpacity>
         </Animated.View>
@@ -142,6 +174,7 @@ const styles = StyleSheet.create({
   container: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderColor: '#E1E1E1',
+    width: '100%',
   },
   replyIndicator: {
     flexDirection: 'row',
@@ -162,8 +195,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  textInput: {
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 12,
+  },
+  inputWrapper: {
     flex: 1,
+    marginRight: 12,
+  },
+  textInput: {
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 10 : 8,
@@ -171,7 +213,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     maxHeight: 120,
-    marginRight: 12,
   },
   sendButtonContainer: {
     justifyContent: 'center',
