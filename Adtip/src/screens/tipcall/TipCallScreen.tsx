@@ -36,10 +36,6 @@ import { UserListRequest, UpdateUserRequest, UpdateUserResponse, Contact } from 
 import ApiService from '../../services/ApiService';
 import Icon from 'react-native-vector-icons/Feather';
 import messaging from '@react-native-firebase/messaging';
-import {
-  initiateVideoSDKCall,
-  updateCallStatus,
-} from '../../helpers/CallHelper';
 import uuid from 'react-native-uuid';
 import CallService from '../../services/CallService';
 

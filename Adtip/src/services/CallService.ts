@@ -8,6 +8,7 @@ import FirebaseService from './FirebaseService';
 import VideoSDKService from './videosdk/VideoSDKService';
 import uuid from 'react-native-uuid';
 import { FirebaseCallData } from './FirebaseCallService';
+import FirebaseCallService from './FirebaseCallService';
 
 interface ActiveCall {
   callId: string;
@@ -26,6 +27,7 @@ class CallService {
   private activeCall: ActiveCall | null = null;
   private callKeepService: CallKeepService;
   private firebaseService: FirebaseService;
+  private isEndingCall: boolean = false;
 
   private constructor() {
     this.callKeepService = CallKeepService.getInstance();
@@ -137,14 +139,37 @@ class CallService {
   }
 
   private async onEndCall({ callUUID }: { callUUID: string }) {
+    if (this.isEndingCall && this.activeCall?.callId !== callUUID) {
+      // If we are in the process of ending a call, but a different call UUID comes in, ignore.
+      return;
+    }
+
     if (this.activeCall && this.activeCall.callId === callUUID) {
-      // Notify caller if this was an incoming call and not answered
-      if (!this.activeCall.isInitiator && this.activeCall.status !== 'connected') {
-        await this.notifyCallerDeclined();
-      }
-      this.resetActiveCall();
-      if (navigationRef.isReady() && navigationRef.getCurrentRoute()?.name === 'Meeting') {
-        navigationRef.goBack();
+      this.isEndingCall = true;
+      const callToEnd = { ...this.activeCall }; // Capture state before resetting
+      this.resetActiveCall(); // Reset state immediately to prevent re-entry
+
+      console.log('[CallService] onEndCall triggered for call:', callToEnd.callId);
+
+      try {
+        // Notify caller if this was an incoming call that was declined (not connected)
+        if (!callToEnd.isInitiator && callToEnd.status !== 'connected') {
+          await this.notifyCallerDeclined(callToEnd);
+        }
+
+        // Send the final status to the backend
+        await this.sendCallEndedStatus(callToEnd);
+
+        // Navigate back to TipCallScreen after call ends
+        if (navigationRef.isReady()) {
+          console.log('[CallService] Navigating to TipCallScreen after call end.');
+          navigationRef.navigate('TipCall' as any);
+        }
+      } catch (error) {
+        console.error('[CallService] Error during onEndCall cleanup:', error);
+      } finally {
+        this.isEndingCall = false; // Reset the flag
+        console.log('[CallService] Call cleanup finished for:', callUUID);
       }
     }
   }
@@ -152,22 +177,31 @@ class CallService {
   /**
    * Notify the caller that the call was declined
    */
-  private async notifyCallerDeclined() {
-    if (!this.activeCall) return;
+  private async notifyCallerDeclined(call: ActiveCall) {
+    if (!call) return;
     try {
-      // You may want to use FirebaseCallService or ApiService to notify the caller
-      // For now, just log
-      console.log('[CallService] Notifying caller of declined call:', this.activeCall.callId);
-      // TODO: Implement actual notification to caller (e.g., via FCM or backend)
+      console.log('[CallService] Notifying caller of declined call:', call.callId);
+      // This is a placeholder. Implement a service call to your backend here.
+      // e.g., await FirebaseCallService.getInstance().updateCallStatus({ type: 'declined', ... })
     } catch (e) {
       console.warn('[CallService] Failed to notify caller of declined call:', e);
     }
   }
 
   public endCurrentCall() {
-    if (this.activeCall) {
-      this.callKeepService.endCall(this.activeCall.callId);
-      this.resetActiveCall();
+    if (this.activeCall && !this.isEndingCall) {
+      this.isEndingCall = true; // Set flag to prevent re-entry
+      try {
+        console.log('[CallService] End current call sequence started.');
+        // This will trigger the 'onEndCall' listener, which will handle the rest.
+        this.callKeepService.endCall(this.activeCall.callId);
+      } catch (e) {
+        console.error('[CallService] Error in endCurrentCall while triggering CallKeep:', e);
+        // If CallKeep fails, manually clean up
+        this.onEndCall({ callUUID: this.activeCall.callId });
+      } finally {
+        // The flag will be reset inside onEndCall after all async operations
+      }
     }
   }
 
@@ -227,7 +261,35 @@ class CallService {
   }
 
   private resetActiveCall() {
+    console.log('[CallService] Resetting active call state.');
     this.activeCall = null;
+  }
+
+  /**
+   * Send call ended status to Firebase
+   */
+  private async sendCallEndedStatus(call: ActiveCall) {
+    if (!call) return;
+    try {
+      const firebaseService = FirebaseCallService.getInstance();
+      let callerToken = await FirebaseService.getInstance().getFCMToken();
+      if (!callerToken) callerToken = '';
+      const userId = await AsyncStorage.getItem('userId');
+
+      const payload: import('./FirebaseCallService').CallStatusUpdate = {
+        callerInfo: {
+          token: callerToken,
+          name: call.callerName,
+          userId: userId || undefined,
+        },
+        type: 'ended',
+        callId: call.callId, // Pass the callId to the backend
+      };
+      await firebaseService.updateCallStatus(payload);
+      console.log('[CallService] Sent CALL_ENDED status to Firebase for callId:', call.callId);
+    } catch (e) {
+      console.warn('[CallService] Failed to send CALL_ENDED status:', e);
+    }
   }
 }
 

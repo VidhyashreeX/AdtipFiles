@@ -18,6 +18,7 @@ import {
   VideoSDKControlsBar, 
   VideoSDKCallTimer 
 } from '../../components/videosdk';
+import CallService from '../../services/CallService';
 
 interface MeetingScreenParams {
   meetingId: string;
@@ -52,17 +53,12 @@ const MeetingScreenContent: React.FC<MeetingScreenParams> = ({
     toggleWebcam,
     toggleSpeaker,
   } = useVideoSDKMeeting({
-    meetingId,
-    token,
-    participantName: displayName,
-    micEnabled: true,
-    webcamEnabled: callType === 'video',
     onMeetingJoined: () => {
       console.log('[MeetingScreen] Successfully joined meeting');
     },
     onMeetingLeft: () => {
-      console.log('[MeetingScreen] Left meeting, navigating back');
-      navigation.goBack();
+      console.log('[MeetingScreen] Left meeting, ending call via CallService and navigating back');
+      CallService.getInstance().endCurrentCall();
     },
     onError: (error) => {
       console.error('[MeetingScreen] Meeting error:', error);
@@ -106,6 +102,7 @@ const MeetingScreenContent: React.FC<MeetingScreenParams> = ({
           style: 'destructive',
           onPress: () => {
             leave();
+            navigation.navigate('TipCall' as never);
           }
         },
       ]
@@ -114,7 +111,7 @@ const MeetingScreenContent: React.FC<MeetingScreenParams> = ({
 
   // Get participant array
   const participantArray = Array.from(participants.values());
-  const remoteParticipants = participantArray.filter(p => !p.isLocal);
+  const remoteParticipants = participantArray.filter(p => p.id !== localParticipant?.id);
 
   return (
     <SafeAreaView style={styles.container}>
