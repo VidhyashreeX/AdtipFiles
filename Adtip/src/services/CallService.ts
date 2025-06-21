@@ -190,15 +190,15 @@ class CallService {
 
   public endCurrentCall() {
     if (this.activeCall && !this.isEndingCall) {
+      const callId = this.activeCall.callId; // Capture before reset
+      this.resetActiveCall(); // Reset immediately
       this.isEndingCall = true; // Set flag to prevent re-entry
       try {
         console.log('[CallService] End current call sequence started.');
-        // This will trigger the 'onEndCall' listener, which will handle the rest.
-        this.callKeepService.endCall(this.activeCall.callId);
+        this.callKeepService.endCall(callId); // Use captured callId
       } catch (e) {
         console.error('[CallService] Error in endCurrentCall while triggering CallKeep:', e);
-        // If CallKeep fails, manually clean up
-        this.onEndCall({ callUUID: this.activeCall.callId });
+        this.onEndCall({ callUUID: callId });
       } finally {
         // The flag will be reset inside onEndCall after all async operations
       }
