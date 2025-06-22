@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
   Text,
   Platform,
+  Linking,
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -79,6 +80,39 @@ const AppNavigator = () => {
   const [callServiceReady, setCallServiceReady] = useState(false);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    const handleDeepLink = (url: string | null) => {
+      if (url) {
+        const route = url.replace(/.*?:\/\//g, '');
+        const host = route.split('/')[0];
+
+        if (host === 'call' && activeCall) {
+          navigationRef.navigate('Meeting', {
+            meetingId: activeCall.meetingId,
+            token: activeCall.token,
+            callType: activeCall.callType,
+            displayName: activeCall.displayName,
+          });
+        }
+      }
+    };
+
+    const getUrlAsync = async () => {
+      const initialUrl = await Linking.getInitialURL();
+      handleDeepLink(initialUrl);
+    };
+
+    getUrlAsync();
+
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      handleDeepLink(url);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [activeCall]);
 
   useEffect(() => {
     if (isNavReady) {

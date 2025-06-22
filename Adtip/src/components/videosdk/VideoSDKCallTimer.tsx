@@ -1,14 +1,23 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Text, StyleSheet, View } from 'react-native';
 import { Clock } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 
-interface VideoSDKCallTimerProps {
-  duration: number; // Duration in seconds
-}
+interface VideoSDKCallTimerProps {}
 
-const VideoSDKCallTimer: React.FC<VideoSDKCallTimerProps> = ({ duration }) => {
+const VideoSDKCallTimer: React.FC<VideoSDKCallTimerProps> = () => {
   const { colors } = useTheme();
+  const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setDuration(prevDuration => prevDuration + 1);
+    }, 1000);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, []);
 
   const formatDuration = (seconds: number): string => {
     if (seconds < 0) return '00:00';

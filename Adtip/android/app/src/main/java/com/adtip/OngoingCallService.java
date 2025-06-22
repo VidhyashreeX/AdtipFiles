@@ -10,6 +10,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
+import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
 import android.os.IBinder;
@@ -96,15 +97,17 @@ public class OngoingCallService extends Service {
     }
 
     private void showNotification(String title, String text) {
-        Intent notificationIntent = new Intent(this, MainActivity.class);
+        // Intent to open the app to the call screen using a deep link
+        Intent notificationIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("adtip://call"));
+        notificationIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent,
-                PendingIntent.FLAG_IMMUTABLE);
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Intent endCallIntent = new Intent(ACTION_END_CALL);
         PendingIntent endCallPendingIntent = PendingIntent.getBroadcast(this, 0, endCallIntent,
                 PendingIntent.FLAG_IMMUTABLE);
 
-        // Use standard system icons as a fallback
+        // Use standard system icons as a fallback to ensure compilation
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle(title)
                 .setContentText(text)

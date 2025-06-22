@@ -105,24 +105,6 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
   const value = { activeCall, startCall, endCall };
 
-  if (activeCall) {
-    return (
-      <CallContext.Provider value={value}>
-        <MeetingProvider
-          config={{
-            meetingId: activeCall.meetingId,
-            micEnabled: true,
-            webcamEnabled: activeCall.callType === 'video',
-            name: activeCall.displayName,
-          }}
-          token={activeCall.token}
-        >
-          {children}
-        </MeetingProvider>
-      </CallContext.Provider>
-    );
-  }
-
   return (
     <CallContext.Provider value={value}>
       {children}

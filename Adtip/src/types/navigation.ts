@@ -100,7 +100,8 @@ export type MainNavigatorParamList = {
 // This is the RootStackParamList for the Stack.Navigator in App.tsx
 export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthNavigatorParamList>; 
-  Main: NavigatorScreenParams<MainNavigatorParamList>; 
+  Main: NavigatorScreenParams<MainNavigatorParamList>;
+  UserDetails: undefined;
   Meeting: {
     meetingId: string;
     token: string;

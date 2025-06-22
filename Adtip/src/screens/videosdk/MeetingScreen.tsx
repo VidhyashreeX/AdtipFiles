@@ -14,9 +14,9 @@ import {
   AppStateStatus,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { MeetingProvider, useMeeting } from '@videosdk.live/react-native-sdk';
 import { useCall } from '../../contexts/CallProvider';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useVideoSDKMeeting } from '../../hooks/videosdk/useVideoSDKMeeting';
 import { 
   VideoSDKParticipantView, 
   VideoSDKControlsBar, 
@@ -25,28 +25,13 @@ import {
 } from '../../components/videosdk';
 import CallService from '../../services/CallService';
 import { appEventEmitter } from '../../events/AppEventEmitter';
-import VideoSDKService from '../../services/videosdk/VideoSDKService';
-import OngoingCallModule from '../../services/OngoingCallModule';
 import { ChevronLeft, MoreVertical } from 'lucide-react-native';
 
-const MeetingScreen: React.FC = () => {
+const MeetingScreenContent: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
   const navigation = useNavigation();
-  const { activeCall, endCall } = useCall();
+  const { activeCall } = useCall();
   
-  // Get parameters exclusively from the activeCall context
-  const meetingId = activeCall?.meetingId;
-  const token = activeCall?.token;
-  const callType = activeCall?.callType || 'voice';
-  const displayName = activeCall?.displayName || 'User';
-  
-  console.log('[MeetingScreen] Initializing with context:', {
-    meetingId,
-    token: token ? 'present' : 'missing',
-    callType,
-    displayName
-  });
-
   const [showControls, setShowControls] = useState(true);
   const [controlsOpacity] = useState(new Animated.Value(1));
   const [isEndingCall, setIsEndingCall] = useState(false);
@@ -54,67 +39,24 @@ const MeetingScreen: React.FC = () => {
   const {
     participants,
     localParticipant,
-    callStatus,
-    callSettings,
-    metrics,
     join,
     leave,
     toggleMic,
     toggleWebcam,
-    toggleSpeaker,
-  } = useVideoSDKMeeting({
     meetingId,
-    token,
-    displayName,
-    micEnabled: callType === 'voice',  // Auto enable mic for voice calls
-    webcamEnabled: callType === 'video', // Auto enable webcam for video calls
-    onMeetingJoined: () => {
-      console.log('[MeetingScreen] Successfully joined meeting.');
-      CallService.updateCallStatus('connected');
-    },
-    onMeetingLeft: () => {
-      console.log('[MeetingScreen] Left meeting session.');
-      // This is now just a callback. The primary state is managed by CallService.
-      // We ensure the global state is also cleaned up if the meeting ends unexpectedly.
-      CallService.resetCallState();
-    },
-    onError: (error) => {
-      console.error('[MeetingScreen] Meeting error:', error);
-      Alert.alert('Call Error', 'An error occurred during the call.');
-      endCall();
-    },
-  });
+  } = useMeeting({});
 
-  // Auto-join when component mounts
+  const micEnabled = localParticipant?.micOn;
+  const webcamEnabled = localParticipant?.webcamOn;
+  const callStatus = participants.size > 0 ? 'connected' : 'connecting';
+
   useEffect(() => {
-    if (meetingId && token && typeof join === 'function') {
-      console.log('[MeetingScreen] Auto-joining meeting:', meetingId);
-      join();
-    } else if (!isEndingCall) { // Prevent error on cleanup
-      console.error('[MeetingScreen] Cannot join meeting - missing data:', {
-        hasMeetingId: !!meetingId,
-        hasToken: !!token,
-        isJoinFunction: typeof join === 'function'
-      });
-      
-      // Show error and go back if we can't join
-      if (!meetingId || !token) {
-        Alert.alert(
-          'Call Error', 
-          'Missing meeting information. Please try again.',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
-        );
-      }
-    }
-  }, [meetingId, token, join, navigation]);
-
-  // Listen for the command to leave the call from the central service
+    join();
+  }, [join]);
+  
   useEffect(() => {
     const handleLeaveCall = () => {
-      if (typeof leave === 'function') {
-        console.log('[MeetingScreen] Received leave command. Leaving meeting now.');
-        leave();
-      }
+      leave();
     };
     appEventEmitter.on('leaveActiveCall', handleLeaveCall);
     return () => {
@@ -122,10 +64,8 @@ const MeetingScreen: React.FC = () => {
     };
   }, [leave]);
 
-  // Effect to handle leaving the screen if the call ends unexpectedly
   useEffect(() => {
     if (!activeCall && !isEndingCall) {
-        console.log('[MeetingScreen] No active call detected, navigating back.');
         if (navigation.canGoBack()) {
             navigation.goBack();
         }
@@ -134,31 +74,21 @@ const MeetingScreen: React.FC = () => {
 
   const styles = createMeetingStyles(colors, isDarkMode);
 
-  // Render a loading/connecting state until the call is established.
-  // This is safe because it's after all hook calls.
-  if (!activeCall) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-        <View style={styles.connectingContainer}>
-          <ActivityIndicator color="#FFFFFF" size="large" />
-          <Text style={[styles.connectingStatusText, { marginTop: 16 }]}>
-            Preparing call...
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // Toggle controls visibility with animation and haptic feedback
+  const handleEndCall = () => {
+    if (isEndingCall) {
+      return;
+    }
+    setIsEndingCall(true);
+    CallService.endCall('User ended call');
+  };
+  
   const toggleControlsVisibility = () => {
-    // Only allow hiding controls when connected
     if (callStatus === 'connecting' || isEndingCall) return;
     
     try {
       Vibration.vibrate(10);
     } catch (error) {
-      // Vibration not supported on some devices
+      // Vibration not supported
     }
     
     const newShowControls = !showControls;
@@ -171,7 +101,6 @@ const MeetingScreen: React.FC = () => {
     }).start();
   };
 
-  // Auto-hide controls after 5 seconds (only when connected)
   useEffect(() => {
     if (showControls && callStatus === 'connected' && !isEndingCall) {
       const timer = setTimeout(() => {
@@ -181,19 +110,6 @@ const MeetingScreen: React.FC = () => {
     }
   }, [showControls, callStatus, isEndingCall]);
 
-  // Enhanced end call handler that delegates to the central service
-  const handleEndCall = () => {
-    if (isEndingCall) {
-      console.log('[MeetingScreen] End call already in progress');
-      return;
-    }
-    setIsEndingCall(true);
-    console.log('[MeetingScreen] User initiated end call. Delegating to CallService.');
-    CallService.endCall('User ended call');
-    // No navigation here. The component will unmount automatically when activeCall becomes null.
-  };
-
-  // Handle end call with confirmation (for UI button)
   const handleEndCallWithConfirmation = () => {
     if (isEndingCall) return;
 
@@ -205,23 +121,15 @@ const MeetingScreen: React.FC = () => {
         {
           text: 'End Call',
           style: 'destructive',
-          onPress: handleEndCall, // This now calls the robust handler
+          onPress: handleEndCall,
         },
       ]
     );
   };
 
-  // Handle back button press
-  const handleBackPress = () => {
-    if (isEndingCall) return;
-    handleEndCallWithConfirmation();
-  };
-
-  // Get participant array
   const participantArray = Array.from(participants.values());
   const remoteParticipants = participantArray.filter(p => p.id !== localParticipant?.id);
 
-  // Render connecting content
   const renderConnectingContent = () => (
     <View style={styles.connectingContainer}>
       <View style={styles.connectingContent}>
@@ -261,44 +169,23 @@ const MeetingScreen: React.FC = () => {
     </View>
   );
 
-  // Render connected content
   const renderConnectedContent = () => (
-    <TouchableOpacity 
-      style={styles.mainContent} 
-      activeOpacity={1} 
-      onPress={toggleControlsVisibility}
-      disabled={isEndingCall}
-    >
+    <View style={styles.connectedContainer}>
       {activeCall?.callType === 'video' ? (
         <View style={styles.videoContainer}>
-          {/* Remote participants */}
           {remoteParticipants.map((participant) => (
-            <VideoSDKParticipantView
-              key={participant.id}
-              participant={participant}
-              isLocal={false}
-              style={styles.remoteVideo}
-            />
+            <VideoSDKParticipantView key={participant.id} participant={participant} isLocal={false} />
           ))}
-          
-          {/* Local participant (small preview) */}
-          {localParticipant && callSettings.webcamEnabled && (
+          {localParticipant && webcamEnabled && (
             <View style={styles.localVideoContainer}>
-              <VideoSDKParticipantView
-                participant={localParticipant}
-                isLocal={true}
-                style={styles.localVideo}
-              />
+              <VideoSDKParticipantView participant={localParticipant} isLocal={true} />
             </View>
           )}
         </View>
       ) : (
         <View style={styles.voiceCallContainer}>
-          {/* Animated Background */}
           <AnimatedBackground isActive={callStatus === 'connected' && !isEndingCall} />
-          
           <View style={styles.voiceCallContent}>
-            {/* Main avatar */}
             <View style={styles.avatarContainer}>
               <View style={styles.avatarWrapper}>
                 <View style={styles.avatarPlaceholder}>
@@ -306,7 +193,6 @@ const MeetingScreen: React.FC = () => {
                     {(remoteParticipants[0]?.displayName || activeCall?.recipientName || 'U')[0].toUpperCase()}
                   </Text>
                 </View>
-                {/* Audio indicator */}
                 {remoteParticipants[0]?.micOn && !isEndingCall && (
                   <View style={styles.audioIndicator}>
                     <View style={styles.audioWave} />
@@ -315,28 +201,20 @@ const MeetingScreen: React.FC = () => {
                   </View>
                 )}
               </View>
-              
               <Text style={styles.participantDisplayName}>
                 {remoteParticipants[0]?.displayName || activeCall?.recipientName || 'Unknown'}
               </Text>
-              
-              {isEndingCall && (
-                <Text style={styles.endingCallText}>
-                  Ending call...
-                </Text>
-              )}
             </View>
           </View>
         </View>
       )}
-    </TouchableOpacity>
+    </View>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} onTouchEnd={toggleControlsVisibility}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       
-      {/* Header - Always visible */}
       <Animated.View style={[
         styles.header, 
         { 
@@ -346,7 +224,7 @@ const MeetingScreen: React.FC = () => {
       ]}>
         <TouchableOpacity 
           style={styles.backButton} 
-          onPress={handleBackPress}
+          onPress={handleEndCallWithConfirmation}
           disabled={isEndingCall}
         >
           <ChevronLeft size={24} color="#ffffff" />
@@ -374,7 +252,7 @@ const MeetingScreen: React.FC = () => {
             {callStatus === 'connected' && !isEndingCall && (
               <>
                 <Text style={styles.statusSeparator}>•</Text>
-                <VideoSDKCallTimer duration={metrics.duration} />
+                <VideoSDKCallTimer />
               </>
             )}
           </View>
@@ -388,45 +266,62 @@ const MeetingScreen: React.FC = () => {
         </TouchableOpacity>
       </Animated.View>
 
-      {/* Main Content - Changes based on connection status */}
-      {callStatus === 'connecting' || callStatus === 'dialing' || isEndingCall ? renderConnectingContent() : renderConnectedContent()}
+      {callStatus === 'connected' ? renderConnectedContent() : renderConnectingContent()}
 
-      {/* Controls - Always accessible, but with different opacity */}
-      <Animated.View style={[
-        styles.controlsOverlay, 
-        { opacity: (callStatus === 'connecting' || callStatus === 'dialing' || isEndingCall) ? 1 : controlsOpacity }
-      ]}>
-        <VideoSDKControlsBar
-          callType={activeCall?.callType}
-          callSettings={callSettings}
-          onToggleMic={toggleMic}
-          onToggleWebcam={toggleWebcam}
-          onToggleSpeaker={toggleSpeaker}
-          onEndCall={handleEndCallWithConfirmation}
-          participantCount={metrics.participantCount}
-          isConnecting={callStatus === 'connecting' || callStatus === 'dialing' || isEndingCall}
-        />
-      </Animated.View>
+      {isEndingCall && (
+        <View style={styles.endingOverlay}>
+          <ActivityIndicator color="#FFFFFF" size="large" />
+          <Text style={styles.endingCallText}>Ending call...</Text>
+        </View>
+      )}
+
+      {!isEndingCall && (
+        <Animated.View style={[styles.controlsContainer, { opacity: controlsOpacity }]}>
+          <VideoSDKControlsBar
+            callType={activeCall?.callType || 'voice'}
+            micEnabled={micEnabled}
+            webcamEnabled={webcamEnabled}
+            toggleMic={toggleMic}
+            toggleWebcam={toggleWebcam}
+            onEndCall={handleEndCallWithConfirmation}
+            isConnecting={callStatus === 'connecting'}
+          />
+        </Animated.View>
+      )}
     </SafeAreaView>
   );
 };
 
+const MeetingScreen: React.FC = () => {
+  const { activeCall } = useCall();
+
+  if (!activeCall) {
+    return (
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#1A1A1A', justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator color="#FFFFFF" size="large" />
+        </SafeAreaView>
+    );
+  }
+
+  return (
+    <MeetingProvider
+      config={{
+        meetingId: activeCall.meetingId,
+        micEnabled: activeCall.callType === 'voice',
+        webcamEnabled: activeCall.callType === 'video',
+        name: activeCall.displayName,
+      }}
+      token={activeCall.token}
+    >
+      <MeetingScreenContent />
+    </MeetingProvider>
+  );
+};
+
 const createMeetingStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
-  // ...existing styles...
-  
-  // Add ending call specific styles
-  endingCallText: {
-    fontSize: 16,
-    color: '#FF3B30',
-    fontWeight: '500',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  
-  // ...rest of existing styles...
   container: {
     flex: 1,
-    backgroundColor: '#0F0F0F',
+    backgroundColor: '#1A1A1A',
   },
   header: {
     position: 'absolute',
@@ -576,7 +471,7 @@ const createMeetingStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
     lineHeight: 20,
   },
   // Connected content styles
-  mainContent: {
+  connectedContainer: {
     flex: 1,
   },
   videoContainer: {
@@ -669,12 +564,29 @@ const createMeetingStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
     textAlign: 'center',
     marginBottom: 8,
   },
-  controlsOverlay: {
+  controlsContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     zIndex: 1000,
+  },
+  endingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  endingCallText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '500',
+    marginTop: 8,
+    textAlign: 'center',
   },
 });
 
