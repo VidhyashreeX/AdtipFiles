@@ -19,7 +19,7 @@ type AuthContextType = {
   loading: boolean; // For individual operations like login, verifyOtp
   error: string | null;
   isInitialized: boolean; // <-- Add this
-  login: (mobileNumber: string) => Promise<OtpResponse>;
+  login: (mobileNumber: string) => Promise<ApiResponse<OtpResponse[]>>;  // Updated return type
   verifyOtp: (mobileNumber: string, otp: string, id: string) => Promise<OtpVerifyApiResponse>;
   logout: () => Promise<void>;
   updateUserDetails: (userData: Partial<User>) => Promise<void>;
@@ -36,7 +36,10 @@ const AuthContext = createContext<AuthContextType>({
   loading: false, // Default operation loading to false
   error: null,
   isInitialized: false, // <-- Default to false
-  login: async () => ({}) as OtpResponse,
+  login: async () => ({
+    status: false,
+    message: 'Default login implementation',
+  }) as ApiResponse<OtpResponse[]>,
   verifyOtp: async () => ({}) as OtpVerifyApiResponse,
   logout: async () => {},
   updateUserDetails: async () => {},
@@ -118,13 +121,12 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     }
   };
   // Login - Send OTP
-  const login = async (mobileNumber: string): Promise<OtpResponse> => {
+  const login = async (mobileNumber: string): Promise<ApiResponse<OtpResponse[]>> => {
     setLoading(true);
     setError(null);
 
     try {
       console.log(`[AuthContext] Attempting login with number: ${mobileNumber}`);
-      console.log(`[AuthContext] API_BASE_URL: ${API_BASE_URL}`);
       
       const apiResponse = await ApiService.post<ApiResponse<OtpResponse[]>>(ENDPOINTS.OTP_LOGIN, {
         mobileNumber,
@@ -136,7 +138,10 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       if (apiResponse.status !== 200 || !apiResponse.data || !Array.isArray(apiResponse.data) || apiResponse.data.length === 0) {
         throw new Error(apiResponse.message || 'Failed to send OTP or invalid response structure');
       }
-      return apiResponse.data[0];
+      
+      // Return the response instead of handling navigation
+      return apiResponse;
+      
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to send OTP';
       setError(errorMessage);

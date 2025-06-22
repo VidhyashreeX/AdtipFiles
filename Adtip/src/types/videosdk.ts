@@ -1,17 +1,23 @@
+// import { MediaStream } from "@videosdk.live/react-native-sdk";
+// import { MediaStreamTrack } from 'react-native-webrtc';
+
 export interface Participant {
   id: string;
   displayName: string;
   isLocal: boolean;
   mode: 'CONFERENCE' | 'VIEWER';
   quality?: 'low' | 'med' | 'high';
+  micOn: boolean;
+  webcamOn: boolean;
+  // streams: Stream[];
 }
 
-export interface Stream {
-  id: string;
-  codec: string;
-  kind: 'video' | 'audio' | 'share';
-  track: MediaStreamTrack;
-}
+// Temporarily commenting out due to missing webrtc types
+// export interface Stream {
+//   streamId: string;
+//   track: MediaStreamTrack;
+//   kind: 'video' | 'audio';
+// }
 
 export interface Meeting {
   id: string;
@@ -26,6 +32,8 @@ export interface CallSettings {
   webcamEnabled: boolean;
   speakerEnabled: boolean;
   screenShareEnabled?: boolean;
+  participantCount: number;
+  networkQuality: 'good' | 'bad' | 'poor' | 'unknown';
 }
 
 export interface CallMetrics {
@@ -36,7 +44,7 @@ export interface CallMetrics {
 
 export type CallType = 'voice' | 'video' | 'screen_share';
 
-export type CallStatus = 'connecting' | 'connected' | 'disconnected' | 'failed' | 'ended';
+export type CallStatus = 'connecting' | 'connected' | 'ended' | 'failed' | 'disconnected' | 'dialing';
 
 export interface CallNotificationData {
   callerName: string;

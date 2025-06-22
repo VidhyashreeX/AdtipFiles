@@ -81,14 +81,6 @@ export type MainNavigatorParamList = {
   Support: undefined;
   CreateCampaign: undefined;
   Explore: undefined;
-  Meeting: {
-    meetingId: string;
-    token: string;
-    callType: 'voice' | 'video';
-    displayName: string;
-    isInitiator?: boolean;
-    recipientName?: string;
-  };
   VideoPlayerModal: {
     video: any;
     cardLayout: any;
@@ -100,13 +92,27 @@ export type MainNavigatorParamList = {
   Channel: undefined;
   AddFundsScreen: undefined;
   UpgradePremiumScreen: undefined;
+  Comments: { postId: number; visible: boolean; onClose: () => void; };
+  CameraRecording: undefined;
   // Add other screens specific to MainNavigator
 };
 
 // This is the RootStackParamList for the Stack.Navigator in App.tsx
 export type RootStackParamList = {
-  Auth: NavigatorScreenParams<AuthNavigatorParamList>; // AuthNavigator is nested
-  Main: NavigatorScreenParams<MainNavigatorParamList>; // MainNavigator is nested
+  Auth: NavigatorScreenParams<AuthNavigatorParamList>; 
+  Main: NavigatorScreenParams<MainNavigatorParamList>; 
+  Meeting: {
+    meetingId: string;
+    token: string;
+    callType: 'voice' | 'video';
+    displayName: string;
+    isInitiator?: boolean;
+    recipientName?: string;
+  };
+  CameraRecording: {
+    maxDuration?: number;
+    aspectRatio?: '9:16' | '16:9' | '1:1';
+  }; // Removed the function param
 };
 
 // Update NavigationProps if needed, though direct use of hooks like useNavigation is often preferred

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,15 +13,22 @@ import {
   Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 // Hooks and contexts
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { AuthNavigatorParamList } from '../../types/navigation';
 
 /**
  * Login screen component
  */
-const LoginScreen = ({ navigation }) => {
+type LoginScreenNavigationProp = NativeStackNavigationProp<
+  AuthNavigatorParamList,
+  'Login'
+>;
+
+const LoginScreen = ({ navigation }: { navigation: LoginScreenNavigationProp }) => {
   // Theme
   const { colors } = useTheme();
   
@@ -32,47 +39,96 @@ const LoginScreen = ({ navigation }) => {
   const [mobileNumber, setMobileNumber] = useState('');
   const [countryCode, setCountryCode] = useState('+91');
   const [error, setError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false); // Local processing state
+  
+  // Ref to prevent multiple calls
+  const isCallingRef = useRef(false);
   
   // Handle login
   const handleLogin = async () => {
+    // Prevent multiple calls if already processing
+    if (isCallingRef.current || isProcessing || loading) {
+      console.log('[LoginScreen] Already processing, ignoring duplicate call');
+      return;
+    }
+
     // Validate mobile number
     if (!mobileNumber || mobileNumber.length < 10) {
       setError('Please enter a valid 10-digit mobile number');
       return;
     }
-    
-    // Clear error and dismiss keyboard
+
+    // Set processing flags and dismiss keyboard
+    isCallingRef.current = true;
+    setIsProcessing(true);
     setError(null);
     Keyboard.dismiss();
-    
+
     try {
-      console.log('[LoginScreen] Attempting to call login from AuthContext...');
-      // Request OTP
-      const otpResponse = await login(mobileNumber);
-      console.log('[LoginScreen] Received OTP Response:', JSON.stringify(otpResponse));
+      console.log('[LoginScreen] Starting login process for:', mobileNumber);
       
-      // Validate essential fields from otpResponse needed for navigation
-      if (!otpResponse || typeof otpResponse.id === 'undefined' || typeof otpResponse.is_first_time === 'undefined') {
-        console.error('[LoginScreen] Invalid or incomplete otpResponse:', otpResponse);
-        setError('Failed to get necessary OTP details from the server. Please try again.');
-        return;
-      }
+      // Call the login function from AuthContext
+      const response = await login(mobileNumber);
       
-      console.log(`[LoginScreen] Navigating to OTP screen with mobileNumber: ${mobileNumber}, id: ${otpResponse.id}, isFirstTime: ${otpResponse.is_first_time}`);
-      // Navigate to OTP verification screen
-      navigation.navigate('OTP', {
-        mobileNumber,
-        id: otpResponse.id.toString(), // OTPScreen expects id as part of route.params
-        isFirstTime: otpResponse.is_first_time,
+      console.log('[LoginScreen] Login response received:', {
+        hasData: !!response?.data,
+        dataLength: response?.data?.length || 0
       });
-      console.log('[LoginScreen] Navigation to OTP screen initiated.');
+      
+      // Check for a valid response
+      if (response && response.data && Array.isArray(response.data) && response.data.length > 0) {
+        const otpResponse = response.data[0];
+        
+        console.log('[LoginScreen] Successfully sent OTP, navigating to OTP screen', {
+          mobileNumber,
+          id: otpResponse.id,
+          isFirstTime: otpResponse.is_first_time
+        });
+        
+        // --- THIS IS THE FIX ---
+        // Navigate directly to the 'OTP' screen, which is a sibling in the AuthNavigator.
+        navigation.navigate('OTP', {
+          mobileNumber,
+          id: otpResponse.id.toString(),
+          isFirstTime: otpResponse.is_first_time,
+        });
+        
+      } else {
+        throw new Error('Invalid API response data');
+      }
     } catch (err) {
-      // Handle error
+      // Handle any errors during the process
       console.error('[LoginScreen] Login error in handleLogin:', err);
-      const errorMessage = err && (err as any).message ? (err as any).message : 'Failed to send the OTP. Please try again.';
+      const errorMessage =
+        err && (err as any).message
+          ? (err as any).message
+          : 'Failed to send the OTP. Please try again.';
       setError(errorMessage);
+    } finally {
+      // Reset processing flags
+      setIsProcessing(false);
+      isCallingRef.current = false;
     }
   };
+  
+  // Handle mobile number change
+  const handleMobileNumberChange = (text: string) => {
+    // Only allow digits
+    const cleanedText = text.replace(/[^0-9]/g, '');
+    setMobileNumber(cleanedText);
+    
+    // Clear error when user starts typing
+    if (error) {
+      setError(null);
+    }
+  };
+  
+  // Check if button should be disabled
+  const isButtonDisabled = !mobileNumber || 
+                          mobileNumber.length < 10 || 
+                          loading || 
+                          isProcessing || 
+                          isCallingRef.current;
   
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -95,7 +151,7 @@ const LoginScreen = ({ navigation }) => {
         </Text>
         
         {/* Mobile number input */}
-        <View style={[styles.inputContainer, { borderColor: colors.border.default }]}>
+        <View style={[styles.inputContainer, { borderColor: colors.border }]}>
           <Text style={[styles.countryCode, { color: colors.text.primary }]}>
             {countryCode}
           </Text>
@@ -105,9 +161,12 @@ const LoginScreen = ({ navigation }) => {
             placeholderTextColor={colors.text.light}
             keyboardType="phone-pad"
             value={mobileNumber}
-            onChangeText={setMobileNumber}
+            onChangeText={handleMobileNumberChange}
             maxLength={10}
             autoFocus
+            editable={!isProcessing && !loading} // Disable input while processing
+            returnKeyType="done"
+            onSubmitEditing={handleLogin}
           />
         </View>
         
@@ -121,12 +180,13 @@ const LoginScreen = ({ navigation }) => {
           style={[
             styles.loginButton,
             { backgroundColor: colors.primary },
-            (!mobileNumber || mobileNumber.length < 10 || loading) && styles.disabledButton,
+            isButtonDisabled && styles.disabledButton,
           ]}
           onPress={handleLogin}
-          disabled={!mobileNumber || mobileNumber.length < 10 || loading}
+          disabled={isButtonDisabled}
+          activeOpacity={isButtonDisabled ? 1 : 0.7}
         >
-          {loading ? (
+          {(loading || isProcessing) ? (
             <ActivityIndicator color="#ffffff" />
           ) : (
             <Text style={styles.loginButtonText}>Get OTP</Text>

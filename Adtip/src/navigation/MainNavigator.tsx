@@ -48,10 +48,11 @@ import ExploreScreen from '../screens/explore/ExploreScreen';
 
 // FIXED IMPORT - Import as default export instead of named export
 import { VideoPlayerModalScreen } from '../screens/tiptube';
+import CameraRecordingScreen from '../screens/content/CameraRecordingScreen';
 
 // Add TipCall imports - Fix the import path
 import TipCallScreen from '../screens/tipcall/TipCallScreen';
-import MeetingScreen from '../screens/videosdk/MeetingScreen';
+// import MeetingScreen from '../screens/videosdk/MeetingScreen';
 
 // Add AddFundsScreen import
 import AddFundsScreen from '../screens/wallet/AddFundsScreen';
@@ -303,7 +304,7 @@ const MainNavigator = () => {
   
   // Add TipCall screens with wallet balance HOC
   const EnhancedTipCallScreen = withWalletBalance(TipCallScreen);
-  const EnhancedMeetingScreen = withWalletBalance(MeetingScreen); // Add this line
+  // const EnhancedMeetingScreen = withWalletBalance(MeetingScreen); // Add this line
 
   return (
     <Stack.Navigator
@@ -329,11 +330,11 @@ const MainNavigator = () => {
         component={EnhancedTipCallScreen}
         options={standardFastTransitionConfig}
       />
-      <Stack.Screen 
+      {/* <Stack.Screen 
         name="Meeting" 
-        component={EnhancedMeetingScreen} // Use enhanced version
+        component={MeetingScreen}
         options={callTransitionConfig}
-      />
+      /> */}
       
       {/* Content creation with slide up animation */}
       <Stack.Screen 
@@ -375,7 +376,7 @@ const MainNavigator = () => {
       {/* Comments with slide up */}
       <Stack.Screen 
         name="Comments" 
-        component={EnhancedCommentsScreen}
+        component={EnhancedCommentsScreen as any}
         options={slideUpTransitionConfig}
       />
       
@@ -428,6 +429,15 @@ const MainNavigator = () => {
           contentStyle: { backgroundColor: 'transparent' },
         }}
       />
+      <Stack.Screen 
+        name="CameraRecording" 
+        component={CameraRecordingScreen}
+        options={{
+          headerShown: false,
+          presentation: 'fullScreenModal',
+        }}
+      />
+        
 
       {/* Add UpgradePremiumScreen */}
       <Stack.Screen name="UpgradePremiumScreen" component={UpgradePremiumScreen} />

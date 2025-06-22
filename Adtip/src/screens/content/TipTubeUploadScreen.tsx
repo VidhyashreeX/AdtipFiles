@@ -1,5 +1,4 @@
-// src/screens/content/TipTubeUploadScreen.tsx
-import React, {useState, useEffect} from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,335 +13,275 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
-  Linking,
   PermissionsAndroid,
+  Linking,
+  Dimensions,
+  BackHandler,
 } from 'react-native';
-import {useNavigation, useRoute, RouteProp} from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { launchImageLibrary, ImagePickerResponse, MediaType } from 'react-native-image-picker';
 import Icon from 'react-native-vector-icons/Feather';
-import ImagePicker from 'react-native-image-crop-picker';
-import * as Progress from 'react-native-progress';
-import {launchImageLibrary} from 'react-native-image-picker';
-import {check, request, PERMISSIONS, RESULTS} from 'react-native-permissions';
-
-// Components
+import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import Header from '../../components/common/Header';
-import CategoryChip from '../../components/common/CategoryChip';
-
-// Context and services
-import {useTheme} from '../../contexts/ThemeContext';
+import VideoCompressionService, { VideoCompressionOptions } from '../../services/VideoCompressionService';
 import ApiService from '../../services/ApiService';
-import VideoCompressionService, {CompressedVideoResult} from '../../services/VideoCompressionService';
-import {ENDPOINTS} from '../../constants/api';
+import RNFS from 'react-native-fs';
 
-// Define the expected route parameters
-type TipTubeUploadScreenParams = {
-  videoSource?: {
-    uri: string;
-    type?: string;
-    name?: string;
-    size?: number;
-  };
-};
+const { width: screenWidth } = Dimensions.get('window');
 
-const TipTubeUploadScreen = () => {
-  const {colors, isDarkMode} = useTheme();
+// API Interfaces
+interface TipTubeUploadRequest {
+  name: string;
+  isShot: boolean;
+  categoryId: number;
+  channelId: number;
+  videoLink: string;
+  videoDesciption: string;
+  createdby: number;
+  play_duration: string;
+  video_Thumbnail: string;
+}
+
+interface TipTubeUploadResponse {
+  status: number;
+  message: string;
+  data: Array<{
+    id: number;
+    name: string;
+    isShot: boolean;
+    categoryId: number;
+    channelId: number;
+    videoLink: string;
+    videoDesciption: string;
+    createdby: number;
+    play_duration: string;
+    video_Thumbnail: string;
+  }>;
+}
+
+// Video Categories
+const VIDEO_CATEGORIES = [
+  { id: 1, name: 'Education', icon: 'book-open' },
+  { id: 2, name: 'Entertainment', icon: 'play-circle' },
+  { id: 3, name: 'Technology', icon: 'smartphone' },
+  { id: 4, name: 'Sports', icon: 'activity' },
+  { id: 5, name: 'Music', icon: 'music' },
+  { id: 6, name: 'Gaming', icon: 'gamepad-2' },
+  { id: 7, name: 'Lifestyle', icon: 'heart' },
+  { id: 8, name: 'News', icon: 'radio' },
+];
+
+// Quality Options
+const QUALITY_OPTIONS = [
+  { key: 'high', label: 'High Quality (Best)', description: '1080p • Larger file size' },
+  { key: 'medium', label: 'Medium Quality (Recommended)', description: '720p • Balanced' },
+  { key: 'low', label: 'Low Quality (Fast)', description: '480p • Smaller file size' },
+];
+
+const TipTubeUploadScreen: React.FC = () => {
   const navigation = useNavigation();
-  const route = useRoute<RouteProp<{params: TipTubeUploadScreenParams}, 'params'>>();
+  const { colors, isDarkMode } = useTheme();
+  const { user } = useAuth();
 
-  // Create dynamic styles based on theme
-  const styles = createStyles(colors, isDarkMode);
-
-  // State variables
+  // Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [videoSource, setVideoSource] = useState<any>(null);
-  const [thumbnail, setThumbnail] = useState<any>(null);
-  const [selectedCategory, setSelectedCategory] = useState<any>(null);
+  const [categoryId, setCategoryId] = useState(1);
   const [isPublic, setIsPublic] = useState(true);
-  const [isMonetized, setIsMonetized] = useState(false);
+  const [selectedQuality, setSelectedQuality] = useState<'high' | 'medium' | 'low'>('medium');
+
+  // Media State
+  const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
+  const [selectedThumbnail, setSelectedThumbnail] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState('00:00:00');
+  const [videoSize, setVideoSize] = useState<number>(0);
+  const [originalVideoSize, setOriginalVideoSize] = useState<number>(0);
+
+  // Upload State
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [processingVideo, setProcessingVideo] = useState(false);
-  const [error, setError] = useState('');
-  const [compressedVideo, setCompressedVideo] = useState<CompressedVideoResult | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressionProgress, setCompressionProgress] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
-  // Check if we have a video from route params
-  useEffect(() => {
-    if (route.params?.videoSource) {
-      setVideoSource(route.params.videoSource);
+  // UI State
+  const [showQualityModal, setShowQualityModal] = useState(false);
 
-      // Generate thumbnail from video if possible
-      if (Platform.OS === 'ios') {
-        // iOS-specific thumbnail generation would go here
-      } else {
-        // Android-specific thumbnail generation would go here
-      }
-    }
-  }, [route.params]);
-  // Pick video from gallery with proper permission handling like TipCallScreen
-  const pickVideo = async () => {
+  // Channel Info (mock - replace with actual API call)
+  const [channelId] = useState(1); // This should come from user's channel
+
+  // Back Handler
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (isUploading || isCompressing) {
+          Alert.alert(
+            'Upload in Progress',
+            'Are you sure you want to cancel the upload?',
+            [
+              { text: 'Continue Upload', style: 'cancel' },
+              { text: 'Cancel Upload', style: 'destructive', onPress: () => navigation.goBack() },
+            ],
+          );
+          return true;
+        }
+        return false;
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [isUploading, isCompressing, navigation]),
+  );
+
+  // Permission Requests (Following TipCallScreen pattern)
+  const requestStoragePermission = async (): Promise<boolean> => {
     try {
       if (Platform.OS === 'android') {
-        console.log('[TipTube] Requesting Android storage permission');
+        console.log('[TipTubeUpload] Requesting Android storage permission');
         
-        // Use PermissionsAndroid for better control like TipCallScreen
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-          {
-            title: 'Storage Permission Required',
-            message: 'This app needs access to your storage to select videos.',
-            buttonNeutral: 'Ask Me Later',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
-          }
-        );
-        
-        console.log('[TipTube] Storage permission result:', granted);
-        
-        if (granted === PermissionsAndroid.RESULTS.DENIED) {
+        const permission = Platform.Version >= 33 
+          ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO
+          : PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE;
+
+        const result = await PermissionsAndroid.request(permission, {
+          title: 'Storage Permission Required',
+          message: 'This app needs access to your storage to select videos.',
+          buttonNeutral: 'Ask Me Later',
+          buttonNegative: 'Cancel',
+          buttonPositive: 'OK',
+        });
+
+        console.log('[TipTubeUpload] Android permission result:', result);
+
+        if (result === PermissionsAndroid.RESULTS.GRANTED) {
+          return true;
+        } else if (result === PermissionsAndroid.RESULTS.DENIED) {
           Alert.alert(
             'Permission Required',
-            'Please allow access to your storage to select videos.',
+            'Storage access is required to select videos. Please try again.',
             [
-              {text: 'Cancel', style: 'cancel'},
-              {text: 'Try Again', onPress: () => pickVideo()},
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Try Again', onPress: () => requestStoragePermission() },
             ],
           );
-          return;
-        }
-
-        if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+          return false;
+        } else if (result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
           Alert.alert(
             'Permission Blocked',
-            'Storage access is blocked. Please enable it in Settings.',
+            'Storage permission has been permanently denied. Please enable it from Settings.',
             [
-              {text: 'Cancel', style: 'cancel'},
-              {text: 'Open Settings', onPress: () => Linking.openSettings()},
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
             ],
           );
-          return;
+          return false;
         }
-
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-          console.log('[TipTube] Storage permission not granted');
-          return;
-        }
+        return false;
       } else {
-        // iOS: Use react-native-permissions with proper flow
-        let permissionStatus = await check(PERMISSIONS.IOS.PHOTO_LIBRARY);
-        console.log('[TipTube] iOS initial photo library permission:', permissionStatus);
+        // iOS - permissions handled by react-native-image-picker
+        return true;
+      }
+    } catch (error) {
+      console.error('[TipTubeUpload] Error requesting storage permission:', error);
+      Alert.alert('Permission Error', 'Failed to request permission. Please try again.');
+      return false;
+    }
+  };
 
-        // Request permission if not granted
-        if (permissionStatus !== RESULTS.GRANTED) {
-          console.log('[TipTube] Requesting iOS photo library permission');
-          permissionStatus = await request(PERMISSIONS.IOS.PHOTO_LIBRARY);
-          console.log('[TipTube] iOS photo library permission result:', permissionStatus);
-        }
+  // Get video duration and size
+  const getVideoInfo = async (uri: string) => {
+    try {
+      const stats = await RNFS.stat(uri);
+      setVideoSize(stats.size);
+      setOriginalVideoSize(stats.size);
+      
+      // For duration, you might need a video processing library
+      // For now, setting a default duration
+      setVideoDuration('00:01:30');
+    } catch (error) {
+      console.error('Error getting video info:', error);
+    }
+  };
 
-        // Handle final permission status
-        if (permissionStatus === RESULTS.DENIED) {
-          Alert.alert(
-            'Permission Required',
-            'Please allow access to your photo library to select videos.',
-            [
-              {text: 'Cancel', style: 'cancel'},
-              {text: 'Try Again', onPress: () => pickVideo()},
-            ],
-          );
-          return;
-        }
-
-        if (permissionStatus === RESULTS.BLOCKED) {
-          Alert.alert(
-            'Permission Blocked',
-            'Photo library access is blocked. Please enable it in Settings.',
-            [
-              {text: 'Cancel', style: 'cancel'},
-              {text: 'Open Settings', onPress: () => Linking.openSettings()},
-            ],
-          );
-          return;
-        }
-
-        if (permissionStatus !== RESULTS.GRANTED) {
-          console.log('[TipTube] Photo library permission not granted');
-          return;
-        }
+  // Pick video from gallery
+  const pickVideo = async () => {
+    try {
+      setError(null);
+      
+      // Request permission first
+      const hasPermission = await requestStoragePermission();
+      if (!hasPermission) {
+        return;
       }
 
-      console.log('[TipTube] Permissions granted, launching image library');
+      console.log('[TipTubeUpload] Launching video picker');
 
-      // Launch media library
       const result = await launchImageLibrary({
-        mediaType: 'video',
+        mediaType: 'video' as MediaType,
         selectionLimit: 1,
         includeBase64: false,
         maxHeight: 1080,
         maxWidth: 1920,
+        quality: 1,
       });
 
+      console.log('[TipTubeUpload] Video picker result:', result);
+
       if (result.didCancel) {
+        console.log('[TipTubeUpload] User cancelled video selection');
         return;
       }
 
       if (result.errorCode) {
-        setError(`Error picking video: ${result.errorMessage}`);
+        console.error('[TipTubeUpload] Video picker error:', result.errorCode, result.errorMessage);
+        Alert.alert('Error', `Failed to select video: ${result.errorMessage}`);
         return;
       }
 
       if (result.assets && result.assets.length > 0) {
         const video = result.assets[0];
-
-        // Check video duration and size
-        if (video.fileSize && video.fileSize > 500 * 1024 * 1024) {
-          // 500 MB limit before compression
-          Alert.alert(
-            'File Too Large',
-            'Please select a video smaller than 500 MB',
-          );
-          return;
-        }
-
-        setVideoSource({
+        console.log('[TipTubeUpload] Selected video:', {
           uri: video.uri,
+          fileSize: video.fileSize,
+          duration: video.duration,
           type: video.type,
-          name: video.fileName,
-          size: video.fileSize,
         });
 
-        // Start compression process
-        await compressSelectedVideo(video.uri!);
-      }
-    } catch (err) {
-      console.error('[TipTube] Error picking video:', err);
-      setError('Failed to select video');
-    }
-  };
-
-  // Compress selected video
-  const compressSelectedVideo = async (uri: string) => {
-    try {
-      setIsCompressing(true);
-      setCompressionProgress(0);
-      setError('');
-
-      // Mock progress updates
-      VideoCompressionService.onCompressionProgress(setCompressionProgress);
-
-      // Compress video for TipTube with adaptive streaming
-      const compressedResult = await VideoCompressionService.compressForTipTube(uri);
-      
-      setCompressedVideo(compressedResult);
-      setIsCompressing(false);
-
-      Alert.alert(
-        'Compression Complete',
-        `Video compressed successfully!\nOriginal size: ${((videoSource?.size || 0) / (1024 * 1024)).toFixed(1)} MB\nCompressed size: ${(compressedResult.totalSize / (1024 * 1024)).toFixed(1)} MB\nCompression ratio: ${compressedResult.compressionRatio.toFixed(1)}x`,
-      );
-    } catch (error) {
-      console.error('Error compressing video:', error);
-      setIsCompressing(false);
-      setError('Failed to compress video. Please try again.');
-    }
-  };
-  // Pick thumbnail for video with proper permission handling like TipCallScreen
-  const pickThumbnail = async () => {
-    try {
-      if (Platform.OS === 'android') {
-        console.log('[TipTube] Requesting Android storage permission for thumbnail');
-        
-        // Use PermissionsAndroid for better control like TipCallScreen
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-          {
-            title: 'Storage Permission Required',
-            message: 'This app needs access to your storage to select thumbnails.',
-            buttonNeutral: 'Ask Me Later',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
+        if (video.uri) {
+          setSelectedVideo(video.uri);
+          await getVideoInfo(video.uri);
+          
+          // Auto-generate thumbnail if none selected
+          if (!selectedThumbnail) {
+            // You can implement thumbnail generation here
+            // For now, we'll let user manually select
           }
-        );
-        
-        console.log('[TipTube] Thumbnail storage permission result:', granted);
-        
-        if (granted === PermissionsAndroid.RESULTS.DENIED) {
-          Alert.alert(
-            'Permission Required',
-            'Please allow access to your storage to select thumbnails.',
-            [
-              {text: 'Cancel', style: 'cancel'},
-              {text: 'Try Again', onPress: () => pickThumbnail()},
-            ],
-          );
-          return;
-        }
-
-        if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
-          Alert.alert(
-            'Permission Blocked',
-            'Storage access is blocked. Please enable it in Settings.',
-            [
-              {text: 'Cancel', style: 'cancel'},
-              {text: 'Open Settings', onPress: () => Linking.openSettings()},
-            ],
-          );
-          return;
-        }
-
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-          console.log('[TipTube] Thumbnail storage permission not granted');
-          return;
         }
       } else {
-        // iOS: Use react-native-permissions with proper flow
-        let permissionStatus = await check(PERMISSIONS.IOS.PHOTO_LIBRARY);
-        console.log('[TipTube] iOS initial photo library permission for thumbnail:', permissionStatus);
+        Alert.alert('Error', 'No video selected. Please try again.');
+      }
+    } catch (err: any) {
+      console.error('[TipTubeUpload] Error picking video:', err);
+      Alert.alert('Error', 'Failed to select video. Please try again.');
+    }
+  };
 
-        // Request permission if not granted
-        if (permissionStatus !== RESULTS.GRANTED) {
-          console.log('[TipTube] Requesting iOS photo library permission for thumbnail');
-          permissionStatus = await request(PERMISSIONS.IOS.PHOTO_LIBRARY);
-          console.log('[TipTube] iOS photo library permission result for thumbnail:', permissionStatus);
-        }
-
-        // Handle final permission status
-        if (permissionStatus === RESULTS.DENIED) {
-          Alert.alert(
-            'Permission Required',
-            'Please allow access to your photo library to select thumbnails.',
-            [
-              {text: 'Cancel', style: 'cancel'},
-              {text: 'Try Again', onPress: () => pickThumbnail()},
-            ],
-          );
-          return;
-        }
-
-        if (permissionStatus === RESULTS.BLOCKED) {
-          Alert.alert(
-            'Permission Blocked',
-            'Photo library access is blocked. Please enable it in Settings.',
-            [
-              {text: 'Cancel', style: 'cancel'},
-              {text: 'Open Settings', onPress: () => Linking.openSettings()},
-            ],
-          );
-          return;
-        }
-
-        if (permissionStatus !== RESULTS.GRANTED) {
-          console.log('[TipTube] Photo library permission not granted for thumbnail');
-          return;
-        }
+  // Pick thumbnail for video
+  const pickThumbnail = async () => {
+    try {
+      setError(null);
+      
+      // Request permission first
+      const hasPermission = await requestStoragePermission();
+      if (!hasPermission) {
+        return;
       }
 
-      console.log('[TipTube] Thumbnail permissions granted, launching image library');
+      console.log('[TipTubeUpload] Launching thumbnail picker');
 
-      // Launch image library for thumbnail
       const result = await launchImageLibrary({
-        mediaType: 'photo',
+        mediaType: 'photo' as MediaType,
         selectionLimit: 1,
         includeBase64: false,
         maxHeight: 720,
@@ -350,441 +289,640 @@ const TipTubeUploadScreen = () => {
         quality: 0.8,
       });
 
+      console.log('[TipTubeUpload] Thumbnail picker result:', result);
+
       if (result.didCancel) {
+        console.log('[TipTubeUpload] User cancelled thumbnail selection');
         return;
       }
 
       if (result.errorCode) {
-        Alert.alert('Error', result.errorMessage || 'Failed to select thumbnail');
+        console.error('[TipTubeUpload] Thumbnail picker error:', result.errorCode, result.errorMessage);
+        Alert.alert('Error', `Failed to select thumbnail: ${result.errorMessage}`);
         return;
       }
 
       if (result.assets && result.assets.length > 0) {
-        const image = result.assets[0];
-        setThumbnail({
-          uri: image.uri,
-          type: image.type,
-          name: image.fileName || 'thumbnail.jpg',
-          size: image.fileSize,
-        });
+        const thumbnail = result.assets[0];
+        console.log('[TipTubeUpload] Selected thumbnail:', thumbnail.uri);
+
+        if (thumbnail.uri) {
+          setSelectedThumbnail(thumbnail.uri);
+        }
+      } else {
+        Alert.alert('Error', 'No thumbnail selected. Please try again.');
       }
-    } catch (error) {
-      console.error('Error picking thumbnail:', error);
-      Alert.alert('Error', 'Failed to select thumbnail');
+    } catch (error: any) {
+      console.error('[TipTubeUpload] Error picking thumbnail:', error);
+      Alert.alert('Error', 'Failed to select thumbnail. Please try again.');
     }
   };
 
-  // Handle select category
-  const handleSelectCategory = () => {
-    // @ts-ignore
-    navigation.navigate('SelectCategory', {
-      onSelect: (category: any) => setSelectedCategory(category),
-      selectedCategory,
-    });
-  };
-
-  // Handle upload with compressed video
-  const handleUpload = async () => {
-    // Validate input
-    if (!title.trim()) {
-      Alert.alert('Missing Information', 'Please enter a title for your video');
-      return;
-    }
-
-    if (!compressedVideo) {
-      Alert.alert('Missing Video', 'Please select and compress a video first');
-      return;
-    }
-
+  // Compress video
+  const compressVideo = async (videoUri: string): Promise<string> => {
     try {
-      setIsUploading(true);
-      setUploadProgress(0);
-      setError('');
+      setIsCompressing(true);
+      setCompressionProgress(0);
 
-      // Create form data
-      const formData = new FormData();
-      formData.append('title', title);
-      formData.append('description', description);
-      formData.append('isPublic', isPublic ? '1' : '0');
-      formData.append('isMonetized', isMonetized ? '1' : '0');
+      console.log('[TipTubeUpload] Starting video compression');
 
-      if (selectedCategory) {
-        formData.append('categoryId', selectedCategory.id);
-      }
+      const compressionOptions: VideoCompressionOptions = {
+        quality: selectedQuality,
+        maxSize: selectedQuality === 'high' ? 100 : selectedQuality === 'medium' ? 50 : 25,
+        outputFormat: 'mp4',
+        compressionMethod: 'manual',
+      };
 
-      // Append main video file (best quality available)
-      formData.append('video', {
-        uri: compressedVideo.compressedUri,
+      // Simulate compression progress
+      const progressInterval = setInterval(() => {
+        setCompressionProgress(prev => {
+          const newProgress = prev + 10;
+          if (newProgress >= 90) {
+            clearInterval(progressInterval);
+          }
+          return Math.min(newProgress, 90);
+        });
+      }, 500);
+
+      const compressedUri = await VideoCompressionService.compressForTipTube(videoUri, compressionOptions);
+
+      clearInterval(progressInterval);
+      setCompressionProgress(100);
+
+      console.log('[TipTubeUpload] Video compressed successfully:', compressedUri);
+
+      // Update video size after compression
+      const stats = await RNFS.stat(compressedUri.compressedUri);
+      setVideoSize(stats.size);
+
+      return compressedUri.compressedUri;
+    } catch (error) {
+      console.error('[TipTubeUpload] Error compressing video:', error);
+      throw new Error('Failed to compress video. Please try again.');
+    } finally {
+      setIsCompressing(false);
+    }
+  };
+
+  // Upload media files
+  const uploadMedia = async (videoUri: string, thumbnailUri: string): Promise<{ videoUrl: string; thumbnailUrl: string }> => {
+    try {
+      console.log('[TipTubeUpload] Starting media upload');
+
+      // Create form data for video
+      const videoFormData = new FormData();
+      videoFormData.append('video', {
+        uri: Platform.OS === 'android' && !videoUri.startsWith('file://') 
+          ? `file://${videoUri}` 
+          : videoUri,
         type: 'video/mp4',
-        name: 'video.mp4',
+        name: `video_${Date.now()}.mp4`,
       } as any);
 
-      // Append HLS manifest if available
-      if (compressedVideo.hlsManifestUri) {
-        formData.append('hlsManifest', {
-          uri: compressedVideo.hlsManifestUri,
-          type: 'application/x-mpegURL',
-          name: 'playlist.m3u8',
-        } as any);
-      }
+      // Create form data for thumbnail
+      const thumbnailFormData = new FormData();
+      thumbnailFormData.append('image', {
+        uri: Platform.OS === 'android' && !thumbnailUri.startsWith('file://')
+          ? `file://${thumbnailUri}`
+          : thumbnailUri,
+        type: 'image/jpeg',
+        name: `thumbnail_${Date.now()}.jpg`,
+      } as any);
 
-      // Append quality versions
-      Object.entries(compressedVideo.qualities).forEach(([quality, videoData]) => {
-        formData.append(`video_${quality}`, {
-          uri: videoData.uri,
-          type: 'video/mp4',
-          name: `video_${quality}.mp4`,
-        } as any);
-      });
-
-      // Append thumbnail if selected
-      if (thumbnail) {
-        formData.append('thumbnail', {
-          uri: thumbnail.uri,
-          type: thumbnail.type,
-          name: thumbnail.name,
-        } as any);
-      }
-
-      // Upload video with adaptive streaming data
-      await ApiService.uploadFile(
-        ENDPOINTS.UPLOAD_VIDEO,
-        formData,
-        progress => {
-          setUploadProgress(progress / 100);
-        },
-      );
-
-      setIsUploading(false);
-      setProcessingVideo(true);
-
-      // Check processing status
-      setTimeout(() => {
-        setProcessingVideo(false);
-        
-        // Cleanup temporary compressed files
-        const tempUris = Object.values(compressedVideo.qualities).map(q => q.uri);
-        if (compressedVideo.hlsManifestUri) {
-          tempUris.push(compressedVideo.hlsManifestUri);
+      // Upload video
+      setUploadProgress(25);
+      const videoResponse = await ApiService.uploadFile(
+        '/api/upload-video',
+        videoFormData,
+        (progress) => {
+          setUploadProgress(25 + (progress * 0.5)); // 25% to 75%
         }
-        VideoCompressionService.cleanupTempFiles(tempUris);
+      );
 
+      // Upload thumbnail
+      setUploadProgress(75);
+      const thumbnailResponse = await ApiService.uploadFile(
+        '/api/upload-image',
+        thumbnailFormData,
+        (progress) => {
+          setUploadProgress(75 + (progress * 0.25)); // 75% to 100%
+        }
+      );
+
+      setUploadProgress(100);
+
+      return {
+        videoUrl: videoResponse.data?.url || videoResponse.url,
+        thumbnailUrl: thumbnailResponse.data?.url || thumbnailResponse.url,
+      };
+    } catch (error) {
+      console.error('[TipTubeUpload] Error uploading media:', error);
+      throw new Error('Failed to upload media files. Please check your connection and try again.');
+    }
+  };
+
+  // Create TipTube video
+  const createTipTubeVideo = async (videoUrl: string, thumbnailUrl: string): Promise<void> => {
+    try {
+      if (!user || !user.id) {
+        throw new Error('User not authenticated');
+      }
+
+      const requestData: TipTubeUploadRequest = {
+        name: title.trim(),
+        isShot: false,
+        categoryId: categoryId,
+        channelId: channelId,
+        videoLink: videoUrl,
+        videoDesciption: description.trim(),
+        createdby: user.id,
+        play_duration: videoDuration,
+        video_Thumbnail: thumbnailUrl,
+      };
+
+      console.log('[TipTubeUpload] Creating TipTube video:', requestData);
+
+      const response = await ApiService.post<TipTubeUploadResponse>(
+        '/api/addShot',
+        requestData
+      );
+
+      console.log('[TipTubeUpload] TipTube video created:', response);
+
+      if (response.status === 200) {
         Alert.alert(
-          'Upload Successful',
-          'Your video has been uploaded with adaptive streaming and will be available once processing is complete',
-          [{text: 'OK', onPress: () => navigation.goBack()}],
+          'Success!',
+          'Your video has been uploaded successfully.',
+          [
+            {
+              text: 'OK',
+              onPress: () => navigation.goBack(),
+            },
+          ]
         );
-      }, 2000);
-    } catch (e) {
+      } else {
+        throw new Error(response.message || 'Failed to create video');
+      }
+    } catch (error: any) {
+      console.error('[TipTubeUpload] Error creating TipTube video:', error);
+      throw new Error(error.message || 'Failed to create video. Please try again.');
+    }
+  };
+
+  // Main upload function
+  const handleUpload = async () => {
+    try {
+      // Validation
+      if (!selectedVideo) {
+        Alert.alert('Error', 'Please select a video to upload.');
+        return;
+      }
+
+      if (!title.trim()) {
+        Alert.alert('Error', 'Please enter a title for your video.');
+        return;
+      }
+
+      if (!selectedThumbnail) {
+        Alert.alert('Error', 'Please select a thumbnail for your video.');
+        return;
+      }
+
+      setIsUploading(true);
+      setError(null);
+      setUploadProgress(0);
+
+      // Step 1: Compress video
+      console.log('[TipTubeUpload] Step 1: Compressing video');
+      const compressedVideoUri = await compressVideo(selectedVideo);
+
+      // Step 2: Upload media files
+      console.log('[TipTubeUpload] Step 2: Uploading media files');
+      const { videoUrl, thumbnailUrl } = await uploadMedia(compressedVideoUri, selectedThumbnail);
+
+      // Step 3: Create TipTube video record
+      console.log('[TipTubeUpload] Step 3: Creating video record');
+      await createTipTubeVideo(videoUrl, thumbnailUrl);
+
+      // Cleanup compressed file
+      try {
+        if (compressedVideoUri !== selectedVideo) {
+          await RNFS.unlink(compressedVideoUri);
+        }
+      } catch (cleanupError) {
+        console.warn('[TipTubeUpload] Failed to cleanup compressed file:', cleanupError);
+      }
+
+    } catch (error: any) {
+      console.error('[TipTubeUpload] Upload failed:', error);
+      setError(error.message || 'Upload failed. Please try again.');
+      Alert.alert('Upload Failed', error.message || 'Something went wrong. Please try again.');
+    } finally {
       setIsUploading(false);
-      setProcessingVideo(false);
-      console.error('Error uploading video:', e);
-      Alert.alert(
-        'Upload Failed',
-        'There was a problem uploading your video. Please try again.',
-      );
+      setIsCompressing(false);
+      setCompressionProgress(0);
+      setUploadProgress(0);
     }
   };
 
-  // Render video selection button or preview
-  const renderVideoSection = () => {
-    if (!videoSource) {
-      return (
-        <TouchableOpacity
-          style={[styles.uploadContainer, {borderColor: colors.border}]}
-          onPress={pickVideo}>
-          <Icon name="video" size={40} color={colors.primary} />
-          <Text style={[styles.uploadText, {color: colors.text.secondary}]}>
-            Select Video
-          </Text>
-        </TouchableOpacity>
-      );
-    }
-
-    return (
-      <View style={styles.videoPreviewContainer}>
-        {thumbnail ? (
-          <Image
-            source={{uri: thumbnail.uri}}
-            style={styles.thumbnailPreview}
-          />
-        ) : (
-          <View
-            style={[
-              styles.videoPlaceholder,
-              {backgroundColor: colors.gray[200]},
-            ]}>
-            <Icon name="video" size={40} color={colors.gray[400]} />
-          </View>
-        )}
-
-        <View style={styles.videoInfoContainer}>
-          <Text
-            style={[styles.videoName, {color: colors.text.primary}]}
-            numberOfLines={1}>
-            {videoSource.name || 'Selected Video'}
-          </Text>
-          {videoSource.size && (
-            <Text style={[styles.videoSize, {color: colors.text.tertiary}]}>
-              Original: {(videoSource.size / (1024 * 1024)).toFixed(2)} MB
-            </Text>
-          )}
-          {compressedVideo && (
-            <Text style={[styles.videoSize, {color: colors.success}]}>
-              Compressed: {(compressedVideo.totalSize / (1024 * 1024)).toFixed(2)} MB
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.videoActionButtons}>
-          <TouchableOpacity
-            style={[styles.actionButton, {backgroundColor: colors.gray[100]}]}
-            onPress={pickThumbnail}>
-            <Icon name="image" size={20} color={colors.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, {backgroundColor: colors.gray[100]}]}
-            onPress={pickVideo}>
-            <Icon name="refresh-cw" size={20} color={colors.primary} />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
+  // Format file size
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const uploadButtonOpacity =
-    isUploading || processingVideo || isCompressing || !compressedVideo || !title.trim() ? 0.5 : 1;
+  // Calculate compression ratio
+  const getCompressionRatio = (): string => {
+    if (originalVideoSize === 0 || videoSize === 0) return '';
+    const ratio = ((originalVideoSize - videoSize) / originalVideoSize) * 100;
+    return ratio > 0 ? `${ratio.toFixed(1)}% smaller` : '';
+  };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Header
-        title="Upload Video"
-        leftComponent={
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Icon name="arrow-left" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
-        }
-        rightComponent={
-          <TouchableOpacity
-            onPress={handleUpload}
-            disabled={
-              isUploading || processingVideo || !videoSource || !title.trim()
-            }
-            style={[styles.uploadButton, {opacity: uploadButtonOpacity}]}
-          >
-            <Text style={[styles.uploadButtonText, {color: colors.primary}]}>
-              Upload
-            </Text>
-          </TouchableOpacity>
-        }
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <Header 
+        title="Upload Video" 
+        showBackButton 
+        onBackPress={() => {
+          if (isUploading || isCompressing) {
+            Alert.alert(
+              'Upload in Progress',
+              'Are you sure you want to cancel the upload?',
+              [
+                { text: 'Continue Upload', style: 'cancel' },
+                { text: 'Cancel Upload', style: 'destructive', onPress: () => navigation.goBack() },
+              ],
+            );
+          } else {
+            navigation.goBack();
+          }
+        }}
       />
-      <KeyboardAvoidingView
-        style={styles.flex1}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+
+      <KeyboardAvoidingView 
+        style={styles.keyboardAvoid} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView
-          style={styles.container}
-          contentContainerStyle={styles.scrollContentContainer}
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
         >
-          {/* Video upload section */}
-          {renderVideoSection()}
-
-          {error ? (
-            <Text style={[styles.errorText, {color: colors.error}]}>
-              {error}
+          {/* Video Selection */}
+          <View style={[styles.section, { backgroundColor: isDarkMode ? colors.card : colors.background }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+              Video
             </Text>
-          ) : null}
+            
+            {selectedVideo ? (
+              <View style={[styles.mediaPreview, { borderColor: colors.border }]}>
+                <View style={styles.videoPreview}>
+                  <Icon name="play-circle" size={40} color={colors.primary} />
+                  <Text style={[styles.videoInfo, { color: colors.text.secondary }]}>
+                    {formatFileSize(originalVideoSize)}
+                    {videoSize !== originalVideoSize && (
+                      <Text style={{ color: colors.success }}>
+                        {' → ' + formatFileSize(videoSize)}
+                      </Text>
+                    )}
+                  </Text>
+                  {getCompressionRatio() && (
+                    <Text style={[styles.compressionInfo, { color: colors.success }]}>
+                      {getCompressionRatio()}
+                    </Text>
+                  )}
+                </View>
+                <TouchableOpacity 
+                  style={[styles.changeButton, { backgroundColor: colors.primary }]}
+                  onPress={pickVideo}
+                  disabled={isUploading || isCompressing}
+                >
+                  <Icon name="edit-2" size={16} color={colors.white} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.uploadButton, { 
+                  borderColor: colors.border,
+                  backgroundColor: isDarkMode ? colors.card : '#F8F9FA'
+                }]}
+                onPress={pickVideo}
+                disabled={isUploading || isCompressing}
+              >
+                <Icon name="video" size={32} color={colors.primary} />
+                <Text style={[styles.uploadButtonText, { color: colors.text.primary }]}>
+                  Select Video
+                </Text>
+                <Text style={[styles.uploadButtonSubtext, { color: colors.text.secondary }]}>
+                  Choose from gallery
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
-          {/* Form fields */}
-          <View style={styles.formContainer}>
-            <View style={styles.inputContainer}>
-              <Text style={[styles.inputLabel, {color: colors.text.secondary}]}>
+          {/* Thumbnail Selection */}
+          <View style={[styles.section, { backgroundColor: isDarkMode ? colors.card : colors.background }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+              Thumbnail
+            </Text>
+            
+            {selectedThumbnail ? (
+              <View style={[styles.mediaPreview, { borderColor: colors.border }]}>
+                <Image source={{ uri: selectedThumbnail }} style={styles.thumbnailPreview} />
+                <TouchableOpacity 
+                  style={[styles.changeButton, { backgroundColor: colors.primary }]}
+                  onPress={pickThumbnail}
+                  disabled={isUploading || isCompressing}
+                >
+                  <Icon name="edit-2" size={16} color={colors.white} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.uploadButton, { 
+                  borderColor: colors.border,
+                  backgroundColor: isDarkMode ? colors.card : '#F8F9FA'
+                }]}
+                onPress={pickThumbnail}
+                disabled={isUploading || isCompressing}
+              >
+                <Icon name="image" size={32} color={colors.primary} />
+                <Text style={[styles.uploadButtonText, { color: colors.text.primary }]}>
+                  Select Thumbnail
+                </Text>
+                <Text style={[styles.uploadButtonSubtext, { color: colors.text.secondary }]}>
+                  Choose cover image
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Video Details */}
+          <View style={[styles.section, { backgroundColor: isDarkMode ? colors.card : colors.background }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+              Video Details
+            </Text>
+            
+            {/* Title */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.text.secondary }]}>
                 Title *
               </Text>
               <TextInput
-                style={[
-                  styles.input,
-                  {color: colors.text.primary, borderColor: colors.border},
-                ]}
+                style={[styles.textInput, { 
+                  backgroundColor: isDarkMode ? colors.gray?.[800] : '#F8F9FA',
+                  borderColor: colors.border,
+                  color: colors.text.primary 
+                }]}
                 value={title}
                 onChangeText={setTitle}
-                maxLength={100}
-                placeholder="Add a title that describes your video"
+                placeholder="Enter video title"
                 placeholderTextColor={colors.text.tertiary}
+                maxLength={100}
+                editable={!isUploading && !isCompressing}
               />
+              <Text style={[styles.characterCount, { color: colors.text.tertiary }]}>
+                {title.length}/100
+              </Text>
             </View>
 
-            <View style={styles.inputContainer}>
-              <Text style={[styles.inputLabel, {color: colors.text.secondary}]}>
+            {/* Description */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.text.secondary }]}>
                 Description
               </Text>
               <TextInput
-                style={[
-                  styles.input,
-                  styles.textArea,
-                  {color: colors.text.primary, borderColor: colors.border},
-                ]}
+                style={[styles.textArea, { 
+                  backgroundColor: isDarkMode ? colors.gray?.[800] : '#F8F9FA',
+                  borderColor: colors.border,
+                  color: colors.text.primary 
+                }]}
                 value={description}
                 onChangeText={setDescription}
-                maxLength={5000}
-                placeholder="Tell viewers about your video"
+                placeholder="Describe your video..."
                 placeholderTextColor={colors.text.tertiary}
                 multiline
+                numberOfLines={4}
+                maxLength={500}
                 textAlignVertical="top"
+                editable={!isUploading && !isCompressing}
               />
+              <Text style={[styles.characterCount, { color: colors.text.tertiary }]}>
+                {description.length}/500
+              </Text>
             </View>
 
-            {/* Category selection */}
-            <View style={styles.inputContainer}>
-              <Text style={[styles.inputLabel, {color: colors.text.secondary}]}>
+            {/* Category */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.text.secondary }]}>
                 Category
               </Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                style={styles.categoryScrollView}
+              >
+                {VIDEO_CATEGORIES.map((category) => (
+                  <TouchableOpacity
+                    key={category.id}
+                    style={[
+                      styles.categoryChip,
+                      {
+                        backgroundColor: categoryId === category.id 
+                          ? colors.primary 
+                          : isDarkMode ? colors.gray?.[800] : '#F8F9FA',
+                        borderColor: categoryId === category.id 
+                          ? colors.primary 
+                          : colors.border,
+                      }
+                    ]}
+                    onPress={() => setCategoryId(category.id)}
+                    disabled={isUploading || isCompressing}
+                  >
+                    <Icon 
+                      name={category.icon} 
+                      size={16} 
+                      color={categoryId === category.id ? colors.white : colors.text.secondary} 
+                    />
+                    <Text style={[
+                      styles.categoryChipText,
+                      { 
+                        color: categoryId === category.id 
+                          ? colors.white 
+                          : colors.text.primary 
+                      }
+                    ]}>
+                      {category.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Quality Selection */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.text.secondary }]}>
+                Quality
+              </Text>
               <TouchableOpacity
-                style={[styles.categoryButton, {borderColor: colors.border}]}
-                onPress={handleSelectCategory}>
-                {selectedCategory ? (
-                  <CategoryChip category={selectedCategory} selected={true} />
-                ) : (
-                  <Text style={{color: colors.text.tertiary}}>
-                    Select category
+                style={[styles.qualitySelector, { 
+                  backgroundColor: isDarkMode ? colors.gray?.[800] : '#F8F9FA',
+                  borderColor: colors.border 
+                }]}
+                onPress={() => setShowQualityModal(true)}
+                disabled={isUploading || isCompressing}
+              >
+                <View style={styles.qualityInfo}>
+                  <Text style={[styles.qualityText, { color: colors.text.primary }]}>
+                    {QUALITY_OPTIONS.find(q => q.key === selectedQuality)?.label}
                   </Text>
-                )}
-                <Icon
-                  name="chevron-right"
-                  size={20}
-                  color={colors.text.tertiary}
-                />
+                  <Text style={[styles.qualityDescription, { color: colors.text.tertiary }]}>
+                    {QUALITY_OPTIONS.find(q => q.key === selectedQuality)?.description}
+                  </Text>
+                </View>
+                <Icon name="chevron-down" size={20} color={colors.text.secondary} />
               </TouchableOpacity>
             </View>
 
-            {/* Visibility toggle */}
-            <View style={styles.toggleContainer}>
-              <View style={styles.toggleInfo}>
-                <Text
-                  style={[styles.toggleLabel, {color: colors.text.primary}]}>
-                  Public
-                </Text>
-                <Text
-                  style={[
-                    styles.toggleDescription,
-                    {color: colors.text.tertiary},
-                  ]}>
-                  {isPublic
-                    ? 'Everyone can see this video'
-                    : 'Only you can see this video'}
-                </Text>
+            {/* Privacy Setting */}
+            <View style={styles.inputGroup}>
+              <View style={styles.switchRow}>
+                <View>
+                  <Text style={[styles.switchLabel, { color: colors.text.primary }]}>
+                    Public Video
+                  </Text>
+                  <Text style={[styles.switchDescription, { color: colors.text.secondary }]}>
+                    Anyone can view this video
+                  </Text>
+                </View>
+                <Switch
+                  value={isPublic}
+                  onValueChange={setIsPublic}
+                  trackColor={{ false: colors.gray?.[300], true: colors.primary }}
+                  thumbColor={colors.white}
+                  disabled={isUploading || isCompressing}
+                />
               </View>
-              <Switch
-                value={isPublic}
-                onValueChange={setIsPublic}
-                trackColor={{
-                  false: colors.gray[300],
-                  true: colors.primary + '80',
-                }}
-                thumbColor={isPublic ? colors.primary : colors.gray[100]}
-              />
-            </View>
-
-            {/* Monetization toggle */}
-            <View style={styles.toggleContainer}>
-              <View style={styles.toggleInfo}>
-                <Text
-                  style={[styles.toggleLabel, {color: colors.text.primary}]}>
-                  Monetize
-                </Text>
-                <Text
-                  style={[
-                    styles.toggleDescription,
-                    {color: colors.text.tertiary},
-                  ]}>
-                  {isMonetized
-                    ? 'Earn money from this video'
-                    : 'No monetization for this video'}
-                </Text>
-              </View>
-              <Switch
-                value={isMonetized}
-                onValueChange={setIsMonetized}
-                trackColor={{
-                  false: colors.gray[300],
-                  true: colors.primary + '80',
-                }}
-                thumbColor={isMonetized ? colors.primary : colors.gray[100]}
-              />
             </View>
           </View>
+
+          {/* Progress Section */}
+          {(isCompressing || isUploading) && (
+            <View style={[styles.section, { backgroundColor: isDarkMode ? colors.card : colors.background }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+                {isCompressing ? 'Compressing Video' : 'Uploading'}
+              </Text>
+              
+              <View style={styles.progressContainer}>
+                <View style={[styles.progressBar, { backgroundColor: colors.gray?.[200] }]}>
+                  <View 
+                    style={[
+                      styles.progressFill, 
+                      { 
+                        backgroundColor: colors.primary,
+                        width: `${isCompressing ? compressionProgress : uploadProgress}%`
+                      }
+                    ]} 
+                  />
+                </View>
+                <Text style={[styles.progressText, { color: colors.text.secondary }]}>
+                  {isCompressing ? `${compressionProgress}%` : `${uploadProgress}%`}
+                </Text>
+              </View>
+
+              {isCompressing && (
+                <Text style={[styles.progressDescription, { color: colors.text.tertiary }]}>
+                  Optimizing video quality for faster upload...
+                </Text>
+              )}
+            </View>
+          )}
+
+          {/* Error Display */}
+          {error && (
+            <View style={[styles.errorContainer, { backgroundColor: colors.error + '10', borderColor: colors.error }]}>
+              <Icon name="alert-circle" size={20} color={colors.error} />
+              <Text style={[styles.errorText, { color: colors.error }]}>
+                {error}
+              </Text>
+            </View>
+          )}
         </ScrollView>
+
+        {/* Upload Button */}
+        <View style={[styles.uploadButtonContainer, { 
+          backgroundColor: colors.background,
+          borderTopColor: colors.border 
+        }]}>
+          <TouchableOpacity
+            style={[
+              styles.uploadBtn,
+              {
+                backgroundColor: (!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing)
+                  ? colors.gray?.[400]
+                  : colors.primary,
+              }
+            ]}
+            onPress={handleUpload}
+            disabled={!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing}
+          >
+            {(isUploading || isCompressing) ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <Icon name="upload" size={20} color={colors.white} />
+            )}
+            <Text style={[styles.uploadBtnText, { color: colors.white }]}>
+              {isCompressing ? 'Compressing...' : isUploading ? 'Uploading...' : 'Upload Video'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
 
-      {/* Compression loading overlay */}
-      {isCompressing && (
-        <View
-          style={[
-            styles.loadingOverlay,
-            {backgroundColor: colors.background + 'E6'},
-          ]}>
-          <View
-            style={[styles.loadingContainer, {backgroundColor: colors.card}]}>
-            <Text
-              style={[styles.loadingText, {color: colors.text.primary}]}>
-              Compressing video...
+      {/* Quality Selection Modal */}
+      {showQualityModal && (
+        <View style={styles.modalOverlay}>
+          <View style={[styles.qualityModal, { backgroundColor: colors.background }]}>
+            <Text style={[styles.modalTitle, { color: colors.text.primary }]}>
+              Select Quality
             </Text>
-            <Progress.Bar
-              progress={compressionProgress / 100}
-              width={200}
-              color={colors.primary}
-              unfilledColor={colors.gray[200]}
-              borderWidth={0}
-              height={8}
-              style={styles.progressBar}
-            />
-            <Text
-              style={[styles.percentText, {color: colors.text.secondary}]}>
-              {Math.round(compressionProgress)}%
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {/* Upload loading overlay */}
-      {(isUploading || processingVideo) && (
-        <View
-          style={[
-            styles.loadingOverlay,
-            {backgroundColor: colors.background + 'E6'},
-          ]}>
-          <View
-            style={[styles.loadingContainer, {backgroundColor: colors.card}]}>
-            {isUploading ? (
-              <>
-                <Text
-                  style={[styles.loadingText, {color: colors.text.primary}]}>
-                  Uploading video...
-                </Text>
-                <Progress.Bar
-                  progress={uploadProgress}
-                  width={200}
-                  color={colors.primary}
-                  unfilledColor={colors.gray[200]}
-                  borderWidth={0}
-                  height={8}
-                  style={styles.progressBar}
-                />
-                <Text
-                  style={[styles.percentText, {color: colors.text.secondary}]}>
-                  {Math.round(uploadProgress * 100)}%
-                </Text>
-              </>
-            ) : (
-              <>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text
-                  style={[styles.loadingText, {color: colors.text.primary}]}>
-                  Processing video...
-                </Text>
-              </>
-            )}
+            
+            {QUALITY_OPTIONS.map((option) => (
+              <TouchableOpacity
+                key={option.key}
+                style={[
+                  styles.qualityOption,
+                  { borderBottomColor: colors.border }
+                ]}
+                onPress={() => {
+                  setSelectedQuality(option.key as 'high' | 'medium' | 'low');
+                  setShowQualityModal(false);
+                }}
+              >
+                <View style={styles.qualityOptionContent}>
+                  <Text style={[styles.qualityOptionLabel, { color: colors.text.primary }]}>
+                    {option.label}
+                  </Text>
+                  <Text style={[styles.qualityOptionDescription, { color: colors.text.secondary }]}>
+                    {option.description}
+                  </Text>
+                </View>
+                {selectedQuality === option.key && (
+                  <Icon name="check" size={20} color={colors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+            
+            <TouchableOpacity
+              style={[styles.modalCloseButton, { backgroundColor: colors.gray?.[200] }]}
+              onPress={() => setShowQualityModal(false)}
+            >
+              <Text style={[styles.modalCloseText, { color: colors.text.primary }]}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -792,181 +930,286 @@ const TipTubeUploadScreen = () => {
   );
 };
 
-const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  flex1: {
-    flex: 1,
-  },
+const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  keyboardAvoid: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 100,
+  },
+  section: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 12,
     padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  uploadContainer: {
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: colors.border,
-    borderRadius: 12,
-    height: 180,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-    backgroundColor: colors.surface,
-  },
-  uploadText: {
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.text.primary,
-  },
-  videoPreviewContainer: {
-    flexDirection: 'row',
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 20,
-    height: 100,
-    backgroundColor: colors.card,
-  },
-  thumbnailPreview: {
-    width: 100,
-    height: 100,
-    borderRadius: 8,
-  },
-  videoPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.gray[200],
-  },
-  videoInfoContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  videoName: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 4,
-    color: colors.text.primary,
-  },
-  videoSize: {
-    fontSize: 14,
-    color: colors.text.secondary,
-  },
-  videoActionButtons: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingRight: 4,
-  },
-  actionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-    backgroundColor: colors.surface,
-  },
-  errorText: {
-    marginBottom: 16,
-    fontSize: 14,
-    textAlign: 'center',
-    color: colors.error,
-  },
-  formContainer: {
-    flex: 1,
-  },
-  inputContainer: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 14,
-    marginBottom: 8,
-    fontWeight: '500',
-    color: colors.text.primary,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    backgroundColor: colors.surface,
-    color: colors.text.primary,
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-    paddingTop: 12,
-  },
-  categoryButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    backgroundColor: colors.surface,
-  },
-  toggleContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  toggleInfo: {
-    flex: 1,
-  },
-  toggleLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 2,
-    color: colors.text.primary,
-  },
-  toggleDescription: {
-    fontSize: 14,
-    color: colors.text.secondary,
-  },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: isDarkMode ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)',
-  },
-  loadingContainer: {
-    padding: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: colors.card,
-  },
-  loadingText: {
+  sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 16,
-    color: colors.text.primary,
   },
-  progressBar: {
-    marginVertical: 12,
-  },
-  percentText: {
-    fontSize: 14,
-    color: colors.text.secondary,
-  },
-  scrollContentContainer: {
-    paddingBottom: 30,
-  },
+  
+  // Media Upload Styles
   uploadButton: {
-    // Only opacity is dynamic
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 120,
   },
   uploadButtonText: {
+    fontSize: 16,
     fontWeight: '600',
+    marginTop: 8,
+  },
+  uploadButtonSubtext: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+  mediaPreview: {
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  videoPreview: {
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+  },
+  videoInfo: {
+    marginTop: 8,
+    fontSize: 14,
+  },
+  compressionInfo: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  thumbnailPreview: {
+    width: '100%',
+    height: 120,
+    resizeMode: 'cover',
+  },
+  changeButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+  // Input Styles
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+  },
+  textArea: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    minHeight: 100,
+  },
+  characterCount: {
+    fontSize: 12,
+    textAlign: 'right',
+    marginTop: 4,
+  },
+  
+  // Category Styles
+  categoryScrollView: {
+    marginTop: 4,
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  categoryChipText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 6,
+  },
+  
+  // Quality Selector
+  qualitySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+  },
+  qualityInfo: {
+    flex: 1,
+  },
+  qualityText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  qualityDescription: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  
+  // Switch Styles
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  switchLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  switchDescription: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  
+  // Progress Styles
+  progressContainer: {
+    marginTop: 8,
+  },
+  progressBar: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  progressDescription: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  
+  // Error Styles
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginHorizontal: 16,
+    marginVertical: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    marginLeft: 8,
+    flex: 1,
+  },
+  
+  // Upload Button
+  uploadButtonContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    borderTopWidth: 1,
+  },
+  uploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  uploadBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  
+  // Modal Styles
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  qualityModal: {
+    borderRadius: 12,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  qualityOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  qualityOptionContent: {
+    flex: 1,
+  },
+  qualityOptionLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  qualityOptionDescription: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  modalCloseButton: {
+    marginTop: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 

@@ -1136,11 +1136,15 @@ export default class ApiService {
   static async getFcmTokensForUsers(data: FcmTokensRequest): Promise<FcmTokensResponse> {
     console.log('[API] Getting FCM tokens for users:', data.userIds);
     try {
+      // Make sure the endpoint is correct
       const response = await this.post<FcmTokensResponse>(
-        ApiEndpoints.TIP_CALLS_ENDPOINTS.GET_FCM_TOKENS,
+        '/api/fcm-tokens-of-both-users', // Use the direct path instead of the constant if needed
         data,
       );
-      console.log('[API] FCM tokens response:', response);
+      console.log('[API] FCM tokens response:', {
+        success: !!response.results,
+        resultsCount: response.results?.length || 0
+      });
       return response;
     } catch (error) {
       console.error('[API] Error getting FCM tokens:', error);

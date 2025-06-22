@@ -3,6 +3,7 @@ import { MeetingProvider } from '@videosdk.live/react-native-sdk';
 import CallService from '../services/CallService';
 import OngoingCallModule from '../services/OngoingCallModule';
 import { AppState, AppStateStatus, NativeEventEmitter, NativeModules } from 'react-native';
+import { appEventEmitter } from '../events/AppEventEmitter';
 
 export interface ActiveCall {
   meetingId: string;
@@ -25,10 +26,44 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
 
   useEffect(() => {
+    const handleCallStateChange = (state: { 
+      isInCall: boolean; 
+      callStatus?: string; 
+      callType?: 'voice' | 'video' 
+    }) => {
+      if (state.isInCall && CallService.activeCall) {
+        const callData = CallService.activeCall;
+        setActiveCall({
+          meetingId: callData.meetingId,
+          token: callData.token,
+          callType: callData.callType,
+          displayName: callData.isInitiator ? callData.callerName : callData.recipientName,
+          isInitiator: callData.isInitiator,
+          recipientName: callData.recipientName,
+        });
+      } else {
+        setActiveCall(null);
+      }
+    };
+
+    appEventEmitter.on('callStateChanged', handleCallStateChange);
+
+    // Check on mount
+    if (CallService.activeCall) {
+      handleCallStateChange({ isInCall: true });
+    }
+
+    return () => {
+      appEventEmitter.off('callStateChanged', handleCallStateChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    // Listen for the native "EndCall" event from the notification
     const eventEmitter = new NativeEventEmitter(NativeModules.OngoingCall);
     const subscription = eventEmitter.addListener('EndCall', () => {
       console.log('[CallProvider] Received EndCall event from native notification.');
-      endCall();
+      CallService.endCall('ended_from_notification');
     });
 
     return () => {
@@ -64,8 +99,6 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const endCall = () => {
     if (activeCall) {
       OngoingCallModule.stopOngoingCallNotification();
-      // The leave() method inside MeetingScreen will trigger the actual end
-      // We just clear the state here
       setActiveCall(null);
     }
   };

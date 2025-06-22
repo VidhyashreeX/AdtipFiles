@@ -356,17 +356,15 @@ export interface UpdateUserResponse {
 // or create a more generic CallActionRequest. For now, assuming AgoraCallRequest is adaptable.
 
 export interface FcmTokensRequest {
-  userIds: number[];
-}
-
-export interface FcmTokenResult {
-  status: boolean;
-  userId: number;
-  fcm_token: string;
+  userIds: number[]; // Array with caller and recipient user IDs
 }
 
 export interface FcmTokensResponse {
-  results: FcmTokenResult[];
+  results: {
+    status: boolean;
+    userId: number;
+    fcm_token: string;
+  }[];
 }
 
 // Add these to your types/api.ts file

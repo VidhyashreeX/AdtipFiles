@@ -52,7 +52,10 @@ import { COLORS } from './src/constants/colors';
 import UserDetailsScreen from './src/screens/auth/UserDetailsScreen';
 import { appEventEmitter } from './src/events/AppEventEmitter';
 
+import { RootStackParamList } from 'src/types/navigation';
+
 const Stack = createNativeStackNavigator();
+const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 // Theme-aware StatusBar
 const ThemeAwareStatusBar = () => {
@@ -69,12 +72,29 @@ const ThemeAwareStatusBar = () => {
 // AppNavigator with Services
 const AppNavigator = () => {
   const { isAuthenticated, isInitialized, user } = useAuth();
+  const { activeCall, startCall } = useCall();
+  const [isNavReady, setIsNavReady] = useState(false);
   const [firebaseReady, setFirebaseReady] = useState(false);
   const [videoSDKReady, setVideoSDKReady] = useState(false);
   const [callServiceReady, setCallServiceReady] = useState(false);
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { isDarkMode, colors } = useTheme();
-  const { activeCall, startCall } = useCall();
+
+  useEffect(() => {
+    if (isNavReady) {
+      const currentRoute = navigationRef.getCurrentRoute()?.name;
+      if (activeCall && currentRoute !== 'Meeting') {
+        navigationRef.navigate('Meeting', {
+          meetingId: activeCall.meetingId,
+          token: activeCall.token,
+          callType: activeCall.callType,
+          displayName: activeCall.displayName,
+        });
+      } else if (!activeCall && currentRoute === 'Meeting') {
+        navigationRef.goBack();
+      }
+    }
+  }, [activeCall, isNavReady]);
 
   // Initialize Firebase Service
   useEffect(() => {
@@ -92,7 +112,7 @@ const AppNavigator = () => {
         
         const firebaseService = FirebaseService.getInstance();
         const success = await firebaseService.initializeMessaging();
-        setFirebaseReady(success);
+        setFirebaseReady(success || true); // Allow app to continue even if FCM fails
         
         if (success) {
           console.log('[App] Firebase service initialized successfully');
@@ -112,7 +132,7 @@ const AppNavigator = () => {
       console.log('[App] Initializing VideoSDK service...');
       const videoSDKService = VideoSDKService.getInstance();
       const success = await videoSDKService.initialize();
-      setVideoSDKReady(success);
+      setVideoSDKReady(success || true);
       
       if (success) {
         console.log('[App] VideoSDK service initialized successfully');
@@ -193,24 +213,31 @@ const AppNavigator = () => {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
-      <View style={{ flex: 1, paddingTop: insets.top }}>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <View style={{ flex: 1 }}>
+      <NavigationContainer ref={navigationRef} onReady={() => setIsNavReady(true)}>
+        <RootStack.Navigator screenOptions={{ headerShown: false }}>
           {!isAuthenticated ? (
-            // User not authenticated - show auth flow
-            <Stack.Screen name="Auth" component={AuthNavigator} />
+            <RootStack.Screen name="Auth" component={AuthNavigator} />
           ) : user?.isSaveUserDetails === 0 ? (
-            // User authenticated but profile incomplete - show user details
-            <Stack.Screen name="UserDetails" component={UserDetailsScreen} />
+            <RootStack.Screen name="UserDetails" component={UserDetailsScreen} />
           ) : (
-            // User fully authenticated with complete profile - show main app
-            <Stack.Screen name="Main" component={MainNavigator} />
+            <RootStack.Screen name="Main" component={MainNavigator} />
           )}
-        </Stack.Navigator>
-        <Sidebar />
-        {activeCall && <MeetingScreen />}
-      </View>
-    </NavigationContainer>
+          <RootStack.Screen
+            name="Meeting"
+            component={MeetingScreen}
+            options={{
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+              gestureEnabled: false,
+            }}
+          />
+        </RootStack.Navigator>
+        {/* The Sidebar is now rendered here, on top of the navigator,
+          only when the user is fully authenticated and in the main app. */}
+      {isAuthenticated && user?.isSaveUserDetails !== 0 && <Sidebar />}
+      </NavigationContainer>
+    </View>
   );
 };
 

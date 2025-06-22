@@ -60,6 +60,11 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Camera features -->
+<uses-feature android:name="android.hardware.camera" android:required="false" />
+<uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+<uses-feature android:name="android.hardware.microphone" android:required="false" />
+
     <!-- WAKE LOCK -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
@@ -165,7 +170,7 @@
         <!-- VIDEOSDK FOREGROUND SERVICES -->
         <service
             android:name="live.videosdk.rnfgservice.ForegroundService"
-            android:foregroundServiceType="mediaProjection|camera|microphone" tools:targetApi="q"/> <!-- Specify types -->
+            tools:node="remove" />
         <service
             android:name="live.videosdk.rnfgservice.ForegroundServiceTask" />
 
@@ -191,7 +196,10 @@
             android:value="adtip_call_channel"
             tools:replace="android:value" />
 
-        <service android:name="com.adtip.OngoingCallService" />
+        <service
+            android:name="com.adtip.OngoingCallService"
+            android:enabled="true"
+            android:exported="false" />
 
     </application>
 

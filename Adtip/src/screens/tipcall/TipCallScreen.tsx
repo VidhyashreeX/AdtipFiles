@@ -549,7 +549,21 @@ export default function TipCallScreen() {
       Alert.alert("Error", "User or recipient information is missing.");
       return;
     }
-    CallService.startOutgoingCall(recipient.id.toString(), recipient.name, callType);
+
+    // Start the call with CallService
+    const callStarted = await CallService.startOutgoingCall(recipient.id.toString(), recipient.name, callType);
+    
+    // If call started successfully, navigate to the meeting screen.
+    // The screen will get its data from the CallContext.
+    if (callStarted && CallService.activeCall) {
+      console.log('[TipCall] Navigating to Meeting screen.');
+      navigation.navigate('Meeting', {
+        meetingId: CallService.activeCall.meetingId,
+        token: CallService.activeCall.token,
+        callType: CallService.activeCall.callType,
+        displayName: CallService.activeCall.callerName,
+      });
+    }
   }, [user, navigation]);
 
   const handleDndToggle = useCallback(async () => {
