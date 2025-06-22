@@ -11,6 +11,8 @@ export function navigate<RouteName extends keyof RootStackParamList>(
 ) {
   if (navigationRef.isReady()) {
     navigationRef.navigate(name as any, params as any);
+  } else {
+    console.warn('[NavigationService] Navigation not ready, skipping navigation to:', name);
   }
 }
 
@@ -26,5 +28,44 @@ export function resetTo<RouteName extends keyof RootStackParamList>(
       // @ts-ignore
       routes: [{name: routeName, params: params}],
     });
+  } else {
+    console.warn('[NavigationService] Navigation not ready, skipping reset to:', routeName);
   }
+}
+
+// Add helper function to check if navigation is ready
+export function isNavigationReady(): boolean {
+  return navigationRef.isReady();
+}
+
+// Add helper function to get current route safely
+export function getCurrentRoute() {
+  if (navigationRef.isReady()) {
+    return navigationRef.getCurrentRoute();
+  }
+  return null;
+}
+
+// Add helper function to navigate with retry logic
+export function navigateWithRetry<RouteName extends keyof RootStackParamList>(
+  name: RouteName,
+  params?: RootStackParamList[RouteName],
+  maxRetries: number = 3,
+  retryDelay: number = 100
+) {
+  let retries = 0;
+  
+  const attemptNavigation = () => {
+    if (navigationRef.isReady()) {
+      navigationRef.navigate(name as any, params as any);
+    } else if (retries < maxRetries) {
+      retries++;
+      console.log(`[NavigationService] Navigation not ready, retry ${retries}/${maxRetries} for:`, name);
+      setTimeout(attemptNavigation, retryDelay);
+    } else {
+      console.error('[NavigationService] Failed to navigate after max retries:', name);
+    }
+  };
+  
+  attemptNavigation();
 }

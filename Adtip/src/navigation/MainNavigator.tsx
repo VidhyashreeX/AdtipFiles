@@ -52,7 +52,8 @@ import CameraRecordingScreen from '../screens/content/CameraRecordingScreen';
 
 // Add TipCall imports - Fix the import path
 import TipCallScreen from '../screens/tipcall/TipCallScreen';
-// import MeetingScreen from '../screens/videosdk/MeetingScreen';
+// Import MeetingScreen
+import MeetingScreen from '../screens/videosdk/MeetingScreen';
 
 // Add AddFundsScreen import
 import AddFundsScreen from '../screens/wallet/AddFundsScreen';
@@ -301,10 +302,10 @@ const MainNavigator = () => {
   
   // CREATE THE ENHANCED VIDEO PLAYER MODAL SCREEN
   const EnhancedVideoPlayerModalScreen = withWalletBalance(VideoPlayerModalScreen);
-  
-  // Add TipCall screens with wallet balance HOC
+    // Add TipCall screens with wallet balance HOC
   const EnhancedTipCallScreen = withWalletBalance(TipCallScreen);
-  // const EnhancedMeetingScreen = withWalletBalance(MeetingScreen); // Add this line
+  // Enhanced MeetingScreen with wallet balance HOC
+  const EnhancedMeetingScreen = withWalletBalance(MeetingScreen);
 
   return (
     <Stack.Navigator
@@ -323,18 +324,23 @@ const MainNavigator = () => {
         component={withFastLoading(HomeScreen, { priority: 'high' })}
         options={fastTransitionConfig}
       />
-      
-      {/* TipCall screens - Fix these */}
+        {/* TipCall screens - Fix these */}
       <Stack.Screen 
         name="TipCall" 
         component={EnhancedTipCallScreen}
         options={standardFastTransitionConfig}
       />
-      {/* <Stack.Screen 
+      {/* MeetingScreen with optimized transition for calls */}
+      <Stack.Screen 
         name="Meeting" 
         component={MeetingScreen}
-        options={callTransitionConfig}
-      /> */}
+        options={{
+          presentation: 'fullScreenModal',
+          animation: 'fade',
+          gestureEnabled: false,
+          headerShown: false,
+        }}
+      />
       
       {/* Content creation with slide up animation */}
       <Stack.Screen 

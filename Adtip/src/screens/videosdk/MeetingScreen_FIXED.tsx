@@ -19,7 +19,6 @@ import CallService from '../../services/CallService';
 import CallErrorBoundary from '../../components/common/CallErrorBoundary';
 import { ChevronLeft, MoreVertical } from 'lucide-react-native';
 import { MainNavigatorParamList } from '../../types/navigation';
-import { appEventEmitter } from '../../events/AppEventEmitter';
 
 // Define the type for the route params
 type MeetingScreenRouteProp = RouteProp<MainNavigatorParamList, 'Meeting'>;
@@ -81,138 +80,91 @@ const MeetingView: React.FC = () => {
   const [isEndingCall, setIsEndingCall] = useState(false);
   const [micEnabled, setMicEnabled] = useState(true);
   const [cameraEnabled, setCameraEnabled] = useState(false);
-  const [hasJoined, setHasJoined] = useState(false);
-  const [isJoining, setIsJoining] = useState(false);
   const controlsOpacity = useRef(new Animated.Value(1)).current;
-  const hasAttemptedJoinRef = useRef(false);
-  
+
   // Get route params safely
   const { callType = 'voice', recipientName = 'Participant' } = route.params || {};
-  // Handle ending call - define early to avoid reference issues
-  const handleEndCall = useCallback(async () => {
-    if (isEndingCall) return;
-    
-    console.log('[MeetingView] Starting end call process');
-    setIsEndingCall(true);
-    
-    try {
-      // End the call service - this will emit leaveActiveCall event
-      await CallService.endCall('User ended call');
-      
-      // Navigate back after a short delay to ensure cleanup
-      setTimeout(() => {
-        if (navigation.canGoBack()) {
-          navigation.goBack();
-        }
-      }, 200);
-      
-    } catch (error) {
-      console.error('[MeetingView] Error ending call:', error);
-      // Force navigation even if there's an error
-      setTimeout(() => {
-        if (navigation.canGoBack()) {
-          navigation.goBack();
-        }
-      }, 100);
-    }
-  }, [isEndingCall, navigation]);
+
   // Use VideoSDK meeting hooks with error handling
-  let meetingHooks: any = null;
-  try {
-    meetingHooks = useMeeting({
-      onMeetingJoined: () => {
-        console.log('[MeetingView] Meeting joined successfully');
-        setHasJoined(true);
-        setIsJoining(false);
-        setShowControls(true);
-      },
-      onMeetingLeft: () => {
-        console.log('[MeetingView] Meeting left');
-        setHasJoined(false);
-        setIsJoining(false);
-        // Don't automatically navigate - let handleEndCall do it
-      },
-      onError: (error) => {
-        console.error('[MeetingView] Meeting error:', error);
-        setIsJoining(false);
-        Alert.alert('Call Error', 'There was an issue with the call. Please try again.');
-        handleEndCall();
-      },
-      onParticipantJoined: (participant) => {
-        console.log('[MeetingView] Participant joined:', participant?.displayName);
-      },
-      onParticipantLeft: (participant) => {
-        console.log('[MeetingView] Participant left:', participant?.displayName);
-      },
-    });
-  } catch (error) {
-    console.error('[MeetingView] Error initializing meeting hooks:', error);
-    meetingHooks = {};
-  }
-  
-  // Safely destructure meeting hooks with defaults
+  const meetingHooks = useMeeting({
+    onMeetingJoined: () => {
+      console.log('[MeetingView] Meeting joined successfully');
+      setShowControls(true);
+    },
+    onMeetingLeft: () => {
+      console.log('[MeetingView] Meeting left');
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
+    },
+    onError: (error) => {
+      console.error('[MeetingView] Meeting error:', error);
+      Alert.alert('Call Error', 'There was an issue with the call. Please try again.');
+      handleEndCall();
+    },
+    onParticipantJoined: (participant) => {
+      console.log('[MeetingView] Participant joined:', participant?.displayName);
+    },
+    onParticipantLeft: (participant) => {
+      console.log('[MeetingView] Participant left:', participant?.displayName);
+    },
+  });
+
+  // Safely destructure meeting hooks
   const {
-    join = null,
-    leave = null,
-    participants = new Map(),
-    localParticipant = null,
-    toggleMic = null,
-    toggleWebcam = null,
+    join,
+    leave,
+    participants,
+    localParticipant,
+    toggleMic,
+    toggleWebcam,
   } = meetingHooks || {};
+
   // Initialize camera state based on call type
   useEffect(() => {
     setCameraEnabled(callType === 'video');
   }, [callType]);
 
-  // Join the meeting ONLY ONCE when the component mounts and we have the join function
+  // Join the meeting when the component mounts
   useEffect(() => {
-    if (join && !hasJoined && !isJoining && !hasAttemptedJoinRef.current) {
-      hasAttemptedJoinRef.current = true;
-      setIsJoining(true);
-      
+    if (join) {
       try {
-        console.log('[MeetingView] Attempting to join meeting (first time only)');
+        console.log('[MeetingView] Attempting to join meeting');
         join();
       } catch (error) {
         console.error('[MeetingView] Error joining meeting:', error);
-        setIsJoining(false);
         Alert.alert('Call Error', 'Unable to join the call.');
         handleEndCall();
       }
     }
-  }, [join]); // Only depend on join function availability, not its reference
-  // Cleanup effect - leave meeting on unmount
-  useEffect(() => {
+    
     return () => {
-      if (leave && hasJoined) {
+      if (leave) {
         try {
           console.log('[MeetingView] Leaving meeting on unmount');
           leave();
         } catch (error) {
-          console.error('[MeetingView] Error leaving meeting on unmount:', error);
+          console.error('[MeetingView] Error leaving meeting:', error);
         }
       }
     };
-  }, [leave, hasJoined]);  // Listen for leave call events from CallService
-  useEffect(() => {
-    const handleLeaveCall = () => {
-      console.log('[MeetingView] Received leaveActiveCall event');
-      if (leave && hasJoined && !isEndingCall) {
-        try {
-          leave();
-          setHasJoined(false);
-        } catch (error) {
-          console.error('[MeetingView] Error leaving meeting via event:', error);
-        }
-      }
-    };
+  }, [join, leave]);
 
-    appEventEmitter.on('leaveActiveCall', handleLeaveCall);
+  // Handle ending call
+  const handleEndCall = useCallback(() => {
+    if (isEndingCall) return;
     
-    return () => {
-      appEventEmitter.off('leaveActiveCall', handleLeaveCall);
-    };
-  }, [leave, hasJoined, isEndingCall]);
+    setIsEndingCall(true);
+    try {
+      CallService.endCall('User ended call');
+    } catch (error) {
+      console.error('[MeetingView] Error ending call:', error);
+    }
+    
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
+  }, [isEndingCall, navigation]);
 
   // Handle back button
   useFocusEffect(
@@ -226,6 +178,7 @@ const MeetingView: React.FC = () => {
       return () => subscription.remove();
     }, [handleEndCall])
   );
+
   // Handle mic toggle
   const handleToggleMic = useCallback(() => {
     if (toggleMic) {
@@ -237,20 +190,6 @@ const MeetingView: React.FC = () => {
       }
     }
   }, [toggleMic]);
-
-  // Listen for mute toggle events from foreground service
-  useEffect(() => {
-    const handleForegroundServiceMuteToggle = () => {
-      console.log('[MeetingView] Received foregroundServiceMuteToggle event from notification');
-      handleToggleMic();
-    };
-
-    appEventEmitter.on('foregroundServiceMuteToggle', handleForegroundServiceMuteToggle);
-    
-    return () => {
-      appEventEmitter.off('foregroundServiceMuteToggle', handleForegroundServiceMuteToggle);
-    };
-  }, [handleToggleMic]);
 
   // Handle camera toggle
   const handleToggleCamera = useCallback(() => {
@@ -275,8 +214,9 @@ const MeetingView: React.FC = () => {
       useNativeDriver: true,
     }).start();
   }, [showControls, controlsOpacity]);
+
   const participantCount = participants?.size || 0;
-  const callStatus = hasJoined ? (participantCount > 1 ? 'connected' : 'waiting') : (isJoining ? 'connecting' : 'initializing');
+  const callStatus = participantCount > 1 ? 'connected' : 'connecting';
 
   if (isEndingCall) {
     return (
@@ -284,17 +224,6 @@ const MeetingView: React.FC = () => {
         <View style={styles.endingContainer}>
           <ActivityIndicator size="large" color="#00D4AA" />
           <Text style={styles.endingText}>Ending call...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (isJoining && !hasJoined) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: '#1A1A1A' }]}>
-        <View style={styles.endingContainer}>
-          <ActivityIndicator size="large" color="#00D4AA" />
-          <Text style={styles.endingText}>Joining call...</Text>
         </View>
       </SafeAreaView>
     );
@@ -315,11 +244,9 @@ const MeetingView: React.FC = () => {
           <View style={styles.statusRow}>
             <View style={[styles.statusDot, { 
               backgroundColor: callStatus === 'connected' ? '#00D4AA' : '#FFB800' 
-            }]} />            <Text style={styles.callStatus}>
-              {callStatus === 'connected' ? 'Connected' : 
-               callStatus === 'waiting' ? 'Waiting for others...' :
-               callStatus === 'connecting' ? 'Connecting...' : 
-               'Initializing...'}
+            }]} />
+            <Text style={styles.callStatus}>
+              {callStatus === 'connected' ? 'Connected' : 'Connecting...'}
             </Text>
             {participantCount > 1 && (
               <>
@@ -354,11 +281,9 @@ const MeetingView: React.FC = () => {
                   {recipientName.charAt(0).toUpperCase()}
                 </Text>
               </View>
-              <Text style={styles.participantDisplayName}>{recipientName}</Text>              <Text style={styles.callStatusText}>
-                {callStatus === 'connected' ? 'Call in progress' : 
-                 callStatus === 'waiting' ? 'Waiting for others to join...' :
-                 callStatus === 'connecting' ? 'Connecting...' : 
-                 'Initializing call...'}
+              <Text style={styles.participantDisplayName}>{recipientName}</Text>
+              <Text style={styles.callStatusText}>
+                {callStatus === 'connected' ? 'Call in progress' : 'Connecting...'}
               </Text>
             </View>
           </View>
@@ -382,31 +307,6 @@ const MeetingView: React.FC = () => {
   );
 };
 
-// Defensive error boundary
-const ErrorBoundary: React.FC<{children: React.ReactNode}> = ({ children }) => {
-  const [error, setError] = useState<Error | null>(null);
-  if (error) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1A1A1A' }}>
-        <Text style={{ color: 'red', fontWeight: 'bold', fontSize: 18 }}>MeetingScreen Error</Text>
-        <Text style={{ color: 'white', marginTop: 10 }}>{error.message}</Text>
-      </View>
-    );
-  }
-  return (
-    <React.Fragment>
-      {React.Children.map(children, child => {
-        try {
-          return child;
-        } catch (e) {
-          setError(e as Error);
-          return null;
-        }
-      })}
-    </React.Fragment>
-  );
-};
-
 /**
  * This is the main component exported from the file.
  * It sets up the MeetingProvider with the correct config.
@@ -417,38 +317,26 @@ const MeetingScreen: React.FC = () => {
   const { activeCall } = useCall();
   const { colors } = useTheme();
   
-  // FIXED: Stabilize the parameters to prevent infinite re-renders
+  // Get params from route with proper fallbacks
   const routeParams = route.params || {};
-  
-  // Use route params first, then fallback to activeCall - but only calculate once
-  const meetingId = routeParams.meetingId || activeCall?.meetingId;
-  const token = routeParams.token || activeCall?.token;
-  const displayName = routeParams.displayName || activeCall?.callerName || activeCall?.recipientName || 'User';
-  const callType = routeParams.callType || activeCall?.callType || 'voice';
-  const isInitiator = routeParams.isInitiator ?? activeCall?.isInitiator ?? false;
-  const recipientName = routeParams.recipientName || activeCall?.recipientName || activeCall?.callerName || 'Participant';
+  const { 
+    meetingId = activeCall?.meetingId, 
+    token = activeCall?.token, 
+    displayName = activeCall?.callerName || 'User', 
+    callType = activeCall?.callType || 'voice', 
+    isInitiator = activeCall?.isInitiator || false, 
+    recipientName = activeCall?.recipientName || 'Participant'
+  } = routeParams;
 
-  // Only log once when component mounts or when essential params change
-  useEffect(() => {
-    console.log('[MeetingScreen] Initializing with params:', {
-      fromRoute: !!routeParams.meetingId,
-      fromActiveCall: !!activeCall?.meetingId,
-      meetingId,
-      token: token ? 'present' : 'missing',
-      displayName,
-      callType,
-      isInitiator,
-      recipientName
-    });
-  }, []); // Only run once on mount
-
-  // Validation effect - only run when essential params actually change
+  // Validation effect
   useEffect(() => {
     if (!meetingId || !token || !displayName) {
       console.error('[MeetingScreen] Missing required parameters:', {
         meetingId: !!meetingId,
         token: !!token,
         displayName: !!displayName,
+        routeParams,
+        activeCall
       });
       
       Alert.alert(
@@ -467,9 +355,17 @@ const MeetingScreen: React.FC = () => {
           }
         ]
       );
-      return;
+    } else {
+      console.log('[MeetingScreen] Initialized with valid params:', {
+        meetingId,
+        token: token.substring(0, 20) + '...',
+        displayName,
+        callType,
+        isInitiator,
+        recipientName
+      });
     }
-  }, [meetingId, token, displayName]); // Removed navigation from deps
+  }, [meetingId, token, displayName, navigation]);
 
   // Show loading state if parameters are missing
   if (!meetingId || !token || !displayName) {
@@ -480,25 +376,26 @@ const MeetingScreen: React.FC = () => {
           <Text style={[styles.loadingText, { color: colors.text?.primary || 'white' }]}>
             Preparing call...
           </Text>
-        </View>      </SafeAreaView>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ErrorBoundary>
+    <CallErrorBoundary>
       <MeetingProvider
         config={{
-          meetingId: meetingId || '',
-          name: displayName || 'Unknown User',
+          meetingId,
+          name: displayName,
           micEnabled: true,
           webcamEnabled: callType === 'video',
         }}
-        token={token || ''}
-        joinWithoutUserInteraction={false}
+        token={token}
+        joinWithoutUserInteraction={true}
       >
         <MeetingView />
       </MeetingProvider>
-    </ErrorBoundary>
+    </CallErrorBoundary>
   );
 };
 

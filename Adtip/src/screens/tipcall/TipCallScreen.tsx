@@ -542,29 +542,42 @@ export default function TipCallScreen() {
     };
 
     fetchWithNewCategory();
-  }, [user, languageFilter]);
-
-  const handleStartCall = useCallback(async (recipient: Contact, callType: 'voice' | 'video') => {
+  }, [user, languageFilter]);  const handleStartCall = useCallback(async (recipient: Contact, callType: 'voice' | 'video') => {
     if (!user || !recipient.name) {
       Alert.alert("Error", "User or recipient information is missing.");
       return;
     }
 
-    // Start the call with CallService
-    const callStarted = await CallService.startOutgoingCall(recipient.id.toString(), recipient.name, callType);
-    
-    // If call started successfully, navigate to the meeting screen.
-    // The screen will get its data from the CallContext.
-    if (callStarted && CallService.activeCall) {
-      console.log('[TipCall] Navigating to Meeting screen.');
-      navigation.navigate('Meeting', {
-        meetingId: CallService.activeCall.meetingId,
-        token: CallService.activeCall.token,
-        callType: CallService.activeCall.callType,
-        displayName: CallService.activeCall.callerName,
-      });
+    // Prevent multiple rapid call attempts
+    if (CallService.activeCall) {
+      Alert.alert("Call In Progress", "You are already in a call.");
+      return;
     }
-  }, [user, navigation]);
+
+    try {
+      console.log('[TipCall] Starting call to:', recipient.name, 'Type:', callType);
+      
+      // Start the call with CallService with enhanced error handling
+      const callStarted = await CallService.startOutgoingCall(
+        recipient.id.toString(), 
+        recipient.name, 
+        callType
+      );
+      
+      if (callStarted) {
+        console.log('[TipCall] Call initiated successfully. Navigation will be handled by App.tsx.');
+        // Navigation is now handled globally in App.tsx when activeCall state changes
+        // No need to navigate manually here as it could cause race conditions
+      } else {
+        console.error('[TipCall] CallService failed to start the call.');
+        // CallService already shows error alerts, but we can add a fallback
+        Alert.alert('Call Failed', 'Unable to start the call. Please check your connection and try again.');
+      }
+    } catch (error) {
+      console.error('[TipCall] Error in handleStartCall:', error);
+      Alert.alert('Call Error', 'An unexpected error occurred while starting the call. Please try again.');
+    }
+  }, [user]);
 
   const handleDndToggle = useCallback(async () => {
     if (!user || !user.id) {

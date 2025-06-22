@@ -12,6 +12,7 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import com.facebook.soloader.SoLoader
 import com.adtip.OngoingCallPackage
+import com.adtip.IncomingCallPackage  // CRITICAL FIX: Add IncomingCallPackage
 
 // VideoSDK Imports
 import live.videosdk.rnwebrtc.WebRTCModulePackage
@@ -35,9 +36,11 @@ class MainApplication : Application(), ReactApplication {
         
         // Add ExoPlayer Package - CRITICAL FOR TIPSHORTS ENHANCED
         packages.add(ExoPlayerPackage())
-        
-        // Add OngoingCallPackage
+          // Add OngoingCallPackage
         packages.add(OngoingCallPackage())
+        
+        // CRITICAL FIX: Add IncomingCallPackage for native call handling
+        packages.add(IncomingCallPackage())
         
         return packages
       }

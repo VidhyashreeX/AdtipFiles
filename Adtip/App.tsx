@@ -11,6 +11,11 @@ import {
   Text,
   Platform,
   Linking,
+  Alert,
+  AppState,
+  AppStateStatus,
+  NativeEventEmitter,
+  NativeModules,
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -37,14 +42,17 @@ import { CallProvider, useCall, ActiveCall } from './src/contexts/CallProvider';
 import Sidebar from './src/components/sidebar/Sidebar';
 import MainNavigator from './src/navigation/MainNavigator';
 import AuthNavigator from './src/navigation/AuthNavigator';
-import { navigationRef } from './src/navigation/NavigationService';
-import MeetingScreen from './src/screens/videosdk/MeetingScreen';
+import { navigationRef, navigateWithRetry, getCurrentRoute, isNavigationReady } from './src/navigation/NavigationService';
 
 // Services
 import FirebaseService from './src/services/FirebaseService';
 import VideoSDKService from './src/services/videosdk/VideoSDKService';
 import CallService from './src/services/CallService';
+import CallKeepService from './src/services/CallKeepService';  // CRITICAL FIX: Import CallKeepService
 import ApiService from './src/services/ApiService';
+import OngoingCallModule from './src/services/OngoingCallModule';
+import NotificationService from './src/services/NotificationService';  // CRITICAL FIX: Import NotificationService
+import IncomingCallService from './src/services/IncomingCallService';  // CRITICAL FIX: Import IncomingCallService
 
 // Constants
 import { COLORS } from './src/constants/colors';
@@ -55,7 +63,6 @@ import { appEventEmitter } from './src/events/AppEventEmitter';
 
 import { RootStackParamList } from 'src/types/navigation';
 
-const Stack = createNativeStackNavigator();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 // Theme-aware StatusBar
@@ -70,6 +77,21 @@ const ThemeAwareStatusBar = () => {
   );
 };
 
+// This component now represents the main app UI, including the sidebar and main navigator
+const MainApp = () => {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <SidebarProvider>
+        <TabNavigatorProvider>
+          <MainNavigator />
+          <Sidebar />
+        </TabNavigatorProvider>
+      </SidebarProvider>
+    </View>
+  );
+}
+
 // AppNavigator with Services
 const AppNavigator = () => {
   const { isAuthenticated, isInitialized, user } = useAuth();
@@ -78,21 +100,26 @@ const AppNavigator = () => {
   const [firebaseReady, setFirebaseReady] = useState(false);
   const [videoSDKReady, setVideoSDKReady] = useState(false);
   const [callServiceReady, setCallServiceReady] = useState(false);
+  const [callKeepReady, setCallKeepReady] = useState(false);  // CRITICAL FIX: Add CallKeep ready state
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
-  useEffect(() => {
-    const handleDeepLink = (url: string | null) => {
+  useEffect(() => {    const handleDeepLink = (url: string | null) => {
       if (url) {
         const route = url.replace(/.*?:\/\//g, '');
         const host = route.split('/')[0];
 
         if (host === 'call' && activeCall) {
-          navigationRef.navigate('Meeting', {
-            meetingId: activeCall.meetingId,
-            token: activeCall.token,
-            callType: activeCall.callType,
-            displayName: activeCall.displayName,
+          navigationRef.navigate('Main', {
+            screen: 'Meeting',
+            params: {
+              meetingId: activeCall.meetingId,
+              token: activeCall.token,
+              callType: activeCall.callType,
+              displayName: activeCall.callerName,
+              recipientName: activeCall.recipientName,
+              isInitiator: activeCall.isInitiator,
+            },
           });
         }
       }
@@ -107,27 +134,140 @@ const AppNavigator = () => {
 
     const subscription = Linking.addEventListener('url', ({ url }) => {
       handleDeepLink(url);
-    });
-
-    return () => {
+    });    return () => {
       subscription.remove();
     };
   }, [activeCall]);
-
+  // CRITICAL FIX: Handle activeCall state changes and navigation
   useEffect(() => {
-    if (isNavReady) {
-      const currentRoute = navigationRef.getCurrentRoute()?.name;
+    const handleNavigation = () => {
+      if (!isNavReady) return;
+      
+      const currentRoute = getCurrentRoute()?.name;
+      console.log('[App] Navigation effect triggered:', {
+        hasActiveCall: !!activeCall,
+        currentRoute,
+        isNavReady
+      });
+      
       if (activeCall && currentRoute !== 'Meeting') {
-        navigationRef.navigate('Meeting', {
+        console.log('[App] Navigating to Meeting screen with call:', {
           meetingId: activeCall.meetingId,
-          token: activeCall.token,
-          callType: activeCall.callType,
-          displayName: activeCall.displayName,
+          callerName: activeCall.callerName,
+          recipientName: activeCall.recipientName
         });
+          // Ensure all required parameters are present
+        if (!activeCall.meetingId || !activeCall.token || !activeCall.callerName) {
+          console.error('[App] Missing required call parameters:', {
+            meetingId: !!activeCall.meetingId,
+            token: !!activeCall.token,
+            callerName: !!activeCall.callerName,
+            fullActiveCall: activeCall
+          });
+          Alert.alert('Call Error', 'Unable to join call. Missing required information.');
+          CallService.endCall('Missing parameters');
+          return;
+        }        // Use the improved navigation function with retry logic
+        const navigationParams = {
+          screen: 'Meeting' as const,
+          params: {
+            meetingId: activeCall.meetingId,
+            token: activeCall.token,
+            callType: activeCall.callType || 'voice',
+            displayName: activeCall.callerName,
+            recipientName: activeCall.recipientName || 'Participant',
+            isInitiator: activeCall.isInitiator || false,
+          },
+        };
+        
+        console.log('[App] Navigating with params:', navigationParams);
+        navigateWithRetry('Main', navigationParams, 3, 150);
+        
       } else if (!activeCall && currentRoute === 'Meeting') {
-        navigationRef.goBack();
+        console.log('[App] No active call, navigating back from Meeting screen');
+        if (navigationRef.canGoBack()) {
+          navigationRef.goBack();
+        }
       }
-    }
+    };
+
+    handleNavigation();
+  }, [activeCall, isNavReady]);  // Handle forced navigation events from CallService
+  useEffect(() => {
+    const handleForceNavigation = (data: { activeCall: ActiveCall }) => {
+      if (!isNavReady) {
+        console.log('[App] Navigation not ready, scheduling force navigation');
+        setTimeout(() => handleForceNavigation(data), 100);
+        return;
+      }
+      
+      const currentRoute = getCurrentRoute()?.name;
+      if (currentRoute !== 'Meeting' && data.activeCall) {
+        console.log('[App] Force navigating to Meeting screen');
+        
+        // Ensure all required parameters are present
+        if (!data.activeCall.meetingId || !data.activeCall.token || !data.activeCall.callerName) {
+          console.error('[App] Missing required parameters in force navigation:', data.activeCall);
+          Alert.alert('Call Error', 'Unable to join call. Missing required information.');
+          CallService.endCall('Missing parameters');
+          return;
+        }
+          // Use the improved navigation function with retry logic
+        const localUserName = data.activeCall.isInitiator
+          ? data.activeCall.callerName
+          : data.activeCall.recipientName;
+        const remoteUserName = data.activeCall.isInitiator
+          ? data.activeCall.recipientName
+          : data.activeCall.callerName;
+
+        const forceNavigationParams = {
+          screen: 'Meeting' as const,
+          params: {
+            meetingId: data.activeCall.meetingId,
+            token: data.activeCall.token,
+            callType: data.activeCall.callType || 'voice',
+            displayName: localUserName || 'Me',
+            recipientName: remoteUserName || 'Participant',
+            isInitiator: data.activeCall.isInitiator || false,
+          },
+        };
+        
+        console.log('[App] Force navigating with params:', forceNavigationParams);
+        navigateWithRetry('Main', forceNavigationParams, 3, 150);
+      }
+    };
+
+    appEventEmitter.on('forceNavigateToMeeting', handleForceNavigation);
+    
+    return () => {
+      appEventEmitter.off('forceNavigateToMeeting', handleForceNavigation);
+    };
+  }, [isNavReady]);  useEffect(() => {
+    if (!isNavReady) return;
+
+    const checkRoute = () => {
+      const currentRoute = getCurrentRoute()?.name;
+      if (activeCall && currentRoute !== 'Meeting') {
+        // Add a delay to ensure the Activity is fully ready
+        setTimeout(() => {
+          OngoingCallModule.startOngoingCallNotification(
+            'Ongoing Call',
+            `In call with ${activeCall.recipientName || 'participant'}`
+          );
+        }, 1000); // 1 second delay
+      } else {
+        OngoingCallModule.stopOngoingCallNotification();
+      }
+    };
+    
+    // Add a delay before the first check to ensure everything is ready
+    setTimeout(checkRoute, 500);
+
+    const unsubscribe = navigationRef.addListener('state', checkRoute);
+
+    return () => {
+      unsubscribe();
+    };
   }, [activeCall, isNavReady]);
 
   // Initialize Firebase Service
@@ -178,15 +318,39 @@ const AppNavigator = () => {
 
     initVideoSDK();
   }, []);
+  // Initialize permissions early when app is ready
+  useEffect(() => {
+    const initializePermissions = async () => {      if (isAuthenticated && isInitialized) {
+        console.log('[App] Pre-requesting call permissions...');
+        
+        // Pre-request phone call permissions when app is fully ready
+        setTimeout(async () => {
+          try {
+            const PermissionsService = require('./src/services/PermissionsService').default;
+            await PermissionsService.requestPhoneCallForegroundServicePermission();
+            console.log('[App] Phone call permissions pre-requested');
+          } catch (error) {
+            console.log('[App] Phone call permissions pre-request failed (not critical):', error);
+          }
+        }, 2000); // Wait 2 seconds after authentication to ensure Activity is ready
+      }
+    };
 
-  // Initialize Call Service
+    initializePermissions();
+  }, [isAuthenticated, isInitialized]);
+  // Initialize Call Service and notify when navigation is ready
   useEffect(() => {
     console.log('[App] Call service is loading...');
     // Since CallService is a singleton exported as a default instance,
     // it is initialized at the time of import. There's no separate init method to call.
     setCallServiceReady(true);
     console.log('[App] Call service is ready.');
-  }, []);
+    
+    // Notify CallService when navigation is ready
+    if (isNavReady) {
+      CallService.setNavigationReady();
+    }
+  }, [isNavReady]);
 
   // Setup notifications when Firebase is ready and user is authenticated
   useEffect(() => {
@@ -226,52 +390,137 @@ const AppNavigator = () => {
       appEventEmitter.off('CallStarted', handleStartCall);
     };
   }, [startCall]);
+  useEffect(() => {
+    const checkNavigationReady = () => {
+      const ready = isNavigationReady();
+      setIsNavReady(ready);
+      if (ready) {
+        console.log('[App] Navigation is ready');
+      }
+    };
+    
+    checkNavigationReady();
+    
+    // Set up a listener for navigation state changes
+    const unsubscribe = navigationRef.addListener('ready', () => {
+      console.log('[App] Navigation ready event fired');
+      setIsNavReady(true);
+    });
 
-  const allServicesReady = firebaseReady && videoSDKReady && callServiceReady;
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
-  if (!isInitialized || !allServicesReady) {
+  // Initialize CallKeep Service - CRITICAL FIX
+  useEffect(() => {
+    const initCallKeep = async () => {
+      console.log('[App] Initializing CallKeep service...');
+      try {
+        const callKeepService = CallKeepService.getInstance();        const config = {
+          ios: {
+            appName: 'Adtip',
+            maximumCallsPerCallGroup: '1',
+            maximumCallGroups: '1',
+            supportsVideo: true,
+            includesCallsInRecents: true,
+          },
+          android: {
+            alertTitle: 'Permissions required',
+            alertDescription: 'This application needs to access your phone accounts',
+            cancelButton: 'Cancel',
+            okButton: 'OK',
+            imageName: 'phone_account_icon',
+            additionalPermissions: [],
+            selfManaged: false,
+          },
+        };
+        
+        const success = await callKeepService.initialize(config);
+        setCallKeepReady(success);
+        
+        if (success) {
+          console.log('[App] CallKeep service initialized successfully');
+        } else {
+          console.warn('[App] CallKeep service initialization failed, continuing without native calls');
+          setCallKeepReady(true); // Allow app to continue
+        }
+      } catch (error) {
+        console.error('[App] CallKeep initialization error:', error);
+        setCallKeepReady(true); // Allow app to continue even if CallKeep fails
+      }
+    };
+
+    if (isInitialized) {
+      initCallKeep();
+    }
+  }, [isInitialized]);  // Setup incoming call broadcast receiver - CRITICAL FIX
+  useEffect(() => {
+    const handleIncomingCallBroadcast = async (data: any) => {
+      console.log('[App] Received incoming call broadcast:', data);
+      
+      if (data && data.isIncomingCall && callKeepReady) {
+        try {
+          const callKeepService = CallKeepService.getInstance();
+          
+          // Generate UUID for the call
+          const callUUID = callKeepService.generateCallUUID();
+          
+          // Display native incoming call screen using CallKeep
+          await callKeepService.displayIncomingCall(
+            callUUID,
+            data.callerId || 'Unknown',
+            data.callerName || 'Unknown Caller',
+            'generic',
+            data.callType === 'video'
+          );
+          
+          // Also display rich notification using notifee
+          await NotificationService.displayIncomingCallNotification(
+            data.callerId || 'unknown',
+            data.callerName || 'Unknown Caller',
+            data.callType || 'voice'
+          );
+          
+          console.log('[App] Native incoming call screen displayed');
+        } catch (error) {
+          console.error('[App] Error handling incoming call broadcast:', error);
+        }
+      }
+    };
+
+    // Use the new IncomingCallService for cleaner event handling
+    const incomingCallService = IncomingCallService.getInstance();
+    const unsubscribe = incomingCallService.onIncomingCall(handleIncomingCallBroadcast);
+
+    return () => {
+      unsubscribe();
+    };
+  }, [callKeepReady]);
+
+  if (!isInitialized || !firebaseReady || !videoSDKReady || !callServiceReady || !callKeepReady) {
     return (
-      <SafeAreaViewRN style={[
-        styles.loadingContainer,
-        { backgroundColor: colors.background, paddingTop: insets.top }
-      ]}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.text?.primary }]}>
-          {!isInitialized ? 'Initializing...' : 
-           !firebaseReady ? 'Setting up notifications...' :
-           !videoSDKReady ? 'Initializing video services...' :
-           !callServiceReady ? 'Setting up call management...' : 'Loading...'}
-        </Text>
-      </SafeAreaViewRN>
+        <Text style={{color: colors.text.primary, marginTop: 10}}>Initializing...</Text>
+      </View>
     );
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      <NavigationContainer ref={navigationRef} onReady={() => setIsNavReady(true)}>
-        <RootStack.Navigator screenOptions={{ headerShown: false }}>
-          {!isAuthenticated ? (
-            <RootStack.Screen name="Auth" component={AuthNavigator} />
-          ) : user?.isSaveUserDetails === 0 ? (
-            <RootStack.Screen name="UserDetails" component={UserDetailsScreen} />
-          ) : (
-            <RootStack.Screen name="Main" component={MainNavigator} />
-          )}
-          <RootStack.Screen
-            name="Meeting"
-            component={MeetingScreen}
-            options={{
-              presentation: 'modal',
-              animation: 'slide_from_bottom',
-              gestureEnabled: false,
-            }}
-          />
-        </RootStack.Navigator>
-        {/* The Sidebar is now rendered here, on top of the navigator,
-          only when the user is fully authenticated and in the main app. */}
-      {isAuthenticated && user?.isSaveUserDetails !== 0 && <Sidebar />}
-      </NavigationContainer>
-    </View>
+    <RootStack.Navigator screenOptions={{ headerShown: false }}>
+      {isAuthenticated && user?.name ? (
+        <>
+          <RootStack.Screen name="Main" component={MainApp} />
+          {/* REMOVE MeetingScreen from the root navigator */}
+        </>
+      ) : (
+        <RootStack.Screen name="Auth" component={AuthNavigator} />
+      )}
+      {!user?.name && isAuthenticated && (
+         <RootStack.Screen name="UserDetails" component={UserDetailsScreen} />
+      )}
+    </RootStack.Navigator>
   );
 };
 
@@ -281,40 +530,27 @@ function App(): React.JSX.Element {
   const isLandscape = width > height;
 
   return (
-    <SafeAreaProvider>
-      <SafeAreaViewRN style={styles.safeArea} edges={['left', 'right', 'bottom']}>
-        <View
-          style={[
-            styles.appContentContainer,
-            {
-              maxWidth: isLandscape && (width >= 768) ? 900 : '100%',
-              alignSelf: 'center',
-            }
-          ]}
-        >
-          <ThemeProvider>
-            <ThemeAwareStatusBar />
-            <AuthProvider>
-              <WalletProvider>
-                <VideoSDKProvider>
-                  <ShortsProvider>
-                    <SidebarProvider>
-                      <CallProvider>
-                        <TabNavigatorProvider>
-                          <GestureHandlerRootView style={{ flex: 1 }}>
-                            <AppNavigator />
-                          </GestureHandlerRootView>
-                        </TabNavigatorProvider>
-                      </CallProvider>
-                    </SidebarProvider>
-                  </ShortsProvider>
-                </VideoSDKProvider>
-              </WalletProvider>
-            </AuthProvider>
-          </ThemeProvider>
-        </View>
-      </SafeAreaViewRN>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <WalletProvider>
+              <CallProvider>
+                <ShortsProvider>
+                  <TabNavigatorProvider>
+                    <GestureHandlerRootView style={{ flex: 1 }}>
+                      <NavigationContainer ref={navigationRef}>
+                        <AppNavigator />
+                      </NavigationContainer>
+                    </GestureHandlerRootView>
+                  </TabNavigatorProvider>
+                </ShortsProvider>
+              </CallProvider>
+            </WalletProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 

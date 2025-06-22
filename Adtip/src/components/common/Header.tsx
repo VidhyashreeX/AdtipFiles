@@ -2,11 +2,12 @@
 import React, {useState, useRef, useMemo, useCallback} from 'react';
 import {View, Text, StyleSheet, TouchableOpacity, Image, useWindowDimensions, Platform, TextInput, Keyboard} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import {useNavigation} from '@react-navigation/native';
+import {useNavigation, useRoute} from '@react-navigation/native';
 import {useTheme} from '../../contexts/ThemeContext';
 import {useWallet} from '../../contexts/WalletContext';
 import {useSidebar} from '../../contexts/SidebarContext';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useCall} from '../../contexts/CallProvider';
 
 export interface HeaderProps {
   title: string;
@@ -30,6 +31,38 @@ function isScreenHeader(): boolean {
   return true; 
 }
 
+const formatDuration = (totalSeconds: number): string => {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  
+  const paddedMinutes = String(minutes).padStart(2, '0');
+  const paddedSeconds = String(seconds).padStart(2, '0');
+  
+  if (hours > 0) {
+    const paddedHours = String(hours).padStart(2, '0');
+    return `${paddedHours}:${paddedMinutes}:${paddedSeconds}`;
+  }
+  return `${paddedMinutes}:${paddedSeconds}`;
+};
+
+const LiveCallTimer: React.FC = () => {
+  const navigation = useNavigation();
+  const { callDuration } = useCall();
+  const { colors } = useTheme();
+
+  const handlePress = () => {
+    navigation.navigate('Meeting' as never);
+  };
+
+  return (
+    <TouchableOpacity onPress={handlePress} style={[styles.liveTimerContainer, { backgroundColor: colors.success }]}>
+      <Icon name="phone" size={14} color="#FFF" />
+      <Text style={styles.liveTimerText}>{formatDuration(callDuration)}</Text>
+    </TouchableOpacity>
+  );
+};
+
 const Header: React.FC<HeaderProps> = ({
   title,
   showLogo,
@@ -47,12 +80,14 @@ const Header: React.FC<HeaderProps> = ({
   showPremium = true, // Default to true to show premium button everywhere
 }) => {
   const navigation = useNavigation();
+  const route = useRoute();
   const {colors, isDarkMode} = useTheme();
   const {balance, isLoading, isPremium} = useWallet(); 
   const {toggleSidebar} = useSidebar();
   const {width: screenWidth} = useWindowDimensions();
   const insets = useSafeAreaInsets(); 
   const searchInputRef = useRef<TextInput>(null);
+  const { activeCall } = useCall();
 
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [searchQueryLocal, setSearchQueryLocal] = useState('');
@@ -135,11 +170,13 @@ const Header: React.FC<HeaderProps> = ({
           name={isPremium ? "star" : "star"} 
           size={sizes.iconSize} 
           color={isPremium ? "#FFD700" : colors.text.secondary}
-          fill={isPremium ? "#FFD700" : "transparent"}
         />
       </TouchableOpacity>
     );
   };
+
+  // Check if call is active and we are NOT on the meeting screen
+  const isCallActiveInBackground = activeCall && route.name !== 'Meeting';
 
   return (
     <View 
@@ -183,7 +220,9 @@ const Header: React.FC<HeaderProps> = ({
 
       {/* --- CENTER SECTION --- */}
       <View style={[styles.centerSectionContainer, { marginHorizontal: sizes.iconSpacing / 2 }]}>
-        {isSearchActive && showSearch ? (
+        {isCallActiveInBackground ? (
+          <LiveCallTimer />
+        ) : isSearchActive && showSearch ? (
           <>
             <TextInput
               ref={searchInputRef}
@@ -346,6 +385,24 @@ const styles = StyleSheet.create({
     padding: 6,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  liveTimerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  liveTimerText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 14,
+    marginLeft: 6,
+    fontVariant: ['tabular-nums'],
   },
 });
 

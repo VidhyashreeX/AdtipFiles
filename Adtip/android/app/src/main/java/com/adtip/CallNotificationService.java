@@ -11,6 +11,7 @@ import android.os.Build;
 import android.util.Log; // Import Log
 
 import androidx.core.app.NotificationCompat;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager; // CRITICAL FIX: Add LocalBroadcastManager
 
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
@@ -26,11 +27,13 @@ public class CallNotificationService extends FirebaseMessagingService {
         Log.d(TAG, "FCM Message Received: " + remoteMessage.getData()); // Log entire data payload
         
         Map<String, String> data = remoteMessage.getData();
-        if (data.size() > 0) {
-            String callType = data.get("call_type"); // Use new key "call_type"
+        if (data.size() > 0) {            String callType = data.get("call_type"); // Use new key "call_type"
             // Check if it's an audio or video call based on the new payload
             if ("video".equals(callType) || "audio".equals(callType)) {
                 Log.d(TAG, "Call notification identified. Type: " + callType);
+                // CRITICAL FIX: Trigger CallKeep first for native call experience
+                triggerCallKeepIncomingCall(data);
+                // Also send notification as backup
                 sendCallNotification(data);
             } else {
                 Log.d(TAG, "Not a call notification or unknown call_type: " + callType);
@@ -117,6 +120,36 @@ public class CallNotificationService extends FirebaseMessagingService {
             Log.d(TAG, "Call notification sent with ID: " + notificationId);
         } else {
             Log.e(TAG, "NotificationManager is null, cannot send notification.");
+        }
+    }
+    
+    /**
+     * CRITICAL FIX: Trigger CallKeep for native call experience
+     */
+    private void triggerCallKeepIncomingCall(Map<String, String> data) {
+        try {
+            Log.d(TAG, "Triggering CallKeep for incoming call");
+            
+            // Create intent to broadcast to React Native
+            Intent callKeepIntent = new Intent();
+            callKeepIntent.setAction("ADTIP_INCOMING_CALL_RECEIVED");
+            
+            // Pass all call data to React Native
+            callKeepIntent.putExtra("callerName", data.get("callerName") != null ? data.get("callerName") : "Unknown Caller");
+            callKeepIntent.putExtra("callType", data.get("call_type"));
+            callKeepIntent.putExtra("callerId", data.get("caller_app_user_id"));
+            callKeepIntent.putExtra("channelName", data.get("channelName"));
+            callKeepIntent.putExtra("meetingId", data.get("meetingId"));
+            callKeepIntent.putExtra("token", data.get("token"));
+            callKeepIntent.putExtra("isIncomingCall", true);
+            
+            // Send local broadcast to React Native
+            LocalBroadcastManager.getInstance(this).sendBroadcast(callKeepIntent);
+            
+            Log.d(TAG, "CallKeep trigger broadcast sent successfully");
+        } catch (Exception e) {
+            Log.e(TAG, "Error triggering CallKeep: " + e.getMessage(), e);
+            // Fallback to notification only if CallKeep fails
         }
     }
 }

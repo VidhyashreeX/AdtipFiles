@@ -27,6 +27,8 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
     micEnabled: props.micEnabled ?? false,
     webcamEnabled: props.webcamEnabled ?? false,
     speakerEnabled: true, // Speaker is on by default
+    participantCount: 0,
+    networkQuality: 'good',
   });
   const [metrics, setMetrics] = useState<CallMetrics>({
     duration: 0,
@@ -113,13 +115,15 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
       console.error('[VideoSDKMeeting] Cannot join meeting: Missing meetingId or token');
       return;
     }
-    
+    if (hasJoinedRef.current) {
+      console.log('[VideoSDKMeeting] joinMeeting already called, skipping.');
+      return;
+    }
     try {
       console.log('[VideoSDKMeeting] Joining meeting:', meetingConfig.meetingId);
-      
-      // Call the join method from mMeeting API
       if (mMeeting && typeof mMeeting.join === 'function') {
         mMeeting.join();
+        hasJoinedRef.current = true;
       } else {
         console.error('[VideoSDKMeeting] join method is not available on mMeeting object:', mMeeting);
         setCallStatus('failed');
@@ -174,8 +178,17 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
           console.error('[VideoSDKMeeting] Error leaving meeting on unmount:', e);
         }
       }
+      // Attempt to disable mic/webcam if possible
+      if (mMeeting && typeof mMeeting.toggleMic === 'function' && micOn) {
+        try { mMeeting.toggleMic(); } catch (e) { /* ignore */ }
+      }
+      if (mMeeting && typeof mMeeting.toggleWebcam === 'function' && webcamOn) {
+        try { mMeeting.toggleWebcam(); } catch (e) { /* ignore */ }
+      }
+      // Optionally, reset hasJoinedRef
+      hasJoinedRef.current = false;
     };
-  }, [mMeeting]);
+  }, [mMeeting, micOn, webcamOn]);
 
   // Update config if props change
   useEffect(() => {

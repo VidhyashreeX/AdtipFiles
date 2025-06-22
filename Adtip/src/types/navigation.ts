@@ -94,14 +94,7 @@ export type MainNavigatorParamList = {
   UpgradePremiumScreen: undefined;
   Comments: { postId: number; visible: boolean; onClose: () => void; };
   CameraRecording: undefined;
-  // Add other screens specific to MainNavigator
-};
-
-// This is the RootStackParamList for the Stack.Navigator in App.tsx
-export type RootStackParamList = {
-  Auth: NavigatorScreenParams<AuthNavigatorParamList>; 
-  Main: NavigatorScreenParams<MainNavigatorParamList>;
-  UserDetails: undefined;
+  // Add Meeting screen here
   Meeting: {
     meetingId: string;
     token: string;
@@ -110,10 +103,18 @@ export type RootStackParamList = {
     isInitiator?: boolean;
     recipientName?: string;
   };
+};
+
+// This is the RootStackParamList for the Stack.Navigator in App.tsx
+export type RootStackParamList = {
+  Auth: NavigatorScreenParams<AuthNavigatorParamList>; 
+  Main: NavigatorScreenParams<MainNavigatorParamList>;
+  UserDetails: undefined;
+  // REMOVE Meeting from the RootStack
   CameraRecording: {
     maxDuration?: number;
     aspectRatio?: '9:16' | '16:9' | '1:1';
-  }; // Removed the function param
+  };
 };
 
 // Update NavigationProps if needed, though direct use of hooks like useNavigation is often preferred

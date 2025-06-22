@@ -1,6 +1,20 @@
 // src/types/api.ts
 // This file contains interface definitions for API responses
 
+export interface Comment {
+    id: number;
+    post_id: number;
+    user_id: number;
+    user_name: string;
+    user_profile_image?: string | null;
+    content: string;
+    like_count: number;
+    reply_count: number;
+    is_liked: boolean;
+    created_at: string;
+    parent_id?: number | null;
+}
+
 export interface ApiResponse<T> {
   status: number | boolean;
   message: string;
@@ -313,6 +327,7 @@ export interface VideoSDKCreateMeetingResponse {
 export interface VideoSDKDeactivateRoomRequest {
   // Similar to create meeting, the 'token' is likely for backend-to-VideoSDK auth.
   roomId: string;
+  token: string;
 }
 
 export interface VideoSDKDeactivateRoomResponse {

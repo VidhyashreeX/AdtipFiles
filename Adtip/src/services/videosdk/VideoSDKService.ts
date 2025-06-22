@@ -162,7 +162,8 @@ class VideoSDKService {
       console.log('[VideoSDK] Deactivating meeting via backend API:', meetingId);
       
       const response = await ApiService.deactivateVideoSDKRoom({
-        roomId: meetingId
+        roomId: meetingId,
+        token: token,
       });
 
       return response.success;

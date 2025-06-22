@@ -5,8 +5,8 @@ import uuid from 'react-native-uuid';
 export interface CallKeepConfig {
   ios: {
     appName: string;
-    maximumCallsPerCallGroup?: number;
-    maximumCallGroups?: number;
+    maximumCallsPerCallGroup?: string;
+    maximumCallGroups?: string;
     supportsVideo?: boolean;
     includesCallsInRecents?: boolean;
   };
@@ -16,7 +16,7 @@ export interface CallKeepConfig {
     cancelButton: string;
     okButton: string;
     imageName?: string;
-    additionalPermissions?: string[];
+    additionalPermissions: string[];
     selfManaged?: boolean;
   };
 }
@@ -66,7 +66,6 @@ class CallKeepService {
       return false;
     }
   }
-
   /**
    * Setup event listeners for CallKeep
    */
@@ -81,6 +80,8 @@ class CallKeepService {
     RNCallKeep.addEventListener('didToggleHoldCallAction', this.onDidToggleHoldCallAction);
     RNCallKeep.addEventListener('didPerformDTMFAction', this.onDidPerformDTMFAction);
     RNCallKeep.addEventListener('didLoadWithEvents', this.onDidLoadWithEvents);
+    
+    console.log('[CallKeep] Event listeners configured');
   }
 
   /**
@@ -146,7 +147,7 @@ class CallKeepService {
         finalCallUUID,
         finalHandle,
         localizedCallerName || finalHandle,
-        handleType || 'generic',
+        handleType as any || 'generic',
         hasVideo || false
       );
       
@@ -252,19 +253,76 @@ class CallKeepService {
   public getInitializationStatus(): boolean {
     return this.isInitialized;
   }
-
   // Event handlers
   private onDidReceiveStartCallAction = (data: any) => {
     console.log('[CallKeep] onDidReceiveStartCallAction:', data);
+    // Handle outgoing call initiation if needed
   };
 
-  private onAnswerCallAction = (data: any) => {
+  private onAnswerCallAction = async (data: any) => {
     console.log('[CallKeep] onAnswerCallAction:', data);
+    // CRITICAL FIX: Handle call answer
+    await this.handleCallAnswered(data.callUUID);
   };
 
-  private onEndCallAction = (data: any) => {
+  private onEndCallAction = async (data: any) => {
     console.log('[CallKeep] onEndCallAction:', data);
+    // CRITICAL FIX: Handle call end
+    await this.handleCallEnded(data.callUUID);
   };
+
+  /**
+   * CRITICAL FIX: Handle call answered event
+   */
+  private async handleCallAnswered(callUUID: string): Promise<void> {
+    try {
+      console.log('[CallKeep] Call answered:', callUUID);
+      
+      // Import CallService and navigationRef dynamically to avoid circular imports
+      const { default: CallService } = await import('./CallService');
+      const { navigationRef } = await import('../navigation/NavigationService');
+      
+      const activeCall = CallService.activeCall;
+      if (activeCall) {
+        // Update call status
+        CallService.updateCallStatus('connected');
+        
+        // Navigate to MeetingScreen
+        if (navigationRef.isReady()) {
+          navigationRef.navigate('Main', {
+            screen: 'Meeting',
+            params: {
+              meetingId: activeCall.meetingId,
+              token: activeCall.token,
+              callType: activeCall.callType,
+              displayName: activeCall.callerName,
+              recipientName: activeCall.recipientName,
+              isInitiator: false, // This is an incoming call
+            },
+          });
+        }
+      }
+    } catch (error) {
+      console.error('[CallKeep] Error handling call answered:', error);
+    }
+  }
+
+  /**
+   * CRITICAL FIX: Handle call ended event
+   */
+  private async handleCallEnded(callUUID: string): Promise<void> {
+    try {
+      console.log('[CallKeep] Call ended:', callUUID);
+      
+      // Import CallService dynamically to avoid circular imports
+      const { default: CallService } = await import('./CallService');
+      
+      // End the call
+      await CallService.endCall('User ended call via CallKeep');
+    } catch (error) {
+      console.error('[CallKeep] Error handling call ended:', error);
+    }
+  }
 
   private onDidActivateAudioSession = (data: any) => {
     console.log('[CallKeep] onDidActivateAudioSession:', data);
