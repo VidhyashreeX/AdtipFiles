@@ -10,7 +10,7 @@ import {
   StatusBar,
   Animated,
   Platform,
-  Dimensions, // Added Dimensions
+  Dimensions,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -23,13 +23,13 @@ interface CreateContentModalProps {
   onClose: () => void;
 }
 
-const screenHeight = Dimensions.get('window').height; // Get screen height for animation
+const screenHeight = Dimensions.get('window').height;
 
 const CreateContentModal: React.FC<CreateContentModalProps> = ({
-  visible: propVisible, // Renamed for clarity within this component
+  visible: propVisible,
   onClose,
 }) => {
-  const {colors} = useTheme();
+  const {colors, isDarkMode} = useTheme();
   const navigation = useNavigation();
   const [isContentMounted, setIsContentMounted] = React.useState(false);
   const slideAnimation = React.useRef(new Animated.Value(0)).current;
@@ -71,10 +71,7 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({
 
   const translateY = slideAnimation.interpolate({
     inputRange: [0, 1],
-    // Corrected outputRange:
-    // 0 (initial state, off-screen) -> screenHeight
-    // 1 (final state, on-screen) -> 0
-    outputRange: [screenHeight, 0], // Modal slides up from the bottom
+    outputRange: [screenHeight, 0],
   });
 
   if (!isContentMounted && !propVisible) {
@@ -90,11 +87,11 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({
     >
       <SafeAreaView style={styles.safeArea}>
         <StatusBar
-          backgroundColor={propVisible ? "rgba(0,0,0,0.5)" : "transparent"}
-          barStyle={propVisible ? "light-content" : (colors.isDarkMode ? "light-content" : "dark-content")}
+          backgroundColor={propVisible ? (isDarkMode ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.5)") : "transparent"}
+          barStyle={propVisible ? "light-content" : (isDarkMode ? "light-content" : "dark-content")}
         />
         <TouchableOpacity
-            style={StyleSheet.absoluteFill}
+            style={[StyleSheet.absoluteFill, {backgroundColor: isDarkMode ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)'}]}
             activeOpacity={1}
             onPress={handleCloseModalWithAnimation}
         />
@@ -103,22 +100,36 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({
             <Animated.View
               style={[
                 styles.modalView,
-                {backgroundColor: colors.background},
-                {transform: [{translateY}]}, // Apply the corrected translateY
+                {
+                  backgroundColor: colors.background,
+                  shadowColor: isDarkMode ? colors.white : colors.black,
+                },
+                {transform: [{translateY}]},
               ]}
             >
               <View style={styles.header}>
                 <Text style={[styles.title, {color: colors.text.primary}]}>
                   Create Content
                 </Text>
-                <TouchableOpacity onPress={handleCloseModalWithAnimation}>
+                <TouchableOpacity 
+                  onPress={handleCloseModalWithAnimation}
+                  style={[styles.closeButton, {backgroundColor: isDarkMode ? colors.gray[800] : colors.gray[100]}]}
+                >
                   <Icon name="x" size={24} color={colors.text.primary} />
                 </TouchableOpacity>
               </View>
               <View style={styles.optionsContainer}>
                 <TouchableOpacity
-                  style={[styles.option, {backgroundColor: colors.gray[100]}]}
-                  onPress={handleCreatePost}>
+                  style={[
+                    styles.option, 
+                    {
+                      backgroundColor: isDarkMode ? colors.gray[800] : colors.gray[100],
+                      borderWidth: isDarkMode ? 1 : 0,
+                      borderColor: isDarkMode ? colors.gray[700] : 'transparent',
+                    }
+                  ]}
+                  onPress={handleCreatePost}
+                >
                   <View
                     style={[
                       styles.iconContainer,
@@ -137,8 +148,16 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.option, {backgroundColor: colors.gray[100]}]}
-                  onPress={handleUploadVideo}>
+                  style={[
+                    styles.option, 
+                    {
+                      backgroundColor: isDarkMode ? colors.gray[800] : colors.gray[100],
+                      borderWidth: isDarkMode ? 1 : 0,
+                      borderColor: isDarkMode ? colors.gray[700] : 'transparent',
+                    }
+                  ]}
+                  onPress={handleUploadVideo}
+                >
                   <View
                     style={[
                       styles.iconContainer,
@@ -157,8 +176,16 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.option, {backgroundColor: colors.gray[100]}]}
-                  onPress={handleCreateShort}>
+                  style={[
+                    styles.option, 
+                    {
+                      backgroundColor: isDarkMode ? colors.gray[800] : colors.gray[100],
+                      borderWidth: isDarkMode ? 1 : 0,
+                      borderColor: isDarkMode ? colors.gray[700] : 'transparent',
+                    }
+                  ]}
+                  onPress={handleCreateShort}
+                >
                   <View
                     style={[
                       styles.iconContainer,
@@ -177,8 +204,16 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.option, {backgroundColor: colors.gray[100]}]}
-                  onPress={handleStartStream}>
+                  style={[
+                    styles.option, 
+                    {
+                      backgroundColor: isDarkMode ? colors.gray[800] : colors.gray[100],
+                      borderWidth: isDarkMode ? 1 : 0,
+                      borderColor: isDarkMode ? colors.gray[700] : 'transparent',
+                    }
+                  ]}
+                  onPress={handleStartStream}
+                >
                   <View
                     style={[
                       styles.iconContainer,
@@ -216,7 +251,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
-    shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: -4,
@@ -225,7 +259,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
     minHeight: 200,
-    width: '100%', // Ensure modal view takes full width
+    width: '100%',
   },
   header: {
     flexDirection: 'row',
@@ -236,6 +270,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '700',
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   optionsContainer: {
     marginBottom: Platform.OS === 'ios' ? 20 : 40,

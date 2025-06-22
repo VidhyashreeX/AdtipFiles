@@ -740,8 +740,27 @@ export default class ApiService {
   /**
    * Get ad passbook
    */
-  static async getAdPassbook(userId: string | number): Promise<any> {
-    return this.get(`${ApiEndpoints.HOME_ENDPOINTS.GET_AD_PASSBOOK}/${userId}`);
+  static async getAdPassbook(userId: number, page: number, limit: number): Promise<any> {
+    return this.get(`/passbook/get-passbook-by-userid/${userId}?page=${page}&limit=${limit}`);
+  }
+
+  /**
+   * Get FCM token for a user
+   */
+  static async getFCMToken(userId: string): Promise<{ token: string; platform: 'ANDROID' | 'IOS' } | null> {
+    try {
+      const response = await this.get(`/users/get-fcm-token/${userId}`);
+      if (response && response.data) {
+        return {
+          token: response.data.fcm_token,
+          platform: response.data.platform,
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error(`[ApiService] Error fetching FCM token for user ${userId}:`, error);
+      return null;
+    }
   }
 
   /**

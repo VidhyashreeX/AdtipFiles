@@ -14,12 +14,14 @@ import {
   ActivityIndicator,
   Platform,
   Dimensions,
+  Linking,
+  PermissionsAndroid,
 } from 'react-native';
 import {useNavigation, useRoute, RouteProp} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import {launchCamera} from 'react-native-image-picker';
 import * as Progress from 'react-native-progress';
-import {request, PERMISSIONS, RESULTS} from 'react-native-permissions';
+import {request, check, PERMISSIONS, RESULTS} from 'react-native-permissions'; // Add check import
 
 // Components
 import Header from '../../components/common/Header';
@@ -32,12 +34,10 @@ import {ENDPOINTS} from '../../constants/api';
 
 const RECORDING_MAX_DURATION = 60; // Max 60 seconds for shorts
 
-import { RootStackParamList } from '../../types/navigation';
-
 const TipShortsUploadScreen = () => {
   const {colors, isDarkMode} = useTheme();
   const navigation = useNavigation();
-  const route = useRoute<RouteProp<RootStackParamList, 'TipShortsUploadScreen'>>();
+  const route = useRoute();
 
   // Create dynamic styles based on theme
   const styles = createStyles(colors, isDarkMode);
@@ -60,39 +60,109 @@ const TipShortsUploadScreen = () => {
 
   // Check if there's a video from route params
   useEffect(() => {
-    if (route.params?.videoSource) {
-      setVideoSource(route.params.videoSource);
+    if (route.params && (route.params as any).videoSource) {
+      setVideoSource((route.params as any).videoSource);
     }
   }, [route.params]);
-
-  // Request camera and microphone permissions
+  // Request camera and microphone permissions with proper flow like TipCallScreen
   const requestPermissions = async () => {
     try {
-      const cameraPermission =
-        Platform.OS === 'ios'
-          ? await request(PERMISSIONS.IOS.CAMERA)
-          : await request(PERMISSIONS.ANDROID.CAMERA);
+      if (Platform.OS === 'android') {
+        console.log('[TipShorts] Requesting Android permissions');
+        
+        // Use PermissionsAndroid for better control like TipCallScreen
+        const grants = await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.CAMERA,
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        ]);
+        
+        console.log('[TipShorts] Permissions granted:', grants);
+        
+        if (
+          grants[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED &&
+          grants[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED
+        ) {
+          console.log('[TipShorts] Camera and mic permissions granted');
+          return true;
+        } else {
+          // Check which specific permission was denied
+          const cameraStatus = grants[PermissionsAndroid.PERMISSIONS.CAMERA];
+          const audioStatus = grants[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO];
+          
+          if (cameraStatus === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN || 
+              audioStatus === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+            Alert.alert(
+              'Permissions Required',
+              'Camera and microphone access are required to record videos. Please enable them from app settings.',
+              [
+                {text: 'Cancel', style: 'cancel'},
+                {text: 'Open Settings', onPress: () => Linking.openSettings()},
+              ],
+            );
+          } else {
+            Alert.alert(
+              'Permissions Required',
+              'Camera and microphone access are required to record videos.',
+              [
+                {text: 'Cancel', style: 'cancel'},
+                {text: 'Try Again', onPress: () => requestPermissions()},
+              ],
+            );
+          }
+          return false;
+        }
+      } else {
+        // iOS: Use react-native-permissions with proper flow
+        let cameraPermission = await check(PERMISSIONS.IOS.CAMERA);
+        let microphonePermission = await check(PERMISSIONS.IOS.MICROPHONE);
 
-      const microphonePermission =
-        Platform.OS === 'ios'
-          ? await request(PERMISSIONS.IOS.MICROPHONE)
-          : await request(PERMISSIONS.ANDROID.RECORD_AUDIO);
+        console.log('[TipShorts] iOS Initial permissions:', { camera: cameraPermission, microphone: microphonePermission });
 
-      if (
-        cameraPermission !== RESULTS.GRANTED ||
-        microphonePermission !== RESULTS.GRANTED
-      ) {
-        Alert.alert(
-          'Permission Required',
-          'Camera and microphone permissions are required to record videos.',
-          [{text: 'OK'}],
-        );
-        return false;
+        // Request camera permission if not granted
+        if (cameraPermission !== RESULTS.GRANTED) {
+          console.log('[TipShorts] Requesting iOS camera permission');
+          cameraPermission = await request(PERMISSIONS.IOS.CAMERA);
+          console.log('[TipShorts] iOS camera permission result:', cameraPermission);
+        }
+
+        // Request microphone permission if not granted
+        if (microphonePermission !== RESULTS.GRANTED) {
+          console.log('[TipShorts] Requesting iOS microphone permission');
+          microphonePermission = await request(PERMISSIONS.IOS.MICROPHONE);
+          console.log('[TipShorts] iOS microphone permission result:', microphonePermission);
+        }
+
+        // Handle final status
+        if (cameraPermission === RESULTS.BLOCKED || microphonePermission === RESULTS.BLOCKED) {
+          Alert.alert(
+            'Permissions Blocked',
+            'Camera and microphone access are blocked. Please enable them in Settings.',
+            [
+              {text: 'Cancel', style: 'cancel'},
+              {text: 'Open Settings', onPress: () => Linking.openSettings()},
+            ],
+          );
+          return false;
+        }
+
+        if (cameraPermission !== RESULTS.GRANTED || microphonePermission !== RESULTS.GRANTED) {
+          Alert.alert(
+            'Permissions Required',
+            'Camera and microphone access are required to record videos.',
+            [
+              {text: 'Cancel', style: 'cancel'},
+              {text: 'Try Again', onPress: () => requestPermissions()},
+            ],
+          );
+          return false;
+        }
+
+        console.log('[TipShorts] iOS permissions granted successfully');
+        return true;
       }
-
-      return true;
     } catch (error) {
-      console.error('Error requesting permissions:', error);
+      console.error('[TipShorts] Error requesting permissions:', error);
+      Alert.alert('Permission Error', 'Failed to request permissions. Please try again.');
       return false;
     }
   };

@@ -30,12 +30,14 @@ import { ShortsProvider } from './src/contexts/ShortsContext';
 import { SidebarProvider } from './src/contexts/SidebarContext';
 import { VideoSDKProvider } from './src/contexts/VideoSDKContext';
 import { useTabNavigator, TabNavigatorProvider } from './src/contexts/TabNavigatorContext';
+import { CallProvider, useCall, ActiveCall } from './src/contexts/CallProvider';
 
 // Components & Navigators
 import Sidebar from './src/components/sidebar/Sidebar';
 import MainNavigator from './src/navigation/MainNavigator';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import { navigationRef } from './src/navigation/NavigationService';
+import MeetingScreen from './src/screens/videosdk/MeetingScreen';
 
 // Services
 import FirebaseService from './src/services/FirebaseService';
@@ -48,6 +50,7 @@ import { COLORS } from './src/constants/colors';
 
 // Import required screens
 import UserDetailsScreen from './src/screens/auth/UserDetailsScreen';
+import { appEventEmitter } from './src/events/AppEventEmitter';
 
 const Stack = createNativeStackNavigator();
 
@@ -71,6 +74,7 @@ const AppNavigator = () => {
   const [callServiceReady, setCallServiceReady] = useState(false);
   const insets = useSafeAreaInsets();
   const { isDarkMode, colors } = useTheme();
+  const { activeCall, startCall } = useCall();
 
   // Initialize Firebase Service
   useEffect(() => {
@@ -123,20 +127,11 @@ const AppNavigator = () => {
 
   // Initialize Call Service
   useEffect(() => {
-    const initializeCallService = async () => {
-      try {
-        console.log('[App] Initializing Call service...');
-        const callService = CallService.getInstance();
-        await callService.initialize();
-        setCallServiceReady(true);
-        console.log('[App] Call service initialized successfully');
-      } catch (error) {
-        console.error('[App] Failed to initialize CallService:', error);
-        setCallServiceReady(true); // Allow app to continue
-      }
-    };
-
-    initializeCallService();
+    console.log('[App] Call service is loading...');
+    // Since CallService is a singleton exported as a default instance,
+    // it is initialized at the time of import. There's no separate init method to call.
+    setCallServiceReady(true);
+    console.log('[App] Call service is ready.');
   }, []);
 
   // Setup notifications when Firebase is ready and user is authenticated
@@ -165,6 +160,18 @@ const AppNavigator = () => {
       return unsubscribe;
     }
   }, [firebaseReady]);
+
+  useEffect(() => {
+    const handleStartCall = (callData: ActiveCall) => {
+      startCall(callData);
+    };
+
+    appEventEmitter.on('CallStarted', handleStartCall);
+
+    return () => {
+      appEventEmitter.off('CallStarted', handleStartCall);
+    };
+  }, [startCall]);
 
   const allServicesReady = firebaseReady && videoSDKReady && callServiceReady;
 
@@ -201,6 +208,7 @@ const AppNavigator = () => {
           )}
         </Stack.Navigator>
         <Sidebar />
+        {activeCall && <MeetingScreen />}
       </View>
     </NavigationContainer>
   );
@@ -230,9 +238,13 @@ function App(): React.JSX.Element {
                 <VideoSDKProvider>
                   <ShortsProvider>
                     <SidebarProvider>
-                      <GestureHandlerRootView style={{ flex: 1 }}>
-                        <AppNavigator />
-                      </GestureHandlerRootView>
+                      <CallProvider>
+                        <TabNavigatorProvider>
+                          <GestureHandlerRootView style={{ flex: 1 }}>
+                            <AppNavigator />
+                          </GestureHandlerRootView>
+                        </TabNavigatorProvider>
+                      </CallProvider>
                     </SidebarProvider>
                   </ShortsProvider>
                 </VideoSDKProvider>

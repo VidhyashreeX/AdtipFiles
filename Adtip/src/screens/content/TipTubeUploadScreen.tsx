@@ -14,6 +14,8 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  Linking,
+  PermissionsAndroid,
 } from 'react-native';
 import {useNavigation, useRoute, RouteProp} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -79,30 +81,98 @@ const TipTubeUploadScreen = () => {
       }
     }
   }, [route.params]);
-
-  // Pick video from gallery
+  // Pick video from gallery with proper permission handling like TipCallScreen
   const pickVideo = async () => {
     try {
-      // Check permissions first
-      const permissionStatus =
-        Platform.OS === 'ios'
-          ? await check(PERMISSIONS.IOS.PHOTO_LIBRARY)
-          : await check(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
-
-      if (permissionStatus !== RESULTS.GRANTED) {
-        const requestResult =
-          Platform.OS === 'ios'
-            ? await request(PERMISSIONS.IOS.PHOTO_LIBRARY)
-            : await request(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
-
-        if (requestResult !== RESULTS.GRANTED) {
+      if (Platform.OS === 'android') {
+        console.log('[TipTube] Requesting Android storage permission');
+        
+        // Use PermissionsAndroid for better control like TipCallScreen
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+          {
+            title: 'Storage Permission Required',
+            message: 'This app needs access to your storage to select videos.',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          }
+        );
+        
+        console.log('[TipTube] Storage permission result:', granted);
+        
+        if (granted === PermissionsAndroid.RESULTS.DENIED) {
           Alert.alert(
-            'Permission Denied',
-            'You need to grant permission to access your media library',
+            'Permission Required',
+            'Please allow access to your storage to select videos.',
+            [
+              {text: 'Cancel', style: 'cancel'},
+              {text: 'Try Again', onPress: () => pickVideo()},
+            ],
           );
           return;
         }
+
+        if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+          Alert.alert(
+            'Permission Blocked',
+            'Storage access is blocked. Please enable it in Settings.',
+            [
+              {text: 'Cancel', style: 'cancel'},
+              {text: 'Open Settings', onPress: () => Linking.openSettings()},
+            ],
+          );
+          return;
+        }
+
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          console.log('[TipTube] Storage permission not granted');
+          return;
+        }
+      } else {
+        // iOS: Use react-native-permissions with proper flow
+        let permissionStatus = await check(PERMISSIONS.IOS.PHOTO_LIBRARY);
+        console.log('[TipTube] iOS initial photo library permission:', permissionStatus);
+
+        // Request permission if not granted
+        if (permissionStatus !== RESULTS.GRANTED) {
+          console.log('[TipTube] Requesting iOS photo library permission');
+          permissionStatus = await request(PERMISSIONS.IOS.PHOTO_LIBRARY);
+          console.log('[TipTube] iOS photo library permission result:', permissionStatus);
+        }
+
+        // Handle final permission status
+        if (permissionStatus === RESULTS.DENIED) {
+          Alert.alert(
+            'Permission Required',
+            'Please allow access to your photo library to select videos.',
+            [
+              {text: 'Cancel', style: 'cancel'},
+              {text: 'Try Again', onPress: () => pickVideo()},
+            ],
+          );
+          return;
+        }
+
+        if (permissionStatus === RESULTS.BLOCKED) {
+          Alert.alert(
+            'Permission Blocked',
+            'Photo library access is blocked. Please enable it in Settings.',
+            [
+              {text: 'Cancel', style: 'cancel'},
+              {text: 'Open Settings', onPress: () => Linking.openSettings()},
+            ],
+          );
+          return;
+        }
+
+        if (permissionStatus !== RESULTS.GRANTED) {
+          console.log('[TipTube] Photo library permission not granted');
+          return;
+        }
       }
+
+      console.log('[TipTube] Permissions granted, launching image library');
 
       // Launch media library
       const result = await launchImageLibrary({
@@ -146,7 +216,7 @@ const TipTubeUploadScreen = () => {
         await compressSelectedVideo(video.uri!);
       }
     } catch (err) {
-      console.error('Error picking video:', err);
+      console.error('[TipTube] Error picking video:', err);
       setError('Failed to select video');
     }
   };
@@ -177,30 +247,98 @@ const TipTubeUploadScreen = () => {
       setError('Failed to compress video. Please try again.');
     }
   };
-
-  // Pick thumbnail for video
+  // Pick thumbnail for video with proper permission handling like TipCallScreen
   const pickThumbnail = async () => {
     try {
-      // Check permissions first
-      const permissionStatus =
-        Platform.OS === 'ios'
-          ? await check(PERMISSIONS.IOS.PHOTO_LIBRARY)
-          : await check(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
-
-      if (permissionStatus !== RESULTS.GRANTED) {
-        const requestResult =
-          Platform.OS === 'ios'
-            ? await request(PERMISSIONS.IOS.PHOTO_LIBRARY)
-            : await request(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
-
-        if (requestResult !== RESULTS.GRANTED) {
+      if (Platform.OS === 'android') {
+        console.log('[TipTube] Requesting Android storage permission for thumbnail');
+        
+        // Use PermissionsAndroid for better control like TipCallScreen
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+          {
+            title: 'Storage Permission Required',
+            message: 'This app needs access to your storage to select thumbnails.',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          }
+        );
+        
+        console.log('[TipTube] Thumbnail storage permission result:', granted);
+        
+        if (granted === PermissionsAndroid.RESULTS.DENIED) {
           Alert.alert(
-            'Permission Denied',
-            'You need to grant permission to access your media library',
+            'Permission Required',
+            'Please allow access to your storage to select thumbnails.',
+            [
+              {text: 'Cancel', style: 'cancel'},
+              {text: 'Try Again', onPress: () => pickThumbnail()},
+            ],
           );
           return;
         }
+
+        if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+          Alert.alert(
+            'Permission Blocked',
+            'Storage access is blocked. Please enable it in Settings.',
+            [
+              {text: 'Cancel', style: 'cancel'},
+              {text: 'Open Settings', onPress: () => Linking.openSettings()},
+            ],
+          );
+          return;
+        }
+
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          console.log('[TipTube] Thumbnail storage permission not granted');
+          return;
+        }
+      } else {
+        // iOS: Use react-native-permissions with proper flow
+        let permissionStatus = await check(PERMISSIONS.IOS.PHOTO_LIBRARY);
+        console.log('[TipTube] iOS initial photo library permission for thumbnail:', permissionStatus);
+
+        // Request permission if not granted
+        if (permissionStatus !== RESULTS.GRANTED) {
+          console.log('[TipTube] Requesting iOS photo library permission for thumbnail');
+          permissionStatus = await request(PERMISSIONS.IOS.PHOTO_LIBRARY);
+          console.log('[TipTube] iOS photo library permission result for thumbnail:', permissionStatus);
+        }
+
+        // Handle final permission status
+        if (permissionStatus === RESULTS.DENIED) {
+          Alert.alert(
+            'Permission Required',
+            'Please allow access to your photo library to select thumbnails.',
+            [
+              {text: 'Cancel', style: 'cancel'},
+              {text: 'Try Again', onPress: () => pickThumbnail()},
+            ],
+          );
+          return;
+        }
+
+        if (permissionStatus === RESULTS.BLOCKED) {
+          Alert.alert(
+            'Permission Blocked',
+            'Photo library access is blocked. Please enable it in Settings.',
+            [
+              {text: 'Cancel', style: 'cancel'},
+              {text: 'Open Settings', onPress: () => Linking.openSettings()},
+            ],
+          );
+          return;
+        }
+
+        if (permissionStatus !== RESULTS.GRANTED) {
+          console.log('[TipTube] Photo library permission not granted for thumbnail');
+          return;
+        }
       }
+
+      console.log('[TipTube] Thumbnail permissions granted, launching image library');
 
       // Launch image library for thumbnail
       const result = await launchImageLibrary({

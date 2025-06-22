@@ -268,7 +268,38 @@ export default function TipCallScreen() {
   const { user } = useAuth();
 
   useEffect(() => {
-    CallService.getInstance().resetCallState();
+    CallService.resetCallState();
+  }, []);
+
+  // Request permissions on component mount
+  useEffect(() => {
+    const requestPermissions = async () => {
+      if (Platform.OS === 'android') {
+        try {
+          const grants = await PermissionsAndroid.requestMultiple([
+            PermissionsAndroid.PERMISSIONS.CAMERA,
+            PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+          ]);
+          console.log('[TipCallScreen] Permissions granted:', grants);
+          if (
+            grants[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED &&
+            grants[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED
+          ) {
+            console.log('[TipCallScreen] Camera and mic permissions granted');
+          } else {
+            console.warn('[TipCallScreen] Some essential permissions were not granted');
+            Alert.alert(
+              "Permissions Required",
+              "Camera and microphone access are required to make calls. Please grant them from app settings."
+            );
+          }
+        } catch (err) {
+          console.warn('[TipCallScreen] Permissions request error:', err);
+        }
+      }
+    };
+    requestPermissions();
   }, []);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -518,7 +549,7 @@ export default function TipCallScreen() {
       Alert.alert("Error", "User or recipient information is missing.");
       return;
     }
-    CallService.getInstance().startOutgoingCall(recipient.id.toString(), recipient.name, callType);
+    CallService.startOutgoingCall(recipient.id.toString(), recipient.name, callType);
   }, [user, navigation]);
 
   const handleDndToggle = useCallback(async () => {
