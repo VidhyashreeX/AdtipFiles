@@ -7,6 +7,11 @@ import App from './App';
 import { name as appName } from './app.json';
 import { getApps, initializeApp } from '@react-native-firebase/app';
 import notifee from '@notifee/react-native';
+import { register } from '@videosdk.live/react-native-sdk';
+
+// Register VideoSDK FIRST - Critical for proper initialization
+register();
+console.log('[Index] VideoSDK registered successfully');
 
 // Initialize Firebase if not already initialized (v22.2.1 compatible)
 if (getApps().length === 0) {

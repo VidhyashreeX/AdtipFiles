@@ -97,8 +97,7 @@ const MeetingView: React.FC = () => {
   const [isMuted, setIsMuted] = useState(false);
   
   // Get route params safely
-  const { callType = 'voice', recipientName = 'Participant' } = route.params || {};
-  // Handle ending call - define early to avoid reference issues
+  const { callType = 'voice', recipientName = 'Participant' } = route.params || {};  // Handle ending call - define early to avoid reference issues
   const handleEndCall = useCallback(async () => {
     if (isEndingCall) return;
     
@@ -106,7 +105,13 @@ const MeetingView: React.FC = () => {
     setIsEndingCall(true);
     
     try {
-      // End the call service - this will emit leaveActiveCall event
+      // First leave the VideoSDK meeting if we have the leave function
+      if (leave && hasJoined) {
+        console.log('[MeetingView] Leaving VideoSDK meeting');
+        leave();
+      }
+      
+      // Then end the call service - this will emit leaveActiveCall event
       await CallService.endCall('User ended call');
       
       // Navigate back after a short delay to ensure cleanup
@@ -125,40 +130,64 @@ const MeetingView: React.FC = () => {
         }
       }, 100);
     }
-  }, [isEndingCall, navigation]);
-  // Use VideoSDK meeting hooks with error handling
-  let meetingHooks: any = null;
-  try {
-    meetingHooks = useVideoSDKMeeting({
-      onMeetingJoined: () => {
-        console.log('[MeetingView] Meeting joined successfully');
-        setHasJoined(true);
-        setIsJoining(false);
-        setShowControls(true);
-      },
-      onMeetingLeft: () => {
-        console.log('[MeetingView] Meeting left');
-        setHasJoined(false);
-        setIsJoining(false);
-        // Don't automatically navigate - let handleEndCall do it
-      },
-      onError: (error) => {
-        console.error('[MeetingView] Meeting error:', error);
-        setIsJoining(false);
-        Alert.alert('Call Error', 'There was an issue with the call. Please try again.');
-        handleEndCall();
-      },
-      onParticipantJoined: (participant) => {
-        console.log('[MeetingView] Participant joined:', participant?.displayName);
-      },
-      onParticipantLeft: (participant) => {
-        console.log('[MeetingView] Participant left:', participant?.displayName);
-      },
-    });
-  } catch (error) {
-    console.error('[MeetingView] Error initializing meeting hooks:', error);
-    meetingHooks = {};
-  }
+  }, [isEndingCall, navigation, hasJoined]); // Removed leave dependency
+
+  // Use VideoSDK meeting hooks CORRECTLY according to documentation
+  const meetingHooks = useMeeting({
+    onMeetingJoined: () => {
+      console.log('[MeetingView] ✅ Meeting joined successfully');
+      setHasJoined(true);
+      setIsJoining(false);
+      setShowControls(true);
+      
+      // Update call state in CallProvider to 'connected' - but ONLY if we have a current call
+      try {
+        const whatsAppCallManager = WhatsAppCallManager.getInstance();
+        const currentCall = whatsAppCallManager.getCurrentCall();
+        if (currentCall && currentCall.status !== 'ended') {
+          // Update call status to connected without clearing activeCall
+          console.log('[MeetingView] Updating call status to connected for call:', currentCall.callId);
+          
+          // Use updateCallStatus method instead of direct event emission to ensure consistency
+          whatsAppCallManager.updateCallStatus('connected');
+        } else {
+          console.warn('[MeetingView] No active call found or call already ended, not updating status');
+        }
+      } catch (error) {
+        console.error('[MeetingView] Error updating call state on join:', error);
+      }
+    },
+    onMeetingLeft: () => {
+      console.log('[MeetingView] Meeting left - staying on screen');
+      setHasJoined(false);
+      setIsJoining(false);
+      // Do NOT automatically navigate away - let handleEndCall manage navigation
+      // Do NOT emit callEnded here to avoid clearing activeCall prematurely
+    },
+    onParticipantJoined: (participant: any) => {
+      console.log('[MeetingView] 👤 Participant joined:', participant?.displayName || participant?.id);
+      // Don't do anything special here - just log for debugging
+    },
+    onParticipantLeft: (participant: any) => {
+      console.log('[MeetingView] 👋 Participant left:', participant?.displayName || participant?.id);
+      // Don't end the call when participants leave - stay in the meeting
+      // Only log this event, don't trigger any call ending logic
+    },
+    onError: (error: any) => {
+      console.error('[MeetingView] ❌ Meeting error:', error);
+      setHasJoined(false);
+      setIsJoining(false);
+      
+      // Only show error dialog for critical errors, don't end call automatically
+      const isCriticalError = error?.code && !['CONNECTION_LOST', 'NETWORK_ERROR', 'RECONNECTION'].includes(error.code);
+      
+      if (isCriticalError) {
+        Alert.alert('Call Error', `There was an issue with the call: ${error?.message || 'Unknown error'}. Please try again.`);
+      } else {
+        console.log('[MeetingView] Non-critical error, continuing call:', error?.message);
+      }
+    },
+  });
   
   // Safely destructure meeting hooks with defaults
   const {
@@ -169,28 +198,46 @@ const MeetingView: React.FC = () => {
     toggleMic = null,
     toggleWebcam = null,
   } = meetingHooks || {};
-  // Initialize camera state based on call type
+
+  // Update handleEndCall to use the leave function properly
+  useEffect(() => {
+    // This effect will run when leave function becomes available
+    // No need to do anything specific here, just ensure leave is available for handleEndCall
+  }, [leave]);// Initialize camera state based on call type
   useEffect(() => {
     setCameraEnabled(callType === 'video');
   }, [callType]);
-
-  // Join the meeting ONLY ONCE when the component mounts and we have the join function
+  // Debug: Log when meeting state changes
   useEffect(() => {
-    if (join && !hasJoined && !isJoining && !hasAttemptedJoinRef.current) {
-      hasAttemptedJoinRef.current = true;
-      setIsJoining(true);
-      
-      try {
-        console.log('[MeetingView] Attempting to join meeting (first time only)');
-        join();
-      } catch (error) {
-        console.error('[MeetingView] Error joining meeting:', error);
-        setIsJoining(false);
-        Alert.alert('Call Error', 'Unable to join the call.');
-        handleEndCall();
-      }
+    const routeParams = route.params || {};
+    const meetingId = routeParams.meetingId || activeCall?.meetingId;
+    const token = routeParams.token || activeCall?.token;
+    
+    console.log('[MeetingView] State changed:', {
+      hasJoined,
+      isJoining,
+      participantCount: participants?.size || 0,
+      localParticipant: localParticipant?.id || 'none',
+      meetingId,
+      token: token ? 'present' : 'missing',
+      callType,
+      recipientName
+    });
+    
+    // Extra debug for connection issues
+    if (participants && participants.size > 0) {
+      console.log('[MeetingView] Participants in meeting:', Array.from(participants.keys()));
     }
-  }, [join]); // Only depend on join function availability, not its reference
+  }, [hasJoined, isJoining, participants?.size, localParticipant?.id, route.params, activeCall, callType, recipientName]);
+
+  // With joinWithoutUserInteraction=true, the meeting will auto-join
+  // No manual join() call needed - VideoSDK handles this automatically
+  // The onMeetingJoined callback will be triggered when ready
+  
+  useEffect(() => {
+    console.log('[MeetingView] Meeting auto-join enabled - waiting for onMeetingJoined callback');
+    setIsJoining(true); // Set joining state when component mounts
+  }, []); // Only run once on mount
   // Cleanup effect - leave meeting on unmount
   useEffect(() => {
     return () => {
@@ -586,19 +633,21 @@ const MeetingScreen: React.FC = () => {
           </Text>
         </View>      </SafeAreaView>
     );
-  }
-
-  return (
-    <ErrorBoundary>
-      <MeetingProvider
-        config={{
+  }  return (
+    <ErrorBoundary>      
+      <MeetingProvider        config={{
           meetingId: meetingId || '',
-          name: displayName || 'Unknown User',
-          micEnabled: true,
-          webcamEnabled: callType === 'video',
+          name: `${displayName.replace(/[^a-zA-Z0-9]/g, '_')}_${isInitiator ? 'host' : 'guest'}_${Date.now().toString().slice(-6)}`, // Unique and safe participant name
+          micEnabled: true, // Always enable mic for calls 
+          webcamEnabled: callType === 'video', // Enable camera only for video calls
+          mode: "SEND_AND_RECV", // Ensure proper mode for call participation
+          notification: {
+            title: "Call in Progress",
+            message: `In call with ${recipientName}`
+          }
         }}
         token={token || ''}
-        joinWithoutUserInteraction={false}
+        joinWithoutUserInteraction={true} // Critical: Auto-join the meeting
       >
         <MeetingView />
       </MeetingProvider>
