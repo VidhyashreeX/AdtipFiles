@@ -878,19 +878,37 @@ class WhatsAppCallManager {
       console.error('[WhatsAppCallManager] Failed to send call notification:', error);
     }
   }
-
   /**
    * Send call status update
    */
   private async sendCallStatusUpdate(callData: CallData, status: 'accepted' | 'declined' | 'ended'): Promise<void> {
     try {
-      await ApiService.handleCall({
-        callerId: callData.callerId,
-        receiverId: callData.recipientId,
-        action: status,
-        callType: callData.callType === 'video' ? 'video-call' : 'audio-call',
-        duration: callData.duration ? Math.floor(callData.duration / 1000) : undefined,
-        meetingId: callData.meetingId,
+      // Get caller's FCM token and platform info
+      const callerUserId = await this.getCurrentUserId();
+      const tokenDetails = await ApiService.getBothUsersFCMTokens(callerUserId, callData.recipientId);
+      
+      // Map status to new API format
+      let apiStatus: 'CALL_ENDED' | 'CALL_MISSED' | 'CALL_ACCEPTED';
+      switch (status) {
+        case 'accepted':
+          apiStatus = 'CALL_ACCEPTED';
+          break;
+        case 'declined':
+          apiStatus = 'CALL_MISSED';
+          break;
+        case 'ended':
+        default:
+          apiStatus = 'CALL_ENDED';
+          break;
+      }
+
+      await ApiService.updateCallStatus({
+        callerInfo: {
+          token: tokenDetails.callerToken || '',
+          name: callData.callerName,
+          platform: tokenDetails.callerPlatform,
+        },
+        type: apiStatus,
       });
 
       console.log('[WhatsAppCallManager] Call status update sent:', status);
@@ -1048,14 +1066,15 @@ class WhatsAppCallManager {
 
   /**
    * Initiate call with recipient using proper VideoSDK API
-   */
-  private async initiateCallWithRecipient(callData: CallData): Promise<void> {
+   */  private async initiateCallWithRecipient(callData: CallData): Promise<void> {
     try {
-      // Get recipient's FCM token
-      const recipientFcmToken = await ApiService.getFCMToken(callData.recipientId);
-      const callerFcmToken = await ApiService.getCurrentFCMToken();
+      // Get current user ID for the caller
+      const callerUserId = await this.getCurrentUserId();
+      
+      // Get both users' FCM tokens efficiently in a single API call
+      const tokenDetails = await ApiService.getBothUsersFCMTokens(callerUserId, callData.recipientId);
 
-      if (!recipientFcmToken || !callerFcmToken) {
+      if (!tokenDetails.recipientToken || !tokenDetails.callerToken) {
         console.warn('[WhatsAppCallManager] Missing FCM tokens, falling back to basic notification');
         await this.sendCallNotification(callData);
         return;
@@ -1064,12 +1083,12 @@ class WhatsAppCallManager {
       // Use the initiate call API for proper VideoSDK integration
       await ApiService.initiateCall({
         calleeInfo: {
-          platform: recipientFcmToken.platform || 'ANDROID',
-          token: recipientFcmToken.token,
+          platform: tokenDetails.recipientPlatform,
+          token: tokenDetails.recipientToken,
         },
         callerInfo: {
           name: callData.callerName,
-          token: callerFcmToken,
+          token: tokenDetails.callerToken,
         },
         videoSDKInfo: {
           meetingId: callData.meetingId,

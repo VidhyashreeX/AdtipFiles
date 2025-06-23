@@ -201,7 +201,7 @@ const MeetingView: React.FC = () => {
         }
       }
     };
-  }, [leave, hasJoined]);  // Listen for leave call events from CallService
+  }, [leave, hasJoined]);  // Listen for leave call events from CallService and notification end events
   useEffect(() => {
     const handleLeaveCall = () => {
       console.log('[MeetingView] Received leaveActiveCall event');
@@ -215,12 +215,26 @@ const MeetingView: React.FC = () => {
       }
     };
 
+    const handleCallEnded = (callData: any) => {
+      console.log('[MeetingView] Received callEnded event from notification:', callData);
+      if (leave && hasJoined && !isEndingCall) {
+        try {
+          console.log('[MeetingView] Ending call due to notification action');
+          handleEndCall();
+        } catch (error) {
+          console.error('[MeetingView] Error ending call via notification event:', error);
+        }
+      }
+    };
+
     appEventEmitter.on('leaveActiveCall', handleLeaveCall);
+    appEventEmitter.on('callEnded', handleCallEnded);
     
     return () => {
       appEventEmitter.off('leaveActiveCall', handleLeaveCall);
+      appEventEmitter.off('callEnded', handleCallEnded);
     };
-  }, [leave, hasJoined, isEndingCall]);
+  }, [leave, hasJoined, isEndingCall, handleEndCall]);
 
   // Show ongoing call notification when backgrounded
   useEffect(() => {

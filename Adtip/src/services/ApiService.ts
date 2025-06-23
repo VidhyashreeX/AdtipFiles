@@ -153,6 +153,21 @@ export interface InitiateCallResponse {
   };
 }
 
+export interface UpdateCallStatusRequest {
+  callerInfo: {
+    token: string;
+    name: string;
+    platform: 'ANDROID' | 'IOS';
+  };
+  type: 'CALL_ENDED' | 'CALL_MISSED' | 'CALL_ACCEPTED';
+}
+
+export interface UpdateCallStatusResponse {
+  success: boolean;
+  message: string;
+  data?: any;
+}
+
 // Define public endpoints that don't require authentication
 const PUBLIC_ENDPOINTS = [
   ApiEndpoints.AUTH_ENDPOINTS.OTP_LOGIN,
@@ -695,9 +710,8 @@ export default class ApiService {
       throw this.handleError(error);
     }
   }
-
   /**
-   * Handle call status updates
+   * Handle call status updates (DEPRECATED - use updateCallStatus instead)
    */
   static async handleCall(data: HandleCallRequest): Promise<HandleCallResponse> {
     console.log('[ApiService] Handling call status:', data);
@@ -791,19 +805,31 @@ export default class ApiService {
   static async getAdPassbook(userId: number, page: number, limit: number): Promise<any> {
     return this.get(`/passbook/get-passbook-by-userid/${userId}?page=${page}&limit=${limit}`);
   }
-
   /**
-   * Get FCM token for a user
+   * Get FCM token for a user (Updated to use fcm-tokens-of-both-users API)
+   * @param userId - The user ID to get FCM token for
+   * @param callerUserId - Optional caller user ID for batch request (for efficiency)
    */
-  static async getFCMToken(userId: string): Promise<{ token: string; platform: 'ANDROID' | 'IOS' } | null> {
+  static async getFCMToken(userId: string, callerUserId?: string): Promise<{ token: string; platform: 'ANDROID' | 'IOS' } | null> {
     try {
-      const response = await this.get(`/users/get-fcm-token/${userId}`);
-      if (response && response.data) {
-        return {
-          token: response.data.fcm_token,
-          platform: response.data.platform,
-        };
+      // Use the new batch API to get FCM tokens
+      const userIds = callerUserId ? [parseInt(callerUserId), parseInt(userId)] : [parseInt(userId)];
+      
+      const response = await this.getFcmTokensForUsers({ userIds });
+      
+      if (response && response.results) {
+        // Find the token for the requested userId
+        const targetUser = response.results.find(result => result.userId === parseInt(userId));
+        
+        if (targetUser && targetUser.status && targetUser.fcm_token) {
+          return {
+            token: targetUser.fcm_token,
+            platform: 'ANDROID', // Default to Android as per your requirement
+          };
+        }
       }
+      
+      console.warn(`[ApiService] No FCM token found for user ${userId}`);
       return null;
     } catch (error) {
       console.error(`[ApiService] Error fetching FCM token for user ${userId}:`, error);
@@ -971,6 +997,57 @@ export default class ApiService {
     } catch (error) {
       console.error('[API] Error getting FCM tokens:', error);
       throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Get FCM tokens for both caller and recipient users efficiently
+   * @param callerUserId - Caller's user ID
+   * @param recipientUserId - Recipient's user ID
+   * @returns Object with both caller and recipient FCM token details
+   */
+  static async getBothUsersFCMTokens(callerUserId: string, recipientUserId: string): Promise<{
+    callerToken: string | null;
+    recipientToken: string | null;
+    callerPlatform: 'ANDROID' | 'IOS';
+    recipientPlatform: 'ANDROID' | 'IOS';
+  }> {
+    try {
+      const userIds = [parseInt(callerUserId), parseInt(recipientUserId)];
+      const response = await this.getFcmTokensForUsers({ userIds });
+      
+      let callerToken = null;
+      let recipientToken = null;
+      let callerPlatform: 'ANDROID' | 'IOS' = 'ANDROID';
+      let recipientPlatform: 'ANDROID' | 'IOS' = 'ANDROID';
+      
+      if (response && response.results) {
+        const callerResult = response.results.find(result => result.userId === parseInt(callerUserId));
+        const recipientResult = response.results.find(result => result.userId === parseInt(recipientUserId));
+        
+        if (callerResult && callerResult.status && callerResult.fcm_token) {
+          callerToken = callerResult.fcm_token;
+        }
+        
+        if (recipientResult && recipientResult.status && recipientResult.fcm_token) {
+          recipientToken = recipientResult.fcm_token;
+        }
+      }
+      
+      return {
+        callerToken,
+        recipientToken,
+        callerPlatform,
+        recipientPlatform,
+      };
+    } catch (error) {
+      console.error(`[ApiService] Error fetching FCM tokens for users ${callerUserId} and ${recipientUserId}:`, error);
+      return {
+        callerToken: null,
+        recipientToken: null,
+        callerPlatform: 'ANDROID',
+        recipientPlatform: 'ANDROID',
+      };
     }
   }
 
@@ -1157,27 +1234,73 @@ export default class ApiService {
       console.error('[ApiService] Error creating VideoSDK meeting:', error);
       throw this.handleError(error);
     }
-  }
-
-  /**
-   * Initiate Call (Cloud Function)
+  }  /**
+   * Initiate Call (Cloud Function) - Direct FCM Server call
    */
   static async initiateCall(payload: {
     calleeInfo: { platform: string; token: string };
     callerInfo: { name: string; token: string };
     videoSDKInfo: { meetingId: string; token: string };
   }): Promise<any> {
-    return this.post(FCM_SERVER_URL, payload);
+    try {
+      console.log('🚀 [ApiService] Making direct call to FCM Server for initiate-call:', FCM_SERVER_URL);
+      
+      // Get auth token for authenticated requests
+      const authToken = await AsyncStorage.getItem('accessToken') || await AsyncStorage.getItem('@auth_token');
+      
+      const headers: any = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      };
+      
+      // Add auth token if available
+      if (authToken) {
+        headers.Authorization = `Bearer ${authToken}`;
+      }
+      
+      const response = await axios.post(`${FCM_SERVER_URL}/api/call/initiate-call`, payload, {
+        headers,
+        timeout: 30000,
+      });
+      
+      console.log('✅ [ApiService] initiate-call response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ [ApiService] initiate-call error:', error);
+      throw this.handleError(error);
+    }
   }
-
   /**
-   * Update Call Status (Cloud Function)
+   * Update Call Status (Cloud Function) - Direct FCM Server call with new format
    */
-  static async updateCallStatus(payload: {
-    callerInfo: { token: string; name: string; platform: string };
-    type: string;
-  }): Promise<any> {
-    return this.post(FCM_SERVER_URL, payload);
+  static async updateCallStatus(payload: UpdateCallStatusRequest): Promise<UpdateCallStatusResponse> {
+    try {
+      console.log('🚀 [ApiService] Making direct call to FCM Server for update-call:', FCM_SERVER_URL);
+      
+      // Get auth token for authenticated requests
+      const authToken = await AsyncStorage.getItem('accessToken') || await AsyncStorage.getItem('@auth_token');
+      
+      const headers: any = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      };
+      
+      // Add auth token if available
+      if (authToken) {
+        headers.Authorization = `Bearer ${authToken}`;
+      }
+      
+      const response = await axios.post(`${FCM_SERVER_URL}/api/call/update-call`, payload, {
+        headers,
+        timeout: 30000,
+      });
+      
+      console.log('✅ [ApiService] update-call response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ [ApiService] update-call error:', error);
+      throw this.handleError(error);
+    }
   }
 
   // ===== MISSING GUEST APIS (NO LOGIN REQUIRED) =====

@@ -34,38 +34,75 @@ const CallContext = createContext<CallContextType | undefined>(undefined);
 
 export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
-  const [callDuration, setCallDuration] = useState(0);
-  useEffect(() => {
-    const handleCallStateChange = (data: { isInCall: boolean; activeCall?: ActiveCall }) => {
+  const [callDuration, setCallDuration] = useState(0);  useEffect(() => {
+    const handleCallStateChange = (data: any) => {
       console.log('[CallProvider] Received callStateChanged event:', data);
       
-      if (data.isInCall && (data.activeCall || CallService.activeCall)) {
-        const callData = data.activeCall || CallService.activeCall;
-        console.log('[CallProvider] Setting active call from event data:', callData);
-        
-        if (callData) {
-          setActiveCall({
-            meetingId: callData.meetingId,
-            token: callData.token,
-            callType: callData.callType,
-            isInitiator: callData.isInitiator,
-            recipientName: callData.recipientName,
-            callerName: callData.callerName,
-            callId: callData.callId,
-            callerId: callData.callerId,
-            recipientId: callData.recipientId,
-            status: callData.status,
-            timestamp: callData.timestamp,
-          });
+      // Handle different event structures:
+      // 1. From CallService: { isInCall: boolean, activeCall: ActiveCall }
+      // 2. From WhatsAppCallManager: CallData (the call object itself)
+      
+      if (typeof data === 'object' && data !== null) {
+        // Check if it's from CallService (has isInCall property)
+        if ('isInCall' in data) {
+          console.log('[CallProvider] Processing CallService event');
+          if (data.isInCall && (data.activeCall || CallService.activeCall)) {
+            const callData = data.activeCall || CallService.activeCall;
+            console.log('[CallProvider] Setting active call from CallService:', callData);
+            
+            if (callData) {
+              setActiveCall({
+                meetingId: callData.meetingId,
+                token: callData.token,
+                callType: callData.callType,
+                isInitiator: callData.isInitiator,
+                recipientName: callData.recipientName,
+                callerName: callData.callerName,
+                callId: callData.callId,
+                callerId: callData.callerId,
+                recipientId: callData.recipientId,
+                status: callData.status,
+                timestamp: callData.timestamp,
+              });
+            }
+          } else {
+            console.log('[CallProvider] Clearing active call from CallService event');
+            setActiveCall(null);
+          }
+        } 
+        // Check if it's from WhatsAppCallManager (has callId, meetingId, etc.)
+        else if ('callId' in data && 'meetingId' in data && data.status !== 'ended' && data.status !== 'declined') {
+          console.log('[CallProvider] Processing WhatsAppCallManager event - status:', data.status);
+          // Only set active call for non-ended states
+          if (data.status === 'calling' || data.status === 'ringing' || data.status === 'connecting' || data.status === 'connected') {
+            console.log('[CallProvider] Setting active call from WhatsAppCallManager:', data);
+            setActiveCall({
+              meetingId: data.meetingId,
+              token: data.token,
+              callType: data.callType,
+              isInitiator: data.isInitiator,
+              recipientName: data.recipientName,
+              callerName: data.callerName,
+              callId: data.callId,
+              callerId: data.callerId,
+              recipientId: data.recipientId,
+              status: data.status,
+              timestamp: data.startTime,
+            });
+          }
         }
-      } else {
-        console.log('[CallProvider] Clearing active call');
-        setActiveCall(null);
       }
     };
 
-    // FIXED: Use consistent event name (camelCase)
+    const handleCallEnded = (data: any) => {
+      console.log('[CallProvider] Received callEnded event:', data);
+      // Always clear active call when call ends
+      setActiveCall(null);
+    };
+
+    // Listen to both callStateChanged and callEnded events
     appEventEmitter.on('callStateChanged', handleCallStateChange);
+    appEventEmitter.on('callEnded', handleCallEnded);
     
     // Check on mount if there's already an active call
     if (CallService.activeCall) {
@@ -75,6 +112,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     return () => {
       appEventEmitter.off('callStateChanged', handleCallStateChange);
+      appEventEmitter.off('callEnded', handleCallEnded);
     };
   }, []);
 

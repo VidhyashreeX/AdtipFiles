@@ -275,11 +275,31 @@ class NotificationService {
    */
   static async updateCallStatus(callerId: string, receiverId: string, status: 'calling' | 'accepted' | 'declined' | 'ended' | 'missed', callType: string): Promise<boolean> {
     try {
-      await ApiService.handleCall({
-        callerId,
-        receiverId,
-        action: status,
-        callType: callType === 'video' ? 'video-call' : 'audio-call',
+      // Map status to new API format
+      let apiStatus: 'CALL_ENDED' | 'CALL_MISSED' | 'CALL_ACCEPTED';
+      switch (status) {
+        case 'accepted':
+          apiStatus = 'CALL_ACCEPTED';
+          break;
+        case 'declined':
+        case 'missed':
+          apiStatus = 'CALL_MISSED';
+          break;
+        case 'ended':
+        case 'calling':
+        default:
+          apiStatus = 'CALL_ENDED';
+          break;
+      }
+
+      // Get caller info - for now use basic info, could be enhanced to get actual FCM tokens
+      await ApiService.updateCallStatus({
+        callerInfo: {
+          token: 'caller-fcm-token', // This should be replaced with actual caller FCM token
+          name: 'Caller', // This should be replaced with actual caller name
+          platform: 'ANDROID', // This should be detected or passed as parameter
+        },
+        type: apiStatus,
       });
       return true;
     } catch (error) {

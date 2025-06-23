@@ -257,7 +257,7 @@ class CallService {
 
   /**
    * Gets the platform of the recipient (Android/iOS)
-   * Uses tokens from getBothUserTokens instead of separate API call
+   * Uses the new getBothUsersFCMTokens API instead of separate API call
    */
   private async getRecipientPlatform(recipientId: string | number, tokens?: { recipientToken: string }): Promise<'ANDROID' | 'IOS'> {
     // If we already have tokens from a previous call, no need to make another API call
@@ -267,9 +267,13 @@ class CallService {
     }
     
     try {
-      // Fallback to direct API call only if we don't have tokens yet
-      const response = await ApiService.getFCMToken(recipientId.toString());
-      return response?.platform || 'ANDROID';
+      // Get current user ID for efficient batch call
+      const currentUser = await this.getCurrentUser();
+      const callerUserId = currentUser?.id?.toString() || '0';
+      
+      // Use the new efficient batch API
+      const tokenDetails = await ApiService.getBothUsersFCMTokens(callerUserId, recipientId.toString());
+      return tokenDetails.recipientPlatform;
     } catch (error) {
       console.error(`[CallService] Error getting recipient platform: ${error}`);
       return 'ANDROID'; // Default to Android if unavailable
@@ -392,6 +396,12 @@ class CallService {
   public async endCall(reason?: string) {
     try {
       if (!this.activeCall) return;
+      
+      console.log('[CallService] Ending call:', reason);
+
+      // End call through WhatsApp Call Manager to synchronize all states
+      await this.whatsAppCallManager.endCall();
+
       // Update call status on backend
       await ApiService.updateCallStatus({
         callerInfo: {
@@ -401,9 +411,14 @@ class CallService {
         },
         type: 'ended',
       });
-      // TODO: Leave/deactivate VideoSDK meeting if needed
+
+      // Emit event for any listening components
+      appEventEmitter.emit('leaveActiveCall');
+
       // Reset local state
       await this.resetCallState();
+      
+      console.log('[CallService] Call ended successfully');
     } catch (error) {
       console.error('[CallService] endCall error:', error);
       await this.resetCallState();

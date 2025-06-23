@@ -48,12 +48,13 @@ import { navigationRef, navigateWithRetry, getCurrentRoute, isNavigationReady } 
 import FirebaseService from './src/services/FirebaseService';
 import VideoSDKService from './src/services/videosdk/VideoSDKService';
 import CallService from './src/services/CallService';
+import WhatsAppCallManager from './src/services/calling/WhatsAppCallManager';
+import CallSyncService from './src/services/calling/CallSyncService';
 
 import ApiService from './src/services/ApiService';
 import OngoingCallModule from './src/services/OngoingCallModule';
 import NotificationService from './src/services/NotificationService';  // CRITICAL FIX: Import NotificationService
 import IncomingCallService from './src/services/IncomingCallService';  // CRITICAL FIX: Import IncomingCallService
-import WhatsAppCallManager from './src/services/calling/WhatsAppCallManager';  // NEW: WhatsApp-like calling
 import CallNotificationHandler from './src/services/calling/CallNotificationHandler';  // NEW: FCM call handler
 
 // Constants
@@ -429,6 +430,15 @@ const AppNavigator = () => {
         
         if (success && notificationSuccess) {
           console.log('[App] ✅ WhatsApp Call Manager and Notification Handler initialized successfully');
+          
+          // Initialize CallSyncService after WhatsApp Call Manager is ready
+          try {
+            const callSyncService = CallSyncService.getInstance();
+            await callSyncService.initialize();
+            console.log('[App] ✅ Call Sync Service initialized successfully');
+          } catch (syncError) {
+            console.error('[App] Call Sync Service initialization failed:', syncError);
+          }
         } else {
           console.warn('[App] ❌ WhatsApp Call system initialization failed, continuing without enhanced calls');
           setWhatsAppCallReady(true); // Allow app to continue
