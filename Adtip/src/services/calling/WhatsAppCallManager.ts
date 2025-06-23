@@ -298,10 +298,9 @@ class WhatsAppCallManager {
   private async handleNotificationEvent(type: EventType, detail: any): Promise<void> {
     try {
       const { notification, pressAction } = detail;
-
-      if (type === EventType.ACTION_PRESS && pressAction) {
-        const callId = notification?.data?.callId;
-        
+      const callId = notification?.data?.callId;
+      // Handle all press actions and taps
+      if ((type === EventType.ACTION_PRESS || type === EventType.PRESS) && pressAction) {
         switch (pressAction.id) {
           case 'accept_call':
             await this.acceptCall(callId);
@@ -313,7 +312,9 @@ class WhatsAppCallManager {
             await this.endCall(callId);
             break;
           case 'open_call':
-            await this.openCallScreen(callId);
+            if (callId && this.currentCall) {
+              this.navigateToMeetingScreen(this.currentCall);
+            }
             break;
           case 'mute_toggle':
             await this.toggleMute();
@@ -323,15 +324,6 @@ class WhatsAppCallManager {
             break;
         }
       }
-
-      if (type === EventType.PRESS) {
-        // Handle notification tap
-        const callId = notification?.data?.callId;
-        if (callId && this.currentCall) {
-          await this.openCallScreen(callId);
-        }
-      }
-
     } catch (error) {
       console.error('[WhatsAppCallManager] Error handling notification event:', error);
     }
@@ -658,10 +650,16 @@ class WhatsAppCallManager {
 
   /**
    * Show outgoing call notification
+   * This notification is shown while the call is connecting/ringing.
+   * It must be cancelled as soon as the call is connected (ongoing) or ended.
    */
   private async showOutgoingCallNotification(callData: CallData): Promise<void> {
     try {
+      // Always cancel any previous outgoing call notification to avoid duplicates
       const notificationId = `outgoing_call_${callData.callId}`;
+      await notifee.cancelNotification(notificationId);
+
+      this.ongoingCallNotificationId = notificationId; // Track for cleanup
 
       await notifee.displayNotification({
         id: notificationId,
@@ -676,8 +674,11 @@ class WhatsAppCallManager {
           channelId: CHANNEL_IDS.ONGOING_CALLS,
           importance: AndroidImportance.LOW,
           visibility: AndroidVisibility.PUBLIC,
-          category: AndroidCategory.CALL,          ongoing: true,
-          autoCancel: false,          color: callData.callType === 'video' ? '#007AFF' : '#34C759',actions: [
+          category: AndroidCategory.CALL,
+          ongoing: true,
+          autoCancel: false,
+          color: callData.callType === 'video' ? '#007AFF' : '#34C759',
+          actions: [
             {
               title: 'End Call',
               pressAction: { id: 'end_call' },
@@ -694,12 +695,22 @@ class WhatsAppCallManager {
   }
 
   /**
-   * Show ongoing call notification (when app is in background)
+   * Show ongoing call notification (when call is connected)
+   * Cancels the outgoing notification before showing the ongoing one.
    */
   private async showOngoingCallNotification(): Promise<void> {
     try {
       if (!this.currentCall || this.currentCall.status !== 'connected') {
         return;
+      }
+
+      // Cancel outgoing notification if it exists
+      const outgoingId = `outgoing_call_${this.currentCall.callId}`;
+      await notifee.cancelNotification(outgoingId);
+
+      // Always cancel any previous ongoing call notification to avoid duplicates
+      if (this.ongoingCallNotificationId && this.ongoingCallNotificationId !== outgoingId) {
+        await notifee.cancelNotification(this.ongoingCallNotificationId);
       }
 
       const notificationId = `ongoing_call_${this.currentCall.callId}`;
@@ -746,6 +757,7 @@ class WhatsAppCallManager {
               pressAction: { id: 'open_call' },
             }
           ],
+          pressAction: { id: 'open_call' }, // Ensure tap always triggers open_call
           style: {
             type: AndroidStyle.BIGTEXT,
             text: `Tap to return to the call with ${participantName}`,
@@ -817,20 +829,34 @@ class WhatsAppCallManager {
   }
 
   /**
-   * Hide ongoing call notification
+   * Hide ongoing call notification and stop foreground service
+   * Also cancels outgoing notification for safety.
    */
   private async hideOngoingCallNotification(): Promise<void> {
     try {
-      if (this.ongoingCallNotificationId) {
-        await notifee.cancelNotification(this.ongoingCallNotificationId);
-        this.ongoingCallNotificationId = null;
-        console.log('[WhatsAppCallManager] Ongoing call notification hidden');
+      // Cancel both outgoing and ongoing notifications
+      if (this.currentCall) {
+        const outgoingId = `outgoing_call_${this.currentCall.callId}`;
+        await notifee.cancelNotification(outgoingId);
+        const ongoingId = `ongoing_call_${this.currentCall.callId}`;
+        await notifee.cancelNotification(ongoingId);
+      }
+      this.ongoingCallNotificationId = null;
+      // Always stop foreground service
+      try {
+        await notifee.stopForegroundService();
+      } catch (e) {
+        console.warn('[WhatsAppCallManager] No foreground service to stop or error stopping:', e);
       }
     } catch (error) {
       console.error('[WhatsAppCallManager] Failed to hide ongoing call notification:', error);
     }
-  }  /**
-   * Navigate to meeting screen
+  }
+
+  /**
+   * Navigate to meeting screen (used for notification tap/deep link)
+   * This method is called from notification pressAction and ensures navigation
+   * works from foreground, background, or killed state (deep linking handled in App.tsx)
    */
   private navigateToMeetingScreen(callData: CallData): void {
     try {
@@ -844,9 +870,8 @@ class WhatsAppCallManager {
       };
 
       console.log('[WhatsAppCallManager] Navigating to meeting screen:', params);
-      
-      // Navigate to Meeting screen directly - the back handler in MeetingScreen
-      // will handle backgrounding instead of going back to previous screens
+      // Uses navigation service to route to MeetingScreen
+      // If app is killed, deep link handler in App.tsx will handle navigation
       navigate('Main', {
         screen: 'Meeting',
         params
@@ -858,7 +883,8 @@ class WhatsAppCallManager {
   }
 
   /**
-   * Open call screen from notification
+   * Open call screen from notification (legacy, now handled by navigateToMeetingScreen)
+   * Kept for backward compatibility, but all navigation should use navigateToMeetingScreen
    */
   private async openCallScreen(callId: string): Promise<void> {
     try {

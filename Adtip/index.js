@@ -22,6 +22,8 @@ if (getApps().length === 0) {
   console.log('[Index] Firebase app already initialized');
 }
 
+// Register Notifee foreground service ONCE as early as possible (per Notifee docs)
+// This promise stays open for the duration of the call, and is resolved when stopForegroundService is called.
 notifee.registerForegroundService(notification => {
   console.log('[Index] Foreground service called for call events');
   return new Promise(() => {
