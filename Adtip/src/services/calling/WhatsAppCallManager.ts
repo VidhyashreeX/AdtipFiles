@@ -138,7 +138,6 @@ class WhatsAppCallManager {
       return false;
     }
   }
-
   /**
    * Request necessary permissions
    */
@@ -147,6 +146,25 @@ class WhatsAppCallManager {
       // Request notification permissions
       const notificationSettings = await notifee.requestPermission();
       console.log('[WhatsAppCallManager] Notification permission:', notificationSettings.authorizationStatus);
+
+      // Request foreground service permission for Android 14+
+      if (Platform.OS === 'android' && Platform.Version >= 34) {
+        try {
+          const foregroundServicePermission = await PermissionsAndroid.request(
+            'android.permission.FOREGROUND_SERVICE_PHONE_CALL' as any,
+            {
+              title: 'Phone Call Service Permission',
+              message: 'Adtip needs permission to run calls in the background for better call experience.',
+              buttonNegative: 'Cancel',
+              buttonPositive: 'OK',
+            }
+          );
+          
+          console.log('[WhatsAppCallManager] Foreground service permission:', foregroundServicePermission);
+        } catch (error) {
+          console.warn('[WhatsAppCallManager] Failed to request foreground service permission:', error);
+        }
+      }
 
       // Request audio/video permissions for Android
       if (Platform.OS === 'android') {
@@ -359,9 +377,7 @@ class WhatsAppCallManager {
 
       if (!token || !meetingId) {
         throw new Error('Failed to create VideoSDK meeting');
-      }
-
-      // Create call data
+      }      // Create call data
       const callData: CallData = {
         callId: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         meetingId,
@@ -379,8 +395,8 @@ class WhatsAppCallManager {
       this.currentCall = callData;
       await this.saveCallState();
 
-      // Send call notification to recipient
-      await this.sendCallNotification(callData);
+      // Send call notification to recipient using proper initiate call API
+      await this.initiateCallWithRecipient(callData);
 
       // Show outgoing call UI
       await this.showOutgoingCallNotification(callData);
@@ -802,9 +818,7 @@ class WhatsAppCallManager {
     } catch (error) {
       console.error('[WhatsAppCallManager] Failed to hide ongoing call notification:', error);
     }
-  }
-
-  /**
+  }  /**
    * Navigate to meeting screen
    */
   private navigateToMeetingScreen(callData: CallData): void {
@@ -820,6 +834,8 @@ class WhatsAppCallManager {
 
       console.log('[WhatsAppCallManager] Navigating to meeting screen:', params);
       
+      // Navigate to Meeting screen directly - the back handler in MeetingScreen
+      // will handle backgrounding instead of going back to previous screens
       navigate('Main', {
         screen: 'Meeting',
         params
@@ -1027,6 +1043,45 @@ class WhatsAppCallManager {
       console.log('[WhatsAppCallManager] Cleanup completed');
     } catch (error) {
       console.error('[WhatsAppCallManager] Cleanup failed:', error);
+    }
+  }
+
+  /**
+   * Initiate call with recipient using proper VideoSDK API
+   */
+  private async initiateCallWithRecipient(callData: CallData): Promise<void> {
+    try {
+      // Get recipient's FCM token
+      const recipientFcmToken = await ApiService.getFCMToken(callData.recipientId);
+      const callerFcmToken = await ApiService.getCurrentFCMToken();
+
+      if (!recipientFcmToken || !callerFcmToken) {
+        console.warn('[WhatsAppCallManager] Missing FCM tokens, falling back to basic notification');
+        await this.sendCallNotification(callData);
+        return;
+      }
+
+      // Use the initiate call API for proper VideoSDK integration
+      await ApiService.initiateCall({
+        calleeInfo: {
+          platform: recipientFcmToken.platform || 'ANDROID',
+          token: recipientFcmToken.token,
+        },
+        callerInfo: {
+          name: callData.callerName,
+          token: callerFcmToken,
+        },
+        videoSDKInfo: {
+          meetingId: callData.meetingId,
+          token: callData.token,
+        },
+      });
+
+      console.log('[WhatsAppCallManager] Call initiated with VideoSDK API');
+    } catch (error) {
+      console.error('[WhatsAppCallManager] Failed to initiate call with VideoSDK API:', error);
+      // Fallback to basic notification
+      await this.sendCallNotification(callData);
     }
   }
 }

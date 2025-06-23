@@ -1145,7 +1145,6 @@ export default class ApiService {
       throw this.handleError(error);
     }
   }
-
   /**
    * Create Meeting Room
    */

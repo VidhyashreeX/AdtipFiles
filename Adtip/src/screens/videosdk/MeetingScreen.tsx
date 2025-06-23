@@ -11,12 +11,15 @@ import {
   ActivityIndicator,
   BackHandler,
   AppState,
+  NativeModules,
+  Platform,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MeetingProvider, useMeeting } from '@videosdk.live/react-native-sdk';
 import { useCall } from '../../contexts/CallProvider';
 import { useTheme } from '../../contexts/ThemeContext';
+import WhatsAppCallManager from '../../services/calling/WhatsAppCallManager';
 import CallService from '../../services/CallService';
 import CallErrorBoundary from '../../components/common/CallErrorBoundary';
 import { ChevronLeft, MoreVertical } from 'lucide-react-native';
@@ -241,23 +244,50 @@ const MeetingView: React.FC = () => {
     };
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();
-  }, [recipientName]);
-
-  // Custom back button: go to TipCallScreen, keep call running
+  }, [recipientName]);  // Custom back button: minimize to background, show persistent notification
   useEffect(() => {
     const onBackPress = () => {
       try {
-        // Type-safe navigation to TipCallScreen with required param
-        navigation.navigate('TipCall', { initialCallNotificationData: undefined });
-        return true; // Prevent default
+        // Don't navigate back to avoid re-rendering TipCallScreen
+        // Instead, minimize to background and show persistent notification
+        console.log('[MeetingView] Back pressed - minimizing to background');
+        
+        // Use WhatsApp Call Manager to show ongoing notification
+        const whatsAppCallManager = WhatsAppCallManager.getInstance();
+        const currentCall = whatsAppCallManager.getCurrentCall();
+        
+        if (currentCall && currentCall.status === 'connected') {
+          // Show persistent ongoing call notification
+          console.log('[MeetingView] Showing persistent notification for active call');
+          
+          // This will trigger the app state change handler in WhatsAppCallManager
+          // which will automatically show the ongoing notification
+        }
+        
+        // Try to minimize the app to background using native module
+        try {
+          if (Platform.OS === 'android') {
+            // Move app to background using Android native method
+            NativeModules.DevSettings?.moveToBackground?.();
+          } else {
+            // For iOS, we can't minimize programmatically, but the notification is enough
+            console.log('[MeetingView] iOS - showing ongoing notification only');
+          }
+        } catch (bgError) {
+          console.log('[MeetingView] Could not minimize to background:', bgError);
+          // If we can't minimize, just prevent the default back action
+          // The ongoing notification will allow user to return to the call
+        }
+        
+        return true; // Prevent default back navigation
       } catch (error) {
-        console.error('[MeetingView] Error navigating to TipCallScreen:', error);
+        console.error('[MeetingView] Error handling back press:', error);
         return false;
       }
     };
     const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => subscription.remove();
-  }, [navigation]);
+  }, [recipientName]);
 
   // Handle mic toggle
   const handleToggleMic = useCallback(() => {
@@ -325,17 +355,8 @@ const MeetingView: React.FC = () => {
       </SafeAreaView>
     );
   }
-
-  if (isJoining && !hasJoined) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: '#1A1A1A' }]}>
-        <View style={styles.endingContainer}>
-          <ActivityIndicator size="large" color="#00D4AA" />
-          <Text style={styles.endingText}>Joining call...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  // Removed the "joining call" loading screen to enable instant navigation
+  // The connecting state is now handled within the main UI with status indicators
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: '#1A1A1A' }]}>
@@ -348,11 +369,20 @@ const MeetingView: React.FC = () => {
         </TouchableOpacity>
         
         <View style={styles.headerInfo}>
-          <Text style={styles.participantName}>{recipientName}</Text>
-          <View style={styles.statusRow}>
+          <Text style={styles.participantName}>{recipientName}</Text>          <View style={styles.statusRow}>
+            {/* Animated status dot */}
             <View style={[styles.statusDot, { 
               backgroundColor: callStatus === 'connected' ? '#00D4AA' : '#FFB800' 
-            }]} />            <Text style={styles.callStatus}>
+            }]} />
+            {/* Show spinner in header for connecting states */}
+            {(isJoining || callStatus === 'connecting' || callStatus === 'initializing') && (
+              <ActivityIndicator 
+                size="small" 
+                color="#FFB800" 
+                style={{ marginLeft: 8, marginRight: 4 }} 
+              />
+            )}
+            <Text style={styles.callStatus}>
               {callStatus === 'connected' ? 'Connected' : 
                callStatus === 'waiting' ? 'Waiting for others...' :
                callStatus === 'connecting' ? 'Connecting...' : 
@@ -377,26 +407,46 @@ const MeetingView: React.FC = () => {
         style={styles.callContent} 
         activeOpacity={1} 
         onPress={toggleControlsVisibility}
-      >
-        {callType === 'video' ? (
+      >        {callType === 'video' ? (
           <View style={styles.videoContainer}>
             <Text style={styles.videoPlaceholder}>Video Call Interface</Text>
-            <Text style={styles.videoSubtext}>Tap to show/hide controls</Text>
+            {(isJoining || callStatus === 'connecting' || callStatus === 'initializing') ? (
+              <View style={styles.statusContainer}>
+                <ActivityIndicator size="small" color="#00D4AA" style={styles.statusLoader} />
+                <Text style={styles.videoSubtext}>
+                  {callStatus === 'connecting' ? 'Connecting...' : 
+                   callStatus === 'initializing' ? 'Initializing...' :
+                   'Setting up video...'}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.videoSubtext}>Tap to show/hide controls</Text>
+            )}
           </View>
         ) : (
-          <View style={styles.voiceCallContainer}>
-            <View style={styles.avatarContainer}>
+          <View style={styles.voiceCallContainer}>            <View style={styles.avatarContainer}>
               <View style={styles.avatarPlaceholder}>
                 <Text style={styles.avatarText}>
                   {recipientName.charAt(0).toUpperCase()}
                 </Text>
               </View>
-              <Text style={styles.participantDisplayName}>{recipientName}</Text>              <Text style={styles.callStatusText}>
-                {callStatus === 'connected' ? 'Call in progress' : 
-                 callStatus === 'waiting' ? 'Waiting for others to join...' :
-                 callStatus === 'connecting' ? 'Connecting...' : 
-                 'Initializing call...'}
-              </Text>
+              <Text style={styles.participantDisplayName}>{recipientName}</Text>              
+              {/* Status with loading indicator for connecting states */}
+              <View style={styles.statusContainer}>
+                {(isJoining || callStatus === 'connecting' || callStatus === 'initializing') && (
+                  <ActivityIndicator 
+                    size="small" 
+                    color="#00D4AA" 
+                    style={styles.statusLoader} 
+                  />
+                )}
+                <Text style={styles.callStatusText}>
+                  {callStatus === 'connected' ? 'Call in progress' : 
+                   callStatus === 'waiting' ? 'Waiting for others to join...' :
+                   callStatus === 'connecting' ? 'Connecting...' : 
+                   'Initializing call...'}
+                </Text>
+              </View>
             </View>
           </View>
         )}
@@ -678,11 +728,19 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     textAlign: 'center',
     marginBottom: 8,
-  },
-  callStatusText: {
+  },  callStatusText: {
     fontSize: 16,
     color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  statusLoader: {
+    marginRight: 4,
   },
   controlsWrapper: {
     position: 'absolute',
