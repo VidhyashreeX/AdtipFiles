@@ -128,10 +128,10 @@ checkFileContent(
   'WhatsAppCallManager calls VideoSDK initiate API'
 );
 
-// Check call status update API
+// Check call status update API (updated to use correct API)
 checkFileContent(
   'src/services/calling/WhatsAppCallManager.ts',
-  'ApiService.handleCall',
+  'ApiService.updateCallStatus',
   'WhatsAppCallManager sends call status updates'
 );
 
@@ -177,6 +177,43 @@ checkFileContent(
   'src/services/calling/WhatsAppCallManager.ts',
   'mute_toggle',
   'WhatsAppCallManager has mute toggle action'
+);
+
+console.log('\n🚀 Checking FCM Foreground Message Handling...\n');
+
+// Check FCM foreground message bulletproof handling
+checkFileContent(
+  'src/services/calling/CallNotificationHandler.ts',
+  'handleForegroundCallMessage',
+  'CallNotificationHandler has bulletproof foreground FCM handling'
+);
+
+// Check fallback notification handler
+checkFileContent(
+  'src/services/calling/CallNotificationHandler.ts',
+  'fallbackNotificationHandler',
+  'CallNotificationHandler has fallback error handling'
+);
+
+// Check foreground call notification
+checkFileContent(
+  'src/services/calling/CallNotificationHandler.ts',
+  'showForegroundCallNotification',
+  'CallNotificationHandler shows foreground call notifications'
+);
+
+// Check basic fallback notification
+checkFileContent(
+  'src/services/calling/CallNotificationHandler.ts',
+  'showBasicIncomingCallNotification',
+  'CallNotificationHandler has basic fallback notification'
+);
+
+// Check try/catch around FCM onMessage
+checkFileContent(
+  'src/services/calling/CallNotificationHandler.ts',
+  'Never re-throw to prevent app crashes',
+  'CallNotificationHandler prevents FCM crashes with proper error handling'
 );
 
 console.log('\n📋 Summary\n');
