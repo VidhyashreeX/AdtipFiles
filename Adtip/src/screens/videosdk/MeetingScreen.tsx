@@ -231,14 +231,14 @@ const MeetingView: React.FC = () => {
   }, [hasJoined, isJoining, participants?.size, localParticipant?.id, route.params, activeCall, callType, recipientName]);
 
   // With joinWithoutUserInteraction=true, the meeting will auto-join
-  // No manual join() call needed - VideoSDK handles this automatically
-  // The onMeetingJoined callback will be triggered when ready
+  // No manual join() call needed - VideoSDK handles this automatically  // The onMeetingJoined callback will be triggered when ready
   
   useEffect(() => {
     console.log('[MeetingView] Meeting auto-join enabled - waiting for onMeetingJoined callback');
     setIsJoining(true); // Set joining state when component mounts
   }, []); // Only run once on mount
-  // Cleanup effect - leave meeting on unmount
+  
+  // Cleanup effect - leave meeting on unmount ONLY
   useEffect(() => {
     return () => {
       if (leave && hasJoined) {
@@ -250,7 +250,9 @@ const MeetingView: React.FC = () => {
         }
       }
     };
-  }, [leave, hasJoined]);  // Listen for leave call events from CallService and notification end events
+  }, []); // Empty dependency array - only runs on unmount
+
+  // Listen for leave call events from CallService and notification end events
   useEffect(() => {
     const handleLeaveCall = () => {
       console.log('[MeetingView] Received leaveActiveCall event');

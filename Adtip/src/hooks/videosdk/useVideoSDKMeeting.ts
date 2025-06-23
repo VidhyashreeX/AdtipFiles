@@ -165,30 +165,24 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
   useEffect(() => {
     updateParticipantCount();
   }, [mMeeting.participants, updateParticipantCount]);
-
-  // Cleanup on unmount
+  // Cleanup on unmount ONLY - no dependencies to prevent cleanup running on state changes
   useEffect(() => {
     return () => {
+      console.log('[VideoSDKMeeting] Component unmounting - cleaning up');
       stopDurationTimer();
       // Attempt to leave meeting if still connected
       if (hasJoinedRef.current && mMeeting && typeof mMeeting.leave === 'function') {
         try {
+          console.log('[VideoSDKMeeting] Leaving meeting on unmount');
           mMeeting.leave();
         } catch (e) {
           console.error('[VideoSDKMeeting] Error leaving meeting on unmount:', e);
         }
       }
-      // Attempt to disable mic/webcam if possible
-      if (mMeeting && typeof mMeeting.toggleMic === 'function' && micOn) {
-        try { mMeeting.toggleMic(); } catch (e) { /* ignore */ }
-      }
-      if (mMeeting && typeof mMeeting.toggleWebcam === 'function' && webcamOn) {
-        try { mMeeting.toggleWebcam(); } catch (e) { /* ignore */ }
-      }
-      // Optionally, reset hasJoinedRef
+      // Reset hasJoinedRef
       hasJoinedRef.current = false;
     };
-  }, [mMeeting, micOn, webcamOn]);
+  }, []); // Empty dependency array - only runs on unmount
 
   // Update config if props change
   useEffect(() => {
