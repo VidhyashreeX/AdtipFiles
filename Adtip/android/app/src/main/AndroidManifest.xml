@@ -119,42 +119,10 @@
 
         </activity>
 
-        <!-- WHATSAPP-LIKE CALL ACTIVITY -->
-        <activity
-            android:name=".IncomingCallActivity"
-            android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar.Fullscreen"
-            android:showWhenLocked="true"
-            android:turnScreenOn="true"
-            android:excludeFromRecents="true"
-            android:launchMode="singleTop"
-            android:exported="false">
-        </activity>
-
-        <!-- WHATSAPP-LIKE CALL SERVICE (No telecom integration) -->
-        <service
-            android:name=".WhatsAppCallService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="microphone|camera" />
-
-        <!-- FIREBASE CALL NOTIFICATION SERVICE -->
-        <service
-            android:name=".CallNotificationService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
-
         <!-- VIDEOSDK FOREGROUND SERVICE -->
         <service 
             android:name="live.videosdk.rnfgservice.ForegroundService" 
             android:foregroundServiceType="camera|microphone" 
-            android:exported="false" />
-
-        <!-- CALL ACTION RECEIVER -->
-        <receiver 
-            android:name=".CallActionReceiver" 
             android:exported="false" />
 
     </application>
