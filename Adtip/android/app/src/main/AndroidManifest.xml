@@ -125,6 +125,9 @@
             android:foregroundServiceType="camera|microphone" 
             android:exported="false" />
 
+        <!-- Notifee's foreground service declaration for camera and microphone -->
+        <service android:name="app.notifee.core.ForegroundService" android:foregroundServiceType="camera|microphone" android:exported="false" />
+
     </application>
 
 </manifest>

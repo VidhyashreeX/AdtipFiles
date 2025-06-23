@@ -591,6 +591,13 @@ class WhatsAppCallManager {
       appEventEmitter.emit('callStateChanged', targetCall);
       appEventEmitter.emit('callEnded', targetCall);
 
+      // Stop Notifee foreground service if running
+      try {
+        await notifee.stopForegroundService();
+      } catch (e) {
+        console.warn('[WhatsAppCallManager] No foreground service to stop or error stopping:', e);
+      }
+
       console.log('[WhatsAppCallManager] Call ended:', targetCall.callId);
 
     } catch (error) {
@@ -720,8 +727,12 @@ class WhatsAppCallManager {
           channelId: CHANNEL_IDS.ONGOING_CALLS,
           importance: AndroidImportance.LOW,
           visibility: AndroidVisibility.PUBLIC,
-          category: AndroidCategory.CALL,          ongoing: true,          autoCancel: false,
-          color: this.currentCall.callType === 'video' ? '#007AFF' : '#34C759',actions: [
+          category: AndroidCategory.CALL,
+          ongoing: true,
+          autoCancel: false,
+          asForegroundService: true,
+          color: this.currentCall.callType === 'video' ? '#007AFF' : '#34C759',
+          actions: [
             {
               title: 'Mute',
               pressAction: { id: 'mute_toggle' },
