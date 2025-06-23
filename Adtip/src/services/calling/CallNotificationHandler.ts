@@ -120,20 +120,39 @@ class CallNotificationHandler {
       if (!remoteMessage?.data) {
         console.log('[CallNotificationHandler] No data in foreground message');
         return;
+      }      const { data } = remoteMessage;
+
+      // NEW: Parse the info field if present for foreground handling
+      let callData = data;
+      if (data.info) {
+        try {
+          const parsedInfo = JSON.parse(data.info as string);
+          callData = { ...data, ...parsedInfo };
+          console.log('[CallNotificationHandler] Parsed foreground call data:', callData);
+        } catch (parseError) {
+          console.error('[CallNotificationHandler] Failed to parse info in foreground:', parseError);
+        }
       }
 
-      const { data } = remoteMessage;      // Check if this is an incoming call
-      // Support multiple notification types for compatibility
-      if (data.isIncomingCall === 'true' || data.type === 'call' || data.type === 'INCOMING_CALL' || data.type === 'CALL_INITIATED') {
+      // Check if this is an incoming call - check isInitiator for CALL_INITIATED
+      const isInitiator = String(callData.isInitiator) === 'true';
+      const isIncomingCall = callData.isIncomingCall === 'true' || 
+                            callData.type === 'call' || 
+                            callData.type === 'INCOMING_CALL' || 
+                            (callData.type === 'CALL_INITIATED' && !isInitiator);
+
+      if (isIncomingCall) {
         console.log('[CallNotificationHandler] Incoming call detected in foreground');
         
         // CRITICAL: Always show Notifee notification for incoming calls in foreground
         // This ensures the user can answer/decline even if the app is active
-        await this.showForegroundCallNotification(data);
+        await this.showForegroundCallNotification(callData);
         
         // Also handle the call through the normal flow
         await this.handleCallNotification(remoteMessage);
       } else {
+        console.log('[CallNotificationHandler] Foreground: Not an incoming call - handling normally');
+        console.log('[CallNotificationHandler] Foreground: Call type:', callData.type, 'isInitiator:', callData.isInitiator);
         // Handle other message types normally
         await this.handleCallNotification(remoteMessage);
       }
@@ -156,15 +175,35 @@ class CallNotificationHandler {
       
       if (!remoteMessage?.data) {
         return;
+      }      const { data } = remoteMessage;
+
+      // NEW: Parse the info field if present
+      let callData = data;
+      if (data.info) {
+        try {
+          const parsedInfo = JSON.parse(data.info as string);
+          callData = { ...data, ...parsedInfo };
+          console.log('[CallNotificationHandler] Parsed fallback call data:', callData);
+        } catch (parseError) {
+          console.error('[CallNotificationHandler] Failed to parse info in fallback:', parseError);
+        }
       }
 
-      const { data } = remoteMessage;
-        // Only handle incoming calls in fallback
-      if (data.isIncomingCall === 'true' || data.type === 'call' || data.type === 'INCOMING_CALL' || data.type === 'CALL_INITIATED') {
+      // Only handle incoming calls in fallback - check isInitiator for CALL_INITIATED
+      const isInitiator = String(callData.isInitiator) === 'true';
+      const isIncomingCall = callData.isIncomingCall === 'true' || 
+                            callData.type === 'call' || 
+                            callData.type === 'INCOMING_CALL' || 
+                            (callData.type === 'CALL_INITIATED' && !isInitiator);
+
+      if (isIncomingCall) {
         console.log('[CallNotificationHandler] Showing fallback notification for incoming call');
         
         // Show basic notification using Notifee
-        await this.showBasicIncomingCallNotification(data);
+        await this.showBasicIncomingCallNotification(callData);
+      } else {
+        console.log('[CallNotificationHandler] Fallback: Not an incoming call - skipping');
+        console.log('[CallNotificationHandler] Fallback: Call type:', callData.type, 'isInitiator:', callData.isInitiator);
       }
       
     } catch (fallbackError) {
@@ -287,8 +326,8 @@ class CallNotificationHandler {
           importance: AndroidImportance.HIGH,
           visibility: AndroidVisibility.PUBLIC,
           category: AndroidCategory.CALL,
-          autoCancel: false,
-          ongoing: true,
+          autoCancel: false,          ongoing: true,
+          smallIcon: 'ic_call', // Required for Android notifications
           actions: [
             {
               title: 'Decline',
@@ -346,8 +385,7 @@ class CallNotificationHandler {
           console.error('[CallNotificationHandler] Failed to parse info field:', parseError);
           // Continue with original data if parsing fails
         }
-      }      // Check if this is a call notification
-      // Support both CALL_INITIATION and CALL_INITIATED for compatibility
+      }      // Check if this is a call notification      // Support both CALL_INITIATION and CALL_INITIATED for compatibility
       if (callData.isIncomingCall === 'true' || callData.type === 'call' || callData.type === 'CALL_INITIATION' || callData.type === 'CALL_INITIATED') {
         console.log('[CallNotificationHandler] Processing call notification:', callData);
         
@@ -359,8 +397,21 @@ class CallNotificationHandler {
             : {};
           const videoSDKInfo = (typeof callData.videoSDKInfo === 'object' && callData.videoSDKInfo !== null) 
             ? callData.videoSDKInfo as any 
-            : {};
+            : {};          // CRITICAL FIX: Check if this is an incoming call for the current user
+          // For CALL_INITIATED, we need to check if the current user is the recipient (not initiator)
+          // Handle isInitiator as either boolean or string
+          const isInitiator = String(callData.isInitiator) === 'true';
+          const isIncomingCall = callData.isIncomingCall === 'true' || 
+                                callData.type === 'call' || 
+                                callData.type === 'CALL_INITIATION' ||
+                                (callData.type === 'CALL_INITIATED' && !isInitiator);
           
+          if (!isIncomingCall) {
+            console.log('[CallNotificationHandler] Not an incoming call for current user - skipping notification');
+            console.log('[CallNotificationHandler] Call type:', callData.type, 'isInitiator:', callData.isInitiator);
+            return;
+          }
+
           const callNotificationData = {
             callId: String(callData.callId || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`),
             callerName: String(callerInfo.name || callData.callerName || 'Unknown Caller'),

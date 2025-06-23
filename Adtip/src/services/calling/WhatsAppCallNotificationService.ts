@@ -280,12 +280,12 @@ class WhatsAppCallNotificationService {
               pressAction: {
                 id: 'decline',
               },
-            },
-          ],
+            },          ],
           style: {
             type: 1, // BIG_TEXT_STYLE
             text: `${data.callerName} is calling you. Tap to answer or decline.`,
           },
+          smallIcon: 'ic_call', // Required for Android notifications
           largeIcon: data.callerAvatar || undefined,
           sound: 'default',
           vibrationPattern: [0, 300, 500, 300, 500],
@@ -353,7 +353,7 @@ class WhatsAppCallNotificationService {
           autoCancel: false,
           colorized: true,
           color: '#00D4AA', // VideoSDK brand color
-          smallIcon: 'ic_call_ongoing',
+          smallIcon: 'ic_call',
           actions: [
             {
               title: '🔇 Mute',
@@ -421,12 +421,12 @@ class WhatsAppCallNotificationService {
 
       await notifee.displayNotification({
         title: `${callTypeText} Call Ended`,
-        body: `${callerName} - ${bodyText}`,
-        android: {
+        body: `${callerName} - ${bodyText}`,        android: {
           channelId: 'call_ended',
           importance: AndroidImportance.DEFAULT,
           autoCancel: true,
           color: '#FF6B6B',
+          smallIcon: 'ic_call', // Required for Android notifications
         },
         ios: {
           categoryId: 'call_ended',

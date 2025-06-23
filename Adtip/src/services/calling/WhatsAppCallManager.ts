@@ -430,9 +430,7 @@ class WhatsAppCallManager {
         isInitiator: false,
         status: 'ringing',
         startTime: Date.now()
-      };
-
-      this.currentCall = callData;
+      };      this.currentCall = callData;
       await this.saveCallState();
 
       // Show incoming call notification
@@ -441,8 +439,10 @@ class WhatsAppCallManager {
       // Start vibration
       Vibration.vibrate(this.INCOMING_CALL_VIBRATION, true);
 
-      // Emit call state change
-      appEventEmitter.emit('callStateChanged', callData);
+      // DO NOT emit callStateChanged for incoming calls - this would trigger navigation to MeetingScreen
+      // Instead, only emit it when the user accepts the call via acceptCall()
+      // This ensures the recipient sees the notification with answer/decline options
+      console.log('[WhatsAppCallManager] Incoming call notification shown - waiting for user action');
 
       console.log('[WhatsAppCallManager] Incoming call handled:', callData.callId);
 
@@ -612,7 +612,29 @@ class WhatsAppCallManager {
           title: 'Accept',
           pressAction: { id: 'accept_call' },
         }
-      ];
+      ];      // Prepare android notification config
+      const androidConfig: any = {
+        channelId: CHANNEL_IDS.INCOMING_CALLS,
+        importance: AndroidImportance.HIGH,
+        visibility: AndroidVisibility.PUBLIC,
+        category: AndroidCategory.CALL,
+        pressAction: { id: 'accept_call' },
+        fullScreenAction: { id: 'accept_call' },
+        actions,
+        ongoing: false,
+        autoCancel: false,
+        color: callData.callType === 'video' ? '#007AFF' : '#34C759',
+        smallIcon: 'ic_call', // Required for Android notifications
+        style: {
+          type: AndroidStyle.BIGTEXT,
+          text: `${callData.callerName} is calling you. Tap to answer or use the action buttons.`,
+        },
+      };
+
+      // Only add largeIcon if callerAvatar is a valid string URL
+      if (callData.callerAvatar && typeof callData.callerAvatar === 'string' && callData.callerAvatar.trim() !== '') {
+        androidConfig.largeIcon = callData.callerAvatar;
+      }
 
       await notifee.displayNotification({
         id: notificationId,
@@ -624,27 +646,39 @@ class WhatsAppCallManager {
           callerName: callData.callerName,
           callerId: callData.callerId,
         },
-        android: {
-          channelId: CHANNEL_IDS.INCOMING_CALLS,
-          importance: AndroidImportance.HIGH,
-          visibility: AndroidVisibility.PUBLIC,
-          category: AndroidCategory.CALL,
-          pressAction: { id: 'accept_call' },
-          fullScreenAction: { id: 'accept_call' },
-          actions,
-          ongoing: false,          autoCancel: false,
-          color: callData.callType === 'video' ? '#007AFF' : '#34C759',
-          largeIcon: callData.callerAvatar || undefined,          style: {
-            type: AndroidStyle.BIGTEXT,
-            text: `${callData.callerName} is calling you. Tap to answer or use the action buttons.`,
-          },
-        },
-      });
-
-      console.log('[WhatsAppCallManager] Incoming call notification shown:', notificationId);
+        android: androidConfig,
+      });      console.log('[WhatsAppCallManager] Incoming call notification shown:', notificationId);
 
     } catch (error) {
       console.error('[WhatsAppCallManager] Failed to show incoming call notification:', error);
+      
+      // Try showing a basic notification without problematic properties as fallback
+      try {
+        console.log('[WhatsAppCallManager] Attempting fallback notification...');
+        await notifee.displayNotification({
+          id: `fallback_incoming_${callData.callId}`,
+          title: `Incoming ${callData.callType === 'video' ? 'video' : 'voice'} call`,
+          body: `${callData.callerName} is calling you`,
+          data: {
+            callId: callData.callId,
+            callType: callData.callType,
+            callerName: callData.callerName,
+            callerId: callData.callerId,
+          },          android: {
+            channelId: CHANNEL_IDS.INCOMING_CALLS,
+            importance: AndroidImportance.HIGH,
+            category: AndroidCategory.CALL,
+            smallIcon: 'ic_call', // Required for Android notifications
+            actions: [
+              { title: 'Decline', pressAction: { id: 'decline_call' } },
+              { title: 'Accept', pressAction: { id: 'accept_call' } }
+            ],
+          },
+        });
+        console.log('[WhatsAppCallManager] Fallback notification shown successfully');
+      } catch (fallbackError) {
+        console.error('[WhatsAppCallManager] Even fallback notification failed:', fallbackError);
+      }
     }
   }
 
@@ -669,8 +703,7 @@ class WhatsAppCallManager {
           callId: callData.callId,
           callType: callData.callType,
           recipientName: callData.recipientName,
-        },
-        android: {
+        },        android: {
           channelId: CHANNEL_IDS.ONGOING_CALLS,
           importance: AndroidImportance.LOW,
           visibility: AndroidVisibility.PUBLIC,
@@ -678,6 +711,7 @@ class WhatsAppCallManager {
           ongoing: true,
           autoCancel: false,
           color: callData.callType === 'video' ? '#007AFF' : '#34C759',
+          smallIcon: 'ic_call', // Required for Android notifications
           actions: [
             {
               title: 'End Call',
@@ -733,8 +767,7 @@ class WhatsAppCallManager {
           callId: this.currentCall.callId,
           callType: this.currentCall.callType,
           participantName,
-        },
-        android: {
+        },        android: {
           channelId: CHANNEL_IDS.ONGOING_CALLS,
           importance: AndroidImportance.LOW,
           visibility: AndroidVisibility.PUBLIC,
@@ -742,6 +775,7 @@ class WhatsAppCallManager {
           ongoing: true,
           autoCancel: false,
           asForegroundService: true,
+          smallIcon: 'ic_call', // Required for Android notifications
           color: this.currentCall.callType === 'video' ? '#007AFF' : '#34C759',
           actions: [
             {
@@ -789,11 +823,11 @@ class WhatsAppCallManager {
           callId: callData.callId,          callType: callData.callType,
           participantName,
           duration: callData.duration || 0,
-        },
-        android: {
+        },        android: {
           channelId: CHANNEL_IDS.CALL_ENDED,
           importance: AndroidImportance.LOW,          visibility: AndroidVisibility.PUBLIC,          autoCancel: true,
           color: '#8E8E93',
+          smallIcon: 'ic_call', // Required for Android notifications
         },
       });
 

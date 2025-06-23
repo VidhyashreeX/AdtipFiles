@@ -5,23 +5,25 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
-  SafeAreaView,
   StatusBar,
+  SafeAreaView,
   Animated,
-  ActivityIndicator,
   BackHandler,
-  AppState,
-  NativeModules,
   Platform,
+  NativeModules,
+  ActivityIndicator,
+  AppState,
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
+import { useMeeting } from '@videosdk.live/react-native-sdk';
+import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { MeetingProvider, useMeeting } from '@videosdk.live/react-native-sdk';
+import { MeetingProvider, useMeeting as useVideoSDKMeeting } from '@videosdk.live/react-native-sdk';
 import { useCall } from '../../contexts/CallProvider';
 import { useTheme } from '../../contexts/ThemeContext';
 import WhatsAppCallManager from '../../services/calling/WhatsAppCallManager';
 import CallService from '../../services/CallService';
 import CallErrorBoundary from '../../components/common/CallErrorBoundary';
+import IncomingCallOverlay from '../../components/call/IncomingCallOverlay';
 import { ChevronLeft, MoreVertical } from 'lucide-react-native';
 import { MainNavigatorParamList } from '../../types/navigation';
 import { appEventEmitter } from '../../events/AppEventEmitter';
@@ -127,7 +129,7 @@ const MeetingView: React.FC = () => {
   // Use VideoSDK meeting hooks with error handling
   let meetingHooks: any = null;
   try {
-    meetingHooks = useMeeting({
+    meetingHooks = useVideoSDKMeeting({
       onMeetingJoined: () => {
         console.log('[MeetingView] Meeting joined successfully');
         setHasJoined(true);
