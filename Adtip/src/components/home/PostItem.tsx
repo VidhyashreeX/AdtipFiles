@@ -223,10 +223,12 @@ const PostItem: React.FC<PostItemProps> = ({
             style={styles.profileImage}
           />
           <View>
-            <Text style={[styles.username, {color: colors.text.primary}]}>{username}</Text>
-            {last_active && (
+            <Text style={[styles.username, {color: colors.text.primary}]}>
+              {username || ''}
+            </Text>
+            {last_active && typeof last_active === 'string' && last_active.trim() && (
               <Text style={[styles.lastActive, {color: colors.text.secondary}]}>
-                Active {timeAgo}
+                Active {last_active}
               </Text>
             )}
           </View>
@@ -370,9 +372,11 @@ const PostItem: React.FC<PostItemProps> = ({
       </Text>
 
       {/* Caption */}
-      {caption && (
+      {caption && typeof caption === 'string' && caption.trim() && (
         <Text style={[styles.caption, {color: colors.text.primary}]}>
-          <Text style={styles.captionUsername}>{username}</Text> {caption}
+          <Text style={styles.captionUsername}>{username || ''}</Text>
+          {' '}
+          {caption.trim()}
         </Text>
       )}
 
@@ -386,7 +390,11 @@ const PostItem: React.FC<PostItemProps> = ({
       )}
 
       {/* Time Ago */}
-      <Text style={[styles.timeAgo, {color: colors.text.secondary}]}>{timeAgo}</Text>
+      {timeAgo && typeof timeAgo === 'string' && timeAgo.trim() && (
+        <Text style={[styles.timeAgo, {color: colors.text.secondary}]}>
+          {timeAgo}
+        </Text>
+      )}
     </View>
   );
 };

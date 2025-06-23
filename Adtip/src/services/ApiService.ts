@@ -1149,9 +1149,10 @@ export default class ApiService {
   /**
    * Create Meeting Room
    */
-  static async createVideoSDKMeeting(token: string, region: string = 'us'): Promise<{ roomId: string }> {
+  static async createVideoSDKMeeting(token: string, region: string = 'us'): Promise<VideoSDKCreateMeetingResponse> {
     try {
-      const response = await this.post<{ roomId: string }>('/api/create-meeting/videosdk', { token, region });
+      const response = await this.post<VideoSDKCreateMeetingResponse>('/api/create-meeting/videosdk', { token, region });
+      console.log('[ApiService] Create VideoSDK meeting response:', response);
       return response;
     } catch (error) {
       console.error('[ApiService] Error creating VideoSDK meeting:', error);
