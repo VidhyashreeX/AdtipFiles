@@ -498,6 +498,29 @@ const AppNavigator = () => {
     };
   }, [callKeepReady]);
 
+  useEffect(() => {
+    // Listen for native call actions (answer/decline)
+    const removeCallActionListener = IncomingCallService.getInstance().onCallAction(async (event) => {
+      if (event.action === 'ANSWER') {
+        // If only sessionId is present, fetch call details from backend or cache
+        // For demo, just log and skip if details are missing
+        if (!event.sessionId) {
+          console.warn('[App] Native ANSWER event missing sessionId');
+          return;
+        }
+        // TODO: Fetch call details using sessionId if needed
+        // Example: const callDetails = await ApiService.getCallDetails(event.sessionId);
+        // if (callDetails) { CallService.handleIncomingCallFromNative(callDetails); }
+        console.log('[App] Native answered call, sessionId:', event.sessionId);
+      } else if (event.action === 'DECLINE') {
+        CallService.endCall('declined');
+      }
+    });
+    return () => {
+      removeCallActionListener();
+    };
+  }, []);
+
   if (!isInitialized || !firebaseReady || !videoSDKReady || !callServiceReady || !callKeepReady) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>

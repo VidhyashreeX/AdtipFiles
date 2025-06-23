@@ -127,8 +127,7 @@ dependencies {
     // implementation 'com.google.firebase:firebase-messaging:23.1.2' // Remove specific version
     
     // VideoSDK Dependencies
-    implementation project(':rnwebrtc')
-    implementation project(':rnfgservice')        // MISSING - ADDED
+    implementation project(':rnwebrtc')        // MISSING - ADDED
     implementation project(':rnincallmanager')    // MISSING - ADDED
 
     // ADD EXOPLAYER DEPENDENCIES - REQUIRED FOR ENHANCED TIPSHORTS

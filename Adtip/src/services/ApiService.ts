@@ -905,232 +905,6 @@ export default class ApiService {
   // ===== VideoSDK API SERVICES =====
 
   /**
-   * Generate a VideoSDK participant token via the backend
-   */
-  static async generateVideoSDKParticipantToken(): Promise<VideoSDKGenerateTokenResponse> {
-    console.log('[API] Requesting VideoSDK participant token from backend');
-    try {
-      const response = await this.post<VideoSDKGenerateTokenResponse>(
-        ApiEndpoints.TIP_CALLS_ENDPOINTS.VIDEOSDK_GENERATE_TOKEN,
-        {},
-      );
-      console.log('[API] VideoSDK participant token response:', {
-        success: response.success,
-        hasToken: !!response.token,
-        message: response.message
-      });
-      
-      if (!response.success || !response.token) {
-        throw new Error(response.message || 'Failed to generate VideoSDK token from backend.');
-      }
-      return response;
-    } catch (error) {
-      console.error('[API] Error generating VideoSDK participant token:', error);
-      throw this.handleError(error);
-    }
-  }
-
-  /**
-   * Create a VideoSDK meeting room via the backend
-   */
-  static async createVideoSDKMeeting(
-    videoSDKToken: string,
-    region: string = "us"
-  ): Promise<VideoSDKCreateMeetingResponse> {
-    const requestData: VideoSDKCreateMeetingRequest = {
-      token: videoSDKToken,
-      region: region
-    };
-    
-    console.log('[API] Creating VideoSDK meeting via backend:', {
-      hasToken: !!videoSDKToken,
-      region: region
-    });
-    
-    try {
-      const response = await this.post<VideoSDKCreateMeetingResponse>(
-        ApiEndpoints.TIP_CALLS_ENDPOINTS.VIDEOSDK_CREATE_MEETING,
-        requestData,
-      );
-      
-      console.log('[API] Create VideoSDK meeting response:', {
-        success: response.success,
-        roomId: response.data?.roomId,
-        message: response.message
-      });
-      
-      if (!response.success || !response.data || !response.data.roomId) {
-        throw new Error(response.message || 'Failed to create VideoSDK meeting via backend.');
-      }
-      return response;
-    } catch (error) {
-      console.error('[API] Error creating VideoSDK meeting:', error);
-      throw this.handleError(error);
-    }
-  }
-
-  /**
-   * Deactivate a VideoSDK meeting room via the backend
-   */
-  static async deactivateVideoSDKRoom(
-    data: VideoSDKDeactivateRoomRequest,
-  ): Promise<VideoSDKDeactivateRoomResponse> {
-    console.log('[API] Requesting to deactivate VideoSDK room via backend:', data);
-    try {
-      const response = await this.post<VideoSDKDeactivateRoomResponse>(
-        ApiEndpoints.TIP_CALLS_ENDPOINTS.VIDEOSDK_DEACTIVATE_ROOM,
-        data,
-      );
-      console.log('[API] Deactivate VideoSDK room response:', JSON.stringify(response, null, 2));
-      if (!response.success) {
-        throw new Error(response.message || 'Failed to deactivate VideoSDK room via backend.');
-      }
-      return response;
-    } catch (error) {
-      console.error('[API] Error deactivating VideoSDK room:', error);
-      throw this.handleError(error);
-    }
-  }
-
-  /**
-   * Validate a VideoSDK meeting room via the backend
-   */
-  static async validateVideoSDKMeeting(
-    data: VideoSDKValidateMeetingRequest,
-  ): Promise<VideoSDKValidateMeetingResponse> {
-    console.log('[API] Requesting to validate VideoSDK meeting via backend:', data);
-    try {
-      const response = await this.post<VideoSDKValidateMeetingResponse>(
-        ApiEndpoints.TIP_CALLS_ENDPOINTS.VIDEOSDK_VALIDATE_MEETING,
-        data,
-      );
-      console.log('[API] Validate VideoSDK meeting response:', JSON.stringify(response, null, 2));
-      return response;
-    } catch (error) {
-      console.error('[API] Error validating VideoSDK meeting:', error);
-      throw this.handleError(error);
-    }
-  }
-
-  /**
-   * Update user profile information including DND status
-   */
-  static async updateUser(data: UpdateUserRequest): Promise<UpdateUserResponse> {
-    console.log('[API] Updating user with data:', JSON.stringify(data, null, 2));
-    try {
-      const response = await this.post<UpdateUserResponse>(
-        '/api/updateuser',
-        data,
-      );
-      console.log('[API] Update user response:', JSON.stringify(response, null, 2));
-      return response;
-    } catch (error) {
-      console.error('[API] Error updating user:', error);
-      throw this.handleError(error);
-    }
-  }
-
-  /**
-   * Initiate call with VideoSDK integration
-   */
-  static async initiateCall(data: InitiateCallRequest): Promise<InitiateCallResponse> {
-    console.log('[ApiService] Initiating call:', {
-      calleePlatform: data.calleeInfo.platform,
-      callerName: data.callerInfo.name,
-      meetingId: data.videoSDKInfo.meetingId,
-      hasCalleeToken: !!data.calleeInfo.token,
-      hasCallerToken: !!data.callerInfo.token,
-      hasVideoSDKToken: !!data.videoSDKInfo.token,
-    });
-
-    try {
-      const response = await this.post<InitiateCallResponse>(
-        '/api/initiate-call',
-        data,
-      );
-
-      console.log('[ApiService] Initiate call response:', {
-        success: response.success,
-        message: response.message,
-        hasData: !!response.data,
-      });
-
-      return response;
-    } catch (error) {
-      console.error('[ApiService] Error initiating call:', error);
-      throw this.handleError(error);
-    }
-  }
-
-  /**
-   * Enhanced initiate call that tries Firebase Cloud Functions first
-   */
-  static async initiateCallWithFirebase(data: InitiateCallRequest): Promise<InitiateCallResponse> {
-    console.log('[ApiService] Initiating call with Firebase integration:', {
-      calleePlatform: data.calleeInfo.platform,
-      callerName: data.callerInfo.name,
-      meetingId: data.videoSDKInfo.meetingId,
-    });
-
-    try {
-      // Set up a timeout controller
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30-second timeout
-
-      try {
-        // Try Firebase Cloud Functions first
-        const firebaseResponse = await fetch(`${FCM_SERVER_URL}/api/call/initiate-call`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify({
-            callerInfo: data.callerInfo,
-            calleeInfo: data.calleeInfo,
-            videoSDKInfo: data.videoSDKInfo,
-          }),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        const firebaseData = await firebaseResponse.json();
-        
-        if (firebaseResponse.ok) {
-          console.log('[ApiService] Firebase call initiated successfully:', firebaseData);
-          return {
-            success: true,
-            message: firebaseData.message || 'Call initiated successfully',
-            data: firebaseData.data || firebaseData,
-          };
-        } else {
-          console.warn('[ApiService] Firebase call failed, falling back to regular API');
-          throw new Error(firebaseData.error || 'Firebase call failed');
-        }
-      } catch (error: any) {
-        clearTimeout(timeoutId);
-        if (error.name === 'AbortError') {
-          console.error('[ApiService] Firebase call initiation timed out.');
-        } else {
-          console.error('[ApiService] Firebase call initiation failed, trying fallback:', error);
-        }
-        
-        // Fallback to the existing API method
-        try {
-          return await this.initiateCall(data);
-        } catch (fallbackError) {
-          console.error('[ApiService] Both Firebase and fallback methods failed:', fallbackError);
-          throw new Error('Failed to initiate call. Please check your connection and try again.');
-        }
-      }
-    } catch (error) {
-      console.error('[ApiService] Error initiating call with Firebase:', error);
-      throw this.handleError(error);
-    }
-  }
-
-  /**
    * Get FCM tokens for multiple users
    */
   static async getFcmTokensForUsers(data: FcmTokensRequest): Promise<FcmTokensResponse> {
@@ -1307,6 +1081,65 @@ export default class ApiService {
       return response;
     } catch (error) {
       console.error('[API] Error reporting comment:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Generate VideoSDK Token
+   */
+  static async generateVideoSDKToken(): Promise<{ token: string }> {
+    try {
+      const response = await this.post<{ token: string }>('/api/generate-token/videosdk', {});
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error generating VideoSDK token:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Create Meeting Room
+   */
+  static async createVideoSDKMeeting(token: string, region: string = 'us'): Promise<{ roomId: string }> {
+    try {
+      const response = await this.post<{ roomId: string }>('/api/create-meeting/videosdk', { token, region });
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error creating VideoSDK meeting:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Initiate Call (Cloud Function)
+   */
+  static async initiateCall(payload: {
+    calleeInfo: { platform: string; token: string };
+    callerInfo: { name: string; token: string };
+    videoSDKInfo: { meetingId: string; token: string };
+  }): Promise<any> {
+    try {
+      const response = await this.post<any>('https://us-central1-adtip-3873c.cloudfunctions.net/callApi/api/call/initiate-call', payload);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error initiating call:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Update Call Status (Cloud Function)
+   */
+  static async updateCallStatus(payload: {
+    callerInfo: { token: string; name: string; platform: string };
+    type: string;
+  }): Promise<any> {
+    try {
+      const response = await this.post<any>('https://us-central1-adtip-3873c.cloudfunctions.net/callApi/api/call/update-call', payload);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error updating call status:', error);
       throw this.handleError(error);
     }
   }

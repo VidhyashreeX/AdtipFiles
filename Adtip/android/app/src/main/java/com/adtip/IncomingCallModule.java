@@ -5,24 +5,47 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import androidx.annotation.NonNull;
-import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+import android.os.Build;
 
-import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
-import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
+import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.WritableMap;
+import javax.annotation.Nullable;
 
 public class IncomingCallModule extends ReactContextBaseJavaModule {
     private static final String MODULE_NAME = "IncomingCallModule";
-    private static ReactApplicationContext reactContext;
-    private BroadcastReceiver callReceiver;
+    private ReactApplicationContext reactContext;
+    private BroadcastReceiver callActionReceiver;
 
-    public IncomingCallModule(ReactApplicationContext context) {
-        super(context);
-        reactContext = context;
-        setupBroadcastReceiver();
+    public IncomingCallModule(ReactApplicationContext reactContext) {
+        super(reactContext);
+        this.reactContext = reactContext;
+
+        callActionReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (intent != null && intent.getAction() != null) {
+                    WritableMap params = Arguments.createMap();
+                    params.putString("action", intent.getAction());
+                    params.putString("sessionId", intent.getStringExtra("sessionId"));
+                    sendEvent("onCallAction", params);
+                }
+            }
+        };
+
+        IntentFilter filter = new IntentFilter();
+        filter.addAction("ANSWER");
+        filter.addAction("DECLINE");
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+             reactContext.registerReceiver(callActionReceiver, filter, ReactApplicationContext.RECEIVER_NOT_EXPORTED);
+        } else {
+             reactContext.registerReceiver(callActionReceiver, filter);
+        }
     }
 
     @NonNull
@@ -31,31 +54,32 @@ public class IncomingCallModule extends ReactContextBaseJavaModule {
         return MODULE_NAME;
     }
 
-    private void setupBroadcastReceiver() {
-        callReceiver = new BroadcastReceiver() {
+    private void setupCallActionReceiver() {
+        callActionReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                if ("ADTIP_INCOMING_CALL_RECEIVED".equals(intent.getAction())) {
-                    WritableMap params = Arguments.createMap();
-                    params.putString("callerName", intent.getStringExtra("callerName"));
-                    params.putString("callType", intent.getStringExtra("callType"));
-                    params.putString("callerId", intent.getStringExtra("callerId"));
-                    params.putString("channelName", intent.getStringExtra("channelName"));
-                    params.putString("meetingId", intent.getStringExtra("meetingId"));
-                    params.putString("token", intent.getStringExtra("token"));
-                    params.putBoolean("isIncomingCall", intent.getBooleanExtra("isIncomingCall", false));
-
-                    sendEvent("ADTIP_INCOMING_CALL_RECEIVED", params);
+                if ("com.adtip.CALL_ACTION".equals(intent.getAction())) {
+                    String action = intent.getStringExtra("action");
+                    String sessionId = intent.getStringExtra("sessionId");
+                    
+                    sendEvent("callAction", createCallActionMap(action, sessionId));
                 }
             }
         };
-
-        IntentFilter filter = new IntentFilter("ADTIP_INCOMING_CALL_RECEIVED");
-        LocalBroadcastManager.getInstance(reactContext).registerReceiver(callReceiver, filter);
+        
+        IntentFilter filter = new IntentFilter("com.adtip.CALL_ACTION");
+        reactContext.registerReceiver(callActionReceiver, filter);
     }
 
-    private void sendEvent(String eventName, WritableMap params) {
-        if (reactContext != null && reactContext.hasActiveCatalystInstance()) {
+    private com.facebook.react.bridge.WritableMap createCallActionMap(String action, String sessionId) {
+        com.facebook.react.bridge.WritableMap params = com.facebook.react.bridge.Arguments.createMap();
+        params.putString("action", action);
+        params.putString("sessionId", sessionId);
+        return params;
+    }
+
+    private void sendEvent(String eventName, @Nullable WritableMap params) {
+        if (reactContext.hasActiveReactInstance()) {
             reactContext
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                 .emit(eventName, params);
@@ -63,20 +87,36 @@ public class IncomingCallModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void addListener(String eventName) {
-        // Required for RN 0.65+
+    public void showIncomingCall(String callerName, String callType, String sessionId) {
+        Intent intent = new Intent(reactContext, IncomingCallActivity.class);
+        intent.putExtra("callerName", callerName);
+        intent.putExtra("callType", callType);
+        intent.putExtra("sessionId", sessionId);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        reactContext.startActivity(intent);
     }
 
     @ReactMethod
-    public void removeListeners(int count) {
-        // Required for RN 0.65+
+    public void addListener(String eventName) {
+        // Required for RN built-in Event Emitter Calls
     }
 
+    @ReactMethod
+    public void removeListeners(Integer count) {
+        // Required for RN built-in Event Emitter Calls
+    }
+
+    // FIXED: Replace deprecated onCatalystInstanceDestroy with invalidate
     @Override
-    public void onCatalystInstanceDestroy() {
-        if (callReceiver != null) {
-            LocalBroadcastManager.getInstance(reactContext).unregisterReceiver(callReceiver);
+    public void invalidate() {
+        if (callActionReceiver != null) {
+            try {
+                reactContext.unregisterReceiver(callActionReceiver);
+            } catch (IllegalArgumentException e) {
+                // Receiver was not registered
+            }
+            callActionReceiver = null;
         }
-        super.onCatalystInstanceDestroy();
+        super.invalidate();
     }
 }

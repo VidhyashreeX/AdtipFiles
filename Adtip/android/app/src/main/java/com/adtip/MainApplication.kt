@@ -16,7 +16,6 @@ import com.adtip.IncomingCallPackage  // CRITICAL FIX: Add IncomingCallPackage
 
 // VideoSDK Imports
 import live.videosdk.rnwebrtc.WebRTCModulePackage
-import live.videosdk.rnfgservice.ForegroundServicePackage
 import live.videosdk.rnincallmanager.InCallManagerPackage
 
 // ExoPlayer Package Import - ENSURE THIS IS CORRECT
@@ -31,7 +30,6 @@ class MainApplication : Application(), ReactApplication {
         
         // Add manually linked VideoSDK packages
         packages.add(WebRTCModulePackage())
-        packages.add(ForegroundServicePackage())
         packages.add(InCallManagerPackage())
         
         // Add ExoPlayer Package - CRITICAL FOR TIPSHORTS ENHANCED

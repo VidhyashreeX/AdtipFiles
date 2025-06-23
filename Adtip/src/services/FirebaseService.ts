@@ -9,6 +9,7 @@ import NotificationService from './NotificationService';
 import { navigationRef } from '../navigation/NavigationService';
 import FirebaseCallService, { FirebaseCallData } from './FirebaseCallService';
 import CallService from './CallService';
+import ApiService from './ApiService';
 
 export interface CallNotificationData {
   callerName: string;
@@ -493,6 +494,24 @@ class FirebaseService {
     this.messagingReady = false;
     this.initializationPromise = null;
     console.log('[FCM] Firebase service reset');
+  }
+
+  /**
+   * Send an FCM data message to invite a user to a call (bulletproof, WhatsApp-like)
+   */
+  public async sendCallInviteFCM(recipientId: string, callPayload: any): Promise<void> {
+    try {
+      // You may need to call your backend to send the FCM, or use the FCM Admin API
+      // For demo, assume a backend endpoint exists: /sendCallInviteFCM
+      await ApiService.post('/sendCallInviteFCM', {
+        recipientId: String(recipientId),
+        data: callPayload,
+      });
+      console.log('[FirebaseService] Sent call invite FCM:', { recipientId, callPayload });
+    } catch (error) {
+      console.error('[FirebaseService] Failed to send call invite FCM:', error);
+      throw error;
+    }
   }
 }
 

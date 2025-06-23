@@ -46,6 +46,17 @@ class IncomingCallService {
       IncomingCallModule.removeListeners(count);
     }
   }
+
+  /**
+   * Listen for answer/decline actions from native Android
+   */
+  public onCallAction(callback: (event: { action: 'ANSWER' | 'DECLINE', sessionId: string }) => void): () => void {
+    const subscription = this.eventEmitter.addListener(
+      'onCallAction',
+      callback
+    );
+    return () => subscription.remove();
+  }
 }
 
 export default IncomingCallService;

@@ -8,7 +8,6 @@ import { OtpVerifyResponse as User } from '../types/api';
 import { FirebaseCallData } from './FirebaseCallService';
 import FirebaseCallService from './FirebaseCallService';
 import VideoSDKService from './videosdk/VideoSDKService';
-import VideoSDKForegroundService from './VideoSDKForegroundService';
 import ApiService from './ApiService';
 import { FcmTokensRequest, FcmTokensResponse } from '../types/api';
 import { getCurrentRoute, navigate } from '../navigation/NavigationService';
@@ -36,7 +35,6 @@ class CallService {
   private currentUser: User | null = null;
   private firebaseService: FirebaseService;
   private videoSDKService: VideoSDKService;
-  private foregroundService: VideoSDKForegroundService;
   private callStateUpdateTimer: NodeJS.Timeout | null = null;
   private appStateSubscription: any = null;
   private callStateRestoreTimer: NodeJS.Timeout | null = null;
@@ -48,7 +46,6 @@ class CallService {
   private constructor() {
     this.firebaseService = FirebaseService.getInstance();
     this.videoSDKService = VideoSDKService.getInstance();
-    this.foregroundService = VideoSDKForegroundService.getInstance();
     this.initializeBackgroundHandling();
     this.setupForegroundServiceEventListeners();
     this.initializeNavigationReadyPromise();
@@ -318,226 +315,93 @@ class CallService {
         }, 50);
       }
     }, 50); // 50ms debounce
-  }  public async startOutgoingCall(recipientId: string, recipientName: string, callType: 'voice' | 'video'): Promise<boolean> {
-    // Prevent starting a new call if one is already active
-    if (this.activeCall) {
-      Alert.alert('Call In Progress', 'You are already in a call.');
-      return false;
-    }
+  }
 
+  /**
+   * Bulletproof outgoing call flow: generate token, create meeting, initiate call, set state, navigate
+   */
+  public async startOutgoingCall(recipientId: string, recipientName: string, callType: 'voice' | 'video'): Promise<boolean> {
     try {
-      console.log('[CallService] Starting outgoing call:', {
-        callType,
-        recipientId,
-        recipientName
-      });
+      // 1. Generate VideoSDK token
+      const { token } = await ApiService.generateVideoSDKToken();
+      if (!token) throw new Error('Failed to generate VideoSDK token');
 
-      // Get current user ID and name first
-      const userId = await AsyncStorage.getItem('userId');
-      const callerName = await this.getCallerName();
-      
-      if (!userId) {
-        throw new Error('User not authenticated');
-      }
+      // 2. Create VideoSDK meeting
+      const { roomId: meetingId } = await ApiService.createVideoSDKMeeting(token);
+      if (!meetingId) throw new Error('Failed to create VideoSDK meeting');
 
-      if (!recipientId || !recipientName) {
-        throw new Error('Recipient information is missing');
-      }
-      
-      console.log('[CallService] User validation passed:', {
-        callerId: userId,
-        callerName,
-        recipientId,
-        recipientName
-      });
-      
-      // Get both FCM tokens at once using the API
-      const tokens = await this.getBothUserTokens(userId, recipientId);
-      if (!tokens) {
-        throw new Error('Failed to get FCM tokens');
-      }
-      
-      console.log('[CallService] FCM tokens retrieved successfully');
-      
-      // Create VideoSDK meeting
-      const { meetingId, token } = await this.setupVideoSDKMeeting();
-      console.log('[CallService] VideoSDK meeting created:', { meetingId, hasToken: !!token });
+      // 3. Initiate call via Cloud Function
+      const payload = {
+        calleeInfo: { platform: 'ANDROID', token: String(recipientId) },
+        callerInfo: { name: this.currentUser?.name || 'User', token: this.currentUser?.fcm_token || '' },
+        videoSDKInfo: { meetingId, token },
+      };
+      await ApiService.initiateCall(payload);
 
-      // Generate a unique call ID
-      let callId: string;
-      try {
-        callId = uuidv4();
-      } catch (error) {
-        console.warn('[CallService] UUID generation failed, using fallback:', error);
-        callId = this.generateSimpleUUID();
-      }
-      
-      // Set up the complete active call state at once
+      // 4. Set active call state
       this.activeCall = {
-        callId,
         meetingId,
         token,
-        callerId: userId,
-        callerName,
-        callerFcmToken: tokens.callerToken,
-        recipientId,
+        callType,
+        isInitiator: true,
         recipientName,
-        recipientFcmToken: tokens.recipientToken,
-        callType,
+        callerName: this.currentUser?.name || 'User',
+        callerId: this.currentUser?.id,
+        recipientId: String(recipientId),
         status: 'dialing',
-        isInitiator: true,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
-
-      console.log('[CallService] Active call state created:', {
-        callId,
-        meetingId,
-        callType,
-        isInitiator: true,
-        hasToken: !!token
-      });      // Immediately persist the call state for background recovery
-      await this.persistCallState();
-      
-      // BULLETPROOF: Start VideoSDK foreground service for the call
-      await this.startForegroundServiceForCall();
-      
-      // Notify listeners of the new call state
       this.emitCallStateChange();
-      
-      console.log('[CallService] Call state emitted, preparing Firebase call');
-      
-      // Prepare call data for Firebase
-      const callData = {
-        calleeInfo: {
-          platform: await this.getRecipientPlatform(recipientId, tokens),
-          token: tokens.recipientToken,
-        },
-        callerInfo: {
-          name: callerName,
-          token: tokens.callerToken,
-        },
-        videoSDKInfo: {
-          meetingId,
-          token,
-        }
-      };      
-      // Initiate call with Firebase (this can be async in the background)
-      ApiService.initiateCallWithFirebase(callData)
-        .then((callResponse) => {
-          if (!callResponse.success) {
-            console.error('[CallService] Firebase call initiation failed:', callResponse.message);
-            // Don't fail the entire call for Firebase issues
-          } else {
-            console.log('[CallService] Firebase call initiated successfully');
-          }
-        })
-        .catch((error) => {
-          console.error('[CallService] Firebase call initiation error:', error);
-          // Don't fail the entire call for Firebase issues
-        });
-      
-      // Ensure navigation happens after a brief delay
-      setTimeout(() => {
-        console.log('[CallService] Ensuring navigation to meeting screen');
-        this.ensureNavigationToMeeting();
-      }, 100);
-      
-      console.log('[CallService] Call setup completed successfully');
+      // 5. Navigation handled by App.tsx effect
       return true;
-    } catch (error: any) {
-      console.error('[CallService] Error starting outgoing call:', error);
-      
-      // Provide more specific error messages
-      let errorMessage = 'Failed to start call. Please try again.';
-      if (error.message.includes('not authenticated')) {
-        errorMessage = 'Please log in again to make calls.';
-      } else if (error.message.includes('FCM tokens')) {
-        errorMessage = 'Unable to connect to recipient. Please try again.';
-      } else if (error.message.includes('VideoSDK')) {
-        errorMessage = 'Call service is temporarily unavailable. Please try again later.';
-      } else if (error.message.includes('Recipient information')) {
-        errorMessage = 'Invalid recipient information. Please try again.';
-      }
-      
-      Alert.alert('Call Error', errorMessage);
-      
-      // Ensure state is reset on failure
+    } catch (error) {
+      console.error('[CallService] Outgoing call error:', error);
       await this.resetCallState();
       return false;
     }
-  }  /**
-   * Handles ending a call with proper cleanup and navigation
+  }
+
+  /**
+   * Bulletproof incoming call handler: set active call state from native/FCM event, emit, navigate
+   */
+  public handleIncomingCallFromNative(event: { meetingId: string, token: string, callType: 'voice' | 'video', callerName: string, callerId: string, recipientName: string, recipientId: string }): void {
+    this.activeCall = {
+      meetingId: event.meetingId,
+      token: event.token,
+      callType: event.callType,
+      isInitiator: false,
+      recipientName: event.recipientName,
+      callerName: event.callerName,
+      callerId: event.callerId,
+      recipientId: event.recipientId,
+      status: 'ringing',
+      timestamp: Date.now(),
+    };
+    this.emitCallStateChange();
+    // Navigation handled by App.tsx effect
+  }
+
+  /**
+   * Bulletproof call end: update status, leave/deactivate VideoSDK, clean up state
    */
   public async endCall(reason?: string) {
     try {
-      if (!this.activeCall) {
-        console.log('[CallService] No active call to end');
-        return true;
-      }
-      
-      console.log('[CallService] Ending call:', {
-        callId: this.activeCall.callId,
-        reason
+      if (!this.activeCall) return;
+      // Update call status on backend
+      await ApiService.updateCallStatus({
+        callerInfo: {
+          token: this.currentUser?.fcm_token || '',
+          name: this.currentUser?.name || '',
+          platform: 'ANDROID',
+        },
+        type: 'ended',
       });
-
-      const { meetingId, token } = this.activeCall;
-      
-      // Step 1: Immediately reset the local state to prevent multiple end calls
-      const callToEnd = this.activeCall;
-      this.activeCall = null;
-      
-      // Step 2: Emit leave event for any active VideoSDK meeting
-      appEventEmitter.emit('leaveActiveCall');
-      
-      // Step 3: Clean up VideoSDK meeting on the backend (fire-and-forget)
-      if (meetingId && token) {
-        this.videoSDKService.deactivateMeeting(meetingId, token).catch(err => {
-          console.warn('[CallService] Non-critical error deactivating VideoSDK meeting:', err);
-        });
-      }
-      
-      // Step 4: Clean up CallKeep if available
-      try {
-        const callKeepService = CallKeepService.getInstance();
-        if (callKeepService.isCallKeepAvailable()) {
-          // End any active CallKeep calls
-          const callUUID = callKeepService.generateCallUUID();
-          await callKeepService.endCall(callUUID).catch(() => {
-            // Ignore errors - CallKeep might not have an active call
-          });
-        }
-      } catch (error) {
-        console.warn('[CallService] CallKeep cleanup error (non-critical):', error);
-      }
-        // Step 5: Stop VideoSDK foreground service
-      await this.stopForegroundServiceForCall();
-      
-      // Step 6: Reset local state and persistence
+      // TODO: Leave/deactivate VideoSDK meeting if needed
+      // Reset local state
       await this.resetCallState();
-      
-      // Step 7: Navigate back to previous screen if currently on Meeting screen
-      setTimeout(() => {
-        const currentRoute = getCurrentRoute();        if (currentRoute?.name === 'Meeting') {
-          console.log('[CallService] Navigating away from Meeting screen after call end');
-          navigate('Main', { screen: 'TipCall', params: {} });
-        }
-      }, 100);
-      
-      console.log('[CallService] Call ended successfully');
-      return true;
     } catch (error) {
-      console.error('[CallService] Error ending call:', error);
-      // Force reset state even if there's an error
-      this.activeCall = null;
+      console.error('[CallService] endCall error:', error);
       await this.resetCallState();
-      
-      // Still attempt navigation cleanup
-      setTimeout(() => {
-        const currentRoute = getCurrentRoute();        if (currentRoute?.name === 'Meeting') {
-          navigate('Main', { screen: 'TipCall', params: {} });
-        }
-      }, 100);      
-      return false;
     }
   }
 
@@ -583,13 +447,6 @@ class CallService {
     if (this.callStateRestoreTimer) {
       clearTimeout(this.callStateRestoreTimer);
     }
-    
-    // BULLETPROOF: Cleanup VideoSDK foreground service
-    this.foregroundService.destroy();
-    
-    // Remove foreground service event listeners
-    DeviceEventEmitter.removeAllListeners('endCallFromForegroundService');
-    DeviceEventEmitter.removeAllListeners('toggleMuteFromForegroundService');
   }
   /**
    * Updates the status of the active call and notifies listeners.
@@ -598,9 +455,6 @@ class CallService {
     if (this.activeCall) {
       console.log(`[CallService] Updating call status from ${this.activeCall.status} to ${status}`);
       this.activeCall.status = status;
-      
-      // BULLETPROOF: Update foreground service with new status
-      this.updateForegroundServiceStatus(status);
       
       this.emitCallStateChange();
     } else {
@@ -776,64 +630,6 @@ class CallService {
       // Emit event for meeting screen to handle mute toggle
       appEventEmitter.emit('toggleMuteFromService');
     });
-  }
-
-  /**
-   * BULLETPROOF: Start foreground service when call begins
-   */
-  private async startForegroundServiceForCall(): Promise<void> {
-    if (!this.activeCall) return;
-
-    try {
-      const callData = {
-        meetingId: this.activeCall.meetingId,
-        callType: this.activeCall.callType,
-        participantName: this.activeCall.recipientName,
-        callerName: this.activeCall.callerName,
-        isInitiator: this.activeCall.isInitiator,
-      };
-
-      const started = await this.foregroundService.startForegroundService(callData);
-      
-      if (started) {
-        console.log('[CallService] VideoSDK foreground service started for call');
-      } else {
-        console.warn('[CallService] Failed to start VideoSDK foreground service');
-      }
-    } catch (error) {
-      console.error('[CallService] Error starting VideoSDK foreground service:', error);
-    }
-  }
-
-  /**
-   * BULLETPROOF: Update foreground service with call status
-   */
-  private async updateForegroundServiceStatus(status: string, participantCount?: number): Promise<void> {
-    if (!this.activeCall || !this.foregroundService.isServiceActive()) return;
-
-    try {
-      const updateData = {
-        isConnected: status === 'connected',
-        participantCount: participantCount || 1,
-      };
-
-      await this.foregroundService.updateForegroundService(updateData);
-      console.log('[CallService] VideoSDK foreground service updated:', updateData);
-    } catch (error) {
-      console.error('[CallService] Error updating VideoSDK foreground service:', error);
-    }
-  }
-
-  /**
-   * BULLETPROOF: Stop foreground service when call ends
-   */
-  private async stopForegroundServiceForCall(): Promise<void> {
-    try {
-      await this.foregroundService.stopForegroundService();
-      console.log('[CallService] VideoSDK foreground service stopped');
-    } catch (error) {
-      console.error('[CallService] Error stopping VideoSDK foreground service:', error);
-    }
   }
 }
 

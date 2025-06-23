@@ -1,10 +1,20 @@
-import { NativeModules, Platform } from 'react-native';
+import { NativeModules, Platform, NativeEventEmitter } from 'react-native';
 import PermissionsService from './PermissionsService';
 
 const { OngoingCall } = NativeModules;
 
 // Track permission status to avoid repeated requests
 let phoneCallPermissionGranted: boolean | null = null;
+
+const LINKING_ERROR =
+  `The package 'OngoingCallModule' doesn't seem to be linked. Make sure:
+\n\n` +
+  Platform.select({ ios: "- You have run 'pod install'\n", default: '' }) +
+  '- You rebuilt the app after installing the package\n' +
+  '- You are not using Expo managed workflow\n';
+
+const OngoingCallNative = NativeModules.OngoingCallModule || {};
+const eventEmitter = new NativeEventEmitter(OngoingCallNative);
 
 const OngoingCallModule = {
   async startOngoingCallNotification(title: string, message: string) {
@@ -19,9 +29,9 @@ const OngoingCallModule = {
         }
       }
       
-      if (OngoingCall && OngoingCall.startOngoingCallNotification) {
+      if (Platform.OS === 'android' && OngoingCallNative.startOngoingCallNotification) {
         console.log('[OngoingCallModule] Starting ongoing call notification');
-        OngoingCall.startOngoingCallNotification(title, message);
+        OngoingCallNative.startOngoingCallNotification(title, message);
       } else {
         console.warn('[OngoingCallModule] OngoingCall native module not available');
       }
@@ -30,11 +40,22 @@ const OngoingCallModule = {
     }
   },
   
+  updateOngoingCallNotification(message: string) {
+    try {
+      if (Platform.OS === 'android' && OngoingCallNative.updateOngoingCallNotification) {
+        console.log('[OngoingCallModule] Updating ongoing call notification');
+        OngoingCallNative.updateOngoingCallNotification(message);
+      }
+    } catch (error) {
+      console.error('[OngoingCallModule] Error updating ongoing call notification:', error);
+    }
+  },
+
   stopOngoingCallNotification() {
     try {
-      if (OngoingCall && OngoingCall.stopOngoingCallNotification) {
+      if (Platform.OS === 'android' && OngoingCallNative.stopOngoingCallNotification) {
         console.log('[OngoingCallModule] Stopping ongoing call notification');
-        OngoingCall.stopOngoingCallNotification();
+        OngoingCallNative.stopOngoingCallNotification();
       }
     } catch (error) {
       console.error('[OngoingCallModule] Error stopping ongoing call notification:', error);
@@ -44,6 +65,14 @@ const OngoingCallModule = {
   // Reset permission status (useful for testing or after permission changes)
   resetPermissionStatus() {
     phoneCallPermissionGranted = null;
+  },
+
+  /**
+   * Listen for mute toggled events from native notification
+   */
+  onMuteToggled(callback: (isMuted: boolean) => void): () => void {
+    const subscription = eventEmitter.addListener('MuteToggled', callback);
+    return () => subscription.remove();
   },
 };
 

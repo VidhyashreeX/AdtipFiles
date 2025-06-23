@@ -10,8 +10,10 @@ import {
   Animated,
   ActivityIndicator,
   BackHandler,
+  AppState,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MeetingProvider, useMeeting } from '@videosdk.live/react-native-sdk';
 import { useCall } from '../../contexts/CallProvider';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -20,6 +22,7 @@ import CallErrorBoundary from '../../components/common/CallErrorBoundary';
 import { ChevronLeft, MoreVertical } from 'lucide-react-native';
 import { MainNavigatorParamList } from '../../types/navigation';
 import { appEventEmitter } from '../../events/AppEventEmitter';
+import OngoingCallModule from '../../services/OngoingCallModule';
 
 // Define the type for the route params
 type MeetingScreenRouteProp = RouteProp<MainNavigatorParamList, 'Meeting'>;
@@ -34,7 +37,8 @@ const MeetingControls: React.FC<{
   micEnabled: boolean;
   cameraEnabled: boolean;
   callType: 'voice' | 'video';
-}> = ({ onEndCall, onToggleMic, onToggleCamera, micEnabled, cameraEnabled, callType }) => {
+  isMuted: boolean;
+}> = ({ onEndCall, onToggleMic, onToggleCamera, micEnabled, cameraEnabled, callType, isMuted }) => {
   const { colors } = useTheme();
   
   return (
@@ -73,7 +77,7 @@ const MeetingControls: React.FC<{
  */
 const MeetingView: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
   const { activeCall } = useCall();
   const route = useRoute<MeetingScreenRouteProp>();
   
@@ -85,6 +89,7 @@ const MeetingView: React.FC = () => {
   const [isJoining, setIsJoining] = useState(false);
   const controlsOpacity = useRef(new Animated.Value(1)).current;
   const hasAttemptedJoinRef = useRef(false);
+  const [isMuted, setIsMuted] = useState(false);
   
   // Get route params safely
   const { callType = 'voice', recipientName = 'Participant' } = route.params || {};
@@ -214,18 +219,46 @@ const MeetingView: React.FC = () => {
     };
   }, [leave, hasJoined, isEndingCall]);
 
-  // Handle back button
-  useFocusEffect(
-    useCallback(() => {
-      const onBackPress = () => {
-        handleEndCall();
-        return true;
-      };
+  // Show ongoing call notification when backgrounded
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: string) => {
+      if (nextAppState === 'background') {
+        try {
+          OngoingCallModule.startOngoingCallNotification(
+            'Ongoing Call',
+            `In call with ${recipientName}`
+          );
+        } catch (error) {
+          console.error('[MeetingView] Error starting ongoing call notification:', error);
+        }
+      } else if (nextAppState === 'active') {
+        try {
+          OngoingCallModule.stopOngoingCallNotification();
+        } catch (error) {
+          console.error('[MeetingView] Error stopping ongoing call notification:', error);
+        }
+      }
+    };
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, [recipientName]);
 
-      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => subscription.remove();
-    }, [handleEndCall])
-  );
+  // Custom back button: go to TipCallScreen, keep call running
+  useEffect(() => {
+    const onBackPress = () => {
+      try {
+        // Type-safe navigation to TipCallScreen with required param
+        navigation.navigate('TipCall', { initialCallNotificationData: undefined });
+        return true; // Prevent default
+      } catch (error) {
+        console.error('[MeetingView] Error navigating to TipCallScreen:', error);
+        return false;
+      }
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [navigation]);
+
   // Handle mic toggle
   const handleToggleMic = useCallback(() => {
     if (toggleMic) {
@@ -238,19 +271,23 @@ const MeetingView: React.FC = () => {
     }
   }, [toggleMic]);
 
-  // Listen for mute toggle events from foreground service
+  // Listen for mute toggled events from native notification
   useEffect(() => {
-    const handleForegroundServiceMuteToggle = () => {
-      console.log('[MeetingView] Received foregroundServiceMuteToggle event from notification');
-      handleToggleMic();
-    };
-
-    appEventEmitter.on('foregroundServiceMuteToggle', handleForegroundServiceMuteToggle);
-    
-    return () => {
-      appEventEmitter.off('foregroundServiceMuteToggle', handleForegroundServiceMuteToggle);
-    };
-  }, [handleToggleMic]);
+    const removeMuteListener = OngoingCallModule.onMuteToggled((muted: boolean) => {
+      setIsMuted(muted);
+      try {
+        if (meetingHooks && meetingHooks.toggleMic) {
+          // Only toggle if state differs
+          if (muted !== !micEnabled) {
+            meetingHooks.toggleMic();
+          }
+        }
+      } catch (error) {
+        console.error('[MeetingView] Error toggling mic from notification:', error);
+      }
+    });
+    return removeMuteListener;
+  }, [meetingHooks, micEnabled]);
 
   // Handle camera toggle
   const handleToggleCamera = useCallback(() => {
@@ -375,6 +412,7 @@ const MeetingView: React.FC = () => {
             micEnabled={micEnabled}
             cameraEnabled={cameraEnabled}
             callType={callType}
+            isMuted={isMuted}
           />
         </Animated.View>
       )}
