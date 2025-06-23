@@ -184,14 +184,36 @@ class CallNotificationHandler {
     try {
       console.log('[CallNotificationHandler] Showing foreground call notification');
       
+      // NEW: Parse the info field which contains the actual call data
+      let callData = data;
+      if (data.info) {
+        try {
+          console.log('[CallNotificationHandler] Parsing info field for foreground notification:', data.info);
+          const parsedInfo = JSON.parse(data.info as string);
+          callData = { ...data, ...parsedInfo };
+          console.log('[CallNotificationHandler] Parsed foreground call data:', callData);
+        } catch (parseError) {
+          console.error('[CallNotificationHandler] Failed to parse info field for foreground:', parseError);
+          // Continue with original data if parsing fails
+        }
+      }
+      
+      // Handle nested structure from FCM info field with proper type checking
+      const callerInfo = (typeof callData.callerInfo === 'object' && callData.callerInfo !== null) 
+        ? callData.callerInfo as any 
+        : {};
+      const videoSDKInfo = (typeof callData.videoSDKInfo === 'object' && callData.videoSDKInfo !== null) 
+        ? callData.videoSDKInfo as any 
+        : {};
+      
       const callNotificationData = {
-        callId: String(data.callId || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`),
-        callerName: String(data.callerName || 'Unknown Caller'),
-        callType: (String(data.callType) === 'video' ? 'video' : 'voice') as 'voice' | 'video',
-        callerId: String(data.callerId || 'unknown'),
-        meetingId: String(data.meetingId || ''),
-        token: String(data.rtcToken || data.token || ''),
-        callerAvatar: data.callerAvatar ? String(data.callerAvatar) : undefined,
+        callId: String(callData.callId || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`),
+        callerName: String(callerInfo.name || callData.callerName || 'Unknown Caller'),
+        callType: (String(callData.callType || 'voice') === 'video' ? 'video' : 'voice') as 'voice' | 'video',
+        callerId: String(callerInfo.userId || callData.callerId || 'unknown'),
+        meetingId: String(videoSDKInfo.meetingId || callData.meetingId || ''),
+        token: String(videoSDKInfo.token || callData.rtcToken || callData.token || ''),
+        callerAvatar: (callerInfo.avatarUrl || callData.callerAvatar) ? String(callerInfo.avatarUrl || callData.callerAvatar) : undefined,
       };
 
       // Let WhatsApp Call Manager handle the notification display
@@ -212,9 +234,32 @@ class CallNotificationHandler {
     try {
       console.log('[CallNotificationHandler] Showing basic incoming call notification');
       
-      const callerName = String(data.callerName || 'Unknown Caller');
-      const callType = String(data.callType) === 'video' ? 'video' : 'voice';
-      const callId = String(data.callId || `fallback_call_${Date.now()}`);
+      // NEW: Parse the info field which contains the actual call data
+      let callData = data;
+      if (data.info) {
+        try {
+          console.log('[CallNotificationHandler] Parsing info field for basic notification:', data.info);
+          const parsedInfo = JSON.parse(data.info as string);
+          callData = { ...data, ...parsedInfo };
+        } catch (parseError) {
+          console.error('[CallNotificationHandler] Failed to parse info field for basic notification:', parseError);
+          // Continue with original data if parsing fails
+        }
+      }
+      
+      // Handle nested structure from FCM info field with proper type checking
+      const callerInfo = (typeof callData.callerInfo === 'object' && callData.callerInfo !== null) 
+        ? callData.callerInfo as any 
+        : {};
+      const videoSDKInfo = (typeof callData.videoSDKInfo === 'object' && callData.videoSDKInfo !== null) 
+        ? callData.videoSDKInfo as any 
+        : {};
+      
+      const callerName = String(callerInfo.name || callData.callerName || 'Unknown Caller');
+      const callType = String(callData.callType || 'voice') === 'video' ? 'video' : 'voice';
+      const callId = String(callData.callId || `fallback_call_${Date.now()}`);
+      const meetingId = String(videoSDKInfo.meetingId || callData.meetingId || '');
+      const token = String(videoSDKInfo.token || callData.rtcToken || callData.token || '');
       
       // Create basic notification channel if it doesn't exist
       await notifee.createChannel({
@@ -234,8 +279,9 @@ class CallNotificationHandler {
           callId,
           callType,
           callerName,
-          meetingId: String(data.meetingId || ''),
-          token: String(data.rtcToken || data.token || ''),
+          meetingId,
+          token,
+          callerId: String(callerInfo.userId || callData.callerId || 'unknown'),
           isFallback: 'true',
         },
         android: {
@@ -290,29 +336,54 @@ class CallNotificationHandler {
         return;
       }
 
+      // NEW: Parse the info field which contains the actual call data
+      let callData = data;
+      if (data.info) {
+        try {
+          console.log('[CallNotificationHandler] Parsing info field:', data.info);
+          const parsedInfo = JSON.parse(data.info as string);
+          callData = { ...data, ...parsedInfo };
+          console.log('[CallNotificationHandler] Parsed call data:', callData);
+        } catch (parseError) {
+          console.error('[CallNotificationHandler] Failed to parse info field:', parseError);
+          // Continue with original data if parsing fails
+        }
+      }
+
       // Check if this is a call notification
-      if (data.isIncomingCall === 'true' || data.type === 'call') {
-        console.log('[CallNotificationHandler] Processing call notification:', data);
+      if (callData.isIncomingCall === 'true' || callData.type === 'call' || callData.type === 'CALL_INITIATION') {
+        console.log('[CallNotificationHandler] Processing call notification:', callData);
         
         try {
           // Extract call data with proper type conversion and validation
+          // Handle nested structure from FCM info field with proper type checking
+          const callerInfo = (typeof callData.callerInfo === 'object' && callData.callerInfo !== null) 
+            ? callData.callerInfo as any 
+            : {};
+          const videoSDKInfo = (typeof callData.videoSDKInfo === 'object' && callData.videoSDKInfo !== null) 
+            ? callData.videoSDKInfo as any 
+            : {};
+          
           const callNotificationData = {
-            callId: String(data.callId || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`),
-            callerName: String(data.callerName || 'Unknown Caller'),
-            callType: (String(data.callType) === 'video' ? 'video' : 'voice') as 'voice' | 'video',
-            callerId: String(data.callerId || 'unknown'),
-            meetingId: String(data.meetingId || ''),
-            token: String(data.rtcToken || data.token || ''),
-            callerAvatar: data.callerAvatar ? String(data.callerAvatar) : undefined,
+            callId: String(callData.callId || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`),
+            callerName: String(callerInfo.name || callData.callerName || 'Unknown Caller'),
+            callType: (String(callData.callType || 'voice') === 'video' ? 'video' : 'voice') as 'voice' | 'video',
+            callerId: String(callerInfo.userId || callData.callerId || 'unknown'),
+            meetingId: String(videoSDKInfo.meetingId || callData.meetingId || ''),
+            token: String(videoSDKInfo.token || callData.rtcToken || callData.token || ''),
+            callerAvatar: (callerInfo.avatarUrl || callData.callerAvatar) ? String(callerInfo.avatarUrl || callData.callerAvatar) : undefined,
+            callerFcmToken: String(callerInfo.token || ''),
           };
 
           // Validate required data
           if (!callNotificationData.meetingId || !callNotificationData.token) {
             console.error('[CallNotificationHandler] Missing required call data:', callNotificationData);
+            console.error('[CallNotificationHandler] meetingId:', callNotificationData.meetingId);
+            console.error('[CallNotificationHandler] token:', callNotificationData.token);
             return;
           }
 
-          // Handle incoming call with WhatsApp Call Manager
+          // Handle incoming call with WhatsApp Call Manager  
           await this.whatsAppCallManager.handleIncomingCall(callNotificationData);
 
           console.log('[CallNotificationHandler] ✅ Call notification processed successfully');
@@ -320,16 +391,18 @@ class CallNotificationHandler {
         } catch (callHandlingError) {
           console.error('[CallNotificationHandler] Error processing call notification:', callHandlingError);
           // Don't re-throw to prevent app crashes
-        }      } else if (data.type === 'call_status') {
+        }
+      } else if (callData.type === 'call_status') {
         // Handle call status updates (accepted, declined, ended)
-        console.log('[CallNotificationHandler] Processing call status update:', data);
+        console.log('[CallNotificationHandler] Processing call status update:', callData);
         try {
-          this.handleCallStatusUpdate(data);
+          this.handleCallStatusUpdate(callData);
         } catch (statusError) {
           console.error('[CallNotificationHandler] Error processing call status update:', statusError);
         }
       } else {
-        console.log('[CallNotificationHandler] Unknown notification type:', data.type);
+        console.log('[CallNotificationHandler] Unknown notification type:', callData.type || 'undefined');
+        console.log('[CallNotificationHandler] Full call data for debugging:', callData);
       }
 
     } catch (error) {
