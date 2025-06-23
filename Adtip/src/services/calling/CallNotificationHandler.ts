@@ -122,10 +122,9 @@ class CallNotificationHandler {
         return;
       }
 
-      const { data } = remoteMessage;
-      
-      // Check if this is an incoming call
-      if (data.isIncomingCall === 'true' || data.type === 'call' || data.type === 'INCOMING_CALL') {
+      const { data } = remoteMessage;      // Check if this is an incoming call
+      // Support multiple notification types for compatibility
+      if (data.isIncomingCall === 'true' || data.type === 'call' || data.type === 'INCOMING_CALL' || data.type === 'CALL_INITIATED') {
         console.log('[CallNotificationHandler] Incoming call detected in foreground');
         
         // CRITICAL: Always show Notifee notification for incoming calls in foreground
@@ -160,9 +159,8 @@ class CallNotificationHandler {
       }
 
       const { data } = remoteMessage;
-      
-      // Only handle incoming calls in fallback
-      if (data.isIncomingCall === 'true' || data.type === 'call' || data.type === 'INCOMING_CALL') {
+        // Only handle incoming calls in fallback
+      if (data.isIncomingCall === 'true' || data.type === 'call' || data.type === 'INCOMING_CALL' || data.type === 'CALL_INITIATED') {
         console.log('[CallNotificationHandler] Showing fallback notification for incoming call');
         
         // Show basic notification using Notifee
@@ -348,10 +346,9 @@ class CallNotificationHandler {
           console.error('[CallNotificationHandler] Failed to parse info field:', parseError);
           // Continue with original data if parsing fails
         }
-      }
-
-      // Check if this is a call notification
-      if (callData.isIncomingCall === 'true' || callData.type === 'call' || callData.type === 'CALL_INITIATION') {
+      }      // Check if this is a call notification
+      // Support both CALL_INITIATION and CALL_INITIATED for compatibility
+      if (callData.isIncomingCall === 'true' || callData.type === 'call' || callData.type === 'CALL_INITIATION' || callData.type === 'CALL_INITIATED') {
         console.log('[CallNotificationHandler] Processing call notification:', callData);
         
         try {
@@ -420,7 +417,7 @@ class CallNotificationHandler {
 
       const { data } = remoteMessage;
 
-      if (data.isIncomingCall === 'true' || data.type === 'call') {
+      if (data.isIncomingCall === 'true' || data.type === 'call' || data.type === 'CALL_INITIATED') {
         // If user tapped on call notification, navigate to appropriate screen
         console.log('[CallNotificationHandler] User opened app from call notification');
         
