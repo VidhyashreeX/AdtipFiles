@@ -432,7 +432,13 @@ const AppNavigator = () => {
             okButton: 'OK',
             imageName: 'phone_account_icon',
             additionalPermissions: [],
-            selfManaged: false,
+            selfManaged: false, // CRITICAL FIX: Set to false to prevent self-managed phone account errors
+            foregroundService: {
+              channelId: 'adtip_call_channel',
+              channelName: 'Adtip Call Channel',
+              notificationTitle: 'Adtip is running in background',
+              notificationIcon: 'ic_launcher',
+            },
           },
         };
         
@@ -448,6 +454,7 @@ const AppNavigator = () => {
       } catch (error) {
         console.error('[App] CallKeep initialization error:', error);
         setCallKeepReady(true); // Allow app to continue even if CallKeep fails
+        console.warn('[App] ⚠️ CallKeep failed to initialize, app will continue without native call functionality');
       }
     };
 

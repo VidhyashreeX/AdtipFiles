@@ -86,3 +86,52 @@ export const WALLET_ENDPOINTS = {
 export const EXPLORE_ENDPOINTS = {
   GET_EXPLORE_CONTENT: '/api/explore',
 };
+
+// Additional endpoints from CSV analysis
+export const ADDITIONAL_ENDPOINTS = {
+  // Guest endpoints (no login required)
+  LIST_PREMIUM_POSTS: '/api/list-premium-posts',
+  GET_PUBLIC_VIDEOS: '/getpublicvideos', // + '/:categoryId/:offset'
+  GET_PUBLIC_SHOTS: '/getpublicshots',
+  
+  // Video interactions
+  SAVE_VIDEO_LIKE: '/saveVideoLike',
+  SAVE_VIDEO_COMMENT: '/savevideocomment',
+  SAVE_VIDEO_COMMENT_LIKE: '/savevideocommentlike',
+  GET_COMMENTS_OF_VIDEOS: '/getcommentsofvideos', // + '/:userId/:videoId'
+  
+  // Follow/Unfollow
+  FOLLOW_USER: '/api/follow-user',
+  
+  // Channel management
+  SAVE_MY_CHANNEL: '/api/savemychannel',
+  UPDATE_CHANNEL: '/api/updatechanel',
+  GET_POPULAR_SHORT: '/getpopularshort', // + '/:videoType/:userId'
+  GET_VIDEO_BY_CHANNEL: '/getvideobychannel', // + '/:videoType/:channelId/:userId'
+  GET_FOLLOWED_CHANNELS: '/getlistoffollowedchannelbyuser', // + '/:userId'
+  
+  // Premium plans
+  USER_PREMIUM_PLANS: '/api/user-premium-plans', // + '/:userId'
+  CONTENT_PREMIUM_PLANS: '/api/content-premium-plans', // + '/:userId'
+  UPGRADE_PREMIUM: '/api/upgrade-premium',
+  UPGRADE_CONTENT_PREMIUM: '/api/upgrade-content-premium',
+  
+  // Razorpay
+  RAZORPAY_DETAILS: '/razorpay-details',
+  RAZORPAY_ORDER: '/api/razorpay-order',
+  RAZORPAY_VERIFICATION: '/api/razorpay-verification',
+  ADD_FUNDS: '/api/addfunds',
+  
+  // Celebration ads
+  SAVE_CELEBRATION_ADS: '/api/savecelebrationadds',
+  GET_CELEBRATION_ADS: '/getcelebrationads',
+  SAVE_CELEBRATION_AD_VIEW: '/savecelebrationadview',
+  
+  // Others
+  GET_SENT_NOTIFICATIONS: '/getsentnotification', // + '/:userId'
+  UPDATE_USER: '/api/updateuser',
+  UPLOAD_POST: '/api/post',
+  UPLOAD_SHOT: '/uploadshot',
+  GENERATE_PRESIGNED_URL: '/api/generatePresignedUrl',
+  GET_REFERRAL_DETAILS: '/api/referral/details', // + '/:userId'
+};

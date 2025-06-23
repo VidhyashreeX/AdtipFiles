@@ -13,7 +13,8 @@ import {
 import Video from 'react-native-video';
 import Icon from 'react-native-vector-icons/Feather';
 import { Heart, MessageCircle, Share2, UserPlus } from 'lucide-react-native';
-import {useTheme} from '../../contexts/ThemeContext';
+import { useTheme } from '../../contexts/ThemeContext';
+import { createSecureImageSource, createSecureVideoSource } from '../../utils/mediaUtils';
 
 const {width} = Dimensions.get('window');
 
@@ -61,8 +62,7 @@ const PostItem: React.FC<PostItemProps> = ({
   userId,
   isVisible = false,
   last_active,
-}) => {
-  const {colors, isDarkMode} = useTheme();
+}) => {  const {colors, isDarkMode} = useTheme();
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [videoLoading, setVideoLoading] = useState(true);
@@ -70,7 +70,38 @@ const PostItem: React.FC<PostItemProps> = ({
   const [videoDuration, setVideoDuration] = useState(0);
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoError, setVideoError] = useState(false);
-  const [wasManuallyPaused, setWasManuallyPaused] = useState(false); // Track manual pause
+  const [wasManuallyPaused, setWasManuallyPaused] = useState(false);
+  const [secureProfileImage, setSecureProfileImage] = useState<any>(null);
+  const [securePostImage, setSecurePostImage] = useState<any>(null);
+  const [secureVideoSource, setSecureVideoSource] = useState<any>(null);
+
+  // Load secure media sources
+  useEffect(() => {
+    const loadSecureMedia = async () => {
+      try {
+        // Load secure profile image
+        if (profileImage) {
+          const secureProfile = await createSecureImageSource(profileImage);
+          setSecureProfileImage(secureProfile);
+        }
+
+        // Load secure post media
+        if (postImage) {
+          if (media_type === 'video') {
+            const secureVideo = await createSecureVideoSource(postImage);
+            setSecureVideoSource(secureVideo);
+          } else {
+            const secureImage = await createSecureImageSource(postImage);
+            setSecurePostImage(secureImage);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load secure media:', error);
+      }
+    };
+
+    loadSecureMedia();
+  }, [profileImage, postImage, media_type]);
 
   // Enhanced Video Playback Logic - INSTANT play/pause on visibility change
   useEffect(() => {
@@ -184,11 +215,10 @@ const PostItem: React.FC<PostItemProps> = ({
   return (
     <View style={[styles.postContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
       {/* User Info Header */}
-      <View style={styles.postHeader}>
-        <TouchableOpacity onPress={handleUserPress} style={styles.userInfo}>
+      <View style={styles.postHeader}>        <TouchableOpacity onPress={handleUserPress} style={styles.userInfo}>
           <Image
-            source={{
-              uri: profileImage || 'https://via.placeholder.com/40x40.png?text=U',
+            source={secureProfileImage || {
+              uri: 'https://via.placeholder.com/40x40.png?text=U',
             }}
             style={styles.profileImage}
           />
@@ -205,24 +235,22 @@ const PostItem: React.FC<PostItemProps> = ({
         <TouchableOpacity onPress={handleFollowPress} style={styles.followIconButton}>
           <UserPlus size={20} color={colors.primary} />
         </TouchableOpacity>
-      </View>
-
-      {/* Media Content (Image or Video) */}
-      <TouchableWithoutFeedback onPress={handlePostPress}>
+      </View>      {/* Media Content (Image or Video) */}
+      <TouchableOpacity onPress={handlePostPress} activeOpacity={1}>
         <View style={styles.mediaContainer}>
-          {media_type === 'image' && postImage && (
+          {media_type === 'image' && postImage && securePostImage && (
             <Image
-              source={{ uri: postImage }}
+              source={securePostImage}
               style={styles.postMedia}
               resizeMode="cover"
             />
           )}
 
-          {media_type === 'video' && postImage && !videoError && (
+          {media_type === 'video' && postImage && secureVideoSource && !videoError && (
             <TouchableWithoutFeedback onPress={togglePlayPause}>
               <View style={styles.videoPlayerContainer}>
                 <Video
-                  source={{uri: postImage}}
+                  source={secureVideoSource}
                   style={styles.postMedia}
                   resizeMode="cover"
                   repeat={true}
@@ -315,7 +343,7 @@ const PostItem: React.FC<PostItemProps> = ({
             </View>
           )}
         </View>
-      </TouchableWithoutFeedback>
+      </TouchableOpacity>
 
       {/* Actions (Like, Comment, Share) */}
       <View style={styles.postActions}>

@@ -28,6 +28,7 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 
 import { useTheme } from '../../contexts/ThemeContext';
 import MemoizedRelatedVideoCard from '../../components/tiptube/MemoizedRelatedVideoCard';
+import { createSecureVideoSource } from '../../utils/mediaUtils';
 
 // Get screen dimensions
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -66,7 +67,29 @@ const VideoPlayerModalScreen: React.FC = () => {
   const { isDarkMode, colors } = useTheme();
   
   const [isVideoReady, setIsVideoReady] = useState(false);
+  const [videoSource, setVideoSource] = useState<any>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
   const videoPlayerRef = useRef<VideoRef | null>(null);
+
+  // Load secure video source
+  useEffect(() => {
+    const loadVideoSource = async () => {
+      try {
+        setVideoError(null);
+        const secureSource = await createSecureVideoSource(video.videoUrl);
+        console.log('[VideoPlayerModal] Loading video source:', {
+          originalUrl: video.videoUrl,
+          secureSource: secureSource,
+        });
+        setVideoSource(secureSource);
+      } catch (error) {
+        console.error('[VideoPlayerModal] Failed to create secure video source:', error);
+        setVideoError('Failed to load video source');
+      }
+    };
+
+    loadVideoSource();
+  }, [video.videoUrl]);
 
   // Animation values - separate backdrop and content opacity
   const backdropOpacity = useSharedValue(0);
@@ -179,33 +202,77 @@ const VideoPlayerModalScreen: React.FC = () => {
       
       {/* Content Layer */}
       <Animated.View style={[{ flex: 1 }, contentStyle]}>
-        {/* Video Player */}
-        <GestureDetector gesture={dragGesture}>
+        {/* Video Player */}        <GestureDetector gesture={dragGesture}>
           <View style={styles.videoContainer}>
-            <Video
-              key={video.id}
-              source={{uri: video.videoUrl ?? ''}}
-              style={StyleSheet.absoluteFillObject}
-              controls={true}
-              paused={false}
-              resizeMode="contain"
-              onReadyForDisplay={() => setIsVideoReady(true)}
-              onError={(error) => {
-                console.error('[VideoPlayerModal] Video error:', error);
-              }}
-              repeat={false}
-              playInBackground={false}
-              playWhenInactive={false}
-              bufferConfig={{
-                minBufferMs: 1500,
-                maxBufferMs: 6000,
-                bufferForPlaybackMs: 800,
-                bufferForPlaybackAfterRebufferMs: 1500
-              }}
-              ref={videoPlayerRef}
-            />
+            {videoSource && !videoError ? (
+              <Video
+                key={video.id}
+                source={videoSource}
+                style={StyleSheet.absoluteFillObject}
+                controls={true}
+                paused={false}
+                resizeMode="contain"
+                onReadyForDisplay={() => setIsVideoReady(true)}
+                onError={(error) => {
+                  console.error('[VideoPlayerModal] Video playback error:', error);
+                  setVideoError('Video playback failed');
+                }}
+                onLoadStart={() => {
+                  console.log('[VideoPlayerModal] Video loading started');
+                  setIsVideoReady(false);
+                }}
+                onLoad={(data) => {
+                  console.log('[VideoPlayerModal] Video loaded successfully:', data);
+                }}
+                repeat={false}
+                playInBackground={false}
+                playWhenInactive={false}
+                bufferConfig={{
+                  minBufferMs: 1500,
+                  maxBufferMs: 6000,
+                  bufferForPlaybackMs: 800,
+                  bufferForPlaybackAfterRebufferMs: 1500
+                }}
+                ref={videoPlayerRef}
+              />
+            ) : (
+              <View style={styles.loadingOverlay}>
+                {videoError ? (
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={{ color: '#fff', textAlign: 'center', marginBottom: 16 }}>
+                      {videoError}
+                    </Text>
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: 'rgba(255,255,255,0.3)',
+                        paddingHorizontal: 16,
+                        paddingVertical: 8,
+                        borderRadius: 8,
+                      }}
+                      onPress={() => {
+                        setVideoError(null);
+                        // Retry loading
+                        const retryLoad = async () => {
+                          try {
+                            const secureSource = await createSecureVideoSource(video.videoUrl);
+                            setVideoSource(secureSource);
+                          } catch (error) {
+                            setVideoError('Failed to load video source');
+                          }
+                        };
+                        retryLoad();
+                      }}
+                    >
+                      <Text style={{ color: '#fff', fontWeight: '600' }}>Retry</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <ActivityIndicator size="large" color="#fff" />
+                )}
+              </View>
+            )}
             
-            {!isVideoReady && (
+            {!isVideoReady && !videoError && videoSource && (
               <View style={styles.loadingOverlay}>
                 <ActivityIndicator size="large" color="#fff" />
               </View>

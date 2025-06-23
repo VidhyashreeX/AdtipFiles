@@ -14,7 +14,10 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../../contexts/AuthContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme } from '../../contexts/ThemeContext';
+import ApiService from '../../services/ApiService';
+import { SaveChannelRequest } from '../../types/api';
+import { getFallbackAvatarUrl, getSecureMediaUrl } from '../../utils/mediaUtils';
 
 type RootStackParamList = {
   TabHome: undefined;
@@ -69,8 +72,7 @@ interface User {
   id: number | string;
 }
 
-const CreateChannelScreen: React.FC = () => {
-  const [channelName, setChannelName] = useState('');
+const CreateChannelScreen: React.FC = () => {  const [channelName, setChannelName] = useState('');
   const [description, setDescription] = useState('');
   const [nameError, setNameError] = useState('');
   const [channelData, setChannelData] = useState<ChannelData | null>(null);
@@ -78,12 +80,6 @@ const CreateChannelScreen: React.FC = () => {
   const [error, setError] = useState('');
   const navigation = useNavigation<NavigationProp>();
   const { user } = useAuth();
-
-  // Generate a random avatar URL using DiceBear API if none provided
-  const getRandomAvatarUrl = (userId: string | number) => {
-    return `https://api.dicebear.com/9.x/identicon/svg?seed=${userId || Math.random()}`;
-  };
-
   useEffect(() => {
     const fetchChannel = async () => {
       if (!user || !user.id) {
@@ -93,48 +89,25 @@ const CreateChannelScreen: React.FC = () => {
       }
 
       try {
-        const token = await AsyncStorage.getItem('accessToken');
-        if (!token) {
-          setError('Authentication token not found');
-          setLoading(false);
-          return;
-        }
-
-        const response = await fetch(`https://api.adtip.in/api/getchannelbyuserid/${user.id}`, {
-          method: 'GET',
-          headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(errorText);
-        }
-
-        const result = await response.json();
-        if (result.status === 200 && result.data && result.data.length > 0) {
-          const channel = result.data[0];
+        const response = await ApiService.getChannelByUserId(Number(user.id));
+        if (response.status === 200 && response.data && response.data.length > 0) {
+          const channel = response.data[0];
           const mappedChannel: ChannelData = {
             channelId: String(channel.channelId),
             channelName: channel.channelName,
             description: channel.description || '',
-            avatar: channel.profileImage || getRandomAvatarUrl(user.id),
+            avatar: channel.profileImage ? await getSecureMediaUrl(channel.profileImage) : getFallbackAvatarUrl(user.id),
             followers: Number(channel.totalSubscribers) || 0,
             totalViews: Number(channel.totalVideos) || 0,
             isCallEnabled: false,
           };
           setChannelData(mappedChannel);
-          // Store channelId in AsyncStorage
-          await AsyncStorage.setItem('channelId', mappedChannel.channelId);
           navigation.replace('Channel', { channelId: mappedChannel.channelId });
         } else {
           setChannelData(null);
         }
       } catch (err: any) {
-        if (err.message.includes('404')) {
+        if (err.message?.includes('404')) {
           setChannelData(null);
         } else {
           setError('Failed to fetch channel data. Try again.');
@@ -162,7 +135,6 @@ const CreateChannelScreen: React.FC = () => {
 
     return isValid;
   };
-
   const handleCreateChannel = async () => {
     if (!validateForm()) return;
 
@@ -170,39 +142,18 @@ const CreateChannelScreen: React.FC = () => {
       if (!user || !user.id) {
         throw new Error('User not authenticated');
       }
-      const token = await AsyncStorage.getItem('accessToken');
-      if (!token) {
-        throw new Error('Authentication token not found');
-      }
 
-      const payload = {
+      const payload: SaveChannelRequest = {
         channelName,
         channelDescription: description,
-        profileImageURL: getRandomAvatarUrl(user.id), // Use random avatar for now
+        profileImageURL: getFallbackAvatarUrl(user.id), // Use fallback avatar for now
         coverImageURL: '', // Optional, set to empty if not provided
         createdBy: Number(user.id),
         updatedBy: Number(user.id),
       };
 
-      const response = await fetch('https://api.adtip.in/api/savemychannel', {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText);
-      }
-
-      const result = await response.json();
-      const channelId = String(result.data?.channelId || user.id); // Adjust based on actual API response
-      // Store channelId in AsyncStorage
-      await AsyncStorage.setItem('channelId', channelId);
+      const response = await ApiService.saveMyChannel(payload);
+      const channelId = String(response.data?.channelId || user.id); // Adjust based on actual API response
       navigation.replace('Analytics', { channelId });
     } catch (error: any) {
       console.error('Failed to create channel:', error.message);

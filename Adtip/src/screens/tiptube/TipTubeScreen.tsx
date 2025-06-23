@@ -23,6 +23,11 @@ import Header from '../../components/common/Header';
 import VideoCardSkeleton from '../../components/skeletons/VideoCardSkeleton';
 import ScreenTransition from '../../components/common/ScreenTransition';
 import AnimatedVideoCard from './AnimatedVideoCard';
+import { 
+  getSecureMediaUrl, 
+  getFallbackAvatarUrl, 
+  getFallbackThumbnailUrl 
+} from '../../utils/mediaUtils';
 
 // Get screen dimensions and create constants
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -115,22 +120,27 @@ const TipTubeScreen = () => {
 
   // Memoized styles
   const styles = useMemo(() => createYouTubeStyles(colors, isDarkMode), [colors, isDarkMode]);
+  // Transform API data to Video interface with secure URLs
+  const transformVideoData = useCallback(async (apiVideo: any): Promise<Video> => {
+    const secureVideoUrl = await getSecureMediaUrl(apiVideo.video_link || apiVideo.videoUrl);
+    const secureThumbnail = await getSecureMediaUrl(apiVideo.video_Thumbnail);
+    const secureAvatar = await getSecureMediaUrl(apiVideo.channel_profile);
 
-  // Transform API data to Video interface
-  const transformVideoData = useCallback((apiVideo: any): Video => ({
-    id: apiVideo.id || 0,
-    title: apiVideo.name || apiVideo.title || "Untitled Video",
-    thumbnail: apiVideo.video_Thumbnail !== "undefined" ? apiVideo.video_Thumbnail : undefined,
-    videoUrl: apiVideo.video_link || apiVideo.videoUrl,
-    duration: parseInt(apiVideo.play_duration || apiVideo.duration || "0", 10),
-    views: apiVideo.total_views || 0,
-    posted: apiVideo.createddate || "Recently",
-    avatar: apiVideo.channel_profile !== "null" ? apiVideo.channel_profile : undefined,
-    creatorName: apiVideo.channelName || "Unknown Creator",
-    isVerified: false,
-    channelId: apiVideo.video_channel || apiVideo.channelId || apiVideo.createdby || 0,
-    price: apiVideo.price ? parseFloat(apiVideo.price) : undefined,
-  }), []);
+    return {
+      id: apiVideo.id || 0,
+      title: apiVideo.name || apiVideo.title || "Untitled Video",
+      thumbnail: secureThumbnail || getFallbackThumbnailUrl(apiVideo.id),
+      videoUrl: secureVideoUrl || '',
+      duration: parseInt(apiVideo.play_duration || apiVideo.duration || "0", 10),
+      views: apiVideo.total_views || 0,
+      posted: apiVideo.createddate || "Recently",
+      avatar: secureAvatar || getFallbackAvatarUrl(apiVideo.createdby || apiVideo.id),
+      creatorName: apiVideo.channelName || "Unknown Creator",
+      isVerified: false,
+      channelId: apiVideo.video_channel || apiVideo.channelId || apiVideo.createdby || 0,
+      price: apiVideo.price ? parseFloat(apiVideo.price) : undefined,
+    };
+  }, []);
 
   // Fetch videos function
   const fetchVideos = useCallback(async (
@@ -187,11 +197,12 @@ const TipTubeScreen = () => {
 
       if (abortController.signal.aborted) {
         return;
-      }
-
-      if (response && (response.status === 200 || response.status === true)) {
+      }      if (response && (response.status === 200 || response.status === true)) {
         const videosArray = Array.isArray(response.data) ? response.data : [];
-        const transformedVideos = videosArray.map(transformVideoData);
+          // Transform videos with secure URLs (async)
+        const transformedVideos = await Promise.all(
+          videosArray.map((video: any) => transformVideoData(video))
+        );
 
         console.log('[TipTubeScreen] Received videos:', transformedVideos.length);
 
@@ -333,7 +344,7 @@ const TipTubeScreen = () => {
         isPreview={previewingVideoId === item.id}
         styles={styles}
         colors={colors}
-        onNavigateToChannel={() => navigation.navigate('ChannelScreen', { channelId: item.channelId })}
+        onNavigateToChannel={() => navigation.navigate('Channel', { channelId: item.channelId })}
         index={index}
         isYouTubeLayout={true} // Pass flag for YouTube-like layout
       />

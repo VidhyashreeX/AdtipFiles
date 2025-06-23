@@ -9,8 +9,7 @@ export interface CallKeepConfig {
     maximumCallGroups?: string;
     supportsVideo?: boolean;
     includesCallsInRecents?: boolean;
-  };
-  android: {
+  };  android: {
     alertTitle: string;
     alertDescription: string;
     cancelButton: string;
@@ -18,6 +17,12 @@ export interface CallKeepConfig {
     imageName?: string;
     additionalPermissions: string[];
     selfManaged?: boolean;
+    foregroundService?: {
+      channelId: string;
+      channelName: string;
+      notificationTitle: string;
+      notificationIcon?: string;
+    };
   };
 }
 
@@ -34,7 +39,6 @@ class CallKeepService {
     }
     return CallKeepService.instance;
   }
-
   /**
    * Initialize CallKeep with configuration
    */
@@ -47,11 +51,32 @@ class CallKeepService {
 
       this.config = config;
 
+      // FIXED: Ensure selfManaged is false for Android to prevent self-managed phone account errors
+      const androidConfig = {
+        ...config.android,
+        selfManaged: false, // Force to false to avoid self-managed phone account issues
+        foregroundService: config.android.foregroundService || {
+          channelId: 'adtip_call_channel',
+          channelName: 'Adtip Call Channel',
+          notificationTitle: 'Adtip is running in background',
+          notificationIcon: 'ic_launcher',
+        },
+      };
+
       // Setup CallKeep
       await RNCallKeep.setup({
         ios: config.ios,
-        android: config.android,
+        android: androidConfig,
       });
+
+      // FIXED: Check and request permissions properly for Android
+      if (Platform.OS === 'android') {
+        const hasPermissions = await this.checkAndRequestPermissions();
+        if (!hasPermissions) {
+          console.warn('[CallKeep] Required permissions not granted, but continuing...');
+          // Don't return false, allow app to continue
+        }
+      }
 
       // Register event listeners
       this.setupEventListeners();
@@ -252,7 +277,32 @@ class CallKeepService {
    */
   public getInitializationStatus(): boolean {
     return this.isInitialized;
+  }  /**
+   * Check and request required permissions for Android
+   */
+  private async checkAndRequestPermissions(): Promise<boolean> {
+    try {
+      // Check if device has phone account configured
+      const hasPhoneAccount = await RNCallKeep.hasPhoneAccount();
+      if (!hasPhoneAccount) {
+        console.log('[CallKeep] No phone account configured');
+        return false;
+      }
+
+      // Check if app is default phone account
+      const isDefaultPhoneAccount = await RNCallKeep.hasDefaultPhoneAccount();
+      if (!isDefaultPhoneAccount) {
+        console.log('[CallKeep] App is not default phone account');
+        // Don't fail here, just log it
+      }
+
+      return true;
+    } catch (error) {
+      console.error('[CallKeep] Permission check failed:', error);
+      return false;
+    }
   }
+
   // Event handlers
   private onDidReceiveStartCallAction = (data: any) => {
     console.log('[CallKeep] onDidReceiveStartCallAction:', data);

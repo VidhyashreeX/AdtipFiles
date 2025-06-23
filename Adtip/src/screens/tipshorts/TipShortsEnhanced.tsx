@@ -40,6 +40,7 @@ import ApiService from '../../services/ApiService';
 import { ENDPOINTS } from '../../constants/api';
 import { useShorts } from '../../contexts/ShortsContext';
 import VideoPreloaderService from '../../services/VideoPreloaderService';
+import { getSecureMediaUrl, getFallbackAvatarUrl } from '../../utils/mediaUtils';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PAGE_SIZE = 10;
@@ -541,39 +542,36 @@ const TipShortsEnhanced = () => {
         ? response.data
         : response.data.status === 200 && Array.isArray(response.data.data)
           ? response.data.data
-          : [];
-
-      const mappedShorts: ShortVideo[] = publicShots
-        .map((shot: PublicShot) => ({
-          id: shot.id?.toString() || Math.random().toString(),
-          title: shot.name || 'Untitled Short',
-          thumbnail: shot.video_Thumbnail && shot.video_Thumbnail !== 'undefined'
-            ? shot.video_Thumbnail
-            : null,
-          channel: {
-            id: shot.channelId?.toString() || 'unknownChannel',
-            name: shot.channelName || 'Unknown Channel',
-            avatar: shot.channel_profile && shot.channel_profile !== 'null'
-              ? shot.channel_profile
-              : `https://i.pravatar.cc/80?u=${shot.channelId || Math.random()}`,
-            verified: false,
-            subscribers: shot.total_channel_followers || 0,
-          },
-          views: shot.total_views || 0,
-          likes: shot.total_likes || 0,
-          duration: shot.play_duration || '0:00',
-          createdAt: shot.createddate || new Date().toISOString(),
-          category: shot.category_id?.toString() || '1',
-          isPaidPromotional: shot.is_paid_promotional === 1,
-          postedAt: shot.createddate || new Date().toISOString(),
-          description: shot.video_description && shot.video_description !== 'undefined'
-            ? shot.video_description
-            : 'No description available',
-          videoUrl: shot.video_link || '',
-          comments: shot.total_comments || 0,
-          musicName: shot.name || 'Original Sound',
-        }))
-        .filter(short => short.videoUrl && short.videoUrl.startsWith('http'));
+          : [];      const mappedShorts: ShortVideo[] = (await Promise.all(
+        publicShots
+          .map(async (shot: PublicShot) => ({
+            id: shot.id?.toString() || Math.random().toString(),
+            title: shot.name || 'Untitled Short',            thumbnail: shot.video_Thumbnail && shot.video_Thumbnail !== 'undefined'
+              ? (await getSecureMediaUrl(shot.video_Thumbnail)) || null
+              : null,
+            channel: {
+              id: shot.channelId?.toString() || 'unknownChannel',
+              name: shot.channelName || 'Unknown Channel',              avatar: shot.channel_profile && shot.channel_profile !== 'null'
+                ? (await getSecureMediaUrl(shot.channel_profile)) || getFallbackAvatarUrl(shot.channelId || Math.random().toString())
+                : getFallbackAvatarUrl(shot.channelId || Math.random().toString()),
+              verified: false,
+              subscribers: shot.total_channel_followers || 0,
+            },
+            views: shot.total_views || 0,
+            likes: shot.total_likes || 0,
+            duration: shot.play_duration || '0:00',
+            createdAt: shot.createddate || new Date().toISOString(),
+            category: shot.category_id?.toString() || '1',
+            isPaidPromotional: shot.is_paid_promotional === 1,
+            postedAt: shot.createddate || new Date().toISOString(),
+            description: shot.video_description && shot.video_description !== 'undefined'
+              ? shot.video_description
+              : 'No description available',
+            videoUrl: (await getSecureMediaUrl(shot.video_link || '')) || '',
+            comments: shot.total_comments || 0,
+            musicName: shot.name || 'Original Sound',
+          }))
+      )).filter(short => short.videoUrl && short.videoUrl.startsWith('http'));
 
       setShorts(prev => {
         const existingIds = new Set(prev.map(s => s.id));

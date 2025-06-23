@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,300 +11,476 @@ import {
   RefreshControl,
   Alert,
   Platform,
+  FlatList,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import { useNavigation, NavigationProp } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation, NavigationProp, useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { launchImageLibrary } from 'react-native-image-picker';
+import ApiService from '../../services/ApiService';
+import { 
+  ChannelInfo, 
+  Video, 
+  VideoListResponse, 
+  FollowUserRequest,
+  UpdateChannelRequest,
+  ChannelAnalyticsResponse 
+} from '../../types/api';
+import { Play, Calendar, Users, Eye, Settings, Edit3, Upload, BarChart3 } from 'lucide-react-native';
+
+const { width } = Dimensions.get('window');
 
 type RootStackParamList = {
   TabHome: undefined;
   CreateChannel: undefined;
   ChannelSettings: undefined;
   TipTubeUpload: undefined;
-  Analytics: { totalViews: number; followers: number; videos: number }; // Renamed from Preview to Analytics
+  TipShortsUpload: undefined;
+  Analytics: { channelId: string };
+  VideoPreview: { postId: string };
+  EditChannel: { channelId: string };
 };
 
 type NavigationPropType = NavigationProp<RootStackParamList>;
 
 interface ChannelData {
-  createddate: string;
   channelId: string;
   channelName: string;
   description: string;
-  avatar?: string;
-  followers: number;
+  profileImage?: string;
+  coverImage?: string;
+  totalSubscribers: number;
   totalViews: number;
-  videos: number;
+  totalVideos: number;
   totalEarnings: number;
   isCallEnabled?: boolean;
-}
-
-interface User {
-  id: number | string;
+  createdDate: string;
 }
 
 const MyChannelScreen: React.FC = () => {
   const navigation = useNavigation<NavigationPropType>();
   const { user } = useAuth();
   const { colors } = useTheme();
+  
+  // State management
   const [channel, setChannel] = useState<ChannelData | null>(null);
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [shorts, setShorts] = useState<Video[]>([]);
+  const [analytics, setAnalytics] = useState<ChannelAnalyticsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<'Videos' | 'Shorts' | 'Analytics' | 'About'>('Videos');
   const [isCallEnabled, setIsCallEnabled] = useState(false);
   const [isVideoCallEnabled, setIsVideoCallEnabled] = useState(false);
   const [isChatEnabled, setIsChatEnabled] = useState(false);
-  const [activeTab, setActiveTab] = useState<'Videos' | 'Shorts' | 'Playlists' | 'About'>('Videos');
 
-  const fetchChannelData = async () => {
-    if (!user || !user.id) {
+  // Fetch channel data using ApiService
+  const fetchChannelData = useCallback(async () => {
+    if (!user?.id) {
       setError('User not authenticated');
       setIsLoading(false);
       return;
     }
 
     try {
-      const token = await AsyncStorage.getItem('accessToken');
-      if (!token) {
-        setError('Authentication token not found');
-        setIsLoading(false);
-        return;
-      }
-
-      const response = await fetch(https://api.adtip.in/api/getchannelbyuserid/${user.id}, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          Authorization: Bearer ${token},
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText);
-      }
-
-      const result = await response.json();
-      if (result.status === 200 && result.data && result.data.length > 0) {
-        const channelData = result.data[0];
-        const mappedChannel: ChannelData = {
+      setError('');
+      const response = await ApiService.getChannelByUserId(Number(user.id));
+      
+      if (response.status === 200 && response.data && response.data.length > 0) {
+        const channelData = response.data[0];
+        setChannel({
           channelId: String(channelData.channelId),
           channelName: channelData.channelName,
           description: channelData.description || 'No description available',
-          avatar: channelData.profileImage,
-          followers: Number(channelData.totalSubscribers) || 0,
-          totalViews: Number(channelData.totalVideos) || 0,
-          videos: Number(channelData.totalVideos) || 0,
-          totalEarnings: Number(channelData.total_earnings) || 0,
-          isCallEnabled: false,
-          createddate: channelData.createddate || '2025-04-11T20:36:35.000Z',
-        };
-        setChannel(mappedChannel);
-        setIsCallEnabled(mappedChannel.isCallEnabled || false);
+          profileImage: channelData.profileImage,
+          coverImage: channelData.coverImage,
+          totalSubscribers: Number(channelData.totalSubscribers) || 0,
+          totalViews: Number(channelData.totalViews) || 0,
+          totalVideos: Number(channelData.totalVideos) || 0,
+          totalEarnings: 0, // This would come from earnings API
+          createdDate: channelData.createdDate || new Date().toISOString(),
+          isCallEnabled: channelData.isCallEnabled || false,
+        });
+
+        // Fetch videos and shorts for this channel
+        await fetchChannelContent(channelData.channelId);
+        await fetchChannelAnalytics(channelData.channelId);
       } else {
-        setChannel(null);
+        setError('No channel found for this user');
       }
     } catch (err: any) {
-      console.error('Failed to fetch channel:', err.message);
-      setError('Failed to load channel data. Please try again.');
+      console.error('Error fetching channel data:', err);
+      setError(err.message || 'Failed to load channel data');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
+  }, [user?.id]);
+
+  // Fetch channel content (videos and shorts)
+  const fetchChannelContent = async (channelId: string) => {
+    try {      const videosResponse = await ApiService.getVideoByChannel(0, Number(channelId), Number(user?.id));
+      if (videosResponse.status === 200 && videosResponse.data) {
+        const allVideos = videosResponse.data;
+        setVideos(allVideos.filter((video: any) => video.videoType === 0)); // TipTube videos
+        
+        // Fetch shorts separately
+        const shortsResponse = await ApiService.getVideoByChannel(1, Number(channelId), Number(user?.id));
+        if (shortsResponse.status === 200 && shortsResponse.data) {
+          setShorts(shortsResponse.data);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching channel content:', err);
+    }
   };
 
-  const pickImage = async () => {
+  // Fetch channel analytics
+  const fetchChannelAnalytics = async (channelId: string) => {
     try {
-      console.log('Opening image library...');
-      const result = await launchImageLibrary({
+      const analyticsResponse = await ApiService.getChannelAnalytics(channelId);
+      if (analyticsResponse.status === 200) {
+        setAnalytics(analyticsResponse);
+      }
+    } catch (err) {
+      console.error('Error fetching analytics:', err);
+    }
+  };
+
+  // Handle refresh
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    fetchChannelData();
+  }, [fetchChannelData]);
+
+  // Handle avatar change
+  const handleAvatarChange = () => {
+    launchImageLibrary(
+      {
         mediaType: 'photo',
         quality: 0.8,
         maxWidth: 500,
         maxHeight: 500,
-        includeBase64: false,
-      });
-
-      console.log('Image picker result:', result);
-
-      if (result.didCancel) {
-        console.log('User cancelled image picker');
-        Alert.alert('Cancelled', 'Image selection was cancelled.');
-        return;
-      }
-
-      if (result.errorCode) {
-        console.error('Image picker error:', result.errorCode, result.errorMessage);
-        Alert.alert('Error', Failed to pick image: ${result.errorMessage});
-        return;
-      }
-
-      if (result.assets && result.assets.length > 0) {
-        const imageUri = result.assets[0].uri;
-        console.log('Selected image URI:', imageUri);
-        if (imageUri) {
-          await uploadProfilePicture(imageUri);
-        } else {
-          console.error('No URI found in image picker result');
-          Alert.alert('Error', 'No image URI found. Please try again.');
+      },
+      (result) => {
+        if (result.errorCode) {
+          Alert.alert('Error', `Failed to pick image: ${result.errorMessage}`);
+          return;
         }
-      } else {
-        console.error('No assets found in image picker result');
-        Alert.alert('Error', 'No image selected. Please try again.');
+
+        if (result.didCancel || !result.assets || result.assets.length === 0) {
+          return;
+        }
+
+        const selectedImage = result.assets[0];
+        if (selectedImage.uri) {
+          // Here you would upload the image and update the channel
+          updateChannelAvatar(selectedImage.uri);
+        }
       }
-    } catch (err: any) {
-      console.error('Unexpected error in pickImage:', err);
-      Alert.alert('Error', 'An unexpected error occurred while picking the image.');
-    }
+    );
   };
 
-  const uploadProfilePicture = async (imageUri: string) => {
-    if (!channel || !user) {
-      console.error('Channel or user not available');
-      Alert.alert('Error', 'Channel or user data not available.');
-      return;
-    }
+  // Update channel avatar
+  const updateChannelAvatar = async (imageUri: string) => {
+    if (!channel) return;
 
     try {
-      const token = await AsyncStorage.getItem('accessToken');
-      if (!token) {
-        console.error('No access token found');
-        Alert.alert('Error', 'Authentication token not found');
-        return;
-      }
-
-      const uri = Platform.OS === 'android' && !imageUri.startsWith('file://')
-        ? file://${imageUri}
-        : imageUri;
-
-      console.log('Uploading image with URI:', uri);
-
       const formData = new FormData();
       formData.append('channelId', channel.channelId);
       formData.append('profileImage', {
-        uri: uri,
+        uri: imageUri,
         type: 'image/jpeg',
-        name: profile_${user.id}.jpg,
+        name: `profile_${user?.id}.jpg`,
       } as any);
 
-      console.log('FormData prepared:', formData);
+      // Use update channel endpoint
+      const updateData: UpdateChannelRequest = {
+        id: Number(channel.channelId),
+        channelName: channel.channelName,
+        channelDescription: channel.description,
+        profileImageURL: imageUri,
+      };
 
-      const response = await fetch('https://api.adtip.in/api/channel/update-profile-picture', {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          Authorization: Bearer ${token},
-          'Content-Type': 'multipart/form-data',
-        },
-        body: formData,
-      });
-
-      console.log('Upload response status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Upload failed:', errorText);
-        throw new Error(errorText);
+      const response = await ApiService.updateChannel(updateData);
+      if (response.status === 200) {
+        setChannel(prev => prev ? { ...prev, profileImage: imageUri } : null);
+        Alert.alert('Success', 'Profile image updated successfully');
       }
+    } catch (err) {
+      console.error('Error updating avatar:', err);
+      Alert.alert('Error', 'Failed to update profile image');
+    }
+  };
 
-      const result = await response.json();
-      console.log('Upload response:', result);
+  // Toggle call settings
+  const toggleCallSetting = async (settingType: 'call' | 'videoCall' | 'chat', value: boolean) => {
+    if (!channel) return;
 
-      if (result.status === 200 && result.data) {
-        const newAvatar = result.data.profileImage || imageUri;
-        console.log('New avatar URL:', newAvatar);
-        setChannel({ ...channel, avatar: newAvatar });
-        Alert.alert('Success', 'Profile picture updated successfully!');
-      } else {
-        console.error('Upload response invalid:', result);
-        throw new Error('Failed to update profile picture');
+    try {
+      const updateData: UpdateChannelRequest = {
+        id: Number(channel.channelId),
+        channelName: channel.channelName,
+        channelDescription: channel.description,
+        profileImageURL: channel.profileImage || '',
+      };
+
+      const response = await ApiService.updateChannel(updateData);
+      if (response.status === 200) {
+        setChannel(prev => prev ? { ...prev, isCallEnabled: value } : null);
+        
+        // Update local state
+        switch (settingType) {
+          case 'call':
+            setIsCallEnabled(value);
+            break;
+          case 'videoCall':
+            setIsVideoCallEnabled(value);
+            break;
+          case 'chat':
+            setIsChatEnabled(value);
+            break;
+        }
       }
-    } catch (err: any) {
-      console.error('Failed to upload profile picture:', err.message);
-      Alert.alert('Error', 'Failed to update profile picture. Please try again.');
+    } catch (err) {
+      console.error('Error updating call settings:', err);
+      Alert.alert('Error', 'Failed to update settings');
     }
   };
 
-  useEffect(() => {
-    fetchChannelData();
-  }, [user]);
+  // Focus effect to refresh data
+  useFocusEffect(
+    useCallback(() => {
+      fetchChannelData();
+    }, [fetchChannelData])
+  );
 
-  const onRefresh = async () => {
-    setIsRefreshing(true);
-    await fetchChannelData();
-  };
-
-  const toggleCallSwitch = async () => {
-    try {
-      const newValue = !isCallEnabled;
-      setIsCallEnabled(newValue);
-      if (channel) {
-        setChannel({ ...channel, isCallEnabled: newValue });
-      }
-    } catch (err: any) {
-      setError('Failed to update call settings.');
-    }
-  };
-
-  const toggleVideoCallSwitch = async () => {
-    try {
-      const newValue = !isVideoCallEnabled;
-      setIsVideoCallEnabled(newValue);
-    } catch (err: any) {
-      setError('Failed to update video call settings.');
-    }
-  };
-
-  const toggleChatSwitch = async () => {
-    try {
-      const newValue = !isChatEnabled;
-      setIsChatEnabled(newValue);
-    } catch (err: any) {
-      setError('Failed to update chat settings.');
-    }
-  };
-
-  const goBack = () => {
-    navigation.goBack();
-  };
-
-  const navigateToSettings = () => {
-    navigation.navigate('ChannelSettings');
-  };
-
-  const handleTabPress = (tab: 'Videos' | 'Shorts' | 'Playlists' | 'About') => {
-    setActiveTab(tab);
-  };
-
-  const navigateToAnalytics = () => {
-    if (channel) {
-      navigation.navigate('Analytics', {
-        totalViews: channel.totalViews,
-        followers: channel.followers,
-        videos: channel.videos,
-      });
-    }
-  };
-
-  if (isLoading && !isRefreshing) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={goBack} style={styles.backButton}>
-            <Icon name="arrow-left" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.primary }]}>Your Channel</Text>
-          <TouchableOpacity onPress={navigateToSettings} style={styles.settingsButton}>
-            <Icon name="settings" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
+  // Render video item
+  const renderVideoItem = ({ item }: { item: Video }) => (
+    <TouchableOpacity
+      style={styles.videoItem}
+      onPress={() => navigation.navigate('VideoPreview', { postId: item.id })}
+    >
+      <Image source={{ uri: item.videoThumbnail }} style={styles.videoThumbnail} />
+      <View style={styles.videoOverlay}>
+        <View style={styles.videoDuration}>
+          <Text style={styles.videoDurationText}>{item.playDuration}</Text>
         </View>
+      </View>
+      <Text style={[styles.videoTitle, { color: colors.text.primary }]} numberOfLines={2}>
+        {item.name}
+      </Text>
+      <View style={styles.videoStats}>
+        <Text style={[styles.videoStatsText, { color: colors.textSecondary }]}>
+          {item.views} views • {new Date(item.createdDate).toLocaleDateString()}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  // Render analytics section
+  const renderAnalytics = () => (
+    <View style={styles.analyticsContainer}>
+      <View style={styles.analyticsHeader}>
+        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Channel Analytics</Text>
+        <TouchableOpacity
+          style={styles.analyticsButton}
+          onPress={() => navigation.navigate('Analytics', { channelId: channel?.channelId || '' })}
+        >
+          <BarChart3 size={20} color={colors.primary} />
+          <Text style={[styles.analyticsButtonText, { color: colors.primary }]}>View All</Text>
+        </TouchableOpacity>
+      </View>
+      
+      <View style={styles.analyticsGrid}>
+        <View style={[styles.analyticsCard, { backgroundColor: colors.surface }]}>
+          <Eye size={24} color={colors.primary} />
+          <Text style={[styles.analyticsValue, { color: colors.text.primary }]}>
+            {channel?.totalViews.toLocaleString() || '0'}
+          </Text>
+          <Text style={[styles.analyticsLabel, { color: colors.textSecondary }]}>Total Views</Text>
+        </View>
+        
+        <View style={[styles.analyticsCard, { backgroundColor: colors.surface }]}>
+          <Users size={24} color={colors.primary} />
+          <Text style={[styles.analyticsValue, { color: colors.text.primary }]}>
+            {channel?.totalSubscribers.toLocaleString() || '0'}
+          </Text>
+          <Text style={[styles.analyticsLabel, { color: colors.textSecondary }]}>Subscribers</Text>
+        </View>
+        
+        <View style={[styles.analyticsCard, { backgroundColor: colors.surface }]}>
+          <Play size={24} color={colors.primary} />
+          <Text style={[styles.analyticsValue, { color: colors.text.primary }]}>
+            {channel?.totalVideos.toLocaleString() || '0'}
+          </Text>
+          <Text style={[styles.analyticsLabel, { color: colors.textSecondary }]}>Videos</Text>
+        </View>
+        
+        <View style={[styles.analyticsCard, { backgroundColor: colors.surface }]}>
+          <Calendar size={24} color={colors.primary} />
+          <Text style={[styles.analyticsValue, { color: colors.text.primary }]}>
+            {channel ? new Date(channel.createdDate).getFullYear() : 'N/A'}
+          </Text>
+          <Text style={[styles.analyticsLabel, { color: colors.textSecondary }]}>Joined</Text>
+        </View>
+      </View>
+    </View>
+  );
+
+  // Render about section
+  const renderAbout = () => (
+    <View style={styles.aboutContainer}>
+      <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>About</Text>
+      <Text style={[styles.channelDescription, { color: colors.textSecondary }]}>
+        {channel?.description || 'No description available'}
+      </Text>
+      
+      <View style={styles.aboutStats}>
+        <View style={styles.aboutStat}>
+          <Text style={[styles.aboutStatLabel, { color: colors.textSecondary }]}>Joined</Text>
+          <Text style={[styles.aboutStatValue, { color: colors.text.primary }]}>
+            {channel ? new Date(channel.createdDate).toLocaleDateString() : 'N/A'}
+          </Text>
+        </View>
+        <View style={styles.aboutStat}>
+          <Text style={[styles.aboutStatLabel, { color: colors.textSecondary }]}>Total Views</Text>
+          <Text style={[styles.aboutStatValue, { color: colors.text.primary }]}>
+            {channel?.totalViews.toLocaleString() || '0'}
+          </Text>
+        </View>
+      </View>
+
+      {/* Call Settings */}
+      <View style={styles.callSettings}>
+        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Call Settings</Text>
+        
+        <View style={styles.settingItem}>
+          <View>
+            <Text style={[styles.settingLabel, { color: colors.text.primary }]}>Enable Voice Calls</Text>
+            <Text style={[styles.settingDescription, { color: colors.textSecondary }]}>
+              Allow followers to make voice calls to you
+            </Text>
+          </View>
+          <Switch
+            value={isCallEnabled}
+            onValueChange={(value) => toggleCallSetting('call', value)}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={isCallEnabled ? colors.background : colors.textSecondary}
+          />
+        </View>
+        
+        <View style={styles.settingItem}>
+          <View>
+            <Text style={[styles.settingLabel, { color: colors.text.primary }]}>Enable Video Calls</Text>
+            <Text style={[styles.settingDescription, { color: colors.textSecondary }]}>
+              Allow followers to make video calls to you
+            </Text>
+          </View>
+          <Switch
+            value={isVideoCallEnabled}
+            onValueChange={(value) => toggleCallSetting('videoCall', value)}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={isVideoCallEnabled ? colors.background : colors.textSecondary}
+          />
+        </View>
+        
+        <View style={styles.settingItem}>
+          <View>
+            <Text style={[styles.settingLabel, { color: colors.text.primary }]}>Enable Chat</Text>
+            <Text style={[styles.settingDescription, { color: colors.textSecondary }]}>
+              Allow followers to send you messages
+            </Text>
+          </View>
+          <Switch
+            value={isChatEnabled}
+            onValueChange={(value) => toggleCallSetting('chat', value)}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={isChatEnabled ? colors.background : colors.textSecondary}
+          />
+        </View>
+      </View>
+    </View>
+  );
+
+  // Render tab content
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'Videos':
+        return (
+          <FlatList
+            data={videos}
+            renderItem={renderVideoItem}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            columnWrapperStyle={styles.videoRow}
+            contentContainerStyle={styles.videosList}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Upload size={48} color={colors.textSecondary} />
+                <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
+                  No videos uploaded yet
+                </Text>
+                <TouchableOpacity
+                  style={[styles.uploadButton, { backgroundColor: colors.primary }]}
+                  onPress={() => navigation.navigate('TipTubeUpload')}
+                >
+                  <Text style={[styles.uploadButtonText, { color: colors.background }]}>
+                    Upload Video
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            }
+          />
+        );
+      case 'Shorts':
+        return (
+          <FlatList
+            data={shorts}
+            renderItem={renderVideoItem}
+            keyExtractor={(item) => item.id}
+            numColumns={3}
+            columnWrapperStyle={styles.shortsRow}
+            contentContainerStyle={styles.videosList}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Upload size={48} color={colors.textSecondary} />
+                <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
+                  No shorts uploaded yet
+                </Text>
+                <TouchableOpacity
+                  style={[styles.uploadButton, { backgroundColor: colors.primary }]}
+                  onPress={() => navigation.navigate('TipShortsUpload')}
+                >
+                  <Text style={[styles.uploadButtonText, { color: colors.background }]}>
+                    Upload Short
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            }
+          />
+        );
+      case 'Analytics':
+        return renderAnalytics();
+      case 'About':
+        return renderAbout();
+      default:
+        return null;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.text.primary }]}>Loading...</Text>
+          <Text style={[styles.loadingText, { color: colors.text.primary }]}>Loading channel...</Text>
         </View>
       </SafeAreaView>
     );
@@ -312,20 +488,14 @@ const MyChannelScreen: React.FC = () => {
 
   if (error) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={goBack} style={styles.backButton}>
-            <Icon name="arrow-left" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.primary }]}>Your Channel</Text>
-          <TouchableOpacity onPress={navigateToSettings} style={styles.settingsButton}>
-            <Icon name="settings" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
-        </View>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-          <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={onRefresh}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+          <TouchableOpacity
+            style={[styles.retryButton, { backgroundColor: colors.primary }]}
+            onPress={fetchChannelData}
+          >
+            <Text style={[styles.retryButtonText, { color: colors.background }]}>Retry</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -334,25 +504,14 @@ const MyChannelScreen: React.FC = () => {
 
   if (!channel) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={goBack} style={styles.backButton}>
-            <Icon name="arrow-left" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.primary }]}>Create Channel</Text>
-          <TouchableOpacity onPress={navigateToSettings} style={styles.settingsButton}>
-            <Icon name="settings" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.notFoundContainer}>
-          <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
-            You don't have a channel yet
-          </Text>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorText, { color: colors.text.primary }]}>No channel found</Text>
           <TouchableOpacity
+            style={[styles.retryButton, { backgroundColor: colors.primary }]}
             onPress={() => navigation.navigate('CreateChannel')}
-            style={[styles.createButton, { backgroundColor: colors.primary }]}
           >
-            <Text style={styles.createButtonText}>Create Channel</Text>
+            <Text style={[styles.retryButtonText, { color: colors.background }]}>Create Channel</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -360,153 +519,83 @@ const MyChannelScreen: React.FC = () => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={goBack} style={styles.backButton}>
-          <Icon name="arrow-left" size={24} color="#000" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Your Channel</Text>
-        <TouchableOpacity onPress={navigateToSettings} style={styles.settingsButton}>
-          <Icon name="settings" size={24} color="#000" />
-        </TouchableOpacity>
-      </View>
-
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
         }
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.profileSection}>
-          <View style={styles.avatarWrapper}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Icon name="arrow-left" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text.primary }]}>My Channel</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('ChannelSettings')}>
+            <Settings size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Cover Image */}
+        {channel.coverImage && (
+          <Image source={{ uri: channel.coverImage }} style={styles.coverImage} />
+        )}
+
+        {/* Channel Info */}
+        <View style={styles.channelInfo}>
+          <TouchableOpacity onPress={handleAvatarChange} style={styles.avatarContainer}>
             <Image
-              source={{ uri: channel.avatar || 'https://via.placeholder.com/100' }}
+              source={{
+                uri: channel.profileImage || `https://api.dicebear.com/9.x/identicon/svg?seed=${user?.id}`,
+              }}
               style={styles.avatar}
             />
-            <TouchableOpacity onPress={pickImage} style={styles.addImageButton}>
-              <Icon name="plus" size={24} color="#fff" />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.channelName}>{channel.channelName}</Text>
-          <View style={styles.actionIcons}>
-            <TouchableOpacity onPress={navigateToAnalytics} style={styles.actionIconBox}>
-              <Icon name="bar-chart-2" size={20} color="#666" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => {}} style={styles.actionIconBox}>
-              <Icon name="edit" size={20} color="#666" />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.followersText}>{channel.followers} followers</Text>
-          <Text style={styles.descriptionText}>{channel.description}</Text>
-          <View style={styles.toggleSection}>
-            <View style={styles.toggleItem}>
-              <Text style={styles.toggleLabel}>Call</Text>
-              <Switch
-                onValueChange={toggleCallSwitch}
-                value={isCallEnabled}
-                trackColor={{ false: '#767577', true: '#24d05a' }}
-                thumbColor={isCallEnabled ? '#fff' : '#f4f3f4'}
-              />
+            <View style={[styles.editAvatarOverlay, { backgroundColor: colors.primary }]}>
+              <Edit3 size={16} color={colors.background} />
             </View>
-            <View style={styles.toggleItem}>
-              <Text style={styles.toggleLabel}>Video Call</Text>
-              <Switch
-                onValueChange={toggleVideoCallSwitch}
-                value={isVideoCallEnabled}
-                trackColor={{ false: '#767577', true: '#24d05a' }}
-                thumbColor={isVideoCallEnabled ? '#fff' : '#f4f3f4'}
-              />
-            </View>
-            <View style={styles.toggleItem}>
-              <Text style={styles.toggleLabel}>Chat</Text>
-              <Switch
-                onValueChange={toggleChatSwitch}
-                value={isChatEnabled}
-                trackColor={{ false: '#767577', true: '#24d05a' }}
-                thumbColor={isChatEnabled ? '#fff' : '#f4f3f4'}
-              />
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.statsSection}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{channel.totalViews}</Text>
-            <Text style={styles.statLabel}>Total Views</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{channel.followers}</Text>
-            <Text style={styles.statLabel}>Followers</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{channel.videos}</Text>
-            <Text style={styles.statLabel}>Videos</Text>
-          </View>
-        </View>
-
-        <View style={styles.tabsSection}>
-          <TouchableOpacity onPress={() => handleTabPress('Videos')}>
-            <Text style={activeTab === 'Videos' ? styles.tabActive : styles.tab}>Videos</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleTabPress('Shorts')}>
-            <Text style={activeTab === 'Shorts' ? styles.tabActive : styles.tab}>Shorts</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleTabPress('Playlists')}>
-            <Text style={activeTab === 'Playlists' ? styles.tabActive : styles.tab}>Playlists</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleTabPress('About')}>
-            <Text style={activeTab === 'About' ? styles.tabActive : styles.tab}>About</Text>
-          </TouchableOpacity>
-        </View>
-
-        {activeTab === 'Videos' && (
-          <View style={styles.videosSection}>
-            <Text style={styles.sectionTitle}>Your Videos</Text>
-            <Text style={styles.noVideosText}>You haven't uploaded any videos yet</Text>
-          </View>
-        )}
-
-        {activeTab === 'Shorts' && (
-          <View style={styles.videosSection}>
-            <Text style={styles.sectionTitle}>Your Shorts</Text>
-            <Text style={styles.noVideosText}>You haven't uploaded any shorts yet</Text>
-          </View>
-        )}
-
-        {activeTab === 'Playlists' && (
-          <View style={styles.videosSection}>
-            <Text style={styles.sectionTitle}>Your Playlists</Text>
-            <Text style={styles.noVideosText}>You haven't created any playlists yet</Text>
-          </View>
-        )}
-
-        {activeTab === 'About' && (
-          <View style={styles.videosSection}>
-            <Text style={styles.sectionTitle}>About</Text>
-            <Text style={styles.descriptionText}>{channel.description}</Text>
-            <Text style={styles.descriptionText}>
-              Channel created on: {new Date(channel.createddate).toLocaleDateString()}
+          
+          <View style={styles.channelDetails}>
+            <Text style={[styles.channelName, { color: colors.text.primary }]}>{channel.channelName}</Text>
+            <Text style={[styles.channelStats, { color: colors.textSecondary }]}>
+              {channel.totalSubscribers.toLocaleString()} subscribers • {channel.totalVideos} videos
             </Text>
           </View>
-        )}
 
-        <View style={styles.earningsSection}>
-          <Text style={styles.sectionTitle}>Earnings</Text>
-          <View style={styles.earningsRow}>
-            <Text style={styles.earningsLabel}>Total Earned</Text>
-            <Text style={styles.earningsValue}>₹{channel.totalEarnings.toFixed(1)}</Text>
-          </View>
-          <View style={styles.earningsRow}>
-            <Text style={styles.earningsLabel}>Available Balance</Text>
-            <Text style={styles.earningsValue}>₹{channel.totalEarnings.toFixed(1)}</Text>
-          </View>
-          <TouchableOpacity style={styles.withdrawButton} disabled={channel.totalEarnings < 1000}>
-            <Text style={styles.withdrawButtonText}>Withdraw</Text>
+          <TouchableOpacity
+            style={[styles.editButton, { borderColor: colors.primary }]}
+            onPress={() => navigation.navigate('EditChannel', { channelId: channel.channelId })}
+          >
+            <Text style={[styles.editButtonText, { color: colors.primary }]}>Edit Channel</Text>
           </TouchableOpacity>
-          <Text style={styles.withdrawInfo}>
-            Minimum withdrawal ₹1000 for premium. Non-premium user minimum withdrawal ₹5000
-          </Text>
         </View>
+
+        {/* Tabs */}
+        <View style={[styles.tabsContainer, { borderBottomColor: colors.border }]}>
+          {(['Videos', 'Shorts', 'Analytics', 'About'] as const).map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              style={[
+                styles.tab,
+                activeTab === tab && { borderBottomColor: colors.primary },
+              ]}
+              onPress={() => setActiveTab(tab)}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  { color: activeTab === tab ? colors.primary : colors.textSecondary },
+                ]}
+              >
+                {tab}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Tab Content */}
+        {renderTabContent()}
       </ScrollView>
     </SafeAreaView>
   );
@@ -515,198 +604,6 @@ const MyChannelScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFF',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#24d05a',
-  },
-  settingsButton: {
-    padding: 8,
-  },
-  scrollContent: {
-    paddingBottom: 20,
-  },
-  profileSection: {
-    alignItems: 'center',
-    padding: 20,
-  },
-  avatarWrapper: {
-    position: 'relative',
-    marginBottom: 10,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 2,
-    borderColor: '#000000',
-  },
-  addImageButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#000000',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 5,
-  },
-  channelName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  actionIcons: {
-    flexDirection: 'row',
-    marginVertical: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 20,
-  },
-  actionIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
-    backgroundColor: '#F9F9F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  followersText: {
-    fontSize: 16,
-    color: '#666',
-    marginVertical: 4,
-  },
-  descriptionText: {
-    fontSize: 16,
-    color: '#666',
-    marginVertical: 4,
-    textAlign: 'center',
-  },
-  toggleSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginVertical: 10,
-    width: '100%',
-  },
-  toggleItem: {
-    alignItems: 'center',
-  },
-  toggleLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  statsSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#666',
-  },
-  tabsSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
-  },
-  tab: {
-    fontSize: 16,
-    color: '#666',
-  },
-  tabActive: {
-    fontSize: 16,
-    color: '#24d05a',
-    fontWeight: 'bold',
-    borderBottomWidth: 2,
-    borderBottomColor: '#24d05a',
-    paddingBottom: 5,
-  },
-  videosSection: {
-    padding: 20,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
-  },
-  noVideosText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  earningsSection: {
-    padding: 20,
-  },
-  earningsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginVertical: 5,
-  },
-  earningsLabel: {
-    fontSize: 16,
-    color: '#666',
-  },
-  earningsValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  withdrawButton: {
-    backgroundColor: '#24d05a',
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginVertical: 10,
-    opacity: 0.5,
-  },
-  withdrawButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  withdrawInfo: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
   },
   loadingContainer: {
     flex: 1,
@@ -714,7 +611,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 8,
+    marginTop: 16,
     fontSize: 16,
   },
   errorContainer: {
@@ -725,38 +622,247 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    marginBottom: 16,
+    textAlign: 'center',
+    marginBottom: 20,
   },
   retryButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     borderRadius: 8,
-    marginTop: 16,
   },
   retryButtonText: {
-    color: '#FFF',
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  notFoundContainer: {
-    flex: 1,
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    padding: 16,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  coverImage: {
+    width: '100%',
+    height: 120,
+    resizeMode: 'cover',
+  },
+  channelInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  avatarContainer: {
+    position: 'relative',
+  },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  editAvatarOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
-    padding: 20,
+    alignItems: 'center',
+  },
+  channelDetails: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  channelName: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  channelStats: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+  editButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  videosList: {
+    padding: 16,
+  },
+  videoRow: {
+    justifyContent: 'space-between',
+  },
+  shortsRow: {
+    justifyContent: 'space-between',
+  },
+  videoItem: {
+    width: (width - 48) / 2,
+    marginBottom: 16,
+  },
+  videoThumbnail: {
+    width: '100%',
+    height: 100,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  videoOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+  },
+  videoDuration: {
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  videoDurationText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  videoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  videoStats: {
+    marginTop: 4,
+  },
+  videoStatsText: {
+    fontSize: 12,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#666',
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  uploadButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  uploadButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  analyticsContainer: {
+    padding: 16,
+  },
+  analyticsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
   },
-  createButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginTop: 16,
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
   },
-  createButtonText: {
-    color: '#FFF',
-    fontWeight: 'bold',
+  analyticsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  analyticsButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  analyticsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  analyticsCard: {
+    width: (width - 48) / 2,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  analyticsValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  analyticsLabel: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  aboutContainer: {
+    padding: 16,
+  },
+  channelDescription: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  aboutStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 32,
+  },
+  aboutStat: {
+    flex: 1,
+  },
+  aboutStatLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  aboutStatValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  callSettings: {
+    marginTop: 24,
+  },
+  settingItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  settingLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  settingDescription: {
+    fontSize: 14,
+    marginTop: 4,
   },
 });
 

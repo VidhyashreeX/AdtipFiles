@@ -89,7 +89,7 @@ export type MainNavigatorParamList = {
   SelectCategory: undefined;
   TipTubeUpload: undefined;
   TipShortsUpload: undefined;
-  Channel: undefined;
+  Channel: { channelId: string | number };
   AddFundsScreen: undefined;
   UpgradePremiumScreen: undefined;
   Comments: { postId: number; visible: boolean; onClose: () => void; };

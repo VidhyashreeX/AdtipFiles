@@ -179,16 +179,19 @@
             android:foregroundServiceType="camera|microphone" 
             android:exported="false" />
 
-        <!-- CALLKEEP SERVICES -->
+        <!-- FIXED: CALLKEEP SERVICES WITH PROPER CONFIGURATION -->
         <service
             android:name="io.wazo.callkeep.VoiceConnectionService"
-            android:label="Adtip Calls"
+            android:label="Adtip Voice Calls"
             android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE"
-            android:foregroundServiceType="camera|microphone"
+            android:foregroundServiceType="phoneCall"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.telecom.ConnectionService" />
             </intent-filter>
+            <meta-data
+                android:name="android.telecom.INCLUDE_EXTERNAL_CALLS"
+                android:value="true" />
         </service>
 
         <service

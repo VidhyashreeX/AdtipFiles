@@ -23,6 +23,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import ApiService from '../../services/ApiService';
 import { ENDPOINTS } from '../../constants/api';
 import { useShorts } from '../../contexts/ShortsContext';
+import { getSecureMediaUrl, getFallbackAvatarUrl } from '../../utils/mediaUtils';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PAGE_SIZE = 8; // Number of shorts to fetch per page
@@ -348,23 +349,22 @@ const TipShorts = () => {
         ? response.data
         : response.data.status === 200 && Array.isArray(response.data.data)
           ? response.data.data
-          : [];
-
-      let mappedShorts: ShortVideo[] = publicShots
-        .map((shot: PublicShot) => ({
+          : [];      const mappedShortsPromises = publicShots
+        .filter(shot => shot.video_link && shot.video_link.startsWith('http'))
+        .map(async (shot: PublicShot) => ({
           id: shot.id?.toString() || Math.random().toString(),
           title: shot.name || 'Untitled Short',
           thumbnail:
             shot.video_Thumbnail && shot.video_Thumbnail !== 'undefined'
-              ? shot.video_Thumbnail
-              : 'https://via.placeholder.com/360x640.png?text=No+Thumbnail',
+              ? (await getSecureMediaUrl(shot.video_Thumbnail)) || null
+              : null,
           channel: {
             id: shot.channelId?.toString() || 'unknownChannel',
             name: shot.channelName || 'Unknown Channel',
             avatar:
               shot.channel_profile && shot.channel_profile !== 'null'
-                ? shot.channel_profile
-                : `https://i.pravatar.cc/80?u=${shot.channelId || Math.random()}`,
+                ? (await getSecureMediaUrl(shot.channel_profile)) || getFallbackAvatarUrl(shot.channelId || Math.random().toString())
+                : getFallbackAvatarUrl(shot.channelId || Math.random().toString()),
             verified: false,
             subscribers: shot.total_channel_followers || 0,
           },
@@ -379,11 +379,10 @@ const TipShorts = () => {
             shot.video_description && shot.video_description !== 'undefined'
               ? shot.video_description
               : 'No description available for this short.',
-          videoUrl: shot.video_link || '',
+          videoUrl: (await getSecureMediaUrl(shot.video_link || '')) || '',
           comments: shot.total_comments || 0,
           musicName: shot.name || 'Original Sound',
-        }))
-        .filter(short => short.videoUrl && short.videoUrl.startsWith('http'));
+        }));      const mappedShorts: ShortVideo[] = await Promise.all(mappedShortsPromises);
 
       setShorts(prev => {
         const existingIds = new Set(prev.map(s => s.id));

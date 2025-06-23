@@ -193,6 +193,19 @@ apiClient.interceptors.request.use(
           console.warn(`No auth token found for protected endpoint: ${config.url}`);
         }
       }
+
+      // Log raw request details
+      console.log('🚀 API REQUEST:', {
+        method: config.method?.toUpperCase(),
+        url: config.url,
+        baseURL: config.baseURL,
+        fullURL: `${config.baseURL || ''}${config.url || ''}`,
+        headers: config.headers,
+        params: config.params,
+        data: config.data,
+        timeout: config.timeout,
+        timestamp: new Date().toISOString()
+      });
     } catch (error) {
       console.error('Error in request interceptor while handling auth token:', error);
     }
@@ -203,11 +216,38 @@ apiClient.interceptors.request.use(
   },
 );
 
-// Add response interceptor for error handling
+// Add response interceptor for logging and error handling
 apiClient.interceptors.response.use(
-  response => response,
+  response => {
+    // Log raw response details
+    console.log('📥 API RESPONSE:', {
+      method: response.config.method?.toUpperCase(),
+      url: response.config.url,
+      baseURL: response.config.baseURL,
+      fullURL: `${response.config.baseURL || ''}${response.config.url || ''}`,
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+      data: response.data,
+      timestamp: new Date().toISOString()
+    });
+    return response;
+  },
   error => {
+    // Log error response details
     if (error.response) {
+      console.log('❌ API ERROR RESPONSE:', {
+        method: error.config?.method?.toUpperCase(),
+        url: error.config?.url,
+        baseURL: error.config?.baseURL,
+        fullURL: `${error.config?.baseURL || ''}${error.config?.url || ''}`,
+        status: error.response.status,
+        statusText: error.response.statusText,
+        headers: error.response.headers,
+        data: error.response.data,
+        timestamp: new Date().toISOString()
+      });
+
       if (error.response.status === 401) {
         // Unauthorized - token expired or invalid
         console.warn('API: Unauthorized access - token may be expired');
@@ -218,6 +258,14 @@ apiClient.interceptors.response.use(
       }
     } else if (error.request) {
       console.error('Network error. Please check your connection.');
+      console.log('❌ API NETWORK ERROR:', {
+        method: error.config?.method?.toUpperCase(),
+        url: error.config?.url,
+        baseURL: error.config?.baseURL,
+        fullURL: `${error.config?.baseURL || ''}${error.config?.url || ''}`,
+        message: error.message,
+        timestamp: new Date().toISOString()
+      });
     }
 
     return Promise.reject(error);
@@ -1119,13 +1167,7 @@ export default class ApiService {
     callerInfo: { name: string; token: string };
     videoSDKInfo: { meetingId: string; token: string };
   }): Promise<any> {
-    try {
-      const response = await this.post<any>('https://us-central1-adtip-3873c.cloudfunctions.net/callApi/api/call/initiate-call', payload);
-      return response;
-    } catch (error) {
-      console.error('[ApiService] Error initiating call:', error);
-      throw this.handleError(error);
-    }
+    return this.post(FCM_SERVER_URL, payload);
   }
 
   /**
@@ -1135,12 +1177,397 @@ export default class ApiService {
     callerInfo: { token: string; name: string; platform: string };
     type: string;
   }): Promise<any> {
-    try {
-      const response = await this.post<any>('https://us-central1-adtip-3873c.cloudfunctions.net/callApi/api/call/update-call', payload);
-      return response;
-    } catch (error) {
-      console.error('[ApiService] Error updating call status:', error);
-      throw this.handleError(error);
-    }
+    return this.post(FCM_SERVER_URL, payload);
+  }
+
+  // ===== MISSING GUEST APIS (NO LOGIN REQUIRED) =====
+
+  /**
+   * Get premium posts for homepage (no login required)
+   */
+  static async getListPremiumPosts(): Promise<any> {
+    return this.get('/api/list-premium-posts');
+  }
+
+  /**
+   * Get public videos for TipTube (no login required)
+   */
+  static async getPublicVideos(categoryId: number = 0, offset: number = 0): Promise<any> {
+    return this.get(`/getpublicvideos/${categoryId}/${offset}`);
+  }
+
+  /**
+   * Get public shots for TipShorts (no login required)
+   */
+  static async getPublicShots(): Promise<any> {
+    return this.get('/getpublicshots');
+  }
+
+  // ===== VIDEO/SHORTS INTERACTION APIS =====
+
+  /**
+   * Save video like/unlike
+   */
+  static async saveVideoLike(data: {
+    videoId: number;
+    userId: number;
+    like: number; // 1 for like, 0 for unlike
+    videoCreatorId: number;
+  }): Promise<any> {
+    return this.post('/saveVideoLike', data);
+  }
+
+  /**
+   * Save video comment
+   */
+  static async saveVideoComment(data: {
+    comment: string;
+    videoId: number;
+    createdBy: number;
+    parentCommetId?: number | null;
+  }): Promise<any> {
+    return this.post('/savevideocomment', data);
+  }
+
+  /**
+   * Save video comment like
+   */
+  static async saveVideoCommentLike(data: {
+    commentId: number;
+    userId: number;
+  }): Promise<any> {
+    return this.post('/savevideocommentlike', data);
+  }
+
+  /**
+   * Get comments of videos
+   */
+  static async getCommentsOfVideos(userId: number, videoId: number): Promise<any> {
+    return this.get(`/getcommentsofvideos/${userId}/${videoId}`);
+  }
+
+  // ===== FOLLOW/UNFOLLOW APIS =====
+
+  /**
+   * Follow or unfollow a user
+   */
+  static async followUser(data: {
+    followingId: number;
+    followerId: number;
+    action: 'follow' | 'unfollow';
+  }): Promise<any> {
+    return this.post('/api/follow-user', data);
+  }
+
+  /**
+   * Get user followers
+   */
+  static async getUserFollowers(userId: number): Promise<any> {
+    return this.get(`/api/follow/followers/${userId}`);
+  }
+
+  /**
+   * Get user followings
+   */
+  static async getUserFollowings(userId: number): Promise<any> {
+    return this.get(`/api/follow/followings/${userId}`);
+  }
+
+  /**
+   * Get user posts with pagination
+   */
+  static async getUserPosts(userId: number, page: number = 1, limit: number = 10, loggedUserId: number): Promise<any> {
+    return this.get(`/api/users/${userId}/posts?page=${page}&limit=${limit}&loggined_user_id=${loggedUserId}`);
+  }
+
+  // ===== UPLOAD APIS =====
+
+  /**
+   * Upload post (promoted or non-promoted)
+   */
+  static async uploadPost(data: {
+    user_id: number;
+    title: string;
+    content: string;
+    media_url: string;
+    media_type: 'video' | 'image';
+    is_promoted: boolean;
+    video_category_id: number;
+    start_date: string;
+    end_date: string;
+    target_min_age?: number;
+    target_max_age?: number;
+    pay_per_view?: number;
+    reach_goal?: number;
+    duration_days?: number;
+    total_pay?: number;
+    platform_fee?: number;
+    post_target_locations?: string[];
+    post_target_genders?: string[];
+  }): Promise<any> {
+    return this.post('/api/post', data);
+  }
+
+  /**
+   * Upload shot (TipTube or TipShorts)
+   */
+  static async uploadShot(data: {
+    name: string;
+    isShot: boolean; // false for TipTube, true for TipShorts
+    categoryId: number;
+    channelId: number;
+    videoLink: string;
+    videoDesciption: string;
+    createdby: number;
+    play_duration: string;
+    video_Thumbnail: string;
+  }): Promise<any> {
+    return this.post('/uploadshot', data);
+  }
+
+  /**
+   * Generate presigned URL for file uploads
+   */
+  static async generatePresignedUrl(files: Array<{ contentType: string }>): Promise<any> {
+    return this.post('/api/generatePresignedUrl', { files });
+  }
+
+  // ===== CHANNEL MANAGEMENT APIS =====
+
+  /**
+   * Save/Create channel
+   */
+  static async saveMyChannel(data: {
+    channelName: string;
+    channelDescription: string;
+    profileImageURL: string;
+    coverImageURL: string;
+    createdBy: number;
+    updatedBy: number;
+  }): Promise<any> {
+    return this.post('/api/savemychannel', data);
+  }
+
+  /**
+   * Update channel
+   */
+  static async updateChannel(data: {
+    id: number;
+    channelName: string;
+    channelDescription: string;
+    profileImageURL: string;
+  }): Promise<any> {
+    return this.post('/api/updatechanel', data);
+  }
+
+  /**
+   * Get popular shorts/videos for channel home
+   */
+  static async getPopularShort(videoType: number, userId: number): Promise<any> {
+    return this.get(`/getpopularshort/${videoType}/${userId}`);
+  }
+
+  /**
+   * Get videos by channel
+   */
+  static async getVideoByChannel(videoType: number, channelId: number, userId: number): Promise<any> {
+    return this.get(`/getvideobychannel/${videoType}/${channelId}/${userId}`);
+  }
+
+  /**
+   * Get list of followed channels
+   */
+  static async getListOfFollowedChannelByUser(userId: number): Promise<any> {
+    return this.get(`/getlistoffollowedchannelbyuser/${userId}`);
+  }
+
+  // ===== PREMIUM PLAN APIS =====
+
+  /**
+   * Get user premium plans
+   */
+  static async getUserPremiumPlans(userId: number): Promise<any> {
+    return this.get(`/api/user-premium-plans/${userId}`);
+  }
+
+  /**
+   * Get content premium plans
+   */
+  static async getContentPremiumPlans(userId: number): Promise<any> {
+    return this.get(`/api/content-premium-plans/${userId}`);
+  }
+
+  /**
+   * Upgrade to premium
+   */
+  static async upgradePremium(data: {
+    coupon_code?: string | null;
+    isCron: boolean;
+    order_id: string;
+    payment_id: string;
+    payment_status: string;
+    plan_id: number;
+    user_id: number;
+  }): Promise<any> {
+    return this.post('/api/upgrade-premium', data);
+  }
+
+  /**
+   * Upgrade to content premium
+   */
+  static async upgradeContentPremium(data: {
+    payment_status: string;
+    user_id: number;
+    plan_id: number;
+    order_id: string;
+    payment_id: string;
+    coupon_code?: string | null;
+    isCron: boolean;
+  }): Promise<any> {
+    return this.post('/api/upgrade-content-premium', data);
+  }
+
+  // ===== RAZORPAY INTEGRATION APIS =====
+
+  /**
+   * Get Razorpay details
+   */
+  static async getRazorpayDetails(): Promise<{
+    status: number;
+    message: string;
+    api_key: string;
+    api_secret: string;
+  }> {
+    return this.get('/razorpay-details');
+  }
+
+  /**
+   * Create Razorpay order
+   */
+  static async createRazorpayOrder(data: {
+    amount: number;
+    currency: string;
+    user_id: number;
+  }): Promise<any> {
+    return this.post('/api/razorpay-order', data);
+  }
+
+  /**
+   * Verify Razorpay payment
+   */
+  static async verifyRazorpayPayment(data: {
+    amount: number;
+    currency: string;
+    order_id: string;
+    payment_status: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+    transaction_for: string;
+    user_id: number;
+    plan_id?: number;
+  }): Promise<any> {
+    return this.post('/api/razorpay-verification', data);
+  }
+
+  /**
+   * Add funds to wallet
+   */
+  static async addFunds(data: {
+    amount: number;
+    createdby: number;
+    isCron: boolean;
+    order_id: string;
+    payment_id: string;
+    transaction_type: string;
+    transactionStatus: string;
+  }): Promise<any> {
+    return this.post('/api/addfunds', data);
+  }
+
+  // ===== CELEBRATION ADS APIS =====
+
+  /**
+   * Save celebration ads
+   */
+  static async saveCelebrationAds(data: {
+    campaignName: string;
+    targetPeople: number;
+    AdModelId: number;
+    targetArea: string;
+    targetLowerAge: number;
+    targetUpperAge: number;
+    maritalStatus: string;
+    targetGender: string;
+    targetProfessions: string;
+    adTotal: number;
+    Coupon?: string;
+    AdTax: number;
+    createdby: number;
+    adStartDateTime: string;
+    adEndDateTime: string;
+    modelTypeName?: string;
+    adFile?: string;
+  }): Promise<any> {
+    return this.post('/api/savecelebrationadds', data);
+  }
+
+  /**
+   * Get celebration ads
+   */
+  static async getCelebrationAds(data: {
+    userId: number;
+    gender: string;
+    age: number;
+    maritalStatus: string;
+    targetLocation: string;
+    targetProfession?: string;
+    limit?: number;
+  }): Promise<any> {
+    return this.post('/getcelebrationads', data);
+  }
+
+  /**
+   * Save celebration ad view
+   */
+  static async saveCelebrationAdView(data: {
+    adId: number;
+    userId: number;
+  }): Promise<any> {
+    return this.post('/savecelebrationadview', data);
+  }
+
+  // ===== NOTIFICATIONS & EXPLORE APIS =====
+
+  /**
+   * Get sent notifications
+   */
+  static async getSentNotifications(userId: number): Promise<any> {
+    return this.get(`/getsentnotification/${userId}`);
+  }
+
+  /**
+   * Get explore content
+   */
+  static async getExploreContent(data: {
+    page: number;
+    limit: number;
+    loggined_user_id: number;
+  }): Promise<any> {
+    return this.post('/api/explore', data);
+  }
+
+  /**
+   * Update user settings (DND, availability)
+   */
+  static async updateUser(data: UpdateUserRequest): Promise<UpdateUserResponse> {
+    return this.post('/api/updateuser', data);
+  }
+
+  // ===== REFERRAL APIS =====
+  /**
+   * Get referral details
+   */
+  static async getReferralDetails(userId: number): Promise<any> {
+    return this.get(`/api/referral/details/${userId}`);
   }
 }

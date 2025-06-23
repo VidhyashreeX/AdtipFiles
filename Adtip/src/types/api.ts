@@ -460,3 +460,323 @@ export interface ReportCommentResponse {
   success: boolean;
   message: string;
 }
+
+// ===== CHANNEL AND VIDEO TYPES =====
+
+export interface ChannelInfo {
+  channelId: string;
+  channelName: string;
+  description: string;
+  profileImage: string;
+  coverImage?: string;
+  totalSubscribers: number;
+  totalVideos: number;
+  totalViews: number;
+  isSubscribed: boolean;
+  isVerified: boolean;
+  createdDate: string;
+  createdBy: number;
+  isCallEnabled?: boolean;
+}
+
+export interface Video {
+  id: string;
+  name: string;
+  videoThumbnail: string;
+  playDuration: string;
+  views: number;
+  createdDate: string;
+  description: string;
+  videoType: number; // 0 for TipTube, 1 for TipShorts
+  videoLink?: string;
+  categoryId?: number;
+  channelId?: string;
+  createdBy?: number;
+  likes?: number;
+  isLiked?: boolean;
+}
+
+export interface VideoListResponse {
+  status: number;
+  message: string;
+  data: Video[];
+}
+
+export interface ChannelAnalyticsResponse {
+  status: number;
+  message: string;
+  data: {
+    totalViews: number;
+    totalSubscribers: number;
+    totalVideos: number;
+    totalEarnings: number;
+    monthlyData?: Array<{
+      month: string;
+      views: number;
+      subscribers: number;
+      earnings: number;
+    }>;
+  };
+}
+
+// ===== ADDITIONAL API TYPES FROM CSV ANALYSIS =====
+
+// Upload Shot Request/Response
+export interface UploadShotRequest {
+  name: string;
+  isShot: boolean; // false for TipTube, true for TipShorts
+  categoryId: number;
+  channelId: number;
+  videoLink: string;
+  videoDesciption: string;
+  createdby: number;
+  play_duration: string;
+  video_Thumbnail: string;
+}
+
+export interface UploadShotResponse {
+  status: boolean;
+  message: string;
+  data?: any;
+}
+
+// Upload Post Request (extends existing)
+export interface UploadPostRequest {
+  user_id: number;
+  title: string;
+  content: string;
+  media_url: string;
+  media_type: 'video' | 'image';
+  is_promoted: boolean;
+  video_category_id: number;
+  start_date: string;
+  end_date: string;
+  target_min_age?: number;
+  target_max_age?: number;
+  pay_per_view?: number;
+  reach_goal?: number;
+  duration_days?: number;
+  total_pay?: number;
+  platform_fee?: number;
+  post_target_locations?: string[];
+  post_target_genders?: string[];
+}
+
+// Channel Management Types
+export interface SaveChannelRequest {
+  channelName: string;
+  channelDescription: string;
+  profileImageURL: string;
+  coverImageURL: string;
+  createdBy: number;
+  updatedBy: number;
+}
+
+export interface SaveChannelResponse {
+  status: boolean;
+  message: string;
+  data?: {
+    id: number;
+    channelName: string;
+  };
+}
+
+export interface UpdateChannelRequest {
+  id: number;
+  channelName: string;
+  channelDescription: string;
+  profileImageURL: string;
+}
+
+// Video Interaction Types
+export interface SaveVideoLikeRequest {
+  videoId: number;
+  userId: number;
+  like: number; // 1 for like, 0 for unlike
+  videoCreatorId: number;
+}
+
+export interface SaveVideoCommentRequest {
+  comment: string;
+  videoId: number;
+  createdBy: number;
+  parentCommetId?: number | null;
+}
+
+export interface SaveVideoCommentLikeRequest {
+  commentId: number;
+  userId: number;
+}
+
+// Follow User Types
+export interface FollowUserRequest {
+  followingId: number;
+  followerId: number;
+  action: 'follow' | 'unfollow';
+}
+
+export interface FollowUserResponse {
+  status: boolean;
+  message: string;
+  is_following?: boolean;
+}
+
+// Premium Plan Types
+export interface PremiumPlan {
+  id: number;
+  name: string;
+  price: number;
+  duration_days: number;
+  features: string[];
+  is_active: boolean;
+}
+
+export interface UserPremiumPlansResponse {
+  status: boolean;
+  message: string;
+  data: PremiumPlan[];
+}
+
+export interface UpgradePremiumRequest {
+  coupon_code?: string | null;
+  isCron: boolean;
+  order_id: string;
+  payment_id: string;
+  payment_status: string;
+  plan_id: number;
+  user_id: number;
+}
+
+// Razorpay Types
+export interface RazorpayDetailsResponse {
+  status: number;
+  message: string;
+  api_key: string;
+  api_secret: string;
+}
+
+export interface CreateRazorpayOrderRequest {
+  amount: number;
+  currency: string;
+  user_id: number;
+}
+
+export interface CreateRazorpayOrderResponse {
+  status: boolean;
+  data: {
+    id: string;
+    amount: number;
+    currency: string;
+    receipt: string;
+    status: string;
+    created_at: number;
+    user_id: number;
+  };
+}
+
+export interface VerifyRazorpayPaymentRequest {
+  amount: number;
+  currency: string;
+  order_id: string;
+  payment_status: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+  transaction_for: string;
+  user_id: number;
+  plan_id?: number;
+}
+
+export interface AddFundsRequest {
+  amount: number;
+  createdby: number;
+  isCron: boolean;
+  order_id: string;
+  payment_id: string;
+  transaction_type: string;
+  transactionStatus: string;
+}
+
+export interface AddFundsResponse {
+  status: number;
+  message: string;
+  data: Array<{
+    id: number;
+    createdby: number;
+    amount: number;
+    transactionStatus: string;
+    transaction_type: string;
+    order_id: string;
+    payment_id: string;
+    isCron: boolean;
+    totalBalance: number;
+  }>;
+}
+
+// Celebration Ads Types
+export interface SaveCelebrationAdsRequest {
+  campaignName: string;
+  targetPeople: number;
+  AdModelId: number;
+  targetArea: string;
+  targetLowerAge: number;
+  targetUpperAge: number;
+  maritalStatus: string;
+  targetGender: string;
+  targetProfessions: string;
+  adTotal: number;
+  Coupon?: string;
+  AdTax: number;
+  createdby: number;
+  adStartDateTime: string;
+  adEndDateTime: string;
+  modelTypeName?: string;
+  adFile?: string;
+}
+
+export interface GetCelebrationAdsRequest {
+  userId: number;
+  gender: string;
+  age: number;
+  maritalStatus: string;
+  targetLocation: string;
+  targetProfession?: string;
+  limit?: number;
+}
+
+export interface SaveCelebrationAdViewRequest {
+  adId: number;
+  userId: number;
+}
+
+// Explore Content Types
+export interface ExploreContentRequest {
+  page: number;
+  limit: number;
+  loggined_user_id: number;
+}
+
+export interface ExploreContentResponse {
+  status: boolean;
+  message: string;
+  data: Post[]; // Reuse Post interface
+  pagination: {
+    current_page: number;
+    total_pages: number;
+    total_count: number;
+  };
+}
+
+// Presigned URL Types
+export interface GeneratePresignedUrlRequest {
+  files: Array<{ contentType: string }>;
+}
+
+export interface GeneratePresignedUrlResponse {
+  status: boolean;
+  message: string;
+  data: Array<{
+    presignedUrl: string;
+    publicUrl: string;
+    fileName: string;
+  }>;
+}
