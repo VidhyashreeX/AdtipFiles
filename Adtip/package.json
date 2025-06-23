@@ -44,7 +44,6 @@
     "postinstall-postinstall": "^2.1.0",
     "react": "19.0.0",
     "react-native": "0.79.2",
-    "react-native-callkeep": "github:react-native-webrtc/react-native-callkeep#4b1fa98a685f6502d151875138b7c81baf1ec680",
     "react-native-compressor": "^1.11.0",
     "react-native-country-codes-picker": "^2.3.5",
     "react-native-css-interop": "^0.1.22",

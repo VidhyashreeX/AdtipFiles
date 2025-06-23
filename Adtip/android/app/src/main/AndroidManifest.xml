@@ -6,25 +6,17 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
-    <!-- VIDEOSDK & GENERAL CALL PERMISSIONS (Consolidated) -->
+    <!-- WHATSAPP-LIKE CALLING PERMISSIONS - Minimal set -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" tools:targetApi="upsideDownCake"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" tools:targetApi="upsideDownCake"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
     
-    <!-- VIDEOSDK SPECIFIC PERMISSIONS -->
+    <!-- VIDEOSDK & OVERLAY PERMISSIONS -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-
-    <!-- CALLKEEP PERMISSIONS -->
-    <uses-permission android:name="android.permission.BIND_TELECOM_CONNECTION_SERVICE" />
-    <uses-permission android:name="android.permission.CALL_PHONE" />
-    <uses-permission android:name="android.permission.READ_CALL_LOG" />
-    <uses-permission android:name="android.permission.ADD_VOICEMAIL" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <!-- BLUETOOTH PERMISSIONS -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
@@ -37,11 +29,6 @@
     <!-- LOCATION PERMISSIONS -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
-    <!-- PHONE STATE & CALLS -->
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
-    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" tools:targetApi="O"/>
 
     <!-- STORAGE PERMISSIONS -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
@@ -127,26 +114,12 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="adtip" android:host="app" />
-            </intent-filter>
-
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="adtip" android:host="call" />
             </intent-filter>
 
-            <!-- CALLKEEP DEEP LINKING -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="adtipcall" />
-            </intent-filter>
         </activity>
 
-        <!-- FIXED: IncomingCallActivity with proper configuration -->
+        <!-- WHATSAPP-LIKE CALL ACTIVITY -->
         <activity
             android:name=".IncomingCallActivity"
             android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar.Fullscreen"
@@ -157,14 +130,14 @@
             android:exported="false">
         </activity>
 
-        <!-- FIXED: OngoingCallService with proper foreground service type -->
+        <!-- WHATSAPP-LIKE CALL SERVICE (No telecom integration) -->
         <service
-            android:name=".OngoingCallService"
+            android:name=".WhatsAppCallService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="phoneCall" />
+            android:foregroundServiceType="microphone|camera" />
 
-        <!-- FIXED: CallNotificationService (Firebase) -->
+        <!-- FIREBASE CALL NOTIFICATION SERVICE -->
         <service
             android:name=".CallNotificationService"
             android:exported="false">
@@ -179,26 +152,7 @@
             android:foregroundServiceType="camera|microphone" 
             android:exported="false" />
 
-        <!-- FIXED: CALLKEEP SERVICES WITH PROPER CONFIGURATION -->
-        <service
-            android:name="io.wazo.callkeep.VoiceConnectionService"
-            android:label="Adtip Voice Calls"
-            android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE"
-            android:foregroundServiceType="phoneCall"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.telecom.ConnectionService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.telecom.INCLUDE_EXTERNAL_CALLS"
-                android:value="true" />
-        </service>
-
-        <service
-            android:name="io.wazo.callkeep.RNCallKeepBackgroundMessagingService"
-            android:exported="false" />
-
-        <!-- BROADCAST RECEIVERS -->
+        <!-- CALL ACTION RECEIVER -->
         <receiver 
             android:name=".CallActionReceiver" 
             android:exported="false" />

@@ -48,11 +48,13 @@ import { navigationRef, navigateWithRetry, getCurrentRoute, isNavigationReady } 
 import FirebaseService from './src/services/FirebaseService';
 import VideoSDKService from './src/services/videosdk/VideoSDKService';
 import CallService from './src/services/CallService';
-import CallKeepService from './src/services/CallKeepService';  // CRITICAL FIX: Import CallKeepService
+
 import ApiService from './src/services/ApiService';
 import OngoingCallModule from './src/services/OngoingCallModule';
 import NotificationService from './src/services/NotificationService';  // CRITICAL FIX: Import NotificationService
 import IncomingCallService from './src/services/IncomingCallService';  // CRITICAL FIX: Import IncomingCallService
+import WhatsAppCallManager from './src/services/calling/WhatsAppCallManager';  // NEW: WhatsApp-like calling
+import CallNotificationHandler from './src/services/calling/CallNotificationHandler';  // NEW: FCM call handler
 
 // Constants
 import { COLORS } from './src/constants/colors';
@@ -100,7 +102,7 @@ const AppNavigator = () => {
   const [firebaseReady, setFirebaseReady] = useState(false);
   const [videoSDKReady, setVideoSDKReady] = useState(false);
   const [callServiceReady, setCallServiceReady] = useState(false);
-  const [callKeepReady, setCallKeepReady] = useState(false);  // CRITICAL FIX: Add CallKeep ready state
+  const [whatsAppCallReady, setWhatsAppCallReady] = useState(false);  // NEW: WhatsApp-like call service ready state
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -412,84 +414,57 @@ const AppNavigator = () => {
     };
   }, []);
 
-  // Initialize CallKeep Service - CRITICAL FIX
+  // Initialize WhatsApp-like Call Manager (NEW enhanced system)
   useEffect(() => {
-    const initCallKeep = async () => {
-      console.log('[App] Initializing CallKeep service...');
+    const initWhatsAppCall = async () => {
+      console.log('[App] Initializing WhatsApp Call Manager...');
       try {
-        const callKeepService = CallKeepService.getInstance();        const config = {
-          ios: {
-            appName: 'Adtip',
-            maximumCallsPerCallGroup: '1',
-            maximumCallGroups: '1',
-            supportsVideo: true,
-            includesCallsInRecents: true,
-          },
-          android: {
-            alertTitle: 'Permissions required',
-            alertDescription: 'This application needs to access your phone accounts',
-            cancelButton: 'Cancel',
-            okButton: 'OK',
-            imageName: 'phone_account_icon',
-            additionalPermissions: [],
-            selfManaged: false, // CRITICAL FIX: Set to false to prevent self-managed phone account errors
-            foregroundService: {
-              channelId: 'adtip_call_channel',
-              channelName: 'Adtip Call Channel',
-              notificationTitle: 'Adtip is running in background',
-              notificationIcon: 'ic_launcher',
-            },
-          },
-        };
+        const whatsAppCallManager = WhatsAppCallManager.getInstance();
+        const callNotificationHandler = CallNotificationHandler.getInstance();
         
-        const success = await callKeepService.initialize(config);
-        setCallKeepReady(success);
+        const success = await whatsAppCallManager.initialize();
+        const notificationSuccess = await callNotificationHandler.initialize();
         
-        if (success) {
-          console.log('[App] CallKeep service initialized successfully');
+        setWhatsAppCallReady(success && notificationSuccess);
+        
+        if (success && notificationSuccess) {
+          console.log('[App] ✅ WhatsApp Call Manager and Notification Handler initialized successfully');
         } else {
-          console.warn('[App] CallKeep service initialization failed, continuing without native calls');
-          setCallKeepReady(true); // Allow app to continue
+          console.warn('[App] ❌ WhatsApp Call system initialization failed, continuing without enhanced calls');
+          setWhatsAppCallReady(true); // Allow app to continue
         }
       } catch (error) {
-        console.error('[App] CallKeep initialization error:', error);
-        setCallKeepReady(true); // Allow app to continue even if CallKeep fails
-        console.warn('[App] ⚠️ CallKeep failed to initialize, app will continue without native call functionality');
+        console.error('[App] WhatsApp Call system initialization error:', error);
+        setWhatsAppCallReady(true); // Allow app to continue even if fails
       }
     };
 
-    if (isInitialized) {
-      initCallKeep();
-    }
-  }, [isInitialized]);  // Setup incoming call broadcast receiver - CRITICAL FIX
+    initWhatsAppCall();
+  }, [isInitialized]);
+
+  // Setup incoming call handling with WhatsApp Call Manager
   useEffect(() => {
     const handleIncomingCallBroadcast = async (data: any) => {
       console.log('[App] Received incoming call broadcast:', data);
       
-      if (data && data.isIncomingCall && callKeepReady) {
+      if (data && data.isIncomingCall && whatsAppCallReady) {
         try {
-          const callKeepService = CallKeepService.getInstance();
+          const whatsAppCallManager = WhatsAppCallManager.getInstance();
           
-          // Generate UUID for the call
-          const callUUID = callKeepService.generateCallUUID();
+          // Create call notification data
+          const callNotificationData = {
+            callId: data.callId || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            callerName: data.callerName || 'Unknown Caller',
+            callType: data.callType || 'voice',
+            callerId: data.callerId,
+            meetingId: data.meetingId,
+            token: data.token,
+          };
           
-          // Display native incoming call screen using CallKeep
-          await callKeepService.displayIncomingCall(
-            callUUID,
-            data.callerId || 'Unknown',
-            data.callerName || 'Unknown Caller',
-            'generic',
-            data.callType === 'video'
-          );
+          // Handle incoming call with WhatsApp Call Manager
+          await whatsAppCallManager.handleIncomingCall(callNotificationData);
           
-          // Also display rich notification using notifee
-          await NotificationService.displayIncomingCallNotification(
-            data.callerId || 'unknown',
-            data.callerName || 'Unknown Caller',
-            data.callType || 'voice'
-          );
-          
-          console.log('[App] Native incoming call screen displayed');
+          console.log('[App] ✅ WhatsApp-like incoming call handled');
         } catch (error) {
           console.error('[App] Error handling incoming call broadcast:', error);
         }
@@ -503,7 +478,7 @@ const AppNavigator = () => {
     return () => {
       unsubscribe();
     };
-  }, [callKeepReady]);
+  }, [whatsAppCallReady]);
 
   useEffect(() => {
     // Listen for native call actions (answer/decline)
@@ -528,7 +503,7 @@ const AppNavigator = () => {
     };
   }, []);
 
-  if (!isInitialized || !firebaseReady || !videoSDKReady || !callServiceReady || !callKeepReady) {
+  if (!isInitialized || !firebaseReady || !videoSDKReady || !callServiceReady || !whatsAppCallReady) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.primary} />

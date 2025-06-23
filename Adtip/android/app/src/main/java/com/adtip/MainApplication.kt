@@ -11,15 +11,10 @@ import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import com.facebook.soloader.SoLoader
-import com.adtip.OngoingCallPackage
-import com.adtip.IncomingCallPackage  // CRITICAL FIX: Add IncomingCallPackage
 
 // VideoSDK Imports
 import live.videosdk.rnwebrtc.WebRTCModulePackage
 import live.videosdk.rnincallmanager.InCallManagerPackage
-
-// ExoPlayer Package Import - ENSURE THIS IS CORRECT
-import com.adtip.app.adtip_app.ExoPlayerPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -31,14 +26,6 @@ class MainApplication : Application(), ReactApplication {
         // Add manually linked VideoSDK packages
         packages.add(WebRTCModulePackage())
         packages.add(InCallManagerPackage())
-        
-        // Add ExoPlayer Package - CRITICAL FOR TIPSHORTS ENHANCED
-        packages.add(ExoPlayerPackage())
-          // Add OngoingCallPackage
-        packages.add(OngoingCallPackage())
-        
-        // CRITICAL FIX: Add IncomingCallPackage for native call handling
-        packages.add(IncomingCallPackage())
         
         return packages
       }

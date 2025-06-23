@@ -38,6 +38,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import messaging from '@react-native-firebase/messaging';
 import uuid from 'react-native-uuid';
 import CallService from '../../services/CallService';
+import WhatsAppCallManager from '../../services/calling/WhatsAppCallManager'; // NEW: WhatsApp-like calling
 
 // Define navigation stack param list
 type RootStackParamList = {
@@ -555,22 +556,31 @@ export default function TipCallScreen() {
     }
 
     try {
-      console.log('[TipCall] Starting call to:', recipient.name, 'Type:', callType);
+      console.log('[TipCall] Starting WhatsApp-like call to:', recipient.name, 'Type:', callType);
       
-      // Start the call with CallService with enhanced error handling
-      const callStarted = await CallService.startOutgoingCall(
-        recipient.id.toString(), 
-        recipient.name, 
-        callType
+      // Initialize WhatsApp Call Manager if not already done
+      const whatsAppCallManager = WhatsAppCallManager.getInstance();
+      const initialized = await whatsAppCallManager.initialize();
+      
+      if (!initialized) {
+        Alert.alert("Call Error", "Unable to initialize calling system. Please try again.");
+        return;
+      }
+      
+      // Start the call with WhatsApp Call Manager
+      const callData = await whatsAppCallManager.startOutgoingCall(
+        recipient.id.toString(),
+        recipient.name,
+        callType,
+        user.name || 'User',
+        user.id.toString()
       );
       
-      if (callStarted) {
-        console.log('[TipCall] Call initiated successfully. Navigation will be handled by App.tsx.');
-        // Navigation is now handled globally in App.tsx when activeCall state changes
-        // No need to navigate manually here as it could cause race conditions
+      if (callData) {
+        console.log('[TipCall] WhatsApp-like call initiated successfully:', callData.callId);
+        // Navigation will be handled automatically by WhatsApp Call Manager
       } else {
-        console.error('[TipCall] CallService failed to start the call.');
-        // CallService already shows error alerts, but we can add a fallback
+        console.error('[TipCall] WhatsApp Call Manager failed to start the call.');
         Alert.alert('Call Failed', 'Unable to start the call. Please check your connection and try again.');
       }
     } catch (error) {

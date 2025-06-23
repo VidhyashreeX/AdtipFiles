@@ -2,7 +2,8 @@ import { Alert, AppState, AppStateStatus, DeviceEventEmitter } from 'react-nativ
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { v4 as uuidv4 } from 'uuid';
 import { appEventEmitter } from '../events/AppEventEmitter';
-import CallKeepService from './CallKeepService';
+import WhatsAppCallManager from './calling/WhatsAppCallManager'; // NEW: WhatsApp-like calling
+import WhatsAppCallNotificationService from './calling/WhatsAppCallNotificationService'; // NEW: Enhanced notifications
 import FirebaseService from './FirebaseService';
 import { OtpVerifyResponse as User } from '../types/api';
 import { FirebaseCallData } from './FirebaseCallService';
@@ -35,6 +36,8 @@ class CallService {
   private currentUser: User | null = null;
   private firebaseService: FirebaseService;
   private videoSDKService: VideoSDKService;
+  private whatsAppCallManager: WhatsAppCallManager; // NEW: WhatsApp-like calling
+  private whatsAppNotificationService: WhatsAppCallNotificationService; // NEW: Enhanced notifications
   private callStateUpdateTimer: NodeJS.Timeout | null = null;
   private appStateSubscription: any = null;
   private callStateRestoreTimer: NodeJS.Timeout | null = null;
@@ -46,6 +49,8 @@ class CallService {
   private constructor() {
     this.firebaseService = FirebaseService.getInstance();
     this.videoSDKService = VideoSDKService.getInstance();
+    this.whatsAppCallManager = WhatsAppCallManager.getInstance(); // NEW: WhatsApp-like calling
+    this.whatsAppNotificationService = WhatsAppCallNotificationService.getInstance(); // NEW: Enhanced notifications
     this.initializeBackgroundHandling();
     this.setupForegroundServiceEventListeners();
     this.initializeNavigationReadyPromise();
@@ -346,7 +351,7 @@ class CallService {
         isInitiator: true,
         recipientName,
         callerName: this.currentUser?.name || 'User',
-        callerId: this.currentUser?.id,
+        callerId: this.currentUser?.id ? String(this.currentUser.id) : undefined,
         recipientId: String(recipientId),
         status: 'dialing',
         timestamp: Date.now(),
@@ -519,43 +524,26 @@ class CallService {
   }
 
   /**
-   * CRITICAL FIX: Trigger native incoming call UI
+   * WHATSAPP-LIKE: Trigger native incoming call UI (no telecom)
    */
   private async triggerNativeIncomingCall(callData: any): Promise<void> {
     try {
-      // Import services dynamically to avoid circular imports
-      const [
-        { default: CallKeepService },
-        { default: NotificationService }
-      ] = await Promise.all([
-        import('./CallKeepService'),
-        import('./NotificationService')
-      ]);
+      // Use WhatsApp-like calling service
+      const whatsAppCallManager = this.whatsAppCallManager;
       
-      const callKeepService = CallKeepService.getInstance();
+      // Show WhatsApp-like incoming call (no telecom integration)
+      await whatsAppCallManager.handleIncomingCall({
+        callId: callData.callId,
+        callerName: callData.callerName,
+        callType: callData.callType,
+        meetingId: callData.meetingId,
+        token: callData.token,
+        callerId: String(callData.callerId), // Convert to string
+      });
       
-      // Generate UUID for the call
-      const callUUID = callKeepService.generateCallUUID();
-      
-      // Display native incoming call screen using CallKeep
-      await callKeepService.displayIncomingCall(
-        callUUID,
-        callData.callerId,
-        callData.callerName,
-        'generic',
-        callData.callType === 'video'
-      );
-      
-      // Also display rich notification using notifee
-      await NotificationService.displayIncomingCallNotification(
-        callData.callId,
-        callData.callerName,
-        callData.callType
-      );
-      
-      console.log('[CallService] Native incoming call UI triggered');
+      console.log('[CallService] WhatsApp-like incoming call UI triggered');
     } catch (error) {
-      console.error('[CallService] Error triggering native incoming call:', error);
+      console.error('[CallService] Error triggering WhatsApp-like incoming call:', error);
     }
   }
 

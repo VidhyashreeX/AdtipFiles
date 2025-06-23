@@ -21,4 +21,7 @@ if (getApps().length === 0) {
   console.log('[Index] Firebase app already initialized');
 }
 
+// Register the headless JS task for call events
+import './src/tasks/CallEventTask';
+
 AppRegistry.registerComponent(appName, () => App);
