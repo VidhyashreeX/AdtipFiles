@@ -61,6 +61,9 @@ import AddFundsScreen from '../screens/wallet/AddFundsScreen';
 // Add UpgradePremiumScreen import
 import UpgradePremiumScreen from '../screens/wallet/UpgradePremiumScreen';
 
+// Import SubscriptionScreen
+import SubscriptionScreen from '../screens/packages/SubscriptionScreen';
+
 // Create stack navigator with proper typing
 const Stack = createNativeStackNavigator<MainNavigatorParamList>();
 
@@ -447,6 +450,7 @@ const MainNavigator = () => {
 
       {/* Add UpgradePremiumScreen */}
       <Stack.Screen name="UpgradePremiumScreen" component={UpgradePremiumScreen} />
+      <Stack.Screen name="SubscriptionScreen" component={SubscriptionScreen} />
     </Stack.Navigator>
   );
 };

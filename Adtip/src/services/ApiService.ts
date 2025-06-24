@@ -1550,18 +1550,31 @@ export default class ApiService {
     return this.post('/api/upgrade-content-premium', data);
   }
 
+  // ===== SUBSCRIPTION APIS =====
+
+  static async getSubscriptionPlans(): Promise<any> {
+    return this.get('/api/subscription-plans');
+  }
+
+  static async createSubscription(plan_id: string, user_id: number): Promise<any> {
+    return this.post('/api/subscriptions/create', { plan_id, user_id });
+  }
+
+  static async cancelSubscription(): Promise<any> {
+    return this.post('/api/subscriptions/cancel', {});
+  }
+
+  static async getSubscriptionStatus(userId: number): Promise<any> {
+    return this.get(`/api/subscriptions/status/${userId}`);
+  }
+
   // ===== RAZORPAY INTEGRATION APIS =====
 
   /**
    * Get Razorpay details
    */
-  static async getRazorpayDetails(): Promise<{
-    status: number;
-    message: string;
-    api_key: string;
-    api_secret: string;
-  }> {
-    return this.get('/razorpay-details');
+  static async getRazorpayDetails(): Promise<any> {
+    return this.get('/api/razorpay-details');
   }
 
   /**

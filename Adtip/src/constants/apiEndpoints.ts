@@ -116,6 +116,12 @@ export const ADDITIONAL_ENDPOINTS = {
   UPGRADE_PREMIUM: '/api/upgrade-premium',
   UPGRADE_CONTENT_PREMIUM: '/api/upgrade-content-premium',
   
+  // Subscription Plans
+  GET_SUBSCRIPTION_PLANS: '/api/subscription-plans',
+  CREATE_SUBSCRIPTION: '/api/subscriptions/create',
+  CANCEL_SUBSCRIPTION: '/api/subscriptions/cancel',
+  GET_SUBSCRIPTION_STATUS: '/api/subscriptions/status', // + '/:userId'
+  
   // Razorpay
   RAZORPAY_DETAILS: '/razorpay-details',
   RAZORPAY_ORDER: '/api/razorpay-order',

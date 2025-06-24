@@ -76,7 +76,7 @@ export type MainNavigatorParamList = {
   CreateChannel: undefined;
   PromotePost: undefined;
   VideoPreview: undefined;
-  Shorts: undefined;
+  Shorts: { videoId?: number, shortId?: number };
   TrackOrder: undefined;
   Support: undefined;
   CreateCampaign: undefined;
@@ -103,6 +103,8 @@ export type MainNavigatorParamList = {
     isInitiator?: boolean;
     recipientName?: string;
   };
+  UserPremiumPlans: undefined;
+  SubscriptionScreen: undefined;
 };
 
 // This is the RootStackParamList for the Stack.Navigator in App.tsx

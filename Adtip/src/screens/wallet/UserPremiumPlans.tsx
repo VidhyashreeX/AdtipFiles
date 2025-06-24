@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
+import ApiService from '../../services/ApiService';
 
 const { width } = Dimensions.get('window');
 
@@ -27,35 +28,95 @@ const UserPremiumPlans = () => {
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [subscription, setSubscription] = useState<any>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   useEffect(() => {
-    const fetchPlans = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        let token = await AsyncStorage.getItem('accessToken');
-        if (!token) token = await AsyncStorage.getItem('@auth_token');
-        if (!user?.id || !token) {
-          setError('User not authenticated');
-          setLoading(false);
-          return;
-        }
-        const res = await fetch(`https://api.adtip.in/api/user-premium-plans/${user.id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        if (!data.status) throw new Error(data.message || 'Failed to fetch plans');
-        // Only show active and queued plans
-        const filtered = (data.data || []).filter((p: any) => p.status === 'active' || p.status === 'queued');
-        setPlans(filtered.sort((a: any, b: any) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()));
-      } catch (err: any) {
-        setError(err.message || 'Failed to fetch plans');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchPlans();
+    fetchData();
   }, [user]);
+
+  const fetchData = async () => {
+    if (!user?.id) {
+      setError('User not authenticated');
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      // Fetch both legacy plans and new subscription status
+      const [plansResponse, subResponse] = await Promise.all([
+        ApiService.getUserPremiumPlans(user.id),
+        ApiService.getSubscriptionStatus(user.id).catch(e => e) // Catch error if no subscription
+      ]);
+
+      if (plansResponse.status) {
+        const filtered = (plansResponse.data || []).filter((p: any) => p.status === 'active' || p.status === 'queued');
+        setPlans(filtered.sort((a: any, b: any) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()));
+      }
+      
+      if (subResponse?.status) {
+        setSubscription(subResponse.data);
+      }
+
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    Alert.alert(
+      "Cancel Subscription",
+      "Are you sure you want to cancel? Your premium benefits will continue until the end of the current billing period.",
+      [
+        { text: "Don't Cancel", style: "cancel" },
+        { text: "Yes, Cancel", style: "destructive", onPress: async () => {
+          setIsCancelling(true);
+          try {
+            const response = await ApiService.cancelSubscription();
+            if (response.status) {
+              Alert.alert("Success", "Your subscription has been scheduled for cancellation.");
+              fetchData(); // Refresh data
+            } else {
+              Alert.alert("Error", response.message || "Could not cancel subscription.");
+            }
+          } catch (error: any) {
+            Alert.alert("Error", error.message || "An error occurred during cancellation.");
+          } finally {
+            setIsCancelling(false);
+          }
+        }}
+      ]
+    );
+  };
+
+  const renderSubscriptionCard = () => (
+    <LinearGradient
+        colors={isDarkMode ? ['#434343', '#2a2a2a'] : ['#F0F0F0', '#E0E0E0']}
+        style={[styles.planBar, { borderColor: subscription.status === 'active' ? PLAN_STATUS_COLORS.active : colors.border }]}
+    >
+      <View style={styles.planBarRow}>
+        <Text style={[styles.planName, { color: isDarkMode ? colors.text.primary : colors.primary }]}>{subscription.plan_name || 'Premium Subscription'}</Text>
+        <Text style={[styles.status, { color: PLAN_STATUS_COLORS[subscription.status] || colors.primary }]}>{subscription.status.toUpperCase()}</Text>
+      </View>
+      <View style={styles.planBarRow}>
+        <Text style={[styles.expiry, { color: colors.text.secondary }]}>
+          {subscription.status === 'active' ? `Renews on: ${formatDate(subscription.current_end_at)}` : `Cancelled`}
+        </Text>
+      </View>
+      {subscription.status === 'active' && (
+        <TouchableOpacity 
+          style={[styles.cancelButton, {backgroundColor: isDarkMode ? 'rgba(255, 80, 80, 0.1)' : 'rgba(255, 80, 80, 0.15)'}]} 
+          onPress={handleCancelSubscription}
+          disabled={isCancelling}
+        >
+          {isCancelling ? <ActivityIndicator color={colors.error} size="small" /> : <Text style={{ color: colors.error }}>Cancel Subscription</Text>}
+        </TouchableOpacity>
+      )}
+    </LinearGradient>
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? colors.background : '#fff' }] }>
@@ -64,7 +125,7 @@ const UserPremiumPlans = () => {
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 32 }} />
       ) : error ? (
         <Text style={{ color: colors.error, marginTop: 24 }}>{error}</Text>
-      ) : plans.length === 0 ? (
+      ) : plans.length === 0 && !subscription ? (
         <LinearGradient
           colors={GOLD_GRADIENT}
           style={[styles.noPlanBar, { borderColor: GOLD_GRADIENT[0] }]}
@@ -75,6 +136,7 @@ const UserPremiumPlans = () => {
         </LinearGradient>
       ) : (
         <ScrollView style={{ width: '100%' }} contentContainerStyle={{ alignItems: 'center', paddingBottom: 24 }}>
+          {subscription && renderSubscriptionCard()}
           {plans.map((plan, idx) => (
             <LinearGradient
               key={plan.id}
@@ -95,7 +157,7 @@ const UserPremiumPlans = () => {
       )}
       <TouchableOpacity
         style={[styles.upgradeBtn, { backgroundColor: colors.primary, marginTop: 24 }]}
-        onPress={() => navigation.navigate('UpgradePremiumScreen')}
+        onPress={() => navigation.navigate('SubscriptionScreen')}
       >
         <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Upgrade Premium</Text>
       </TouchableOpacity>
@@ -182,6 +244,12 @@ const styles = StyleSheet.create({
     color: '#B8860B',
     textAlign: 'center',
     fontWeight: '600',
+  },
+  cancelButton: {
+    marginTop: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
   },
 });
 
