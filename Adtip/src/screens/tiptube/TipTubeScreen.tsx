@@ -28,6 +28,7 @@ import {
   getFallbackAvatarUrl, 
   getFallbackThumbnailUrl 
 } from '../../utils/mediaUtils';
+import BannerAdComponent from '../../googleads/BannerAdComponent';
 
 // Get screen dimensions and create constants
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -334,7 +335,7 @@ const TipTubeScreen = () => {
 
   // Render video item - YouTube style
   const renderVideoItem = useCallback(({ item, index }: { item: Video; index: number }) => (
-    <View style={styles.videoItemContainer}>
+    <>
       <AnimatedVideoCard
         video={item}
         onPress={(layout) => openPlayer(item, layout)}
@@ -348,7 +349,8 @@ const TipTubeScreen = () => {
         index={index}
         isYouTubeLayout={true} // Pass flag for YouTube-like layout
       />
-    </View>
+      {index % 3 === 2 && <BannerAdComponent />}
+    </>
   ), [openPlayer, selectedVideoId, previewingVideoId, styles, colors, navigation]);
 
   // Render footer loading indicator
@@ -438,7 +440,7 @@ const TipTubeScreen = () => {
             ref={flatListRef}
             data={videos}
             keyExtractor={(item) => `video-${item.id}`}
-            renderItem={renderVideoItem}
+            renderItem={({item, index}) => renderVideoItem({item, index})}
             ListHeaderComponent={renderCategoryHeader}
             ListFooterComponent={renderFooter}
             ListEmptyComponent={renderEmptyState}

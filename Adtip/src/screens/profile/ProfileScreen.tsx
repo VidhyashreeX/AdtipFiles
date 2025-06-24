@@ -24,6 +24,7 @@ import LastSeen from '../../components/common/LastSeen';
 import ProfilePageSkeleton from '../../components/skeletons/ProfilePageSkeleton';
 import ScreenTransition from '../../components/common/ScreenTransition';
 import CommentScreen from '../home/CommentScreen';
+import RectangleAdComponent from '../../googleads/RectangleAdComponent';
 
 // Context
 import { useTheme } from '../../contexts/ThemeContext';
@@ -724,6 +725,9 @@ const ProfileScreen: React.FC = () => {
                 </View>
               </TouchableOpacity>
             ))}
+          </View>
+          <View style={{ marginVertical: 12 }}>
+            <RectangleAdComponent />
           </View>
         </ScrollView>
         {showImageViewer && (

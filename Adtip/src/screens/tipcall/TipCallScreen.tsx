@@ -39,6 +39,7 @@ import messaging from '@react-native-firebase/messaging';
 import uuid from 'react-native-uuid';
 import CallService from '../../services/CallService';
 import WhatsAppCallManager from '../../services/calling/WhatsAppCallManager'; // NEW: WhatsApp-like calling
+import RectangleAdComponent from '../../googleads/RectangleAdComponent';
 
 // Define navigation stack param list
 type RootStackParamList = {
@@ -260,6 +261,18 @@ const ContactsSkeleton: React.FC<{ colors: any; isDarkMode: boolean }> = ({ colo
     ))}
   </View>
 );
+
+// Helper to interleave RectangleAdComponent after every 3 contacts
+const getContactsWithAds = (contacts: Contact[]) => {
+  const result: (Contact | { ad: true; key: string })[] = [];
+  contacts.forEach((contact, idx) => {
+    result.push(contact);
+    if ((idx + 1) % 3 === 0) {
+      result.push({ ad: true, key: `ad-${idx}` });
+    }
+  });
+  return result;
+};
 
 // Update the main component to use Header search properly
 export default function TipCallScreen() {
@@ -681,6 +694,15 @@ export default function TipCallScreen() {
     categoryFilter
   });
 
+  const contactsWithAds = getContactsWithAds(filteredContacts);
+
+  const renderItem = ({ item }: { item: Contact | { ad: true; key: string } }) => {
+    if ('ad' in item) {
+      return <RectangleAdComponent key={item.key} />;
+    }
+    return renderContactItem({ item });
+  };
+
   return (
     <ScreenTransition animationType="fade">
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -807,47 +829,13 @@ export default function TipCallScreen() {
           ) : filteredContacts.length === 0 ? (
             renderEmptyState()
           ) : (
-            <FlatList
-              data={filteredContacts}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={renderContactItem}
-              contentContainerStyle={styles.contactsList}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={handleRefresh}
-                  colors={[colors.primary]}
-                  tintColor={colors.primary}
-                  progressBackgroundColor={colors.card}
-                />
-              }
-              showsVerticalScrollIndicator={false}
-              ListHeaderComponent={() => (
-                <View style={styles.contactsHeader}>
-                  <Text style={[styles.contactsCount, { color: colors.text.secondary }]}>
-                    {searchQuery ? (
-                      <>
-                        {filteredContacts.length} result{filteredContacts.length !== 1 ? 's' : ''} for "{searchQuery}"
-                        {isDndEnabled && (
-                          <Text style={[styles.dndStatusText, { color: colors.danger || '#EF4444' }]}>
-                            {' • DND Active'}
-                          </Text>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        {filteredContacts.length} contact{filteredContacts.length !== 1 ? 's' : ''} available
-                        {isDndEnabled && (
-                          <Text style={[styles.dndStatusText, { color: colors.danger || '#EF4444' }]}>
-                            {' • DND Active'}
-                          </Text>
-                        )}
-                      </>
-                    )}
-                  </Text>
-                </View>
-              )}
-            />
+            <View style={{ marginVertical: 12 }}>
+              <FlatList
+                data={contactsWithAds}
+                renderItem={renderItem}
+                keyExtractor={(item, idx) => ('ad' in item ? item.key : String(item.id))}
+              />
+            </View>
           )}
         </View>
       </View>

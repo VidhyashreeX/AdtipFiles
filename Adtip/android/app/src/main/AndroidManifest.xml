@@ -76,7 +76,7 @@
         <!-- AdMob App ID -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-1099807384885107~8206076548"
+            android:value="ca-app-pub-7664893030317051~7091150780"
             tools:replace="android:value" />
 
         <!-- VIDEOSDK FOREGROUND SERVICE CONFIGURATION -->

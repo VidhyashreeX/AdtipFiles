@@ -155,6 +155,8 @@ function shuffleArray<T>(array: T[]): T[] {
   return newArray;
 }
 
+import BannerAdComponent from '../../googleads/BannerAdComponent';
+
 const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}) => {
   const {colors, isDarkMode} = useTheme();
   const {user, refreshUserData} = useAuth();
@@ -469,16 +471,32 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     </>
   );
 
-  const renderPostItem = ({item}: {item: Post}) => (
-    <PostItem id={item.id} username={item.user_name} profileImage={getFullImageUrl(item.user_profile_image)}
-      postImage={getFullImageUrl(item.media_url)} caption={item.content} likes={item.likeCount}
-      comments={item.commentCount} timeAgo={getTimeAgo(item.created_at)} media_type={item.media_type}
-      isPremium={item.is_premium} onLike={() => handleLike(item.id)} onComment={() => handleComment(item.id)}
-      onShare={() => handleShare(item.id)} onPostPress={() => handlePostPress(item.id)}
-      onUserPress={() => handleUserPress(item.user_id)} onFollow={() => handleFollow(item.user_id)}
-      isLiked={!!likedPosts[item.id]} userId={item.user_id}
-      isVisible={visiblePostIds.includes(item.id)} last_active={item.last_active}
-    />
+  const renderPostItem = ({item, index}: {item: Post, index: number}) => (
+    <>
+      <PostItem
+        id={item.id}
+        username={item.user_name}
+        profileImage={item.user_profile_image}
+        postImage={item.media_url}
+        caption={item.content}
+        likes={item.likeCount}
+        comments={item.commentCount}
+        timeAgo={item.created_at}
+        media_type={item.media_type}
+        isPremium={item.is_premium}
+        onLike={() => {}}
+        onComment={() => handleComment(item.id)}
+        onShare={() => handleShare(item.id)}
+        onPostPress={() => handlePostPress(item.id)}
+        onUserPress={() => handleUserPress(item.user_id)}
+        onFollow={() => handleFollow(item.user_id)}
+        isLiked={!!likedPosts[item.id]}
+        userId={item.user_id}
+        isVisible={visiblePostIds.includes(item.id)}
+        last_active={item.last_active}
+      />
+      {index % 3 === 2 && <BannerAdComponent />}
+    </>
   );
 
   const renderFooter = () => {
@@ -550,7 +568,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
         <Header title="Home" showLogo={false} showWallet={true} walletAmount={walletAmount} />
         <FlatList
           data={posts}
-          renderItem={renderPostItem}
+          renderItem={({item, index}) => renderPostItem({item, index})}
           keyExtractor={(item, index) => `post-${item.id}-${index}`}
           ListHeaderComponent={renderListHeader}
           ListFooterComponent={renderFooter}

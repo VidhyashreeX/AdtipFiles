@@ -27,6 +27,8 @@ import {
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { getApps } from '@react-native-firebase/app';
 import messaging from '@react-native-firebase/messaging';
+import mobileAds from 'react-native-google-mobile-ads';
+import { useAppOpenAd } from './src/googleads/AppOpenAdManager';
 
 // Contexts
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -543,6 +545,19 @@ const AppNavigator = () => {
 function App(): React.JSX.Element {
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
+
+  // Initialize AdMob SDK
+  useEffect(() => {
+    mobileAds().initialize();
+  }, []);
+
+  // Show App Open Ad on launch
+  const { showAd, adLoaded } = useAppOpenAd();
+  useEffect(() => {
+    if (adLoaded) {
+      showAd();
+    }
+  }, [adLoaded]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
