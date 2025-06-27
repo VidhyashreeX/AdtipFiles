@@ -58,7 +58,7 @@ const MemoizedRelatedVideoCard: React.FC<MemoizedRelatedVideoCardProps> = ({ ite
       <View style={contentStyle}>
         <Text style={titleStyle} numberOfLines={2}>{item.title}</Text>
         <Text style={creatorStyle}>{item.creatorName}</Text>
-        <Text style={statsStyle}>{item.views.toLocaleString()} views • {item.posted}</Text>
+        <Text style={statsStyle}>{(item.views || 0).toLocaleString()} views • {item.posted}</Text>
       </View>
     </TouchableOpacity>
   );

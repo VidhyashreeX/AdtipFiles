@@ -28,7 +28,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { appEventEmitter } from '../../events/AppEventEmitter';
 import ApiService from '../ApiService';
 import VideoSDKService from '../videosdk/VideoSDKService';
-import { navigate } from '../../navigation/NavigationService';
+import { navigate, navigationRef } from '../../navigation/NavigationService';
 
 // Types
 export interface CallData {
@@ -278,8 +278,26 @@ class WhatsAppCallManager {
    * Setup app state listener
    */
   private setupAppStateListener(): void {
+    let lastStateChangeTime = 0;
+    let lastAppState = AppState.currentState;
+    
     AppState.addEventListener('change', (nextAppState) => {
+      const now = Date.now();
+      
+      // Throttle app state changes to prevent rapid switching
+      if (now - lastStateChangeTime < 1000) {
+        return; // Ignore state changes that happen within 1 second
+      }
+      
+      // Only process if state actually changed
+      if (lastAppState === nextAppState) {
+        return;
+      }
+      
       this.appState = nextAppState;
+      lastAppState = nextAppState;
+      lastStateChangeTime = now;
+      
       console.log('[WhatsAppCallManager] App state changed:', nextAppState);
 
       if (nextAppState === 'background' && this.currentCall?.status === 'connected') {
@@ -904,12 +922,15 @@ class WhatsAppCallManager {
       };
 
       console.log('[WhatsAppCallManager] Navigating to meeting screen:', params);
-      // Uses navigation service to route to MeetingScreen
-      // If app is killed, deep link handler in App.tsx will handle navigation
-      navigate('Main', {
-        screen: 'Meeting',
-        params
-      });
+      // Navigate to the Main navigator with the Meeting screen
+      // Since UltraFastLoader renders MainNavigator directly, navigate directly to Meeting
+      if (navigationRef.isReady()) {
+        // Cast to any to bypass the type check since navigationRef is typed for RootStack
+        // but we're actually using MainNavigator directly
+        (navigationRef as any).navigate('Meeting', params);
+      } else {
+        console.warn('[WhatsAppCallManager] Navigation not ready, cannot navigate to meeting');
+      }
 
     } catch (error) {
       console.error('[WhatsAppCallManager] Failed to navigate to meeting screen:', error);

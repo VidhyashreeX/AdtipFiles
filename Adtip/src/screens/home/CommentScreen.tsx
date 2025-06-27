@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { 
   View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, 
   Image, ActivityIndicator, Keyboard, Dimensions, 
-  Animated, PanResponder, Platform, ScrollView, Modal, StatusBar
+  Animated, PanResponder, Platform, ScrollView, Modal
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
@@ -273,12 +273,8 @@ const CommentScreen: React.FC<CommentScreenProps> = ({ visible, postId, onClose 
       visible={visible}
       onRequestClose={handleCloseModalWithAnimation}
       animationType="none"
-      statusBarTranslucent={true}
+      statusBarTranslucent={false}
     >
-      <StatusBar
-        backgroundColor={visible ? "rgba(0,0,0,0.5)" : "transparent"}
-        barStyle={visible ? "light-content" : (isDarkMode ? "light-content" : "dark-content")}
-      />
       <TouchableOpacity
         style={StyleSheet.absoluteFill}
         activeOpacity={1}

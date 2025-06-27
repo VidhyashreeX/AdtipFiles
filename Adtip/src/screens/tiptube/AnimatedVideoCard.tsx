@@ -305,7 +305,7 @@ const AnimatedVideoCard = React.memo<AnimatedVideoCardProps>(({
                 </Text>
               </TouchableOpacity>
               <Text style={styles.youtubeVideoStats}>
-                {video.views.toLocaleString()} views • {video.posted}
+                {(video.views || 0).toLocaleString()} views • {video.posted}
               </Text>
             </View>
           </View>
@@ -377,7 +377,7 @@ const AnimatedVideoCard = React.memo<AnimatedVideoCardProps>(({
                 <Text style={styles.creatorName} numberOfLines={1}>{video.creatorName}</Text>
               </TouchableOpacity>
               <Text style={styles.videoStats}>
-                {video.views.toLocaleString()} views • {video.posted}
+                {(video.views || 0).toLocaleString()} views • {video.posted}
               </Text>
             </View>
           </View>

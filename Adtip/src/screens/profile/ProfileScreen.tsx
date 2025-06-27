@@ -582,7 +582,7 @@ const ProfileScreen: React.FC = () => {
             <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
             <TouchableOpacity style={styles.statItem} onPress={handleFollowersPress}>
               <Text style={[styles.statValue, { color: colors.text.primary }]}>
-                {stats.followers.toLocaleString()}
+                {(stats.followers || 0).toLocaleString()}
               </Text>
               <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Followers</Text>
             </TouchableOpacity>

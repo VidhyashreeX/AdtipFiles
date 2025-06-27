@@ -1,4 +1,4 @@
-import { Alert, AppState, AppStateStatus, DeviceEventEmitter } from 'react-native';
+import { Alert, AppState, AppStateStatus, DeviceEventEmitter, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { v4 as uuidv4 } from 'uuid';
 import { appEventEmitter } from '../events/AppEventEmitter';
@@ -43,6 +43,8 @@ class CallService {
   private callStateRestoreTimer: NodeJS.Timeout | null = null;
   private persistedCallStateKey = 'ADTIP_PERSISTED_CALL_STATE';
   private isAppInBackground = false;
+  private lastAppState: AppStateStatus = 'active';
+  private lastAppStateChangeTime: number = 0;
   private navigationReadyPromise: Promise<void> | null = null;
   private navigationReadyResolver: (() => void) | null = null;
 
@@ -94,7 +96,21 @@ class CallService {
    */
   private handleAppStateChange(nextAppState: AppStateStatus) {
     const wasInBackground = this.isAppInBackground;
+    
+    // Throttle app state changes to prevent rapid switching
+    const now = Date.now();
+    if (this.lastAppStateChangeTime && now - this.lastAppStateChangeTime < 1000) {
+      return; // Ignore state changes that happen within 1 second
+    }
+    
+    // Only process if state actually changed
+    if (this.lastAppState === nextAppState) {
+      return;
+    }
+    
     this.isAppInBackground = nextAppState === 'background';
+    this.lastAppState = nextAppState;
+    this.lastAppStateChangeTime = now;
     
     console.log('[CallService] App state changed:', {
       previousState: wasInBackground ? 'background' : 'foreground',
@@ -340,9 +356,10 @@ class CallService {
       if (!meetingId) throw new Error('Failed to create VideoSDK meeting');
 
       // 3. Initiate call via Cloud Function
+      const callerFcmToken = this.currentUser?.fcm_token || '';
       const payload = {
         calleeInfo: { platform: 'ANDROID', token: String(recipientId) },
-        callerInfo: { name: this.currentUser?.name || 'User', token: this.currentUser?.fcm_token || '' },
+        callerInfo: { name: this.currentUser?.name || 'User', token: callerFcmToken },
         videoSDKInfo: { meetingId, token },
       };
       await ApiService.initiateCall(payload);
@@ -356,6 +373,7 @@ class CallService {
         recipientName,
         callerName: this.currentUser?.name || 'User',
         callerId: this.currentUser?.id ? String(this.currentUser.id) : undefined,
+        callerFcmToken: callerFcmToken, // Store the same FCM token used for initiation
         recipientId: String(recipientId),
         status: 'dialing',
         timestamp: Date.now(),
@@ -382,6 +400,7 @@ class CallService {
       recipientName: event.recipientName,
       callerName: event.callerName,
       callerId: event.callerId,
+      callerFcmToken: this.currentUser?.fcm_token || '', // Store current user's FCM token for later use
       recipientId: event.recipientId,
       status: 'ringing',
       timestamp: Date.now(),
@@ -403,14 +422,57 @@ class CallService {
       await this.whatsAppCallManager.endCall();
 
       // Update call status on backend
-      await ApiService.updateCallStatus({
-        callerInfo: {
-          token: this.currentUser?.fcm_token || '',
-          name: this.currentUser?.name || '',
-          platform: 'ANDROID',
-        },
-        type: 'ended',
+      let fcmToken = this.activeCall.callerFcmToken || this.currentUser?.fcm_token;
+      let userName = this.activeCall.callerName || this.currentUser?.name;
+      
+      console.log('[CallService] Updating call status with:', {
+        token: fcmToken ? 'present' : 'missing',
+        name: userName ? userName : 'missing',
+        platform: Platform.OS === 'ios' ? 'IOS' : 'ANDROID',
+        usingStoredToken: !!this.activeCall.callerFcmToken,
+        tokenSource: this.activeCall.callerFcmToken ? 'activeCall' : 'currentUser',
+        isInitiator: this.activeCall.isInitiator
       });
+      
+      if (!fcmToken || !userName) {
+        console.warn('[CallService] Missing required fields for updateCallStatus:', {
+          fcmToken: !!fcmToken,
+          userName: !!userName,
+          storedToken: !!this.activeCall.callerFcmToken,
+          currentUserToken: !!this.currentUser?.fcm_token
+        });
+        // Try to get current user data if missing
+        if (!this.currentUser) {
+          const refreshedUser = await this.getCurrentUser();
+          // Update the variables after getting user data
+          fcmToken = this.activeCall.callerFcmToken || refreshedUser?.fcm_token;
+          userName = this.activeCall.callerName || refreshedUser?.name;
+        }
+      }
+      
+      // Final validation before API call
+      if (!fcmToken || !userName) {
+        console.error('[CallService] Still missing required fields after retry:', {
+          fcmToken: !!fcmToken,
+          userName: !!userName,
+          fcmTokenValue: fcmToken ? 'present' : 'missing',
+          userNameValue: userName || 'missing'
+        });
+        throw new Error('Missing required fields for updateCallStatus API call');
+      }
+      
+      const updatePayload = {
+        callerInfo: {
+          token: fcmToken,
+          name: userName,
+          platform: (Platform.OS === 'ios' ? 'IOS' : 'ANDROID') as 'ANDROID' | 'IOS',
+        },
+        type: 'CALL_ENDED' as const,
+      };
+      
+      console.log('[CallService] Sending updateCallStatus with payload:', JSON.stringify(updatePayload, null, 2));
+      
+      await ApiService.updateCallStatus(updatePayload);
 
       // Emit event for any listening components
       appEventEmitter.emit('leaveActiveCall');
@@ -516,7 +578,7 @@ class CallService {
         recipientName: currentUserName, // Local user is the recipient
         callerName: callData.callerName, // Remote user is the caller
         callerId: callData.callerId,
-        callerFcmToken: callData.callerFcmToken,
+        callerFcmToken: this.currentUser?.fcm_token || '', // Store current user's FCM token for end call
         recipientId: userId,
         status: 'ringing',
         timestamp: Date.now()

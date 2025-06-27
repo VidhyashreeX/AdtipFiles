@@ -1,6 +1,6 @@
 // App.tsx
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   SafeAreaView,
   StatusBar,
@@ -39,6 +39,8 @@ import { SidebarProvider } from './src/contexts/SidebarContext';
 import { VideoSDKProvider } from './src/contexts/VideoSDKContext';
 import { useTabNavigator, TabNavigatorProvider } from './src/contexts/TabNavigatorContext';
 import { CallProvider, useCall, ActiveCall } from './src/contexts/CallProvider';
+import { DataProvider } from './src/providers/DataProvider';
+import { EnhancedQueryProvider } from './src/providers/QueryProvider';
 
 // Components & Navigators
 import Sidebar from './src/components/sidebar/Sidebar';
@@ -66,16 +68,19 @@ import { COLORS } from './src/constants/colors';
 import UserDetailsScreen from './src/screens/auth/UserDetailsScreen';
 import { appEventEmitter } from './src/events/AppEventEmitter';
 
+// Ultra Fast Loader for instant app initialization
+import UltraFastLoader from './src/components/common/UltraFastLoader';
+
 import { RootStackParamList } from 'src/types/navigation';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
-// Theme-aware StatusBar
+// Theme-aware StatusBar with proper safe area handling
 const ThemeAwareStatusBar = () => {
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, colors } = useTheme();
   return (
     <StatusBar
-      translucent
+      translucent={true}
       backgroundColor="transparent"
       barStyle={isDarkMode ? 'light-content' : 'dark-content'}
     />
@@ -86,18 +91,19 @@ const ThemeAwareStatusBar = () => {
 const MainApp = () => {
   const { colors } = useTheme();
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaViewRN style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
+      <ThemeAwareStatusBar />
       <SidebarProvider>
         <TabNavigatorProvider>
           <MainNavigator />
           <Sidebar />
         </TabNavigatorProvider>
       </SidebarProvider>
-    </View>
+    </SafeAreaViewRN>
   );
 }
 
-// AppNavigator with Services
+// AppNavigator with Services - Ultra Fast with Authentication-aware UltraFastLoader
 const AppNavigator = () => {
   const { isAuthenticated, isInitialized, user } = useAuth();
   const { activeCall, startCall } = useCall();
@@ -109,22 +115,32 @@ const AppNavigator = () => {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
+  // Check if user needs to complete profile details
+  // User needs profile completion if authenticated but either:
+  // 1. No name provided, OR
+  // 2. Profile details not saved (isSaveUserDetails !== 1)
+  const needsUserDetails = isAuthenticated && (!user?.name || user?.isSaveUserDetails !== 1);
+
+  // Memoize the initialization complete callback to prevent re-renders
+  const handleInitializationComplete = useCallback(() => {
+    console.log('[App] Ultra-fast initialization complete');
+  }, []);
+
+  // Ultra-fast deep linking setup
   useEffect(() => {    const handleDeepLink = (url: string | null) => {
       if (url) {
         const route = url.replace(/.*?:\/\//g, '');
         const host = route.split('/')[0];
 
         if (host === 'call' && activeCall) {
-          navigationRef.navigate('Main', {
-            screen: 'Meeting',
-            params: {
-              meetingId: activeCall.meetingId,
-              token: activeCall.token,
-              callType: activeCall.callType,
-              displayName: activeCall.callerName,
-              recipientName: activeCall.recipientName,
-              isInitiator: activeCall.isInitiator,
-            },
+          // Since UltraFastLoader renders MainNavigator directly, navigate directly to Meeting
+          (navigationRef as any).navigate('Meeting', {
+            meetingId: activeCall.meetingId,
+            token: activeCall.token,
+            callType: activeCall.callType,
+            displayName: activeCall.callerName,
+            recipientName: activeCall.recipientName,
+            isInitiator: activeCall.isInitiator,
           });
         }
       }
@@ -174,19 +190,17 @@ const AppNavigator = () => {
           return;
         }        // Use the improved navigation function with retry logic
         const navigationParams = {
-          screen: 'Meeting' as const,
-          params: {
-            meetingId: activeCall.meetingId,
-            token: activeCall.token,
-            callType: activeCall.callType || 'voice',
-            displayName: activeCall.callerName,
-            recipientName: activeCall.recipientName || 'Participant',
-            isInitiator: activeCall.isInitiator || false,
-          },
+          meetingId: activeCall.meetingId,
+          token: activeCall.token,
+          callType: activeCall.callType || 'voice',
+          displayName: activeCall.callerName,
+          recipientName: activeCall.recipientName || 'Participant',
+          isInitiator: activeCall.isInitiator || false,
         };
         
         console.log('[App] Navigating with params:', navigationParams);
-        navigateWithRetry('Main', navigationParams, 3, 150);
+        // Navigate directly to Meeting screen since UltraFastLoader renders MainNavigator directly
+        (navigationRef as any).navigate('Meeting', navigationParams);
         
       } else if (!activeCall && currentRoute === 'Meeting') {
         console.log('[App] No active call, navigating back from Meeting screen');
@@ -226,19 +240,17 @@ const AppNavigator = () => {
           : data.activeCall.callerName;
 
         const forceNavigationParams = {
-          screen: 'Meeting' as const,
-          params: {
-            meetingId: data.activeCall.meetingId,
-            token: data.activeCall.token,
-            callType: data.activeCall.callType || 'voice',
-            displayName: localUserName || 'Me',
-            recipientName: remoteUserName || 'Participant',
-            isInitiator: data.activeCall.isInitiator || false,
-          },
+          meetingId: data.activeCall.meetingId,
+          token: data.activeCall.token,
+          callType: data.activeCall.callType || 'voice',
+          displayName: localUserName || 'Me',
+          recipientName: remoteUserName || 'Participant',
+          isInitiator: data.activeCall.isInitiator || false,
         };
         
         console.log('[App] Force navigating with params:', forceNavigationParams);
-        navigateWithRetry('Main', forceNavigationParams, 3, 150);
+        // Navigate directly to Meeting screen since UltraFastLoader renders MainNavigator directly
+        (navigationRef as any).navigate('Meeting', forceNavigationParams);
       }
     };
 
@@ -275,115 +287,118 @@ const AppNavigator = () => {
     };
   }, [activeCall, isNavReady]);
 
-  // Initialize Firebase Service
+  // Set all services as ready immediately - they'll initialize in background
   useEffect(() => {
-    const initFirebase = async () => {
-      if (isInitialized) {
-        console.log('[App] Initializing Firebase service...');
-        
-        // Check if Firebase apps are available using v22.2.1 API
-        const apps = getApps();
-        if (apps.length === 0) {
-          console.warn('[App] No Firebase apps found. Firebase features may be limited.');
-        } else {
-          console.log(`[App] Found ${apps.length} Firebase app(s)`);
-        }
-        
-        const firebaseService = FirebaseService.getInstance();
-        const success = await firebaseService.initializeMessaging();
-        setFirebaseReady(success || true); // Allow app to continue even if FCM fails
-        
-        if (success) {
-          console.log('[App] Firebase service initialized successfully');
-        } else {
-          console.warn('[App] Firebase service initialization failed, continuing without FCM');
-          setFirebaseReady(true); // Allow app to continue
-        }
-      }
-    };
-
-    initFirebase();
-  }, [isInitialized]);
-
-  // Initialize VideoSDK Service
-  useEffect(() => {
-    const initVideoSDK = async () => {
-      console.log('[App] Initializing VideoSDK service...');
-      const videoSDKService = VideoSDKService.getInstance();
-      const success = await videoSDKService.initialize();
-      setVideoSDKReady(success || true);
-      
-      if (success) {
-        console.log('[App] VideoSDK service initialized successfully');
-      } else {
-        console.warn('[App] VideoSDK service initialization failed, continuing without video calls');
-        setVideoSDKReady(true); // Allow app to continue
-      }
-    };
-
-    initVideoSDK();
-  }, []);
-  // Initialize permissions early when app is ready
-  useEffect(() => {
-    const initializePermissions = async () => {      if (isAuthenticated && isInitialized) {
-        console.log('[App] Pre-requesting call permissions...');
-        
-        // Pre-request phone call permissions when app is fully ready
-        setTimeout(async () => {
-          try {
-            const PermissionsService = require('./src/services/PermissionsService').default;
-            await PermissionsService.requestPhoneCallForegroundServicePermission();
-            console.log('[App] Phone call permissions pre-requested');
-          } catch (error) {
-            console.log('[App] Phone call permissions pre-request failed (not critical):', error);
-          }
-        }, 2000); // Wait 2 seconds after authentication to ensure Activity is ready
-      }
-    };
-
-    initializePermissions();
-  }, [isAuthenticated, isInitialized]);
-  // Initialize Call Service and notify when navigation is ready
-  useEffect(() => {
-    console.log('[App] Call service is loading...');
-    // Since CallService is a singleton exported as a default instance,
-    // it is initialized at the time of import. There's no separate init method to call.
+    // Initialize all services as ready immediately for ultra-fast app start
+    setFirebaseReady(true);
+    setVideoSDKReady(true);
     setCallServiceReady(true);
-    console.log('[App] Call service is ready.');
+    setWhatsAppCallReady(true);
     
-    // Notify CallService when navigation is ready
-    if (isNavReady) {
-      CallService.setNavigationReady();
-    }
-  }, [isNavReady]);
+    console.log('[App] All services marked as ready for instant app start');
+  }, []);
 
-  // Setup notifications when Firebase is ready and user is authenticated
+  // Background initialization - no blocking with delayed execution
   useEffect(() => {
-    const setupNotifications = async () => {
-      if (firebaseReady && isAuthenticated) {
-        console.log('[App] Setting up notifications...');
-        const firebaseService = FirebaseService.getInstance();
-        await firebaseService.setupNotifications();
-      }
-    };
+    if (!isInitialized) return;
+    
+    // Background Firebase initialization - minimal delay for UI responsiveness
+    setTimeout(() => {
+      (async () => {
+        try {
+          console.log('[App] Background: Initializing Firebase service...');
+          const apps = getApps();
+          if (apps.length === 0) {
+            console.warn('[App] Background: No Firebase apps found');
+          } else {
+            console.log(`[App] Background: Found ${apps.length} Firebase app(s)`);
+          }
+          
+          const firebaseService = FirebaseService.getInstance();
+          const success = await firebaseService.initializeMessaging();
+          
+          if (success) {
+            console.log('[App] Background: Firebase service initialized successfully');
+            // Setup notifications when ready
+            if (isAuthenticated) {
+              await firebaseService.setupNotifications();
+              firebaseService.setupNotificationListeners();
+              firebaseService.executeDelayedNavigation();
+            }
+          } else {
+            console.warn('[App] Background: Firebase service initialization failed');
+          }
+        } catch (error) {
+          console.error('[App] Background: Firebase initialization error:', error);
+        }
+      })();
+    }, 100); // Minimal delay for UI responsiveness
 
-    setupNotifications();
-  }, [firebaseReady, isAuthenticated]);
+    // Background VideoSDK initialization
+    setTimeout(() => {
+      (async () => {
+        try {
+          console.log('[App] Background: Initializing VideoSDK service...');
+          const videoSDKService = VideoSDKService.getInstance();
+          const success = await videoSDKService.initialize();
+          
+          if (success) {
+            console.log('[App] Background: VideoSDK service initialized successfully');
+          } else {
+            console.warn('[App] Background: VideoSDK service initialization failed');
+          }
+        } catch (error) {
+          console.error('[App] Background: VideoSDK initialization error:', error);
+        }
+      })();
+    }, 200);
 
-  // Setup notification listeners
-  useEffect(() => {
-    if (firebaseReady) {
-      console.log('[App] Setting up notification listeners...');
-      const firebaseService = FirebaseService.getInstance();
-      const unsubscribe = firebaseService.setupNotificationListeners();
+    // Background WhatsApp Call Manager initialization
+    setTimeout(() => {
+      (async () => {
+        try {
+          console.log('[App] Background: Initializing WhatsApp Call Manager...');
+          const whatsAppCallManager = WhatsAppCallManager.getInstance();
+          const callNotificationHandler = CallNotificationHandler.getInstance();
+          
+          const success = await whatsAppCallManager.initialize();
+          const notificationSuccess = await callNotificationHandler.initialize();
+          
+          if (success && notificationSuccess) {
+            console.log('[App] Background: WhatsApp Call Manager initialized successfully');
+            
+            // Initialize CallSyncService
+            try {
+              const callSyncService = CallSyncService.getInstance();
+              await callSyncService.initialize();
+              console.log('[App] Background: Call Sync Service initialized successfully');
+            } catch (syncError) {
+              console.error('[App] Background: Call Sync Service initialization failed:', syncError);
+            }
+          } else {
+            console.warn('[App] Background: WhatsApp Call system initialization failed');
+          }
+        } catch (error) {
+          console.error('[App] Background: WhatsApp Call system initialization error:', error);
+        }
+      })();
+    }, 300);
 
-      // Execute any delayed navigation
-      firebaseService.executeDelayedNavigation();
-
-      return unsubscribe;
+    // Background permissions initialization - delayed to not impact UI
+    if (isAuthenticated) {
+      setTimeout(async () => {
+        try {
+          const PermissionsService = require('./src/services/PermissionsService').default;
+          await PermissionsService.requestPhoneCallForegroundServicePermission();
+          console.log('[App] Background: Phone call permissions requested');
+        } catch (error) {
+          console.log('[App] Background: Phone call permissions request failed (not critical):', error);
+        }
+      }, 1000); // Reduced from 2000ms to 1000ms
     }
-  }, [firebaseReady]);
+  }, [isInitialized, isAuthenticated]);
 
+  // Essential event listeners and navigation setup
   useEffect(() => {
     const handleStartCall = (callData: ActiveCall) => {
       startCall(callData);
@@ -395,12 +410,14 @@ const AppNavigator = () => {
       appEventEmitter.off('CallStarted', handleStartCall);
     };
   }, [startCall]);
+
   useEffect(() => {
     const checkNavigationReady = () => {
       const ready = isNavigationReady();
       setIsNavReady(ready);
       if (ready) {
         console.log('[App] Navigation is ready');
+        CallService.setNavigationReady();
       }
     };
     
@@ -410,49 +427,13 @@ const AppNavigator = () => {
     const unsubscribe = navigationRef.addListener('ready', () => {
       console.log('[App] Navigation ready event fired');
       setIsNavReady(true);
+      CallService.setNavigationReady();
     });
 
     return () => {
       unsubscribe();
     };
   }, []);
-
-  // Initialize WhatsApp-like Call Manager (NEW enhanced system)
-  useEffect(() => {
-    const initWhatsAppCall = async () => {
-      console.log('[App] Initializing WhatsApp Call Manager...');
-      try {
-        const whatsAppCallManager = WhatsAppCallManager.getInstance();
-        const callNotificationHandler = CallNotificationHandler.getInstance();
-        
-        const success = await whatsAppCallManager.initialize();
-        const notificationSuccess = await callNotificationHandler.initialize();
-        
-        setWhatsAppCallReady(success && notificationSuccess);
-        
-        if (success && notificationSuccess) {
-          console.log('[App] ✅ WhatsApp Call Manager and Notification Handler initialized successfully');
-          
-          // Initialize CallSyncService after WhatsApp Call Manager is ready
-          try {
-            const callSyncService = CallSyncService.getInstance();
-            await callSyncService.initialize();
-            console.log('[App] ✅ Call Sync Service initialized successfully');
-          } catch (syncError) {
-            console.error('[App] Call Sync Service initialization failed:', syncError);
-          }
-        } else {
-          console.warn('[App] ❌ WhatsApp Call system initialization failed, continuing without enhanced calls');
-          setWhatsAppCallReady(true); // Allow app to continue
-        }
-      } catch (error) {
-        console.error('[App] WhatsApp Call system initialization error:', error);
-        setWhatsAppCallReady(true); // Allow app to continue even if fails
-      }
-    };
-
-    initWhatsAppCall();
-  }, [isInitialized]);
 
   // Setup incoming call handling with WhatsApp Call Manager
   useEffect(() => {
@@ -515,28 +496,16 @@ const AppNavigator = () => {
     };
   }, []);
 
-  if (!isInitialized || !firebaseReady || !videoSDKReady || !callServiceReady || !whatsAppCallReady) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{color: colors.text.primary, marginTop: 10}}>Initializing...</Text>
-      </View>
-    );
+  // Ultra-fast app initialization with authentication-aware routing
+  // Use UltraFastLoader for instant app initialization
+  if (!needsUserDetails) {
+    return <UltraFastLoader onInitializationComplete={handleInitializationComplete} />;
   }
 
+  // Only show UserDetails screen if authenticated but missing user name
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
-      {isAuthenticated && user?.name ? (
-        <>
-          <RootStack.Screen name="Main" component={MainApp} />
-          {/* REMOVE MeetingScreen from the root navigator */}
-        </>
-      ) : (
-        <RootStack.Screen name="Auth" component={AuthNavigator} />
-      )}
-      {!user?.name && isAuthenticated && (
-         <RootStack.Screen name="UserDetails" component={UserDetailsScreen} />
-      )}
+      <RootStack.Screen name="UserDetails" component={UserDetailsScreen} />
     </RootStack.Navigator>
   );
 };
@@ -546,16 +515,20 @@ function App(): React.JSX.Element {
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
 
-  // Initialize AdMob SDK
+  // Initialize AdMob SDK in background
   useEffect(() => {
-    mobileAds().initialize();
+    setTimeout(() => {
+      mobileAds().initialize();
+    }, 500); // Delayed to not block initial render
   }, []);
 
-  // Show App Open Ad on launch
+  // Show App Open Ad in background
   const { showAd, adLoaded } = useAppOpenAd();
   useEffect(() => {
     if (adLoaded) {
-      showAd();
+      setTimeout(() => {
+        showAd();
+      }, 1000); // Delayed to not block app start
     }
   }, [adLoaded]);
 
@@ -566,15 +539,19 @@ function App(): React.JSX.Element {
           <AuthProvider>
             <WalletProvider>
               <CallProvider>
-                <ShortsProvider>
-                  <TabNavigatorProvider>
-                    <GestureHandlerRootView style={{ flex: 1 }}>
-                      <NavigationContainer ref={navigationRef}>
-                        <AppNavigator />
-                      </NavigationContainer>
-                    </GestureHandlerRootView>
-                  </TabNavigatorProvider>
-                </ShortsProvider>
+                <EnhancedQueryProvider>
+                  <DataProvider>
+                    <ShortsProvider>
+                      <TabNavigatorProvider>
+                        <GestureHandlerRootView style={{ flex: 1 }}>
+                          <NavigationContainer ref={navigationRef}>
+                            <AppNavigator />
+                          </NavigationContainer>
+                        </GestureHandlerRootView>
+                      </TabNavigatorProvider>
+                    </ShortsProvider>
+                  </DataProvider>
+                </EnhancedQueryProvider>
               </CallProvider>
             </WalletProvider>
           </AuthProvider>

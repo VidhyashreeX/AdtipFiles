@@ -300,7 +300,7 @@ const MyChannelScreen: React.FC = () => {
         <View style={[styles.analyticsCard, { backgroundColor: colors.surface }]}>
           <Eye size={24} color={colors.primary} />
           <Text style={[styles.analyticsValue, { color: colors.text.primary }]}>
-            {channel?.totalViews.toLocaleString() || '0'}
+            {(channel?.totalViews || 0).toLocaleString()}
           </Text>
           <Text style={[styles.analyticsLabel, { color: colors.textSecondary }]}>Total Views</Text>
         </View>
@@ -308,7 +308,7 @@ const MyChannelScreen: React.FC = () => {
         <View style={[styles.analyticsCard, { backgroundColor: colors.surface }]}>
           <Users size={24} color={colors.primary} />
           <Text style={[styles.analyticsValue, { color: colors.text.primary }]}>
-            {channel?.totalSubscribers.toLocaleString() || '0'}
+            {(channel?.totalSubscribers || 0).toLocaleString()}
           </Text>
           <Text style={[styles.analyticsLabel, { color: colors.textSecondary }]}>Subscribers</Text>
         </View>
@@ -316,7 +316,7 @@ const MyChannelScreen: React.FC = () => {
         <View style={[styles.analyticsCard, { backgroundColor: colors.surface }]}>
           <Play size={24} color={colors.primary} />
           <Text style={[styles.analyticsValue, { color: colors.text.primary }]}>
-            {channel?.totalVideos.toLocaleString() || '0'}
+            {(channel?.totalVideos || 0).toLocaleString()}
           </Text>
           <Text style={[styles.analyticsLabel, { color: colors.textSecondary }]}>Videos</Text>
         </View>
@@ -350,7 +350,7 @@ const MyChannelScreen: React.FC = () => {
         <View style={styles.aboutStat}>
           <Text style={[styles.aboutStatLabel, { color: colors.textSecondary }]}>Total Views</Text>
           <Text style={[styles.aboutStatValue, { color: colors.text.primary }]}>
-            {channel?.totalViews.toLocaleString() || '0'}
+            {(channel?.totalViews || 0).toLocaleString()}
           </Text>
         </View>
       </View>
@@ -559,7 +559,7 @@ const MyChannelScreen: React.FC = () => {
           <View style={styles.channelDetails}>
             <Text style={[styles.channelName, { color: colors.text.primary }]}>{channel.channelName}</Text>
             <Text style={[styles.channelStats, { color: colors.textSecondary }]}>
-              {channel.totalSubscribers.toLocaleString()} subscribers • {channel.totalVideos} videos
+              {(channel.totalSubscribers || 0).toLocaleString()} subscribers • {channel.totalVideos} videos
             </Text>
           </View>
 

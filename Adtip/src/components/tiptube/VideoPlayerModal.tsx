@@ -256,7 +256,7 @@ const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 
             <View style={styles.videoStats}>
               <Text style={[styles.viewCount, {color: colors.text.secondary}]}>
-                {videoData.view_count?.toLocaleString() || 0} views •{' '}
+                {(videoData.view_count || 0).toLocaleString()} views •{' '}
                 {new Date(videoData.created_at).toLocaleDateString()}
               </Text>
 
@@ -269,7 +269,7 @@ const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                   />
                   <Text
                     style={[styles.actionText, {color: colors.text.secondary}]}>
-                    {videoData.like_count?.toLocaleString() || 0}
+                    {(videoData.like_count || 0).toLocaleString()}
                   </Text>
                 </TouchableOpacity>
 
@@ -281,7 +281,7 @@ const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                   />
                   <Text
                     style={[styles.actionText, {color: colors.text.secondary}]}>
-                    {videoData.comment_count?.toLocaleString() || 0}
+                    {(videoData.comment_count || 0).toLocaleString()}
                   </Text>
                 </TouchableOpacity>
 

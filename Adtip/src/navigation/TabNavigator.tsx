@@ -106,7 +106,30 @@ const TabNavigator = () => {
   // Memoize the function that renders the CreateContentButton
   const renderCreateButton = useCallback(() => <CreateContentButton />, []);
 
-  // Memoize tab press listener
+  // Instant navigation handlers - prioritize navigation over data loading
+  const handleInstantNavigation = useCallback((routeName: string) => {
+    return (e: any) => {
+      // Don't prevent default navigation - let it proceed immediately
+      // This ensures instant navigation regardless of current screen's loading state
+      console.log(`TabNavigator: Instant navigation to ${routeName}`);
+      
+      // Force immediate navigation without waiting for current screen data
+      setTimeout(() => {
+        // Use the tab navigator's jumpTo method for instant tab switching
+        if (navigation && typeof navigation.jumpTo === 'function') {
+          navigation.jumpTo(routeName);
+        }
+      }, 0);
+    };
+  }, [navigation]);
+
+  // Memoize tab press listeners for instant navigation
+  const homeTabPress = useCallback(handleInstantNavigation('Home'), [handleInstantNavigation]);
+  const tipTubeTabPress = useCallback(handleInstantNavigation('TipTube'), [handleInstantNavigation]);
+  const tipCallTabPress = useCallback(handleInstantNavigation('TipCall'), [handleInstantNavigation]);
+  const profileTabPress = useCallback(handleInstantNavigation('Profile'), [handleInstantNavigation]);
+
+  // Memoize tab press listener for create content (prevents navigation)
   const createContentTabPress = useCallback((e: any) => {
     e.preventDefault(); // Prevent navigation
   }, []);
@@ -120,12 +143,18 @@ const TabNavigator = () => {
           options={{
             tabBarIcon: HomeIcon,
           }}
+          listeners={{
+            tabPress: homeTabPress,
+          }}
         />
         <Tab.Screen
           name="TipTube"
           component={EnhancedTipTubeScreen}
           options={{
             tabBarIcon: TipTubeIcon,
+          }}
+          listeners={{
+            tabPress: tipTubeTabPress,
           }}
         />
         <Tab.Screen
@@ -145,12 +174,18 @@ const TabNavigator = () => {
           options={{
             tabBarIcon: TipCallIcon,
           }}
+          listeners={{
+            tabPress: tipCallTabPress,
+          }}
         />
         <Tab.Screen
           name="Profile"
           component={EnhancedProfileScreen}
           options={{
             tabBarIcon: ProfileIcon,
+          }}
+          listeners={{
+            tabPress: profileTabPress,
           }}
         />
       </Tab.Navigator>

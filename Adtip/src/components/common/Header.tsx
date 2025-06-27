@@ -186,6 +186,7 @@ const Header: React.FC<HeaderProps> = ({
           backgroundColor: colors.background,
           paddingHorizontal: sizes.paddingHorizontal,
           borderBottomColor: colors.borderLight,
+          paddingTop: insets.top > 0 ? 8 : 12, // Adjust for safe area
         }
       ]}
     >

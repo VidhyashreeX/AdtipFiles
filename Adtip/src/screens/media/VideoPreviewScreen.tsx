@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  StatusBar,
 } from 'react-native';
 import {useNavigation, useRoute} from '@react-navigation/native';
 import Video from 'react-native-video';

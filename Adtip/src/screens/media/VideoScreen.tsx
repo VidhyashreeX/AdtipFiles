@@ -536,7 +536,7 @@ const VideoScreen = () => {
 
             <View style={styles.videoStats}>
               <Text style={[styles.statsText, {color: colors.text.secondary}]}>
-                {video.views.toLocaleString()} views •{' '}
+                {(video.views || 0).toLocaleString()} views •{' '}
                 {new Date(video.createdAt).toLocaleDateString()}
               </Text>
 
@@ -561,7 +561,7 @@ const VideoScreen = () => {
                     liked && styles.likedActionText,
                     { color: liked ? colors.primary : colors.text.secondary },
                   ]}>
-                  {video.likes.toLocaleString()}
+                  {(video.likes || 0).toLocaleString()}
                 </Text>
               </TouchableOpacity>
 
@@ -603,7 +603,7 @@ const VideoScreen = () => {
                     styles.subscriberCount,
                     {color: colors.text.secondary},
                   ]}>
-                  {video.user.followers.toLocaleString()} followers
+                  {(video.user.followers || 0).toLocaleString()} followers
                 </Text>
               </View>
             </View>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,16 +9,15 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import axios from 'axios';
-import Animated, {
-  FadeIn,
-} from 'react-native-reanimated';
+import { useNavigation } from '@react-navigation/native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import { useAuth } from '../../contexts/AuthContext';
-import ApiService from '../../services/ApiService';
+import { useDataContext } from '../../providers/DataProvider';
+import { useVideos, usePrefetchData } from '../../hooks/useQueries';
+import { useNetInfo } from '@react-native-community/netinfo';
 import Header from '../../components/common/Header';
 import VideoCardSkeleton from '../../components/skeletons/VideoCardSkeleton';
 import ScreenTransition from '../../components/common/ScreenTransition';
@@ -38,7 +37,6 @@ const HORIZONTAL_PADDING = 16;
 const VERTICAL_SPACING = 16;
 const CARD_WIDTH = SCREEN_WIDTH - (HORIZONTAL_PADDING * 2);
 const THUMBNAIL_HEIGHT = (CARD_WIDTH * 9) / 16; // 16:9 aspect ratio
-const LOAD_MORE_THRESHOLD = 3; // Load more when 3 items from bottom
 
 // Define interfaces
 interface Video {
@@ -94,198 +92,110 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   return newArray;
 };
 
-// Main TipTube Screen
+// Main TipTube Screen - Enhanced with React Query v5 data layer
 const TipTubeScreen = () => {
   const { isDarkMode, colors } = useTheme();
   const { contentPaddingBottom } = useTabNavigator();
   const { user } = useAuth();
+  const { clearCache } = useDataContext();
   const navigation = useNavigation<any>();
+  const netInfo = useNetInfo();
 
-  // State
+  // UI state management (decoupled from navigation)
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [refreshPage, setRefreshPage] = useState(1); // Track refresh page separately
-  const [hasMore, setHasMore] = useState(true);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [previewingVideoId, setPreviewingVideoId] = useState<number | null>(null);
   const [selectedVideoId, setSelectedVideoId] = useState<number | null>(null);
 
   // Refs
   const flatListRef = useRef<FlatList>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const isLoadingRef = useRef(false);
 
-  // Memoized styles
-  const styles = useMemo(() => createYouTubeStyles(colors, isDarkMode), [colors, isDarkMode]);
-  // Transform API data to Video interface with secure URLs
-  const transformVideoData = useCallback(async (apiVideo: any): Promise<Video> => {
-    const secureVideoUrl = await getSecureMediaUrl(apiVideo.video_link || apiVideo.videoUrl);
-    const secureThumbnail = await getSecureMediaUrl(apiVideo.video_Thumbnail);
-    const secureAvatar = await getSecureMediaUrl(apiVideo.channel_profile);
+  // Enhanced data layer using React Query v5
+  const categoryId = categoryToIdMap[selectedCategory] || 0;
+  const {
+    data: videosData,
+    isLoading: videosLoading,
+    isFetchingNextPage: videosLoadingMore,
+    error: videosError,
+    refetch: refreshVideos,
+    fetchNextPage: loadMoreVideos,
+    hasNextPage: hasMoreVideos,
+  } = useVideos(categoryId, user?.id, searchQuery);
 
-    return {
+  // Prefetch data for better performance
+  const { prefetchProfile } = usePrefetchData();
+
+  // Transform videos data for compatibility and proper typing
+  const videos = useMemo(() => {
+    const allVideos = videosData?.pages?.flatMap(page => page?.data || []) || [];
+    
+    console.log('[TipTubeScreen] Raw videos data:', {
+      pagesCount: videosData?.pages?.length || 0,
+      firstPage: videosData?.pages?.[0]?.data?.slice(0, 2), // Log first 2 videos from first page
+      allVideosCount: allVideos.length
+    });
+    
+    // Transform API videos to Video interface format
+    const transformedVideos = allVideos.map((apiVideo: any) => ({
       id: apiVideo.id || 0,
       title: apiVideo.name || apiVideo.title || "Untitled Video",
-      thumbnail: secureThumbnail || getFallbackThumbnailUrl(apiVideo.id),
-      videoUrl: secureVideoUrl || '',
+      thumbnail: apiVideo.video_Thumbnail || getFallbackThumbnailUrl(apiVideo.id),
+      videoUrl: apiVideo.video_link || apiVideo.videoUrl || '',
       duration: parseInt(apiVideo.play_duration || apiVideo.duration || "0", 10),
       views: apiVideo.total_views || 0,
       posted: apiVideo.createddate || "Recently",
-      avatar: secureAvatar || getFallbackAvatarUrl(apiVideo.createdby || apiVideo.id),
-      creatorName: apiVideo.channelName || "Unknown Creator",
+      avatar: apiVideo.channel_profile || getFallbackAvatarUrl(apiVideo.createdby || apiVideo.id),
+      creatorName: apiVideo.channelName || apiVideo.channel_name || "Unknown Creator",
       isVerified: false,
       channelId: apiVideo.video_channel || apiVideo.channelId || apiVideo.createdby || 0,
       price: apiVideo.price ? parseFloat(apiVideo.price) : undefined,
-    };
-  }, []);
+    }));
+    
+    console.log('[TipTubeScreen] Transformed videos:', {
+      count: transformedVideos.length,
+      firstVideo: transformedVideos[0]
+    });
+    
+    return transformedVideos;
+  }, [videosData]);
 
-  // Fetch videos function
-  const fetchVideos = useCallback(async (
-    page: number = 1,
-    categoryName: string = "All",
-    searchText: string = "",
-    isRefresh: boolean = false,
-    isPullToRefresh: boolean = false // New parameter to distinguish pull-to-refresh
-  ) => {
-    if (!user?.id || isLoadingRef.current) {
-      return;
-    }
+  // Network state for offline handling
+  const isOnline = netInfo.isConnected;
 
-    // Prevent duplicate requests
-    isLoadingRef.current = true;
+  // Derived state for UI
+  const initialLoading = videosLoading && videos.length === 0;
+  const loadingMore = videosLoadingMore;
+  const hasMore = hasMoreVideos;
 
-    try {
-      // Cancel previous request
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+  // Memoized styles
+  const styles = useMemo(() => createYouTubeStyles(colors, isDarkMode), [colors, isDarkMode]);
 
-      // Create new abort controller
-      const abortController = new AbortController();
-      abortControllerRef.current = abortController;
-
-      // Set loading states
-      if (isPullToRefresh) {
-        setRefreshing(true);
-      } else if (page === 1) {
-        setInitialLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
-
-      const categoryId = categoryToIdMap[categoryName] || 0;
-
-      console.log('[TipTubeScreen] Fetching videos:', {
-        page,
-        categoryId,
-        categoryName,
-        searchText,
-        isRefresh,
-        isPullToRefresh
-      });
-
-      const response = await ApiService.getVideos(
-        user.id,
-        categoryId,
-        page,
-        searchText,
-        abortController.signal
-      );
-
-      if (abortController.signal.aborted) {
-        return;
-      }      if (response && (response.status === 200 || response.status === true)) {
-        const videosArray = Array.isArray(response.data) ? response.data : [];
-          // Transform videos with secure URLs (async)
-        const transformedVideos = await Promise.all(
-          videosArray.map((video: any) => transformVideoData(video))
-        );
-
-        console.log('[TipTubeScreen] Received videos:', transformedVideos.length);
-
-        if (isPullToRefresh) {
-          // Pull to refresh - prepend new videos to existing ones
-          setVideos(prevVideos => [...transformedVideos, ...prevVideos]);
-          setRefreshPage(page + 1); // Increment refresh page for next pull
-        } else if (isRefresh || page === 1) {
-          // Fresh data - replace all videos (category change, search, initial load)
-          setVideos(transformedVideos);
-          setCurrentPage(2); // Next page to load for infinite scroll
-          setRefreshPage(1); // Reset refresh page counter
-        } else {
-          // Append new videos for infinite scroll
-          setVideos(prevVideos => [...prevVideos, ...transformedVideos]);
-          setCurrentPage(page + 1);
-        }
-
-        // Check if there are more videos to load
-        setHasMore(transformedVideos.length > 0);
-      } else {
-        console.warn('[TipTubeScreen] API returned unsuccessful response:', response?.status);
-        if (page === 1 && !isPullToRefresh) {
-          setVideos([]);
-        }
-        setHasMore(false);
-      }
-
-    } catch (error: any) {
-      if (axios.isCancel(error)) {
-        console.log('[TipTubeScreen] Request cancelled');
-        return;
-      }
-      
-      console.error('[TipTubeScreen] Error fetching videos:', error);
-      
-      if (page === 1 && !isPullToRefresh) {
-        setVideos([]);
-      }
-      setHasMore(false);
-    } finally {
-      setInitialLoading(false);
-      setLoadingMore(false);
-      setRefreshing(false);
-      isLoadingRef.current = false;
-      abortControllerRef.current = null;
-    }
-  }, [user?.id, transformVideoData]);
-
-  // Pull to refresh handler - increments page number
+  // Enhanced event handlers using React Query
   const handleRefresh = useCallback(() => {
-    console.log('[TipTubeScreen] Pull to refresh triggered, page:', refreshPage);
-    fetchVideos(refreshPage, selectedCategory, searchQuery, false, true);
-  }, [fetchVideos, selectedCategory, searchQuery, refreshPage]);
+    console.log('[TipTubeScreen] Pull to refresh triggered');
+    refreshVideos();
+  }, [refreshVideos]);
 
-  // Load more handler for infinite scroll
   const handleLoadMore = useCallback(() => {
-    if (!loadingMore && !initialLoading && hasMore && !isLoadingRef.current) {
-      console.log('[TipTubeScreen] Loading more videos, page:', currentPage);
-      fetchVideos(currentPage, selectedCategory, searchQuery, false, false);
+    if (!loadingMore && hasMore) {
+      console.log('[TipTubeScreen] Loading more videos');
+      loadMoreVideos();
     }
-  }, [loadingMore, initialLoading, hasMore, currentPage, fetchVideos, selectedCategory, searchQuery]);
+  }, [loadingMore, hasMore, loadMoreVideos]);
 
-  // Category change handler - resets pages
   const handleCategoryChange = useCallback((categoryName: string) => {
     console.log('[TipTubeScreen] Category changed to:', categoryName);
     setSelectedCategory(categoryName);
-    setCurrentPage(1);
-    setRefreshPage(1); // Reset refresh page
-    setHasMore(true);
-    fetchVideos(1, categoryName, searchQuery, true, false);
-  }, [fetchVideos, searchQuery]);
+    // Clear cache for better UX on category change
+    clearCache(`videos-${categoryToIdMap[selectedCategory]}`);
+  }, [selectedCategory, clearCache]);
 
-  // Search handler - resets pages
   const handleSearch = useCallback((query: string) => {
     console.log('[TipTubeScreen] Search query:', query);
     setSearchQuery(query);
-    setCurrentPage(1);
-    setRefreshPage(1); // Reset refresh page
-    setHasMore(true);
-    fetchVideos(1, selectedCategory, query, true, false);
-  }, [fetchVideos, selectedCategory]);
+    // Clear cache to force fresh search results
+    clearCache(`videos-${categoryId}`);
+  }, [categoryId, clearCache]);
 
   // Video player handler
   const openPlayer = useCallback((video: Video, layout: CardLayout) => {
@@ -301,6 +211,56 @@ const TipTubeScreen = () => {
       upNextVideos: shuffledVideos.slice(0, 10)
     });
   }, [videos, navigation]);
+
+  // Render helper functions
+  const renderSkeletonLoading = useCallback(() => (
+    <View style={styles.skeletonContainer}>
+      <View style={styles.skeletonContent}>
+        {Array.from({ length: 6 }, (_, index) => (
+          <VideoCardSkeleton key={`skeleton-${index}`} />
+        ))}
+      </View>
+    </View>
+  ), [styles]);
+
+  const renderFooter = useCallback(() => {
+    if (!hasMore && videos.length > 0) {
+      return (
+        <View style={styles.footerLoading}>
+          <Text style={styles.footerLoadingText}>No more videos</Text>
+        </View>
+      );
+    }
+
+    if (loadingMore) {
+      return (
+        <View style={styles.footerLoading}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={styles.footerLoadingText}>Loading more videos...</Text>
+        </View>
+      );
+    }
+
+    return null;
+  }, [hasMore, videos.length, loadingMore, styles, colors.primary]);
+
+  const renderEmptyState = useCallback(() => {
+    if (initialLoading) return null;
+
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>
+          {videosError && !isOnline 
+            ? 'You\'re offline. Videos will load when you\'re back online.'
+            : videosError 
+            ? 'Failed to load videos. Please try again.'
+            : searchQuery
+            ? `No videos found for "${searchQuery}"`
+            : 'No videos available'}
+        </Text>
+      </View>
+    );
+  }, [initialLoading, videosError, isOnline, searchQuery, styles]);
 
   // Render category header
   const renderCategoryHeader = useCallback(() => (
@@ -349,78 +309,14 @@ const TipTubeScreen = () => {
         index={index}
         isYouTubeLayout={true} // Pass flag for YouTube-like layout
       />
-      {index % 3 === 2 && <BannerAdComponent />}
+      {/* Banner ad every 5 videos */}
+      {(index + 1) % 5 === 0 && (
+        <View style={{ marginVertical: 10 }}>
+          <BannerAdComponent />
+        </View>
+      )}
     </>
   ), [openPlayer, selectedVideoId, previewingVideoId, styles, colors, navigation]);
-
-  // Render footer loading indicator
-  const renderFooter = useCallback(() => {
-    if (!loadingMore) return null;
-    
-    return (
-      <View style={styles.footerLoading}>
-        <ActivityIndicator size="small" color={colors.primary} />
-        <Text style={styles.footerLoadingText}>Loading more videos...</Text>
-      </View>
-    );
-  }, [loadingMore, colors.primary, styles]);
-
-  // Render empty state
-  const renderEmptyState = useCallback(() => {
-    if (initialLoading) return null;
-    
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>
-          {searchQuery ? `No videos found for "${searchQuery}"` : 'No videos available'}
-        </Text>
-      </View>
-    );
-  }, [initialLoading, searchQuery, styles]);
-
-  // Render skeleton loading with YouTube layout
-  const renderSkeletonLoading = useCallback(() => (
-    <FlatList
-      data={Array(6).fill(0)}
-      keyExtractor={(_, index) => `skeleton-${index}`}
-      renderItem={({ index }) => (
-        <Animated.View
-          entering={FadeIn.delay(index * 100).duration(300)}
-          style={styles.skeletonContainer}
-        >
-          <VideoCardSkeleton isYouTubeLayout={true} />
-        </Animated.View>
-      )}
-      scrollEnabled={false}
-      contentContainerStyle={styles.skeletonContent}
-      ListHeaderComponent={renderCategoryHeader} // Include category header in skeleton
-    />
-  ), [styles, renderCategoryHeader]);
-
-  // Initial load effect
-  useEffect(() => {
-    if (user?.id) {
-      fetchVideos(1, selectedCategory, searchQuery, true, false);
-    }
-  }, [user?.id]); // Only depend on user ID for initial load
-
-  // Focus effect
-  useFocusEffect(
-    useCallback(() => {
-      if (user?.id && videos.length === 0) {
-        fetchVideos(1, selectedCategory, searchQuery, true, false);
-      }
-    }, [user?.id, videos.length])
-  );
-
-  // Cleanup effect
-  useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, []);
 
   return (
     <ScreenTransition animationType="slide" skipAnimation={false}>
@@ -440,13 +336,13 @@ const TipTubeScreen = () => {
             ref={flatListRef}
             data={videos}
             keyExtractor={(item) => `video-${item.id}`}
-            renderItem={({item, index}) => renderVideoItem({item, index})}
+            renderItem={renderVideoItem}
             ListHeaderComponent={renderCategoryHeader}
             ListFooterComponent={renderFooter}
             ListEmptyComponent={renderEmptyState}
             refreshControl={
               <RefreshControl
-                refreshing={refreshing}
+                refreshing={false} // Managed by React Query
                 onRefresh={handleRefresh}
                 colors={[colors.primary]}
                 tintColor={colors.primary}
@@ -520,12 +416,11 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
     backgroundColor: colors.background,
     marginBottom: VERTICAL_SPACING,
   },
-  // YouTube-style video card - edge to edge thumbnail
   youtubeVideoCard: {
     backgroundColor: colors.background,
   },
   youtubeThumbnailContainer: {
-    width: SCREEN_WIDTH, // Full screen width, no margins
+    width: SCREEN_WIDTH,
     height: THUMBNAIL_HEIGHT,
     backgroundColor: colors.border,
   },
@@ -564,7 +459,7 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
   },
   youtubeVideoInfo: {
     flexDirection: 'row',
-    paddingHorizontal: HORIZONTAL_PADDING, // Only info section has padding
+    paddingHorizontal: HORIZONTAL_PADDING,
     paddingTop: 12,
     paddingBottom: 4,
   },
@@ -617,10 +512,10 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
     textAlign: 'center',
   },
   skeletonContainer: {
-    marginBottom: 0, // Remove margin since skeleton handles its own spacing
+    marginBottom: 0,
   },
   skeletonContent: {
-    paddingTop: 0, // Remove padding since we include category header
+    paddingTop: 0,
   },
 });
 

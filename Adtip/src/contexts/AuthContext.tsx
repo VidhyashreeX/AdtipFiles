@@ -1,4 +1,4 @@
-import React, {createContext, useState, useContext, useEffect} from 'react';
+import React, {createContext, useState, useContext, useEffect, useMemo} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {API_BASE_URL, ENDPOINTS} from '../constants/api';
 import ApiService from '../services/ApiService';
@@ -354,8 +354,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     }
   };
 
-  // Provide context value
-  const contextValue: AuthContextType = {
+  // Provide context value - MEMOIZED to prevent unnecessary re-renders
+  const contextValue: AuthContextType = useMemo(() => ({
     isAuthenticated,
     user,
     loading,
@@ -369,7 +369,15 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     hasChannel,
     createChannel,
     completeOnboarding,
-  };
+  }), [
+    isAuthenticated,
+    user,
+    loading,
+    error,
+    isInitialized,
+    hasChannel,
+    // Note: Functions are stable and don't need to be in deps since they don't change
+  ]);
 
   // Add this to the AuthContext component where user state is managed
   useEffect(() => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -97,40 +97,7 @@ const MeetingView: React.FC = () => {
   const [isMuted, setIsMuted] = useState(false);
   
   // Get route params safely
-  const { callType = 'voice', recipientName = 'Participant' } = route.params || {};  // Handle ending call - define early to avoid reference issues
-  const handleEndCall = useCallback(async () => {
-    if (isEndingCall) return;
-    
-    console.log('[MeetingView] Starting end call process');
-    setIsEndingCall(true);
-    
-    try {
-      // First leave the VideoSDK meeting if we have the leave function
-      if (leave && hasJoined) {
-        console.log('[MeetingView] Leaving VideoSDK meeting');
-        leave();
-      }
-      
-      // Then end the call service - this will emit leaveActiveCall event
-      await CallService.endCall('User ended call');
-      
-      // Navigate back after a short delay to ensure cleanup
-      setTimeout(() => {
-        if (navigation.canGoBack()) {
-          navigation.goBack();
-        }
-      }, 200);
-      
-    } catch (error) {
-      console.error('[MeetingView] Error ending call:', error);
-      // Force navigation even if there's an error
-      setTimeout(() => {
-        if (navigation.canGoBack()) {
-          navigation.goBack();
-        }
-      }, 100);
-    }
-  }, [isEndingCall, navigation, hasJoined]); // Removed leave dependency
+  const { callType = 'voice', recipientName = 'Participant' } = route.params || {};
 
   // Use VideoSDK meeting hooks CORRECTLY according to documentation
   const meetingHooks = useMeeting({
@@ -199,6 +166,60 @@ const MeetingView: React.FC = () => {
     toggleWebcam = null,
   } = meetingHooks || {};
 
+  // Handle ending call - define after leave is available
+  const handleEndCall = useCallback(async () => {
+    if (isEndingCall) return;
+    
+    console.log('[MeetingView] Starting end call process');
+    setIsEndingCall(true);
+    
+    try {
+      // Reset local meeting state immediately
+      setHasJoined(false);
+      setIsJoining(false);
+      
+      // First leave the VideoSDK meeting if we have the leave function
+      if (leave && hasJoined) {
+        console.log('[MeetingView] Leaving VideoSDK meeting');
+        try {
+          leave();
+        } catch (leaveError) {
+          console.warn('[MeetingView] Error leaving VideoSDK meeting:', leaveError);
+        }
+      }
+      
+      // Then end the call service - this will emit leaveActiveCall event and clear activeCall
+      await CallService.endCall('User ended call');
+      
+      // Force clear WhatsAppCallManager state as well to ensure consistency
+      const whatsAppCallManager = WhatsAppCallManager.getInstance();
+      const currentCall = whatsAppCallManager.getCurrentCall();
+      if (currentCall) {
+        console.log('[MeetingView] Force clearing WhatsAppCallManager state');
+        await whatsAppCallManager.endCall(currentCall.callId);
+      }
+      
+      // Navigate back immediately without delay
+      console.log('[MeetingView] Call ended, navigating back immediately');
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
+      
+    } catch (error) {
+      console.error('[MeetingView] Error ending call:', error);
+      
+      // Reset state even if there's an error
+      setHasJoined(false);
+      setIsJoining(false);
+      setIsEndingCall(false);
+      
+      // Force navigation even if there's an error
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
+    }
+  }, [isEndingCall, navigation, hasJoined, leave]);
+
   // Update handleEndCall to use the leave function properly
   useEffect(() => {
     // This effect will run when leave function becomes available
@@ -207,28 +228,32 @@ const MeetingView: React.FC = () => {
   useEffect(() => {
     setCameraEnabled(callType === 'video');
   }, [callType]);
-  // Debug: Log when meeting state changes
+  // Debug: Log when meeting state changes - but only when significant changes occur
+  const meetingState = useMemo(() => ({
+    hasJoined,
+    isJoining,
+    participantCount: participants?.size || 0,
+    localParticipantId: localParticipant?.id || 'none',
+    meetingId: (route.params?.meetingId || activeCall?.meetingId),
+    hasToken: !!(route.params?.token || activeCall?.token),
+    callType,
+    recipientName
+  }), [hasJoined, isJoining, participants?.size, localParticipant?.id, route.params?.meetingId, activeCall?.meetingId, route.params?.token, activeCall?.token, callType, recipientName]);
+
+  const previousMeetingStateRef = useRef<string>('');
   useEffect(() => {
-    const routeParams = route.params || {};
-    const meetingId = routeParams.meetingId || activeCall?.meetingId;
-    const token = routeParams.token || activeCall?.token;
+    const currentStateString = JSON.stringify(meetingState);
     
-    console.log('[MeetingView] State changed:', {
-      hasJoined,
-      isJoining,
-      participantCount: participants?.size || 0,
-      localParticipant: localParticipant?.id || 'none',
-      meetingId,
-      token: token ? 'present' : 'missing',
-      callType,
-      recipientName
-    });
-    
-    // Extra debug for connection issues
-    if (participants && participants.size > 0) {
-      console.log('[MeetingView] Participants in meeting:', Array.from(participants.keys()));
+    if (previousMeetingStateRef.current !== currentStateString) {
+      console.log('[MeetingView] State changed:', meetingState);
+      previousMeetingStateRef.current = currentStateString;
+      
+      // Extra debug for connection issues - only when participants change
+      if (participants && participants.size > 0) {
+        console.log('[MeetingView] Participants in meeting:', Array.from(participants.keys()));
+      }
     }
-  }, [hasJoined, isJoining, participants?.size, localParticipant?.id, route.params, activeCall, callType, recipientName]);
+  }, [meetingState, participants]);
 
   // With joinWithoutUserInteraction=true, the meeting will auto-join
   // No manual join() call needed - VideoSDK handles this automatically  // The onMeetingJoined callback will be triggered when ready
@@ -256,36 +281,99 @@ const MeetingView: React.FC = () => {
   useEffect(() => {
     const handleLeaveCall = () => {
       console.log('[MeetingView] Received leaveActiveCall event');
+      
+      // Reset local meeting state immediately
+      setHasJoined(false);
+      setIsJoining(false);
+      setIsEndingCall(false);
+      
+      // Leave VideoSDK meeting if still connected
       if (leave && hasJoined && !isEndingCall) {
         try {
+          console.log('[MeetingView] Leaving VideoSDK meeting due to service call');
           leave();
-          setHasJoined(false);
         } catch (error) {
           console.error('[MeetingView] Error leaving meeting via event:', error);
         }
       }
+      
+      // Navigate back after a short delay to ensure cleanup
+      setTimeout(() => {
+        if (navigation.canGoBack()) {
+          console.log('[MeetingView] Navigating back due to leaveActiveCall');
+          navigation.goBack();
+        }
+      }, 100);
     };
 
     const handleCallEnded = (callData: any) => {
       console.log('[MeetingView] Received callEnded event from notification:', callData);
+      
+      // Reset local meeting state immediately
+      setHasJoined(false);
+      setIsJoining(false);
+      setIsEndingCall(false);
+      
+      // Leave VideoSDK meeting if still connected
       if (leave && hasJoined && !isEndingCall) {
         try {
           console.log('[MeetingView] Ending call due to notification action');
-          handleEndCall();
+          leave();
         } catch (error) {
           console.error('[MeetingView] Error ending call via notification event:', error);
         }
+      }
+      
+      // Navigate back immediately
+      setTimeout(() => {
+        if (navigation.canGoBack()) {
+          console.log('[MeetingView] Navigating back due to callEnded');
+          navigation.goBack();
+        }
+      }, 100);
+    };
+
+    // Listen for call state changes that indicate the call is ended
+    const handleCallStateChanged = (data: any) => {
+      // Check if the call has ended via status check
+      if (data && ((data.status === 'ended') || (data.isInCall === false))) {
+        console.log('[MeetingView] Call state indicates call ended, cleaning up UI');
+        
+        // Reset local meeting state immediately
+        setHasJoined(false);
+        setIsJoining(false);
+        setIsEndingCall(false);
+        
+        // Leave VideoSDK meeting if still connected
+        if (leave && hasJoined) {
+          try {
+            console.log('[MeetingView] Leaving VideoSDK meeting due to call state change');
+            leave();
+          } catch (error) {
+            console.error('[MeetingView] Error leaving meeting via state change:', error);
+          }
+        }
+        
+        // Navigate back
+        setTimeout(() => {
+          if (navigation.canGoBack()) {
+            console.log('[MeetingView] Navigating back due to call state change');
+            navigation.goBack();
+          }
+        }, 100);
       }
     };
 
     appEventEmitter.on('leaveActiveCall', handleLeaveCall);
     appEventEmitter.on('callEnded', handleCallEnded);
+    appEventEmitter.on('callStateChanged', handleCallStateChanged);
     
     return () => {
       appEventEmitter.off('leaveActiveCall', handleLeaveCall);
       appEventEmitter.off('callEnded', handleCallEnded);
+      appEventEmitter.off('callStateChanged', handleCallStateChanged);
     };
-  }, [leave, hasJoined, isEndingCall, handleEndCall]);
+  }, [leave, hasJoined, isEndingCall, navigation]);
 
   // Show ongoing call notification when backgrounded
   useEffect(() => {
@@ -407,15 +495,58 @@ const MeetingView: React.FC = () => {
       useNativeDriver: true,
     }).start();
   }, [showControls, controlsOpacity]);
+  
   const participantCount = participants?.size || 0;
-  const callStatus = hasJoined ? (participantCount > 1 ? 'connected' : 'waiting') : (isJoining ? 'connecting' : 'initializing');
+  
+  // Helper function to determine call status with proper typing
+  const getCallStatus = (): 'initializing' | 'connecting' | 'waiting' | 'connected' | 'ending' | 'ended' => {
+    // If we're in the process of ending the call, show ending state
+    if (isEndingCall) return 'ending';
+    
+    // If there's no activeCall from CallService, the call is ended
+    if (!activeCall) return 'ended';
+    
+    // If the activeCall status is 'ended', the call is ended
+    if (activeCall.status === 'ended') return 'ended';
+    
+    // CRITICAL FIX: Check WhatsAppCallManager state as well
+    const whatsAppCallManager = WhatsAppCallManager.getInstance();
+    const currentCall = whatsAppCallManager.getCurrentCall();
+    
+    // If WhatsAppCallManager has no current call or the call is ended, the call is ended
+    if (!currentCall || currentCall.status === 'ended') return 'ended';
+    
+    // Otherwise, use VideoSDK meeting state for status
+    return hasJoined ? (participantCount > 1 ? 'connected' : 'waiting') : (isJoining ? 'connecting' : 'initializing');
+  };
+  
+  // FIXED: Check both VideoSDK state AND actual call service state
+  // If there's no activeCall, the call has been ended regardless of VideoSDK state
+  const callStatus = useMemo(getCallStatus, [isEndingCall, activeCall, hasJoined, participantCount, isJoining]);
 
-  if (isEndingCall) {
+  if (isEndingCall || callStatus === 'ending') {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: '#1A1A1A' }]}>
         <View style={styles.endingContainer}>
           <ActivityIndicator size="large" color="#00D4AA" />
           <Text style={styles.endingText}>Ending call...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // If call is ended, navigate back immediately
+  if (callStatus === 'ended') {
+    console.log('[MeetingView] Call ended, navigating back');
+    setTimeout(() => {
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
+    }, 100);
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: '#1A1A1A' }]}>
+        <View style={styles.endingContainer}>
+          <Text style={styles.endingText}>Call ended</Text>
         </View>
       </SafeAreaView>
     );
@@ -437,7 +568,15 @@ const MeetingView: React.FC = () => {
           <Text style={styles.participantName}>{recipientName}</Text>          <View style={styles.statusRow}>
             {/* Animated status dot */}
             <View style={[styles.statusDot, { 
-              backgroundColor: callStatus === 'connected' ? '#00D4AA' : '#FFB800' 
+              backgroundColor: (() => {
+                const status = callStatus as string;
+                switch (status) {
+                  case 'connected': return '#00D4AA';
+                  case 'ended':
+                  case 'ending': return '#FF4444';
+                  default: return '#FFB800';
+                }
+              })()
             }]} />
             {/* Show spinner in header for connecting states */}
             {(isJoining || callStatus === 'connecting' || callStatus === 'initializing') && (
@@ -448,10 +587,17 @@ const MeetingView: React.FC = () => {
               />
             )}
             <Text style={styles.callStatus}>
-              {callStatus === 'connected' ? 'Connected' : 
-               callStatus === 'waiting' ? 'Waiting for others...' :
-               callStatus === 'connecting' ? 'Connecting...' : 
-               'Initializing...'}
+              {(() => {
+                const status = callStatus as string;
+                switch (status) {
+                  case 'connected': return 'Connected';
+                  case 'waiting': return 'Waiting for others...';
+                  case 'connecting': return 'Connecting...';
+                  case 'ending': return 'Ending call...';
+                  case 'ended': return 'Call ended';
+                  default: return 'Initializing...';
+                }
+              })()}
             </Text>
             {participantCount > 1 && (
               <>

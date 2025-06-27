@@ -1277,20 +1277,46 @@ export default class ApiService {
     try {
       console.log('🚀 [ApiService] Making direct call to FCM Server for update-call:', FCM_SERVER_URL);
       
+      // Validate payload structure matches expected format exactly
+      if (!payload.callerInfo || !payload.callerInfo.token || !payload.callerInfo.name || !payload.callerInfo.platform || !payload.type) {
+        console.error('❌ [ApiService] Invalid payload structure:', JSON.stringify(payload, null, 2));
+        throw new Error('Invalid payload: missing required fields in callerInfo or type');
+      }
+      
+      // Ensure payload matches the exact expected format
+      const validatedPayload = {
+        callerInfo: {
+          token: payload.callerInfo.token,
+          name: payload.callerInfo.name,
+          platform: payload.callerInfo.platform
+        },
+        type: payload.type
+      };
+      
+      console.log('📤 [ApiService] updateCallStatus validated payload:', JSON.stringify(validatedPayload, null, 2));
+      
       // Get auth token for authenticated requests
       const authToken = await AsyncStorage.getItem('accessToken') || await AsyncStorage.getItem('@auth_token');
+      console.log('🔑 [ApiService] Auth token available:', !!authToken);
+      
+      if (!authToken) {
+        console.error('❌ [ApiService] No auth token found - this is required for update-call API');
+        throw new Error('Authentication token required for updateCallStatus API');
+      }
       
       const headers: any = {
         'Content-Type': 'application/json',
         Accept: 'application/json',
+        Authorization: `Bearer ${authToken}`,
       };
       
-      // Add auth token if available
-      if (authToken) {
-        headers.Authorization = `Bearer ${authToken}`;
-      }
+      console.log('� [ApiService] Request headers:', { 
+        'Content-Type': headers['Content-Type'],
+        'Accept': headers.Accept,
+        'Authorization': 'Bearer [REDACTED]'
+      });
       
-      const response = await axios.post(`${FCM_SERVER_URL}/api/call/update-call`, payload, {
+      const response = await axios.post(`${FCM_SERVER_URL}/api/call/update-call`, validatedPayload, {
         headers,
         timeout: 30000,
       });
@@ -1299,6 +1325,11 @@ export default class ApiService {
       return response.data;
     } catch (error) {
       console.error('❌ [ApiService] update-call error:', error);
+      console.error('❌ [ApiService] update-call error details:', {
+        payload: JSON.stringify(payload, null, 2),
+        url: `${FCM_SERVER_URL}/api/call/update-call`,
+        hasAuthToken: !!(await AsyncStorage.getItem('accessToken') || await AsyncStorage.getItem('@auth_token'))
+      });
       throw this.handleError(error);
     }
   }

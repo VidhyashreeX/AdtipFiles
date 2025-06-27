@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useCallback, useMemo} from 'react';
+import React, {useEffect, useState, useCallback} from 'react';
 import {
   View,
   Text,
@@ -21,9 +21,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
-import { useDataContext } from '../../providers/DataProvider';
-import { useNetInfo } from '@react-native-community/netinfo';
-import { useUsers, usePrefetchData } from '../../hooks/useQueries';
 import Header from '../../components/common/Header';
 import ScreenTransition from '../../components/common/ScreenTransition';
 import {
@@ -283,8 +280,6 @@ export default function TipCallScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
-  const { clearCache } = useDataContext();
-  const netInfo = useNetInfo();
 
   useEffect(() => {
     CallService.resetCallState();
@@ -321,56 +316,22 @@ export default function TipCallScreen() {
     requestPermissions();
   }, []);
 
-  // UI state management (decoupled from navigation)
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  
   const [languageFilter, setLanguageFilter] = useState<number>(0);
   const [categoryFilter, setCategoryFilter] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  
+  // Add DND state
   const [isDndEnabled, setIsDndEnabled] = useState<boolean>(false);
   const [isDndLoading, setIsDndLoading] = useState<boolean>(false);
 
   const initialCallData = route.params?.initialCallNotificationData;
   const [incomingCallNotification, setIncomingCallNotification] = useState<any>(null);
-
-  // Enhanced data layer using React Query v5
-  const filters = { languageFilter, categoryFilter, searchQuery };
-  const {
-    data: usersData,
-    isLoading: usersLoading,
-    isFetchingNextPage: usersLoadingMore,
-    error: usersError,
-    refetch: refreshUsers,
-    fetchNextPage: loadMoreUsers,
-    hasNextPage: hasMoreUsers,
-  } = useUsers(filters, user?.id);
-
-  // Prefetch data for better performance
-  const { prefetchProfile } = usePrefetchData();
-
-  // Transform users data for compatibility
-  const contacts = useMemo(() => {
-    const allUsers = usersData?.pages?.flatMap(page => page?.data || []) || [];
-    return allUsers.filter(contact => contact.id !== user?.id);
-  }, [usersData, user?.id]);
-
-  // Filtered contacts for search (local filtering for immediate response)
-  const filteredContacts = useMemo(() => {
-    if (!searchQuery.trim()) return contacts;
-    
-    const lowerCaseQuery = searchQuery.toLowerCase();
-    return contacts.filter(contact => 
-      contact.name?.toLowerCase().includes(lowerCaseQuery) ||
-      contact.id.toString().includes(searchQuery) ||
-      contact.emailId?.toLowerCase().includes(lowerCaseQuery)
-    );
-  }, [contacts, searchQuery]);
-
-  // Network state for offline handling
-  const isOnline = netInfo.isConnected;
-
-  // Derived state for UI
-  const initialLoading = usersLoading && contacts.length === 0;
-  const loadingMore = usersLoadingMore;
-  const hasMore = hasMoreUsers;
 
   // Initialize DND state from user data
   useEffect(() => {
@@ -393,32 +354,13 @@ export default function TipCallScreen() {
     );
   }, []);
 
-  // Enhanced event handlers using React Query
-  const handleRefresh = useCallback(() => {
-    console.log('[TipCall] Pull to refresh triggered');
-    refreshUsers();
-  }, [refreshUsers]);
-
-  const handleLoadMore = useCallback(() => {
-    if (!loadingMore && hasMore) {
-      console.log('[TipCall] Loading more users');
-      loadMoreUsers();
-    }
-  }, [loadingMore, hasMore, loadMoreUsers]);
-
-  const handleLanguageFilter = useCallback((languageId: number) => {
-    console.log('[TipCall] Language filter changed to:', languageId);
-    setLanguageFilter(languageId);
-    // Clear cache for better UX on filter change
-    clearCache(`users-${JSON.stringify(filters)}`);
-  }, [filters, clearCache]);
-
-  const handleCategoryFilter = useCallback((categoryId: number) => {
-    console.log('[TipCall] Category filter changed to:', categoryId);
-    setCategoryFilter(categoryId);
-    // Clear cache for better UX on filter change
-    clearCache(`users-${JSON.stringify(filters)}`);
-  }, [filters, clearCache]);
+  // Apply search filter only when search query changes
+  useEffect(() => {
+    console.log('[TipCall] Applying search filter. Contacts:', contacts.length, 'Search:', searchQuery);
+    const filtered = applySearchFilter(searchQuery, contacts);
+    setFilteredContacts(filtered);
+    console.log('[TipCall] Filtered contacts:', filtered.length);
+  }, [contacts, searchQuery, applySearchFilter]);
 
   // Search handler - for header search functionality
   const handleSearch = useCallback((query: string) => {
@@ -432,34 +374,189 @@ export default function TipCallScreen() {
     setSearchQuery('');
   }, []);
 
-  // DND (Do Not Disturb) Toggle Handler
-  const handleDndToggle = useCallback(async () => {
-    try {
-      setIsDndLoading(true);
-      
-      const newDndState = !isDndEnabled;
-      console.log('[TipCall] Toggling DND to:', newDndState);
-      
-      const updateData: UpdateUserRequest = {
-        id: user!.id,
-        dnd: newDndState ? 1 : 0, // Convert boolean to number
-      };
-      
-      const response: UpdateUserResponse = await ApiService.updateUser(updateData);
-      
-      if (response.status) { // UpdateUserResponse has status as boolean
-        setIsDndEnabled(newDndState);
-        console.log('[TipCall] DND updated successfully');
-      } else {
-        throw new Error(response.message || 'Failed to update DND status');
-      }
-    } catch (error: any) {
-      console.error('[TipCall] Error toggling DND:', error);
-      Alert.alert('Error', 'Failed to update Do Not Disturb status. Please try again.');
-    } finally {
-      setIsDndLoading(false);
+  // Fetch contacts function - removed dependencies to prevent auto-calls
+  const fetchContacts = useCallback(async (showLoading = true) => {
+    console.log('[TipCall] fetchContacts called with showLoading:', showLoading);
+    
+    if (showLoading) {
+      setLoading(true);
     }
-  }, [isDndEnabled, user]);  const handleStartCall = useCallback(async (recipient: Contact, callType: 'voice' | 'video') => {
+    setError(null);
+    
+    try {
+      if (!user || !user.id) {
+        throw new Error('User not authenticated');
+      }
+
+      const requestData: UserListRequest = {
+        id: 0,
+        page: 1,
+        limit: 50,
+        language: languageFilter === 0 ? [] : [languageFilter],
+        interest: categoryFilter === 0 ? [] : [categoryFilter],
+        user_id: null,
+        search_by_name: "",
+        loggined_user_id: user.id,
+        sortBy: {}
+      };
+
+      console.log('[TipCall] Fetching contacts with payload:', JSON.stringify(requestData, null, 2));
+      
+      const response = await ApiService.getAllUsersList(requestData);
+      console.log('[TipCall] Contacts API response status:', response?.status);
+      console.log('[TipCall] Contacts API response data length:', response?.data?.length);
+      
+      if (response && response.status && response.data && Array.isArray(response.data)) {
+        const allContacts = response.data.filter(contact => contact.id !== user.id);
+        console.log('[TipCall] Setting contacts. Total:', response.data.length, 'Filtered:', allContacts.length);
+        setContacts(allContacts);
+      } else {
+        console.warn('[TipCall] No valid data found in response:', response);
+        setContacts([]);
+      }
+    } catch (err) {
+      console.error('[TipCall] Error fetching contacts:', err);
+      setError('Failed to load contacts. Please try again later.');
+      setContacts([]);
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+      }
+    }
+  }, []); // Remove all dependencies to prevent auto-calls
+
+  // Initial fetch - only when component mounts and user is available
+  useEffect(() => {
+    if (user && user.id) {
+      console.log('[TipCall] Initial fetch triggered');
+      fetchContacts();
+    }
+  }, [user?.id]); // Only depend on user.id, not the entire user object
+
+  const handleRefresh = useCallback(() => {
+    console.log('[TipCall] Refresh triggered');
+    setRefreshing(true);
+    
+    // Create a new fetchContacts call with current filter values
+    const fetchWithCurrentFilters = async () => {
+      try {
+        if (!user || !user.id) {
+          throw new Error('User not authenticated');
+        }
+
+        const requestData: UserListRequest = {
+          id: 0,
+          page: 1,
+          limit: 50,
+          language: languageFilter === 0 ? [] : [languageFilter],
+          interest: categoryFilter === 0 ? [] : [categoryFilter],
+          user_id: null,
+          search_by_name: "",
+          loggined_user_id: user.id,
+          sortBy: {}
+        };
+
+        const response = await ApiService.getAllUsersList(requestData);
+        
+        if (response && response.status && response.data && Array.isArray(response.data)) {
+          const allContacts = response.data.filter(contact => contact.id !== user.id);
+          setContacts(allContacts);
+        } else {
+          setContacts([]);
+        }
+      } catch (err) {
+        console.error('[TipCall] Error refreshing contacts:', err);
+        setError('Failed to refresh contacts.');
+      }
+    };
+
+    fetchWithCurrentFilters().finally(() => {
+      setRefreshing(false);
+    });
+  }, [user, languageFilter, categoryFilter]);
+
+  // Filter change handlers - these will trigger API calls
+  const handleLanguageFilterChange = useCallback((languageId: number) => {
+    console.log('[TipCall] Language filter changed to:', languageId);
+    setLanguageFilter(languageId);
+    
+    // Manually fetch with new language filter
+    const fetchWithNewLanguage = async () => {
+      try {
+        if (!user || !user.id) return;
+
+        setLoading(true);
+        const requestData: UserListRequest = {
+          id: 0,
+          page: 1,
+          limit: 50,
+          language: languageId === 0 ? [] : [languageId],
+          interest: categoryFilter === 0 ? [] : [categoryFilter],
+          user_id: null,
+          search_by_name: "",
+          loggined_user_id: user.id,
+          sortBy: {}
+        };
+
+        const response = await ApiService.getAllUsersList(requestData);
+        
+        if (response && response.status && response.data && Array.isArray(response.data)) {
+          const allContacts = response.data.filter(contact => contact.id !== user.id);
+          setContacts(allContacts);
+        } else {
+          setContacts([]);
+        }
+      } catch (err) {
+        console.error('[TipCall] Error fetching contacts with language filter:', err);
+        setError('Failed to load contacts with selected language.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchWithNewLanguage();
+  }, [user, categoryFilter]);
+
+  const handleCategoryFilterChange = useCallback((categoryId: number) => {
+    console.log('[TipCall] Category filter changed to:', categoryId);
+    setCategoryFilter(categoryId);
+    
+    // Manually fetch with new category filter
+    const fetchWithNewCategory = async () => {
+      try {
+        if (!user || !user.id) return;
+
+        setLoading(true);
+        const requestData: UserListRequest = {
+          id: 0,
+          page: 1,
+          limit: 50,
+          language: languageFilter === 0 ? [] : [languageFilter],
+          interest: categoryId === 0 ? [] : [categoryId],
+          user_id: null,
+          search_by_name: "",
+          loggined_user_id: user.id,
+          sortBy: {}
+        };
+
+        const response = await ApiService.getAllUsersList(requestData);
+        
+        if (response && response.status && response.data && Array.isArray(response.data)) {
+          const allContacts = response.data.filter(contact => contact.id !== user.id);
+          setContacts(allContacts);
+        } else {
+          setContacts([]);
+        }
+      } catch (err) {
+        console.error('[TipCall] Error fetching contacts with category filter:', err);
+        setError('Failed to load contacts with selected interest.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchWithNewCategory();
+  }, [user, languageFilter]);  const handleStartCall = useCallback(async (recipient: Contact, callType: 'voice' | 'video') => {
     if (!user || !recipient.name) {
       Alert.alert("Error", "User or recipient information is missing.");
       return;
@@ -505,25 +602,46 @@ export default function TipCallScreen() {
     }
   }, [user]);
 
-  // Prefetch profile data only for the current user (not for all contacts)
-  useEffect(() => {
-    if (user?.id) {
-      prefetchProfile(user.id);
+  const handleDndToggle = useCallback(async () => {
+    if (!user || !user.id) {
+      return;
     }
-  }, [user?.id, prefetchProfile]);
+
+    setIsDndLoading(true);
+    const newDndState = !isDndEnabled;
+
+    try {
+      const updateData: UpdateUserRequest = {
+        id: user.id,
+        dnd: newDndState ? 1 : 0,
+      };
+
+      console.log('[TipCall] Updating DND status:', updateData);
+      const response = await ApiService.updateUser(updateData);
+
+      if (response.status) {
+        setIsDndEnabled(newDndState);
+        console.log('[TipCall] DND status updated successfully:', newDndState);
+      } else {
+        console.error('[TipCall] Failed to update DND status:', response.message);
+      }
+    } catch (error: any) {
+      console.error('[TipCall] Error updating DND status:', error);
+    } finally {
+      setIsDndLoading(false);
+    }
+  }, [user, isDndEnabled]);
 
   // Render contact item
-  const renderContactItem = ({ item }: { item: Contact }) => {
-    return (
-      <ContactCard
-        contact={item}
-        onVideoCall={() => handleStartCall(item, 'video')}
-        onVoiceCall={() => handleStartCall(item, 'voice')}
-        colors={colors}
-        isDarkMode={isDarkMode}
-      />
-    );
-  };
+  const renderContactItem = ({ item }: { item: Contact }) => (
+    <ContactCard
+      contact={item}
+      onVideoCall={() => handleStartCall(item, 'video')}
+      onVoiceCall={() => handleStartCall(item, 'voice')}
+      colors={colors}
+      isDarkMode={isDarkMode}
+    />
+  );
 
   // Render empty state
   const renderEmptyState = () => (
@@ -546,18 +664,18 @@ export default function TipCallScreen() {
   // Render error state
   const renderErrorState = () => (
     <View style={styles.errorStateContainer}>
-      <View style={[styles.errorStateIcon, { backgroundColor: colors.error + '20' }]}>
-        <Icon name="wifi-off" size={40} color={colors.error} />
+      <View style={[styles.errorStateIcon, { backgroundColor: '#FEE2E2' }]}>
+        <Icon name="wifi-off" size={40} color="#EF4444" />
       </View>
       <Text style={[styles.errorStateTitle, { color: colors.text.primary }]}>
-        {isOnline ? 'Something went wrong' : 'You\'re offline'}
+        Connection Error
       </Text>
       <Text style={[styles.errorStateMessage, { color: colors.text.secondary }]}>
-        {isOnline ? 'Failed to load contacts. Please try again.' : 'Contacts will load when you\'re back online.'}
+        {error}
       </Text>
       <TouchableOpacity
         style={[styles.retryButton, { backgroundColor: colors.primary }]}
-        onPress={() => refreshUsers()}
+        onPress={() => fetchContacts()}
         activeOpacity={0.8}
       >
         <Icon name="refresh-cw" size={16} color="#FFFFFF" />
@@ -567,8 +685,8 @@ export default function TipCallScreen() {
   );
 
   console.log('[TipCall] Render state:', {
-    initialLoading,
-    error: !!usersError,
+    loading,
+    error: !!error,
     contactsLength: contacts.length,
     filteredContactsLength: filteredContacts.length,
     searchQuery,
@@ -669,7 +787,7 @@ export default function TipCallScreen() {
                   key={lang.id}
                   label={lang.name}
                   isSelected={languageFilter === lang.id}
-                  onPress={() => handleLanguageFilter(lang.id)}
+                  onPress={() => handleLanguageFilterChange(lang.id)}
                   colors={colors}
                   isDarkMode={isDarkMode}
                 />
@@ -693,7 +811,7 @@ export default function TipCallScreen() {
                   key={category.id}
                   label={category.name}
                   isSelected={categoryFilter === category.id}
-                  onPress={() => handleCategoryFilter(category.id)}
+                  onPress={() => handleCategoryFilterChange(category.id)}
                   colors={colors}
                   isDarkMode={isDarkMode}
                 />
@@ -704,9 +822,9 @@ export default function TipCallScreen() {
 
         {/* Content Section */}
         <View style={styles.contentSection}>
-          {initialLoading ? (
+          {loading ? (
             <ContactsSkeleton colors={colors} isDarkMode={isDarkMode} />
-          ) : usersError ? (
+          ) : error ? (
             renderErrorState()
           ) : filteredContacts.length === 0 ? (
             renderEmptyState()
@@ -716,23 +834,6 @@ export default function TipCallScreen() {
                 data={contactsWithAds}
                 renderItem={renderItem}
                 keyExtractor={(item, idx) => ('ad' in item ? item.key : String(item.id))}
-                refreshControl={
-                  <RefreshControl
-                    refreshing={false} // Managed by React Query
-                    onRefresh={handleRefresh}
-                    colors={[colors.primary]}
-                    tintColor={colors.primary}
-                  />
-                }
-                onEndReached={handleLoadMore}
-                onEndReachedThreshold={0.5}
-                ListFooterComponent={
-                  loadingMore ? (
-                    <View style={{ padding: 20, alignItems: 'center' }}>
-                      <ActivityIndicator size="small" color={colors.primary} />
-                    </View>
-                  ) : null
-                }
               />
             </View>
           )}

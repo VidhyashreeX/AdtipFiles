@@ -5,7 +5,8 @@ import React, {
   useState,
   useEffect,
   ReactNode,
-  useCallback, // Added useCallback
+  useCallback,
+  useMemo, // Added useMemo
 } from 'react';
 import {useAuth} from './AuthContext';
 import WalletService from '../services/WalletService';
@@ -58,14 +59,16 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({children}) => {
     refreshBalance();
   }, [refreshBalance]);
 
+  // Memoize context value to prevent unnecessary re-renders
+  const contextValue = useMemo(() => ({
+    balance,
+    isPremium,
+    refreshBalance,
+    isLoading,
+  }), [balance, isPremium, refreshBalance, isLoading]);
+
   return (
-    <WalletContext.Provider
-      value={{
-        balance,
-        isPremium,
-        refreshBalance,
-        isLoading,
-      }}>
+    <WalletContext.Provider value={contextValue}>
       {children}
     </WalletContext.Provider>
   );

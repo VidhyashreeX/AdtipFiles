@@ -305,7 +305,7 @@ const VideoPlayerModalScreen: React.FC = () => {
               </Text>
               <View style={styles.videoMeta}>
                 <Text style={styles.videoStats}>
-                  {video.views.toLocaleString()} views • {video.posted}
+                  {(video.views || 0).toLocaleString()} views • {video.posted}
                 </Text>
               </View>
             </View>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, Image, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
@@ -6,7 +6,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Header from '../../components/common/Header'; // Import the Header component
+import Header from '../../components/common/Header';
+import { usePaginatedData } from '../../hooks/useDataLayer';
+import PostItemSkeleton from '../../components/skeletons/PostItemSkeleton';
 
 // Constants
 const API_BASE_URL = 'https://api.adtip.in';
@@ -33,16 +35,31 @@ const ExploreScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const [exploreItems, setExploreItems] = useState<ExploreItem[]>([]);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-
+  
   const loggedInUserId = 56768; // Replace with actual user ID from auth context
-  const limit = 5;
+
+  // Use the new data layer for better performance
+  const {
+    data: exploreItems,
+    isLoading: loading,
+    isLoadingMore,
+    error,
+    hasMore,
+    refresh,
+    loadMore,
+    isOnline,
+  } = usePaginatedData<ExploreItem>(
+    '/api/explore',
+    { loggined_user_id: loggedInUserId },
+    { 
+      enabled: true,
+      staleTime: 10 * 60 * 1000, // 10 minutes cache
+      cacheKey: 'explore-content'
+    }
+  );
 
   // Helper function for full image URLs
-  const getFullImageUrl = (url?: string | null): string => {
+  const getFullImageUrl = useCallback((url?: string | null): string => {
     if (!url || url === 'null' || url === 'undefined') {
       return 'https://via.placeholder.com/150';
     }
@@ -50,65 +67,9 @@ const ExploreScreen: React.FC = () => {
       return url;
     }
     return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
-  };
-
-  // Fetch explore content from API
-  const fetchExploreContent = useCallback(async (pageNum: number) => {
-    if (loading || !hasMore) return;
-
-    setLoading(true);
-    try {
-      const token = await AsyncStorage.getItem('accessToken');
-      const response = await fetch(`${API_BASE_URL}/api/explore`, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          page: pageNum,
-          limit,
-          loggined_user_id: loggedInUserId,
-        }),
-      });
-
-      if (!response.ok) {
-        console.error('Error fetching explore content:', await response.text());
-        setExploreItems([]);
-        return;
-      }
-
-      const result = await response.json();
-      if (result.status && Array.isArray(result.data)) {
-        const newItems = result.data.map((item: any) => ({
-          id: String(item.id),
-          type: item.type as 'post' | 'short',
-          imageUrl: getFullImageUrl(item.imageUrl || item.thumbnail),
-          caption: item.caption || '',
-        }));
-
-        if (newItems.length < limit) {
-          setHasMore(false);
-        }
-        setExploreItems(prev => [...prev, ...newItems]);
-        setPage(prev => prev + 1);
-      } else {
-        setExploreItems([]);
-        setHasMore(false);
-      }
-    } catch (error) {
-      console.error('Error fetching explore content:', error);
-      setExploreItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [loading, hasMore]);
-
-  useEffect(() => {
-    fetchExploreContent(page);
   }, []);
 
+  // Memoized render item for better performance
   const renderItem = useCallback(({ item }: { item: ExploreItem }) => {
     return (
       <TouchableOpacity
@@ -119,7 +80,6 @@ const ExploreScreen: React.FC = () => {
           } else {
             navigation.navigate('TipShorts', { 
               shortId: item.id,
-              initialIndex: 0, // If you want to start at a specific video
             });
           }
         }}
@@ -137,8 +97,9 @@ const ExploreScreen: React.FC = () => {
         )}
       </TouchableOpacity>
     );
-  }, [navigation]);
+  }, [navigation, getFullImageUrl]);
 
+  // Memoized item layout for better scrolling performance
   const getItemLayout = useCallback(
     (data: any, index: number) => {
       const itemSize = width / 3;
@@ -151,35 +112,87 @@ const ExploreScreen: React.FC = () => {
     [width]
   );
 
+  // Memoized key extractor
   const keyExtractor = useCallback((item: ExploreItem) => item.id, []);
+
+  // Loading skeleton component
+  const renderLoadingSkeleton = useMemo(() => (
+    <FlatList
+      data={Array(9).fill(null)}
+      numColumns={3}
+      keyExtractor={(_, index) => `skeleton-${index}`}
+      renderItem={() => (
+        <View style={[styles.itemContainer, { backgroundColor: colors.surface }]}>
+          <PostItemSkeleton />
+        </View>
+      )}
+      scrollEnabled={false}
+    />
+  ), [colors.surface]);
+
+  // Empty state component
+  const renderEmptyState = useMemo(() => (
+    <View style={styles.emptyContainer}>
+      <Icon name="search" size={48} color={colors.text.secondary} />
+      <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
+        {error ? 'Failed to load content' : 'No content found'}
+      </Text>
+      {error && (
+        <TouchableOpacity 
+          style={[styles.retryButton, { backgroundColor: colors.primary }]}
+          onPress={refresh}
+        >
+          <Text style={styles.retryText}>Retry</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  ), [colors, error, refresh]);
+
+  // Network status indicator
+  const NetworkIndicator = useMemo(() => {
+    if (!isOnline) {
+      return (
+        <View style={[styles.networkIndicator, { backgroundColor: colors.error }]}>
+          <Icon name="wifi-off" size={16} color="#FFF" />
+          <Text style={styles.networkText}>Offline Mode</Text>
+        </View>
+      );
+    }
+    return null;
+  }, [isOnline, colors.error]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background}]}>
       <Header title="Explore" />
+      {NetworkIndicator}
       
-      <FlatList
-        data={exploreItems}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        numColumns={3}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        onEndReached={() => fetchExploreContent(page)}
-        onEndReachedThreshold={0.5}
-        ListFooterComponent={
-          loading ? (
-            <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-          ) : null
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
-              No content found.
-            </Text>
-          </View>
-        }
-        getItemLayout={getItemLayout}
-      />
+      {loading && exploreItems.length === 0 ? (
+        renderLoadingSkeleton
+      ) : (
+        <FlatList
+          data={exploreItems}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          numColumns={3}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          onRefresh={refresh}
+          refreshing={loading && exploreItems.length > 0}
+          ListFooterComponent={
+            isLoadingMore ? (
+              <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+            ) : null
+          }
+          ListEmptyComponent={renderEmptyState}
+          getItemLayout={getItemLayout}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={9}
+          windowSize={5}
+          initialNumToRender={9}
+        />
+      )}
     </View>
   );
 };
@@ -222,6 +235,31 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 20,
+  },
+  retryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  networkIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  networkText: {
+    color: '#FFF',
+    fontSize: 14,
+    marginLeft: 8,
+    fontWeight: '500',
   },
 });
 
