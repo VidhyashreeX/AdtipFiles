@@ -75,6 +75,25 @@ const PostItem: React.FC<PostItemProps> = ({
   const [securePostImage, setSecurePostImage] = useState<any>(null);
   const [secureVideoSource, setSecureVideoSource] = useState<any>(null);
 
+  // Defensive: Ensure all text props are strings or numbers
+  const safeUsername = typeof username === 'string' || typeof username === 'number' ? String(username) : '';
+  const safeCaption = typeof caption === 'string' || typeof caption === 'number' ? String(caption) : '';
+  const safeTimeAgo = typeof timeAgo === 'string' || typeof timeAgo === 'number' ? String(timeAgo) : '';
+  const safeLastActive = typeof last_active === 'string' || typeof last_active === 'number' ? String(last_active) : '';
+
+  if (typeof username !== 'string' && typeof username !== 'number') {
+    console.warn('PostItem: username is not a string/number', username);
+  }
+  if (typeof caption !== 'string' && typeof caption !== 'number') {
+    console.warn('PostItem: caption is not a string/number', caption);
+  }
+  if (typeof timeAgo !== 'string' && typeof timeAgo !== 'number') {
+    console.warn('PostItem: timeAgo is not a string/number', timeAgo);
+  }
+  if (last_active && typeof last_active !== 'string' && typeof last_active !== 'number') {
+    console.warn('PostItem: last_active is not a string/number', last_active);
+  }
+
   // Load secure media sources
   useEffect(() => {
     const loadSecureMedia = async () => {
@@ -212,107 +231,99 @@ const PostItem: React.FC<PostItemProps> = ({
     await onFollow(userId);
   };
 
-  return (
-    <View style={[styles.postContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-      {/* User Info Header */}
-      <View style={styles.postHeader}>        <TouchableOpacity onPress={handleUserPress} style={styles.userInfo}>
-          <Image
-            source={secureProfileImage || {
-              uri: 'https://via.placeholder.com/40x40.png?text=U',
-            }}
-            style={styles.profileImage}
-          />
-          <View>
-            <Text style={[styles.username, {color: colors.text.primary}]}>
-              {username || ''}
-            </Text>
-            {last_active && typeof last_active === 'string' && last_active.trim() && (
-              <Text style={[styles.lastActive, {color: colors.text.secondary}]}>
-                Active {last_active}
-              </Text>
-            )}
-          </View>
-        </TouchableOpacity>
-        
-        <TouchableOpacity onPress={handleFollowPress} style={styles.followIconButton}>
-          <UserPlus size={20} color={colors.primary} />
-        </TouchableOpacity>
-      </View>      {/* Media Content (Image or Video) */}
-      <TouchableOpacity onPress={handlePostPress} activeOpacity={1}>
-        <View style={styles.mediaContainer}>
-          {media_type === 'image' && postImage && securePostImage && (
+  try {
+    return (
+      <View style={[styles.postContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        {/* User Info Header */}
+        <View style={styles.postHeader}>
+          <TouchableOpacity onPress={handleUserPress} style={styles.userInfo}>
             <Image
-              source={securePostImage}
-              style={styles.postMedia}
-              resizeMode="cover"
+              source={secureProfileImage || {
+                uri: 'https://via.placeholder.com/40x40.png?text=U',
+              }}
+              style={styles.profileImage}
             />
-          )}
+            <View>
+              <Text style={[styles.username, {color: colors.text.primary}]}>
+                {safeUsername}
+              </Text>
+              {safeLastActive.trim() && (
+                <Text style={[styles.lastActive, {color: colors.text.secondary}]}>
+                  Active {safeLastActive}
+                </Text>
+              )}
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleFollowPress} style={styles.followIconButton}>
+            <UserPlus size={20} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
+        {/* Media Content (Image or Video) */}
+        <TouchableOpacity onPress={handlePostPress} activeOpacity={1}>
+          <View style={styles.mediaContainer}>
+            {media_type === 'image' && postImage && securePostImage && (
+              <Image
+                source={securePostImage}
+                style={styles.postMedia}
+                resizeMode="cover"
+              />
+            )}
 
-          {media_type === 'video' && postImage && secureVideoSource && !videoError && (
-            <TouchableWithoutFeedback onPress={togglePlayPause}>
-              <View style={styles.videoPlayerContainer}>
-                <Video
-                  source={secureVideoSource}
-                  style={styles.postMedia}
-                  resizeMode="cover"
-                  repeat={true}
-                  paused={!isPlaying} // Instant pause/play response
-                  muted={isMuted}
-                  onLoadStart={handleVideoLoadStart}
-                  onLoad={handleVideoLoad}
-                  onProgress={handleVideoProgress}
-                  onEnd={handleVideoEnd}
-                  onError={handleVideoError}
-                  // OPTIMIZED BUFFER CONFIG FOR INSTANT PLAYBACK
-                  bufferConfig={{
-                    minBufferMs: 2000,     // Reduced from 15000
-                    maxBufferMs: 8000,     // Reduced from 50000
-                    bufferForPlaybackMs: 500,      // Reduced from 2500
-                    bufferForPlaybackAfterRebufferMs: 1000, // Reduced from 5000
-                  }}
-                  // Additional props for instant response
-                  playInBackground={false}
-                  playWhenInactive={false}
-                  ignoreSilentSwitch="ignore" // Play even when phone is on silent
-                  mixWithOthers="duck" // Duck other audio when playing
-                />
-                
-                {videoLoading && (
-                  <View style={styles.videoOverlay}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                  </View>
-                )}
-                
-                {/* Instant control overlay - no delays */}
-                {(showControls || !isPlaying || !isVisible) && !videoLoading && (
-                  <TouchableOpacity onPress={togglePlayPause} style={styles.videoControlOverlay}>
-                    <Icon 
-                      name={isPlaying && isVisible ? 'pause-circle' : 'play-circle'} 
-                      size={50} 
-                      color="white" 
-                    />
-                  </TouchableOpacity>
-                )}
-                
-                {/* Instant mute button */}
-                {(showControls || !isPlaying) && !videoLoading && isVisible && (
-                  <TouchableOpacity onPress={toggleMute} style={styles.muteButton}>
-                    <Icon name={isMuted ? 'volume-x' : 'volume-2'} size={24} color="white" />
-                  </TouchableOpacity>
-                )}
-                
-                {/* Instant out of view indicator */}
-                {!isVisible && (
-                  <View style={styles.outOfViewOverlay}>
-                    <Text style={styles.outOfViewText}>Video paused</Text>
-                  </View>
-                )}
-              </View>
-            </TouchableWithoutFeedback>
-          )}
-
-          {media_type === 'video' && videoError && (
-             <View style={styles.errorMedia}>
+            {media_type === 'video' && postImage && secureVideoSource && !videoError && (
+              <TouchableWithoutFeedback onPress={togglePlayPause}>
+                <View style={styles.videoPlayerContainer}>
+                  <Video
+                    source={secureVideoSource}
+                    style={styles.postMedia}
+                    resizeMode="cover"
+                    repeat={true}
+                    paused={!isPlaying} // Instant pause/play response
+                    muted={isMuted}
+                    onLoadStart={handleVideoLoadStart}
+                    onLoad={handleVideoLoad}
+                    onProgress={handleVideoProgress}
+                    onEnd={handleVideoEnd}
+                    onError={handleVideoError}
+                    bufferConfig={{
+                      minBufferMs: 2000,
+                      maxBufferMs: 8000,
+                      bufferForPlaybackMs: 500,
+                      bufferForPlaybackAfterRebufferMs: 1000,
+                    }}
+                    playInBackground={false}
+                    playWhenInactive={false}
+                    ignoreSilentSwitch="ignore"
+                    mixWithOthers="duck"
+                  />
+                  {videoLoading && (
+                    <View style={styles.videoOverlay}>
+                      <ActivityIndicator size="large" color={colors.primary} />
+                    </View>
+                  )}
+                  {(showControls || !isPlaying || !isVisible) && !videoLoading && (
+                    <TouchableOpacity onPress={togglePlayPause} style={styles.videoControlOverlay}>
+                      <Icon 
+                        name={isPlaying && isVisible ? 'pause-circle' : 'play-circle'} 
+                        size={50} 
+                        color="white" 
+                      />
+                    </TouchableOpacity>
+                  )}
+                  {(showControls || !isPlaying) && !videoLoading && isVisible && (
+                    <TouchableOpacity onPress={toggleMute} style={styles.muteButton}>
+                      <Icon name={isMuted ? 'volume-x' : 'volume-2'} size={24} color="white" />
+                    </TouchableOpacity>
+                  )}
+                  {!isVisible && (
+                    <View style={styles.outOfViewOverlay}>
+                      <Text style={styles.outOfViewText}>Video paused</Text>
+                    </View>
+                  )}
+                </View>
+              </TouchableWithoutFeedback>
+            )}
+            {media_type === 'video' && videoError && (
+              <View style={styles.errorMedia}>
                 <Icon name="alert-triangle" size={50} color={colors.danger || '#FF0000'} />
                 <Text style={[styles.errorText, {color: colors.text.secondary}]}>Video failed to load.</Text>
                 <TouchableOpacity 
@@ -328,74 +339,66 @@ const PostItem: React.FC<PostItemProps> = ({
                 >
                   <Text style={{color: colors.primary}}>Tap to Retry</Text>
                 </TouchableOpacity>
-             </View>
-          )}
-
-          {/* Default placeholder when no media */}
-          {!postImage && (
-            <View style={[styles.placeholderMedia, { backgroundColor: colors.surface }]}>
-              <Icon name="image" size={50} color={colors.text.tertiary || '#CCCCCC'} />
-              <Text style={[styles.placeholderText, { color: colors.text.tertiary }]}>No media</Text>
-            </View>
-          )}
-
-          {isPremium && (
-            <View style={styles.premiumBadge}>
-              <Text style={styles.premiumText}>Premium</Text>
-            </View>
-          )}
-        </View>
-      </TouchableOpacity>
-
-      {/* Actions (Like, Comment, Share) */}
-      <View style={styles.postActions}>
-        <View style={styles.leftActions}>
-          <TouchableOpacity onPress={handleLikePress} style={styles.actionButton}>
-            <Heart 
-              size={24} 
-              color={isLiked ? "#FF0000" : (isDarkMode ? colors.text.primary : "#1A1A1A")} 
-              fill={isLiked ? "#FF0000" : "none"}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleCommentPress} style={styles.actionButton}>
-            <MessageCircle size={24} color={isDarkMode ? colors.text.primary : "#1A1A1A"} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleSharePress} style={styles.actionButton}>
-            <Share2 size={24} color={isDarkMode ? colors.text.primary : "#1A1A1A"} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Like Count */}
-      <Text style={[styles.likesCount, {color: colors.text.primary}]}>
-        {`${likes} ${likes === 1 ? 'like' : 'likes'}`}
-      </Text>
-
-      {/* Caption */}
-      {caption && typeof caption === 'string' && caption.trim() && (
-        <Text style={[styles.caption, {color: colors.text.primary}]}>
-          <Text style={styles.captionUsername}>{username || ''}</Text>
-          {` ${caption.trim()}`}
-        </Text>
-      )}
-
-      {/* Comment Count */}
-      {comments > 0 && (
-        <TouchableOpacity onPress={handleCommentPress}>
-          <Text style={[styles.commentsCount, {color: colors.text.secondary}]}>
-            View all {comments} comments
-          </Text>
+              </View>
+            )}
+            {!postImage && (
+              <View style={[styles.placeholderMedia, { backgroundColor: colors.surface }]}>
+                <Icon name="image" size={50} color={colors.text.tertiary || '#CCCCCC'} />
+                <Text style={[styles.placeholderText, { color: colors.text.tertiary }]}>No media</Text>
+              </View>
+            )}
+            {isPremium && (
+              <View style={styles.premiumBadge}>
+                <Text style={styles.premiumText}>Premium</Text>
+              </View>
+            )}
+          </View>
         </TouchableOpacity>
-      )}
-
-      {/* Time Ago */}
-      {timeAgo && typeof timeAgo === 'string' && timeAgo.trim() && (
-        <Text style={[styles.timeAgo, {color: colors.text.secondary}]}>
-          {timeAgo}
+        {/* Actions (Like, Comment, Share) */}
+        <View style={styles.postActions}>
+          <View style={styles.leftActions}>
+            <TouchableOpacity onPress={handleLikePress} style={styles.actionButton}>
+              <Heart 
+                size={24} 
+                color={isLiked ? "#FF0000" : (isDarkMode ? colors.text.primary : "#1A1A1A")} 
+                fill={isLiked ? "#FF0000" : "none"}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleCommentPress} style={styles.actionButton}>
+              <MessageCircle size={24} color={isDarkMode ? colors.text.primary : "#1A1A1A"} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleSharePress} style={styles.actionButton}>
+              <Share2 size={24} color={isDarkMode ? colors.text.primary : "#1A1A1A"} />
+            </TouchableOpacity>
+          </View>
+        </View>
+        <Text style={[styles.likesCount, {color: colors.text.primary}]}>
+          {`${likes} ${likes === 1 ? 'like' : 'likes'}`}
         </Text>
-      )}
-    </View>
-  );
+        {safeCaption.trim() && (
+          <Text style={[styles.caption, {color: colors.text.primary}]}>
+            <Text style={styles.captionUsername}>{safeUsername}</Text>
+            {` ${safeCaption.trim()}`}
+          </Text>
+        )}
+        {comments > 0 && (
+          <TouchableOpacity onPress={handleCommentPress}>
+            <Text style={[styles.commentsCount, {color: colors.text.secondary}]}>
+              View all {comments} comments
+            </Text>
+          </TouchableOpacity>
+        )}
+        {safeTimeAgo.trim() && (
+          <Text style={[styles.timeAgo, {color: colors.text.secondary}]}>
+            {safeTimeAgo}
+          </Text>
+        )}
+      </View>
+    );
+  } catch (err) {
+    console.error('Error rendering PostItem:', err);
+    return <Text style={{color: 'red'}}>Error rendering post</Text>;
+  }
 };
 
 // Add new styles for the out-of-view overlay
