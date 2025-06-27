@@ -36,7 +36,8 @@ import NotificationScreen from '../screens/notifications/NotificationScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import EarningsScreen from '../screens/earnings/EarningsScreen';
 import ReferralScreen from '../screens/referral/ReferralScreen';
-import PlayToEarnScreen from '../screens/playtoEarn/LudoGameScreen';
+import ChooseGameScreen from '../screens/playtoEarn/ChooseGamesScreen';
+import LudoGameScreen from '../screens/playtoEarn/LudoGameScreen';
 import WatchToEarnScreen from '../screens/watchToEarn/WatchToEarnScreen';
 import AdPassbookScreen from '../screens/adPassbook/AdPassbookScreen';
 import SupportScreen from '../screens/support/SupportScreen';
@@ -207,7 +208,7 @@ const slideUpTransitionConfig = {
 };
 
 // Enhanced screens with fast loading
-const FastPlayToEarnScreen = withFastLoading(PlayToEarnScreen, { 
+const FastPlayToEarnScreen = withFastLoading(ChooseGameScreen, { 
   skipAnimation: true, // Skip animation for faster loading
   priority: 'high' // High priority screen
 });
@@ -296,7 +297,8 @@ const MainNavigator = () => {
   const EnhancedSettingsScreen = withWalletBalance(SettingsScreen);
   const EnhancedEarningsScreen = withWalletBalance(EarningsScreen);
   const EnhancedReferralScreen = withWalletBalance(ReferralScreen);
-  const EnhancedPlayToEarnScreen = withWalletBalance(PlayToEarnScreen);
+  const EnhancedPlayToEarnScreen = withWalletBalance(ChooseGameScreen);
+  const EnhancedLudoGameScreen = withWalletBalance(LudoGameScreen);
   const EnhancedWatchToEarnScreen = withWalletBalance(WatchToEarnScreen);
   const EnhancedAdPassbookScreen = withWalletBalance(AdPassbookScreen);
   const EnhancedSupportScreen = withWalletBalance(SupportScreen);
@@ -324,6 +326,11 @@ const MainNavigator = () => {
         name="PlayToEarn" 
         component={FastPlayToEarnScreen}
         options={fastTransitionConfig}
+      />
+      <Stack.Screen 
+        name="LudoGame" 
+        component={EnhancedLudoGameScreen}
+        options={standardFastTransitionConfig}
       />
       <Stack.Screen 
         name="Home" 

@@ -1,17 +1,12 @@
-import { Alert, AppState, AppStateStatus, DeviceEventEmitter, Platform } from 'react-native';
+import { AppState, AppStateStatus, DeviceEventEmitter, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { v4 as uuidv4 } from 'uuid';
 import { appEventEmitter } from '../events/AppEventEmitter';
 import WhatsAppCallManager from './calling/WhatsAppCallManager'; // NEW: WhatsApp-like calling
 import WhatsAppCallNotificationService from './calling/WhatsAppCallNotificationService'; // NEW: Enhanced notifications
-import FirebaseService from './FirebaseService';
 import { OtpVerifyResponse as User } from '../types/api';
-import { FirebaseCallData } from './FirebaseCallService';
-import FirebaseCallService from './FirebaseCallService';
 import VideoSDKService from './videosdk/VideoSDKService';
 import ApiService from './ApiService';
 import { FcmTokensRequest, FcmTokensResponse } from '../types/api';
-import { getCurrentRoute, navigate } from '../navigation/NavigationService';
 
 export interface ActiveCall {
   callId?: string;
@@ -34,7 +29,6 @@ class CallService {
   public activeCall: ActiveCall | null = null;
   private isInitiator: boolean = false;
   private currentUser: User | null = null;
-  private firebaseService: FirebaseService;
   private videoSDKService: VideoSDKService;
   private whatsAppCallManager: WhatsAppCallManager; // NEW: WhatsApp-like calling
   private whatsAppNotificationService: WhatsAppCallNotificationService; // NEW: Enhanced notifications
@@ -49,12 +43,12 @@ class CallService {
   private navigationReadyResolver: (() => void) | null = null;
 
   private constructor() {
-    this.firebaseService = FirebaseService.getInstance();
     this.videoSDKService = VideoSDKService.getInstance();
     this.whatsAppCallManager = WhatsAppCallManager.getInstance(); // NEW: WhatsApp-like calling
     this.whatsAppNotificationService = WhatsAppCallNotificationService.getInstance(); // NEW: Enhanced notifications
     this.initializeBackgroundHandling();
     this.setupForegroundServiceEventListeners();
+    this.setupFCMEventListeners(); // NEW: Setup FCM event listeners
     this.initializeNavigationReadyPromise();
     this.restoreCallStateFromPersistence();
   }
@@ -694,6 +688,44 @@ class CallService {
       console.log('[CallService] Mute toggle triggered from foreground service');
       // Emit event for meeting screen to handle mute toggle
       appEventEmitter.emit('toggleMuteFromService');
+    });
+  }
+
+  /**
+   * Setup FCM event listeners to handle events from FirebaseService
+   */
+  private setupFCMEventListeners() {
+    // Listen for incoming call events from FCM
+    appEventEmitter.on('incomingCallFromFCM', (callData: {
+      callId: string;
+      meetingId: string;
+      token: string;
+      callerId: string;
+      callerName: string;
+      callerFcmToken: string;
+      callType: 'voice' | 'video';
+    }) => {
+      console.log('[CallService] Received incoming call from FCM:', callData);
+      this.handleIncomingCall(callData);
+    });
+
+    // Listen for call accepted events from FCM
+    appEventEmitter.on('callAcceptedFromFCM', (callId: string) => {
+      console.log('[CallService] Received call accepted from FCM:', callId);
+      // Handle call accepted logic if needed
+      if (this.activeCall && this.activeCall.callId === callId) {
+        this.activeCall.status = 'connected';
+        this.emitCallStateChange();
+      }
+    });
+
+    // Listen for call declined events from FCM
+    appEventEmitter.on('callDeclinedFromFCM', (callId: string) => {
+      console.log('[CallService] Received call declined from FCM:', callId);
+      // Handle call declined logic if needed
+      if (this.activeCall && this.activeCall.callId === callId) {
+        this.endCall('Call declined by recipient');
+      }
     });
   }
 }

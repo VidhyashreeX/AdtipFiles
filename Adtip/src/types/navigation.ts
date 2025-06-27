@@ -65,6 +65,7 @@ export type MainNavigatorParamList = {
     preloadedShorts?: any[];
   };
   PlayToEarn: undefined;
+  LudoGame: undefined;
   WatchToEarn: undefined;
   AdPassbook: undefined;
   Earnings: undefined;

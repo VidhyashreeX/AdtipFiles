@@ -7,9 +7,15 @@ import { getApps, getApp } from '@react-native-firebase/app';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NotificationService from './NotificationService';
 import { navigationRef } from '../navigation/NavigationService';
-import FirebaseCallService, { FirebaseCallData } from './FirebaseCallService';
-import CallService from './CallService';
+import { appEventEmitter } from '../events/AppEventEmitter';
 import ApiService from './ApiService';
+
+/**
+ * CIRCULAR DEPENDENCY FIX:
+ * Removed direct import of FirebaseCallService to break circular dependency.
+ * FirebaseService no longer directly depends on FirebaseCallService.
+ * All call-related communication now happens through events via appEventEmitter.
+ */
 
 export interface CallNotificationData {
   callerName: string;
@@ -135,7 +141,9 @@ class FirebaseService {
             callData.callerInfo.name,
             callData.callInfo.callType
           );
-          CallService.getInstance().handleIncomingCall({
+          
+          // Emit event instead of directly calling CallService
+          appEventEmitter.emit('incomingCallFromFCM', {
             callId: callData.callInfo.callId,
             meetingId: callData.videoSDKInfo.meetingId,
             token: callData.videoSDKInfo.token,
@@ -234,12 +242,14 @@ class FirebaseService {
         } else if (type === 'CALL_ACCEPTED') {
           console.log('[FCM] Call accepted event received.');
           if (remoteMessage.data?.callId) {
-            CallService.getInstance().handleCallAccepted(remoteMessage.data.callId as string);
+            // Emit event instead of directly calling CallService
+            appEventEmitter.emit('callAcceptedFromFCM', remoteMessage.data.callId as string);
           }
         } else if (type === 'CALL_DECLINED') {
           console.log('[FCM] Call declined event received.');
            if (remoteMessage.data?.callId) {
-            CallService.getInstance().handleCallDeclined(remoteMessage.data.callId as string);
+            // Emit event instead of directly calling CallService
+            appEventEmitter.emit('callDeclinedFromFCM', remoteMessage.data.callId as string);
           }
         } else if (remoteMessage?.notification) {
           // Handle standard notifications
@@ -283,7 +293,9 @@ class FirebaseService {
     if (remoteMessage.data?.callData) {
         try {
           const callData = JSON.parse(remoteMessage.data.callData as string);
-          CallService.getInstance().handleIncomingCall({
+          
+          // Emit event instead of directly calling CallService
+          appEventEmitter.emit('incomingCallFromFCM', {
             callId: callData.callInfo.callId,
             meetingId: callData.videoSDKInfo.meetingId,
             token: callData.videoSDKInfo.token,
@@ -345,15 +357,13 @@ class FirebaseService {
         // Check if data is still valid (within 5 minutes)
         if (Date.now() - navigationData.timestamp < 300000) {
           if (navigationData.screen === 'TipCall') {
-            navigationRef.navigate('Main', {
-              screen: 'TipCall',
-              params: {
-                initialCallNotificationData: navigationData.data
-              }
+            // Direct navigation since UltraFastLoader renders MainNavigator directly
+            navigationRef.navigate('TipCall', {
+              initialCallNotificationData: navigationData.data
             });
           } else if (navigationData.screen === 'Meeting') {
-            // Handle Meeting navigation properly
-            navigationRef.navigate('Main', navigationData.data);
+            // Handle Meeting navigation properly - direct navigation
+            navigationRef.navigate('Meeting', navigationData.data);
           }
         }
         

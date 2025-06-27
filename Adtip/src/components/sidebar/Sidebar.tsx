@@ -265,22 +265,18 @@ const Sidebar: React.FC = () => {
     // Use a shorter delay for more responsive navigation
     setTimeout(() => {
       try {
-        // Navigate with potential screen-specific parameters if needed
+        // Navigate directly to the screen since UltraFastLoader renders MainNavigator directly
+        // No need for nested navigation like 'Main' -> { screen: 'PlayToEarn' }
         if (screenName === 'Profile') {
-          NavigationService.navigate('Main', { 
-            screen: screenName as any,
-            params: { userId: undefined } // Current user profile
-          });
-        } else if (screenName === 'TabHome') {
-          // Navigate to Main which contains TabHome
-          NavigationService.navigate('Main', { screen: 'TabHome' as any });
+          NavigationService.navigate('Profile', { userId: undefined }); // Current user profile
         } else {
-          NavigationService.navigate('Main', { screen: screenName as any });
+          // Direct navigation to the screen
+          NavigationService.navigate(screenName);
         }
       } catch (error) {
         console.warn('Navigation error:', error, 'navigating to screen:', screenName);
         // Fallback to home if navigation fails
-        NavigationService.navigate('Main', { screen: 'TabHome' as any });
+        NavigationService.navigate('TabHome');
       }
     }, 100); // Reduced delay for more responsive feel
   }, [closeSidebar]);
@@ -488,3 +484,32 @@ const styles = StyleSheet.create({
 });
 
 export default Sidebar;
+
+/**
+ * NAVIGATION STRUCTURE FIX COMPLETE ✅
+ * 
+ * PROBLEM: 
+ * Navigation error: The action 'NAVIGATE' with payload {"name":"Main","params":{"screen":"PlayToEarn"}} 
+ * was not handled by any navigator.
+ * 
+ * ROOT CAUSE:
+ * The app uses UltraFastLoader which renders MainNavigator DIRECTLY (not through a Root Stack with "Main" screen).
+ * But several places were trying to navigate like: navigate('Main', { screen: 'PlayToEarn' })
+ * This assumes a nested navigation structure that doesn't exist.
+ * 
+ * ACTUAL STRUCTURE:
+ * UltraFastLoader → MainNavigator (contains PlayToEarn, TipCall, etc. screens directly)
+ * 
+ * SOLUTION:
+ * Fixed all navigation calls to navigate directly to screens:
+ * - ❌ navigate('Main', { screen: 'PlayToEarn' }) 
+ * - ✅ navigate('PlayToEarn')
+ * 
+ * FIXED FILES:
+ * 1. Sidebar.tsx - Main navigation fixes for all menu items
+ * 2. FirebaseService.ts - Delayed navigation fixes
+ * 3. CheckoutScreen.tsx - Success navigation fix  
+ * 4. CallNotificationHandler.ts - Call notification navigation fixes
+ * 
+ * PlayToEarn now correctly navigates to ChooseGamesScreen.tsx ✅
+ */

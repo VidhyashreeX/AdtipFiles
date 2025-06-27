@@ -1,8 +1,15 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FCM_SERVER_URL } from '../constants/api';
-import FirebaseService from './FirebaseService';
 import ApiService from './ApiService';
+
+/**
+ * CIRCULAR DEPENDENCY FIX:
+ * FirebaseCallService no longer imports FirebaseService directly to avoid circular dependencies.
+ * Instead, FCM tokens are passed as parameters to methods that need them.
+ * This maintains functionality while breaking the circular dependency chain:
+ * FirebaseService <-> FirebaseCallService
+ */
 
 export interface FirebaseCallData {
   callerInfo: {
@@ -142,11 +149,10 @@ class FirebaseCallService {
     callerName: string,
     meetingId: string,
     videoSDKToken: string,
-    callInfo: { callType: 'voice' | 'video'; callId: string }
+    callInfo: { callType: 'voice' | 'video'; callId: string },
+    callerToken: string // Add caller token as parameter to avoid circular dependency
   ): Promise<FirebaseCallData> {
     try {
-      const firebaseService = FirebaseService.getInstance();
-      const callerToken = await firebaseService.getFCMToken();
       const userId = await AsyncStorage.getItem('userId');
 
       if (!callerToken) {
@@ -184,12 +190,11 @@ class FirebaseCallService {
   public async prepareCallStatusUpdate(
     type: CallStatusUpdate['type'],
     callerName: string,
+    callerToken: string, // Add caller token as parameter to avoid circular dependency
     callId?: string,
     duration?: number
   ): Promise<CallStatusUpdate> {
     try {
-      const firebaseService = FirebaseService.getInstance();
-      const callerToken = await firebaseService.getFCMToken();
       const userId = await AsyncStorage.getItem('userId');
 
       if (!callerToken) {

@@ -78,7 +78,7 @@ const CheckoutScreen: React.FC = () => {
         [
           {
             text: 'OK',
-            onPress: () => navigation.navigate('Main' as never),
+            onPress: () => navigation.navigate('TabHome' as never),
           },
         ],
       );

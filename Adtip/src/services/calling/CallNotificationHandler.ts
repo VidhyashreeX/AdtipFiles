@@ -475,23 +475,18 @@ class CallNotificationHandler {
         // Check if there's an active call
         const currentCall = this.whatsAppCallManager.getCurrentCall();
         if (currentCall && currentCall.status === 'connected') {
-          // Navigate to meeting screen
-          navigate('Main', {
-            screen: 'Meeting',
-            params: {
-              meetingId: currentCall.meetingId,
-              token: currentCall.token,
-              callType: currentCall.callType,
-              displayName: currentCall.isInitiator ? currentCall.callerName : currentCall.recipientName,
-              recipientName: currentCall.isInitiator ? currentCall.recipientName : currentCall.callerName,
-              isInitiator: currentCall.isInitiator,
-            },
+          // Navigate to meeting screen - direct navigation since UltraFastLoader renders MainNavigator directly
+          navigate('Meeting', {
+            meetingId: currentCall.meetingId,
+            token: currentCall.token,
+            callType: currentCall.callType,
+            displayName: currentCall.isInitiator ? currentCall.callerName : currentCall.recipientName,
+            recipientName: currentCall.isInitiator ? currentCall.recipientName : currentCall.callerName,
+            isInitiator: currentCall.isInitiator,
           });
-        } else {          // Navigate to TipCall screen
-          navigate('Main', {
-            screen: 'TipCall',
-            params: {}
-          });
+        } else {
+          // Navigate to TipCall screen - direct navigation
+          navigate('TipCall', {});
         }
       }
 
