@@ -368,15 +368,14 @@ const PostItem: React.FC<PostItemProps> = ({
 
       {/* Like Count */}
       <Text style={[styles.likesCount, {color: colors.text.primary}]}>
-        {likes} {likes === 1 ? 'like' : 'likes'}
+        {`${likes} ${likes === 1 ? 'like' : 'likes'}`}
       </Text>
 
       {/* Caption */}
       {caption && typeof caption === 'string' && caption.trim() && (
         <Text style={[styles.caption, {color: colors.text.primary}]}>
           <Text style={styles.captionUsername}>{username || ''}</Text>
-          {' '}
-          {caption.trim()}
+          {` ${caption.trim()}`}
         </Text>
       )}
 
