@@ -357,13 +357,19 @@ class FirebaseService {
         // Check if data is still valid (within 5 minutes)
         if (Date.now() - navigationData.timestamp < 300000) {
           if (navigationData.screen === 'TipCall') {
-            // Direct navigation since UltraFastLoader renders MainNavigator directly
-            navigationRef.navigate('TipCall', {
-              initialCallNotificationData: navigationData.data
+            // Navigate to TipCall using nested navigation
+            navigationRef.navigate('Main', {
+              screen: 'TipCall',
+              params: {
+                initialCallNotificationData: navigationData.data
+              }
             });
           } else if (navigationData.screen === 'Meeting') {
-            // Handle Meeting navigation properly - direct navigation
-            navigationRef.navigate('Meeting', navigationData.data);
+            // Navigate to Meeting using nested navigation
+            navigationRef.navigate('Main', {
+              screen: 'Meeting',
+              params: navigationData.data
+            });
           }
         }
         

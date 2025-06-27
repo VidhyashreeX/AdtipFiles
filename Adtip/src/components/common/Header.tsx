@@ -53,7 +53,7 @@ const LiveCallTimer: React.FC = () => {
   const { colors } = useTheme();
 
   const handlePress = () => {
-    navigation.navigate('Meeting' as never);
+    (navigation as any).navigate('Main', { screen: 'Meeting' });
   };
 
   return (

@@ -118,14 +118,17 @@ const AppNavigator = () => {
         const host = route.split('/')[0];
 
         if (host === 'call' && activeCall) {
-          // Since UltraFastLoader renders MainNavigator directly, navigate directly to Meeting
-          (navigationRef as any).navigate('Meeting', {
-            meetingId: activeCall.meetingId,
-            token: activeCall.token,
-            callType: activeCall.callType,
-            displayName: activeCall.callerName,
-            recipientName: activeCall.recipientName,
-            isInitiator: activeCall.isInitiator,
+          // Navigate to Meeting using nested navigation
+          (navigationRef as any).navigate('Main', {
+            screen: 'Meeting',
+            params: {
+              meetingId: activeCall.meetingId,
+              token: activeCall.token,
+              callType: activeCall.callType,
+              displayName: activeCall.callerName,
+              recipientName: activeCall.recipientName,
+              isInitiator: activeCall.isInitiator,
+            }
           });
         }
       }
@@ -184,8 +187,11 @@ const AppNavigator = () => {
         };
         
         console.log('[App] Navigating with params:', navigationParams);
-        // Navigate directly to Meeting screen since UltraFastLoader renders MainNavigator directly
-        (navigationRef as any).navigate('Meeting', navigationParams);
+        // Navigate to Meeting using nested navigation
+        (navigationRef as any).navigate('Main', {
+          screen: 'Meeting',
+          params: navigationParams
+        });
         
       } else if (!activeCall && currentRoute === 'Meeting') {
         console.log('[App] No active call, navigating back from Meeting screen');
@@ -234,8 +240,11 @@ const AppNavigator = () => {
         };
         
         console.log('[App] Force navigating with params:', forceNavigationParams);
-        // Navigate directly to Meeting screen since UltraFastLoader renders MainNavigator directly
-        (navigationRef as any).navigate('Meeting', forceNavigationParams);
+        // Navigate to Meeting using nested navigation
+        (navigationRef as any).navigate('Main', {
+          screen: 'Meeting',
+          params: forceNavigationParams
+        });
       }
     };
 

@@ -933,9 +933,11 @@ class WhatsAppCallManager {
       // Navigate to the Main navigator with the Meeting screen
       // Since UltraFastLoader renders MainNavigator directly, navigate directly to Meeting
       if (navigationRef.isReady()) {
-        // Cast to any to bypass the type check since navigationRef is typed for RootStack
-        // but we're actually using MainNavigator directly
-        (navigationRef as any).navigate('Meeting', params);
+        // Navigate to Meeting using nested navigation
+        (navigationRef as any).navigate('Main', {
+          screen: 'Meeting',
+          params: params
+        });
       } else {
         console.warn('[WhatsAppCallManager] Navigation not ready, cannot navigate to meeting');
       }
