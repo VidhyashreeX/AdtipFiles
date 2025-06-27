@@ -88,22 +88,6 @@ const ThemeAwareStatusBar = () => {
   );
 };
 
-// This component now represents the main app UI, including the sidebar and main navigator
-const MainApp = () => {
-  const { colors } = useTheme();
-  return (
-    <SafeAreaViewRN style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
-      <ThemeAwareStatusBar />
-      <SidebarProvider>
-        <TabNavigatorProvider>
-          <MainNavigator />
-          <Sidebar />
-        </TabNavigatorProvider>
-      </SidebarProvider>
-    </SafeAreaViewRN>
-  );
-}
-
 // AppNavigator with Services - Ultra Fast with Authentication-aware UltraFastLoader
 const AppNavigator = () => {
   const { isAuthenticated, isInitialized, user } = useAuth();
@@ -544,11 +528,14 @@ function App(): React.JSX.Element {
                   <DataProvider>
                     <ShortsProvider>
                       <TabNavigatorProvider>
-                        <GestureHandlerRootView style={{ flex: 1 }}>
-                          <NavigationContainer ref={navigationRef}>
-                            <AppNavigator />
-                          </NavigationContainer>
-                        </GestureHandlerRootView>
+                        <SidebarProvider>
+                          <GestureHandlerRootView style={{ flex: 1 }}>
+                            <NavigationContainer ref={navigationRef}>
+                              <AppNavigator />
+                              <Sidebar />
+                            </NavigationContainer>
+                          </GestureHandlerRootView>
+                        </SidebarProvider>
                       </TabNavigatorProvider>
                     </ShortsProvider>
                   </DataProvider>
