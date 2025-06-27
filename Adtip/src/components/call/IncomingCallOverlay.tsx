@@ -6,98 +6,149 @@ import {
   TouchableOpacity,
   Dimensions,
   StatusBar,
+  Image,
+  Animated,
+  PanResponder,
 } from 'react-native';
-import { Phone, PhoneOff, Video, VideoOff } from 'lucide-react-native';
+import { Phone, MessageSquare } from 'lucide-react-native';
 import LinearGradient from 'react-native-linear-gradient';
 
 const { width, height } = Dimensions.get('window');
 
 interface IncomingCallOverlayProps {
   callerName: string;
+  phoneNumber?: string;
   callType: 'voice' | 'video';
   callerAvatar?: string;
   onAccept: () => void;
   onDecline: () => void;
+  onMessage?: () => void;
 }
 
 const IncomingCallOverlay: React.FC<IncomingCallOverlayProps> = ({
   callerName,
+  phoneNumber,
   callType,
   callerAvatar,
   onAccept,
   onDecline,
-}) => {  return (
+  onMessage,
+}) => {
+  // Animation for the swipe to accept
+  const pan = React.useRef(new Animated.ValueXY()).current;
+  const acceptButtonOpacity = React.useRef(new Animated.Value(1)).current;
+  
+  const panResponder = React.useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderMove: (_, gestureState) => {
+        // Only allow upward movement
+        if (gestureState.dy < 0) {
+          Animated.event([null, { dy: pan.y }], { useNativeDriver: false })(_, gestureState);
+          
+          // Calculate opacity based on movement (fade out as user swipes up)
+          const opacity = Math.max(0, 1 - Math.abs(gestureState.dy) / 200);
+          acceptButtonOpacity.setValue(opacity);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        // If swiped up enough, accept the call
+        if (gestureState.dy < -100) {
+          onAccept();
+        } else {
+          // Reset position if not swiped enough
+          Animated.spring(pan, {
+            toValue: { x: 0, y: 0 },
+            useNativeDriver: false,
+          }).start();
+          
+          // Reset opacity
+          Animated.spring(acceptButtonOpacity, {
+            toValue: 1,
+            useNativeDriver: false,
+          }).start();
+        }
+      }
+    })
+  ).current;
+
+  return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="rgba(0,0,0,0.9)" />
+      <StatusBar barStyle="light-content" backgroundColor="#121212" />
       
-      {/* Background with gradient */}
-      <LinearGradient
-        colors={['#1A1A2E', '#16213E', '#0F3460']}
-        style={styles.backgroundGradient}
-      >
-        <View style={styles.overlay}>
-          
-          {/* Top section with caller info */}
-          <View style={styles.topSection}>
-            <Text style={styles.incomingCallText}>
-              Incoming {callType === 'video' ? 'video' : 'voice'} call
-            </Text>
-            
-            {/* Caller Avatar */}
-            <View style={styles.avatarContainer}>
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarText}>
-                  {callerName.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-            </View>
-            
-            {/* Caller Name */}
-            <Text style={styles.callerNameText}>{callerName}</Text>
-            
-            {/* Call Status */}
-            <Text style={styles.callStatusText}>
-              {callType === 'video' ? 'wants to video chat' : 'is calling you'}
-            </Text>
+      {/* Dark patterned background */}
+      <View style={styles.backgroundPattern}>
+        <Image 
+          source={require('../../assets/images/whatsapp_bg_pattern.png')} 
+          style={styles.patternImage}
+          resizeMode="repeat" 
+        />
+      </View>
+      
+      {/* Caller info */}
+      <View style={styles.callerInfoContainer}>
+        <Text style={styles.callerName}>{callerName}</Text>
+        {phoneNumber && (
+          <View style={styles.phoneNumberContainer}>
+            <Image 
+              source={require('../../assets/images/whatsapp_icon.png')} 
+              style={styles.whatsappIcon} 
+            />
+            <Text style={styles.phoneNumber}>{phoneNumber}</Text>
           </View>
-
-          {/* Bottom section with action buttons */}
-          <View style={styles.bottomSection}>
-            <View style={styles.actionsContainer}>
-              
-              {/* Decline Button */}
-              <TouchableOpacity
-                style={[styles.actionButton, styles.declineButton]}
-                onPress={onDecline}
-                activeOpacity={0.8}
-              >
-                <PhoneOff size={28} color="#ffffff" />
-              </TouchableOpacity>
-
-              {/* Accept Button */}
-              <TouchableOpacity
-                style={[styles.actionButton, styles.acceptButton]}
-                onPress={onAccept}
-                activeOpacity={0.8}
-              >
-                {callType === 'video' ? (
-                  <Video size={28} color="#ffffff" />
-                ) : (
-                  <Phone size={28} color="#ffffff" />
-                )}
-              </TouchableOpacity>
-              
-            </View>
-
-            {/* Action Labels */}
-            <View style={styles.labelsContainer}>
-              <Text style={styles.actionLabel}>Decline</Text>
-              <Text style={styles.actionLabel}>Accept</Text>
-            </View>
-          </View>
-          
+        )}
+      </View>
+      
+      {/* Caller avatar */}
+      <View style={styles.avatarContainer}>
+        <View style={styles.avatar}>
+          {callerAvatar ? (
+            <Image source={{ uri: callerAvatar }} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.avatarText}>
+              {callerName.charAt(0).toUpperCase()}
+            </Text>
+          )}
         </View>
-      </LinearGradient>
+      </View>
+      
+      {/* Call actions */}
+      <View style={styles.actionsContainer}>
+        {/* Decline button */}
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.declineButton]} 
+          onPress={onDecline}
+        >
+          <Phone style={styles.declineIcon} size={24} color="#fff" />
+        </TouchableOpacity>
+        
+        {/* Accept button with pan responder */}
+        <Animated.View 
+          style={[
+            styles.actionButton, 
+            styles.acceptButton,
+            { transform: pan.getTranslateTransform(), opacity: acceptButtonOpacity }
+          ]}
+          {...panResponder.panHandlers}
+        >
+          <Phone size={24} color="#fff" />
+        </Animated.View>
+        
+        {/* Message button */}
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.messageButton]} 
+          onPress={onMessage}
+        >
+          <MessageSquare size={22} color="#fff" />
+        </TouchableOpacity>
+      </View>
+      
+      {/* Action labels */}
+      <View style={styles.actionLabels}>
+        <Text style={styles.actionLabel}>Decline</Text>
+        <Text style={styles.actionLabel}>Swipe up to accept</Text>
+        <Text style={styles.actionLabel}>Message</Text>
+      </View>
     </View>
   );
 };
@@ -105,103 +156,100 @@ const IncomingCallOverlay: React.FC<IncomingCallOverlayProps> = ({
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 1000,
-  },
-  backgroundGradient: {
-    flex: 1,
-    width,
-    height,
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    paddingTop: 60,
-    paddingBottom: 40,
-    paddingHorizontal: 20,
+    backgroundColor: '#121212',
     justifyContent: 'space-between',
+    paddingBottom: 40,
   },
-  topSection: {
+  backgroundPattern: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.12,
+  },
+  patternImage: {
+    width: '100%',
+    height: '100%',
+  },
+  callerInfoContainer: {
     alignItems: 'center',
-    flex: 1,
-    justifyContent: 'center',
+    marginTop: 80,
   },
-  incomingCallText: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginBottom: 40,
-    textAlign: 'center',
+  callerName: {
+    color: '#FFFFFF',
+    fontSize: 36,
+    fontWeight: '500',
+  },
+  phoneNumberContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  whatsappIcon: {
+    width: 18,
+    height: 18,
+    marginRight: 6,
+  },
+  phoneNumber: {
+    color: '#CCCCCC',
+    fontSize: 18,
   },
   avatarContainer: {
-    marginBottom: 24,
-  },
-  avatarPlaceholder: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 4,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  avatar: {
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: '#1F2C34',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
-    fontSize: 64,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  callerNameText: {
-    fontSize: 32,
+    color: '#5ACFAA',
+    fontSize: 90,
     fontWeight: '600',
-    color: '#ffffff',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  callStatusText: {
-    fontSize: 18,
-    color: 'rgba(255, 255, 255, 0.8)',
-    textAlign: 'center',
-  },
-  bottomSection: {
-    paddingBottom: 20,
   },
   actionsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
     marginBottom: 16,
-    paddingHorizontal: 40,
   },
   actionButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    justifyContent: 'center',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    justifyContent: 'center',
   },
   declineButton: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#FF4343',
+    transform: [{ rotate: '135deg' }],
+  },
+  declineIcon: {
+    transform: [{ rotate: '225deg' }],
   },
   acceptButton: {
-    backgroundColor: '#30D158',
+    backgroundColor: '#00A884',
   },
-  labelsContainer: {
+  messageButton: {
+    backgroundColor: '#3B3B3B',
+  },
+  actionLabels: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 40,
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
   },
   actionLabel: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: '#CCCCCC',
+    fontSize: 14,
     textAlign: 'center',
-    fontWeight: '500',
+    width: 70,
   },
 });
 

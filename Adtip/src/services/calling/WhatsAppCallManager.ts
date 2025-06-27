@@ -29,6 +29,7 @@ import { appEventEmitter } from '../../events/AppEventEmitter';
 import ApiService from '../ApiService';
 import VideoSDKService from '../videosdk/VideoSDKService';
 import { navigate, navigationRef } from '../../navigation/NavigationService';
+import CallMediaManager from './CallMediaManager';
 
 // Types
 export interface CallData {
@@ -90,12 +91,16 @@ class WhatsAppCallManager {
   private audioPermissionGranted = false;
   private videoPermissionGranted = false;
   
+  // Media manager integration
+  private mediaManager: CallMediaManager;
+  
   // Vibration patterns
   private readonly INCOMING_CALL_VIBRATION = [2,1000,1000, 2000];
   private readonly CALL_END_VIBRATION = [2,200];
   
   private constructor() {
     this.setupAppStateListener();
+    this.mediaManager = CallMediaManager.getInstance();
   }
 
   public static getInstance(): WhatsAppCallManager {
@@ -581,6 +586,9 @@ class WhatsAppCallManager {
       targetCall.endTime = Date.now();
       targetCall.duration = targetCall.endTime - (targetCall.startTime || 0);
 
+      // BULLETPROOF: Cleanup media first
+      await this.mediaManager.cleanup('call_ended_by_user');
+
       // Hide all call notifications
       await this.hideIncomingCallNotification();
       await this.hideOngoingCallNotification();
@@ -970,6 +978,71 @@ class WhatsAppCallManager {
       console.error('[WhatsAppCallManager] Failed to send call notification:', error);
     }
   }
+
+  /**
+   * Initiate call with recipient using VideoSDK API
+   */
+  private async initiateCallWithRecipient(callData: CallData): Promise<void> {
+    try {
+      console.log('[WhatsAppCallManager] Initiating call with recipient:', callData.recipientId);
+
+      // Get recipient's FCM token and platform info
+      const recipientTokenInfo = await ApiService.getFCMToken(callData.recipientId, callData.callerId);
+      
+      if (!recipientTokenInfo) {
+        console.warn('[WhatsAppCallManager] No FCM token found for recipient, using fallback notification');
+        // Fallback to basic notification
+        await this.sendCallNotification(callData);
+        return;
+      }
+
+      // Get current user's FCM token
+      const callerToken = await ApiService.getCurrentFCMToken();
+      
+      if (!callerToken) {
+        console.warn('[WhatsAppCallManager] No FCM token for caller, using fallback notification');
+        await this.sendCallNotification(callData);
+        return;
+      }
+
+      // Prepare initiate call payload
+      const payload = {
+        calleeInfo: {
+          platform: recipientTokenInfo.platform,
+          token: recipientTokenInfo.token,
+        },
+        callerInfo: {
+          name: callData.callerName,
+          token: callerToken,
+        },
+        videoSDKInfo: {
+          meetingId: callData.meetingId,
+          token: callData.token,
+        },
+      };
+
+      console.log('[WhatsAppCallManager] Sending initiate call request');
+      const response = await ApiService.initiateCall(payload);
+      
+      if (response.success) {
+        console.log('[WhatsAppCallManager] Call initiation successful:', response.message);
+      } else {
+        console.warn('[WhatsAppCallManager] Call initiation returned false, but no error thrown');
+      }
+    } catch (error) {
+      console.error('[WhatsAppCallManager] Failed to initiate call with recipient:', error);
+      
+      // Fallback to basic notification if initiate call fails
+      try {
+        console.log('[WhatsAppCallManager] Attempting fallback notification');
+        await this.sendCallNotification(callData);
+      } catch (fallbackError) {
+        console.error('[WhatsAppCallManager] Fallback notification also failed:', fallbackError);
+        // Don't throw here - we don't want to break the call flow
+      }
+    }
+  }
+
   /**
    * Send call status update
    */
@@ -1018,18 +1091,6 @@ class WhatsAppCallManager {
       console.log('[WhatsAppCallManager] Mute toggled');
     } catch (error) {
       console.error('[WhatsAppCallManager] Failed to toggle mute:', error);
-    }
-  }
-
-  /**
-   * Toggle speaker
-   */
-  private async toggleSpeaker(): Promise<void> {
-    try {
-      appEventEmitter.emit('toggleSpeaker');
-      console.log('[WhatsAppCallManager] Speaker toggled');
-    } catch (error) {
-      console.error('[WhatsAppCallManager] Failed to toggle speaker:', error);
     }
   }
 
@@ -1150,6 +1211,10 @@ class WhatsAppCallManager {
       this.hideIncomingCallNotification();
       this.hideOngoingCallNotification();
       this.clearCallState();
+      
+      // BULLETPROOF: Ensure media cleanup
+      this.mediaManager.cleanup('whatsapp_call_manager_cleanup');
+      
       console.log('[WhatsAppCallManager] Cleanup completed');
     } catch (error) {
       console.error('[WhatsAppCallManager] Cleanup failed:', error);
@@ -1157,43 +1222,62 @@ class WhatsAppCallManager {
   }
 
   /**
-   * Initiate call with recipient using proper VideoSDK API
-   */  private async initiateCallWithRecipient(callData: CallData): Promise<void> {
+   * Initialize media for call
+   */
+  public initializeMediaForCall(callId: string, isVideoCall: boolean): void {
     try {
-      // Get current user ID for the caller
-      const callerUserId = await this.getCurrentUserId();
-      
-      // Get both users' FCM tokens efficiently in a single API call
-      const tokenDetails = await ApiService.getBothUsersFCMTokens(callerUserId, callData.recipientId);
-
-      if (!tokenDetails.recipientToken || !tokenDetails.callerToken) {
-        console.warn('[WhatsAppCallManager] Missing FCM tokens, falling back to basic notification');
-        await this.sendCallNotification(callData);
-        return;
-      }
-
-      // Use the initiate call API for proper VideoSDK integration
-      await ApiService.initiateCall({
-        calleeInfo: {
-          platform: tokenDetails.recipientPlatform,
-          token: tokenDetails.recipientToken,
-        },
-        callerInfo: {
-          name: callData.callerName,
-          token: tokenDetails.callerToken,
-        },
-        videoSDKInfo: {
-          meetingId: callData.meetingId,
-          token: callData.token,
-        },
-      });
-
-      console.log('[WhatsAppCallManager] Call initiated with VideoSDK API');
+      this.mediaManager.initialize(callId, isVideoCall);
+      console.log('[WhatsAppCallManager] Media initialized for call:', callId);
     } catch (error) {
-      console.error('[WhatsAppCallManager] Failed to initiate call with VideoSDK API:', error);
-      // Fallback to basic notification
-      await this.sendCallNotification(callData);
+      console.error('[WhatsAppCallManager] Failed to initialize media:', error);
     }
+  }
+
+  /**
+   * Set VideoSDK meeting reference for media control
+   */
+  public setVideoSDKMeeting(meeting: any): void {
+    try {
+      this.mediaManager.setMeeting(meeting);
+      console.log('[WhatsAppCallManager] VideoSDK meeting set for media control');
+    } catch (error) {
+      console.error('[WhatsAppCallManager] Failed to set VideoSDK meeting:', error);
+    }
+  }
+
+  /**
+   * Get media manager instance
+   */
+  public getMediaManager(): CallMediaManager {
+    return this.mediaManager;
+  }
+
+  /**
+   * Toggle microphone through media manager
+   */
+  public async toggleMic(): Promise<boolean> {
+    return await this.mediaManager.toggleMic();
+  }
+
+  /**
+   * Toggle camera through media manager
+   */
+  public async toggleCamera(): Promise<boolean> {
+    return await this.mediaManager.toggleCamera();
+  }
+
+  /**
+   * Toggle speaker through media manager
+   */
+  public async toggleSpeaker(): Promise<boolean> {
+    return await this.mediaManager.toggleSpeaker();
+  }
+
+  /**
+   * Get current media state
+   */
+  public getMediaState() {
+    return this.mediaManager.getMediaState();
   }
 }
 
