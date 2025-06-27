@@ -67,6 +67,7 @@ import { COLORS } from './src/constants/colors';
 // Import required screens
 import UserDetailsScreen from './src/screens/auth/UserDetailsScreen';
 import { appEventEmitter } from './src/events/AppEventEmitter';
+import ChatScreen from './src/screens/chat/ChatScreen';
 
 // Ultra Fast Loader for instant app initialization
 import UltraFastLoader from './src/components/common/UltraFastLoader';

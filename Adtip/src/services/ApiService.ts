@@ -1737,4 +1737,11 @@ export default class ApiService {
   static async getReferralDetails(userId: number): Promise<any> {
     return this.get(`/api/referral/details/${userId}`);
   }
+  static async fetchChatMessages(userId: number, chattinguserid: number) {
+    return this.get(`/api/messages?userId=${userId}&chattinguserid=${chattinguserid}`);
+  }
+
+  static async sendChatMessage(data: { userId: number; receiverId: number; message: string }) {
+    return this.post('/api/sendmessage', data);
+  }
 }

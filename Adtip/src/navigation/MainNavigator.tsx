@@ -36,7 +36,7 @@ import NotificationScreen from '../screens/notifications/NotificationScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import EarningsScreen from '../screens/earnings/EarningsScreen';
 import ReferralScreen from '../screens/referral/ReferralScreen';
-import PlayToEarnScreen from '../screens/playtoEarn/PlayToEarnScreen';
+import PlayToEarnScreen from '../screens/playtoEarn/LudoGameScreen';
 import WatchToEarnScreen from '../screens/watchToEarn/WatchToEarnScreen';
 import AdPassbookScreen from '../screens/adPassbook/AdPassbookScreen';
 import SupportScreen from '../screens/support/SupportScreen';
@@ -63,6 +63,9 @@ import UpgradePremiumScreen from '../screens/wallet/UpgradePremiumScreen';
 
 // Import SubscriptionScreen
 import SubscriptionScreen from '../screens/packages/SubscriptionScreen';
+
+// Import ChatScreen
+import ChatScreen from '../screens/chat/ChatScreen';
 
 // Create stack navigator with proper typing
 const Stack = createNativeStackNavigator<MainNavigatorParamList>();
@@ -342,6 +345,17 @@ const MainNavigator = () => {
           animation: 'fade',
           gestureEnabled: false,
           headerShown: false,
+        }}
+      />
+      
+      {/* Add Chat screen */}
+      <Stack.Screen 
+        name="Chat" 
+        component={ChatScreen}
+        options={{
+          headerShown: false,
+          animation: 'slide_from_right',
+          gestureEnabled: true,
         }}
       />
       

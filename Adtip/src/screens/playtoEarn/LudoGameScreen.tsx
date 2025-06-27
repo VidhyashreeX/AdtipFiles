@@ -13,12 +13,17 @@ import {
   Modal,
   ActivityIndicator,
   Platform,
+  RefreshControl,
 } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import ApiService from '../../services/ApiService';
+import { useAuth } from '../../contexts/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Calculate adaptive sizes based on screen width
 const { width, height } = Dimensions.get('window');
@@ -38,21 +43,21 @@ const PLAYER_COLORS = {
 const generateTokenId = (color: string, index: number) => `${color.toUpperCase()}${index}`;
 
 // Initial player tokens positions with IDs
-const getInitialTokens = () => ({
-  red: Array(4).fill(null).map((_, i) => ({ id: generateTokenId('red', i), position: 'home', index: i, pathIndex: -1, color: 'red' })),
-  green: Array(4).fill(null).map((_, i) => ({ id: generateTokenId('green', i), position: 'home', index: i, pathIndex: -1, color: 'green' })),
-  yellow: Array(4).fill(null).map((_, i) => ({ id: generateTokenId('yellow', i), position: 'home', index: i, pathIndex: -1, color: 'yellow' })),
-  blue: Array(4).fill(null).map((_, i) => ({ id: generateTokenId('blue', i), position: 'home', index: i, pathIndex: -1, color: 'blue' })),
+const getInitialTokens = (): Tokens => ({
+  red: Array(4).fill(null).map((_, i) => ({ id: generateTokenId('red', i), position: 'home' as const, index: i, pathIndex: -1, color: 'red' })),
+  green: Array(4).fill(null).map((_, i) => ({ id: generateTokenId('green', i), position: 'home' as const, index: i, pathIndex: -1, color: 'green' })),
+  yellow: Array(4).fill(null).map((_, i) => ({ id: generateTokenId('yellow', i), position: 'home' as const, index: i, pathIndex: -1, color: 'yellow' })),
+  blue: Array(4).fill(null).map((_, i) => ({ id: generateTokenId('blue', i), position: 'home' as const, index: i, pathIndex: -1, color: 'blue' })),
 });
 
 const CHALLENGES = [
-  { id: 'free', name: 'Free Play', entryFee: 0, winAmount: 0, players: '2/4', difficulty: 'Easy' },
-  { id: 'beginner', name: 'Beginner Challenge', entryFee: 1, winAmount: 1.8, players: '2/4', difficulty: 'Easy' },
-  { id: 'casual', name: 'Casual Match', entryFee: 5, winAmount: 9, players: '3/4', difficulty: 'Easy' },
-  { id: 'classic', name: 'Classic Battle', entryFee: 10, winAmount: 18, players: '2/4', difficulty: 'Medium' },
-  { id: 'pro', name: 'Pro Tournament', entryFee: 25, winAmount: 45, players: '2/4', difficulty: 'Medium' },
-  { id: 'expert', name: 'Expert League', entryFee: 50, winAmount: 90, players: '2/4', difficulty: 'Hard' },
-  { id: 'championship', name: 'Championship', entryFee: 100, winAmount: 180, players: '2/4', difficulty: 'Hard' },
+  { id: 'free', name: 'Free Play', entryFee: 0, winAmount: 0, difficulty: 'Easy' },
+  { id: 'beginner', name: 'Beginner Challenge', entryFee: 1, winAmount: 1.8, difficulty: 'Easy' },
+  { id: 'casual', name: 'Casual Match', entryFee: 5, winAmount: 9, difficulty: 'Easy' },
+  { id: 'classic', name: 'Classic Battle', entryFee: 10, winAmount: 18, difficulty: 'Medium' },
+  { id: 'pro', name: 'Pro Tournament', entryFee: 25, winAmount: 45, difficulty: 'Medium' },
+  { id: 'expert', name: 'Expert League', entryFee: 50, winAmount: 90, difficulty: 'Hard' },
+  { id: 'championship', name: 'Championship', entryFee: 100, winAmount: 180, difficulty: 'Hard' },
 ];
 
 const PATH_COORDINATES = {
@@ -100,12 +105,55 @@ const SAFE_CELLS = [
 // Placeholder for actual user ID, replace with your auth logic
 const MOCK_USER_ID = 50816; // Replace with actual dynamic user ID
 
-const PlayToEarnScreen: React.FC = () => {
-  const { colors, isDark } = useTheme();
+// --- Types ---
+type PlayerColor = 'red' | 'green' | 'yellow' | 'blue';
+
+interface Token {
+  id: string;
+  position: 'home' | 'path' | 'finished';
+  index: number;
+  pathIndex: number;
+  color: PlayerColor;
+}
+
+interface Tokens {
+  red: Token[];
+  green: Token[];
+  yellow: Token[];
+  blue: Token[];
+  [key: string]: Token[]; // for dynamic access
+}
+
+interface Player {
+  id: number;
+  color: PlayerColor;
+}
+
+interface Challenge {
+  id: string;
+  name: string;
+  entryFee: number;
+  winAmount: number;
+  difficulty: string;
+}
+
+interface GameStats {
+  duration: string;
+  totalMoves: number;
+  movesByPlayer: Record<PlayerColor, number>;
+  averageDiceRoll: number;
+  luckyRolls: number;
+}
+
+const LudoGameScreen: React.FC = () => {
+  const { colors, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const { user } = useAuth();
   let contentPadding = insets.bottom;
 
-  const [userId, setUserId] = useState<number>(MOCK_USER_ID);
+  const [userId, setUserId] = useState<number>(user?.id || 50816);
+  const [playerNames, setPlayerNames] = useState<Record<number, string>>({});
   const [gameMode, setGameMode] = useState<'challenges' | 'lobby' | 'game'>('challenges');
   const [gameStarted, setGameStarted] = useState(false);
   const [actualGameStarted, setActualGameStarted] = useState(false);
@@ -113,26 +161,87 @@ const PlayToEarnScreen: React.FC = () => {
   const [currentPlayerId, setCurrentPlayerId] = useState<number | null>(null);
   const [diceValue, setDiceValue] = useState<number | null>(null);
   const [isRolling, setIsRolling] = useState(false);
-  const [playersInGame, setPlayersInGame] = useState<Array<{id: number, color: string}>>([]);
-  const [selectedChallenge, setSelectedChallenge] = useState(CHALLENGES[0]);
-  const [tokens, setTokens] = useState(getInitialTokens());
+  const [playersInGame, setPlayersInGame] = useState<Player[]>([]);
+  const [selectedChallenge, setSelectedChallenge] = useState<Challenge>(CHALLENGES[0]);
+  const [tokens, setTokens] = useState<Tokens>(getInitialTokens());
   const [roomId, setRoomId] = useState<string | null>(null);
   const [winnerId, setWinnerId] = useState<number | null>(null);
   const [serverMessageLog, setServerMessageLog] = useState<string[]>([]);
-  const [gameStats, setGameStats] = useState({
+  const [gameStats, setGameStats] = useState<GameStats>({
     duration: '0:00',
     totalMoves: 0,
     movesByPlayer: { red: 0, blue: 0, yellow: 0, green: 0 },
     averageDiceRoll: 0,
     luckyRolls: 0
   });
+  const [lobbyCounts, setLobbyCounts] = useState<Record<number, { current: number, total: number }>>({});
+  const [loadingLobbyCounts, setLoadingLobbyCounts] = useState(false);
 
   const socketRef = useRef<WebSocket | null>(null);
   const diceAnimation = useRef(new Animated.Value(0)).current;
   const pulseAnimation = useRef(new Animated.Value(1)).current;
 
+  const [retryCount, setRetryCount] = useState<number>(0);
+
   // WebSocket URL
   const WEBSOCKET_URL = 'wss://api.adtip.in';
+
+  // Fetch lobby counts for all challenge types
+  const fetchLobbyCounts = useCallback(async () => {
+    if (gameMode !== 'challenges') return;
+    
+    setLoadingLobbyCounts(true);
+    try {
+      const token = await AsyncStorage.getItem('accessToken');
+      if (!token) {
+        // Set default counts if no token
+        const defaultCounts: Record<number, { current: number, total: number }> = {};
+        CHALLENGES.forEach(challenge => {
+          defaultCounts[challenge.entryFee] = { current: Math.floor(Math.random() * 3), total: 4 };
+        });
+        setLobbyCounts(defaultCounts);
+        return;
+      }
+
+      // Call backend API to get lobby counts for each room type (entry fee)
+      const response = await ApiService.post('/api/get-lobby-counts', {}, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (response?.data?.success && response.data.data) {
+        setLobbyCounts(response.data.data);
+      } else {
+        // Fallback to random counts if API fails
+        const fallbackCounts: Record<number, { current: number, total: number }> = {};
+        CHALLENGES.forEach(challenge => {
+          fallbackCounts[challenge.entryFee] = { current: Math.floor(Math.random() * 3), total: 4 };
+        });
+        setLobbyCounts(fallbackCounts);
+      }
+    } catch (error) {
+      console.error('Failed to fetch lobby counts:', error);
+      // Fallback to random counts
+      const fallbackCounts: Record<number, { current: number, total: number }> = {};
+      CHALLENGES.forEach(challenge => {
+        fallbackCounts[challenge.entryFee] = { current: Math.floor(Math.random() * 3), total: 4 };
+      });
+      setLobbyCounts(fallbackCounts);
+    } finally {
+      setLoadingLobbyCounts(false);
+    }
+  }, [gameMode]);
+
+  // Fetch lobby counts when component mounts and when returning to challenges
+  useEffect(() => {
+    if (gameMode === 'challenges') {
+      fetchLobbyCounts();
+      // Refresh lobby counts every 10 seconds when on challenges screen
+      const interval = setInterval(fetchLobbyCounts, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [gameMode, fetchLobbyCounts]);
 
   // Animation for waiting room pulse
   useEffect(() => {
@@ -169,154 +278,200 @@ const PlayToEarnScreen: React.FC = () => {
          const joinMessage = {
           type: "join",
           userId: userId,
-          challengeAmount: selectedChallenge.entryFee
+          roomType: selectedChallenge.entryFee
         };
         console.log('Sending join message (already connected):', joinMessage);
         socketRef.current?.send(JSON.stringify(joinMessage));
       }
       return;
     }
+    
     console.log('Attempting to connect to WebSocket...');
     setLoading(true);
-    socketRef.current = new WebSocket(WEBSOCKET_URL);
-
-    socketRef.current.onopen = () => {
-      console.log('WebSocket connected');
-      setLoading(false);
-      if (gameMode === 'lobby' && selectedChallenge) {
-        const joinMessage = {
-          type: "join",
-          userId: userId,
-          challengeAmount: selectedChallenge.entryFee
-        };
-        console.log('Sending join message:', joinMessage);
-        socketRef.current?.send(JSON.stringify(joinMessage));
-      }
-    };
-
-    socketRef.current.onmessage = (event) => {
+    
+    // Clean up any existing connection
+    if (socketRef.current) {
+      socketRef.current.onopen = null;
+      socketRef.current.onmessage = null;
+      socketRef.current.onerror = null;
+      socketRef.current.onclose = null;
       try {
-        const message = JSON.parse(event.data as string);
-        console.log('WebSocket message received:', message);
-        setServerMessageLog(prev => [...prev.slice(-20), JSON.stringify(message, null, 2)]);
-
-        if (message.type === 'room_created' || message.type === 'game_joined' || message.type === 'player_joined') {
-          if(message.roomId) setRoomId(message.roomId);
-          // Ensure playersInGame is updated with the list from the server
-          if(message.players) {
-            setPlayersInGame(message.players);
-          } else if (message.player) { // Handle single player join confirmation
-            setPlayersInGame(prev => {
-              const playerExists = prev.some(p => p.id === message.player.id);
-              return playerExists ? prev : [...prev, message.player];
-            });
+        socketRef.current.close();
+      } catch (e) {
+        console.log('Error closing existing socket:', e);
+      }
+      socketRef.current = null;
+    }
+    
+    try {
+      // Connect to Ludo WebSocket endpoint
+      socketRef.current = new WebSocket(`${WEBSOCKET_URL}/ludo`);
+      
+      // Set up event handlers
+      socketRef.current.onopen = () => {
+        console.log('WebSocket connected successfully');
+        setLoading(false);
+        setRetryCount(0); // Reset retry count on successful connection
+        
+        // Send join message if in lobby mode
+        if (gameMode === 'lobby' && selectedChallenge) {
+          const joinMessage = {
+            type: "join",
+            userId: userId,
+            roomType: selectedChallenge.entryFee
+          };
+          console.log('Sending join message:', joinMessage);
+          try {
+            socketRef.current?.send(JSON.stringify(joinMessage));
+          } catch (e) {
+            console.error('Error sending join message:', e);
           }
-          if(message.message) Alert.alert("Game Info", message.message);
-          if (message.players && message.players.some(p => p.id === userId) && !actualGameStarted) {
-            setGameMode('lobby');
-          }
-        } else if (message.type === 'game_start') {
-          if(message.roomId) setRoomId(message.roomId);
-          if(message.players) setPlayersInGame(message.players);
-          if(message.currentPlayerId) setCurrentPlayerId(message.currentPlayerId);
-          setActualGameStarted(true);
-          setGameMode('game');
-          setWinnerId(null);
-          setLoading(false);
-          Alert.alert("Game Started!", `Room ID: ${message.roomId}. Player ${message.currentPlayerId}'s turn.`);
-        } 
-        // Handling both flat and nested move structures
-        else if (message.type === 'move_update' || (message.type === 'move' && message.move)) { 
-          const moveData = message.type === 'move' ? message.move : message;
-
-          if (moveData.tokens) { 
-            setTokens(prevTokens => {
-              const newTokens = JSON.parse(JSON.stringify(prevTokens)); 
-              (moveData.tokens as Array<{tokenId: string, newPosition: number, pathIndex?: number, positionType: 'home'|'path'|'finished', color?: string, index?: number}>).forEach(movedToken => {
-                const parsedTokenId = parseTokenId(movedToken.tokenId);
-                if (parsedTokenId) {
-                  const { color, index } = parsedTokenId;
-                  if (newTokens[color] && newTokens[color][index]) {
-                    // Prefer pathIndex from server if available, otherwise use newPosition
-                    newTokens[color][index].pathIndex = movedToken.pathIndex !== undefined ? movedToken.pathIndex : movedToken.newPosition;
-                    newTokens[color][index].position = movedToken.positionType || (newTokens[color][index].pathIndex === -1 ? 'home' : (newTokens[color][index].pathIndex >= TOTAL_PATH_LENGTH ? 'finished' : 'path'));
-                  }
-                }
-              });
-              return newTokens;
-            });
-          }
-          if (moveData.cut && moveData.cut.tokenId) {
-             const cutTokenInfo = parseTokenId(moveData.cut.tokenId);
-             if (cutTokenInfo) {
-                setTokens(prevTokens => {
-                    const newTokens = JSON.parse(JSON.stringify(prevTokens));
-                    if (newTokens[cutTokenInfo.color] && newTokens[cutTokenInfo.color][cutTokenInfo.index]) {
-                        newTokens[cutTokenInfo.color][cutTokenInfo.index].position = 'home';
-                        newTokens[cutTokenInfo.color][cutTokenInfo.index].pathIndex = -1;
-                    }
-                    return newTokens;
-                });
-                Alert.alert("Token Cut!", `Token ${moveData.cut.tokenId} was sent home.`);
-             }
-          }
-          if (moveData.currentPlayerId) setCurrentPlayerId(moveData.currentPlayerId);
-          if (moveData.diceValue) setDiceValue(moveData.diceValue); 
-
-          if (moveData.isWinner && (moveData.winnerId || message.winnerId)) { // Check both locations for winnerId
-            const winner = moveData.winnerId || message.winnerId;
-            setWinnerId(winner);
-            setCurrentPlayerId(null); 
-            setActualGameStarted(false);
-            Alert.alert("Game Over!", `Player ${winner} wins!`);
-          }
-        } else if (message.type === 'turn_change') {
-            setCurrentPlayerId(message.currentPlayerId);
-            setDiceValue(null); 
-            setGameStarted(message.currentPlayerId === userId); 
-            Alert.alert("Next Turn", `It's player ${message.currentPlayerId}'s turn.`);
-        } else if (message.type === 'dice_rolled') { 
-            if (message.userId === currentPlayerId) { 
-                setDiceValue(message.diceValue);
-                setIsRolling(false); 
-            }
-        } else if (message.type === 'error') {
-          Alert.alert("Game Error", message.message || "An unknown error occurred.");
-          setLoading(false);
-        } else if (message.type === 'player_quit') {
-            Alert.alert("Player Left", `Player ${message.userId} has quit the game.`);
-            setPlayersInGame(prev => prev.filter(p => p.id !== message.userId));
         }
-      } catch (error) {
-        console.error('Failed to parse WebSocket message or handle it:', error);
-        setServerMessageLog(prev => [...prev.slice(-20), `Error parsing: ${event.data}`]);
-      }
-    };
+      };
 
-    socketRef.current.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      Alert.alert("Connection Error", "WebSocket connection error. Please try again.");
+      socketRef.current.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data as string);
+          console.log('WebSocket message received:', message);
+          setServerMessageLog(prev => [...prev.slice(-20), JSON.stringify(message, null, 2)]);
+
+          // Handle different message types
+          if (message.type === 'joined') {
+            if(message.roomId) setRoomId(message.roomId);
+            setGameMode('lobby');
+            Alert.alert("Joined Game", `Successfully joined room ${message.roomId}`);
+          } else if (message.type === 'room_state') {
+            if(message.players) {
+              setPlayersInGame(message.players as Player[]);
+            }
+          } else if (message.type === 'start') {
+            if(message.roomId) setRoomId(message.roomId);
+            if(message.players) setPlayersInGame(message.players);
+            if(message.currentTurn) setCurrentPlayerId(message.currentTurn);
+            if(message.tokenPositions) setTokens(message.tokenPositions);
+            setActualGameStarted(true);
+            setGameMode('game');
+            setWinnerId(null);
+            setLoading(false);
+            Alert.alert("Game Started!", `Room ID: ${message.roomId}. Game has begun!`);
+          } else if (message.type === 'turn') {
+            setCurrentPlayerId(message.currentTurn);
+            setDiceValue(null); 
+            setGameStarted(message.currentTurn === userId); 
+            console.log(`Turn change: Player ${message.currentTurn}'s turn`);
+          } else if (message.type === 'game-over') {
+            setWinnerId(message.winner);
+            setActualGameStarted(false);
+            Alert.alert("Game Over", `Player ${message.winner} wins! Amount: ${message.winnerAmount}`);
+          } else if (message.type === 'error') {
+            console.error('Game error:', message.message);
+            Alert.alert("Game Error", message.message || "An unknown error occurred.");
+            setLoading(false);
+          } else if (message.type === 'rejoined') {
+            if(message.roomId) setRoomId(message.roomId);
+            setGameMode('game');
+            Alert.alert("Rejoined", "Successfully rejoined the game!");
+          }
+        } catch (error) {
+          console.error('Failed to parse WebSocket message:', error);
+          setServerMessageLog(prev => [...prev.slice(-20), `Error parsing: ${event.data}`]);
+        }
+      };
+
+      socketRef.current.onerror = (error) => {
+        console.error('WebSocket error occurred:', error);
+        console.log('Error details:', JSON.stringify(error, null, 2));
+        
+        // Check if this is the specific control frames error
+        if (error.message && error.message.includes('Control frames must be final')) {
+          console.log('Detected control frames error - attempting recovery');
+          // Don't show alert for this specific error, just log it
+          setLoading(false);
+          
+          // Try to close and reconnect immediately for control frame errors
+          setTimeout(() => {
+            if (socketRef.current) {
+              try {
+                socketRef.current.close();
+              } catch (e) {
+                console.log('Error closing socket after control frame error:', e);
+              }
+            }
+          }, 100);
+        } else {
+          Alert.alert("Connection Error", "WebSocket connection error. Attempting to reconnect...");
+          setLoading(false);
+        }
+      };
+
+      socketRef.current.onclose = (event) => {
+        console.log(`WebSocket closed: Code ${event.code}, Reason: ${event.reason}`);
+        setLoading(false);
+        
+        if (gameMode === 'game' || gameMode === 'lobby') {
+          // Handle different close codes
+          if (event.code === 1006) {
+            // Abnormal closure - likely the control frames error
+            console.log('Abnormal closure detected (1006) - likely control frames issue');
+            
+            setRetryCount(prev => {
+              const newCount = prev + 1;
+              if (newCount <= 10) { // Increased retry limit for control frame issues
+                const baseDelay = 1000; // Start with 1 second
+                const backoffDelay = Math.min(baseDelay * newCount + Math.random() * 500, 5000); // Linear backoff up to 5s
+                
+                console.log(`Attempting reconnection ${newCount}/10 in ${Math.round(backoffDelay/1000)} seconds...`);
+                
+                setTimeout(() => {
+                  console.log(`Reconnection attempt ${newCount}`);
+                  connectWebSocket();
+                }, backoffDelay);
+              } else {
+                console.log('Max reconnection attempts reached for control frame error');
+                Alert.alert(
+                  "Connection Issue", 
+                  "Having trouble maintaining connection. Please restart the game.",
+                  [
+                    { text: "Restart", onPress: () => setGameMode('challenges') },
+                    { text: "Keep Trying", onPress: () => setRetryCount(0) }
+                  ]
+                );
+              }
+              return newCount;
+            });
+          } else if (event.code !== 1000) {
+            // Other abnormal closures
+            console.log('Other abnormal closure detected');
+            setRetryCount(prev => {
+              const newCount = prev + 1;
+              if (newCount <= 5) {
+                const backoffDelay = Math.min(1000 * Math.pow(2, newCount), 10000);
+                console.log(`Reconnecting (attempt ${newCount}/5) in ${Math.round(backoffDelay/1000)} seconds...`);
+                setTimeout(() => {
+                  connectWebSocket();
+                }, backoffDelay);
+              } else {
+                Alert.alert("Connection Failed", "Unable to reconnect. Please restart the game.");
+              }
+              return newCount;
+            });
+          }
+        }
+      };
+      
+    } catch (error) {
+      console.error('Error creating WebSocket:', error);
       setLoading(false);
-      if (gameMode !== 'challenges') {
-        setGameMode('challenges');
-      }
-    };
+      Alert.alert("Connection Error", "Failed to create WebSocket connection.");
+    }
+  }, [gameMode, selectedChallenge, userId]);
 
-    socketRef.current.onclose = (event) => {
-      console.log('WebSocket closed:', event.code, event.reason);
-      setLoading(false);
-      if (gameMode === 'game' || gameMode === 'lobby') {
-      }
-      socketRef.current = null; 
-    };
-  }, [userId, selectedChallenge, gameMode, actualGameStarted]);
-
-  const parseTokenId = (tokenId: string): { color: string, index: number } | null => {
+  const parseTokenId = (tokenId: string): { color: PlayerColor, index: number } | null => {
     const match = tokenId.match(/([A-Z]+)(\d+)/i);
     if (match && match[1] && match[2]) {
-        const color = match[1].toLowerCase();
+        const color = match[1].toLowerCase() as PlayerColor;
         const index = parseInt(match[2], 10);
-        if (PLAYER_COLORS[color] !== undefined && !isNaN(index)) {
+        if ((PLAYER_COLORS as Record<string, string>)[color] !== undefined && !isNaN(index)) {
             return { color, index };
         }
     }
@@ -334,7 +489,66 @@ const PlayToEarnScreen: React.FC = () => {
         socketRef.current = null;
       }
     };
-  }, []); 
+  }, []);
+
+  // Fetch player names when players list changes
+  useEffect(() => {
+    const fetchPlayerNames = async () => {
+      if (playersInGame.length === 0) return;
+      
+      try {
+        const userIds = playersInGame.map(p => p.id);
+        const token = await AsyncStorage.getItem('accessToken');
+        
+        if (!token) {
+          // Fallback to generic names if no token
+          const fallbackNames: Record<number, string> = {};
+          userIds.forEach(id => {
+            fallbackNames[id] = id === userId ? 'You' : 'Random User';
+          });
+          setPlayerNames(fallbackNames);
+          return;
+        }
+
+        const response = await ApiService.post('/api/get-multiple-user-names', {
+          userid: userIds
+        }, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+
+        if (response?.data?.success && response.data.data) {
+          const names: Record<number, string> = {};
+          Object.entries(response.data.data).forEach(([id, name]) => {
+            const numId = Number(id);
+            names[numId] = (!name || name === 'null') ? 'Random User' : String(name);
+            if (numId === userId) {
+              names[numId] = names[numId] + ' (You)';
+            }
+          });
+          setPlayerNames(names);
+        } else {
+          // Fallback if API call fails
+          const fallbackNames: Record<number, string> = {};
+          userIds.forEach(id => {
+            fallbackNames[id] = id === userId ? 'You' : 'Random User';
+          });
+          setPlayerNames(fallbackNames);
+        }
+      } catch (error) {
+        console.error('Failed to fetch player names:', error);
+        // Fallback to generic names
+        const fallbackNames: Record<number, string> = {};
+        playersInGame.forEach(p => {
+          fallbackNames[p.id] = p.id === userId ? 'You' : 'Random User';
+        });
+        setPlayerNames(fallbackNames);
+      }
+    };
+
+    fetchPlayerNames();
+  }, [playersInGame, userId]); 
 
   const handleStartGamePress = () => {
     if (!selectedChallenge) {
@@ -355,7 +569,7 @@ const PlayToEarnScreen: React.FC = () => {
         const joinMessage = {
             type: "join",
             userId: userId,
-            challengeAmount: selectedChallenge.entryFee
+            roomType: selectedChallenge.entryFee
         };
         console.log('Sending join message (already connected):', joinMessage);
         socketRef.current?.send(JSON.stringify(joinMessage));
@@ -382,7 +596,7 @@ const PlayToEarnScreen: React.FC = () => {
     });
   };
 
-  const handleTokenClick = (color: string, tokenIndex: number) => {
+  const handleTokenClick = (color: PlayerColor, tokenIndex: number) => {
     if (currentPlayerId !== userId || !diceValue || winnerId) {
       // console.log("Not your turn, or dice not rolled, or game over.");
       return;
@@ -454,41 +668,119 @@ const PlayToEarnScreen: React.FC = () => {
     setLoading(false);
   };
 
+  const handleBack = () => {
+    if (gameMode === 'challenges') {
+      navigation.goBack();
+    } else {
+      handleQuitGame();
+    }
+  };
+
+  const renderHeaderLeft = () => {
+    if (gameMode === 'challenges') return undefined;
+    return (
+      <TouchableOpacity onPress={handleBack} style={{ padding: 8, marginRight: 8 }}>
+        <Icon name="arrow-left" size={22} color={colors.text.primary} />
+      </TouchableOpacity>
+    );
+  };
+
   const renderChallengesScreen = () => {
     return (
       <LinearGradient
-        colors={isDark ? ['#121212', '#1E1E1E'] : ['#F0F0FF', '#FFFFFF']}
+        colors={isDarkMode ? ['#121212', '#1E1E1E'] : ['#F0F0FF', '#FFFFFF']}
         style={styles.challengesContainer}
       >
-        <View style={styles.ludoHeader}>
-          <View style={styles.logoContainer}>
+        {/* Sticky top: selected challenge or header/instructions */}
+        {selectedChallenge ? (
+          <View style={styles.selectedChallengeContainer}>
             <LinearGradient
-              colors={['#F57C00', '#FF9800']}
-              style={styles.logoBox}
+              colors={isDarkMode ? ['#222244', '#191932'] : ['#EBE7FF', '#F0F0FF']}
+              style={styles.selectedChallengeCard}
             >
-              <Icon name="cube-outline" size={24} color="#FFFFFF" />
+              <Text style={[styles.selectedChallengeTitle, {color: isDarkMode ? '#BB86FC' : '#9C27B0'}]}>
+                {selectedChallenge.name} Selected!
+              </Text>
+              <View style={styles.selectedChallengeDetails}>
+                <View style={styles.selectedDetailItem}>
+                  <Text style={styles.selectedDetailLabel}>Entry Fee</Text>
+                  <Text style={styles.selectedDetailValue}>₹{selectedChallenge.entryFee}</Text>
+                </View>
+                <View style={styles.selectedDetailItem}>
+                  <Text style={styles.selectedDetailLabel}>Win Amount</Text>
+                  <Text style={[styles.selectedDetailValue, {color: '#4CAF50'}]}>₹{selectedChallenge.winAmount}</Text>
+                </View>
+              </View>
+              <TouchableOpacity 
+                style={[styles.startGameButton, {
+                  backgroundColor: isDarkMode ? '#BB86FC' : '#9C27B0'
+                }]}
+                onPress={handleStartGamePress}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Icon name="play" size={18} color="#FFFFFF" style={{marginRight: 8}} />
+                    <Text style={styles.startGameButtonText}>
+                      {selectedChallenge.entryFee > 0 
+                        ? `Start Game - Pay ₹${selectedChallenge.entryFee}`
+                        : 'Start Free Game'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </LinearGradient>
-            <Text style={[styles.gameTitle, {color: colors.text.primary}]}>
-              <Text style={{color: '#F57C00'}}>Ludo</Text>{' '}
-              <Text style={{color: '#8BC34A'}}>Game</Text>{' '}
-              <Icon name="gamepad-variant-outline" size={20} color="#8BC34A" />
-            </Text>
           </View>
-          <Text style={[styles.gameSubtitle, {color: colors.text.secondary}]}>
-            Classic Board Game • 4 Players • Strategic Fun
-          </Text>
-        </View>
-        
-        <Text style={[styles.challengeSectionTitle, {color: isDark ? '#BB86FC' : '#9C27B0'}]}>
-          Choose Your Challenge
-        </Text>
-        <Text style={[styles.challengeSectionSubtitle, {color: colors.text.secondary}]}>
-          Select a challenge to start playing and win real money!
-        </Text>
-        
+        ) : (
+          <>
+            <View style={styles.ludoHeader}>
+              <View style={styles.logoContainer}>
+                <LinearGradient
+                  colors={['#F57C00', '#FF9800']}
+                  style={styles.logoBox}
+                >
+                  <Icon name="casino" size={24} color="#FFFFFF" />
+                </LinearGradient>
+                <Text style={[styles.gameTitle, {color: colors.text.primary}]}> 
+                  <Text style={{color: '#F57C00'}}>Ludo</Text>{' '}
+                  <Text style={{color: '#8BC34A'}}>Game</Text>{' '}
+                  <Icon name="sports-esports" size={20} color="#8BC34A" />
+                </Text>
+              </View>
+              <Text style={[styles.gameSubtitle, {color: colors.text.secondary}]}> Classic Board Game • 4 Players • Strategic Fun </Text>
+            </View>
+            <Text style={[styles.challengeSectionTitle, {color: isDarkMode ? '#BB86FC' : '#9C27B0'}]}> Choose Your Challenge </Text>
+            <Text style={[styles.challengeSectionSubtitle, {color: colors.text.secondary}]}> Select a challenge to start playing and win real money! </Text>
+            <TouchableOpacity 
+              style={[styles.refreshButton, {backgroundColor: isDarkMode ? '#333333' : '#F0F0F0'}]}
+              onPress={fetchLobbyCounts}
+              disabled={loadingLobbyCounts}
+            >
+              {loadingLobbyCounts ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Icon name="refresh" size={16} color={colors.text.secondary} />
+              )}
+              <Text style={[styles.refreshButtonText, {color: colors.text.secondary}]}>
+                {loadingLobbyCounts ? 'Updating...' : 'Refresh Lobbies'}
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
+        {/* Scrollable challenge list below sticky top */}
         <ScrollView 
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.challengesScrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={loadingLobbyCounts}
+              onRefresh={fetchLobbyCounts}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
         >
           {CHALLENGES.map((challenge) => {
             const isSelected = selectedChallenge?.id === challenge.id;
@@ -496,19 +788,19 @@ const PlayToEarnScreen: React.FC = () => {
               challenge.difficulty === 'Easy' ? '#4CAF50' : 
               challenge.difficulty === 'Medium' ? '#FF9800' : 
               '#F44336';
-            
-            // Calculate players progress
-            const [current, total] = challenge.players.split('/').map(Number);
+            // Get dynamic player counts from lobby data
+            const lobbyData = lobbyCounts[challenge.entryFee] || { current: 0, total: 4 };
+            const current = lobbyData.current;
+            const total = lobbyData.total;
             const progress = current / total;
-            
             return (
               <TouchableOpacity 
                 key={challenge.id}
                 style={[
                   styles.challengeCard,
                   {
-                    backgroundColor: isDark ? colors.cardBackground : '#FFFFFF',
-                    borderColor: isSelected ? (isDark ? '#BB86FC' : '#9C27B0') : 'transparent'
+                    backgroundColor: isDarkMode ? colors.card : '#FFFFFF',
+                    borderColor: isSelected ? (isDarkMode ? '#BB86FC' : '#9C27B0') : 'transparent'
                   }
                 ]}
                 onPress={() => setSelectedChallenge(challenge)}
@@ -519,222 +811,164 @@ const PlayToEarnScreen: React.FC = () => {
                     <Text style={[styles.difficultyText, {color: difficultyColor}]}>{challenge.difficulty}</Text>
                   </View>
                 </View>
-                
                 <View style={styles.challengeDetails}>
                   <View style={styles.challengeDetailItem}>
-                    <Icon name="ticket-percent-outline" size={16} color={isDark ? '#BB86FC' : '#9C27B0'} />
+                    <Icon name="local-offer" size={16} color={isDarkMode ? '#BB86FC' : '#9C27B0'} />
                     <Text style={[styles.detailLabel, {color: colors.text.secondary}]}>Entry Fee</Text>
                     <Text style={[styles.detailValue, {color: colors.text.primary}]}>₹{challenge.entryFee}</Text>
                   </View>
-                  
                   <View style={styles.challengeDetailItem}>
-                    <Icon name="trophy-outline" size={16} color="#FFC107" />
+                    <Icon name="emoji-events" size={16} color="#FFC107" />
                     <Text style={[styles.detailLabel, {color: colors.text.secondary}]}>Win Amount</Text>
                     <Text style={[styles.detailValue, {color: '#4CAF50'}]}>₹{challenge.winAmount}</Text>
                   </View>
-                  
                   <View style={styles.challengeDetailItem}>
-                    <Icon name="account-group-outline" size={16} color="#2196F3" />
+                    <Icon name="group" size={16} color="#2196F3" />
                     <Text style={[styles.detailLabel, {color: colors.text.secondary}]}>Players</Text>
                     <View style={{width: '100%'}}>
-                      <Text style={[styles.detailValue, {color: colors.text.primary}]}>{challenge.players}</Text>
-                      <View style={[styles.progressBackground, {backgroundColor: isDark ? '#333333' : '#E0E0E0'}]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text style={[styles.detailValue, {color: colors.text.primary}]}>
+                          {current}/{total}
+                        </Text>
+                        {loadingLobbyCounts && (
+                          <ActivityIndicator size="small" color="#2196F3" />
+                        )}
+                      </View>
+                      <View style={[styles.progressBackground, {backgroundColor: isDarkMode ? '#333333' : '#E0E0E0'}]}>
                         <View 
                           style={[styles.progressFill, {
-                            backgroundColor: '#2196F3',
+                            backgroundColor: current >= total ? '#4CAF50' : '#2196F3',
                             width: `${Math.max(5, progress * 100)}%`
                           }]} 
                         />
                       </View>
+                      {current >= total && (
+                        <Text style={{ fontSize: 12, color: '#4CAF50', marginTop: 2 }}>
+                          Ready to Start!
+                        </Text>
+                      )}
+                      {current > 0 && current < total && (
+                        <Text style={{ fontSize: 12, color: colors.text.secondary, marginTop: 2 }}>
+                          {total - current} more needed
+                        </Text>
+                      )}
                     </View>
                   </View>
                 </View>
               </TouchableOpacity>
             );
           })}
-          
-          {selectedChallenge && (
-            <View style={styles.selectedChallengeContainer}>
-              <LinearGradient
-                colors={isDark ? ['#222244', '#191932'] : ['#EBE7FF', '#F0F0FF']}
-                style={styles.selectedChallengeCard}
-              >
-                <Text style={[styles.selectedChallengeTitle, {color: isDark ? '#BB86FC' : '#9C27B0'}]}>
-                  {selectedChallenge.name} Selected!
-                </Text>
-                
-                <View style={styles.selectedChallengeDetails}>
-                  <View style={styles.selectedDetailItem}>
-                    <Text style={styles.selectedDetailLabel}>Entry Fee</Text>
-                    <Text style={styles.selectedDetailValue}>₹{selectedChallenge.entryFee}</Text>
-                  </View>
-                  
-                  <View style={styles.selectedDetailItem}>
-                    <Text style={styles.selectedDetailLabel}>Win Amount</Text>
-                    <Text style={[styles.selectedDetailValue, {color: '#4CAF50'}]}>₹{selectedChallenge.winAmount}</Text>
-                  </View>
-                </View>
-                
-                <TouchableOpacity 
-                  style={[styles.startGameButton, {
-                    backgroundColor: isDark ? '#BB86FC' : '#9C27B0'
-                  }]}
-                  onPress={handleStartGamePress}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                  ) : (
-                    <>
-                      <Icon name="play" size={18} color="#FFFFFF" style={{marginRight: 8}} />
-                      <Text style={styles.startGameButtonText}>
-                        {selectedChallenge.entryFee > 0 
-                          ? `Start Game - Pay ₹${selectedChallenge.entryFee}`
-                          : 'Start Free Game'}
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </LinearGradient>
-            </View>
-          )}
-          
           <View style={{height: contentPadding > 0 ? contentPadding + 20 : 20}} />
         </ScrollView>
       </LinearGradient>
     );
   };
 
-  const renderLobbyScreen = () => {
-    const expectedPlayers = selectedChallenge?.players.includes('/') ? 
-      parseInt(selectedChallenge.players.split('/')[1], 10) : 4;
-      
-    return (
-      <LinearGradient
-        colors={isDark ? ['#121212', '#1E1E1E'] : ['#F0F0FF', '#FFFFFF']}
-        style={styles.lobbyContainer}
-      >
-        <Animated.View style={{
-          transform: [{scale: pulseAnimation}],
-          alignItems: 'center'
-        }}>
-          <View style={styles.lobbyStatusIndicator}>
-            <Icon name="access-point" size={24} color="#FFFFFF" />
-          </View>
-          <Text style={[styles.lobbyTitle, {color: colors.text.primary}]}>Finding Players...</Text>
-        </Animated.View>
-        
-        <View style={[styles.lobbyInfoCard, {
-          backgroundColor: isDark ? colors.cardBackground : '#FFFFFF'
-        }]}
-        >
-          <View style={styles.lobbyInfoRow}>
-            <Icon name="information-outline" size={16} color={isDark ? '#BB86FC' : '#9C27B0'} />
-            <Text style={[styles.lobbyInfoText, {color: colors.text.secondary}]}>
-              Room ID: <Text style={{color: colors.text.primary, fontWeight: '600'}}>{roomId || "Connecting..."}</Text>
-            </Text>
-          </View>
-          
-          <View style={styles.lobbyInfoRow}>
-            <Icon name="trophy-outline" size={16} color="#FFC107" />
-            <Text style={[styles.lobbyInfoText, {color: colors.text.secondary}]}>
-              Playing <Text style={{color: colors.text.primary, fontWeight: '600'}}>{selectedChallenge?.name}</Text>
-            </Text>
-          </View>
-          
-          <View style={styles.lobbyInfoRow}>
-            <Icon name="cash-multiple" size={16} color="#4CAF50" />
-            <Text style={[styles.lobbyInfoText, {color: colors.text.secondary}]}>
-              Entry: ₹{selectedChallenge?.entryFee} | Win: <Text style={{color: '#4CAF50', fontWeight: '600'}}>₹{selectedChallenge?.winAmount}</Text>
-            </Text>
-          </View>
-        </View>
-        
-        {loading && !roomId && (
-          <ActivityIndicator size="large" color={isDark ? '#BB86FC' : '#9C27B0'} style={styles.lobbyLoader} />
-        )}
-        
-        <View style={styles.playersSection}>
-          <View style={styles.playersSectionHeader}>
-            <Icon name="account-group" size={16} color={colors.text.secondary} />
-            <Text style={[styles.playersSectionTitle, {color: colors.text.primary}]}>
-              Players ({playersInGame.length}/{expectedPlayers})
-            </Text>
-          </View>
-          
-          <View style={[styles.playersProgressBackground, {backgroundColor: isDark ? '#333333' : '#E0E0E0'}]}>
-            <View 
-              style={[styles.playersProgressFill, {
-                backgroundColor: isDark ? '#BB86FC' : '#9C27B0',
-                width: `${(playersInGame.length / expectedPlayers) * 100}%`
-              }]} 
-            />
-          </View>
-          
-          <View style={styles.lobbyPlayersList}>
-            {Object.keys(PLAYER_COLORS).map((color, index) => {
-              const player = playersInGame[index];
-              const isActive = player !== undefined;
-              
-              return (
-                <View 
-                  key={color}
-                  style={[
-                    styles.lobbyPlayerCard,
-                    {
-                      backgroundColor: isDark ? colors.cardBackground : '#FFFFFF',
-                      borderColor: PLAYER_COLORS[color],
-                      opacity: isActive ? 1 : 0.6
-                    }
-                  ]}
-                >
-                  <View style={[styles.playerColorIndicator, {backgroundColor: PLAYER_COLORS[color]}]} />
-                  
-                  {isActive ? (
-                    <Text style={[styles.lobbyPlayerName, {color: colors.text.primary}]}>
-                      Player {player.id}{player.id === userId ? " (You)" : ""}
-                    </Text>
-                  ) : (
-                    <View style={styles.waitingForPlayer}>
-                      <ActivityIndicator size="small" color={PLAYER_COLORS[color]} style={{marginRight: 8}} />
-                      <Text style={[styles.waitingText, {color: colors.text.secondary}]}>Waiting...</Text>
-                    </View>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        </View>
-        
-        <TouchableOpacity
-          style={[styles.cancelButton, {backgroundColor: '#F44336'}]}
-          onPress={handleQuitGame}
-        >
-          <Icon name="close-circle-outline" size={18} color="#FFFFFF" style={{marginRight: 8}} />
-          <Text style={styles.cancelButtonText}>Cancel & Leave</Text>
+  const renderWaitingRoom = () => (
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ flexGrow: 1 }}>
+      <View style={[styles.ludoHeader, { paddingTop: contentPadding + 10 }]}>
+        <TouchableOpacity onPress={handleBack} style={styles.ludoHeaderBackButton}>
+          <Icon name="arrow-left" size={22} color={colors.text.primary} />
         </TouchableOpacity>
-        
-        {/* You can keep server logs for debugging but hide in production */}
-        {__DEV__ && (
-          <ScrollView style={[styles.serverLogScrollView, {
-            backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.05)'
-          }]}
+        <Text style={[styles.ludoHeaderTitle, { color: colors.text.primary }]}>
+          Waiting Room
+        </Text>
+        <View style={{ width: 22 }} />
+      </View>
+
+      <View style={styles.waitingContent}>
+        <Animated.View style={[styles.waitingCard, { transform: [{ scale: pulseAnimation }] }]}>
+          <Text style={[styles.waitingTitle, { color: colors.text.primary }]}>
+            Finding Players...
+          </Text>
+          
+          <Text style={[styles.roomInfo, { color: colors.text.secondary }]}>
+            Room ID: {roomId || 'Connecting...'}
+          </Text>
+          
+          <Text style={[styles.challengeInfo, { color: colors.text.primary }]}>
+            Entry Fee: ₹{selectedChallenge?.entryFee || 0}
+          </Text>
+
+          {/* Dynamic Player Display */}
+          <View style={styles.playersContainer}>
+            <Text style={[styles.playersTitle, { color: colors.text.primary }]}>
+              Players ({playersInGame.length}/4)
+            </Text>
+            
+            <View style={styles.playersList}>
+              {[0, 1, 2, 3].map((index) => {
+                const player = playersInGame[index];
+                const playerName = player ? (playerNames[player.id] || `Player ${player.id}`) : '';
+                
+                return (
+                  <View key={index} style={[styles.playerSlot, { borderColor: colors.border }]}>
+                    <View style={[
+                      styles.playerAvatar, 
+                      { 
+                        backgroundColor: player ? colors.primary : colors.card,
+                        borderColor: player ? colors.primary : colors.border 
+                      }
+                    ]}>
+                      {player ? (
+                        <Icon name="user" size={20} color={colors.background} />
+                      ) : (
+                        <Icon name="user-plus" size={20} color={colors.text.secondary} />
+                      )}
+                    </View>
+                    <Text style={[
+                      styles.playerName, 
+                      { color: player ? colors.text.primary : colors.text.secondary }
+                    ]}>
+                      {player ? playerName : 'Waiting...'}
+                    </Text>
+                    {player && (
+                      <View style={[styles.statusIndicator, { backgroundColor: colors.success }]} />
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          {loading && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
+                Connecting to game server...
+              </Text>
+            </View>
+          )}
+
+          {!loading && playersInGame.length > 0 && playersInGame.length < 4 && (
+            <View style={styles.waitingInfo}>
+              <Text style={[styles.waitingText, { color: colors.text.secondary }]}>
+                Waiting for {4 - playersInGame.length} more player{4 - playersInGame.length > 1 ? 's' : ''}...
+              </Text>
+              <Text style={[styles.waitingSubtext, { color: colors.text.secondary }]}>
+                Game will start automatically when all players join
+              </Text>
+            </View>
+          )}
+
+          <TouchableOpacity 
+            style={[styles.cancelButton, { backgroundColor: colors.error }]} 
+            onPress={handleQuitGame}
           >
-            <Text style={[styles.serverLogTitle, {color: colors.text.secondary}]}>Debug Log:</Text>
-            {serverMessageLog.slice(-3).map((log, i) => (
-              <Text key={i} style={[styles.serverLogText, {color: colors.text.secondary}]}>{log}</Text>
-            ))}
-          </ScrollView>
-        )}
-      </LinearGradient>
-    );
-  };
-  
+            <Text style={[styles.cancelButtonText, { color: colors.background }]}>
+              Cancel & Leave
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    </ScrollView>
+  );
+
   const renderGameScreen = () => {
     if (winnerId) {
       return (
         <LinearGradient
-          colors={isDark ? ['#121212', '#1E1E1E'] : ['#F0F0FF', '#FFFFFF']}
+          colors={isDarkMode ? ['#121212', '#1E1E1E'] : ['#F0F0FF', '#FFFFFF']}
           style={styles.gameOverContainer}
         >
           <View style={styles.trophyContainer}>
@@ -743,7 +977,7 @@ const PlayToEarnScreen: React.FC = () => {
           </View>
           
           <View style={[styles.gameOverCard, {
-            backgroundColor: isDark ? colors.cardBackground : '#FFFFFF'
+            backgroundColor: isDarkMode ? colors.card : '#FFFFFF'
           }]}>
             <Text style={[styles.gameOverSubtitle, {color: colors.text.secondary}]}>
               Player <Text style={{fontWeight: 'bold', color: winnerId === userId ? '#4CAF50' : colors.text.primary}}>
@@ -759,7 +993,7 @@ const PlayToEarnScreen: React.FC = () => {
               </View>
               
               <View style={styles.gameOverDetailItem}>
-                <Icon name="clock-outline" size={20} color={isDark ? '#BB86FC' : '#9C27B0'} />
+                <Icon name="clock-outline" size={20} color={isDarkMode ? '#BB86FC' : '#9C27B0'} />
                 <Text style={[styles.gameOverDetailLabel, {color: colors.text.secondary}]}>Duration</Text>
                 <Text style={[styles.gameOverDetailValue, {color: colors.text.primary}]}>{gameStats.duration}</Text>
               </View>
@@ -772,7 +1006,7 @@ const PlayToEarnScreen: React.FC = () => {
             </View>
             
             <TouchableOpacity 
-              style={[styles.newGameButton, {backgroundColor: isDark ? '#BB86FC' : '#9C27B0'}]}
+              style={[styles.newGameButton, {backgroundColor: isDarkMode ? '#BB86FC' : '#9C27B0'}]}
               onPress={handleQuitGame}
             >
               <Text style={styles.newGameButtonText}>Back to Challenges</Text>
@@ -785,10 +1019,10 @@ const PlayToEarnScreen: React.FC = () => {
     if (!actualGameStarted) {
       return (
         <LinearGradient
-          colors={isDark ? ['#121212', '#1E1E1E'] : ['#F0F0FF', '#FFFFFF']}
+          colors={isDarkMode ? ['#121212', '#1E1E1E'] : ['#F0F0FF', '#FFFFFF']}
           style={styles.loadingGameContainer}
         >
-          <ActivityIndicator size="large" color={isDark ? '#BB86FC' : '#9C27B0'} />
+          <ActivityIndicator size="large" color={isDarkMode ? '#BB86FC' : '#9C27B0'} />
           <Text style={[styles.loadingGameText, {color: colors.text.primary}]}>Loading Game...</Text>
           <Text style={[styles.loadingGameSubText, {color: colors.text.secondary}]}>
             Preparing game board for {selectedChallenge?.name}
@@ -797,7 +1031,7 @@ const PlayToEarnScreen: React.FC = () => {
       );
     }
 
-    const getTokenScreenPosition = (color: string, tokenIndex: number) => {
+    const getTokenScreenPosition = (color: PlayerColor, tokenIndex: number) => {
       const token = tokens[color][tokenIndex];
       if (token.position === 'home') {
         const homePos = INITIAL_POSITIONS[color][tokenIndex]; 
@@ -823,12 +1057,12 @@ const PlayToEarnScreen: React.FC = () => {
 
     return (
       <ScrollView
-        style={{flex: 1, backgroundColor: isDark ? '#121212' : '#F5F5F5'}}
+        style={{flex: 1, backgroundColor: isDarkMode ? '#121212' : '#F5F5F5'}}
         contentContainerStyle={styles.gameContentContainer}
       >
         <View style={styles.gameHeader}>
           <View style={[styles.gameInfoBanner, {
-            backgroundColor: isDark ? colors.cardBackground : '#FFFFFF',
+            backgroundColor: isDarkMode ? colors.card : '#FFFFFF',
           }]}>
             <Text style={[styles.gameHeaderTitle, {color: colors.text.primary}]}>
               {selectedChallenge?.name}{' '}
@@ -857,8 +1091,8 @@ const PlayToEarnScreen: React.FC = () => {
         <View style={styles.gameAreaContainer}>
           {/* Game board */}
           <View style={[styles.gameBoard, {
-            backgroundColor: isDark ? '#1E1E1E' : '#FFFFFF',
-            borderColor: isDark ? '#333333' : '#E0E0E0'
+            backgroundColor: isDarkMode ? '#1E1E1E' : '#FFFFFF',
+            borderColor: isDarkMode ? '#333333' : '#E0E0E0'
           }]}>
             {/* Home areas */}
             {Object.keys(homeAreaStyles).map(color => (
@@ -866,7 +1100,7 @@ const PlayToEarnScreen: React.FC = () => {
                 key={`home-${color}`}
                 style={[
                   styles.homeArea,
-                  homeAreaStyles[color]
+                  homeAreaStyles[color as PlayerColor]
                 ]}
               />
             ))}
@@ -876,13 +1110,13 @@ const PlayToEarnScreen: React.FC = () => {
               {Array(15).fill(0).map((_, i) => (
                 <View key={`h-${i}`} style={[styles.gridLine, styles.horizontalLine, {
                   top: i * CELL_SIZE,
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+                  backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
                 }]} />
               ))}
               {Array(15).fill(0).map((_, i) => (
                 <View key={`v-${i}`} style={[styles.gridLine, styles.verticalLine, {
                   left: i * CELL_SIZE,
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+                  backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
                 }]} />
               ))}
             </View>
@@ -894,15 +1128,15 @@ const PlayToEarnScreen: React.FC = () => {
                 style={[styles.safeCell, {
                   left: cell.x * CELL_SIZE,
                   top: cell.y * CELL_SIZE,
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)'
+                  backgroundColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)'
                 }]}
               />
             ))}
             
             {/* Tokens */}
-            {Object.keys(tokens).map(color => 
-              tokens[color].map((token, index) => {
-                const pos = getTokenScreenPosition(color, index);
+            {Object.keys(tokens).map((color) => 
+              (tokens[color as PlayerColor] as Token[]).map((token: Token, index: number) => {
+                const pos = getTokenScreenPosition(color as PlayerColor, index);
                 const isMyTurn = currentPlayerId === userId;
                 const canMoveThisToken = gameStarted && isMyTurn && diceValue !== null && !isRolling; 
                 const isMovable = canMoveThisToken && token.position !== 'finished';
@@ -913,23 +1147,23 @@ const PlayToEarnScreen: React.FC = () => {
                     style={[
                       styles.token,
                       {
-                        backgroundColor: PLAYER_COLORS[color],
+                        backgroundColor: (PLAYER_COLORS as Record<string, string>)[color],
                         left: pos.left, 
                         top: pos.top,
                         width: TOKEN_SIZE,
                         height: TOKEN_SIZE,
                         borderRadius: TOKEN_SIZE / 2,
-                        borderColor: isMovable ? '#FFFFFF' : PLAYER_COLORS[color],
+                        borderColor: isMovable ? '#FFFFFF' : (PLAYER_COLORS as Record<string, string>)[color],
                         borderWidth: isMovable ? 2 : 0,
                         opacity: token.position === 'finished' ? 0.7 : 1,
                         elevation: isMovable ? 8 : 4,
-                        shadowColor: PLAYER_COLORS[color],
+                        shadowColor: (PLAYER_COLORS as Record<string, string>)[color],
                         shadowOffset: { width: 0, height: 2 },
                         shadowOpacity: isMovable ? 0.5 : 0.3,
                         shadowRadius: isMovable ? 4 : 2
                       }
                     ]}
-                    onPress={() => isMovable && handleTokenClick(color, index)}
+                    onPress={() => isMovable && handleTokenClick(color as PlayerColor, index)}
                     disabled={!isMovable}
                   >
                     {isMovable && (
@@ -945,7 +1179,7 @@ const PlayToEarnScreen: React.FC = () => {
           
           {/* Game controls */}
           <View style={[styles.gameControls, {
-            backgroundColor: isDark ? colors.cardBackground : '#FFFFFF'
+            backgroundColor: isDarkMode ? colors.card : '#FFFFFF'
           }]}>
             <Text style={[styles.gameControlsTitle, {color: colors.text.primary}]}>
               Game Controls
@@ -962,8 +1196,8 @@ const PlayToEarnScreen: React.FC = () => {
                     styles.diceButton, 
                     {
                       backgroundColor: isRolling || (diceValue !== null) ? 
-                        (isDark ? '#333333' : '#EEEEEE') : 
-                        (isDark ? '#BB86FC' : '#9C27B0')
+                        (isDarkMode ? '#333333' : '#EEEEEE') : 
+                        (isDarkMode ? '#BB86FC' : '#9C27B0')
                     }
                   ]}
                   onPress={rollDice}
@@ -981,14 +1215,14 @@ const PlayToEarnScreen: React.FC = () => {
                       name={diceValue ? `dice-${diceValue}` : 'dice-multiple'} 
                       size={32} 
                       color={isRolling || (diceValue !== null) ? 
-                        (isDark ? '#BB86FC' : '#9C27B0') : 
+                        (isDarkMode ? '#BB86FC' : '#9C27B0') : 
                         '#FFFFFF'
                       } 
                     />
                   </Animated.View>
                   <Text style={[styles.diceButtonText, {
                     color: isRolling || (diceValue !== null) ? 
-                      (isDark ? '#BB86FC' : '#9C27B0') : 
+                      (isDarkMode ? '#BB86FC' : '#9C27B0') : 
                       '#FFFFFF'
                   }]}>
                     {isRolling ? "Rolling..." : (diceValue ? `Dice: ${diceValue}` : "Roll Dice")}
@@ -1000,7 +1234,7 @@ const PlayToEarnScreen: React.FC = () => {
                 <Icon 
                   name={winnerId ? "trophy" : "clock-outline"} 
                   size={24} 
-                  color={winnerId ? "#FFC107" : (isDark ? '#BB86FC' : '#9C27B0')}
+                  color={winnerId ? "#FFC107" : (isDarkMode ? '#BB86FC' : '#9C27B0')}
                 />
                 <Text style={[styles.waitingText, {color: colors.text.secondary}]}>
                   {winnerId ? 
@@ -1027,24 +1261,24 @@ const PlayToEarnScreen: React.FC = () => {
           </Text>
           
           <View style={styles.playerStatsContainer}>
-            {Object.keys(PLAYER_COLORS).map(color => {
-              const playerTokens = tokens[color];
-              const homeCount = playerTokens.filter(t => t.position === 'home').length;
-              const boardCount = playerTokens.filter(t => t.position === 'path').length;
-              const finishedCount = playerTokens.filter(t => t.position === 'finished').length;
-              const playerInGame = playersInGame.find(p => p.color === color);
+            {Object.keys(PLAYER_COLORS).map((color) => {
+              const playerTokens = tokens[color as PlayerColor];
+              const homeCount = playerTokens.filter((t: Token) => t.position === 'home').length;
+              const boardCount = playerTokens.filter((t: Token) => t.position === 'path').length;
+              const finishedCount = playerTokens.filter((t: Token) => t.position === 'finished').length;
+              const playerInGame = playersInGame.find((p: Player) => p.color === color);
               
               return (
                 <View 
                   key={`stats-${color}`}
                   style={[styles.playerStatsCard, {
-                    backgroundColor: isDark ? colors.cardBackground : '#FFFFFF',
-                    borderColor: PLAYER_COLORS[color],
+                    backgroundColor: isDarkMode ? colors.card : '#FFFFFF',
+                    borderColor: (PLAYER_COLORS as Record<string, string>)[color],
                     opacity: playerInGame ? 1 : 0.7
                   }]}
                 >
                   <View style={styles.playerStatsHeader}>
-                    <View style={[styles.playerColorDot, {backgroundColor: PLAYER_COLORS[color]}]} />
+                    <View style={[styles.playerColorDot, {backgroundColor: (PLAYER_COLORS as Record<string, string>)[color]}]} />
                     <Text style={[styles.playerColorName, {color: colors.text.primary}]}>
                       {color.charAt(0).toUpperCase() + color.slice(1)}
                       {playerInGame && playerInGame.id === userId && " (You)"}
@@ -1072,7 +1306,7 @@ const PlayToEarnScreen: React.FC = () => {
           
           {/* Game Statistics */}
           <View style={[styles.gameStatsCard, {
-            backgroundColor: isDark ? colors.cardBackground : '#FFFFFF',
+            backgroundColor: isDarkMode ? colors.card : '#FFFFFF',
             marginBottom: 20
           }]}>
             <View style={styles.gameStatsHeader}>
@@ -1124,13 +1358,13 @@ const PlayToEarnScreen: React.FC = () => {
               </Text>
               
               <View style={styles.movesByPlayerGrid}>
-                {Object.keys(PLAYER_COLORS).map(color => (
+                {Object.keys(PLAYER_COLORS).map((color) => (
                   <View key={`moves-${color}`} style={styles.playerMoveItem}>
-                    <View style={[styles.playerMoveDot, {backgroundColor: PLAYER_COLORS[color]}]} />
+                    <View style={[styles.playerMoveDot, {backgroundColor: (PLAYER_COLORS as Record<string, string>)[color]}]} />
                     <Text style={[styles.playerMoveName, {color: colors.text.secondary}]}>{color}</Text>
                     <Text style={[styles.playerMoveCount, {color: colors.text.primary}]}
                     >
-                      {gameStats.movesByPlayer[color]}
+                      {gameStats.movesByPlayer[color as PlayerColor]}
                     </Text>
                   </View>
                 ))}
@@ -1143,17 +1377,16 @@ const PlayToEarnScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, {backgroundColor: isDark ? '#0A0A0A' : '#FFFFFF'}]}>
+    <SafeAreaView style={[styles.container, {backgroundColor: isDarkMode ? '#0A0A0A' : '#FFFFFF'}]}>
       <Header 
         title={gameMode === 'challenges' ? "Ludo Cash" : (
           gameMode === 'lobby' ? `${selectedChallenge?.name} - Waiting` : `Playing Ludo`
         )}
-        showBackButton={gameMode !== 'challenges'}
-        onBackPress={gameMode === 'challenges' ? undefined : handleQuitGame}
+        leftComponent={renderHeaderLeft()}
       />
       <View style={styles.mainContainer}>
         {gameMode === 'challenges' && renderChallengesScreen()}
-        {gameMode === 'lobby' && renderLobbyScreen()}
+        {gameMode === 'lobby' && renderWaitingRoom()}
         {gameMode === 'game' && renderGameScreen()}
       </View>
     </SafeAreaView>
@@ -1805,6 +2038,124 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
+
+  ludoHeaderBackButton: {
+    padding: 8,
+    marginRight: 8,
+  },
+  ludoHeaderTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
+  waitingContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  waitingCard: {
+    width: '100%',
+    maxWidth: 400,
+    padding: 30,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+  },
+  waitingTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  roomInfo: {
+    fontSize: 16,
+    marginBottom: 5,
+    textAlign: 'center',
+  },
+  challengeInfo: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 30,
+    textAlign: 'center',
+  },
+  playersContainer: {
+    width: '100%',
+    marginBottom: 30,
+  },
+  playersTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  playersList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  playerSlot: {
+    width: '48%',
+    alignItems: 'center',
+    padding: 15,
+    marginBottom: 15,
+    borderRadius: 12,
+    borderWidth: 1,
+    position: 'relative',
+  },
+  playerAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  playerName: {
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  statusIndicator: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  waitingInfo: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  waitingSubtext: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 5,
+  },
+  refreshButtonText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '500',
+  },
 });
 
-export default PlayToEarnScreen;
+export default LudoGameScreen;

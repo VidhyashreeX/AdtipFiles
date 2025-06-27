@@ -1,6 +1,7 @@
 // src/components/common/Header.tsx
 import React, {useState, useRef, useMemo, useCallback} from 'react';
-import {View, Text, StyleSheet, TouchableOpacity, Image, useWindowDimensions, Platform, TextInput, Keyboard} from 'react-native';
+import {View, Text, StyleSheet, Image, useWindowDimensions, Platform, TextInput, Keyboard} from 'react-native';
+import { TouchableOpacity } from 'react-native-gesture-handler';
 import Icon from 'react-native-vector-icons/Feather';
 import {useNavigation, useRoute} from '@react-navigation/native';
 import {useTheme} from '../../contexts/ThemeContext';

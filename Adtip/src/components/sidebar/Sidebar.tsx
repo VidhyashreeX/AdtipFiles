@@ -4,7 +4,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   useWindowDimensions,
   Platform,
   ScrollView,
@@ -28,6 +27,7 @@ import {
   Gesture,
   GestureDetector,
   GestureHandlerRootView,
+  TouchableOpacity, // ADD TouchableOpacity import here
 } from 'react-native-gesture-handler';
 import {useTheme} from '../../contexts/ThemeContext';
 import {useSidebar} from '../../contexts/SidebarContext';
@@ -271,6 +271,9 @@ const Sidebar: React.FC = () => {
             screen: screenName as any,
             params: { userId: undefined } // Current user profile
           });
+        } else if (screenName === 'TabHome') {
+          // Navigate to Main which contains TabHome
+          NavigationService.navigate('Main', { screen: 'TabHome' as any });
         } else {
           NavigationService.navigate('Main', { screen: screenName as any });
         }

@@ -1,5 +1,6 @@
 // src/types/navigation.ts
 import {NavigationProp, NavigatorScreenParams} from '@react-navigation/native';
+import { Contact } from '../types/api';
 
 // Define the Comment interface (as you already have it)
 interface Comment {
@@ -37,6 +38,7 @@ export type MainNavigatorParamList = {
   TipTube: undefined;
   TipCall: { initialCallNotificationData?: CallNotificationData }; // TipCall now takes params
   TipShop: undefined;
+  Chat: { user: Contact }; // Add this line
   Profile: {userId?: number};
   PostDetail: {postId: number};
   Video: {postId: number};

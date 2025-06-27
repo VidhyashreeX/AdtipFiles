@@ -780,3 +780,15 @@ export interface GeneratePresignedUrlResponse {
     fileName: string;
   }>;
 }
+export interface ChatMessage {
+  id: number;
+  sender: number;
+  receiver: number;
+  message: string;
+  createddate: string;
+  is_seen: boolean;
+}
+
+export interface ChatConversation {
+  messages: ChatMessage[];
+}

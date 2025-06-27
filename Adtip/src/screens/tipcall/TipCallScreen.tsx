@@ -43,25 +43,11 @@ import uuid from 'react-native-uuid';
 import CallService from '../../services/CallService';
 import WhatsAppCallManager from '../../services/calling/WhatsAppCallManager'; // NEW: WhatsApp-like calling
 import RectangleAdComponent from '../../googleads/RectangleAdComponent';
+import { RootStackParamList, MainNavigatorParamList } from '../../types/navigation';
 
 // Define navigation stack param list
-type RootStackParamList = {
-  TipCall: { initialCallNotificationData?: any } | undefined;
-  Login: undefined;
-  Profile: { userId: number };
-  Meeting: {
-    meetingId: string;
-    token: string;
-    callType: 'voice' | 'video';
-    displayName: string;
-    isInitiator?: boolean;
-    recipientName?: string;
-  };
-  Notifications: undefined;
-};
-
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'TipCall'>;
-type TipCallScreenRouteProp = RouteProp<RootStackParamList, 'TipCall'>;
+type NavigationProp = NativeStackNavigationProp<MainNavigatorParamList, 'TipCall'>;
+type TipCallScreenRouteProp = RouteProp<MainNavigatorParamList, 'TipCall'>;
 
 // Enhanced interfaces
 interface Language {
@@ -147,9 +133,10 @@ const ContactCard: React.FC<{
   contact: Contact;
   onVideoCall: () => void;
   onVoiceCall: () => void;
+  onChat: () => void; // Add this line
   colors: any;
   isDarkMode: boolean;
-}> = ({ contact, onVideoCall, onVoiceCall, colors, isDarkMode }) => {
+}> = ({ contact, onVideoCall, onVoiceCall, onChat, colors, isDarkMode }) => {
   const isAvailable = contact.is_available && !contact.dnd && contact.online_status;
   const avatarColor = isAvailable ? colors.success : colors.gray?.[400] || '#9CA3AF';
   
@@ -240,6 +227,15 @@ const ContactCard: React.FC<{
               activeOpacity={0.8}
             >
               <Icon name="phone" size={16} color="#FFFFFF" />
+            </TouchableOpacity>
+            
+            {/* Add this chat button */}
+            <TouchableOpacity
+              style={[styles.actionButton, styles.chatButton, { backgroundColor: colors.info || '#3B82F6' }]}
+              onPress={onChat}
+              activeOpacity={0.8}
+            >
+              <Icon name="message-circle" size={16} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         )}
@@ -519,6 +515,7 @@ export default function TipCallScreen() {
         contact={item}
         onVideoCall={() => handleStartCall(item, 'video')}
         onVoiceCall={() => handleStartCall(item, 'voice')}
+        onChat={() => navigation.navigate('Chat', { user: item })} // Add this line
         colors={colors}
         isDarkMode={isDarkMode}
       />
@@ -578,7 +575,7 @@ export default function TipCallScreen() {
 
   const contactsWithAds = getContactsWithAds(filteredContacts);
 
-  const renderItem = ({ item }: { item: Contact | { ad: true; key: string } }) => {
+  const renderItem = ({ item }: { item: Contact | { ad: true, key: string } }) => {
     if ('ad' in item) {
       return <RectangleAdComponent key={item.key} />;
     }
@@ -1081,5 +1078,11 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+
+  // Add to the styles object at the bottom (around line 800-900)
+  chatButton: {
+    // Add this new style
+    backgroundColor: '#3B82F6',
   },
 });
