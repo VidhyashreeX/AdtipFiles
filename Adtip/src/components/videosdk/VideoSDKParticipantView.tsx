@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,8 @@ import {
   ViewStyle,
   Dimensions,
 } from 'react-native';
-import { RTCView, MediaStream } from '@videosdk.live/react-native-sdk';
+import { RTCView } from '@videosdk.live/react-native-sdk';
+
 import { useParticipant } from '@videosdk.live/react-native-sdk';
 import { Mic, MicOff, Video, VideoOff } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -57,12 +58,15 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
 
   const renderVideoView = () => {
     if (videoStream && webcamOn) {
+      // Extract the streamID which should be a string
+      const streamID = videoStream.id;
+      
       return (
         <RTCView
-          streamURL={videoStream}
+          streamURL={streamID}
           objectFit="cover"
           style={styles.videoStream}
-          mirror={isLocal} // Mirror local video
+          mirror={isLocal}
         />
       );
     }
