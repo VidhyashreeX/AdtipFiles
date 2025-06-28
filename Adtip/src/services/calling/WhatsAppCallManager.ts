@@ -548,17 +548,17 @@ class WhatsAppCallManager {
       targetCall.status = 'declined';
       targetCall.endTime = Date.now();
 
-      // Send decline notification to caller
+      // CRITICAL FIX: Send decline notification to caller with CALL_ENDED status
       await this.sendCallStatusUpdate(targetCall, 'declined');
 
-      // Clear call state
+      // Clear call state completely
       await this.clearCallState();
 
       // Emit call state change
       appEventEmitter.emit('callStateChanged', targetCall);
       appEventEmitter.emit('callEnded', targetCall);
 
-      console.log('[WhatsAppCallManager] Call declined:', targetCall.callId);
+      console.log('[WhatsAppCallManager] Call declined successfully:', targetCall.callId);
 
     } catch (error) {
       console.error('[WhatsAppCallManager] Failed to decline call:', error);
@@ -581,42 +581,39 @@ class WhatsAppCallManager {
 
       console.log('[WhatsAppCallManager] Ending call:', targetCall.callId);
 
-      // Update call status
-      targetCall.status = 'ended';
-      targetCall.endTime = Date.now();
-      targetCall.duration = targetCall.endTime - (targetCall.startTime || 0);
+      // Stop any ongoing vibration
+      Vibration.cancel();
 
-      // BULLETPROOF: Cleanup media first
-      await this.mediaManager.cleanup('call_ended_by_user');
-
-      // Hide all call notifications
+      // Hide any active call notifications
       await this.hideIncomingCallNotification();
       await this.hideOngoingCallNotification();
 
       // Show call ended notification
       await this.showCallEndedNotification(targetCall);
 
-      // Send end call notification to other participant
+      // CRITICAL FIX: Send end call notification to other participant with CALL_ENDED status
       await this.sendCallStatusUpdate(targetCall, 'ended');
 
-      // Clear call state
+      // Clear call state completely
       await this.clearCallState();
 
       // Vibrate briefly to indicate call end
       Vibration.vibrate(this.CALL_END_VIBRATION);
 
       // Emit call state change
-      appEventEmitter.emit('callStateChanged', targetCall);
-      appEventEmitter.emit('callEnded', targetCall);
+      appEventEmitter.emit('callStateChanged', { ...targetCall, status: 'ended' });
+      appEventEmitter.emit('callEnded', { ...targetCall, status: 'ended' });
 
       // Stop Notifee foreground service if running
       try {
         await notifee.stopForegroundService();
-      } catch (e) {
-        console.warn('[WhatsAppCallManager] No foreground service to stop or error stopping:', e);
+        console.log('[WhatsAppCallManager] Notifee foreground service stopped');
+      } catch (serviceError) {
+        console.warn('[WhatsAppCallManager] Could not stop foreground service:', serviceError);
       }
 
-      console.log('[WhatsAppCallManager] Call ended:', targetCall.callId);
+      this.currentCall = null;
+      console.log('[WhatsAppCallManager] Call ended successfully');
 
     } catch (error) {
       console.error('[WhatsAppCallManager] Failed to end call:', error);
@@ -874,15 +871,27 @@ class WhatsAppCallManager {
   }
 
   /**
-   * Hide incoming call notification
+   * Hide incoming call notification and remove all related UI
    */
   private async hideIncomingCallNotification(): Promise<void> {
     try {
+      // Cancel the specific incoming call notification
       if (this.incomingCallNotificationId) {
         await notifee.cancelNotification(this.incomingCallNotificationId);
         this.incomingCallNotificationId = null;
         console.log('[WhatsAppCallManager] Incoming call notification hidden');
       }
+
+      // Also cancel any fallback notifications that might exist
+      if (this.currentCall) {
+        const fallbackId = `fallback_incoming_${this.currentCall.callId}`;
+        await notifee.cancelNotification(fallbackId);
+      }
+
+      // Stop vibration if still ongoing
+      Vibration.cancel();
+
+      console.log('[WhatsAppCallManager] ✅ Incoming call UI completely removed');
     } catch (error) {
       console.error('[WhatsAppCallManager] Failed to hide incoming call notification:', error);
     }
@@ -1046,7 +1055,7 @@ class WhatsAppCallManager {
   }
 
   /**
-   * Send call status update
+   * Send call status update to API with proper status mapping
    */
   private async sendCallStatusUpdate(callData: CallData, status: 'accepted' | 'declined' | 'ended'): Promise<void> {
     try {
@@ -1054,33 +1063,43 @@ class WhatsAppCallManager {
       const callerUserId = await this.getCurrentUserId();
       const tokenDetails = await ApiService.getBothUsersFCMTokens(callerUserId, callData.recipientId);
       
-      // Map status to new API format
+      // CRITICAL FIX: Map status to correct API format - both decline and end should send CALL_ENDED
       let apiStatus: 'CALL_ENDED' | 'CALL_MISSED' | 'CALL_ACCEPTED';
       switch (status) {
         case 'accepted':
           apiStatus = 'CALL_ACCEPTED';
           break;
         case 'declined':
-          apiStatus = 'CALL_MISSED';
+          // FIXED: Declined calls should send CALL_ENDED status to properly terminate the call
+          apiStatus = 'CALL_ENDED';
           break;
         case 'ended':
         default:
+          // Ended calls should send CALL_ENDED status
           apiStatus = 'CALL_ENDED';
           break;
       }
 
-      await ApiService.updateCallStatus({
+      const payload = {
         callerInfo: {
           token: tokenDetails.callerToken || '',
           name: callData.callerName,
           platform: tokenDetails.callerPlatform,
         },
         type: apiStatus,
+      };
+
+      console.log('[WhatsAppCallManager] Sending call status update:', { 
+        status, 
+        apiStatus, 
+        payload: { ...payload, callerInfo: { ...payload.callerInfo, token: '[REDACTED]' } }
       });
 
-      console.log('[WhatsAppCallManager] Call status update sent:', status);
+      await ApiService.updateCallStatus(payload);
+
+      console.log('[WhatsAppCallManager] ✅ Call status update sent successfully:', status, '-> API:', apiStatus);
     } catch (error) {
-      console.error('[WhatsAppCallManager] Failed to send call status update:', error);
+      console.error('[WhatsAppCallManager] ❌ Failed to send call status update:', error);
     }
   }
 
@@ -1152,13 +1171,24 @@ class WhatsAppCallManager {
   }
 
   /**
-   * Clear call state
+   * Clear call state completely and cleanup all resources
    */
   private async clearCallState(): Promise<void> {
     try {
+      // Clear current call
       this.currentCall = null;
+      
+      // Clear notification IDs
+      this.incomingCallNotificationId = null;
+      this.ongoingCallNotificationId = null;
+      
+      // Remove from persistent storage
       await AsyncStorage.removeItem(this.callStateKey);
-      console.log('[WhatsAppCallManager] Call state cleared');
+      
+      // Cancel any remaining vibrations
+      Vibration.cancel();
+      
+      console.log('[WhatsAppCallManager] ✅ Call state completely cleared');
     } catch (error) {
       console.error('[WhatsAppCallManager] Failed to clear call state:', error);
     }

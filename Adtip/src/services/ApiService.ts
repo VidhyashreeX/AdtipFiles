@@ -942,7 +942,7 @@ export default class ApiService {
     console.log('[API] Sending like request:', JSON.stringify(data, null, 2));
     try {
       const response = await this.post<LikePostResponse>(
-        '/api/save-user-post-like',
+        ApiEndpoints.HOME_ENDPOINTS.SAVE_USER_POST_LIKE,
         data,
         config,
       );

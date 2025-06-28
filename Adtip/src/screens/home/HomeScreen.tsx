@@ -39,7 +39,7 @@ import PostItem from '../../components/home/PostItem';
 import StoryItem from '../../components/home/StoryItem';
 import CategoryItem from '../../components/home/CategoryItem';
 import EarnCard from '../../components/home/EarnCard';
-import CommentScreen from './CommentScreen';
+
 import ScreenTransition from '../../components/common/ScreenTransition';
 import UserProfileScreen from '../profile/UserProfileScreen';
 
@@ -387,8 +387,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
   // Optimistic mutations for instant UI feedback (now using the new hooks)
   const handleLikePost = useCallback((postId: number, isLiked: boolean) => {
-    likeMutation.mutate({ postId: postId.toString(), isLiked });
-  }, [likeMutation]);
+    if (!user?.id) {
+      console.warn('Cannot like post: User not logged in');
+      return;
+    }
+    likeMutation.mutate({ postId, userId: user.id, isLiked });
+  }, [likeMutation, user?.id]);
 
   const handleFollowUser = useCallback((userId: number, isFollowing: boolean) => {
     followMutation.mutate({ userId, isFollowing });
@@ -682,21 +686,17 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           showsVerticalScrollIndicator={false}
         />
 
-        {/* Comment Modal */}
-        <Modal
-          visible={commentModalVisible}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => setCommentModalVisible(false)}
-        >
-          {selectedCommentPostId && (
-            <CommentScreen
-              postId={selectedCommentPostId}
-              visible={commentModalVisible}
-              onClose={() => setCommentModalVisible(false)}
-            />
-          )}
-        </Modal>
+        {/* Comments Bottom Sheet */}
+        {selectedCommentPostId && (
+          <CommentsBottomSheet
+            visible={commentModalVisible}
+            postId={selectedCommentPostId}
+            onClose={() => setCommentModalVisible(false)}
+            initialCommentCount={
+              displayPosts.find(post => post.id === selectedCommentPostId)?.commentCount || 0
+            }
+          />
+        )}
 
         {/* User Profile Modal */}
         <Modal

@@ -17,6 +17,7 @@ export const HOME_ENDPOINTS = {
   CHECK_PREMIUM: '/api/check-premium',
   GET_AD_PASSBOOK: '/getadpassbook',
   GET_CHANNEL_BY_USER_ID: '/api/getchannelbyuserid',
+  SAVE_USER_POST_LIKE: '/api/save-user-post-like',
 };
 
 // TipTube endpoints

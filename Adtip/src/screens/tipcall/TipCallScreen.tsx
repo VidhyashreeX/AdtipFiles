@@ -347,7 +347,7 @@ export default function TipCallScreen() {
   } = useUsers(filters, user?.id);
 
   // Prefetch data for better performance
-  const { prefetchProfile } = usePrefetchData();
+  // const { prefetchProfile } = usePrefetchData(); // Removed to avoid unnecessary API calls
 
   // Transform users data for compatibility
   const contacts = useMemo(() => {
@@ -555,11 +555,12 @@ export default function TipCallScreen() {
   }, [user]);
 
   // Prefetch profile data only for the current user (not for all contacts)
-  useEffect(() => {
-    if (user?.id) {
-      prefetchProfile(user.id);
-    }
-  }, [user?.id, prefetchProfile]);
+  // Commented out to avoid unnecessary API calls in TipCallScreen
+  // useEffect(() => {
+  //   if (user?.id) {
+  //     prefetchProfile(user.id);
+  //   }
+  // }, [user?.id, prefetchProfile]);
 
   // Fetch unread counts when contacts are loaded or screen is focused
   useFocusEffect(

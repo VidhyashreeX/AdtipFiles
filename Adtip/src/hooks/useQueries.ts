@@ -333,10 +333,11 @@ export const useLikeMutation = () => {
   const queryClientInstance = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ postId, isLiked }: { postId: string; isLiked: boolean }) => {
-      return ApiService.post('/api/like-post', {
-        post_id: postId,
-        action: isLiked ? 'unlike' : 'like'
+    mutationFn: async ({ postId, userId, isLiked }: { postId: number; userId: number; isLiked: boolean }) => {
+      return ApiService.likePost({
+        userId: userId,
+        postId: postId,
+        is_liked: !isLiked // Toggle the like state
       });
     },
     onMutate: async ({ postId, isLiked }) => {
@@ -355,8 +356,12 @@ export const useLikeMutation = () => {
           pages: old.pages?.map((page: any) => ({
             ...page,
             data: page.data?.map((post: any) => 
-              post.id.toString() === postId 
-                ? { ...post, likes: post.likes + (isLiked ? -1 : 1), isLiked: !isLiked }
+              post.id === postId 
+                ? { 
+                    ...post, 
+                    likeCount: post.likeCount + (isLiked ? -1 : 1), 
+                    is_liked: !isLiked 
+                  }
                 : post
             )
           }))
