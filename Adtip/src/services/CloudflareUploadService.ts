@@ -2,6 +2,9 @@
 // Cloudflare R2 Upload Service using AWS S3 SDK v3
 // Following Cloudflare R2 best practices: https://developers.cloudflare.com/r2/examples/aws/aws-sdk-js-v3/
 
+import 'react-native-url-polyfill/auto';
+import 'react-native-get-random-values';
+
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListBucketsCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import RNFS from 'react-native-fs';
@@ -87,7 +90,7 @@ class CloudflareUploadService {
 
         // Check file format
         const extension = filePath.split('.').pop()?.toLowerCase();
-        if (!extension || !allowedFormats.includes(extension)) {
+        if (!extension || !(allowedFormats as readonly string[]).includes(extension)) {
           reject(new Error(`Unsupported file format. Allowed: ${allowedFormats.join(', ')}`));
           return;
         }
@@ -106,9 +109,9 @@ class CloudflareUploadService {
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 8);
     const extension = originalName.split('.').pop()?.toLowerCase();
-    const userPrefix = userId ? `user_${userId}` : 'anonymous';
     
-    return `${folder}/${userPrefix}/${timestamp}_${random}.${extension}`;
+    // Simple flat structure - no user folders
+    return `${folder}/${timestamp}_${random}.${extension}`;
   }
 
   /**
@@ -132,9 +135,9 @@ class CloudflareUploadService {
   }
 
   /**
-   * Read file as buffer for upload
+   * Read file as Uint8Array for upload (React Native compatible)
    */
-  private async readFileAsBuffer(filePath: string): Promise<Buffer> {
+  private async readFileAsUint8Array(filePath: string): Promise<Uint8Array> {
     try {
       // For React Native, we need to handle file URIs properly
       let normalizedPath = filePath;
@@ -143,9 +146,41 @@ class CloudflareUploadService {
         normalizedPath = `file://${filePath}`;
       }
 
-      // Read file as base64 first, then convert to buffer
+      // Read file as base64 first, then convert to Uint8Array
       const base64Data = await RNFS.readFile(normalizedPath, 'base64');
-      return Buffer.from(base64Data, 'base64');
+      
+      // Convert base64 to Uint8Array (React Native compatible)
+      // Use global atob if available, otherwise use a polyfill
+      let binaryString: string;
+      if (typeof atob !== 'undefined') {
+        binaryString = atob(base64Data);
+      } else {
+        // Simple base64 decode polyfill for React Native
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+        let str = base64Data.replace(/[^A-Za-z0-9+/]/g, '');
+        let output = '';
+        
+        for (let i = 0; i < str.length; i += 4) {
+          const encoded1 = chars.indexOf(str.charAt(i));
+          const encoded2 = chars.indexOf(str.charAt(i + 1));
+          const encoded3 = chars.indexOf(str.charAt(i + 2));
+          const encoded4 = chars.indexOf(str.charAt(i + 3));
+          
+          const bitmap = (encoded1 << 18) | (encoded2 << 12) | (encoded3 << 6) | encoded4;
+          
+          output += String.fromCharCode((bitmap >> 16) & 255);
+          if (encoded3 !== 64) output += String.fromCharCode((bitmap >> 8) & 255);
+          if (encoded4 !== 64) output += String.fromCharCode(bitmap & 255);
+        }
+        binaryString = output;
+      }
+      
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      return bytes;
     } catch (error) {
       console.error('[CloudflareUpload] Error reading file:', error);
       throw new Error('Failed to read file for upload');
@@ -165,10 +200,25 @@ class CloudflareUploadService {
     try {
       console.log('[CloudflareUpload] Starting upload:', filePath);
 
-      // Determine file type and validation rules
-      const isVideo = folder.includes('video') || folder.includes('short') || folder.includes('tiptube');
-      const maxSize = isVideo ? FILE_SIZE_LIMITS.VIDEO_MAX : FILE_SIZE_LIMITS.THUMBNAIL_MAX;
-      const allowedFormats = isVideo ? SUPPORTED_FORMATS.VIDEO : SUPPORTED_FORMATS.IMAGE;
+      // Determine file type and validation rules based on file extension
+      const fileExtension = filePath.split('.').pop()?.toLowerCase() || '';
+      const isVideo = (SUPPORTED_FORMATS.VIDEO as readonly string[]).includes(fileExtension);
+      const isImage = (SUPPORTED_FORMATS.IMAGE as readonly string[]).includes(fileExtension);
+      
+      let maxSize: number;
+      let allowedFormats: readonly string[];
+      
+      if (isVideo) {
+        maxSize = folder.includes('short') ? FILE_SIZE_LIMITS.SHORT_MAX : FILE_SIZE_LIMITS.VIDEO_MAX;
+        allowedFormats = SUPPORTED_FORMATS.VIDEO;
+      } else if (isImage) {
+        maxSize = FILE_SIZE_LIMITS.THUMBNAIL_MAX;
+        allowedFormats = SUPPORTED_FORMATS.IMAGE;
+      } else {
+        // Default to video validation if we can't determine
+        maxSize = FILE_SIZE_LIMITS.VIDEO_MAX;
+        allowedFormats = [...SUPPORTED_FORMATS.VIDEO, ...SUPPORTED_FORMATS.IMAGE];
+      }
 
       // Validate file
       await this.validateFile(filePath, maxSize, allowedFormats);
@@ -183,8 +233,8 @@ class CloudflareUploadService {
       // Get content type
       const contentType = this.getContentType(filePath);
 
-      // Read file as buffer
-      const fileBuffer = await this.readFileAsBuffer(filePath);
+      // Read file as Uint8Array
+      const fileData = await this.readFileAsUint8Array(filePath);
 
       // Simulate progress if callback provided
       if (onProgress) {
@@ -195,7 +245,7 @@ class CloudflareUploadService {
       const command = new PutObjectCommand({
         Bucket: this.bucketName,
         Key: key,
-        Body: fileBuffer,
+        Body: fileData,
         ContentType: contentType,
         Metadata: {
           originalName: originalName,
@@ -256,15 +306,20 @@ class CloudflareUploadService {
     let thumbnailResult: UploadResult | undefined;
 
     try {
-      console.log('[CloudflareUpload] Starting TipShorts batch upload');
+      console.log('[CloudflareUpload] Starting TipShorts batch upload', {
+        videoPath,
+        thumbnailPath,
+        userId
+      });
 
-      // Upload video
+      // Upload video directly to /videos folder
       if (onProgress) onProgress({ loaded: 0, total: 100, percentage: 0 });
       
+      console.log('[CloudflareUpload] Uploading TipShorts video to /videos...');
       videoResult = await this.uploadFile(
         videoPath,
-        `${UPLOAD_FOLDERS.SHORTS}/${UPLOAD_FOLDERS.VIDEOS}`,
-        `short_${Date.now()}.mp4`,
+        'videos', // Direct to videos folder
+        `tipshort_${Date.now()}.mp4`,
         userId,
         (progress) => {
           if (onProgress) {
@@ -278,14 +333,18 @@ class CloudflareUploadService {
       );
 
       if (!videoResult.success) {
+        console.error('[CloudflareUpload] TipShorts video upload failed:', videoResult.error);
         errors.push(`Video upload failed: ${videoResult.error}`);
+      } else {
+        console.log('[CloudflareUpload] TipShorts video upload successful:', videoResult.url);
       }
 
-      // Upload thumbnail
+      // Upload thumbnail directly to /images folder
+      console.log('[CloudflareUpload] Uploading TipShorts thumbnail to /images...');
       thumbnailResult = await this.uploadFile(
         thumbnailPath,
-        `${UPLOAD_FOLDERS.SHORTS}/${UPLOAD_FOLDERS.THUMBNAILS}`,
-        `short_thumbnail_${Date.now()}.jpg`,
+        'images', // Direct to images folder
+        `tipshort_thumb_${Date.now()}.jpg`,
         userId,
         (progress) => {
           if (onProgress) {
@@ -299,7 +358,10 @@ class CloudflareUploadService {
       );
 
       if (!thumbnailResult.success) {
+        console.error('[CloudflareUpload] TipShorts thumbnail upload failed:', thumbnailResult.error);
         errors.push(`Thumbnail upload failed: ${thumbnailResult.error}`);
+      } else {
+        console.log('[CloudflareUpload] TipShorts thumbnail upload successful:', thumbnailResult.url);
       }
 
     } catch (error: any) {
@@ -328,15 +390,20 @@ class CloudflareUploadService {
     let thumbnailResult: UploadResult | undefined;
 
     try {
-      console.log('[CloudflareUpload] Starting TipTube batch upload');
+      console.log('[CloudflareUpload] Starting TipTube batch upload', {
+        videoPath,
+        thumbnailPath,
+        userId
+      });
 
-      // Upload video
+      // Upload video directly to /videos folder
       if (onProgress) onProgress({ loaded: 0, total: 100, percentage: 0 });
       
+      console.log('[CloudflareUpload] Uploading TipTube video to /videos...');
       videoResult = await this.uploadFile(
         videoPath,
-        `${UPLOAD_FOLDERS.TIPTUBE}/${UPLOAD_FOLDERS.VIDEOS}`,
-        `video_${Date.now()}.mp4`,
+        'videos', // Direct to videos folder
+        `tiptube_${Date.now()}.mp4`,
         userId,
         (progress) => {
           if (onProgress) {
@@ -350,14 +417,18 @@ class CloudflareUploadService {
       );
 
       if (!videoResult.success) {
+        console.error('[CloudflareUpload] TipTube video upload failed:', videoResult.error);
         errors.push(`Video upload failed: ${videoResult.error}`);
+      } else {
+        console.log('[CloudflareUpload] TipTube video upload successful:', videoResult.url);
       }
 
-      // Upload thumbnail
+      // Upload thumbnail directly to /images folder
+      console.log('[CloudflareUpload] Uploading TipTube thumbnail to /images...');
       thumbnailResult = await this.uploadFile(
         thumbnailPath,
-        `${UPLOAD_FOLDERS.TIPTUBE}/${UPLOAD_FOLDERS.THUMBNAILS}`,
-        `video_thumbnail_${Date.now()}.jpg`,
+        'images', // Direct to images folder
+        `tiptube_thumb_${Date.now()}.jpg`,
         userId,
         (progress) => {
           if (onProgress) {
@@ -371,7 +442,10 @@ class CloudflareUploadService {
       );
 
       if (!thumbnailResult.success) {
+        console.error('[CloudflareUpload] TipTube thumbnail upload failed:', thumbnailResult.error);
         errors.push(`Thumbnail upload failed: ${thumbnailResult.error}`);
+      } else {
+        console.log('[CloudflareUpload] TipTube thumbnail upload successful:', thumbnailResult.url);
       }
 
     } catch (error: any) {
