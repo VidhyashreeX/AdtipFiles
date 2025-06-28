@@ -45,16 +45,6 @@ import { getSecureMediaUrl, getFallbackAvatarUrl } from '../../utils/mediaUtils'
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PAGE_SIZE = 10;
 
-// Native components with fallback
-let ExoPlayerView: any = null;
-
-try {
-  const { requireNativeComponent } = require('react-native');
-  ExoPlayerView = requireNativeComponent('ExoPlayerView');
-} catch (error) {
-  console.warn('ExoPlayer not available, using react-native-video');
-}
-
 interface ShortVideo {
   id: string;
   title: string;
@@ -156,25 +146,7 @@ const OptimizedVideoPlayer = memo(({
     }
   }, [isActive, onProgress]);
 
-  // Use ExoPlayer if available for better performance
-  if (ExoPlayerView && !hasError) {
-    return (
-      <ExoPlayerView
-        source={source}
-        paused={!shouldPlay}
-        muted={isMuted}
-        repeat={true}
-        resizeMode="cover"
-        style={[StyleSheet.absoluteFill, style]}
-        onLoad={handleLoad}
-        onProgress={handleProgress}
-        onError={handleError}
-        onEnd={onEnd}
-      />
-    );
-  }
-
-  // Fallback to react-native-video with optimized config
+  // Default to react-native-video with optimized config
   return (
     <Video
       source={source}
