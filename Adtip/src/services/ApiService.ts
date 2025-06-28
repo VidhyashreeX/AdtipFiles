@@ -1744,4 +1744,98 @@ export default class ApiService {
   static async sendChatMessage(data: { userId: number; receiverId: number; message: string }) {
     return this.post('/api/sendmessage', data);
   }
+
+  // ===== TIP-TUBE UPLOAD SERVICES =====
+
+  /**
+   * Upload TipShorts video using the /uploadshot API endpoint
+   */
+  static async uploadTipShortsVideo(data: {
+    name: string;
+    categoryId: number;
+    channelId: number;
+    videoLink: string;
+    videoDesciption: string;
+    createdby: number;
+    play_duration: string;
+    video_Thumbnail: string;
+  }): Promise<{
+    status: number;
+    message: string;
+    data: Array<{
+      id: number;
+      name: string;
+      isShot: boolean;
+      categoryId: number;
+      channelId: number;
+      videoLink: string;
+      videoDesciption: string;
+      createdby: number;
+      play_duration: string;
+      video_Thumbnail: string;
+    }>;
+  }> {
+    try {
+      console.log('[ApiService] Uploading TipShorts video:', data);
+
+      const requestBody = {
+        ...data,
+        isShot: true, // TipShorts videos have isShot: true
+      };
+
+      const response = await this.post('/api/uploadshot', requestBody);
+      
+      console.log('[ApiService] TipShorts video uploaded successfully:', response);
+      return response;
+    } catch (error: any) {
+      console.error('[ApiService] TipShorts video upload failed:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Upload TipTube video using the /uploadshot API endpoint
+   */
+  static async uploadTipTubeVideo(data: {
+    name: string;
+    categoryId: number;
+    channelId: number;
+    videoLink: string;
+    videoDesciption: string;
+    createdby: number;
+    play_duration: string;
+    video_Thumbnail: string;
+  }): Promise<{
+    status: number;
+    message: string;
+    data: Array<{
+      id: number;
+      name: string;
+      isShot: boolean;
+      categoryId: number;
+      channelId: number;
+      videoLink: string;
+      videoDesciption: string;
+      createdby: number;
+      play_duration: string;
+      video_Thumbnail: string;
+    }>;
+  }> {
+    try {
+      console.log('[ApiService] Uploading TipTube video:', data);
+
+      const requestBody = {
+        ...data,
+        isShot: false, // TipTube videos have isShot: false
+      };
+
+      const response = await this.post('/api/uploadshot', requestBody);
+      
+      console.log('[ApiService] TipTube video uploaded successfully:', response);
+      return response;
+    } catch (error: any) {
+      console.error('[ApiService] TipTube video upload failed:', error);
+      throw this.handleError(error);
+    }
+  }
 }

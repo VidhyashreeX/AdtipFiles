@@ -560,9 +560,8 @@ const TipShortsUploadScreen: React.FC = () => {
         throw new Error('User not authenticated');
       }
 
-      const requestData: TipShotUploadRequest = {
+      const requestData = {
         name: title.trim(),
-        isShot: true, // IMPORTANT: Set to true for TipShorts
         categoryId: categoryId,
         channelId: channelId,
         videoLink: videoUrl,
@@ -572,12 +571,9 @@ const TipShortsUploadScreen: React.FC = () => {
         video_Thumbnail: thumbnailUrl,
       };
 
-      console.log('[TipShortsUpload] Creating TipShot:', requestData);
+      console.log('[TipShortsUpload] Creating TipShot with new API:', requestData);
 
-      const response = await ApiService.post<TipShotUploadResponse>(
-        '/api/addShot',
-        requestData
-      );
+      const response = await ApiService.uploadTipShortsVideo(requestData);
 
       console.log('[TipShortsUpload] TipShot created:', response);
 

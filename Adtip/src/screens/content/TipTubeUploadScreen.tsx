@@ -414,9 +414,8 @@ const TipTubeUploadScreen: React.FC = () => {
         throw new Error('User not authenticated');
       }
 
-      const requestData: TipTubeUploadRequest = {
+      const requestData = {
         name: title.trim(),
-        isShot: false,
         categoryId: categoryId,
         channelId: channelId,
         videoLink: videoUrl,
@@ -426,12 +425,9 @@ const TipTubeUploadScreen: React.FC = () => {
         video_Thumbnail: thumbnailUrl,
       };
 
-      console.log('[TipTubeUpload] Creating TipTube video:', requestData);
+      console.log('[TipTubeUpload] Creating TipTube video with new API:', requestData);
 
-      const response = await ApiService.post<TipTubeUploadResponse>(
-        '/api/addShot',
-        requestData
-      );
+      const response = await ApiService.uploadTipTubeVideo(requestData);
 
       console.log('[TipTubeUpload] TipTube video created:', response);
 
