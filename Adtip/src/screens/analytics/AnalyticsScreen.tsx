@@ -11,25 +11,32 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
+import { useRoute, RouteProp } from '@react-navigation/native';
+import ApiService from '../../services/ApiService';
 
 interface AnalyticsData {
-  totalViews: number;
-  totalEarnings: number;
-  totalVideos: number;
-  avgViewTime: string;
-  topVideo: {
-    title: string;
-    views: number;
-  };
-  recentStats: {
-    date: string;
-    views: number;
-    earnings: number;
-  }[];
+  channel_name: string;
+  channel_image: string;
+  channel_followers: number;
+  total_videos: number;
+  total_paid_views: number;
+  total_normal_views: number;
+  total_views: number;
+  paid_video_earned: string;
+  withdrawn: string;
+  available_balance: string;
 }
+
+type RootStackParamList = {
+  Analytics: { channelId: string };
+};
+
+type AnalyticsScreenRouteProp = RouteProp<RootStackParamList, 'Analytics'>;
 
 const AnalyticsScreen: React.FC = () => {
   const {colors} = useTheme();
+  const route = useRoute<AnalyticsScreenRouteProp>();
+  const { channelId } = route.params;
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<'7d' | '30d' | '90d'>(
@@ -47,29 +54,19 @@ const AnalyticsScreen: React.FC = () => {
   }, [selectedPeriod]);
 
   const loadAnalytics = async () => {
+    if (!channelId) {
+      console.error('No channel ID provided to AnalyticsScreen');
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
-
-      // Mock analytics data
-      const mockData: AnalyticsData = {
-        totalViews: 125000,
-        totalEarnings: 450.75,
-        totalVideos: 23,
-        avgViewTime: '3:45',
-        topVideo: {
-          title: 'Getting Started with React Native',
-          views: 15000,
-        },
-        recentStats: [
-          {date: '2024-06-01', views: 1200, earnings: 15.5},
-          {date: '2024-05-31', views: 980, earnings: 12.3},
-          {date: '2024-05-30', views: 1450, earnings: 18.75},
-          {date: '2024-05-29', views: 890, earnings: 11.2},
-          {date: '2024-05-28', views: 1100, earnings: 14.8},
-        ],
-      };
-
-      setAnalytics(mockData);
+      const response = await ApiService.getChannelAnalytics(channelId);
+      if (response.status === true && response.data) {
+        setAnalytics(response.data);
+      } else {
+        console.error('Failed to fetch analytics data:', response.message);
+      }
     } catch (error) {
       console.error('Error loading analytics:', error);
     } finally {
@@ -161,26 +158,26 @@ const AnalyticsScreen: React.FC = () => {
         <View style={styles.statsGrid}>
           <StatCard
             title="Total Views"
-            value={formatNumber(analytics?.totalViews || 0)}
+            value={formatNumber(analytics?.total_views || 0)}
             icon="eye"
             color={colors.primary}
           />
           <StatCard
-            title="Total Earnings"
-            value={`$${analytics?.totalEarnings.toFixed(2) || '0.00'}`}
+            title="Available Balance"
+            value={`$${parseFloat(analytics?.available_balance || '0').toFixed(2)}`}
             icon="dollar-sign"
             color="#00C851"
           />
           <StatCard
-            title="Videos"
-            value={analytics?.totalVideos.toString() || '0'}
-            icon="video"
+            title="Followers"
+            value={formatNumber(analytics?.channel_followers || 0)}
+            icon="users"
             color="#FF4444"
           />
           <StatCard
-            title="Avg. View Time"
-            value={analytics?.avgViewTime || '0:00'}
-            icon="clock"
+            title="Total Videos"
+            value={formatNumber(analytics?.total_videos || 0)}
+            icon="video"
             color="#FF8800"
           />
         </View>
@@ -188,18 +185,18 @@ const AnalyticsScreen: React.FC = () => {
         {/* Top Performance */}
         <View style={[styles.section, {backgroundColor: colors.surface}]}>
           <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
-            Top Performing Video
+            Earnings Summary
           </Text>
           <View style={styles.topVideoCard}>
             <Icon name="trending-up" size={24} color={colors.success} />
             <View style={styles.topVideoInfo}>
               <Text
                 style={[styles.topVideoTitle, {color: colors.text.primary}]}>
-                {analytics?.topVideo.title}
+                Paid Video Earnings: ${parseFloat(analytics?.paid_video_earned || '0').toFixed(2)}
               </Text>
               <Text
                 style={[styles.topVideoViews, {color: colors.text.secondary}]}>
-                {formatNumber(analytics?.topVideo.views || 0)} views
+                Withdrawn: ${parseFloat(analytics?.withdrawn || '0').toFixed(2)}
               </Text>
             </View>
           </View>
@@ -208,28 +205,36 @@ const AnalyticsScreen: React.FC = () => {
         {/* Recent Performance */}
         <View style={[styles.section, {backgroundColor: colors.surface}]}>
           <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
-            Recent Performance
+            Views Breakdown
           </Text>
-          {analytics?.recentStats.map((stat, index) => (
             <View
-              key={index}
               style={[
                 styles.statRow,
                 {borderBottomColor: colors.border.light},
               ]}>
               <Text style={[styles.statDate, {color: colors.text.secondary}]}>
-                {new Date(stat.date).toLocaleDateString()}
+                Paid Views
               </Text>
               <View style={styles.statNumbers}>
                 <Text style={[styles.statViews, {color: colors.text.primary}]}>
-                  {formatNumber(stat.views)} views
-                </Text>
-                <Text style={[styles.statEarnings, {color: colors.success}]}>
-                  ${stat.earnings.toFixed(2)}
+                  {formatNumber(analytics?.total_paid_views || 0)}
                 </Text>
               </View>
             </View>
-          ))}
+            <View
+              style={[
+                styles.statRow,
+                {borderBottomColor: 'transparent'},
+              ]}>
+              <Text style={[styles.statDate, {color: colors.text.secondary}]}>
+                Normal Views
+              </Text>
+              <View style={styles.statNumbers}>
+                <Text style={[styles.statViews, {color: colors.text.primary}]}>
+                  {formatNumber(analytics?.total_normal_views || 0)}
+                </Text>
+              </View>
+            </View>
         </View>
 
         {/* Export Data */}

@@ -143,8 +143,8 @@ const MyChannelScreen: React.FC = () => {
   const fetchChannelAnalytics = async (channelId: string) => {
     try {
       const analyticsResponse = await ApiService.getChannelAnalytics(channelId);
-      if (analyticsResponse.status === 200) {
-        setAnalytics(analyticsResponse);
+      if (analyticsResponse.status === true && analyticsResponse.data) {
+        setAnalytics(analyticsResponse.data);
       }
     } catch (err) {
       console.error('Error fetching analytics:', err);
