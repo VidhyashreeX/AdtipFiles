@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   Dimensions,
 } from 'react-native';
 import { RTCView } from '@videosdk.live/react-native-sdk';
-
 import { useParticipant } from '@videosdk.live/react-native-sdk';
 import { Mic, MicOff, Video, VideoOff } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -26,10 +25,8 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
   style,
 }) => {
   const { colors } = useTheme();
-  const [videoStream, setVideoStream] = useState<any>(null);
-  const [audioStream, setAudioStream] = useState<any>(null);
 
-  // Use VideoSDK's useParticipant hook
+  // Access participant data directly from the hook - no intermediate state
   const {
     displayName,
     webcamStream,
@@ -37,46 +34,36 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
     webcamOn,
     micOn,
     isActiveSpeaker,
-    isLocal: participantIsLocal,
   } = useParticipant(participant.id);
 
-  useEffect(() => {
-    if (webcamStream) {
-      setVideoStream(webcamStream);
+  // Debug logging
+  React.useEffect(() => {
+    if (webcamOn && webcamStream) {
+      console.log(`[VideoSDKParticipantView] Participant ${displayName || participant.id}: Active webcam stream with ID: ${webcamStream.id}`);
     } else {
-      setVideoStream(null);
+      console.log(`[VideoSDKParticipantView] Participant ${displayName || participant.id}: No active webcam. webcamOn: ${webcamOn}, hasStream: ${!!webcamStream}`);
     }
-  }, [webcamStream]);
-
-  useEffect(() => {
-    if (micStream) {
-      setAudioStream(micStream);
-    } else {
-      setAudioStream(null);
-    }
-  }, [micStream]);
-
-  const renderVideoView = () => {
-    if (videoStream && webcamOn) {
-      // Extract the streamID which should be a string
-      const streamID = videoStream.id;
-      
+  }, [webcamStream, webcamOn, displayName, participant.id]);
+  
+  // Render video or placeholder based on webcam state
+  const renderContent = () => {
+    if (webcamOn && webcamStream && webcamStream.id) {
       return (
         <RTCView
-          streamURL={streamID}
+          streamURL={webcamStream.id}
           objectFit="cover"
           style={styles.videoStream}
           mirror={isLocal}
+          zOrder={0}
         />
       );
     }
 
-    // Show placeholder when video is off
     return (
       <View style={[styles.videoPlaceholder, { backgroundColor: colors.surface }]}>
         <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
           <Text style={styles.avatarText}>
-            {displayName ? displayName[0].toUpperCase() : 'U'}
+            {(displayName || 'U').charAt(0).toUpperCase()}
           </Text>
         </View>
         <Text style={[styles.participantName, { color: colors.text.primary }]}>
@@ -93,17 +80,15 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
 
   return (
     <View style={[styles.container, style]}>
-      {renderVideoView()}
+      {renderContent()}
       
-      {/* Participant info overlay */}
+      {/* Info overlay */}
       <View style={styles.infoOverlay}>
         <View style={styles.infoContainer}>
           <Text style={styles.nameText} numberOfLines={1}>
             {displayName || 'Unknown'} {isLocal && '(You)'}
           </Text>
-            {/* Audio/Video status indicators */}
           <View style={styles.statusIndicators}>
-            {/* Mic status */}
             <View style={[
               styles.statusIndicator, 
               { backgroundColor: micOn ? '#00D4AA' : '#FF3B30' }
@@ -114,7 +99,6 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
               }
             </View>
             
-            {/* Camera status (only show for video calls) */}
             <View style={[
               styles.statusIndicator, 
               { backgroundColor: webcamOn ? '#00D4AA' : '#FF3B30' }
@@ -126,13 +110,6 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
             </View>
           </View>
         </View>
-          {/* Active speaker indicator */}
-        {isActiveSpeaker && (
-          <View style={styles.activeSpeakerIndicator}>
-            <View style={styles.speakerPulse} />
-            <Text style={styles.activeSpeakerText}>Speaking</Text>
-          </View>
-        )}
       </View>
     </View>
   );
@@ -142,13 +119,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
-    borderRadius: 16,
+    borderRadius: 8,
     overflow: 'hidden',
-    position: 'relative',
   },
   videoStream: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: 'transparent', // Changed from black for debugging
   },
   videoPlaceholder: {
     flex: 1,

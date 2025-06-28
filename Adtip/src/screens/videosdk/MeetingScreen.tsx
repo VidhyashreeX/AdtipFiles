@@ -619,8 +619,22 @@ const MeetingView = () => {
 
   // Toggle camera - USE CENTRALIZED MEDIA MANAGER
   const handleToggleCamera = useCallback(async () => {
-    await callMediaManager.toggleCamera();
-  }, [callMediaManager]);
+    console.log('[MeetingView] Toggling camera. Current state:', cameraEnabled);
+    
+    try {
+      // Direct use of VideoSDK toggleWebcam for more reliable control
+      if (meetingHooks && meetingHooks.toggleWebcam) {
+        await meetingHooks.toggleWebcam();
+        console.log('[MeetingView] Camera toggled directly with VideoSDK');
+      } else {
+        // Fallback to media manager
+        await callMediaManager.toggleCamera();
+        console.log('[MeetingView] Camera toggled via callMediaManager');
+      }
+    } catch (error) {
+      console.error('[MeetingView] Error toggling camera:', error);
+    }
+  }, [cameraEnabled, callMediaManager, meetingHooks]);
 
   // Toggle speaker - USE CENTRALIZED MEDIA MANAGER
   const handleToggleSpeaker = useCallback(async () => {
@@ -671,13 +685,27 @@ const MeetingView = () => {
 
   // Enable webcam for video calls after meeting is joined
   useEffect(() => {
-    if (callType === 'video' && hasJoined && localParticipant && !webcamOn && toggleWebcam) {
-      console.log('[MeetingView] Auto-enabling webcam for video call');
-      setTimeout(() => {
-        toggleWebcam();
-      }, 1000); // Give the meeting a moment to fully initialize
+    // Only run this once when the meeting has been joined
+    if (callType === 'video' && hasJoined && meetingHooks?.toggleWebcam) {
+      const initializeCamera = async () => {
+        try {
+          // Check if the webcam is already enabled from the config
+          if (!webcamOn) {
+            console.log('[MeetingView] Meeting joined, initializing camera');
+            await meetingHooks.toggleWebcam();
+            console.log('[MeetingView] Camera initialized successfully');
+          } else {
+            console.log('[MeetingView] Camera already enabled');
+          }
+        } catch (error) {
+          console.error('[MeetingView] Error initializing camera:', error);
+        }
+      };
+
+      // Initialize the camera immediately, no setTimeout
+      initializeCamera();
     }
-  }, [callType, hasJoined, localParticipant, webcamOn, toggleWebcam]);
+  }, [hasJoined, callType, meetingHooks, webcamOn]);
 
   // Enhanced App State Handling - BULLETPROOF IMPLEMENTATION
   useEffect(() => {
@@ -1084,9 +1112,19 @@ const MeetingScreen = () => {
           name: displayName,
           micEnabled: true,
           webcamEnabled: callType === 'video',
+          
+          // Settings based on VideoSDK documentation
+          participantId: activeCall?.callId || undefined,
+          
+          // Media settings - use EXACT values from VideoSDK docs
+          multiStream: true,
+          mode: "SEND_AND_RECV", // Add this explicit mode
+          defaultCamera: "front", // Keep this as string
+          
+          // Notification settings
           notification: {
             title: "Call in Progress",
-            message: `In call with ${recipientName}`
+            message: `${callType === 'video' ? 'Video' : 'Voice'} call with ${recipientName}`
           }
         }}
         token={token}
@@ -1167,6 +1205,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#fff',
+    backgroundColor: '#000', // Add this to ensure visibility during loading
+    zIndex: 10, // Add this to ensure it appears on top
   },
   videoPlaceholder: {
     width: '100%',
