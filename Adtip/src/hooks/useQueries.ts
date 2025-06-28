@@ -556,7 +556,7 @@ export const useVideos = (categoryId: number = 0, userId?: number, searchQuery?:
       const hasMore = lastPage?.data?.length > 0;
       return hasMore ? allPages.length + 1 : undefined;
     },
-    enabled: !!userId,
+    enabled: true,
     staleTime: 3 * 60 * 1000, // 3 minutes for videos
     refetchOnMount: false,
     refetchOnWindowFocus: false,
