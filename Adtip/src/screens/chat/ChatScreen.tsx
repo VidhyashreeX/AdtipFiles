@@ -33,12 +33,14 @@ const ChatScreen: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [inputHeight, setInputHeight] = useState(40);
   const [isUserInChat, setIsUserInChat] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   
-  const ws = useRef<WebSocket | null>(null);
+  const ws = useRef<WebSocket & { pingInterval?: NodeJS.Timeout } | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const messageQueueRef = useRef<string[]>([]);
+  const isConnectingRef = useRef(false);
 
   // Helper to sort messages by createddate ascending
   const sortedMessages = [...messages].sort((a, b) => new Date(a.createddate).getTime() - new Date(b.createddate).getTime());
@@ -54,9 +56,10 @@ const ChatScreen: React.FC = () => {
 
   // WebSocket connection management
   const connectWebSocket = useCallback(async () => {
-    if (!self || ws.current) return;
+    if (!self || ws.current || isConnectingRef.current) return;
 
     try {
+      isConnectingRef.current = true;
       const token = await AsyncStorage.getItem('accessToken');
       if (!token) return;
 
@@ -65,6 +68,7 @@ const ChatScreen: React.FC = () => {
       ws.current.onopen = () => {
         console.log('WebSocket connected');
         setIsConnected(true);
+        isConnectingRef.current = false;
         
         // Send queued messages
         while (messageQueueRef.current.length > 0) {
@@ -72,6 +76,15 @@ const ChatScreen: React.FC = () => {
           if (queuedMessage && ws.current?.readyState === WebSocket.OPEN) {
             ws.current.send(queuedMessage);
           }
+        }
+        
+        // Start ping interval to keep connection alive
+        if (ws.current) {
+          ws.current.pingInterval = setInterval(() => {
+            if (ws.current?.readyState === WebSocket.OPEN) {
+              ws.current.send(JSON.stringify({ type: 'ping' }));
+            }
+          }, 30000); // Ping every 30 seconds
         }
       };
 
@@ -109,6 +122,9 @@ const ChatScreen: React.FC = () => {
             setMessages(prev => prev.map(m => 
               m.id === data.messageId ? { ...m, is_seen: true } : m
             ));
+          } else if (data.type === 'pong') {
+            // Connection is alive
+            console.log('WebSocket ping-pong successful');
           }
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -118,9 +134,17 @@ const ChatScreen: React.FC = () => {
       ws.current.onclose = (event) => {
         console.log('WebSocket disconnected:', event.reason);
         setIsConnected(false);
-        ws.current = null;
         
-        // Attempt to reconnect after 3 seconds
+        // Clear ping interval before setting ws.current to null
+        const pingInterval = ws.current?.pingInterval;
+        if (pingInterval) {
+          clearInterval(pingInterval);
+        }
+        
+        ws.current = null;
+        isConnectingRef.current = false;
+        
+        // Attempt to reconnect after 3 seconds only if user is still in chat
         if (isUserInChat) {
           reconnectTimeoutRef.current = setTimeout(() => {
             connectWebSocket();
@@ -131,10 +155,12 @@ const ChatScreen: React.FC = () => {
       ws.current.onerror = (error) => {
         console.error('WebSocket error:', error);
         setIsConnected(false);
+        isConnectingRef.current = false;
       };
 
     } catch (error) {
       console.error('Failed to connect WebSocket:', error);
+      isConnectingRef.current = false;
     }
   }, [self, otherUser.id, isUserInChat, scrollToBottom]);
 
@@ -175,7 +201,7 @@ const ChatScreen: React.FC = () => {
     }
   }, [self, otherUser.id, connectWebSocket]);
 
-  // Send message via API and WebSocket
+  // Send message via WebSocket only (no API call for instant messaging)
   const handleSend = useCallback(() => {
     if (!input.trim() || !self) return;
     
@@ -190,16 +216,10 @@ const ChatScreen: React.FC = () => {
       is_seen: false,
     };
 
-    // Optimistically add to UI
+    // Optimistically add to UI immediately
     setMessages(prev => [...prev, msgPayload]);
     
-    // Send via API and WebSocket
-    ApiService.sendChatMessage({
-      userId: self.id,
-      receiverId: otherUser.id,
-      message: input.trim()
-    });
-    
+    // Send via WebSocket only (backend will handle API storage)
     sendMessageWS(input.trim());
     setInput('');
     setInputHeight(40);
@@ -248,15 +268,16 @@ const ChatScreen: React.FC = () => {
     }
   }, []);
 
-  // Load messages and setup WebSocket
+  // Load messages only once when entering chat
   useEffect(() => {
     let isMounted = true;
     
-    const setupChat = async () => {
+    const loadMessages = async () => {
       if (!self?.id) return;
       
       try {
-        // Fetch existing messages
+        setIsLoading(true);
+        // Fetch existing messages only once
         const res = await ApiService.fetchChatMessages(self.id, otherUser.id);
         console.log('Chat API response:', res);
         
@@ -279,18 +300,27 @@ const ChatScreen: React.FC = () => {
         if (isMounted) {
           setMessages([]);
         }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
-      
-      // Connect WebSocket
-      connectWebSocket();
     };
 
-    setupChat();
+    loadMessages();
 
     return () => {
       isMounted = false;
-      setIsUserInChat(false);
-      
+    };
+  }, [self, otherUser.id, scrollToBottom]);
+
+  // Setup WebSocket connection
+  useEffect(() => {
+    if (isUserInChat) {
+      connectWebSocket();
+    }
+
+    return () => {
       // Clear timeouts
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -299,13 +329,17 @@ const ChatScreen: React.FC = () => {
         clearTimeout(reconnectTimeoutRef.current);
       }
       
-      // Close WebSocket
+      // Close WebSocket and clear ping interval
       if (ws.current) {
+        const pingInterval = ws.current.pingInterval;
+        if (pingInterval) {
+          clearInterval(pingInterval);
+        }
         ws.current.close();
         ws.current = null;
       }
     };
-  }, [self, otherUser.id, connectWebSocket, scrollToBottom]);
+  }, [connectWebSocket, isUserInChat]);
 
   // Handle screen focus/blur for chat state management
   useFocusEffect(
@@ -409,30 +443,39 @@ const ChatScreen: React.FC = () => {
           </View>
         </View>
         
-        <FlatList
-          ref={flatListRef}
-          data={sortedMessages}
-          renderItem={({ item, index }) => renderItem({ item, index })}
-          keyExtractor={item => item.id.toString()}
-          style={styles.list}
-          contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
-          onContentSizeChange={() => scrollToBottom(true)}
-          onLayout={() => scrollToBottom(false)}
-        />
-        
-        {isOtherTyping && isUserInChat && (
-          <View style={styles.typingContainer}>
-            <View style={styles.typingBubble}>
-              <Text style={[styles.typingText, { color: isDarkMode ? '#bbb' : '#888' }]}>
-                {otherUser.name} is typing
-              </Text>
-              <View style={styles.typingDots}>
-                <View style={[styles.typingDot, { backgroundColor: isDarkMode ? '#bbb' : '#888' }]} />
-                <View style={[styles.typingDot, { backgroundColor: isDarkMode ? '#bbb' : '#888' }]} />
-                <View style={[styles.typingDot, { backgroundColor: isDarkMode ? '#bbb' : '#888' }]} />
-              </View>
-            </View>
+        {isLoading ? (
+          <View style={[styles.loadingContainer, { justifyContent: 'center', alignItems: 'center' }]}>
+            <ActivityIndicator size="large" color={isDarkMode ? '#fff' : '#333'} />
+            <Text style={[styles.loadingText, { color: isDarkMode ? '#bbb' : '#666' }]}>Loading messages...</Text>
           </View>
+        ) : (
+          <>
+            <FlatList
+              ref={flatListRef}
+              data={sortedMessages}
+              renderItem={({ item, index }) => renderItem({ item, index })}
+              keyExtractor={item => item.id.toString()}
+              style={styles.list}
+              contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
+              onContentSizeChange={() => scrollToBottom(true)}
+              onLayout={() => scrollToBottom(false)}
+            />
+            
+            {isOtherTyping && isUserInChat && (
+              <View style={styles.typingContainer}>
+                <View style={styles.typingBubble}>
+                  <Text style={[styles.typingText, { color: isDarkMode ? '#bbb' : '#888' }]}>
+                    {otherUser.name} is typing
+                  </Text>
+                  <View style={styles.typingDots}>
+                    <View style={[styles.typingDot, { backgroundColor: isDarkMode ? '#bbb' : '#888' }]} />
+                    <View style={[styles.typingDot, { backgroundColor: isDarkMode ? '#bbb' : '#888' }]} />
+                    <View style={[styles.typingDot, { backgroundColor: isDarkMode ? '#bbb' : '#888' }]} />
+                  </View>
+                </View>
+              </View>
+            )}
+          </>
         )}
         
         <View style={[styles.inputRow, { backgroundColor: isDarkMode ? '#23272f' : '#fff', borderTopColor: isDarkMode ? '#23272f' : '#eee' }]}> 
@@ -501,6 +544,8 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   headerSubtitle: { fontSize: 12 },
+  loadingContainer: { flex: 1 },
+  loadingText: { marginTop: 12, fontSize: 16 },
   list: { flex: 1 },
   bubble: { 
     marginVertical: 4, 
