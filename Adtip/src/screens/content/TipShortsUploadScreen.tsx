@@ -29,6 +29,8 @@ import ApiService from '../../services/ApiService';
 import CloudflareUploadService from '../../services/CloudflareUploadService';
 import RNFS from 'react-native-fs';
 import { EventRegister } from 'react-native-event-listeners';
+import { getVideoDurationProps } from '../../utils/videoUtils';
+import Video from 'react-native-video';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -129,6 +131,8 @@ const TipShortsUploadScreen: React.FC = () => {
   // UI State
   const [showCompressionModal, setShowCompressionModal] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isExtractingDuration, setIsExtractingDuration] = useState(false);
+  const [hiddenVideoUri, setHiddenVideoUri] = useState<string | null>(null);
 
   // Channel Info (mock - replace with actual API call)
   const [channelId] = useState(1); // This should come from user's channel
@@ -276,11 +280,22 @@ const TipShortsUploadScreen: React.FC = () => {
       setVideoSize(stats.size);
       setOriginalVideoSize(stats.size);
       
-      // For shorts, typically 15-60 seconds
-      setVideoDuration('00:00:30');
+      // Extract actual video duration
+      console.log('[TipShortsUpload] Extracting video duration for:', uri);
+      setIsExtractingDuration(true);
+      setHiddenVideoUri(uri);
     } catch (error) {
       console.error('Error getting video info:', error);
+      setVideoDuration('00:00:30'); // Default fallback
     }
+  };
+
+  // Handle video duration extraction from hidden video component
+  const handleDurationExtracted = (duration: string) => {
+    console.log('[TipShortsUpload] Duration extracted:', duration);
+    setVideoDuration(duration);
+    setIsExtractingDuration(false);
+    setHiddenVideoUri(null);
   };
 
   // Generate thumbnail from video (mock implementation)
@@ -723,6 +738,13 @@ const TipShortsUploadScreen: React.FC = () => {
                       </Text>
                     )}
                   </Text>
+                  <Text style={[styles.videoInfo, { color: colors.text.secondary }]}>
+                    Duration: {isExtractingDuration ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : (
+                      videoDuration
+                    )}
+                  </Text>
                   {getCompressionRatio() && (
                     <Text style={[styles.compressionInfo, { color: colors.success }]}>
                       {getCompressionRatio()}
@@ -940,7 +962,7 @@ const TipShortsUploadScreen: React.FC = () => {
                   onPress={() => setShowCompressionModal(true)}
                   disabled={isUploading || isCompressing}
                 >
-                  <View style={styles.compressionInfo}>
+                  <View style={styles.compressionSelectorInfo}>
                     <Text style={[styles.compressionText, { color: colors.text.primary }]}>
                       {COMPRESSION_OPTIONS.find(opt => opt.key === selectedCompression)?.label}
                     </Text>
@@ -1096,6 +1118,13 @@ const TipShortsUploadScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         </View>
+      )}
+
+      {/* Hidden Video Component for Duration Extraction */}
+      {hiddenVideoUri && (
+        <Video
+          {...getVideoDurationProps(hiddenVideoUri, handleDurationExtracted)}
+        />
       )}
     </SafeAreaView>
   );
@@ -1318,7 +1347,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
   },
-  compressionInfo: {
+  compressionSelectorInfo: {
     flex: 1,
   },
   compressionText: {

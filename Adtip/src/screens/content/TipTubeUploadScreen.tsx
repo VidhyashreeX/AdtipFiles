@@ -28,6 +28,8 @@ import VideoCompressionService, { VideoCompressionOptions } from '../../services
 import ApiService from '../../services/ApiService';
 import CloudflareUploadService from '../../services/CloudflareUploadService';
 import RNFS from 'react-native-fs';
+import { getVideoDurationProps } from '../../utils/videoUtils';
+import Video from 'react-native-video';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -108,6 +110,8 @@ const TipTubeUploadScreen: React.FC = () => {
 
   // UI State
   const [showQualityModal, setShowQualityModal] = useState(false);
+  const [isExtractingDuration, setIsExtractingDuration] = useState(false);
+  const [hiddenVideoUri, setHiddenVideoUri] = useState<string | null>(null);
 
   // Channel Info (mock - replace with actual API call)
   const [channelId] = useState(1); // This should come from user's channel
@@ -197,12 +201,22 @@ const TipTubeUploadScreen: React.FC = () => {
       setVideoSize(stats.size);
       setOriginalVideoSize(stats.size);
       
-      // For duration, you might need a video processing library
-      // For now, setting a default duration
-      setVideoDuration('00:01:30');
+      // Extract actual video duration
+      console.log('[TipTubeUpload] Extracting video duration for:', uri);
+      setIsExtractingDuration(true);
+      setHiddenVideoUri(uri);
     } catch (error) {
       console.error('Error getting video info:', error);
+      setVideoDuration('00:01:30'); // Default fallback
     }
+  };
+
+  // Handle video duration extraction from hidden video component
+  const handleDurationExtracted = (duration: string) => {
+    console.log('[TipTubeUpload] Duration extracted:', duration);
+    setVideoDuration(duration);
+    setIsExtractingDuration(false);
+    setHiddenVideoUri(null);
   };
 
   // Pick video from gallery
@@ -571,6 +585,13 @@ const TipTubeUploadScreen: React.FC = () => {
                       </Text>
                     )}
                   </Text>
+                  <Text style={[styles.videoInfo, { color: colors.text.secondary }]}>
+                    Duration: {isExtractingDuration ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : (
+                      videoDuration
+                    )}
+                  </Text>
                   {getCompressionRatio() && (
                     <Text style={[styles.compressionInfo, { color: colors.success }]}>
                       {getCompressionRatio()}
@@ -907,6 +928,13 @@ const TipTubeUploadScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         </View>
+      )}
+
+      {/* Hidden Video Component for Duration Extraction */}
+      {hiddenVideoUri && (
+        <Video
+          {...getVideoDurationProps(hiddenVideoUri, handleDurationExtracted)}
+        />
       )}
     </SafeAreaView>
   );
