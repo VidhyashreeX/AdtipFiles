@@ -250,7 +250,7 @@ const Sidebar: React.FC = () => {
     {icon: 'credit-card', label: 'Wallet', screen: 'Wallet'},
     {icon: 'users', label: 'Refer & Earn', screen: 'Referral'},
     {icon: 'play', label: 'Play to Earn', screen: 'PlayToEarn'},
-    {icon: 'film', label: 'Watch to Earn', screen: 'WatchToEarn'},
+    {icon: 'film', label: 'Watch to Earn', screen: 'TipTube'},
     {icon: 'book-open', label: 'My Ad Passbook', screen: 'AdPassbook'},
     {icon: 'user', label: 'View Profile', screen: 'Profile'},
     {icon: 'video', label: 'Tip Shorts', screen: 'TipShorts'},
@@ -265,12 +265,14 @@ const Sidebar: React.FC = () => {
     // Use a shorter delay for more responsive navigation
     setTimeout(() => {
       try {
-        // Navigate directly to the screen since UltraFastLoader renders MainNavigator directly
-        // No need for nested navigation like 'Main' -> { screen: 'PlayToEarn' }
-        if (screenName === 'Profile') {
+        // Special handling for nested screens like TipTube
+        if (screenName === 'TipTube') {
+          // Navigate to the parent tab navigator, then to the specific screen
+          NavigationService.navigate('TabHome', { screen: 'TipTube' });
+        } else if (screenName === 'Profile') {
           NavigationService.navigate('Profile', { userId: undefined }); // Current user profile
         } else {
-          // Direct navigation to the screen
+          // Direct navigation for other screens
           NavigationService.navigate(screenName);
         }
       } catch (error) {

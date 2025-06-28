@@ -97,12 +97,12 @@ const MyChannelScreen: React.FC = () => {
           channelName: channelData.channelName,
           description: channelData.description || 'No description available',
           profileImage: channelData.profileImage,
-          coverImage: channelData.coverImage,
+          coverImage: channelData.profileCoverImage, // Corrected from coverImage
           totalSubscribers: Number(channelData.totalSubscribers) || 0,
-          totalViews: Number(channelData.totalViews) || 0,
+          totalViews: Number(channelData.total_ads_view) || 0, // Corrected from totalViews
           totalVideos: Number(channelData.totalVideos) || 0,
-          totalEarnings: 0, // This would come from earnings API
-          createdDate: channelData.createdDate || new Date().toISOString(),
+          totalEarnings: Number(channelData.total_earnings) || 0, // Corrected from hardcoded 0
+          createdDate: channelData.createddate || new Date().toISOString(), // Corrected from createdDate
           isCallEnabled: channelData.isCallEnabled || false,
         });
 

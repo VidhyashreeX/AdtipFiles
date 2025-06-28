@@ -67,7 +67,9 @@ const ChannelScreen: React.FC = () => {
   const [shortsLoading, setShortsLoading] = useState(false);
 
   // Get channel ID from route params
-  const channelId = (route.params as any)?.channelId || (route.params as any)?.userId;
+  const routeChannelId = (route.params as any)?.channelId || (route.params as any)?.userId;
+  const isMyChannel = !routeChannelId || String(routeChannelId) === String(user?.id);
+  const channelId = isMyChannel ? user?.id : routeChannelId;
 
   const loadChannelData = useCallback(async () => {
     if (!channelId) {
@@ -85,18 +87,18 @@ const ChannelScreen: React.FC = () => {
         const channel = channelResponse.data[0];
         
         const channelInfo: ChannelInfo = {
-          channelId: String(channel.channelId || channel.id),
-          channelName: channel.channelName || channel.name || 'Unknown Channel',
+          channelId: String(channel.channelId),
+          channelName: channel.channelName || 'Unknown Channel',
           description: channel.description || 'No description available',
-          profileImage: channel.profileImage || channel.profile_image || `https://api.dicebear.com/9.x/identicon/svg?seed=${channelId}`,
-          coverImage: channel.coverImage || channel.cover_image,
-          totalSubscribers: Number(channel.totalSubscribers || channel.followers_count || 0),
-          totalVideos: Number(channel.totalVideos || channel.videoCount || 0),
-          totalViews: Number(channel.totalViews || 0),
-          isSubscribed: Boolean(channel.isSubscribed || channel.is_following),
-          isVerified: Boolean(channel.isVerified || channel.verified),
-          createdDate: channel.createdDate || channel.created_date || new Date().toISOString(),
-          createdBy: Number(channel.createdBy || channel.created_by || channelId),
+          profileImage: channel.profileImage || `https://api.dicebear.com/9.x/identicon/svg?seed=${channelId}`,
+          coverImage: channel.profileCoverImage,
+          totalSubscribers: Number(channel.totalSubscribers || 0),
+          totalVideos: Number(channel.totalVideos || 0),
+          totalViews: Number(channel.total_ads_view || 0),
+          isSubscribed: Boolean(channel.isSubscribed), // Assuming this field will be added to the API
+          isVerified: Boolean(channel.isVerified), // Assuming this field will be added
+          createdDate: channel.createddate || new Date().toISOString(),
+          createdBy: Number(channel.createdBy || channelId),
         };
 
         setChannelInfo(channelInfo);
@@ -120,7 +122,7 @@ const ChannelScreen: React.FC = () => {
       setVideosLoading(true);
       
       // Load TipTube videos (videoType = 0)
-      const videosResponse = await ApiService.getVideoByChannel(0, Number(channelInfo.channelId), user.id);
+      const videosResponse = await ApiService.getVideoByChannel(0, Number(channelInfo.channelId), Number(user.id));
       
       if (videosResponse.status === 200 && videosResponse.data) {
         const formattedVideos: Video[] = videosResponse.data.map((video: any) => ({
@@ -151,7 +153,7 @@ const ChannelScreen: React.FC = () => {
       setShortsLoading(true);
       
       // Load TipShorts videos (videoType = 1)
-      const shortsResponse = await ApiService.getVideoByChannel(1, Number(channelInfo.channelId), user.id);
+      const shortsResponse = await ApiService.getVideoByChannel(1, Number(channelInfo.channelId), Number(user.id));
       
       if (shortsResponse.status === 200 && shortsResponse.data) {
         const formattedShorts: Video[] = shortsResponse.data.map((video: any) => ({

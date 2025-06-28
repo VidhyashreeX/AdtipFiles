@@ -367,7 +367,13 @@ const TipShortsEnhanced = () => {
   const { colors } = useTheme();
   const navigation = useNavigation();
   const { user } = useAuth();
-  const { isGloballyMuted, isGloballyPlaying, toggleGlobalPlayPause, toggleGlobalMute } = useShorts();
+  const { 
+    isGloballyMuted, 
+    isGloballyPlaying, 
+    toggleGlobalPlayPause, 
+    toggleGlobalMute,
+    setGlobalPlayState 
+  } = useShorts();
   const insets = useSafeAreaInsets();
 
   // Core states
@@ -391,6 +397,7 @@ const TipShortsEnhanced = () => {
   const [loadedVideos, setLoadedVideos] = useState<Set<string>>(new Set());
   const [visibleVideoIds, setVisibleVideoIds] = useState<string[]>([]);
   const [showPlayPause, setShowPlayPause] = useState(false);
+  const playPauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Refs
   const flatListRef = useRef<FlatList>(null);
@@ -431,7 +438,7 @@ const TipShortsEnhanced = () => {
 
   // Handle video load and start preloading next
   const handleVideoLoad = useCallback((videoId: string) => {
-    setLoadedVideos(prev => new Set([...prev, videoId]));
+    setLoadedVideos(prev => new Set(new Set(prev)).add(videoId));
     
     // Start preloading next video after current starts playing
     const currentVideoIndex = shorts.findIndex(short => short.id === videoId);
@@ -446,8 +453,11 @@ const TipShortsEnhanced = () => {
     .onEnd(() => {
       runOnJS(() => {
         toggleGlobalPlayPause();
+        if (playPauseTimeoutRef.current) clearTimeout(playPauseTimeoutRef.current);
         setShowPlayPause(true);
-        setTimeout(() => setShowPlayPause(false), 100);
+        playPauseTimeoutRef.current = setTimeout(() => {
+          setShowPlayPause(false);
+        }, 800);
       })();
     });
 
@@ -824,17 +834,30 @@ const TipShortsEnhanced = () => {
     return () => backHandler.remove();
   }, [navigation]);
 
-  // Initial fetch
+  // Set initial play state and handle cleanup
   useEffect(() => {
-    fetchShorts(true);
-  }, []);
+    // Start playing when the screen is focused
+    const unsubscribeFocus = navigation.addListener('focus', () => {
+      setGlobalPlayState(true);
+    });
 
-  // Cleanup on unmount
-  useEffect(() => {
+    // Pause when the screen is blurred
+    const unsubscribeBlur = navigation.addListener('blur', () => {
+      setGlobalPlayState(false);
+    });
+    
+    // Initial fetch
+    fetchShorts(true);
+
     return () => {
+      unsubscribeFocus();
+      unsubscribeBlur();
       videoPreloader.clearAll();
+      if (playPauseTimeoutRef.current) {
+        clearTimeout(playPauseTimeoutRef.current);
+      }
     };
-  }, [videoPreloader]);
+  }, []);
 
   // Render loading state with skeletons
   if (loading && shorts.length === 0) {

@@ -98,7 +98,7 @@ const CreateChannelScreen: React.FC = () => {  const [channelName, setChannelNam
             description: channel.description || '',
             avatar: channel.profileImage ? await getSecureMediaUrl(channel.profileImage) : getFallbackAvatarUrl(user.id),
             followers: Number(channel.totalSubscribers) || 0,
-            totalViews: Number(channel.totalVideos) || 0,
+            totalViews: Number(channel.total_ads_view) || 0, // Corrected from totalVideos
             isCallEnabled: false,
           };
           setChannelData(mappedChannel);
