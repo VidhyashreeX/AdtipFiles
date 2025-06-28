@@ -17,7 +17,7 @@ import {
   AppStateStatus,
   Vibration,
 } from 'react-native';
-import { useMeeting } from '@videosdk.live/react-native-sdk';
+import { useMeeting, useParticipant } from '@videosdk.live/react-native-sdk';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MeetingProvider } from '@videosdk.live/react-native-sdk';
@@ -36,6 +36,7 @@ import {
 import { MainNavigatorParamList } from '../../types/navigation';
 import { appEventEmitter } from '../../events/AppEventEmitter';
 import VideoCallInterface from '../../components/call/VideoCallInterface';
+import { VideoSDKParticipantView } from '../../components/videosdk';
 import notifee from '@notifee/react-native';
 import CallErrorBoundary from '../../components/common/CallErrorBoundary';
 
@@ -346,6 +347,9 @@ const MeetingView = () => {
     toggleWebcam,
     localParticipant,
   } = meetingHooks || {};
+
+  // Get local participant's video stream details using useParticipant hook
+  const { webcamStream, webcamOn, micStream, micOn } = useParticipant(localParticipant?.id || '');
 
   // Connect VideoSDK meeting to media manager for direct control
   useEffect(() => {
@@ -658,12 +662,22 @@ const MeetingView = () => {
 
   // Initialize camera for video calls - USE CENTRALIZED MEDIA MANAGER
   useEffect(() => {
-    if (callType === 'video' && !cameraEnabled) {
+    if (callType === 'video') {
       callMediaManager.setCameraEnabled(true);
-    } else if (callType === 'voice' && cameraEnabled) {
+    } else {
       callMediaManager.setCameraEnabled(false);
     }
-  }, [callType, cameraEnabled, callMediaManager]);
+  }, [callType, callMediaManager]);
+
+  // Enable webcam for video calls after meeting is joined
+  useEffect(() => {
+    if (callType === 'video' && hasJoined && localParticipant && !webcamOn && toggleWebcam) {
+      console.log('[MeetingView] Auto-enabling webcam for video call');
+      setTimeout(() => {
+        toggleWebcam();
+      }, 1000); // Give the meeting a moment to fully initialize
+    }
+  }, [callType, hasJoined, localParticipant, webcamOn, toggleWebcam]);
 
   // Enhanced App State Handling - BULLETPROOF IMPLEMENTATION
   useEffect(() => {
@@ -846,12 +860,18 @@ const MeetingView = () => {
   const participantsForVideoInterface = useMemo(() => {
     const participants = [];
     
+    // Get the first remote participant from the meeting
+    const remoteParticipants = Array.from(meetingHooks?.participants?.values() || []);
+    const remoteParticipant = remoteParticipants.find(p => p.id !== localParticipant?.id);
+    
     // Add remote participant
     participants.push({
       id: 'remote',
       name: recipientName,
       isSelf: false,
       micMuted: false,
+      webcamOn: remoteParticipant?.webcamOn || false,
+      webcamStream: null, // Remote participant stream would be handled by VideoSDK
     });
     
     // Add local participant
@@ -860,26 +880,97 @@ const MeetingView = () => {
       name: 'You',
       isSelf: true,
       micMuted: !micEnabled,
+      webcamOn: webcamOn,
+      webcamStream: webcamStream,
     });
     
     return participants;
-  }, [recipientName, micEnabled]);
+  }, [recipientName, micEnabled, webcamOn, webcamStream, meetingHooks?.participants, localParticipant?.id]);
 
-  // If it's a video call, use the VideoCallInterface component
+  // If it's a video call, use the VideoCallInterface component with VideoSDK streams
   if (callType === 'video') {
     return (
-      <VideoCallInterface
-        participants={participantsForVideoInterface}
-        isGroupCall={false}
-        onToggleMic={handleToggleMic}
-        onToggleCamera={handleToggleCamera}
-        onEndCall={handleEndCall}
-        onFlipCamera={handleFlipCamera}
-        onOpenChat={handleOpenChat}
-        onMoreOptions={handleMoreOptions}
-        micEnabled={micEnabled}
-        cameraEnabled={cameraEnabled}
-      />
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#121212" />
+        
+        {/* Top call info bar */}
+        <View style={styles.callInfoBar}>
+          <View style={styles.callInfoContent}>
+            <Text style={styles.callDuration}>
+              {callState === 'connecting' ? 'Connecting...' : 
+               callState === 'reconnecting' ? 'Reconnecting...' : 
+               formatCallDuration(callDuration)}
+            </Text>
+            <Text style={styles.callEndToEndText}>End-to-end encrypted call</Text>
+          </View>
+        </View>
+        
+        {/* Video participants container */}
+        <View style={styles.videoContainer}>
+          {/* Remote participant (main view) */}
+          {participants.length > 0 && (
+            <View style={styles.largeVideo}>
+              {Array.from(meetingHooks?.participants?.values() || [])
+                .filter(p => p.id !== localParticipant?.id)
+                .slice(0, 1)
+                .map(remoteParticipant => (
+                  <VideoSDKParticipantView
+                    key={remoteParticipant.id}
+                    participant={remoteParticipant}
+                    isLocal={false}
+                    style={styles.largeVideo}
+                  />
+                ))
+              }
+              {/* Fallback if no remote participant */}
+              {Array.from(meetingHooks?.participants?.values() || []).filter(p => p.id !== localParticipant?.id).length === 0 && (
+                <View style={styles.videoPlaceholder}>
+                  <View style={styles.participantInitialContainer}>
+                    <Text style={styles.participantInitial}>
+                      {recipientName.charAt(0).toUpperCase()}
+                    </Text>
+                    <Text style={styles.recipientNameText}>
+                      {recipientName}
+                    </Text>
+                    <Text style={styles.callStatusText}>
+                      Connecting...
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+          
+          {/* Local participant (small self-view) */}
+          {localParticipant && (
+            <View style={styles.selfViewContainer}>
+              <VideoSDKParticipantView
+                participant={localParticipant}
+                isLocal={true}
+                style={styles.smallVideo}
+              />
+            </View>
+          )}
+        </View>
+        
+        {/* Call controls */}
+        {showControls && (
+          <Animated.View style={[styles.controlsWrapper, { opacity: controlsOpacity }]}>
+            <CallControls
+              micEnabled={micEnabled}
+              cameraEnabled={cameraEnabled}
+              speakerEnabled={speakerEnabled}
+              callType={callType}
+              onToggleMic={handleToggleMic}
+              onToggleCamera={handleToggleCamera}
+              onToggleSpeaker={handleToggleSpeaker}
+              onEndCall={handleEndCall}
+              onSwitchCamera={handleSwitchCamera}
+              onShowParticipants={handleShowParticipants}
+            />
+          </Animated.View>
+        )}
+      </SafeAreaView>
     );
   }
 

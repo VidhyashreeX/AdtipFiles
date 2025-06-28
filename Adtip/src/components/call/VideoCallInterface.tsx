@@ -11,6 +11,7 @@ import {
   Mic, MicOff, Video, VideoOff, Phone, 
   RotateCcw, MessageSquare, MoreVertical 
 } from 'lucide-react-native';
+import { RTCView, MediaStream } from '@videosdk.live/react-native-sdk';
 
 const { width, height } = Dimensions.get('window');
 
@@ -25,19 +26,48 @@ interface VideoCallInterfaceProps {
   onMoreOptions: () => void;
   micEnabled: boolean;
   cameraEnabled: boolean;
+  localWebcamOn?: boolean;
+  localWebcamStream?: any;
 }
 
-const VideoParticipant = ({ participant, isLarge = false }: { participant: any; isLarge?: boolean }) => {
+const VideoParticipant = ({ 
+  participant, 
+  isLarge = false, 
+  webcamStream, 
+  webcamOn 
+}: { 
+  participant: any; 
+  isLarge?: boolean;
+  webcamStream?: any;
+  webcamOn?: boolean;
+}) => {
+  const renderVideoContent = () => {
+    if (webcamStream && webcamOn) {
+      return (
+        <RTCView
+          streamURL={new MediaStream([webcamStream.track]).toURL()}
+          objectFit="cover"
+          style={styles.participantVideo}
+          mirror={participant.isSelf} // Mirror local video
+        />
+      );
+    }
+
+    // Show placeholder when video is off or no stream
+    return (
+      <View style={styles.participantInitial}>
+        <Text style={styles.initialText}>{participant.name.charAt(0).toUpperCase()}</Text>
+      </View>
+    );
+  };
+
   return (
     <View style={[
       styles.participantContainer,
       isLarge ? styles.largeParticipant : styles.smallParticipant
     ]}>
       <View style={styles.participantVideo}>
-        {/* Placeholder for video component */}
-        <View style={styles.participantInitial}>
-          <Text style={styles.initialText}>{participant.name.charAt(0).toUpperCase()}</Text>
-        </View>
+        {renderVideoContent()}
       </View>
       <View style={styles.participantInfo}>
         <Text style={styles.participantName}>
@@ -62,6 +92,8 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
   onMoreOptions,
   micEnabled,
   cameraEnabled,
+  localWebcamOn,
+  localWebcamStream,
 }) => {
   return (
     <SafeAreaView style={styles.container}>
@@ -79,6 +111,8 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
               key={participant.id} 
               participant={participant} 
               isLarge={index === 0} 
+              webcamStream={participant.isSelf ? localWebcamStream : null}
+              webcamOn={participant.isSelf ? localWebcamOn : true}
             />
           ))
         ) : (
@@ -89,6 +123,8 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
               <VideoParticipant 
                 participant={participants.find(p => !p.isSelf) || participants[0]} 
                 isLarge={true} 
+                webcamStream={null} // Remote participant stream would come from VideoSDK
+                webcamOn={true} // This should come from remote participant state
               />
             )}
             
@@ -97,6 +133,8 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
               <View style={styles.selfViewWrapper}>
                 <VideoParticipant 
                   participant={participants.find(p => p.isSelf) || participants[1]} 
+                  webcamStream={localWebcamStream}
+                  webcamOn={localWebcamOn}
                 />
               </View>
             )}
