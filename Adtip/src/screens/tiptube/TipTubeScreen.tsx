@@ -217,7 +217,7 @@ const TipTubeScreen = () => {
     <View style={styles.skeletonContainer}>
       <View style={styles.skeletonContent}>
         {Array.from({ length: 6 }, (_, index) => (
-          <VideoCardSkeleton key={`skeleton-${index}`} />
+          <VideoCardSkeleton key={`skeleton-${index}`} isYouTubeLayout={true} />
         ))}
       </View>
     </View>
@@ -512,10 +512,12 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
     textAlign: 'center',
   },
   skeletonContainer: {
-    marginBottom: 0,
+    flex: 1,
+    backgroundColor: colors.background,
   },
   skeletonContent: {
     paddingTop: 0,
+    width: '100%', // Ensure full width
   },
 });
 

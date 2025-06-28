@@ -63,7 +63,7 @@ const PostItemSkeleton: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 12,
+    borderRadius: 12, // Match PostItem styling
     marginVertical: 8,
     marginHorizontal: 16,
     paddingBottom: 12,
@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   avatar: {
-    width: 40,
+    width: 40, // Match PostItem avatar size
     height: 40,
     borderRadius: 20,
     marginRight: 10,
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   },
   media: {
     width: '100%',
-    height: 250,
+    height: 250, // Match typical PostItem media height
   },
   actionsContainer: {
     flexDirection: 'row',

@@ -4,7 +4,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HORIZONTAL_PADDING = 16;
-const THUMBNAIL_HEIGHT = (SCREEN_WIDTH * 9) / 16; // 16:9 aspect ratio, full width
+const CARD_WIDTH = SCREEN_WIDTH - (HORIZONTAL_PADDING * 2);
+const THUMBNAIL_HEIGHT = (CARD_WIDTH * 9) / 16; // 16:9 aspect ratio to match TipTube
 
 const VideoCardSkeleton: React.FC<{ isYouTubeLayout?: boolean }> = ({ isYouTubeLayout = false }) => {
   const { colors, isDarkMode } = useTheme();
@@ -163,20 +164,22 @@ const styles = StyleSheet.create({
   // YouTube-style skeleton styles
   youtubeSkeletonContainer: {
     backgroundColor: 'transparent',
-    marginBottom: 16,
+    marginBottom: 16, // Match TipTube VERTICAL_SPACING
+    width: SCREEN_WIDTH, // Ensure full screen width
   },
   youtubeThumbnailPlaceholder: {
-    width: SCREEN_WIDTH, // Full screen width
-    height: THUMBNAIL_HEIGHT,
+    width: SCREEN_WIDTH, // Full screen width to match TipTube
+    height: THUMBNAIL_HEIGHT, // Match TipTube thumbnail height calculation
   },
   youtubeInfoContainer: {
     flexDirection: 'row',
-    paddingHorizontal: HORIZONTAL_PADDING,
+    paddingHorizontal: HORIZONTAL_PADDING, // Match TipTube padding
     paddingTop: 12,
     paddingBottom: 4,
+    width: SCREEN_WIDTH, // Ensure full width
   },
   youtubeAvatarPlaceholder: {
-    width: 40,
+    width: 40, // Match TipTube avatar size
     height: 40,
     borderRadius: 20,
     marginRight: 12,
@@ -186,7 +189,7 @@ const styles = StyleSheet.create({
   },
   youtubeTitleLine1: {
     width: '95%',
-    height: 16,
+    height: 16, // Match TipTube title font size
     borderRadius: 8,
     marginBottom: 6,
   },
@@ -198,14 +201,14 @@ const styles = StyleSheet.create({
   },
   youtubeChannelName: {
     width: '40%',
-    height: 14,
+    height: 14, // Match TipTube channel name font size
     borderRadius: 7,
     marginBottom: 4,
   },
   youtubeStatsLine: {
     width: '60%',
-    height: 12,
-    borderRadius: 6,
+    height: 14, // Match TipTube stats font size
+    borderRadius: 7,
   },
   
   // Original grid skeleton styles

@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
+
+const { width: screenWidth } = Dimensions.get('window');
 
 const EarnCardSkeleton: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
@@ -48,36 +50,43 @@ const EarnCardSkeleton: React.FC = () => {
 
 const styles = StyleSheet.create({
   containerWrapper: {
-    borderRadius: 12,
-    marginBottom: 12,
-    height: 80,
+    width: screenWidth - 16, // Match actual carousel item width
+    height: 120, // Match actual carousel item height
+    borderRadius: 16,
+    marginHorizontal: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    overflow: 'hidden',
   },
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    height: 80,
+    padding: 20,
+    borderRadius: 16,
+    height: 120,
   },
   icon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
+    width: 60, // Match earnCardIconContainer
+    height: 60,
+    borderRadius: 30,
+    marginRight: 0, // Remove margin since it's positioned differently
   },
   textContainer: {
     flex: 1,
   },
   title: {
     width: '60%',
-    height: 16,
-    borderRadius: 8,
-    marginBottom: 8,
+    height: 20, // Match earnCardTitle font size
+    borderRadius: 10,
+    marginBottom: 6,
   },
   description: {
     width: '80%',
-    height: 12,
-    borderRadius: 6,
+    height: 14, // Match earnCardDescription font size
+    borderRadius: 7,
   },
 });
 

@@ -489,7 +489,7 @@ export const useUsers = (filters: {
     },
     enabled: !!userId,
     staleTime: 2 * 60 * 1000, // 2 minutes for users
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
   });
 };

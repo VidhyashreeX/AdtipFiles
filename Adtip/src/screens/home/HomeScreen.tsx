@@ -1,5 +1,5 @@
 // src/screens/home/HomeScreen.tsx - Enhanced with bulletproof navigation and data layer
-import React, {useState, useCallback, useMemo} from 'react';
+import React, {useState, useCallback, useMemo, useRef, useEffect} from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,14 @@ import {
   ViewToken,
   TouchableOpacity,
   Modal,
+  Dimensions,
+  Image,
 } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import {useNavigation} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
+// Import Lucide React Native icons
+import { PlayCircle, Gamepad2 } from 'lucide-react-native';
 import CommentsBottomSheet from '../../components/commentsbottomsheet/CommentsBottomSheet';
 
 // Enhanced Contexts & Services
@@ -39,7 +44,7 @@ import ScreenTransition from '../../components/common/ScreenTransition';
 import UserProfileScreen from '../profile/UserProfileScreen';
 
 // Skeleton Components
-import StorySkeleton from '../../components/skeletons/StoryItemSkeleton';
+import StoryItemSkeleton from '../../components/skeletons/StoryItemSkeleton';
 import CategorySkeleton from '../../components/skeletons/CategoryItemSkeleton';
 import EarnCardSkeleton from '../../components/skeletons/EarnCardSkeleton';
 import PostItemSkeleton from '../../components/skeletons/PostItemSkeleton';
@@ -49,6 +54,9 @@ import BannerAdComponent from '../../googleads/BannerAdComponent';
 
 // Types
 import {AppNavigationProps} from '../../types/navigation';
+
+// Get screen dimensions
+const { width: screenWidth } = Dimensions.get('window');
 
 // Interfaces
 interface Story { id: string; username: string; imageUrl: string | null; }
@@ -77,9 +85,16 @@ const StoriesRow: React.FC<StoriesRowProps> = ({ stories, onStoryPress, onAddSto
   if (isLoading) {
     return (
       <View style={styles.storiesSection}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.storiesContainer} contentContainerStyle={styles.storiesContentContainer}>
-          <StorySkeleton isAddStory={true} />
-          {Array(5).fill(0).map((_, index) => <StorySkeleton key={`story-skel-${index}`} />)}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          style={styles.storiesContainer} 
+          contentContainerStyle={styles.storiesContentContainer}
+        >
+          <StoryItemSkeleton isAddStory={true} />
+          {Array(5).fill(0).map((_, index) => (
+            <StoryItemSkeleton key={`story-skel-${index}`} />
+          ))}
         </ScrollView>
       </View>
     );
@@ -139,40 +154,167 @@ const CategoriesRow: React.FC<CategoriesRowProps> = ({ categories, selectedCateg
 
 interface EarnCardsRowProps { 
   onWatchAndEarn: () => void; 
-  onReferAndEarn: () => void; 
+  onPlayAndEarn: () => void; 
   isLoading?: boolean; 
 }
 
-const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onReferAndEarn, isLoading }) => {
+const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onPlayAndEarn, isLoading }) => {
   const {colors} = useTheme();
   const styles = createHomeScreenStyles(colors);
+  const flatListRef = useRef<FlatList>(null);
+  const currentIndexRef = useRef(0);
+  
+  // Define earn cards data for carousel
+  const earnCardsData = [
+    {
+      id: '1',
+      title: 'Watch & Earn',
+      description: 'Watch videos and earn rewards',
+      iconName: 'play-circle',
+      onPress: onWatchAndEarn,
+      gradientColors: ['#CC0000', '#EE2400', '#FF4D00' ],
+    },
+    {
+      id: '2',
+      title: 'Play & Earn',
+      description: 'Play games and earn rewards',
+      iconName: 'gamepad-2',
+      onPress: onPlayAndEarn,
+      gradientColors: ['#1565C0', '#1976D2', '#0D47A1'],
+    },
+  ];
+
+  // Create infinite data by duplicating items for seamless looping
+  const infiniteData = [
+    ...earnCardsData,
+    ...earnCardsData,
+    ...earnCardsData,
+  ];
+
+  // Auto-scroll functionality
+  useEffect(() => {
+    if (isLoading || !flatListRef.current) return;
+
+    const interval = setInterval(() => {
+      const nextIndex = (currentIndexRef.current + 1) % earnCardsData.length;
+      const actualIndex = earnCardsData.length + nextIndex; // Always use middle set for smooth infinite scroll
+      
+      currentIndexRef.current = nextIndex;
+      
+      flatListRef.current?.scrollToIndex({
+        index: actualIndex,
+        animated: true,
+      });
+    }, 5000); // Auto-scroll every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [isLoading, earnCardsData.length]);
+
+  // Handle infinite scroll loop
+  const handleScrollEnd = useCallback((event: any) => {
+    const contentOffset = event.nativeEvent.contentOffset.x;
+    const itemWidth = screenWidth; // Full screen width for proper calculation
+    const newIndex = Math.round(contentOffset / itemWidth);
+    
+    // Reset position for infinite loop when reaching boundaries
+    if (newIndex >= earnCardsData.length * 2) {
+      // Jumped to end, reset to middle
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({
+          index: earnCardsData.length,
+          animated: false,
+        });
+        currentIndexRef.current = 0;
+      }, 100);
+    } else if (newIndex < earnCardsData.length) {
+      // At the beginning, jump to middle equivalent
+      if (newIndex === 0) {
+        setTimeout(() => {
+          flatListRef.current?.scrollToIndex({
+            index: earnCardsData.length,
+            animated: false,
+          });
+          currentIndexRef.current = 0;
+        }, 100);
+      } else {
+        currentIndexRef.current = newIndex;
+      }
+    } else {
+      // In the middle set, update current index
+      currentIndexRef.current = newIndex - earnCardsData.length;
+    }
+  }, [earnCardsData.length]);
+
+  const renderEarnCard = ({ item, index }: { item: typeof earnCardsData[0], index: number }) => {
+    // Get the original item data for infinite loop
+    const originalItem = earnCardsData[index % earnCardsData.length];
+    
+    return (
+      <TouchableOpacity
+        style={styles.earnCardCarouselItem}
+        onPress={originalItem.onPress}
+        activeOpacity={0.9}
+      >
+        <LinearGradient
+          colors={originalItem.gradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.earnCardGradient}
+        >
+          <View style={styles.earnCardContent}>
+            <View style={styles.earnCardTextContainer}>
+              <Text style={styles.earnCardTitle}>{originalItem.title}</Text>
+              <Text style={styles.earnCardDescription}>{originalItem.description}</Text>
+            </View>
+            <View style={styles.earnCardIconContainer}>
+              {originalItem.iconName === 'play-circle' ? (
+                <PlayCircle size={28} color="#FFFFFF" />
+              ) : (
+                <Gamepad2 size={28} color="#FFFFFF" />
+              )}
+            </View>
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  };
   
   if (isLoading) {
     return (
-      <View style={styles.earnCardsSection}>
-        <View style={styles.earnCard}><EarnCardSkeleton /></View>
-        <View style={styles.earnCard}><EarnCardSkeleton /></View>
+      <View style={styles.earnCardsCarouselSection}>
+        <View style={styles.earnCardsCarouselSkeletonContainer}>
+          <EarnCardSkeleton />
+        </View>
       </View>
     );
   }
+
   return (
-    <View style={styles.earnCardsSection}>
-      <View style={styles.earnCard}>
-        <EarnCard
-          title="Watch & Earn"
-          description="Watch videos and earn rewards"
-          iconName="play-circle"
-          onPress={onWatchAndEarn}
-        />
-      </View>
-      <View style={styles.earnCard}>
-        <EarnCard
-          title="Refer & Earn"
-          description="Invite friends and earn rewards together"
-          iconName="user-plus"
-          onPress={onReferAndEarn}
-        />
-      </View>
+    <View style={styles.earnCardsCarouselSection}>
+      <FlatList
+        ref={flatListRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        data={infiniteData}
+        renderItem={renderEarnCard}
+        keyExtractor={(item, index) => `${item.id}-${index}`}
+        snapToInterval={screenWidth} // Full screen width for perfect snapping
+        decelerationRate="fast"
+        snapToAlignment="start"
+        pagingEnabled={false}
+        removeClippedSubviews={false}
+        onMomentumScrollEnd={handleScrollEnd}
+        initialScrollIndex={earnCardsData.length} // Start from the middle set
+        getItemLayout={(data, index) => ({
+          length: screenWidth,
+          offset: screenWidth * index,
+          index,
+        })}
+        contentContainerStyle={{
+          paddingHorizontal: 0, // No padding to ensure full width
+        }}
+        ItemSeparatorComponent={() => <View style={{ width: 0 }} />}
+      />
     </View>
   );
 };
@@ -305,10 +447,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     navigation.navigate('TipTube' as never);
   }, [navigation]);
 
-  const handleReferAndEarn = useCallback(() => {
-    console.log('Refer and earn pressed');
-    // navigation.navigate('ReferralScreen');
-  }, []);
+  const handlePlayAndEarn = useCallback(() => {
+    console.log('Play and earn pressed');
+    navigation.navigate('PlayToEarn' as never);
+  }, [navigation]);
 
   const handlePostLike = useCallback((postId: number) => {
     // Find current like state and optimistically update
@@ -392,15 +534,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     );
   }, [visiblePostIds, handlePostLike, handleCommentPress, handleUserProfilePress, handleUserFollow, getTimeAgo]);
 
-  // Header component with wallet balance
-  const renderHeader = useCallback(() => (
+  // Header component that scrolls with the list
+  const renderScrollableHeader = useCallback(() => (
     <View style={styles.headerContainer}>
-      <Header 
-        title="Home" 
-        showWallet={true}
-        walletAmount={walletAmount}
-      />
-      
       <StoriesRow 
         stories={displayStories}
         onStoryPress={handleStoryPress}
@@ -417,16 +553,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
       
       <EarnCardsRow 
         onWatchAndEarn={handleWatchAndEarn}
-        onReferAndEarn={handleReferAndEarn}
+        onPlayAndEarn={handlePlayAndEarn}
         isLoading={initialLoading}
       />
 
-      {/* Banner Ad */}
+      {/* Google Ad Banner */}
       <BannerAdComponent />
     </View>
   ), [
     styles.headerContainer, 
-    walletAmount,
     displayStories, 
     handleStoryPress, 
     handleAddStoryPress, 
@@ -435,7 +570,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     selectedCategoryState, 
     handleCategoryPress, 
     handleWatchAndEarn, 
-    handleReferAndEarn
+    handlePlayAndEarn
   ]);
 
   // Footer component
@@ -469,7 +604,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     return (
       <ScreenTransition>
         <View style={styles.container}>
-          {renderHeader()}
+        
           <View style={styles.errorContainer}>
             <Icon name="wifi-off" size={48} color={colors.textSecondary} />
             <Text style={[styles.errorTitle, { color: colors.text.primary }]}>
@@ -497,7 +632,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     return (
       <ScreenTransition>
         <View style={styles.container}>
-          {renderHeader()}
           <View style={styles.skeletonContainer}>
             {Array(3).fill(0).map((_, index) => (
               <PostItemSkeleton key={`skeleton-${index}`} />
@@ -512,11 +646,17 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   return (
     <ScreenTransition>
       <View style={styles.container}>
+        <Header 
+          title="Home" 
+          showWallet={true}
+          walletAmount={walletAmount}
+          showSearch={false}
+        />
         <FlatList
           data={displayPosts}
           renderItem={renderPostItem}
           keyExtractor={(item, index) => `post-${item.id}-${index}`}
-          ListHeaderComponent={renderHeader}
+          ListHeaderComponent={renderScrollableHeader}
           ListFooterComponent={renderFooter}
           refreshControl={
             <RefreshControl
@@ -657,6 +797,60 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
     flex: 1,
     padding: 16,
     gap: 16,
+  },
+  earnCardsCarouselSkeletonContainer: {
+    paddingHorizontal: 8,
+  },
+  earnCardsCarouselSection: {
+    paddingVertical: 16,
+  },
+  earnCardsCarouselContainer: {
+    paddingHorizontal: 16,
+    gap: 16,
+  },
+  earnCardCarouselItem: {
+    width: screenWidth - 16, // Full width minus minimal padding
+    height: 120,
+    borderRadius: 16,
+    marginHorizontal: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    overflow: 'hidden',
+  },
+  earnCardGradient: {
+    flex: 1,
+    borderRadius: 16,
+  },
+  earnCardContent: {
+    padding: 20,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  earnCardTextContainer: {
+    flex: 1,
+  },
+  earnCardTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 6,
+  },
+  earnCardDescription: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    opacity: 0.9,
+  },
+  earnCardIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 
