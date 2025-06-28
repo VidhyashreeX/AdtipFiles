@@ -10,25 +10,37 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { View, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCall } from '../../contexts/CallProvider';
 import { safeAreaStyles, statusBarConfig } from '../../utils/SafeAreaUtils';
+import { navigationRef } from '../../navigation/NavigationService';
+import Sidebar from '../sidebar/Sidebar';
 
 // Import navigation screens
 import MainNavigator from '../../navigation/MainNavigator';
 import AuthNavigator from '../../navigation/AuthNavigator';
+import MeetingScreen from '../../screens/videosdk/MeetingScreen';
+import { RootStackParamList } from '../../types/navigation';
 
 interface UltraFastLoaderProps {
   onInitializationComplete?: () => void;
 }
+
+// Create the RootStack inside UltraFastLoader
+const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({ 
   onInitializationComplete 
 }) => {
   const { colors, isDarkMode } = useTheme();
   const { isAuthenticated, isInitialized, user } = useAuth();
+  const { activeCall } = useCall();
   const [isVisible, setIsVisible] = useState(true);
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [isNavReady, setIsNavReady] = useState(false);
   const initStartTime = useRef<number | null>(null);
   const hasInitializedRef = useRef(false);
   const onInitializationCompleteRef = useRef<(() => void) | null>(null);
@@ -116,6 +128,35 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
     initializeServices();
   }, []); // Empty dependency array - only run once on mount
 
+  // Handle active call navigation
+  useEffect(() => {
+    if (!isNavReady || !activeCall) return;
+    
+    console.log('[UltraFastLoader] Active call detected, navigating to Meeting screen');
+    
+    // Navigate to Meeting screen when there's an active call
+    if (activeCall.meetingId && activeCall.token && activeCall.callerName) {
+      const navigationParams = {
+        meetingId: activeCall.meetingId,
+        token: activeCall.token,
+        callType: activeCall.callType || 'voice',
+        displayName: activeCall.callerName,
+        recipientName: activeCall.recipientName || 'Participant',
+        isInitiator: activeCall.isInitiator || false,
+      };
+      
+      // Navigate to Meeting within Main navigator using nested navigation
+      setTimeout(() => {
+        if (navigationRef.isReady()) {
+          (navigationRef as any).navigate('Main', {
+            screen: 'Meeting',
+            params: navigationParams
+          });
+        }
+      }, 100);
+    }
+  }, [activeCall, isNavReady]);
+
   // Render authentication loading state only while auth context is initializing
   if (!isInitialized) {
     return (
@@ -134,7 +175,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
     );
   }
 
-  // Always render content immediately based on auth state
+  // Always render the NavigationContainer with RootStack for consistent navigation
   return (
     <SafeAreaView 
       style={[
@@ -146,7 +187,25 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
       <StatusBar 
         {...(isDarkMode ? statusBarConfig.dark : statusBarConfig.light)}
       />
-      {shouldShowMainApp ? <MainNavigator /> : <AuthNavigator />}
+      
+      <NavigationContainer
+        ref={navigationRef}
+        onReady={() => {
+          console.log('[UltraFastLoader] Navigation is ready');
+          setIsNavReady(true);
+        }}
+      >
+        <RootStack.Navigator screenOptions={{ headerShown: false }}>
+          {shouldShowMainApp ? (
+            <RootStack.Screen name="Main" component={MainNavigator} />
+          ) : (
+            <RootStack.Screen name="Auth" component={AuthNavigator} />
+          )}
+        </RootStack.Navigator>
+        
+        {/* Move Sidebar inside NavigationContainer */}
+        {shouldShowMainApp && <Sidebar />}
+      </NavigationContainer>
     </SafeAreaView>
   );
 };

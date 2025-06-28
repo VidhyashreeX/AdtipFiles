@@ -92,18 +92,14 @@ const ThemeAwareStatusBar = () => {
 const AppNavigator = () => {
   const { isAuthenticated, isInitialized, user } = useAuth();
   const { activeCall, startCall } = useCall();
-  const [isNavReady, setIsNavReady] = useState(false);
   const [firebaseReady, setFirebaseReady] = useState(false);
   const [videoSDKReady, setVideoSDKReady] = useState(false);
   const [callServiceReady, setCallServiceReady] = useState(false);
-  const [whatsAppCallReady, setWhatsAppCallReady] = useState(false);  // NEW: WhatsApp-like call service ready state
+  const [whatsAppCallReady, setWhatsAppCallReady] = useState(false);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
   // Check if user needs to complete profile details
-  // User needs profile completion if authenticated but either:
-  // 1. No name provided, OR
-  // 2. Profile details not saved (isSaveUserDetails !== 1)
   const needsUserDetails = isAuthenticated && (!user?.name || user?.isSaveUserDetails !== 1);
 
   // Memoize the initialization complete callback to prevent re-renders
@@ -147,139 +143,6 @@ const AppNavigator = () => {
       subscription.remove();
     };
   }, [activeCall]);
-  // CRITICAL FIX: Handle activeCall state changes and navigation
-  useEffect(() => {
-    const handleNavigation = () => {
-      if (!isNavReady) return;
-      
-      const currentRoute = getCurrentRoute()?.name;
-      console.log('[App] Navigation effect triggered:', {
-        hasActiveCall: !!activeCall,
-        currentRoute,
-        isNavReady
-      });
-      
-      if (activeCall && currentRoute !== 'Meeting') {
-        console.log('[App] Navigating to Meeting screen with call:', {
-          meetingId: activeCall.meetingId,
-          callerName: activeCall.callerName,
-          recipientName: activeCall.recipientName
-        });
-          // Ensure all required parameters are present
-        if (!activeCall.meetingId || !activeCall.token || !activeCall.callerName) {
-          console.error('[App] Missing required call parameters:', {
-            meetingId: !!activeCall.meetingId,
-            token: !!activeCall.token,
-            callerName: !!activeCall.callerName,
-            fullActiveCall: activeCall
-          });
-          Alert.alert('Call Error', 'Unable to join call. Missing required information.');
-          CallService.endCall('Missing parameters');
-          return;
-        }        // Use the improved navigation function with retry logic
-        const navigationParams = {
-          meetingId: activeCall.meetingId,
-          token: activeCall.token,
-          callType: activeCall.callType || 'voice',
-          displayName: activeCall.callerName,
-          recipientName: activeCall.recipientName || 'Participant',
-          isInitiator: activeCall.isInitiator || false,
-        };
-        
-        console.log('[App] Navigating with params:', navigationParams);
-        // Navigate to Meeting using nested navigation
-        (navigationRef as any).navigate('Main', {
-          screen: 'Meeting',
-          params: navigationParams
-        });
-        
-      } else if (!activeCall && currentRoute === 'Meeting') {
-        console.log('[App] No active call, navigating back from Meeting screen');
-        if (navigationRef.canGoBack()) {
-          navigationRef.goBack();
-        }
-      }
-    };
-
-    handleNavigation();
-  }, [activeCall, isNavReady]);  // Handle forced navigation events from CallService
-  useEffect(() => {
-    const handleForceNavigation = (data: { activeCall: ActiveCall }) => {
-      if (!isNavReady) {
-        console.log('[App] Navigation not ready, scheduling force navigation');
-        setTimeout(() => handleForceNavigation(data), 100);
-        return;
-      }
-      
-      const currentRoute = getCurrentRoute()?.name;
-      if (currentRoute !== 'Meeting' && data.activeCall) {
-        console.log('[App] Force navigating to Meeting screen');
-        
-        // Ensure all required parameters are present
-        if (!data.activeCall.meetingId || !data.activeCall.token || !data.activeCall.callerName) {
-          console.error('[App] Missing required parameters in force navigation:', data.activeCall);
-          Alert.alert('Call Error', 'Unable to join call. Missing required information.');
-          CallService.endCall('Missing parameters');
-          return;
-        }
-          // Use the improved navigation function with retry logic
-        const localUserName = data.activeCall.isInitiator
-          ? data.activeCall.callerName
-          : data.activeCall.recipientName;
-        const remoteUserName = data.activeCall.isInitiator
-          ? data.activeCall.recipientName
-          : data.activeCall.callerName;
-
-        const forceNavigationParams = {
-          meetingId: data.activeCall.meetingId,
-          token: data.activeCall.token,
-          callType: data.activeCall.callType || 'voice',
-          displayName: localUserName || 'Me',
-          recipientName: remoteUserName || 'Participant',
-          isInitiator: data.activeCall.isInitiator || false,
-        };
-        
-        console.log('[App] Force navigating with params:', forceNavigationParams);
-        // Navigate to Meeting using nested navigation
-        (navigationRef as any).navigate('Main', {
-          screen: 'Meeting',
-          params: forceNavigationParams
-        });
-      }
-    };
-
-    appEventEmitter.on('forceNavigateToMeeting', handleForceNavigation);
-    
-    return () => {
-      appEventEmitter.off('forceNavigateToMeeting', handleForceNavigation);
-    };
-  }, [isNavReady]);  useEffect(() => {
-    if (!isNavReady) return;
-
-    const checkRoute = () => {
-      const currentRoute = getCurrentRoute()?.name;
-      if (activeCall && currentRoute !== 'Meeting') {
-        // Add a delay to ensure the Activity is fully ready
-        setTimeout(() => {
-          OngoingCallModule.startOngoingCallNotification(
-            'Ongoing Call',
-            `In call with ${activeCall.recipientName || 'participant'}`
-          );
-        }, 1000); // 1 second delay
-      } else {
-        OngoingCallModule.stopOngoingCallNotification();
-      }
-    };
-    
-    // Add a delay before the first check to ensure everything is ready
-    setTimeout(checkRoute, 500);
-
-    const unsubscribe = navigationRef.addListener('state', checkRoute);
-
-    return () => {
-      unsubscribe();
-    };
-  }, [activeCall, isNavReady]);
 
   // Set all services as ready immediately - they'll initialize in background
   useEffect(() => {
@@ -405,30 +268,6 @@ const AppNavigator = () => {
     };
   }, [startCall]);
 
-  useEffect(() => {
-    const checkNavigationReady = () => {
-      const ready = isNavigationReady();
-      setIsNavReady(ready);
-      if (ready) {
-        console.log('[App] Navigation is ready');
-        CallService.setNavigationReady();
-      }
-    };
-    
-    checkNavigationReady();
-    
-    // Set up a listener for navigation state changes
-    const unsubscribe = navigationRef.addListener('ready', () => {
-      console.log('[App] Navigation ready event fired');
-      setIsNavReady(true);
-      CallService.setNavigationReady();
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, []);
-
   // Setup incoming call handling with WhatsApp Call Manager
   useEffect(() => {
     const handleIncomingCallBroadcast = async (data: any) => {
@@ -490,17 +329,18 @@ const AppNavigator = () => {
     };
   }, []);
 
-  // Ultra-fast app initialization with authentication-aware routing
-  // Use UltraFastLoader for instant app initialization
+  // Always use UltraFastLoader unless user needs profile completion
   if (!needsUserDetails) {
     return <UltraFastLoader onInitializationComplete={handleInitializationComplete} />;
   }
 
   // Only show UserDetails screen if authenticated but missing user name
   return (
-    <RootStack.Navigator screenOptions={{ headerShown: false }}>
-      <RootStack.Screen name="UserDetails" component={UserDetailsScreen} />
-    </RootStack.Navigator>
+    <NavigationContainer ref={navigationRef}>
+      <RootStack.Navigator screenOptions={{ headerShown: false }}>
+        <RootStack.Screen name="UserDetails" component={UserDetailsScreen} />
+      </RootStack.Navigator>
+    </NavigationContainer>
   );
 };
 
@@ -513,7 +353,7 @@ function App(): React.JSX.Element {
   useEffect(() => {
     setTimeout(() => {
       mobileAds().initialize();
-    }, 500); // Delayed to not block initial render
+    }, 500);
   }, []);
 
   // Show App Open Ad in background
@@ -522,7 +362,7 @@ function App(): React.JSX.Element {
     if (adLoaded) {
       setTimeout(() => {
         showAd();
-      }, 1000); // Delayed to not block app start
+      }, 1000);
     }
   }, [adLoaded]);
 
@@ -539,10 +379,8 @@ function App(): React.JSX.Element {
                       <TabNavigatorProvider>
                         <SidebarProvider>
                           <GestureHandlerRootView style={{ flex: 1 }}>
-                            <NavigationContainer ref={navigationRef}>
-                              <AppNavigator />
-                              <Sidebar />
-                            </NavigationContainer>
+                            <AppNavigator />
+                            {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
                           </GestureHandlerRootView>
                         </SidebarProvider>
                       </TabNavigatorProvider>
