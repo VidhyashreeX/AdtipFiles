@@ -199,12 +199,15 @@ const ChatScreen: React.FC = () => {
       tempId: tempId // Include tempId for tracking
     };
 
+    console.log('Sending WebSocket message:', payload);
     const messageString = JSON.stringify(payload);
 
     if (ws.current?.readyState === WebSocket.OPEN) {
+      console.log('WebSocket is open, sending message');
       ws.current.send(messageString);
       return true;
     } else {
+      console.log('WebSocket not open, queueing message. ReadyState:', ws.current?.readyState);
       // Queue message if not connected
       messageQueueRef.current.push(messageString);
       // Try to reconnect
