@@ -33,6 +33,7 @@ import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 
 // Constants
 import { API_BASE_URL, API_ENDPOINTS } from '../../constants/api';
+import ApiService from '../../services/ApiService';
 
 // Define navigation param list
 type RootStackParamList = {
@@ -43,6 +44,8 @@ type RootStackParamList = {
   FollowingsList: { userId?: number };
   PostDetail: { postId: number };
   TipShorts: undefined;
+  Channel: { channelId: string };
+  Analytics: { channelId: string };
   Earnings: undefined;
   Packages: undefined; // Ensure this matches the target route name
   ChoosePackages: undefined; // Keep if other parts of ProfileScreen might use it, or remove if not
@@ -117,6 +120,7 @@ const ProfileScreen: React.FC = () => {
   const [imageViewerIndex, setImageViewerIndex] = useState(0);
   const [isCommentsVisible, setCommentsVisible] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
+  const [userChannelId, setUserChannelId] = useState<string | null>(null);
 
   // Default profile image
   const DEFAULT_PROFILE_IMAGE = 'https://via.placeholder.com/150';
@@ -192,6 +196,18 @@ const ProfileScreen: React.FC = () => {
       }
 
       setUser(userData);
+
+      // Fetch user's channel ID if this is their own profile
+      if (isOwnProfile && currentUser?.id) {
+        try {
+          const channelResponse = await ApiService.getChannelByUserId(Number(currentUser.id));
+          if (channelResponse.status === 200 && channelResponse.data && channelResponse.data.length > 0) {
+            setUserChannelId(String(channelResponse.data[0].channelId));
+          }
+        } catch (error) {
+          console.log('No channel found for user');
+        }
+      }
 
       let fetchedFollowers: any[] = [];
       let fetchedFollowings: any[] = [];
@@ -341,6 +357,24 @@ const ProfileScreen: React.FC = () => {
     navigation.navigate('CreateChannel');
   };
 
+  const handleMyChannel = () => {
+    if (userChannelId) {
+      navigation.navigate('Channel', { channelId: userChannelId });
+    } else {
+      // If no channel found, redirect to create channel
+      navigation.navigate('CreateChannel');
+    }
+  };
+
+  const handleAnalytics = () => {
+    if (userChannelId) {
+      navigation.navigate('Analytics', { channelId: userChannelId });
+    } else {
+      // If no channel found, redirect to create channel
+      navigation.navigate('CreateChannel');
+    }
+  };
+
   const handleFollowersPress = () => {
     navigation.navigate('FollowersList', { userId: user?.id ? Number(user.id) : undefined });
   };
@@ -397,6 +431,22 @@ const ProfileScreen: React.FC = () => {
       title: 'Watch Videos',
       subtitle: 'Earn coins by watching content',
       onPress: () => navigation.navigate('TipShorts'),
+      active: false,
+    },
+    {
+      id: 'channel',
+      icon: 'tv',
+      title: 'My Channel',
+      subtitle: 'Manage your channel content',
+      onPress: handleMyChannel,
+      active: false,
+    },
+    {
+      id: 'analytics',
+      icon: 'bar-chart-2',
+      title: 'Analytics',
+      subtitle: 'View channel performance',
+      onPress: handleAnalytics,
       active: false,
     },
     {
