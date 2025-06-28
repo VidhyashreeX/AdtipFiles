@@ -552,6 +552,12 @@ class CallService {
   }): Promise<void> {
     try {
       console.log('[CallService] Handling incoming call:', callData);
+
+      // Prevent handling if a call is already active
+      if (this.activeCall) {
+        console.warn('[CallService] Ignoring incoming call because another call is already active.');
+        return;
+      }
       
       // Get current user info
       const userId = await AsyncStorage.getItem('userId');
@@ -572,7 +578,7 @@ class CallService {
         recipientName: currentUserName, // Local user is the recipient
         callerName: callData.callerName, // Remote user is the caller
         callerId: callData.callerId,
-        callerFcmToken: this.currentUser?.fcm_token || '', // Store current user's FCM token for end call
+        callerFcmToken: callData.callerFcmToken, // The token of the person calling us
         recipientId: userId,
         status: 'ringing',
         timestamp: Date.now()
@@ -581,10 +587,10 @@ class CallService {
       // Persist state immediately
       await this.persistCallState();
       
-      // Emit state change
+      // Emit state change to update UI (e.g., CallProvider)
       this.emitCallStateChange();
       
-      // CRITICAL FIX: Trigger native call experience
+      // CRITICAL: Trigger native call experience
       await this.triggerNativeIncomingCall(callData);
       
       console.log('[CallService] Incoming call setup complete');

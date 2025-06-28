@@ -130,30 +130,40 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
 
   // Handle active call navigation
   useEffect(() => {
-    if (!isNavReady || !activeCall) return;
+    if (!isNavReady || !activeCall || !navigationRef.isReady()) return;
     
-    console.log('[UltraFastLoader] Active call detected, navigating to Meeting screen');
-    
-    // Navigate to Meeting screen when there's an active call
-    if (activeCall.meetingId && activeCall.token && activeCall.callerName) {
-      const navigationParams = {
-        meetingId: activeCall.meetingId,
-        token: activeCall.token,
-        callType: activeCall.callType || 'voice',
-        displayName: activeCall.callerName,
-        recipientName: activeCall.recipientName || 'Participant',
-        isInitiator: activeCall.isInitiator || false,
-      };
+    // Only navigate if the call is in a state that requires the meeting screen
+    const shouldNavigate = activeCall.status === 'connected' || 
+                           (activeCall.status === 'ringing' && !activeCall.isInitiator) ||
+                           (activeCall.status === 'dialing' && activeCall.isInitiator);
+
+    if (shouldNavigate) {
+      console.log('[UltraFastLoader] Active call detected, navigating to Meeting screen. Status:', activeCall.status);
       
-      // Navigate to Meeting within Main navigator using nested navigation
-      setTimeout(() => {
-        if (navigationRef.isReady()) {
-          (navigationRef as any).navigate('Main', {
-            screen: 'Meeting',
-            params: navigationParams
-          });
-        }
-      }, 100);
+      if (activeCall.meetingId && activeCall.token) {
+        const navigationParams = {
+          meetingId: activeCall.meetingId,
+          token: activeCall.token,
+          callType: activeCall.callType || 'voice',
+          displayName: activeCall.isInitiator ? activeCall.recipientName : activeCall.callerName,
+          recipientName: activeCall.recipientName || 'Participant',
+          isInitiator: activeCall.isInitiator || false,
+        };
+        
+        // Use a timeout to ensure the navigation container is fully ready
+        setTimeout(() => {
+          if (navigationRef.isReady()) {
+            // Check current route to avoid redundant navigation
+            const currentRoute = navigationRef.getCurrentRoute();
+            if (currentRoute?.name !== 'Meeting') {
+              (navigationRef as any).navigate('Main', {
+                screen: 'Meeting',
+                params: navigationParams,
+              });
+            }
+          }
+        }, 150);
+      }
     }
   }, [activeCall, isNavReady]);
 

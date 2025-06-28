@@ -9,7 +9,8 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { useTheme } from '../../contexts/ThemeContext';
@@ -94,6 +95,7 @@ const shuffleArray = <T,>(array: T[]): T[] => {
 
 // Main TipTube Screen - Enhanced with React Query v5 data layer
 const TipTubeScreen = () => {
+  const queryClient = useQueryClient();
   const { isDarkMode, colors } = useTheme();
   const { contentPaddingBottom } = useTabNavigator();
   const { user } = useAuth();
@@ -124,6 +126,15 @@ const TipTubeScreen = () => {
 
   // Prefetch data for better performance
   const { prefetchProfile } = usePrefetchData();
+
+  // Fetch data whenever the screen comes into focus by invalidating the query.
+  // This marks the data as stale and triggers a refetch without blocking navigation.
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[TipTubeScreen] Screen focused. Invalidating videos query to trigger refetch.');
+      queryClient.invalidateQueries({ queryKey: ['videos', categoryId, user?.id, searchQuery] });
+    }, [queryClient, categoryId, user?.id, searchQuery])
+  );
 
   // Transform videos data for compatibility and proper typing
   const videos = useMemo(() => {
