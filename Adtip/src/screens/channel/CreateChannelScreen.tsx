@@ -72,7 +72,8 @@ interface User {
   id: number | string;
 }
 
-const CreateChannelScreen: React.FC = () => {  const [channelName, setChannelName] = useState('');
+const CreateChannelScreen: React.FC = () => {
+  const [channelName, setChannelName] = useState('');
   const [description, setDescription] = useState('');
   const [nameError, setNameError] = useState('');
   const [channelData, setChannelData] = useState<ChannelData | null>(null);
@@ -80,6 +81,7 @@ const CreateChannelScreen: React.FC = () => {  const [channelName, setChannelNam
   const [error, setError] = useState('');
   const navigation = useNavigation<NavigationProp>();
   const { user } = useAuth();
+  const { colors, isDarkMode } = useTheme();
   useEffect(() => {
     const fetchChannel = async () => {
       if (!user || !user.id) {
@@ -167,17 +169,17 @@ const CreateChannelScreen: React.FC = () => {  const [channelName, setChannelNam
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.borderLight }]}>
           <TouchableOpacity onPress={goBack} style={styles.backButton}>
-            <Icon name="arrow-left" size={24} color="#000" />
+            <Icon name="arrow-left" size={24} color={colors.text.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Channel</Text>
+          <Text style={[styles.headerTitle, { color: colors.primary }]}>Create Channel</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#24d05a" />
-          <Text style={styles.loadingText}>Loading...</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text.secondary }]}>Loading...</Text>
         </View>
       </SafeAreaView>
     );
@@ -185,18 +187,18 @@ const CreateChannelScreen: React.FC = () => {  const [channelName, setChannelNam
 
   if (error) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.borderLight }]}>
           <TouchableOpacity onPress={goBack} style={styles.backButton}>
-            <Icon name="arrow-left" size={24} color="#000" />
+            <Icon name="arrow-left" size={24} color={colors.text.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Channel</Text>
+          <Text style={[styles.headerTitle, { color: colors.primary }]}>Create Channel</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={goBack}>
-            <Text style={styles.retryButtonText}>Go Back</Text>
+          <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+          <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={goBack}>
+            <Text style={[styles.retryButtonText, { color: colors.white }]}>Go Back</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -204,12 +206,12 @@ const CreateChannelScreen: React.FC = () => {  const [channelName, setChannelNam
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.borderLight }]}>
         <TouchableOpacity onPress={goBack} style={styles.backButton}>
-          <Icon name="arrow-left" size={24} color="#000" />
+          <Icon name="arrow-left" size={24} color={colors.text.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Create Channel</Text>
+        <Text style={[styles.headerTitle, { color: colors.primary }]}>Create Channel</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -218,18 +220,23 @@ const CreateChannelScreen: React.FC = () => {  const [channelName, setChannelNam
         style={styles.formContainer}
       >
         <View style={styles.formContent}>
-          <Text style={styles.title}>Create your TipTube channel</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, { color: colors.primary }]}>Create your TipTube channel</Text>
+          <Text style={[styles.subtitle, { color: colors.text.secondary }]}>
             Start sharing your content and earn money through views and engagement
           </Text>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Channel Name</Text>
+            <Text style={[styles.label, { color: colors.text.primary }]}>Channel Name</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { 
+                borderColor: colors.border, 
+                backgroundColor: colors.surface,
+                color: colors.text.primary
+              }]}
               value={channelName}
               onChangeText={setChannelName}
               placeholder="Enter channel name"
+              placeholderTextColor={colors.text.tertiary}
               maxLength={50}
               onBlur={() => {
                 if (channelName && channelName.length < 3) {
@@ -237,16 +244,21 @@ const CreateChannelScreen: React.FC = () => {  const [channelName, setChannelNam
                 }
               }}
             />
-            {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+            {nameError ? <Text style={[styles.errorText, { color: colors.error }]}>{nameError}</Text> : null}
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Description</Text>
+            <Text style={[styles.label, { color: colors.text.primary }]}>Description</Text>
             <TextInput
-              style={[styles.input, styles.textArea]}
+              style={[styles.input, styles.textArea, { 
+                borderColor: colors.border, 
+                backgroundColor: colors.surface,
+                color: colors.text.primary
+              }]}
               value={description}
               onChangeText={setDescription}
               placeholder="Tell viewers about your channel"
+              placeholderTextColor={colors.text.tertiary}
               multiline
               numberOfLines={4}
               maxLength={500}
@@ -254,14 +266,18 @@ const CreateChannelScreen: React.FC = () => {  const [channelName, setChannelNam
           </View>
 
           <TouchableOpacity
-            style={[styles.createButton, (!channelName || nameError) && styles.disabledButton]}
+            style={[
+              styles.createButton, 
+              { backgroundColor: colors.primary },
+              (!channelName || nameError) && { backgroundColor: colors.text.tertiary }
+            ]}
             onPress={handleCreateChannel}
             disabled={!channelName || !!nameError}
           >
-            <Text style={styles.createButtonText}>Create Channel</Text>
+            <Text style={[styles.createButtonText, { color: colors.white }]}>Create Channel</Text>
           </TouchableOpacity>
 
-          <Text style={styles.termsText}>
+          <Text style={[styles.termsText, { color: colors.text.tertiary }]}>
             By creating a channel, you agree to TipTube's Terms of Service and Community Guidelines
           </Text>
         </View>
@@ -273,7 +289,6 @@ const CreateChannelScreen: React.FC = () => {  const [channelName, setChannelNam
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFF',
   },
   header: {
     flexDirection: 'row',
@@ -282,7 +297,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
   },
   backButton: {
     padding: 8,
@@ -290,7 +304,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#24d05a',
   },
   placeholder: {
     width: 40,
@@ -304,13 +317,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#24d05a',
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
     marginBottom: 32,
     textAlign: 'center',
   },
@@ -320,12 +331,10 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#333',
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#CCCCCC',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
@@ -335,30 +344,23 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   errorText: {
-    color: '#FF0000',
     fontSize: 14,
     marginTop: 4,
     marginBottom: 8,
   },
   createButton: {
-    backgroundColor: '#24d05a',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
     marginTop: 16,
   },
-  disabledButton: {
-    backgroundColor: '#CCCCCC',
-  },
   createButtonText: {
-    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
     textAlign: 'center',
   },
   termsText: {
     fontSize: 12,
-    color: '#666',
     marginTop: 16,
     textAlign: 'center',
   },
@@ -370,7 +372,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 8,
     fontSize: 16,
-    color: '#666',
   },
   errorContainer: {
     flex: 1,
@@ -379,14 +380,12 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   retryButton: {
-    backgroundColor: '#24d05a',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
     marginTop: 16,
   },
   retryButtonText: {
-    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   },
