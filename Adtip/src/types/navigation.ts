@@ -40,6 +40,7 @@ export type MainNavigatorParamList = {
   TipShop: undefined;
   Chat: { user: Contact }; // Add this line
   Profile: {userId?: number};
+  EditProfile: undefined;
   PostDetail: {postId: number};
   Video: {postId: number};
   Story: {storyId: string};

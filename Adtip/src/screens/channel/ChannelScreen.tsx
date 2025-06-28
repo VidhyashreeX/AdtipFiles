@@ -67,20 +67,25 @@ const ChannelScreen: React.FC = () => {
   const [shortsLoading, setShortsLoading] = useState(false);
 
   // Get channel ID from route params
+  // Note: Despite being called 'channelId', this parameter may contain userId
+  // when navigated from ProfileScreen, since the API expects userId
   const routeChannelId = (route.params as any)?.channelId || (route.params as any)?.userId;
   const isMyChannel = !routeChannelId || String(routeChannelId) === String(user?.id);
+  
+  // For the API call, we use the route parameter (which should contain userId for API compatibility)
   const channelId = isMyChannel ? user?.id : routeChannelId;
 
   const loadChannelData = useCallback(async () => {
     if (!channelId) {
-      Alert.alert('Error', 'Channel ID not provided');
+      Alert.alert('Error', 'User ID not provided');
       return;
     }
 
     try {
       if (!refreshing) setLoading(true);
 
-      // Get channel information
+      // Get channel information using userId (the channelId parameter should now contain the userId)
+      // The API expects userId, so we pass the channelId which now contains the userId
       const channelResponse = await ApiService.getChannelByUserId(channelId);
       
       if (channelResponse.status === 200 && channelResponse.data && channelResponse.data.length > 0) {
@@ -95,8 +100,8 @@ const ChannelScreen: React.FC = () => {
           totalSubscribers: Number(channel.totalSubscribers || 0),
           totalVideos: Number(channel.totalVideos || 0),
           totalViews: Number(channel.total_ads_view || 0),
-          isSubscribed: Boolean(channel.isSubscribed), // Assuming this field will be added to the API
-          isVerified: Boolean(channel.isVerified), // Assuming this field will be added
+          isSubscribed: Boolean(channel.isSubscribed),
+          isVerified: Boolean(channel.isVerified),
           createdDate: channel.createddate || new Date().toISOString(),
           createdBy: Number(channel.createdBy || channelId),
         };

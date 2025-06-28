@@ -358,8 +358,10 @@ const ProfileScreen: React.FC = () => {
   };
 
   const handleMyChannel = () => {
-    if (userChannelId) {
-      navigation.navigate('Channel', { channelId: userChannelId });
+    if (userChannelId && currentUser?.id) {
+      // Note: Despite the parameter name being 'channelId', we pass the userId
+      // because the ChannelScreen API expects userId, not channelId
+      navigation.navigate('Channel', { channelId: String(currentUser.id) });
     } else {
       // If no channel found, redirect to create channel
       navigation.navigate('CreateChannel');
