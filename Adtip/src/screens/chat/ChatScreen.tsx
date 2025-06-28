@@ -45,37 +45,14 @@ const ChatScreen: React.FC = () => {
   // Helper to sort messages by createddate ascending
   const sortedMessages = [...messages].sort((a, b) => new Date(a.createddate).getTime() - new Date(b.createddate).getTime());
 
-  // Auto-scroll to bottom function
+  // Auto-scroll to bottom function (simplified and reliable)
   const scrollToBottom = useCallback((animated: boolean = true) => {
     if (flatListRef.current && sortedMessages.length > 0) {
       console.log('Scrolling to bottom, animated:', animated, 'messages count:', sortedMessages.length);
       try {
-        // Multiple attempts to ensure scrolling works
         flatListRef.current.scrollToEnd({ animated });
-        
-        // Backup method - scroll to last index
-        if (sortedMessages.length > 0) {
-          setTimeout(() => {
-            if (flatListRef.current) {
-              flatListRef.current.scrollToIndex({
-                index: sortedMessages.length - 1,
-                animated: false,
-                viewPosition: 1
-              });
-            }
-          }, animated ? 300 : 150);
-        }
       } catch (error) {
         console.warn('Error scrolling to bottom:', error);
-        // Final fallback: scroll to large offset
-        setTimeout(() => {
-          if (flatListRef.current) {
-            flatListRef.current.scrollToOffset({
-              offset: 999999,
-              animated: false
-            });
-          }
-        }, 200);
       }
     }
   }, [sortedMessages.length]);
@@ -420,15 +397,14 @@ const ChatScreen: React.FC = () => {
           
           setMessages(validatedMessages);
           
-          // Auto-scroll to bottom after loading messages with multiple attempts
+          // Auto-scroll to bottom after loading messages
           setTimeout(() => {
             console.log('Initial scroll to bottom after loading messages');
             scrollToBottom(false);
-          }, 300);
+          }, 500);
           
-          // Additional scroll attempts to ensure it works
-          setTimeout(() => scrollToBottom(false), 800);
-          setTimeout(() => scrollToBottom(false), 1200);
+          // One additional scroll attempt to ensure it works
+          setTimeout(() => scrollToBottom(false), 1000);
         }
       } catch (error) {
         console.error('Failed to fetch messages:', error);
@@ -617,11 +593,11 @@ const ChatScreen: React.FC = () => {
               style={styles.list}
               contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
               onContentSizeChange={() => {
-                console.log('FlatList content size changed, scrolling to bottom');
-                setTimeout(() => scrollToBottom(true), 100);
+                // Scroll to bottom when content size changes (new messages)
+                setTimeout(() => scrollToBottom(false), 100);
               }}
               onLayout={() => {
-                console.log('FlatList layout changed, scrolling to bottom');
+                // Initial layout scroll
                 setTimeout(() => scrollToBottom(false), 200);
               }}
               removeClippedSubviews={false}
