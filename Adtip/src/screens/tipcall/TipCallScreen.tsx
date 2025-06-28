@@ -134,10 +134,10 @@ const ContactCard: React.FC<{
   onVideoCall: () => void;
   onVoiceCall: () => void;
   onChat: () => void;
-  unreadCount: number;
+  hasUnreadMessages: boolean;
   colors: any;
   isDarkMode: boolean;
-}> = ({ contact, onVideoCall, onVoiceCall, onChat, unreadCount, colors, isDarkMode }) => {
+}> = ({ contact, onVideoCall, onVoiceCall, onChat, hasUnreadMessages, colors, isDarkMode }) => {
   const isAvailable = contact.is_available && !contact.dnd && contact.online_status;
   const avatarColor = isAvailable ? colors.success : colors.gray?.[400] || '#9CA3AF';
   
@@ -230,18 +230,16 @@ const ContactCard: React.FC<{
               <Icon name="phone" size={16} color="#FFFFFF" />
             </TouchableOpacity>
             
-            {/* Enhanced chat button with unread indicator */}
+            {/* Enhanced chat button with unread dot indicator */}
             <TouchableOpacity
               style={[styles.actionButton, styles.chatButton, { backgroundColor: colors.info || '#3B82F6' }]}
               onPress={onChat}
               activeOpacity={0.8}
             >
               <Icon name="message-circle" size={16} color="#FFFFFF" />
-              {unreadCount > 0 && (
-                <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadBadgeText}>
-                    {unreadCount > 99 ? '99+' : unreadCount.toString()}
-                  </Text>
+              {hasUnreadMessages && (
+                <View style={styles.unreadDot}>
+                  {/* Gold dot for unread messages */}
                 </View>
               )}
             </TouchableOpacity>
@@ -578,7 +576,7 @@ export default function TipCallScreen() {
         onVideoCall={() => handleStartCall(item, 'video')}
         onVoiceCall={() => handleStartCall(item, 'voice')}
         onChat={() => handleChatNavigation(item)}
-        unreadCount={unreadCounts[item.id] || 0}
+        hasUnreadMessages={unreadCounts[item.id] > 0}
         colors={colors}
         isDarkMode={isDarkMode}
       />
@@ -1149,25 +1147,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#3B82F6',
   },
 
-  // New unread badge styles
-  unreadBadge: {
+  // New unread dot styles
+  unreadDot: {
     position: 'absolute',
     top: -4,
     right: -4,
     backgroundColor: '#FFD700', // Gold color
     borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  
-  unreadBadgeText: {
-    color: '#000000',
-    fontSize: 10,
-    fontWeight: 'bold',
-    textAlign: 'center',
+    width: 8,
+    height: 8,
   },
 });
