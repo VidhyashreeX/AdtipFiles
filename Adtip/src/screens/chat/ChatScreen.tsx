@@ -314,7 +314,7 @@ const ChatScreen: React.FC = () => {
       
       // Mark messages as read when entering chat
       if (self?.id) {
-        ApiService.get(`/api/seenallmessage/${self.id}/${otherUser.id}`)
+        ApiService.markMessagesAsRead(self.id, otherUser.id)
           .catch(error => console.error('Failed to mark messages as read:', error));
       }
       
