@@ -356,15 +356,22 @@ function App(): React.JSX.Element {
     }, 500);
   }, []);
 
-  // Show App Open Ad in background
-  const { showAd, adLoaded } = useAppOpenAd();
+  // Initialize App Open Ad with aggressive showing
+  const { adLoaded, showAd, forceLoadAd } = useAppOpenAd();
+  
+  // The AppOpenAdManager now handles showing ads aggressively:
+  // - On app launch (after 1.5 second delay)
+  // - When app comes to foreground from background
+  // - With only 30-second cooldown between ads
+  // - Automatically retries loading ads
+  
+  // Ensure ad is always ready
   useEffect(() => {
-    if (adLoaded) {
-      setTimeout(() => {
-        showAd();
-      }, 1000);
+    if (!adLoaded) {
+      console.log('App.tsx: Ensuring app open ad is loaded');
+      forceLoadAd();
     }
-  }, [adLoaded]);
+  }, [adLoaded, forceLoadAd]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
