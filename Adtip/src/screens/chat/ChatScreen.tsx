@@ -48,9 +48,35 @@ const ChatScreen: React.FC = () => {
   // Auto-scroll to bottom function
   const scrollToBottom = useCallback((animated: boolean = true) => {
     if (flatListRef.current && sortedMessages.length > 0) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated });
-      }, 100);
+      console.log('Scrolling to bottom, animated:', animated, 'messages count:', sortedMessages.length);
+      try {
+        // Multiple attempts to ensure scrolling works
+        flatListRef.current.scrollToEnd({ animated });
+        
+        // Backup method - scroll to last index
+        if (sortedMessages.length > 0) {
+          setTimeout(() => {
+            if (flatListRef.current) {
+              flatListRef.current.scrollToIndex({
+                index: sortedMessages.length - 1,
+                animated: false,
+                viewPosition: 1
+              });
+            }
+          }, animated ? 300 : 150);
+        }
+      } catch (error) {
+        console.warn('Error scrolling to bottom:', error);
+        // Final fallback: scroll to large offset
+        setTimeout(() => {
+          if (flatListRef.current) {
+            flatListRef.current.scrollToOffset({
+              offset: 999999,
+              animated: false
+            });
+          }
+        }, 200);
+      }
     }
   }, [sortedMessages.length]);
 
@@ -394,8 +420,15 @@ const ChatScreen: React.FC = () => {
           
           setMessages(validatedMessages);
           
-          // Auto-scroll to bottom after loading messages
-          setTimeout(() => scrollToBottom(false), 500);
+          // Auto-scroll to bottom after loading messages with multiple attempts
+          setTimeout(() => {
+            console.log('Initial scroll to bottom after loading messages');
+            scrollToBottom(false);
+          }, 300);
+          
+          // Additional scroll attempts to ensure it works
+          setTimeout(() => scrollToBottom(false), 800);
+          setTimeout(() => scrollToBottom(false), 1200);
         }
       } catch (error) {
         console.error('Failed to fetch messages:', error);
@@ -455,11 +488,17 @@ const ChatScreen: React.FC = () => {
           .catch(error => console.error('Failed to mark messages as read:', error));
       }
       
+      // Scroll to bottom when focusing on chat (like WhatsApp)
+      setTimeout(() => {
+        console.log('Chat focused, scrolling to bottom');
+        scrollToBottom(false);
+      }, 500);
+      
       return () => {
         setIsUserInChat(false);
         setIsOtherTyping(false);
       };
-    }, [self, otherUser.id])
+    }, [self, otherUser.id, scrollToBottom])
   );
 
   // Memoized message item component for better performance
@@ -577,18 +616,24 @@ const ChatScreen: React.FC = () => {
               }}
               style={styles.list}
               contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
-              onContentSizeChange={() => scrollToBottom(true)}
-              onLayout={() => scrollToBottom(false)}
-              removeClippedSubviews={true}
-              maxToRenderPerBatch={10}
+              onContentSizeChange={() => {
+                console.log('FlatList content size changed, scrolling to bottom');
+                setTimeout(() => scrollToBottom(true), 100);
+              }}
+              onLayout={() => {
+                console.log('FlatList layout changed, scrolling to bottom');
+                setTimeout(() => scrollToBottom(false), 200);
+              }}
+              removeClippedSubviews={false}
+              maxToRenderPerBatch={15}
               updateCellsBatchingPeriod={50}
-              initialNumToRender={20}
-              windowSize={10}
-              getItemLayout={(data, index) => ({
-                length: 80, // Approximate height of each message
-                offset: 80 * index,
-                index,
-              })}
+              initialNumToRender={25}
+              windowSize={15}
+              showsVerticalScrollIndicator={true}
+              scrollEventThrottle={16}
+              scrollEnabled={true}
+              nestedScrollEnabled={true}
+              bounces={true}
             />
             
             {isOtherTyping && isUserInChat && (
