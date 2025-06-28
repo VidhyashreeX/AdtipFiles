@@ -67,8 +67,13 @@ const ChatScreen: React.FC = () => {
 
     try {
       isConnectingRef.current = true;
+      console.log('Starting WebSocket connection...');
       const token = await AsyncStorage.getItem('accessToken');
-      if (!token) return;
+      if (!token) {
+        console.error('No access token found');
+        isConnectingRef.current = false;
+        return;
+      }
 
       ws.current = new WebSocket(`${WS_URL}?token=${token}`);
       
@@ -221,6 +226,11 @@ const ChatScreen: React.FC = () => {
       console.log('WebSocket is open, sending message');
       ws.current.send(messageString);
       return true;
+    } else if (ws.current?.readyState === WebSocket.CONNECTING) {
+      console.log('WebSocket is connecting, queueing message');
+      // Queue message if connecting
+      messageQueueRef.current.push(messageString);
+      return false; // Will be sent when connection opens
     } else {
       console.log('WebSocket not open, queueing message. ReadyState:', ws.current?.readyState);
       // Queue message if not connected
@@ -288,6 +298,12 @@ const ChatScreen: React.FC = () => {
     
     // Auto-scroll after sending
     setTimeout(() => scrollToBottom(true), 100);
+
+    // If WebSocket is connecting, wait a bit for it to open
+    if (isConnectingRef.current && !ws.current) {
+      console.log('WebSocket is connecting, waiting 500ms...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
 
     // Try WebSocket first, then fallback to API
     const wsSuccess = sendMessageWS(messageText, tempId);
@@ -391,9 +407,9 @@ const ChatScreen: React.FC = () => {
     };
   }, [self?.id, otherUser.id]); // Removed scrollToBottom dependency
 
-  // Setup WebSocket connection
+  // Setup WebSocket connection immediately when component mounts
   useEffect(() => {
-    if (isUserInChat) {
+    if (self?.id) {
       connectWebSocket();
     }
 
@@ -416,7 +432,7 @@ const ChatScreen: React.FC = () => {
         ws.current = null;
       }
     };
-  }, [connectWebSocket, isUserInChat]);
+  }, [connectWebSocket, self?.id]); // Connect as soon as we have user info
 
   // Handle screen focus/blur for chat state management
   useFocusEffect(
