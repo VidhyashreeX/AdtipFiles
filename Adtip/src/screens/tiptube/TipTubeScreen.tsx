@@ -320,9 +320,9 @@ const TipTubeScreen = () => {
         index={index}
         isYouTubeLayout={true} // Pass flag for YouTube-like layout
       />
-      {/* Banner ad every 5 videos */}
-      {(index + 1) % 5 === 0 && (
-        <View style={{ marginVertical: 10 }}>
+      {/* Banner ad every 3 videos */}
+      {(index + 1) % 3 === 0 && (
+        <View style={styles.adContainer}>
           <BannerAdComponent />
         </View>
       )}
@@ -392,6 +392,16 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
   },
   listContent: {
     flexGrow: 1,
+  },
+  adContainer: {
+    backgroundColor: colors.background,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginVertical: 8,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderTopColor: colors.border,
+    borderBottomColor: colors.border,
   },
   categoryContainer: {
     backgroundColor: colors.background,

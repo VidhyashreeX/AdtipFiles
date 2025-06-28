@@ -25,6 +25,7 @@ import ProfilePageSkeleton from '../../components/skeletons/ProfilePageSkeleton'
 import ScreenTransition from '../../components/common/ScreenTransition';
 import CommentScreen from '../home/CommentScreen';
 import RectangleAdComponent from '../../googleads/RectangleAdComponent';
+import BannerAdComponent from '../../googleads/BannerAdComponent';
 
 // Context
 import { useTheme } from '../../contexts/ThemeContext';
@@ -750,6 +751,12 @@ const ProfileScreen: React.FC = () => {
               </TouchableOpacity>
             ))}
           </View>
+          
+          {/* Banner Ad above Menu */}
+          <View style={styles.bannerAdContainer}>
+            <BannerAdComponent />
+          </View>
+          
           {/* Menu Section */}
           <View style={[styles.menuContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
             <Text style={[styles.menuTitle, { color: colors.text.primary }]}>Menu</Text>
@@ -967,6 +974,12 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 8,
+  },
+  bannerAdContainer: {
+    marginHorizontal: 16,
+    marginVertical: 12,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   menuContainer: {
     borderRadius: 20,

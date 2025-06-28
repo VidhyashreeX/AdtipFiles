@@ -508,29 +508,45 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     const isVisible = visiblePostIds.includes(item.id);
     
     return (
-      <PostItem
-        key={`post-${item.id}-${index}`}
-        id={item.id}
-        username={item.user_name}
-        profileImage={item.user_profile_image}
-        postImage={item.media_url}
-        caption={item.content}
-        likes={item.likeCount}
-        comments={item.commentCount}
-        timeAgo={getTimeAgo(item.created_at)}
-        media_type={item.media_type}
-        isPremium={item.is_premium}
-        isLiked={item.is_liked}
-        userId={item.user_id}
-        isVisible={isVisible}
-        last_active={item.last_active}
-        onLike={handlePostLike}
-        onComment={handleCommentPress}
-        onShare={(postId: number) => console.log('Share post:', postId)}
-        onPostPress={(postId: number) => console.log('Post pressed:', postId)}
-        onUserPress={handleUserProfilePress}
-        onFollow={handleUserFollow}
-      />
+      <>
+        {/* Sticky banner ad above first post */}
+        {index === 0 && (
+          <View style={styles.stickyBannerContainer}>
+            <BannerAdComponent />
+          </View>
+        )}
+        
+        <PostItem
+          key={`post-${item.id}-${index}`}
+          id={item.id}
+          username={item.user_name}
+          profileImage={item.user_profile_image}
+          postImage={item.media_url}
+          caption={item.content}
+          likes={item.likeCount}
+          comments={item.commentCount}
+          timeAgo={getTimeAgo(item.created_at)}
+          media_type={item.media_type}
+          isPremium={item.is_premium}
+          isLiked={item.is_liked}
+          userId={item.user_id}
+          isVisible={isVisible}
+          last_active={item.last_active}
+          onLike={handlePostLike}
+          onComment={handleCommentPress}
+          onShare={(postId: number) => console.log('Share post:', postId)}
+          onPostPress={(postId: number) => console.log('Post pressed:', postId)}
+          onUserPress={handleUserProfilePress}
+          onFollow={handleUserFollow}
+        />
+        
+        {/* Banner ad every 3 posts */}
+        {(index + 1) % 3 === 0 && (
+          <View style={styles.adSpacingContainer}>
+            <BannerAdComponent />
+          </View>
+        )}
+      </>
     );
   }, [visiblePostIds, handlePostLike, handleCommentPress, handleUserProfilePress, handleUserFollow, getTimeAgo]);
 
@@ -556,9 +572,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
         onPlayAndEarn={handlePlayAndEarn}
         isLoading={initialLoading}
       />
-
-      {/* Google Ad Banner */}
-      <BannerAdComponent />
     </View>
   ), [
     styles.headerContainer, 
@@ -725,6 +738,24 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
   },
   headerContainer: {
     backgroundColor: colors.background,
+  },
+  stickyBannerContainer: {
+    backgroundColor: colors.background,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    marginBottom: 8,
+  },
+  adSpacingContainer: {
+    backgroundColor: colors.background,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginVertical: 8,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderTopColor: colors.border,
+    borderBottomColor: colors.border,
   },
   storiesSection: {
     paddingVertical: 16,

@@ -18,7 +18,7 @@ const PROD_APP_OPEN_AD_UNIT_ID =
 //const APP_OPEN_AD_UNIT_ID = PROD_APP_OPEN_AD_UNIT_ID;
 
 // Minimum cooldown period between app open ads (in milliseconds)
-const AD_COOLDOWN_PERIOD = 30 * 1000; // 30 seconds to prevent rapid-fire ads
+const AD_COOLDOWN_PERIOD = 60 * 1000; // 1 minute to balance user experience with ad revenue
 
 let lastAdShownTime = 0;
 let isAdCurrentlyShowing = false;
@@ -83,15 +83,18 @@ export function useAppOpenAd() {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       console.log('App state changed:', appStateRef.current, '->', nextAppState);
       
-      // Show ad when app comes to foreground
+      // Show ad when app comes to foreground (newly opened or resumed)
       if (
         appStateRef.current.match(/inactive|background/) && 
         nextAppState === 'active' && 
         !isAdCurrentlyShowing
       ) {
-        console.log('App came to foreground, attempting to show app open ad');
+        console.log('App came to foreground, showing app open ad immediately');
         hasShownOnThisSession = false; // Reset session flag for new foreground session
-        showAdIfAppropriate();
+        // Show immediately on foreground - user must "continue to app"
+        setTimeout(() => {
+          showAdIfAppropriate();
+        }, 100); // Very short delay to ensure app is ready
       }
       
       // When app goes to background, reset session flag
@@ -124,26 +127,26 @@ export function useAppOpenAd() {
     const timeSinceLastAd = currentTime - lastAdShownTime;
     
     if (adLoaded && adRef.current && !isAdCurrentlyShowing) {
-      // Check minimal cooldown period (30 seconds to prevent spam)
+      // Check cooldown period (1 minute to prevent spam)
       if (timeSinceLastAd >= AD_COOLDOWN_PERIOD) {
-        console.log('Showing app open ad');
+        console.log('Showing app open ad immediately - user must continue to app');
         adRef.current.show();
       } else {
         const remainingCooldown = Math.ceil((AD_COOLDOWN_PERIOD - timeSinceLastAd) / 1000);
-        console.log(`App open ad on short cooldown. ${remainingCooldown} seconds remaining.`);
+        console.log(`App open ad on cooldown. ${remainingCooldown} seconds remaining.`);
         
-        // Still try to show after short delay
+        // Show after cooldown period for immediate app access
         setTimeout(() => {
           if (adLoaded && adRef.current && !isAdCurrentlyShowing) {
-            console.log('Showing app open ad after short delay');
+            console.log('Showing app open ad after cooldown - continue to app');
             adRef.current.show();
           }
         }, AD_COOLDOWN_PERIOD - timeSinceLastAd);
       }
     } else if (isAdCurrentlyShowing) {
-      console.log('App open ad already showing, skipping');
+      console.log('App open ad already showing, user must dismiss to continue');
     } else {
-      console.log('App open ad not ready to show, will retry when loaded');
+      console.log('App open ad not ready, will show when loaded');
       // Try to load if not already loading
       if (!adLoaded) {
         adRef.current?.load();
@@ -180,15 +183,15 @@ export function useAppOpenAd() {
     if (adLoaded && !isAdCurrentlyShowing) {
       // Show ad when it becomes available
       if (isInitialMount.current) {
-        // On app launch
+        // On app launch - show immediately for "continue to app" experience
         setTimeout(() => {
-          console.log('Showing app open ad on app launch');
+          console.log('Showing app open ad on app launch - continue to access app');
           showAdIfAppropriate();
-        }, 1500); // 1.5 second delay to let app initialize
+        }, 800); // Reduced delay to show ad before users can interact with app
       } else {
         // When ad reloads after being shown
         setTimeout(() => {
-          console.log('App open ad reloaded and ready');
+          console.log('App open ad reloaded and ready for next display');
           // Don't auto-show here, wait for next foreground event
         }, 500);
       }
