@@ -180,14 +180,12 @@ const ChatScreen: React.FC = () => {
         ws.current = null;
         isConnectingRef.current = false;
         
-        // Reconnect for any closure except intentional close (1000) when user leaves
-        if (isUserInChat) {
+        // Only reconnect if it wasn't a normal closure and user is still in chat
+        if (isUserInChat && event.code !== 1000) {
           console.log('Attempting to reconnect WebSocket...');
           reconnectTimeoutRef.current = setTimeout(() => {
-            if (isUserInChat) { // Double check user is still in chat
-              connectWebSocket();
-            }
-          }, 1000); // Faster reconnection
+            connectWebSocket();
+          }, 2000);
         }
       };
 
@@ -248,11 +246,6 @@ const ChatScreen: React.FC = () => {
       console.log('WebSocket is open, sending message');
       ws.current.send(messageString);
       return true;
-    } else if (ws.current?.readyState === WebSocket.CONNECTING) {
-      console.log('WebSocket is connecting, queueing message');
-      // Queue message if connecting
-      messageQueueRef.current.push(messageString);
-      return false; // Will be sent when connection opens
     } else {
       console.log('WebSocket not open, queueing message. ReadyState:', ws.current?.readyState);
       // Queue message if not connected
@@ -320,19 +313,6 @@ const ChatScreen: React.FC = () => {
     
     // Auto-scroll after sending
     setTimeout(() => scrollToBottom(true), 100);
-
-    // If WebSocket is connecting, wait a bit for it to open
-    if (isConnectingRef.current && !ws.current) {
-      console.log('WebSocket is connecting, waiting 800ms...');
-      await new Promise(resolve => setTimeout(resolve, 800));
-    }
-    
-    // If still no WebSocket, try to connect before sending
-    if (!ws.current && !isConnectingRef.current) {
-      console.log('No WebSocket connection, attempting to connect...');
-      connectWebSocket();
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
 
     // Try WebSocket first, then fallback to API
     const wsSuccess = sendMessageWS(messageText, tempId);
@@ -609,7 +589,7 @@ const ChatScreen: React.FC = () => {
             <FlatList
               ref={flatListRef}
               data={sortedMessages}
-              renderItem={renderItem}
+              renderItem={({ item, index }) => renderItem({ item, index })}
               keyExtractor={(item, index) => {
                 // Ensure we always have a valid key
                 if (item.id !== undefined && item.id !== null) {

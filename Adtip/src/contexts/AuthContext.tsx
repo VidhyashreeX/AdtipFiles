@@ -22,7 +22,10 @@ type AuthContextType = {
   login: (mobileNumber: string) => Promise<ApiResponse<OtpResponse[]>>;  // Updated return type
   verifyOtp: (mobileNumber: string, otp: string, id: string) => Promise<OtpVerifyApiResponse>;
   logout: () => Promise<void>;
-  updateUserDetails: (userData: Partial<User>) => Promise<void>;
+  updateUserDetails: (userData: Partial<User> & {
+    languages?: number;
+    interests?: number;
+  }) => Promise<void>;
   refreshUserData: () => Promise<void>;
   hasChannel: boolean;
   createChannel: (name: string, description: string) => Promise<void>;
@@ -261,7 +264,10 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
   };
 
   // Update user details
-  const updateUserDetails = async (userData: Partial<User>): Promise<void> => {
+  const updateUserDetails = async (userData: Partial<User> & {
+    languages?: number;
+    interests?: number;
+  }): Promise<void> => {
     if (!user) {
       setError('User not authenticated');
       throw new Error('User not authenticated');

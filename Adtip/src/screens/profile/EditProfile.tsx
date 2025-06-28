@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,19 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
+  ActivityIndicator,
+  SafeAreaView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Icon from 'react-native-vector-icons/Feather';
+
+// Import contexts
+import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
+
+// Import API service
+import ApiService from '../../services/ApiService';
 
 // Define navigation param list
 type RootStackParamList = {
@@ -26,28 +36,43 @@ type RootStackParamList = {
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-interface EditProfileProps {
-  initialName?: string;
-  initialEmail?: string;
-}
-
-const EditProfile: React.FC<EditProfileProps> = ({
-  initialName = "indraja",
-  initialEmail = "indrajathunguntla@gmail.com",
-}) => {
+const EditProfile: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
-  const [name, setName] = useState<string>(initialName);
-  const [email, setEmail] = useState<string>(initialEmail);
-  const [about, setAbout] = useState<string>("");
-  const [age, setAge] = useState<string>("");
-  const [gender, setGender] = useState<string>("");
-  const [profession, setProfession] = useState<string>("");
-  const [maritalStatus, setMaritalStatus] = useState<string>("");
-  const [interests, setInterests] = useState<string[]>([
-    "Prepare for gov job", "Look for jobs", "Prepare for neet", "Prepare for upsc",
-    "To learn English", "To learn Hindi", "To learn software", "To learn AI",
-    "To prepare for CA", "Doctor", "Prepare for jobs", "To learn stock market",
-  ]);
+  const { user, updateUserDetails } = useAuth();
+  const { colors, isDarkMode } = useTheme();
+  
+  // Loading state
+  const [loading, setLoading] = useState(false);
+  
+  // Form state - initialized with user data
+  const [firstName, setFirstName] = useState<string>(user?.firstName || user?.name?.split(' ')[0] || '');
+  const [lastName, setLastName] = useState<string>(user?.lastName || user?.name?.split(' ').slice(1).join(' ') || '');
+  const [email, setEmail] = useState<string>(user?.emailId || '');
+  const [about, setAbout] = useState<string>(user?.bio || '');
+  const [address, setAddress] = useState<string>(user?.address || '');
+  const [age, setAge] = useState<string>('');
+  const [gender, setGender] = useState<string>(user?.gender || '');
+  const [profession, setProfession] = useState<string>(user?.profession || '');
+  const [maritalStatus, setMaritalStatus] = useState<string>(user?.maternal_status || '');
+  const [interests, setInterests] = useState<string[]>(
+    user?.interests?.map((interest: any) => interest.name || interest) || []
+  );
+
+  // Calculate age from date of birth
+  useEffect(() => {
+    if (user?.dob) {
+      const birthDate = new Date(user.dob);
+      const today = new Date();
+      const calculatedAge = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        setAge((calculatedAge - 1).toString());
+      } else {
+        setAge(calculatedAge.toString());
+      }
+    }
+  }, [user?.dob]);
 
   const allInterests: string[] = [
     "Prepare for gov job", "Look for jobs", "Prepare for neet", "Prepare for upsc",
@@ -69,111 +94,306 @@ const EditProfile: React.FC<EditProfileProps> = ({
     }
   };
 
-  const handleSave = (): void => {
-    // Simulate saving data
-    Alert.alert('Success', 'Profile updated successfully');
-    navigation.goBack();
+  const handleSave = async (): Promise<void> => {
+    if (!user?.id) {
+      Alert.alert('Error', 'User not found');
+      return;
+    }
+
+    setLoading(true);
+    
+    try {
+      // Prepare update data in the exact format required by the API
+      const updateData = {
+        id: user.id,
+        name: `${firstName} ${lastName}`.trim(), // Concatenate first and last name
+        firstname: firstName,
+        lastname: lastName,
+        gender: gender,
+        dob: user.dob || "1990-01-01", // Keep existing DOB or default
+        profile_image: user.profile_image || "",
+        profession: profession,
+        maternal_status: maritalStatus,
+        address: address,
+        emailId: email,
+        longitude: user.longitude || "",
+        latitude: user.latitude || "",
+        pincode: user.pincode || "",
+        languages: 1, // Default language ID, can be made configurable
+        interests: 3, // Default interest ID, can be made configurable  
+        referal_code: "" // Always send empty string to avoid self-referral error
+      };
+
+      // Call the update API with proper type casting
+      await updateUserDetails(updateData as any);
+      
+      Alert.alert('Success', 'Profile updated successfully');
+      navigation.goBack();
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.headerButton}>←</Text>
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
+          <Icon name="arrow-left" size={24} color={colors.text.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Profile</Text>
-        <TouchableOpacity onPress={handleSave}>
-          <Text style={styles.headerButtonSave}>✓</Text>
+        <Text style={[styles.headerTitle, { color: colors.text.primary }]}>Edit Profile</Text>
+        <TouchableOpacity onPress={handleSave} style={styles.headerButton} disabled={loading}>
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <Icon name="check" size={24} color={colors.primary} />
+          )}
         </TouchableOpacity>
       </View>
 
       {/* Form */}
       <ScrollView contentContainerStyle={styles.scrollView}>
-        {/* Name */}
-        <TextInput
-          style={styles.input}
-          value={name}
-          onChangeText={setName}
-          placeholder="Name"
-          placeholderTextColor="#999"
-        />
+        {/* First Name */}
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, { color: colors.text.secondary }]}>First Name</Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                color: colors.text.primary,
+              }
+            ]}
+            value={firstName}
+            onChangeText={setFirstName}
+            placeholder="Enter your first name"
+            placeholderTextColor={colors.text.light}
+            editable={!loading}
+          />
+        </View>
+
+        {/* Last Name */}
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, { color: colors.text.secondary }]}>Last Name</Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                color: colors.text.primary,
+              }
+            ]}
+            value={lastName}
+            onChangeText={setLastName}
+            placeholder="Enter your last name"
+            placeholderTextColor={colors.text.light}
+            editable={!loading}
+          />
+        </View>
 
         {/* Email */}
-        <TextInput
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Email"
-          placeholderTextColor="#999"
-          keyboardType="email-address"
-        />
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, { color: colors.text.secondary }]}>Email</Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                color: colors.text.primary,
+              }
+            ]}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Enter your email"
+            placeholderTextColor={colors.text.light}
+            keyboardType="email-address"
+            editable={!loading}
+          />
+        </View>
+
+        {/* Address */}
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, { color: colors.text.secondary }]}>Address</Text>
+          <TextInput
+            style={[
+              styles.input,
+              styles.textArea,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                color: colors.text.primary,
+              }
+            ]}
+            value={address}
+            onChangeText={setAddress}
+            placeholder="Enter your address"
+            placeholderTextColor={colors.text.light}
+            multiline
+            numberOfLines={2}
+            editable={!loading}
+          />
+        </View>
 
         {/* About */}
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={about}
-          onChangeText={setAbout}
-          placeholder="About"
-          placeholderTextColor="#999"
-          multiline
-          numberOfLines={3}
-        />
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, { color: colors.text.secondary }]}>About</Text>
+          <TextInput
+            style={[
+              styles.input,
+              styles.textArea,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                color: colors.text.primary,
+              }
+            ]}
+            value={about}
+            onChangeText={setAbout}
+            placeholder="Tell us about yourself"
+            placeholderTextColor={colors.text.light}
+            multiline
+            numberOfLines={3}
+            editable={!loading}
+          />
+        </View>
 
         {/* Age */}
-        <TextInput
-          style={styles.input}
-          value={age}
-          onChangeText={setAge}
-          placeholder="Age"
-          placeholderTextColor="#999"
-          keyboardType="numeric"
-        />
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, { color: colors.text.secondary }]}>Age</Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                color: colors.text.primary,
+              }
+            ]}
+            value={age}
+            onChangeText={setAge}
+            placeholder="Enter your age"
+            placeholderTextColor={colors.text.light}
+            keyboardType="numeric"
+            editable={false} // Age is calculated from DOB
+          />
+        </View>
 
         {/* Gender */}
-        <TextInput
-          style={styles.input}
-          value={gender}
-          onChangeText={setGender}
-          placeholder="Gender"
-          placeholderTextColor="#999"
-        />
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, { color: colors.text.secondary }]}>Gender</Text>
+          <View style={styles.genderContainer}>
+            {['Male', 'Female', 'Other'].map((genderOption) => (
+              <TouchableOpacity
+                key={genderOption}
+                style={[
+                  styles.genderButton,
+                  {
+                    backgroundColor: gender === genderOption ? colors.primary : colors.surface,
+                    borderColor: gender === genderOption ? colors.primary : colors.border,
+                  }
+                ]}
+                onPress={() => !loading && setGender(genderOption)}
+                disabled={loading}
+              >
+                <Text
+                  style={[
+                    styles.genderText,
+                    {
+                      color: gender === genderOption ? '#ffffff' : colors.text.primary,
+                    }
+                  ]}
+                >
+                  {genderOption}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
         {/* Profession */}
-        <TextInput
-          style={styles.input}
-          value={profession}
-          onChangeText={setProfession}
-          placeholder="Profession"
-          placeholderTextColor="#999"
-        />
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, { color: colors.text.secondary }]}>Profession</Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                color: colors.text.primary,
+              }
+            ]}
+            value={profession}
+            onChangeText={setProfession}
+            placeholder="Enter your profession"
+            placeholderTextColor={colors.text.light}
+            editable={!loading}
+          />
+        </View>
 
         {/* Marital Status */}
-        <TextInput
-          style={styles.input}
-          value={maritalStatus}
-          onChangeText={setMaritalStatus}
-          placeholder="Marital Status"
-          placeholderTextColor="#999"
-        />
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, { color: colors.text.secondary }]}>Marital Status</Text>
+          <View style={styles.maritalStatusContainer}>
+            {['Single', 'Married', 'Divorced', 'Widowed'].map((status) => (
+              <TouchableOpacity
+                key={status}
+                style={[
+                  styles.maritalStatusButton,
+                  {
+                    backgroundColor: maritalStatus === status ? colors.primary : colors.surface,
+                    borderColor: maritalStatus === status ? colors.primary : colors.border,
+                  }
+                ]}
+                onPress={() => !loading && setMaritalStatus(status)}
+                disabled={loading}
+              >
+                <Text
+                  style={[
+                    styles.maritalStatusText,
+                    {
+                      color: maritalStatus === status ? '#ffffff' : colors.text.primary,
+                    }
+                  ]}
+                >
+                  {status}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
         {/* Interests */}
-        <View>
-          <Text style={styles.sectionTitle}>Interests</Text>
+        <View style={styles.inputGroup}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Interests</Text>
+          <Text style={[styles.sectionSubtitle, { color: colors.text.secondary }]}>
+            Select topics you're interested in
+          </Text>
           <View style={styles.interestsContainer}>
             {allInterests.map((interest) => (
               <TouchableOpacity
                 key={interest}
                 style={[
                   styles.interestButton,
-                  interests.includes(interest) && styles.interestButtonSelected,
+                  {
+                    backgroundColor: interests.includes(interest) ? colors.primary : colors.surface,
+                    borderColor: interests.includes(interest) ? colors.primary : colors.border,
+                  }
                 ]}
-                onPress={() => toggleInterest(interest)}
+                onPress={() => !loading && toggleInterest(interest)}
+                disabled={loading}
               >
                 <Text
                   style={[
                     styles.interestText,
-                    interests.includes(interest) && styles.interestTextSelected,
+                    {
+                      color: interests.includes(interest) ? '#ffffff' : colors.text.primary,
+                    }
                   ]}
                 >
                   {interest}
@@ -183,84 +403,107 @@ const EditProfile: React.FC<EditProfileProps> = ({
           </View>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   headerButton: {
-    fontSize: 24,
-    color: '#4080FF',
-  },
-  headerButtonSave: {
-    fontSize: 24,
-    color: '#00C853',
+    padding: 8,
+    borderRadius: 8,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#333',
   },
   scrollView: {
     padding: 16,
   },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
   input: {
-    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#ddd',
-    marginBottom: 12,
     fontSize: 16,
-    color: '#333',
   },
   textArea: {
     height: 100,
     textAlignVertical: 'top',
   },
+  genderContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  genderButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    borderWidth: 1,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  genderText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  maritalStatusContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  maritalStatusButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  maritalStatusText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
+    marginBottom: 4,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    marginBottom: 12,
   },
   interestsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: 8,
   },
   interestButton: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
     paddingVertical: 8,
     paddingHorizontal: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#ddd',
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  interestButtonSelected: {
-    backgroundColor: '#E0F7FA',
-    borderColor: '#80DEEA',
+    marginBottom: 4,
   },
   interestText: {
     fontSize: 14,
-    color: '#333',
-  },
-  interestTextSelected: {
-    color: '#006064',
+    fontWeight: '500',
   },
 });
 
