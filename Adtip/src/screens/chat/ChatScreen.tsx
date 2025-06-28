@@ -137,11 +137,13 @@ const ChatScreen: React.FC = () => {
               console.log('Message confirmed via WebSocket, no API call needed');
             }
           } else if (data.type === 'typing' && data.userId === otherUser.id && isUserInChat) {
+            console.log('Received typing indicator from user:', data.userId);
             setIsOtherTyping(true);
             if (typingTimeoutRef.current) {
               clearTimeout(typingTimeoutRef.current);
             }
             typingTimeoutRef.current = setTimeout(() => {
+              console.log('Hiding typing indicator');
               setIsOtherTyping(false);
             }, 3000);
           } else if (data.type === 'read') {
@@ -201,7 +203,13 @@ const ChatScreen: React.FC = () => {
         receiverId: otherUser.id, 
         userId: self.id 
       });
+      console.log('Sending typing indicator:', message);
       ws.current.send(message);
+    } else {
+      console.log('Cannot send typing - WebSocket not ready:', {
+        readyState: ws.current?.readyState,
+        self: !!self
+      });
     }
   }, [self, otherUser.id]);
 
@@ -323,6 +331,7 @@ const ChatScreen: React.FC = () => {
     setInputHeight(newHeight);
     
     if (!typing && self && text.trim()) {
+      console.log('User started typing, sending typing indicator');
       setTyping(true);
       sendTyping();
       
@@ -333,6 +342,7 @@ const ChatScreen: React.FC = () => {
       
       // Set new timeout
       typingTimeoutRef.current = setTimeout(() => {
+        console.log('User stopped typing');
         setTyping(false);
       }, 2000);
     }
@@ -452,8 +462,13 @@ const ChatScreen: React.FC = () => {
     }, [self, otherUser.id])
   );
 
-  // Render message with date label at top of each day
-  const renderItem = ({ item, index }: { item: ChatMessage, index: number }) => {
+  // Memoized message item component for better performance
+  const MessageItem = React.memo(({ item, index, isDarkMode, self }: { 
+    item: ChatMessage, 
+    index: number, 
+    isDarkMode: boolean, 
+    self: any 
+  }) => {
     const isSelf = self && item.sender === self.id;
     let showDate = false;
     
@@ -502,7 +517,12 @@ const ChatScreen: React.FC = () => {
         </View>
       </>
     );
-  };
+  });
+
+  // Render function for FlatList
+  const renderItem = useCallback(({ item, index }: { item: ChatMessage, index: number }) => (
+    <MessageItem item={item} index={index} isDarkMode={isDarkMode} self={self} />
+  ), [isDarkMode, self]);
 
   if (!self) {
     return (
@@ -546,7 +566,7 @@ const ChatScreen: React.FC = () => {
             <FlatList
               ref={flatListRef}
               data={sortedMessages}
-              renderItem={({ item, index }) => renderItem({ item, index })}
+              renderItem={renderItem}
               keyExtractor={(item, index) => {
                 // Ensure we always have a valid key
                 if (item.id !== undefined && item.id !== null) {
@@ -559,6 +579,16 @@ const ChatScreen: React.FC = () => {
               contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
               onContentSizeChange={() => scrollToBottom(true)}
               onLayout={() => scrollToBottom(false)}
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={10}
+              updateCellsBatchingPeriod={50}
+              initialNumToRender={20}
+              windowSize={10}
+              getItemLayout={(data, index) => ({
+                length: 80, // Approximate height of each message
+                offset: 80 * index,
+                index,
+              })}
             />
             
             {isOtherTyping && isUserInChat && (
