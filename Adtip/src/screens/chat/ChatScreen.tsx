@@ -56,7 +56,14 @@ const ChatScreen: React.FC = () => {
 
   // WebSocket connection management
   const connectWebSocket = useCallback(async () => {
-    if (!self || ws.current || isConnectingRef.current) return;
+    if (!self || ws.current || isConnectingRef.current) {
+      console.log('Skipping WebSocket connection:', { 
+        self: !!self, 
+        wsExists: !!ws.current, 
+        isConnecting: isConnectingRef.current 
+      });
+      return;
+    }
 
     try {
       isConnectingRef.current = true;
@@ -116,6 +123,7 @@ const ChatScreen: React.FC = () => {
                   id: data.data.id
                 } : m
               ));
+              console.log('Message confirmed via WebSocket, no API call needed');
             }
           } else if (data.type === 'typing' && data.userId === otherUser.id && isUserInChat) {
             setIsOtherTyping(true);
@@ -141,7 +149,7 @@ const ChatScreen: React.FC = () => {
       };
 
       ws.current.onclose = (event) => {
-        console.log('WebSocket disconnected:', event.reason);
+        console.log('WebSocket disconnected. Code:', event.code, 'Reason:', event.reason);
         setIsConnected(false);
         
         // Clear ping interval before setting ws.current to null
@@ -153,11 +161,12 @@ const ChatScreen: React.FC = () => {
         ws.current = null;
         isConnectingRef.current = false;
         
-        // Attempt to reconnect after 3 seconds only if user is still in chat
-        if (isUserInChat) {
+        // Only reconnect if it wasn't a normal closure and user is still in chat
+        if (isUserInChat && event.code !== 1000) {
+          console.log('Attempting to reconnect WebSocket...');
           reconnectTimeoutRef.current = setTimeout(() => {
             connectWebSocket();
-          }, 3000);
+          }, 2000);
         }
       };
 
@@ -360,12 +369,13 @@ const ChatScreen: React.FC = () => {
       }
     };
 
+    // Only load messages once when component mounts
     loadMessages();
 
     return () => {
       isMounted = false;
     };
-  }, [self, otherUser.id, scrollToBottom]);
+  }, [self?.id, otherUser.id]); // Removed scrollToBottom dependency
 
   // Setup WebSocket connection
   useEffect(() => {
