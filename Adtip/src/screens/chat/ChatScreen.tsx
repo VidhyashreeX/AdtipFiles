@@ -93,12 +93,9 @@ const ChatScreen: React.FC = () => {
           const data = JSON.parse(event.data);
           console.log('WebSocket message received:', data);
           
-          if (data.type === 'message' || data.type === 'message_sent') {
-            // Check if the message is for current conversation
-            if (data.data && (
-              (data.data.sender === otherUser.id && data.data.receiver === self.id) ||
-              (data.data.sender === self.id && data.data.receiver === otherUser.id)
-            )) {
+          if (data.type === 'message') {
+            // Incoming message from another user
+            if (data.data && data.data.sender === otherUser.id && data.data.receiver === self.id) {
               LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
               setMessages(prev => {
                 // Avoid duplicates
@@ -109,6 +106,16 @@ const ChatScreen: React.FC = () => {
                 setTimeout(() => scrollToBottom(true), 100);
                 return newMessages;
               });
+            }
+          } else if (data.type === 'message_sent') {
+            // Confirmation that our message was saved successfully
+            if (data.data && data.tempId) {
+              setMessages(prev => prev.map(m => 
+                m.id === data.tempId ? { 
+                  ...data.data,
+                  id: data.data.id
+                } : m
+              ));
             }
           } else if (data.type === 'typing' && data.userId === otherUser.id && isUserInChat) {
             setIsOtherTyping(true);
@@ -122,6 +129,8 @@ const ChatScreen: React.FC = () => {
             setMessages(prev => prev.map(m => 
               m.id === data.messageId ? { ...m, is_seen: true } : m
             ));
+          } else if (data.type === 'error') {
+            console.error('WebSocket error received:', data.message);
           } else if (data.type === 'pong') {
             // Connection is alive
             console.log('WebSocket ping-pong successful');
@@ -177,8 +186,8 @@ const ChatScreen: React.FC = () => {
   }, [self, otherUser.id]);
 
   // WebSocket send message event
-  const sendMessageWS = useCallback((msg: string) => {
-    if (!self) return;
+  const sendMessageWS = useCallback((msg: string, tempId: number) => {
+    if (!self) return false;
 
     const payload = {
       type: 'message',
@@ -186,27 +195,62 @@ const ChatScreen: React.FC = () => {
       receiverId: otherUser.id,
       message: msg,
       chat_type: 'text',
-      chat_type_id_value: 0
+      chat_type_id_value: 0,
+      tempId: tempId // Include tempId for tracking
     };
 
     const messageString = JSON.stringify(payload);
 
     if (ws.current?.readyState === WebSocket.OPEN) {
       ws.current.send(messageString);
+      return true;
     } else {
       // Queue message if not connected
       messageQueueRef.current.push(messageString);
       // Try to reconnect
       connectWebSocket();
+      return false;
     }
   }, [self, otherUser.id, connectWebSocket]);
 
-  // Send message via WebSocket only (no API call for instant messaging)
-  const handleSend = useCallback(() => {
+  // API fallback for sending messages
+  const sendMessageAPI = useCallback(async (msg: string, tempId: number) => {
+    if (!self) return;
+
+    try {
+      const response = await ApiService.sendChatMessage({
+        message: msg,
+        userId: self.id,
+        receiverId: otherUser.id
+      });
+
+      if (response.status === 200) {
+        // Update the temporary message with real ID and data
+        setMessages(prev => prev.map(m => 
+          m.id === tempId ? { 
+            ...m, 
+            id: response.data.messageId || response.data.id,
+            createddate: response.data.createddate || m.createddate
+          } : m
+        ));
+      } else {
+        // Remove the failed message from UI
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+        throw new Error(response.message || 'Failed to send message');
+      }
+    } catch (error) {
+      console.error('API send message failed:', error);
+      // Remove the failed message from UI
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+    }
+  }, [self, otherUser.id]);
+
+  // Send message via WebSocket with API fallback
+  const handleSend = useCallback(async () => {
     if (!input.trim() || !self) return;
     
     const now = new Date().toISOString();
-    const tempId = Date.now();
+    const tempId = -Date.now(); // Use negative number for temp ID to avoid conflicts
     const msgPayload: ChatMessage = {
       id: tempId,
       sender: self.id,
@@ -219,15 +263,21 @@ const ChatScreen: React.FC = () => {
     // Optimistically add to UI immediately
     setMessages(prev => [...prev, msgPayload]);
     
-    // Send via WebSocket only (backend will handle API storage)
-    sendMessageWS(input.trim());
+    const messageText = input.trim();
     setInput('');
     setInputHeight(40);
     setTyping(false);
     
     // Auto-scroll after sending
     setTimeout(() => scrollToBottom(true), 100);
-  }, [input, self, otherUser.id, sendMessageWS, scrollToBottom]);
+
+    // Try WebSocket first, then fallback to API
+    const wsSuccess = sendMessageWS(messageText, tempId);
+    if (!wsSuccess) {
+      console.log('WebSocket failed, using API fallback');
+      await sendMessageAPI(messageText, tempId);
+    }
+  }, [input, self, otherUser.id, sendMessageWS, sendMessageAPI, scrollToBottom]);
 
   // Enhanced typing handler with multiline support
   const handleTyping = useCallback((text: string) => {
@@ -501,7 +551,9 @@ const ChatScreen: React.FC = () => {
             blurOnSubmit={false}
           />
           <TouchableOpacity 
-            onPress={handleSend} 
+            onPress={() => {
+              handleSend();
+            }}
             style={[
               styles.sendButton, 
               { 
@@ -510,6 +562,7 @@ const ChatScreen: React.FC = () => {
               }
             ]}
             disabled={!input.trim()}
+            activeOpacity={0.7}
           > 
             <Icon name="send" size={20} color="#fff" />
           </TouchableOpacity>
