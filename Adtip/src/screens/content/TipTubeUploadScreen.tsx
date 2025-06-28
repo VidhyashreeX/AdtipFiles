@@ -26,6 +26,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import Header from '../../components/common/Header';
 import VideoCompressionService, { VideoCompressionOptions } from '../../services/VideoCompressionService';
 import ApiService from '../../services/ApiService';
+import CloudflareUploadService from '../../services/CloudflareUploadService';
 import RNFS from 'react-native-fs';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -364,60 +365,45 @@ const TipTubeUploadScreen: React.FC = () => {
     }
   };
 
-  // Upload media files
+  // Upload media files using Cloudflare R2
   const uploadMedia = async (videoUri: string, thumbnailUri: string): Promise<{ videoUrl: string; thumbnailUrl: string }> => {
     try {
-      console.log('[TipTubeUpload] Starting media upload');
+      console.log('[TipTubeUpload] Starting Cloudflare R2 upload');
 
-      // Create form data for video
-      const videoFormData = new FormData();
-      videoFormData.append('video', {
-        uri: Platform.OS === 'android' && !videoUri.startsWith('file://') 
-          ? `file://${videoUri}` 
-          : videoUri,
-        type: 'video/mp4',
-        name: `video_${Date.now()}.mp4`,
-      } as any);
+      if (!user || !user.id) {
+        throw new Error('User not authenticated');
+      }
 
-      // Create form data for thumbnail
-      const thumbnailFormData = new FormData();
-      thumbnailFormData.append('image', {
-        uri: Platform.OS === 'android' && !thumbnailUri.startsWith('file://')
-          ? `file://${thumbnailUri}`
-          : thumbnailUri,
-        type: 'image/jpeg',
-        name: `thumbnail_${Date.now()}.jpg`,
-      } as any);
-
-      // Upload video
-      setUploadProgress(25);
-      const videoResponse = await ApiService.uploadFile(
-        '/api/upload-video',
-        videoFormData,
+      // Use CloudflareUploadService for batch upload
+      const uploadResult = await CloudflareUploadService.uploadTipTube(
+        videoUri,
+        thumbnailUri,
+        user.id,
         (progress) => {
-          setUploadProgress(25 + (progress * 0.5)); // 25% to 75%
+          setUploadProgress(progress.percentage);
         }
       );
 
-      // Upload thumbnail
-      setUploadProgress(75);
-      const thumbnailResponse = await ApiService.uploadFile(
-        '/api/upload-image',
-        thumbnailFormData,
-        (progress) => {
-          setUploadProgress(75 + (progress * 0.25)); // 75% to 100%
-        }
-      );
+      if (!uploadResult.allSuccessful) {
+        throw new Error(`Upload failed: ${uploadResult.errors.join(', ')}`);
+      }
 
-      setUploadProgress(100);
+      if (!uploadResult.video?.url || !uploadResult.thumbnail?.url) {
+        throw new Error('Upload completed but URLs are missing');
+      }
+
+      console.log('[TipTubeUpload] Cloudflare upload successful:', {
+        video: uploadResult.video.url,
+        thumbnail: uploadResult.thumbnail.url,
+      });
 
       return {
-        videoUrl: videoResponse.data?.url || videoResponse.url,
-        thumbnailUrl: thumbnailResponse.data?.url || thumbnailResponse.url,
+        videoUrl: uploadResult.video.url,
+        thumbnailUrl: uploadResult.thumbnail.url,
       };
     } catch (error) {
-      console.error('[TipTubeUpload] Error uploading media:', error);
-      throw new Error('Failed to upload media files. Please check your connection and try again.');
+      console.error('[TipTubeUpload] Error uploading to Cloudflare:', error);
+      throw new Error('Failed to upload media files to cloud storage. Please check your connection and try again.');
     }
   };
 
