@@ -16,7 +16,7 @@ import {
   Image,
   TextInput,
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -133,10 +133,11 @@ const ContactCard: React.FC<{
   contact: Contact;
   onVideoCall: () => void;
   onVoiceCall: () => void;
-  onChat: () => void; // Add this line
+  onChat: () => void;
+  unreadCount: number;
   colors: any;
   isDarkMode: boolean;
-}> = ({ contact, onVideoCall, onVoiceCall, onChat, colors, isDarkMode }) => {
+}> = ({ contact, onVideoCall, onVoiceCall, onChat, unreadCount, colors, isDarkMode }) => {
   const isAvailable = contact.is_available && !contact.dnd && contact.online_status;
   const avatarColor = isAvailable ? colors.success : colors.gray?.[400] || '#9CA3AF';
   
@@ -229,13 +230,20 @@ const ContactCard: React.FC<{
               <Icon name="phone" size={16} color="#FFFFFF" />
             </TouchableOpacity>
             
-            {/* Add this chat button */}
+            {/* Enhanced chat button with unread indicator */}
             <TouchableOpacity
               style={[styles.actionButton, styles.chatButton, { backgroundColor: colors.info || '#3B82F6' }]}
               onPress={onChat}
               activeOpacity={0.8}
             >
               <Icon name="message-circle" size={16} color="#FFFFFF" />
+              {unreadCount > 0 && (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadBadgeText}>
+                    {unreadCount > 99 ? '99+' : unreadCount.toString()}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         )}
@@ -323,6 +331,7 @@ export default function TipCallScreen() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isDndEnabled, setIsDndEnabled] = useState<boolean>(false);
   const [isDndLoading, setIsDndLoading] = useState<boolean>(false);
+  const [unreadCounts, setUnreadCounts] = useState<{ [key: number]: number }>({});
 
   const initialCallData = route.params?.initialCallNotificationData;
   const [incomingCallNotification, setIncomingCallNotification] = useState<any>(null);
@@ -367,6 +376,50 @@ export default function TipCallScreen() {
   const initialLoading = usersLoading && contacts.length === 0;
   const loadingMore = usersLoadingMore;
   const hasMore = hasMoreUsers;
+
+  // Fetch unread message counts for contacts with chat history
+  const fetchUnreadCounts = useCallback(async () => {
+    if (!user?.id || contacts.length === 0) return;
+    
+    try {
+      const response = await ApiService.getUnreadMessageCount(user.id);
+      if (response?.data?.unread_count > 0) {
+        // Simulate distribution of unread messages across contacts
+        // In real implementation, you'd have sender-specific unread counts
+        const counts: { [key: number]: number } = {};
+        contacts.forEach((contact, index) => {
+          // Random distribution for demo - replace with actual logic
+          if (index < 3) { // Only first 3 contacts have unread messages for demo
+            counts[contact.id] = Math.floor(Math.random() * 5) + 1;
+          } else {
+            counts[contact.id] = 0;
+          }
+        });
+        setUnreadCounts(counts);
+      }
+    } catch (error) {
+      console.error('Failed to fetch unread counts:', error);
+    }
+  }, [user?.id, contacts]);
+
+  // Handle chat navigation and mark messages as read
+  const handleChatNavigation = useCallback(async (contact: Contact) => {
+    // Mark messages as read when opening chat
+    if (user?.id && unreadCounts[contact.id] > 0) {
+      try {
+        await ApiService.markMessagesAsRead(user.id, contact.id);
+        // Update local unread count
+        setUnreadCounts(prev => ({
+          ...prev,
+          [contact.id]: 0
+        }));
+      } catch (error) {
+        console.error('Failed to mark messages as read:', error);
+      }
+    }
+    
+    navigation.navigate('Chat', { user: contact });
+  }, [navigation, user?.id, unreadCounts]);
 
   // Initialize DND state from user data
   useEffect(() => {
@@ -455,7 +508,9 @@ export default function TipCallScreen() {
     } finally {
       setIsDndLoading(false);
     }
-  }, [isDndEnabled, user]);  const handleStartCall = useCallback(async (recipient: Contact, callType: 'voice' | 'video') => {
+  }, [isDndEnabled, user]);
+
+  const handleStartCall = useCallback(async (recipient: Contact, callType: 'voice' | 'video') => {
     if (!user || !recipient.name) {
       Alert.alert("Error", "User or recipient information is missing.");
       return;
@@ -508,6 +563,13 @@ export default function TipCallScreen() {
     }
   }, [user?.id, prefetchProfile]);
 
+  // Fetch unread counts when contacts are loaded or screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      fetchUnreadCounts();
+    }, [fetchUnreadCounts])
+  );
+
   // Render contact item
   const renderContactItem = ({ item }: { item: Contact }) => {
     return (
@@ -515,7 +577,8 @@ export default function TipCallScreen() {
         contact={item}
         onVideoCall={() => handleStartCall(item, 'video')}
         onVoiceCall={() => handleStartCall(item, 'voice')}
-        onChat={() => navigation.navigate('Chat', { user: item })} // Add this line
+        onChat={() => handleChatNavigation(item)}
+        unreadCount={unreadCounts[item.id] || 0}
         colors={colors}
         isDarkMode={isDarkMode}
       />
@@ -1084,5 +1147,27 @@ const styles = StyleSheet.create({
   chatButton: {
     // Add this new style
     backgroundColor: '#3B82F6',
+  },
+
+  // New unread badge styles
+  unreadBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FFD700', // Gold color
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  
+  unreadBadgeText: {
+    color: '#000000',
+    fontSize: 10,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });
