@@ -1745,6 +1745,14 @@ export default class ApiService {
     return this.post('/api/sendmessage', data);
   }
 
+  static async getUnreadMessageCount(userId: number) {
+    return this.get(`/api/chat/unread-count/${userId}`);
+  }
+
+  static async markMessagesAsRead(userId: number, senderId: number) {
+    return this.post('/api/chat/mark-as-read', { userId, senderId });
+  }
+
   // ===== TIP-TUBE UPLOAD SERVICES =====
 
   /**
