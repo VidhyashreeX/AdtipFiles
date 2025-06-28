@@ -105,6 +105,12 @@ const ChatScreen: React.FC = () => {
             if (data.data && data.data.sender === otherUser.id && data.data.receiver === self.id) {
               LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
               setMessages(prev => {
+                // Ensure message has valid ID
+                if (!data.data.id) {
+                  console.warn('Received message without ID:', data.data);
+                  data.data.id = Date.now(); // Fallback ID
+                }
+                
                 // Avoid duplicates
                 const exists = prev.some(msg => msg.id === data.data.id);
                 if (exists) return prev;
@@ -120,7 +126,7 @@ const ChatScreen: React.FC = () => {
               setMessages(prev => prev.map(m => 
                 m.id === data.tempId ? { 
                   ...data.data,
-                  id: data.data.id
+                  id: data.data.id || Date.now() // Ensure ID exists
                 } : m
               ));
               console.log('Message confirmed via WebSocket, no API call needed');
@@ -344,15 +350,23 @@ const ChatScreen: React.FC = () => {
         console.log('Chat API response:', res);
         
         if (isMounted) {
+          let messagesArray = [];
+          
           if (Array.isArray(res?.data?.data)) {
-            setMessages(res.data.data);
+            messagesArray = res.data.data;
           } else if (Array.isArray(res?.data)) {
-            setMessages(res.data);
+            messagesArray = res.data;
           } else if (Array.isArray(res)) {
-            setMessages(res);
-          } else {
-            setMessages([]);
+            messagesArray = res;
           }
+          
+          // Ensure all messages have valid IDs
+          const validatedMessages = messagesArray.map((msg: any, index: number) => ({
+            ...msg,
+            id: msg.id || `loaded-${index}-${Date.now()}`
+          }));
+          
+          setMessages(validatedMessages);
           
           // Auto-scroll to bottom after loading messages
           setTimeout(() => scrollToBottom(false), 500);
@@ -517,7 +531,14 @@ const ChatScreen: React.FC = () => {
               ref={flatListRef}
               data={sortedMessages}
               renderItem={({ item, index }) => renderItem({ item, index })}
-              keyExtractor={item => item.id.toString()}
+              keyExtractor={(item, index) => {
+                // Ensure we always have a valid key
+                if (item.id !== undefined && item.id !== null) {
+                  return item.id.toString();
+                } else {
+                  return `message-${index}-${item.createddate || Date.now()}`;
+                }
+              }}
               style={styles.list}
               contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
               onContentSizeChange={() => scrollToBottom(true)}
