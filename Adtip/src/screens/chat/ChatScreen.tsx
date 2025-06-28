@@ -98,8 +98,11 @@ const ChatScreen: React.FC = () => {
           ws.current.pingInterval = setInterval(() => {
             if (ws.current?.readyState === WebSocket.OPEN) {
               ws.current.send(JSON.stringify({ type: 'ping' }));
+              console.log('Ping sent to server');
+            } else {
+              console.log('WebSocket not open, cannot send ping');
             }
-          }, 30000); // Ping every 30 seconds
+          }, 20000); // Ping every 20 seconds (faster than backend)
         }
       };
 
@@ -177,12 +180,14 @@ const ChatScreen: React.FC = () => {
         ws.current = null;
         isConnectingRef.current = false;
         
-        // Only reconnect if it wasn't a normal closure and user is still in chat
-        if (isUserInChat && event.code !== 1000) {
+        // Reconnect for any closure except intentional close (1000) when user leaves
+        if (isUserInChat) {
           console.log('Attempting to reconnect WebSocket...');
           reconnectTimeoutRef.current = setTimeout(() => {
-            connectWebSocket();
-          }, 2000);
+            if (isUserInChat) { // Double check user is still in chat
+              connectWebSocket();
+            }
+          }, 1000); // Faster reconnection
         }
       };
 
@@ -211,10 +216,16 @@ const ChatScreen: React.FC = () => {
     } else {
       console.log('Cannot send typing - WebSocket not ready:', {
         readyState: ws.current?.readyState,
-        self: !!self
+        self: !!self,
+        wsExists: !!ws.current
       });
+      // Try to reconnect if not connected
+      if (!ws.current && !isConnectingRef.current && self) {
+        console.log('Attempting to reconnect WebSocket for typing...');
+        connectWebSocket();
+      }
     }
-  }, [self, otherUser.id]);
+  }, [self, otherUser.id, connectWebSocket]);
 
   // WebSocket send message event
   const sendMessageWS = useCallback((msg: string, tempId: number) => {
@@ -312,8 +323,15 @@ const ChatScreen: React.FC = () => {
 
     // If WebSocket is connecting, wait a bit for it to open
     if (isConnectingRef.current && !ws.current) {
-      console.log('WebSocket is connecting, waiting 500ms...');
-      await new Promise(resolve => setTimeout(resolve, 500));
+      console.log('WebSocket is connecting, waiting 800ms...');
+      await new Promise(resolve => setTimeout(resolve, 800));
+    }
+    
+    // If still no WebSocket, try to connect before sending
+    if (!ws.current && !isConnectingRef.current) {
+      console.log('No WebSocket connection, attempting to connect...');
+      connectWebSocket();
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
     // Try WebSocket first, then fallback to API
@@ -429,6 +447,8 @@ const ChatScreen: React.FC = () => {
   // Setup WebSocket connection immediately when component mounts
   useEffect(() => {
     if (self?.id) {
+      // Connect immediately without delay
+      console.log('Setting up WebSocket for user:', self.id);
       connectWebSocket();
     }
 
@@ -451,7 +471,15 @@ const ChatScreen: React.FC = () => {
         ws.current = null;
       }
     };
-  }, [connectWebSocket, self?.id]); // Connect as soon as we have user info
+  }, [self?.id]); // Removed connectWebSocket dependency to prevent loops
+
+  // Separate effect for WebSocket connection setup
+  useEffect(() => {
+    if (self?.id && !ws.current && !isConnectingRef.current) {
+      console.log('Auto-connecting WebSocket...');
+      connectWebSocket();
+    }
+  }, [self?.id, connectWebSocket]);
 
   // Handle screen focus/blur for chat state management
   useFocusEffect(
@@ -565,7 +593,7 @@ const ChatScreen: React.FC = () => {
             <View style={styles.headerStatus}>
               <View style={[styles.connectionDot, { backgroundColor: isConnected ? '#4ADE80' : '#EF4444' }]} />
               <Text style={[styles.headerSubtitle, { color: isDarkMode ? '#bbb' : '#888' }]}>
-                {isConnected ? 'Connected' : 'Connecting...'}
+                {isConnected ? 'Online' : isConnectingRef.current ? 'Connecting...' : 'Reconnecting...'}
               </Text>
             </View>
           </View>
