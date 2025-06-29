@@ -7,7 +7,12 @@ import LastSeenService from '../services/LastSeenService'; // Ensure this import
 import { ApiResponse, OtpLoginResponse as ApiOtpResponse, OtpVerifyResponse as ApiUserType, OtpVerifyApiResponse } from '../types/api';
 
 // Define user type (using the one from api.ts for consistency)
-export type User = ApiUserType; // Assuming ApiUserType from types/api.ts is the correct User type
+interface ExtendedUser extends ApiUserType {
+  banner_image?: string | null;
+}
+
+// Update the User type export to use the extended interface
+export type User = ExtendedUser;
 
 type OtpResponse = ApiOtpResponse;
 

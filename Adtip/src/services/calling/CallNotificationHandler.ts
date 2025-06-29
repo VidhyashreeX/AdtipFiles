@@ -115,52 +115,24 @@ class CallNotificationHandler {
    */
   private async handleForegroundCallMessage(remoteMessage: FirebaseMessagingTypes.RemoteMessage): Promise<void> {
     try {
-      console.log('[CallNotificationHandler] Processing foreground FCM message');
+      console.log('[CallNotificationHandler] Safely handling foreground FCM message:', remoteMessage.messageId);
       
-      if (!remoteMessage?.data) {
-        console.log('[CallNotificationHandler] No data in foreground message');
+      if (!remoteMessage.data) {
+        console.log('[CallNotificationHandler] Foreground message has no data, skipping.');
         return;
-      }      const { data } = remoteMessage;
-
-      // NEW: Parse the info field if present for foreground handling
-      let callData = data;
-      if (data.info) {
-        try {
-          const parsedInfo = JSON.parse(data.info as string);
-          callData = { ...data, ...parsedInfo };
-          console.log('[CallNotificationHandler] Parsed foreground call data:', callData);
-        } catch (parseError) {
-          console.error('[CallNotificationHandler] Failed to parse info in foreground:', parseError);
-        }
       }
 
-      // Check if this is an incoming call - check isInitiator for CALL_INITIATED
-      const isInitiator = String(callData.isInitiator) === 'true';
-      const isIncomingCall = callData.isIncomingCall === 'true' || 
-                            callData.type === 'call' || 
-                            callData.type === 'INCOMING_CALL' || 
-                            (callData.type === 'CALL_INITIATED' && !isInitiator);
+      // FIXED: Only process data and delegate to WhatsAppCallManager for notification display
+      // This prevents duplicate notifications by ensuring only WhatsAppCallManager shows the UI
+      await this.handleCallNotification(remoteMessage);
 
-      if (isIncomingCall) {
-        console.log('[CallNotificationHandler] Incoming call detected in foreground');
-        
-        // CRITICAL: Always show Notifee notification for incoming calls in foreground
-        // This ensures the user can answer/decline even if the app is active
-        await this.showForegroundCallNotification(callData);
-        
-        // Also handle the call through the normal flow
-        await this.handleCallNotification(remoteMessage);
-      } else {
-        console.log('[CallNotificationHandler] Foreground: Not an incoming call - handling normally');
-        console.log('[CallNotificationHandler] Foreground: Call type:', callData.type, 'isInitiator:', callData.isInitiator);
-        // Handle other message types normally
-        await this.handleCallNotification(remoteMessage);
-      }
-      
     } catch (error) {
-      console.error('[CallNotificationHandler] Error in handleForegroundCallMessage:', error);
-      // Don't re-throw - let fallback handler take over
-      throw error;
+      console.error('[CallNotificationHandler] CRITICAL: Error in handleForegroundCallMessage. Fallback triggered.', error);
+      try {
+        await this.fallbackNotificationHandler(remoteMessage);
+      } catch (fallbackError) {
+        console.error('[CallNotificationHandler] CRITICAL: Fallback notification handler also failed.', fallbackError);
+      }
     }
   }
 
@@ -199,11 +171,29 @@ class CallNotificationHandler {
       if (isIncomingCall) {
         console.log('[CallNotificationHandler] Showing fallback notification for incoming call');
         
-        // Show basic notification using Notifee
-        await this.showBasicIncomingCallNotification(callData);
+        // CRITICAL FIX: Delegate to WhatsApp Call Manager for consistent notification handling
+        const callerInfo = (typeof callData.callerInfo === 'object' && callData.callerInfo !== null) 
+          ? callData.callerInfo as any 
+          : {};
+        const videoSDKInfo = (typeof callData.videoSDKInfo === 'object' && callData.videoSDKInfo !== null) 
+          ? callData.videoSDKInfo as any 
+          : {};
+
+        const callNotificationData = {
+          callId: String(callData.callId || `fallback_${Date.now()}`),
+          callerName: String(callerInfo.name || callData.callerName || 'Unknown Caller'),
+          callType: (String(callData.callType || 'voice') === 'video' ? 'video' : 'voice') as 'voice' | 'video',
+          callerId: String(callerInfo.userId || callData.callerId || 'unknown'),
+          meetingId: String(videoSDKInfo.meetingId || callData.meetingId || ''),
+          token: String(videoSDKInfo.token || callData.rtcToken || callData.token || ''),
+          callerAvatar: (callerInfo.avatarUrl || callData.callerAvatar) ? String(callerInfo.avatarUrl || callData.callerAvatar) : undefined,
+        };
+
+        // Delegate to WhatsApp Call Manager to ensure single notification source
+        await this.whatsAppCallManager.handleIncomingCall(callNotificationData);
+        console.log('[CallNotificationHandler] Fallback notification delegated to WhatsAppCallManager');
       } else {
         console.log('[CallNotificationHandler] Fallback: Not an incoming call - skipping');
-        console.log('[CallNotificationHandler] Fallback: Call type:', callData.type, 'isInitiator:', callData.isInitiator);
       }
       
     } catch (fallbackError) {
@@ -264,91 +254,6 @@ class CallNotificationHandler {
     }
   }
   /**
-   * Show basic incoming call notification as last resort
-   * This is the most basic notification possible to prevent missed calls
-   */
-  private async showBasicIncomingCallNotification(data: any): Promise<void> {
-    try {
-      console.log('[CallNotificationHandler] Showing basic incoming call notification');
-      
-      // NEW: Parse the info field which contains the actual call data
-      let callData = data;
-      if (data.info) {
-        try {
-          console.log('[CallNotificationHandler] Parsing info field for basic notification:', data.info);
-          const parsedInfo = JSON.parse(data.info as string);
-          callData = { ...data, ...parsedInfo };
-        } catch (parseError) {
-          console.error('[CallNotificationHandler] Failed to parse info field for basic notification:', parseError);
-          // Continue with original data if parsing fails
-        }
-      }
-      
-      // Handle nested structure from FCM info field with proper type checking
-      const callerInfo = (typeof callData.callerInfo === 'object' && callData.callerInfo !== null) 
-        ? callData.callerInfo as any 
-        : {};
-      const videoSDKInfo = (typeof callData.videoSDKInfo === 'object' && callData.videoSDKInfo !== null) 
-        ? callData.videoSDKInfo as any 
-        : {};
-      
-      const callerName = String(callerInfo.name || callData.callerName || 'Unknown Caller');
-      const callType = String(callData.callType || 'voice') === 'video' ? 'video' : 'voice';
-      const callId = String(callData.callId || `fallback_call_${Date.now()}`);
-      const meetingId = String(videoSDKInfo.meetingId || callData.meetingId || '');
-      const token = String(videoSDKInfo.token || callData.rtcToken || callData.token || '');
-      
-      // Create basic notification channel if it doesn't exist
-      await notifee.createChannel({
-        id: 'fallback_incoming_calls',
-        name: 'Incoming Calls (Fallback)',
-        importance: AndroidImportance.HIGH,
-        sound: 'default',
-        vibration: true,
-      });
-
-      // Show basic notification
-      await notifee.displayNotification({
-        id: `fallback_incoming_${callId}`,
-        title: `Incoming ${callType} call`,
-        body: `${callerName} is calling you`,
-        data: {
-          callId,
-          callType,
-          callerName,
-          meetingId,
-          token,
-          callerId: String(callerInfo.userId || callData.callerId || 'unknown'),
-          isFallback: 'true',
-        },
-        android: {
-          channelId: 'fallback_incoming_calls',
-          importance: AndroidImportance.HIGH,
-          visibility: AndroidVisibility.PUBLIC,
-          category: AndroidCategory.CALL,
-          autoCancel: false,          ongoing: true,
-          smallIcon: 'ic_call', // Required for Android notifications
-          actions: [
-            {
-              title: 'Decline',
-              pressAction: { id: 'decline_call' },
-            },
-            {
-              title: 'Answer',
-              pressAction: { id: 'accept_call' },
-            },
-          ],
-        },
-      });
-      
-      console.log('[CallNotificationHandler] Basic fallback notification shown');
-      
-    } catch (error) {
-      console.error('[CallNotificationHandler] Failed to show basic notification:', error);
-      // Even this failed - nothing more we can do
-    }
-  }
-  /**
    * Handle call notification from FCM
    */
   private async handleCallNotification(remoteMessage: FirebaseMessagingTypes.RemoteMessage): Promise<void> {
@@ -385,7 +290,8 @@ class CallNotificationHandler {
           console.error('[CallNotificationHandler] Failed to parse info field:', parseError);
           // Continue with original data if parsing fails
         }
-      }      // Check if this is a call notification      // Support both CALL_INITIATION and CALL_INITIATED for compatibility
+      }      // Check if this is a call notification      
+      // Support both CALL_INITIATION and CALL_INITIATED for compatibility
       if (callData.isIncomingCall === 'true' || callData.type === 'call' || callData.type === 'CALL_INITIATION' || callData.type === 'CALL_INITIATED') {
         console.log('[CallNotificationHandler] Processing call notification:', callData);
         
@@ -397,7 +303,9 @@ class CallNotificationHandler {
             : {};
           const videoSDKInfo = (typeof callData.videoSDKInfo === 'object' && callData.videoSDKInfo !== null) 
             ? callData.videoSDKInfo as any 
-            : {};          // CRITICAL FIX: Check if this is an incoming call for the current user
+            : {};
+
+          // CRITICAL FIX: Check if this is an incoming call for the current user
           // For CALL_INITIATED, we need to check if the current user is the recipient (not initiator)
           // Handle isInitiator as either boolean or string
           const isInitiator = String(callData.isInitiator) === 'true';
@@ -431,10 +339,11 @@ class CallNotificationHandler {
             return;
           }
 
-          // Handle incoming call with WhatsApp Call Manager  
+          // CRITICAL FIX: Delegate to WhatsAppCallManager to handle the call and display ONE notification
+          // This prevents duplicate notifications by centralizing notification logic in WhatsAppCallManager
           await this.whatsAppCallManager.handleIncomingCall(callNotificationData);
 
-          console.log('[CallNotificationHandler] ✅ Call notification processed successfully');
+          console.log('[CallNotificationHandler] ✅ Call notification processed successfully - notification handled by WhatsAppCallManager');
           
         } catch (callHandlingError) {
           console.error('[CallNotificationHandler] Error processing call notification:', callHandlingError);

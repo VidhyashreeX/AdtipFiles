@@ -109,6 +109,7 @@ export type MainNavigatorParamList = {
   };
   UserPremiumPlans: undefined;
   SubscriptionScreen: undefined;
+  PrivacyPolicy: undefined; // Add this line
 };
 
 // This is the RootStackParamList for the Stack.Navigator in App.tsx

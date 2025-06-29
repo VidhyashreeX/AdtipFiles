@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
+import WalletService from '../../services/WalletService';
 import ApiService from '../../services/ApiService';
 
 const { width } = Dimensions.get('window');
@@ -21,15 +22,70 @@ const PLAN_STATUS_COLORS: Record<string, string> = {
 
 const GOLD_GRADIENT = ['#FFD700', '#FFB300'];
 
-const UserPremiumPlans = () => {
+const UserPremiumPlans: React.FC<{ isPremiumProp?: boolean }> = ({ isPremiumProp }) => {
   const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation();
+  
+  const [isPremium, setIsPremium] = useState<boolean>(isPremiumProp ?? false);
+  const [premiumLoading, setPremiumLoading] = useState(!isPremiumProp);
+  const [premiumPlan, setPremiumPlan] = useState<any>(null);
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [subscription, setSubscription] = useState<any>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+
+  // Fetch premium status if not provided as prop
+  useEffect(() => {
+    if (isPremiumProp !== undefined) {
+      setIsPremium(isPremiumProp);
+      setPremiumLoading(false);
+      return;
+    }
+
+    const fetchPremiumStatus = async () => {
+      if (!user?.id) {
+        setPremiumLoading(false);
+        return;
+      }
+
+      try {
+        setPremiumLoading(true);
+        console.log('UserPremiumPlans: Fetching premium status for user:', user.id);
+        
+        const premiumResponse = await ApiService.checkPremium(user.id);
+        console.log('UserPremiumPlans: Premium check response:', premiumResponse);
+        
+        if (premiumResponse && (premiumResponse.status === true || premiumResponse.status === 1)) {
+          setIsPremium(true);
+          if (premiumResponse.data) {
+            setPremiumPlan(premiumResponse.data);
+          }
+        } else {
+          setIsPremium(false);
+          setPremiumPlan(null);
+        }
+      } catch (error: any) {
+        console.log('UserPremiumPlans: Error checking premium status:', error);
+        
+        const errorMessage = error?.message || error?.response?.data?.message || '';
+        if (errorMessage.toLowerCase().includes('no premium')) {
+          console.log('UserPremiumPlans: User has no premium subscription');
+          setIsPremium(false);
+          setPremiumPlan(null);
+        } else {
+          console.error('UserPremiumPlans: Unexpected error checking premium status:', error);
+          setIsPremium(false);
+          setPremiumPlan(null);
+        }
+      } finally {
+        setPremiumLoading(false);
+      }
+    };
+
+    fetchPremiumStatus();
+  }, [user?.id, isPremiumProp]);
 
   useEffect(() => {
     fetchData();
@@ -50,12 +106,12 @@ const UserPremiumPlans = () => {
         ApiService.getSubscriptionStatus(user.id).catch(e => e) // Catch error if no subscription
       ]);
 
-      if (plansResponse.status) {
+      if (plansResponse.status === true || plansResponse.status === 200) {
         const filtered = (plansResponse.data || []).filter((p: any) => p.status === 'active' || p.status === 'queued');
         setPlans(filtered.sort((a: any, b: any) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()));
       }
       
-      if (subResponse?.status) {
+      if (subResponse?.status === true || subResponse?.status === 200) {
         setSubscription(subResponse.data);
       }
 
@@ -121,7 +177,7 @@ const UserPremiumPlans = () => {
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? colors.background : '#fff' }] }>
       <Text style={[styles.title, { color: isDarkMode ? colors.primary : colors.secondary }]}>My Premium Plans</Text>
-      {loading ? (
+      {premiumLoading ? (
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 32 }} />
       ) : error ? (
         <Text style={{ color: colors.error, marginTop: 24 }}>{error}</Text>
@@ -253,4 +309,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default UserPremiumPlans; 
+export default UserPremiumPlans;

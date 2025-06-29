@@ -46,8 +46,15 @@ const ChatScreen: React.FC = () => {
   const sortedMessages = [...messages].sort((a, b) => new Date(a.createddate).getTime() - new Date(b.createddate).getTime());
 
   // Auto-scroll to bottom function (simplified and reliable)
+  // Auto-scroll to bottom function (simplified and reliable)
   const scrollToBottom = useCallback((animated: boolean = true) => {
     if (flatListRef.current && sortedMessages.length > 0) {
+      console.log('Scrolling to bottom, animated:', animated, 'messages count:', sortedMessages.length);
+      try {
+        flatListRef.current.scrollToEnd({ animated });
+      } catch (error) {
+        console.warn('Error scrolling to bottom:', error);
+      }
       console.log('Scrolling to bottom, animated:', animated, 'messages count:', sortedMessages.length);
       try {
         flatListRef.current.scrollToEnd({ animated });
@@ -67,11 +74,25 @@ const ChatScreen: React.FC = () => {
       });
       return;
     }
+    if (!self || ws.current || isConnectingRef.current) {
+      console.log('Skipping WebSocket connection:', { 
+        self: !!self, 
+        wsExists: !!ws.current, 
+        isConnecting: isConnectingRef.current 
+      });
+      return;
+    }
 
     try {
       isConnectingRef.current = true;
       console.log('Starting WebSocket connection...');
+      console.log('Starting WebSocket connection...');
       const token = await AsyncStorage.getItem('accessToken');
+      if (!token) {
+        console.error('No access token found');
+        isConnectingRef.current = false;
+        return;
+      }
       if (!token) {
         console.error('No access token found');
         isConnectingRef.current = false;
@@ -101,7 +122,11 @@ const ChatScreen: React.FC = () => {
               console.log('Ping sent to server');
             } else {
               console.log('WebSocket not open, cannot send ping');
+              console.log('Ping sent to server');
+            } else {
+              console.log('WebSocket not open, cannot send ping');
             }
+          }, 20000); // Ping every 20 seconds (faster than backend)
           }, 20000); // Ping every 20 seconds (faster than backend)
         }
       };
@@ -114,8 +139,17 @@ const ChatScreen: React.FC = () => {
           if (data.type === 'message') {
             // Incoming message from another user
             if (data.data && data.data.sender === otherUser.id && data.data.receiver === self.id) {
+          if (data.type === 'message') {
+            // Incoming message from another user
+            if (data.data && data.data.sender === otherUser.id && data.data.receiver === self.id) {
               LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
               setMessages(prev => {
+                // Ensure message has valid ID
+                if (!data.data.id) {
+                  console.warn('Received message without ID:', data.data);
+                  data.data.id = Date.now(); // Fallback ID
+                }
+                
                 // Ensure message has valid ID
                 if (!data.data.id) {
                   console.warn('Received message without ID:', data.data);
@@ -142,7 +176,19 @@ const ChatScreen: React.FC = () => {
               ));
               console.log('Message confirmed via WebSocket, no API call needed');
             }
+          } else if (data.type === 'message_sent') {
+            // Confirmation that our message was saved successfully
+            if (data.data && data.tempId) {
+              setMessages(prev => prev.map(m => 
+                m.id === data.tempId ? { 
+                  ...data.data,
+                  id: data.data.id || Date.now() // Ensure ID exists
+                } : m
+              ));
+              console.log('Message confirmed via WebSocket, no API call needed');
+            }
           } else if (data.type === 'typing' && data.userId === otherUser.id && isUserInChat) {
+            console.log('Received typing indicator from user:', data.userId);
             console.log('Received typing indicator from user:', data.userId);
             setIsOtherTyping(true);
             if (typingTimeoutRef.current) {
@@ -150,12 +196,15 @@ const ChatScreen: React.FC = () => {
             }
             typingTimeoutRef.current = setTimeout(() => {
               console.log('Hiding typing indicator');
+              console.log('Hiding typing indicator');
               setIsOtherTyping(false);
             }, 3000);
           } else if (data.type === 'read') {
             setMessages(prev => prev.map(m => 
               m.id === data.messageId ? { ...m, is_seen: true } : m
             ));
+          } else if (data.type === 'error') {
+            console.error('WebSocket error received:', data.message);
           } else if (data.type === 'error') {
             console.error('WebSocket error received:', data.message);
           } else if (data.type === 'pong') {
@@ -168,6 +217,7 @@ const ChatScreen: React.FC = () => {
       };
 
       ws.current.onclose = (event) => {
+        console.log('WebSocket disconnected. Code:', event.code, 'Reason:', event.reason);
         console.log('WebSocket disconnected. Code:', event.code, 'Reason:', event.reason);
         setIsConnected(false);
         
@@ -210,7 +260,19 @@ const ChatScreen: React.FC = () => {
         userId: self.id 
       });
       console.log('Sending typing indicator:', message);
+      console.log('Sending typing indicator:', message);
       ws.current.send(message);
+    } else {
+      console.log('Cannot send typing - WebSocket not ready:', {
+        readyState: ws.current?.readyState,
+        self: !!self,
+        wsExists: !!ws.current
+      });
+      // Try to reconnect if not connected
+      if (!ws.current && !isConnectingRef.current && self) {
+        console.log('Attempting to reconnect WebSocket for typing...');
+        connectWebSocket();
+      }
     } else {
       console.log('Cannot send typing - WebSocket not ready:', {
         readyState: ws.current?.readyState,
@@ -224,8 +286,11 @@ const ChatScreen: React.FC = () => {
       }
     }
   }, [self, otherUser.id, connectWebSocket]);
+  }, [self, otherUser.id, connectWebSocket]);
 
   // WebSocket send message event
+  const sendMessageWS = useCallback((msg: string, tempId: number) => {
+    if (!self) return false;
   const sendMessageWS = useCallback((msg: string, tempId: number) => {
     if (!self) return false;
 
@@ -237,21 +302,27 @@ const ChatScreen: React.FC = () => {
       chat_type: 'text',
       chat_type_id_value: 0,
       tempId: tempId // Include tempId for tracking
+      chat_type_id_value: 0,
+      tempId: tempId // Include tempId for tracking
     };
 
+    console.log('Sending WebSocket message:', payload);
     console.log('Sending WebSocket message:', payload);
     const messageString = JSON.stringify(payload);
 
     if (ws.current?.readyState === WebSocket.OPEN) {
       console.log('WebSocket is open, sending message');
+      console.log('WebSocket is open, sending message');
       ws.current.send(messageString);
       return true;
     } else {
+      console.log('WebSocket not open, queueing message. ReadyState:', ws.current?.readyState);
       console.log('WebSocket not open, queueing message. ReadyState:', ws.current?.readyState);
       // Queue message if not connected
       messageQueueRef.current.push(messageString);
       // Try to reconnect
       connectWebSocket();
+      return false;
       return false;
     }
   }, [self, otherUser.id, connectWebSocket]);
@@ -290,9 +361,44 @@ const ChatScreen: React.FC = () => {
 
   // Send message via WebSocket with API fallback
   const handleSend = useCallback(async () => {
+  // API fallback for sending messages
+  const sendMessageAPI = useCallback(async (msg: string, tempId: number) => {
+    if (!self) return;
+
+    try {
+      const response = await ApiService.sendChatMessage({
+        message: msg,
+        userId: self.id,
+        receiverId: otherUser.id
+      });
+
+      if (response.status === 200) {
+        // Update the temporary message with real ID and data
+        setMessages(prev => prev.map(m => 
+          m.id === tempId ? { 
+            ...m, 
+            id: response.data.messageId || response.data.id,
+            createddate: response.data.createddate || m.createddate
+          } : m
+        ));
+      } else {
+        // Remove the failed message from UI
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+        throw new Error(response.message || 'Failed to send message');
+      }
+    } catch (error) {
+      console.error('API send message failed:', error);
+      // Remove the failed message from UI
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+    }
+  }, [self, otherUser.id]);
+
+  // Send message via WebSocket with API fallback
+  const handleSend = useCallback(async () => {
     if (!input.trim() || !self) return;
     
     const now = new Date().toISOString();
+    const tempId = -Date.now(); // Use negative number for temp ID to avoid conflicts
     const tempId = -Date.now(); // Use negative number for temp ID to avoid conflicts
     const msgPayload: ChatMessage = {
       id: tempId,
@@ -306,6 +412,7 @@ const ChatScreen: React.FC = () => {
     // Optimistically add to UI immediately
     setMessages(prev => [...prev, msgPayload]);
     
+    const messageText = input.trim();
     const messageText = input.trim();
     setInput('');
     setInputHeight(40);
@@ -333,6 +440,7 @@ const ChatScreen: React.FC = () => {
     
     if (!typing && self && text.trim()) {
       console.log('User started typing, sending typing indicator');
+      console.log('User started typing, sending typing indicator');
       setTyping(true);
       sendTyping();
       
@@ -343,6 +451,7 @@ const ChatScreen: React.FC = () => {
       
       // Set new timeout
       typingTimeoutRef.current = setTimeout(() => {
+        console.log('User stopped typing');
         console.log('User stopped typing');
         setTyping(false);
       }, 2000);
@@ -379,9 +488,13 @@ const ChatScreen: React.FC = () => {
         if (isMounted) {
           let messagesArray = [];
           
+          let messagesArray = [];
+          
           if (Array.isArray(res?.data?.data)) {
             messagesArray = res.data.data;
+            messagesArray = res.data.data;
           } else if (Array.isArray(res?.data)) {
+            messagesArray = res.data;
             messagesArray = res.data;
           } else if (Array.isArray(res)) {
             messagesArray = res;
@@ -394,8 +507,25 @@ const ChatScreen: React.FC = () => {
           }));
           
           setMessages(validatedMessages);
+            messagesArray = res;
+          }
+          
+          // Ensure all messages have valid IDs
+          const validatedMessages = messagesArray.map((msg: any, index: number) => ({
+            ...msg,
+            id: msg.id || `loaded-${index}-${Date.now()}`
+          }));
+          
+          setMessages(validatedMessages);
           
           // Auto-scroll to bottom after loading messages
+          setTimeout(() => {
+            console.log('Initial scroll to bottom after loading messages');
+            scrollToBottom(false);
+          }, 500);
+          
+          // One additional scroll attempt to ensure it works
+          setTimeout(() => scrollToBottom(false), 1000);
           setTimeout(() => {
             console.log('Initial scroll to bottom after loading messages');
             scrollToBottom(false);
@@ -417,15 +547,21 @@ const ChatScreen: React.FC = () => {
     };
 
     // Only load messages once when component mounts
+    // Only load messages once when component mounts
     loadMessages();
 
     return () => {
       isMounted = false;
     };
   }, [self?.id, otherUser.id]); // Removed scrollToBottom dependency
+  }, [self?.id, otherUser.id]); // Removed scrollToBottom dependency
 
   // Setup WebSocket connection immediately when component mounts
+  // Setup WebSocket connection immediately when component mounts
   useEffect(() => {
+    if (self?.id) {
+      // Connect immediately without delay
+      console.log('Setting up WebSocket for user:', self.id);
     if (self?.id) {
       // Connect immediately without delay
       console.log('Setting up WebSocket for user:', self.id);
@@ -460,6 +596,15 @@ const ChatScreen: React.FC = () => {
       connectWebSocket();
     }
   }, [self?.id, connectWebSocket]);
+  }, [self?.id]); // Removed connectWebSocket dependency to prevent loops
+
+  // Separate effect for WebSocket connection setup
+  useEffect(() => {
+    if (self?.id && !ws.current && !isConnectingRef.current) {
+      console.log('Auto-connecting WebSocket...');
+      connectWebSocket();
+    }
+  }, [self?.id, connectWebSocket]);
 
   // Handle screen focus/blur for chat state management
   useFocusEffect(
@@ -478,13 +623,27 @@ const ChatScreen: React.FC = () => {
         scrollToBottom(false);
       }, 500);
       
+      // Scroll to bottom when focusing on chat (like WhatsApp)
+      setTimeout(() => {
+        console.log('Chat focused, scrolling to bottom');
+        scrollToBottom(false);
+      }, 500);
+      
       return () => {
         setIsUserInChat(false);
         setIsOtherTyping(false);
       };
     }, [self, otherUser.id, scrollToBottom])
+    }, [self, otherUser.id, scrollToBottom])
   );
 
+  // Memoized message item component for better performance
+  const MessageItem = React.memo(({ item, index, isDarkMode, self }: { 
+    item: ChatMessage, 
+    index: number, 
+    isDarkMode: boolean, 
+    self: any 
+  }) => {
   // Memoized message item component for better performance
   const MessageItem = React.memo(({ item, index, isDarkMode, self }: { 
     item: ChatMessage, 
@@ -546,6 +705,12 @@ const ChatScreen: React.FC = () => {
   const renderItem = useCallback(({ item, index }: { item: ChatMessage, index: number }) => (
     <MessageItem item={item} index={index} isDarkMode={isDarkMode} self={self} />
   ), [isDarkMode, self]);
+  });
+
+  // Render function for FlatList
+  const renderItem = useCallback(({ item, index }: { item: ChatMessage, index: number }) => (
+    <MessageItem item={item} index={index} isDarkMode={isDarkMode} self={self} />
+  ), [isDarkMode, self]);
 
   if (!self) {
     return (
@@ -574,6 +739,7 @@ const ChatScreen: React.FC = () => {
               <View style={[styles.connectionDot, { backgroundColor: isConnected ? '#4ADE80' : '#EF4444' }]} />
               <Text style={[styles.headerSubtitle, { color: isDarkMode ? '#bbb' : '#888' }]}>
                 {isConnected ? 'Online' : isConnectingRef.current ? 'Connecting...' : 'Reconnecting...'}
+                {isConnected ? 'Online' : isConnectingRef.current ? 'Connecting...' : 'Reconnecting...'}
               </Text>
             </View>
           </View>
@@ -600,6 +766,24 @@ const ChatScreen: React.FC = () => {
               }}
               style={styles.list}
               contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
+              onContentSizeChange={() => {
+                // Scroll to bottom when content size changes (new messages)
+                setTimeout(() => scrollToBottom(false), 100);
+              }}
+              onLayout={() => {
+                // Initial layout scroll
+                setTimeout(() => scrollToBottom(false), 200);
+              }}
+              removeClippedSubviews={false}
+              maxToRenderPerBatch={15}
+              updateCellsBatchingPeriod={50}
+              initialNumToRender={25}
+              windowSize={15}
+              showsVerticalScrollIndicator={true}
+              scrollEventThrottle={16}
+              scrollEnabled={true}
+              nestedScrollEnabled={true}
+              bounces={true}
               onContentSizeChange={() => {
                 // Scroll to bottom when content size changes (new messages)
                 setTimeout(() => scrollToBottom(false), 100);
@@ -663,6 +847,9 @@ const ChatScreen: React.FC = () => {
             onPress={() => {
               handleSend();
             }}
+            onPress={() => {
+              handleSend();
+            }}
             style={[
               styles.sendButton, 
               { 
@@ -671,6 +858,7 @@ const ChatScreen: React.FC = () => {
               }
             ]}
             disabled={!input.trim()}
+            activeOpacity={0.7}
             activeOpacity={0.7}
           > 
             <Icon name="send" size={20} color="#fff" />

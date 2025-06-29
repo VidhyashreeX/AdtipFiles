@@ -800,11 +800,30 @@ export default class ApiService {
   }
 
   /**
-   * Get ad passbook
+   * Get ad passbook for a user
    */
-  static async getAdPassbook(userId: number, page: number, limit: number): Promise<any> {
-    return this.get(`/passbook/get-passbook-by-userid/${userId}?page=${page}&limit=${limit}`);
+  static async getAdPassbook(userId: string | number): Promise<{
+    status: number;
+    message: string;
+    data: any[];
+  }> {
+    try {
+      console.log(`[ApiService] Fetching ad passbook for user ID: ${userId}`);
+      
+      const response = await this.get<{
+        status: number;
+        message: string;
+        data: any[];
+      }>(`/api/getadpassbook/${userId}`);
+      
+      console.log('[ApiService] Ad passbook response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error fetching ad passbook:', error);
+      throw this.handleError(error);
+    }
   }
+
   /**
    * Get FCM token for a user (Updated to use fcm-tokens-of-both-users API)
    * @param userId - The user ID to get FCM token for
@@ -942,7 +961,7 @@ export default class ApiService {
     console.log('[API] Sending like request:', JSON.stringify(data, null, 2));
     try {
       const response = await this.post<LikePostResponse>(
-        '/api/save-user-post-like',
+        ApiEndpoints.HOME_ENDPOINTS.SAVE_USER_POST_LIKE,
         data,
         config,
       );
@@ -1813,6 +1832,8 @@ export default class ApiService {
     createdby: number;
     play_duration: string;
     video_Thumbnail: string;
+    is_paid_promotional?: boolean;
+    promotional_price?: number;
   }): Promise<{
     status: number;
     message: string;
@@ -1827,6 +1848,8 @@ export default class ApiService {
       createdby: number;
       play_duration: string;
       video_Thumbnail: string;
+      is_paid_promotional?: boolean;
+      promotional_price?: number;
     }>;
   }> {
     try {
@@ -1843,6 +1866,50 @@ export default class ApiService {
       return response;
     } catch (error: any) {
       console.error('[ApiService] TipTube video upload failed:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Create a new post
+   */
+  static async createPost(data: {
+    user_id: number;
+    title: string;
+    content: string;
+    media_url: string;
+    media_type: 'video' | 'image' | 'text';
+    is_promoted: boolean;
+    video_category_id: number;
+    start_date: string;
+    end_date: string;
+    target_min_age?: number;
+    target_max_age?: number;
+    pay_per_view?: number;
+    reach_goal?: number;
+    duration_days?: number;
+    total_pay?: number;
+    platform_fee?: number;
+    post_target_locations?: string[];
+    post_target_genders?: string[];
+  }): Promise<{
+    status: boolean;
+    statusCode: number;
+    message: string;
+    data: {
+      post_id: number;
+      user_id: number;
+      title: string;
+      is_promoted: boolean;
+    };
+  }> {
+    try {
+      console.log('[ApiService] Creating post with data:', data);
+      const response = await this.post('/api/post', data);
+      console.log('[ApiService] Create post response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error creating post:', error);
       throw this.handleError(error);
     }
   }

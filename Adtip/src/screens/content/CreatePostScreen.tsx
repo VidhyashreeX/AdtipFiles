@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import type {NavigationProp} from '@react-navigation/native';
@@ -20,6 +21,7 @@ import type {RootStackParamList} from '../../types/navigation';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import ImagePicker from 'react-native-image-crop-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Custom components
 import Header from '../../components/common/Header';
@@ -28,23 +30,46 @@ import CategoryChip from '../../components/common/CategoryChip';
 // Context and services
 import {useTheme} from '../../contexts/ThemeContext';
 import ApiService from '../../services/ApiService';
-import {ENDPOINTS} from '../../constants/api';
+import CloudflareUploadService from '../../services/CloudflareUploadService';
 
 const CreatePostScreen = () => {
   const {colors, isDarkMode} = useTheme();
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+  
+  // Form state
+  const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [images, setImages] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
-  const [isPublic, setIsPublic] = useState(true);
+  const [isPromoted, setIsPromoted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [userId, setUserId] = useState<string>('');
+  
+  // Upload progress state
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  
   const textInputRef = useRef<TextInput>(null);
   
   // Create dynamic styles based on theme
   const styles = createStyles(colors, isDarkMode);
 
-  // Focus input when screen loads
+  // Get user ID on component mount
   useEffect(() => {
+    const getUserId = async () => {
+      try {
+        const id = await AsyncStorage.getItem('userId');
+        if (id) {
+          setUserId(id);
+        }
+      } catch (error) {
+        console.error('Error getting user ID:', error);
+      }
+    };
+    
+    getUserId();
+    
+    // Focus input when screen loads
     const timer = setTimeout(() => {
       if (textInputRef.current) {
         textInputRef.current.focus();
@@ -139,58 +164,194 @@ const CreatePostScreen = () => {
     });
   };
 
+  // Handle promoted post toggle
+  const handlePromotedToggle = (value: boolean) => {
+    if (value) {
+      // If user wants to create promoted post, navigate to campaign creation
+      Alert.alert(
+        'Create Promoted Post',
+        'You will be redirected to create a campaign for your promoted post.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Continue',
+            onPress: () => {
+              // Fix: Change 'CreateCampaignScreen' to 'CreateCampaign'
+              //@ts-ignore
+              navigation.navigate('CreateCampaign' as never, {
+                postData: {
+                  title: title.trim(),
+                  content: content.trim(),
+                  images,
+                  selectedCategory,
+                },
+              });
+            },
+          },
+        ]
+      );
+    } else {
+      setIsPromoted(value);
+    }
+  };
+
+  // Upload images using CloudflareUploadService
+  const uploadImages = async (): Promise<string[]> => {
+    if (images.length === 0) return [];
+
+    try {
+      console.log('[CreatePost] Starting image upload process for', images.length, 'images');
+      setIsUploading(true);
+      setUploadProgress(0);
+
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+
+      const uploadedUrls: string[] = [];
+      const totalImages = images.length;
+
+      // Upload images one by one using CloudflareUploadService
+      for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+        console.log(`[CreatePost] Uploading image ${i + 1}/${totalImages}:`, img.uri);
+
+        try {
+          // Upload single image using CloudflareUploadService
+          const uploadResult = await CloudflareUploadService.uploadFile(
+            img.uri,
+            'images', // Upload to images folder
+            img.name || `post_image_${Date.now()}_${i}.jpg`,
+            parseInt(userId),
+            (progress) => {
+              // Calculate overall progress
+              const currentImageProgress = (i / totalImages) * 100;
+              const thisImageProgress = (progress.percentage / totalImages);
+              const totalProgress = currentImageProgress + thisImageProgress;
+              setUploadProgress(Math.min(totalProgress, 100));
+            }
+          );
+
+          if (!uploadResult.success) {
+            throw new Error(uploadResult.error || `Failed to upload image ${i + 1}`);
+          }
+
+          console.log(`[CreatePost] Successfully uploaded image ${i + 1}:`, uploadResult.url);
+          uploadedUrls.push(uploadResult.url);
+
+        } catch (imageError: any) {
+          console.error(`[CreatePost] Error uploading image ${i + 1}:`, imageError);
+          throw new Error(`Failed to upload image ${i + 1}: ${imageError.message}`);
+        }
+      }
+
+      console.log('[CreatePost] All images uploaded successfully:', uploadedUrls);
+      setUploadProgress(100);
+      return uploadedUrls;
+      
+    } catch (error: any) {
+      console.error('[CreatePost] Error in uploadImages function:', error);
+      throw new Error(`Failed to upload images: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
   // Handle publish post
   const handlePublish = async () => {
-    // Validate content
+    // Validate form
+    if (!title.trim()) {
+      Alert.alert('Error', 'Please add a title to your post');
+      return;
+    }
+
     if (!content.trim() && images.length === 0) {
-      Alert.alert('Error', 'Please add some content to your post');
+      Alert.alert('Error', 'Please add some content or images to your post');
+      return;
+    }
+
+    if (!userId) {
+      Alert.alert('Error', 'User not found. Please log in again.');
       return;
     }
 
     try {
       setIsLoading(true);
 
-      // Create form data
-      const formData = new FormData();
-      formData.append('content', content);
-      formData.append('isPublic', isPublic ? '1' : '0');
-
-      if (selectedCategory) {
-        formData.append('categoryId', selectedCategory.id);
+      // Upload images first if any
+      let mediaUrls: string[] = [];
+      if (images.length > 0) {
+        console.log('[CreatePost] Uploading images...');
+        mediaUrls = await uploadImages();
+        console.log('[CreatePost] Images uploaded successfully:', mediaUrls);
       }
 
-      // Add images
-      images.forEach((img, index) => {
-        formData.append(`images[${index}]`, {
-          uri: img.uri,
-          type: img.type,
-          name: img.name,
-        } as any);
-      });
+      // Prepare post data
+      const postData = {
+        user_id: parseInt(userId),
+        title: title.trim(),
+        content: content.trim(),
+        media_url: mediaUrls.length > 0 ? mediaUrls[0] : '', // Use first image as primary media
+        media_type: mediaUrls.length > 0 ? 'image' : 'text' as 'video' | 'image' | 'text',
+        is_promoted: isPromoted,
+        video_category_id: selectedCategory?.id || 1, // Default category if none selected
+        start_date: new Date().toISOString().split('T')[0], // Today's date
+        end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7 days from now
+        // Add all uploaded image URLs as additional data if needed
+        all_media_urls: mediaUrls, // This can be used if the API supports multiple images
+      };
 
-      // Upload post
-      await ApiService.uploadFile(
-        ENDPOINTS.CREATE_POST,
-        formData,
-        progress => {
-          console.log('Upload progress:', progress);
-        },
-      );
+      console.log('[CreatePost] Creating post with data:', postData);
 
+      // Create post using API
+      const response = await ApiService.createPost(postData);
+
+      console.log('[CreatePost] Post creation response:', response);
+
+      if (response.status && response.statusCode === 201) {
+        // Show success message
+        Alert.alert(
+          'Success',
+          isPromoted 
+            ? 'Your promoted post has been created successfully!' 
+            : 'Your post has been published successfully!',
+          [
+            {
+              text: 'OK',
+              onPress: () => navigation.goBack(),
+            },
+          ]
+        );
+      } else {
+        throw new Error(response.message || 'Failed to create post');
+      }
+    } catch (error: any) {
+      console.error('[CreatePost] Error creating post:', error);
+      
+      // More specific error messages
+      let errorMessage = 'Failed to publish your post. Please try again.';
+      
+      if (error.message?.includes('upload')) {
+        errorMessage = 'Failed to upload images. Please check your internet connection and try again.';
+      } else if (error.message?.includes('Network')) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      } else if (error.message?.includes('User not authenticated')) {
+        errorMessage = 'Please log in again to continue.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert('Error', errorMessage);
+    } finally {
       setIsLoading(false);
-
-      // Show success message
-      Alert.alert('Success', 'Your post has been published!', [
-        {text: 'OK', onPress: () => navigation.goBack()},
-      ]);
-    } catch (error) {
-      setIsLoading(false);
-      Alert.alert('Error', 'Failed to publish your post. Please try again.');
-      console.error('Error publishing post:', error);
     }
   };
 
-  const isDisabled = isLoading || (!content.trim() && images.length === 0);
+  const isDisabled = isLoading || isUploading || !title.trim() || (!content.trim() && images.length === 0);
   const publishOpacity = isDisabled ? 0.5 : 1;
 
   return (
@@ -207,7 +368,7 @@ const CreatePostScreen = () => {
             onPress={handlePublish}
             disabled={isDisabled}
             style={{ opacity: publishOpacity }}>
-            {isLoading ? (
+            {isLoading || isUploading ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : (
               <Text style={[{color: colors.primary}, styles.publishText]}>
@@ -224,6 +385,18 @@ const CreatePostScreen = () => {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}>
         <ScrollView style={styles.container}>
           <View style={styles.editorContainer}>
+            {/* Title Input */}
+            <TextInput
+              style={[styles.titleInput, {color: colors.text.primary, borderColor: colors.border}]}
+              placeholder="Add a title..."
+              placeholderTextColor={colors.text.tertiary}
+              value={title}
+              onChangeText={setTitle}
+              maxLength={100}
+              editable={!isLoading && !isUploading}
+            />
+
+            {/* Content Input */}
             <TextInput
               ref={textInputRef}
               style={[styles.contentInput, {color: colors.text.primary}]}
@@ -233,6 +406,7 @@ const CreatePostScreen = () => {
               value={content}
               onChangeText={setContent}
               maxLength={2000}
+              editable={!isLoading && !isUploading}
             />
 
             {/* Image preview section */}
@@ -249,11 +423,32 @@ const CreatePostScreen = () => {
                         styles.removeImageBtn,
                         {backgroundColor: colors.error},
                       ]}
-                      onPress={() => handleRemoveImage(index)}>
+                      onPress={() => handleRemoveImage(index)}
+                      disabled={isLoading || isUploading}>
                       <Icon name="x" size={12} color={colors.white} />
                     </TouchableOpacity>
                   </View>
                 ))}
+              </View>
+            )}
+
+            {/* Upload Progress */}
+            {isUploading && (
+              <View style={styles.uploadProgressContainer}>
+                <Text style={[styles.uploadProgressText, {color: colors.text.secondary}]}>
+                  Uploading images... {Math.round(uploadProgress)}%
+                </Text>
+                <View style={[styles.progressBar, {backgroundColor: colors.gray?.[200]}]}>
+                  <View 
+                    style={[
+                      styles.progressFill, 
+                      { 
+                        backgroundColor: colors.primary,
+                        width: `${uploadProgress}%`
+                      }
+                    ]} 
+                  />
+                </View>
               </View>
             )}
 
@@ -265,51 +460,81 @@ const CreatePostScreen = () => {
                   selected={true}
                   onPress={handleSelectCategory}
                 />
-                <TouchableOpacity onPress={() => setSelectedCategory(null)}>
+                <TouchableOpacity 
+                  onPress={() => setSelectedCategory(null)}
+                  disabled={isLoading || isUploading}>
                   <Icon name="x" size={16} color={colors.text.tertiary} />
                 </TouchableOpacity>
               </View>
             )}
 
             {/* Character count */}
-            <Text style={[styles.charCount, {color: colors.text.tertiary}]}>
-              {content.length}/2000
-            </Text>
+            <View style={styles.metaInfo}>
+              <Text style={[styles.charCount, {color: colors.text.tertiary}]}>
+                Title: {title.length}/100
+              </Text>
+              <Text style={[styles.charCount, {color: colors.text.tertiary}]}>
+                Content: {content.length}/2000
+              </Text>
+            </View>
+
+            {/* Promoted Post Section */}
+            <View style={[styles.promotedSection, {backgroundColor: colors.card, borderColor: colors.border}]}>
+              <View style={styles.promotedHeader}>
+                <Icon name="trending-up" size={20} color={colors.primary} />
+                <Text style={[styles.promotedTitle, {color: colors.text.primary}]}>
+                  Promoted Post
+                </Text>
+              </View>
+              <Text style={[styles.promotedDescription, {color: colors.text.secondary}]}>
+                Reach more people by promoting your post
+              </Text>
+              <View style={styles.promotedToggle}>
+                <Text style={[styles.promotedToggleText, {color: colors.text.primary}]}>
+                  {isPromoted ? 'Promoted' : 'Regular Post'}
+                </Text>
+                <Switch
+                  value={isPromoted}
+                  onValueChange={handlePromotedToggle}
+                  trackColor={{
+                    false: isDarkMode ? colors.gray?.[700] : colors.gray?.[300],
+                    true: colors.primary + '40',
+                  }}
+                  thumbColor={isPromoted ? colors.primary : colors.gray?.[500]}
+                  disabled={isLoading || isUploading}
+                />
+              </View>
+            </View>
           </View>
         </ScrollView>
 
         {/* Bottom action bar */}
-        <View style={[styles.actionBar, {backgroundColor: colors.card}]}>
+        <View style={[styles.actionBar, {backgroundColor: colors.card, borderTopColor: colors.border}]}>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={handlePickImage}>
-            <Icon name="image" size={22} color={colors.primary} />
+            onPress={handlePickImage}
+            disabled={isLoading || isUploading}>
+            <Icon name="image" size={22} color={isLoading || isUploading ? colors.text.tertiary : colors.primary} />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={handleTakePhoto}>
-            <Icon name="camera" size={22} color={colors.primary} />
+            onPress={handleTakePhoto}
+            disabled={isLoading || isUploading}>
+            <Icon name="camera" size={22} color={isLoading || isUploading ? colors.text.tertiary : colors.primary} />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={handleSelectCategory}>
-            <Icon name="tag" size={22} color={colors.primary} />
+            onPress={handleSelectCategory}
+            disabled={isLoading || isUploading}>
+            <Icon name="tag" size={22} color={isLoading || isUploading ? colors.text.tertiary : colors.primary} />
           </TouchableOpacity>
 
-          <View style={styles.visibilitySwitchWrapper}>
-            <Text
-              style={[styles.visibilityText, {color: colors.text.secondary}]}>
-              {isPublic ? 'Public' : 'Private'}
+          <View style={styles.imageCountWrapper}>
+            <Text style={[styles.imageCountText, {color: colors.text.secondary}]}>
+              {images.length}/5 images
             </Text>
-            <TouchableOpacity onPress={() => setIsPublic(!isPublic)}>
-              <MaterialIcons
-                name={isPublic ? 'public' : 'lock'}
-                size={22}
-                color={colors.primary}
-              />
-            </TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -325,6 +550,15 @@ const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
   editorContainer: {
     padding: 16,
     flex: 1,
+  },
+  titleInput: {
+    fontSize: 18,
+    fontWeight: '600',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingBottom: 12,
+    marginBottom: 16,
+    color: colors.text.primary,
   },
   contentInput: {
     fontSize: 16,
@@ -355,18 +589,73 @@ const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: isDarkMode ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.8)',
+    backgroundColor: colors.error,
+  },
+  uploadProgressContainer: {
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  uploadProgressText: {
+    fontSize: 14,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  progressBar: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
   },
   categoryContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 16,
   },
+  metaInfo: {
+    marginTop: 16,
+    alignItems: 'flex-end',
+  },
   charCount: {
-    alignSelf: 'flex-end',
-    marginTop: 8,
     fontSize: 12,
+    color: colors.text.tertiary,
+    marginBottom: 4,
+  },
+  promotedSection: {
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  promotedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  promotedTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+    color: colors.text.primary,
+  },
+  promotedDescription: {
+    fontSize: 14,
     color: colors.text.secondary,
+    marginBottom: 12,
+  },
+  promotedToggle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  promotedToggleText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text.primary,
   },
   actionBar: {
     flexDirection: 'row',
@@ -382,18 +671,17 @@ const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
     justifyContent: 'center',
     marginRight: 16,
   },
-  visibilitySwitchWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  imageCountWrapper: {
     marginLeft: 'auto',
+    justifyContent: 'center',
   },
-  visibilityText: {
-    marginRight: 8,
-    fontSize: 14,
-    color: colors.text.primary,
+  imageCountText: {
+    fontSize: 12,
+    color: colors.text.secondary,
   },
   publishText: {
     fontWeight: 'bold',
+    fontSize: 16,
     color: colors.primary,
   },
 });

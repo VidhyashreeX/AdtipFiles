@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
@@ -138,8 +139,7 @@ const ContactCard: React.FC<{
   colors: any;
   isDarkMode: boolean;
 }> = ({ contact, onVideoCall, onVoiceCall, onChat, hasUnreadMessages, colors, isDarkMode }) => {
-  const isAvailable = contact.is_available && !contact.dnd && contact.online_status;
-  const avatarColor = isAvailable ? colors.success : colors.gray?.[400] || '#9CA3AF';
+  const avatarColor = colors.primary; // Always use primary color
   
   return (
     <View style={[
@@ -211,48 +211,38 @@ const ContactCard: React.FC<{
           )}
         </View>
 
-        {/* Action Buttons */}
-        {isAvailable && (
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.videoButton, { backgroundColor: colors.primary }]}
-              onPress={onVideoCall}
-              activeOpacity={0.8}
-            >
-              <Icon name="video" size={16} color="#FFFFFF" />
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.actionButton, styles.voiceButton, { backgroundColor: colors.success }]}
-              onPress={onVoiceCall}
-              activeOpacity={0.8}
-            >
-              <Icon name="phone" size={16} color="#FFFFFF" />
-            </TouchableOpacity>
-            
-            {/* Enhanced chat button with unread dot indicator */}
-            <TouchableOpacity
-              style={[styles.actionButton, styles.chatButton, { backgroundColor: colors.info || '#3B82F6' }]}
-              onPress={onChat}
-              activeOpacity={0.8}
-            >
-              <Icon name="message-circle" size={16} color="#FFFFFF" />
-              {hasUnreadMessages && (
-                <View style={styles.unreadDot}>
-                  {/* Gold dot for unread messages */}
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {!isAvailable && (
-          <View style={styles.unavailableContainer}>
-            <Text style={[styles.unavailableText, { color: colors.text.tertiary }]}>
-              Unavailable
-            </Text>
-          </View>
-        )}
+        {/* Action Buttons - Always Available */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.videoButton, { backgroundColor: colors.primary }]}
+            onPress={onVideoCall}
+            activeOpacity={0.8}
+          >
+            <Icon name="video" size={16} color="#FFFFFF" />
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.actionButton, styles.voiceButton, { backgroundColor: colors.success }]}
+            onPress={onVoiceCall}
+            activeOpacity={0.8}
+          >
+            <Icon name="phone" size={16} color="#FFFFFF" />
+          </TouchableOpacity>
+          
+          {/* Enhanced chat button with unread dot indicator */}
+          <TouchableOpacity
+            style={[styles.actionButton, styles.chatButton, { backgroundColor: colors.info || '#3B82F6' }]}
+            onPress={onChat}
+            activeOpacity={0.8}
+          >
+            <Icon name="message-circle" size={16} color="#FFFFFF" />
+            {hasUnreadMessages && (
+              <View style={styles.unreadDot}>
+                {/* Gold dot for unread messages */}
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -287,6 +277,7 @@ export default function TipCallScreen() {
   const { user } = useAuth();
   const { clearCache } = useDataContext();
   const netInfo = useNetInfo();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     CallService.resetCallState();
@@ -346,8 +337,20 @@ export default function TipCallScreen() {
     hasNextPage: hasMoreUsers,
   } = useUsers(filters, user?.id);
 
+  // Fetch data whenever the screen comes into focus by invalidating and forcing refetch
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[TipCallScreen] Screen focused. Invalidating and refetching users.');
+      // Invalidate and force refetch
+      queryClient.invalidateQueries({ 
+        queryKey: ['users', filters, user?.id],
+        refetchType: 'active' // Force active queries to refetch
+      });
+    }, [queryClient, filters, user?.id])
+  );
+
   // Prefetch data for better performance
-  const { prefetchProfile } = usePrefetchData();
+  // const { prefetchProfile } = usePrefetchData(); // Removed to avoid unnecessary API calls
 
   // Transform users data for compatibility
   const contacts = useMemo(() => {
@@ -555,11 +558,12 @@ export default function TipCallScreen() {
   }, [user]);
 
   // Prefetch profile data only for the current user (not for all contacts)
-  useEffect(() => {
-    if (user?.id) {
-      prefetchProfile(user.id);
-    }
-  }, [user?.id, prefetchProfile]);
+  // Commented out to avoid unnecessary API calls in TipCallScreen
+  // useEffect(() => {
+  //   if (user?.id) {
+  //     prefetchProfile(user.id);
+  //   }
+  // }, [user?.id, prefetchProfile]);
 
   // Fetch unread counts when contacts are loaded or screen is focused
   useFocusEffect(
@@ -675,36 +679,13 @@ export default function TipCallScreen() {
                 <View style={[styles.notificationBadge, { backgroundColor: colors.primary }]} />
               </TouchableOpacity>
 
-              {/* DND Button - rightmost */}
-              <TouchableOpacity
-                style={[
-                  styles.dndButtonHeader,
-                  {
-                    backgroundColor: isDndEnabled 
-                      ? colors.danger || '#EF4444' 
-                      : colors.success || '#22C55E',
-                    opacity: isDndLoading ? 0.6 : 1,
-                  }
-                ]}
-                onPress={handleDndToggle}
-                disabled={isDndLoading}
-                activeOpacity={0.8}
-              >
-                {isDndLoading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Icon 
-                      name={isDndEnabled ? "bell-off" : "bell"} 
-                      size={14} 
-                      color="#FFFFFF" 
-                    />
-                    <Text style={styles.dndButtonHeaderText}>
-                      {isDndEnabled ? 'DND' : 'Available'}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
+              {/* DND Toggle Switch */}
+              <DndToggleSwitch
+                isDndEnabled={isDndEnabled}
+                onToggle={handleDndToggle}
+                isLoading={isDndLoading}
+                colors={colors}
+              />
             </View>
           }
         />
@@ -829,56 +810,35 @@ const styles = StyleSheet.create({
     backgroundColor: '#EF4444',
   },
   
-  // Original DND button (remove or keep as backup)
-  dndButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    minWidth: 80,
+  // Remove old DND button styles and add new toggle switch styles
+  dndToggleContainer: {
     justifyContent: 'center',
-    gap: 4,
-  },
-  
-  // New header-specific DND button styles
-  dndButtonHeader: {
-    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    minWidth: 70,
+    marginLeft: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  
+  dndToggleCircle: {
+    position: 'absolute',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
-    gap: 3,
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
   },
   
-  dndButtonHeaderText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '600',
+  dndToggleLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  
-  dndButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  
-  dndStatusText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  
-  // Remove DND container since it's now in header
-  // dndContainer: {
-  //   flexDirection: 'row',
-  //   justifyContent: 'flex-end',
-  //   paddingHorizontal: 16,
-  //   paddingVertical: 8,
-  //   borderBottomWidth: StyleSheet.hairlineWidth,
-  //   borderBottomColor: '#E5E7EB',
-  // },
   
   // Filter Sections
   filtersSection: {
@@ -1158,3 +1118,54 @@ const styles = StyleSheet.create({
     height: 8,
   },
 });
+
+// Add this new component for the DND Toggle Switch
+const DndToggleSwitch: React.FC<{
+  isDndEnabled: boolean;
+  onToggle: () => void;
+  isLoading: boolean;
+  colors: any;
+}> = ({ isDndEnabled, onToggle, isLoading, colors }) => {
+  const switchWidth = 50;
+  const switchHeight = 26;
+  const circleSize = 22;
+  const circleOffset = 2;
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.dndToggleContainer,
+        {
+          width: switchWidth,
+          height: switchHeight,
+          backgroundColor: isDndEnabled ? '#EF4444' : '#22C55E', // Red for DND ON, Green for DND OFF
+          borderRadius: switchHeight / 2,
+          opacity: isLoading ? 0.6 : 1,
+        }
+      ]}
+      onPress={onToggle}
+      disabled={isLoading}
+      activeOpacity={0.8}
+    >
+      {isLoading ? (
+        <View style={styles.dndToggleLoadingContainer}>
+          <ActivityIndicator size="small" color="#FFFFFF" />
+        </View>
+      ) : (
+        <View
+          style={[
+            styles.dndToggleCircle,
+            {
+              width: circleSize,
+              height: circleSize,
+              borderRadius: circleSize / 2,
+              left: isDndEnabled ? circleOffset : switchWidth - circleSize - circleOffset,
+            }
+          ]}
+        >
+          <Icon name="moon" size={12} color="#666666" />
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};

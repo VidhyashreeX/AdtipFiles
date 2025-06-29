@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   ScrollView,
   TouchableOpacity,
   FlatList,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -14,7 +16,9 @@ import Icon from 'react-native-vector-icons/Feather';
 import Header from '../../components/common/Header';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import LinearGradient from 'react-native-linear-gradient';
-import ScreenTransition from '../../components/common/ScreenTransition'; // ADD THIS IMPORT
+import ScreenTransition from '../../components/common/ScreenTransition';
+import ApiService from '../../services/ApiService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Campaign = {
   id: string;
@@ -29,6 +33,12 @@ type Campaign = {
   duration: number;
   daysLeft: number;
 };
+
+interface AdPassbookResponse {
+  status: number;
+  message: string;
+  data: any[];
+}
 
 const AdPassbookScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -45,34 +55,10 @@ const AdPassbookScreen: React.FC = () => {
     contentPaddingBottom = 80; // Default padding that should work in most cases
   }
 
-  const [campaigns, setCampaigns] = useState<Campaign[]>([
-    {
-      id: '1',
-      name: 'Summer Sale Campaign',
-      status: 'active',
-      createdDate: '29/03/2024',
-      reach: '259K',
-      clicks: '3.3K',
-      ctr: '2.6%',
-      budget: 2500,
-      spent: 1850,
-      duration: 14,
-      daysLeft: 8,
-    },
-    {
-      id: '2',
-      name: 'Product Launch',
-      status: 'completed',
-      createdDate: '15/02/2024',
-      reach: '45K',
-      clicks: '1.2K',
-      ctr: '2.7%',
-      budget: 1500,
-      spent: 1500,
-      duration: 30,
-      daysLeft: 0,
-    },
-  ]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const stats = {
     total: campaigns.length,
@@ -81,16 +67,89 @@ const AdPassbookScreen: React.FC = () => {
     spent: '$7K',
   };
 
+  // Fetch ad passbook data from API
+  const fetchAdPassbook = async (showLoader = true) => {
+    try {
+      if (showLoader) {
+        setLoading(true);
+      }
+      setError(null);
+
+      // Get user ID from AsyncStorage
+      const userId = await AsyncStorage.getItem('userId');
+      if (!userId) {
+        throw new Error('User ID not found. Please login again.');
+      }
+
+      console.log('[AdPassbook] Fetching ad passbook for user ID:', userId);
+
+      // Call the API using the correct endpoint
+      const response: AdPassbookResponse = await ApiService.get(`/api/getadpassbook/${userId}`);
+      
+      console.log('[AdPassbook] API Response:', response);
+
+      if (response.status === 200) {
+        // Transform API data to match our Campaign type if needed
+        // For now, we'll use mock data since the API returns empty data
+        if (response.data && response.data.length > 0) {
+          // Transform real data here when available
+          const transformedCampaigns = response.data.map((item: any, index: number) => ({
+            id: item.id?.toString() || index.toString(),
+            name: item.name || `Campaign ${index + 1}`,
+            status: item.status || 'active',
+            createdDate: item.createdDate || new Date().toLocaleDateString('en-GB'),
+            reach: item.reach || '0',
+            clicks: item.clicks || '0',
+            ctr: item.ctr || '0%',
+            budget: item.budget || 0,
+            spent: item.spent || 0,
+            duration: item.duration || 0,
+            daysLeft: item.daysLeft || 0,
+          }));
+          setCampaigns(transformedCampaigns);
+        } else {
+          // No campaigns found - set empty state
+          setCampaigns([]);
+        }
+      } else {
+        throw new Error(response.message || 'Failed to fetch ad passbook data');
+      }
+    } catch (error: any) {
+      console.error('[AdPassbook] Error fetching data:', error);
+      setError(error.message || 'Failed to load ad passbook data');
+      // Set empty campaigns on error
+      setCampaigns([]);
+    } finally {
+      setLoading(false);
+      if (refreshing) {
+        setRefreshing(false);
+      }
+    }
+  };
+
+  // Load data on component mount
+  useEffect(() => {
+    fetchAdPassbook();
+  }, []);
+
+  // Handle pull-to-refresh
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchAdPassbook(false);
+  };
+
   const navigateToCreateCampaign = () => {
     navigation.navigate('CreateCampaign' as never);
   };
 
   const handleViewCampaign = (campaign: Campaign) => {
     // Navigate to campaign details
+    console.log('[AdPassbook] View campaign:', campaign.id);
   };
 
   const handleEditCampaign = (campaign: Campaign) => {
     // Navigate to campaign edit screen
+    console.log('[AdPassbook] Edit campaign:', campaign.id);
   };
 
   const handleTogglePause = (campaign: Campaign) => {
@@ -100,7 +159,7 @@ const AdPassbookScreen: React.FC = () => {
         return {
           ...c,
           status: c.status === 'active' ? 'paused' : 'active',
-        };
+        } as Campaign;
       }
       return c;
     });
@@ -124,7 +183,7 @@ const AdPassbookScreen: React.FC = () => {
   );
 
   const renderCampaignCard = (campaign: Campaign) => {
-    const progressPercent = Math.round((campaign.spent / campaign.budget) * 100);
+    const progressPercent = campaign.budget > 0 ? Math.round((campaign.spent / campaign.budget) * 100) : 0;
     const statusColor = campaign.status === 'active' ? '#10B981' : 
                         campaign.status === 'paused' ? '#F59E0B' : '#6B7280';
     
@@ -152,9 +211,9 @@ const AdPassbookScreen: React.FC = () => {
         </Text>
         
         <View style={styles.statsRow}>
-          {renderStatCard('Total', campaign.reach, '#5467FF', 'users')}
-          {renderStatCard('Active', '1', '#10B981', 'activity')}
-          {renderStatCard('Reach', campaign.reach, '#8B5CF6', 'eye')}
+          {renderStatCard('Reach', campaign.reach, '#5467FF', 'users')}
+          {renderStatCard('Clicks', campaign.clicks, '#10B981', 'mouse-pointer')}
+          {renderStatCard('CTR', campaign.ctr, '#8B5CF6', 'target')}
           {renderStatCard('Spent', `$${campaign.spent}`, '#F59E0B', 'dollar-sign')}
         </View>
         
@@ -268,7 +327,7 @@ const AdPassbookScreen: React.FC = () => {
                 style={[
                   styles.daysLeftProgress, 
                   { 
-                    width: `${(campaign.daysLeft / campaign.duration) * 100}%`, 
+                    width: `${campaign.duration > 0 ? (campaign.daysLeft / campaign.duration) * 100 : 0}%`, 
                     backgroundColor: '#10B981' 
                   }
                 ]} 
@@ -288,6 +347,64 @@ const AdPassbookScreen: React.FC = () => {
     );
   };
 
+  // Empty state component
+  const renderEmptyState = () => (
+    <View style={styles.emptyStateContainer}>
+      <Icon name="bar-chart-2" size={48} color={colors.text.tertiary} />
+      <Text style={[styles.emptyStateTitle, { color: colors.text.primary }]}>
+        No Ad Campaigns Yet
+      </Text>
+      <Text style={[styles.emptyStateSubtitle, { color: colors.text.secondary }]}>
+        Create your first campaign to start advertising
+      </Text>
+      <TouchableOpacity 
+        style={[styles.emptyStateButton, { backgroundColor: colors.primary }]}
+        onPress={navigateToCreateCampaign}
+      >
+        <Text style={[styles.emptyStateButtonText, { color: isDarkMode ? '#000' : '#fff' }]}>
+          Create Campaign
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Error state component
+  const renderErrorState = () => (
+    <View style={styles.errorStateContainer}>
+      <Icon name="alert-circle" size={48} color="#EF4444" />
+      <Text style={[styles.errorStateTitle, { color: colors.text.primary }]}>
+        Something went wrong
+      </Text>
+      <Text style={[styles.errorStateSubtitle, { color: colors.text.secondary }]}>
+        {error}
+      </Text>
+      <TouchableOpacity 
+        style={[styles.retryButton, { backgroundColor: colors.primary }]}
+        onPress={() => fetchAdPassbook()}
+      >
+        <Text style={[styles.retryButtonText, { color: isDarkMode ? '#000' : '#fff' }]}>
+          Try Again
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <ScreenTransition animationType="scale">
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+          <Header title="My Ad Passbook" />
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
+              Loading your campaigns...
+            </Text>
+          </View>
+        </SafeAreaView>
+      </ScreenTransition>
+    );
+  }
+
   return (
     <ScreenTransition animationType="scale">
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -296,6 +413,14 @@ const AdPassbookScreen: React.FC = () => {
           style={styles.content} 
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{paddingBottom: contentPaddingBottom}}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
         >
           <View style={styles.headerContainer}>
             <Text style={[styles.title, { color: colors.text.primary }]}>
@@ -315,20 +440,28 @@ const AdPassbookScreen: React.FC = () => {
               Create New Campaign
             </Text>
           </TouchableOpacity>
-          
-          <View style={styles.statsContainer}>
-            {renderStatCard('Total', stats.total.toString(), '#5467FF', 'bar-chart-2')}
-            {renderStatCard('Active', stats.active.toString(), '#10B981', 'activity')}
-            {renderStatCard('Reach', stats.reach, '#8B5CF6', 'users')}
-            {renderStatCard('Spent', stats.spent, '#F59E0B', 'dollar-sign')}
-          </View>
-          
-          <FlatList
-            data={campaigns}
-            renderItem={({item}) => renderCampaignCard(item)}
-            keyExtractor={item => item.id}
-            scrollEnabled={false}
-          />
+
+          {error ? (
+            renderErrorState()
+          ) : campaigns.length === 0 ? (
+            renderEmptyState()
+          ) : (
+            <>
+              <View style={styles.statsContainer}>
+                {renderStatCard('Total', stats.total.toString(), '#5467FF', 'bar-chart-2')}
+                {renderStatCard('Active', stats.active.toString(), '#10B981', 'activity')}
+                {renderStatCard('Reach', stats.reach, '#8B5CF6', 'users')}
+                {renderStatCard('Spent', stats.spent, '#F59E0B', 'dollar-sign')}
+              </View>
+              
+              <FlatList
+                data={campaigns}
+                renderItem={({item}) => renderCampaignCard(item)}
+                keyExtractor={item => item.id}
+                scrollEnabled={false}
+              />
+            </>
+          )}
         </ScrollView>
       </SafeAreaView>
     </ScreenTransition>
@@ -367,6 +500,72 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    marginTop: 16,
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    paddingVertical: 64,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyStateSubtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  emptyStateButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  emptyStateButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  errorStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    paddingVertical: 64,
+  },
+  errorStateTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorStateSubtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  retryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   statsContainer: {
     flexDirection: 'row',

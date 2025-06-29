@@ -8,7 +8,10 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  PermissionsAndroid,
+  Linking,
   Platform,
+  Alert,
   Modal,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -17,6 +20,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Feather';
 import ImageViewer from '@react-native-oh-tpl/react-native-image-zoom-viewer';
+import { launchImageLibrary, MediaType } from 'react-native-image-picker';
+
+// Services
+import CloudflareUploadService from '../../services/CloudflareUploadService';
 
 // Components
 import Header from '../../components/common/Header';
@@ -35,6 +42,8 @@ import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 // Constants
 import { API_BASE_URL, API_ENDPOINTS } from '../../constants/api';
 import ApiService from '../../services/ApiService';
+import UserPremiumPlans from '../wallet/UserPremiumPlans';
+import WalletService from '../../services/WalletService';
 
 // Define navigation param list
 type RootStackParamList = {
@@ -48,8 +57,8 @@ type RootStackParamList = {
   Channel: { channelId: string };
   Analytics: { channelId: string };
   Earnings: undefined;
-  Packages: undefined; // Ensure this matches the target route name
-  ChoosePackages: undefined; // Keep if other parts of ProfileScreen might use it, or remove if not
+  Packages: undefined;
+  ChoosePackages: undefined;
 };
 
 // Define navigation type
@@ -60,7 +69,7 @@ interface ProfileParams {
   userId?: number;
 }
 
-// Define user type
+// Update the User interface to match AuthContext
 interface User {
   id: string | number;
   name?: string;
@@ -71,8 +80,20 @@ interface User {
   address?: string;
   location?: string;
   profile_image?: string | null;
+  banner_image?: string | null;
   last_active?: string | null;
   is_online?: boolean;
+  emailId?: string;
+  gender?: string;
+  dob?: string;
+  profession?: string;
+  maternal_status?: string;
+  longitude?: string;
+  latitude?: string;
+  pincode?: string;
+  interests?: any[];
+  isSaveUserDetails?: number;
+  is_first_time?: number;
 }
 
 // Define post type
@@ -89,6 +110,7 @@ const ProfileScreen: React.FC = () => {
   const { userId } = (route.params as ProfileParams) || {};
   const { colors, isDarkMode } = useTheme();
   const navigation = useNavigation<NavigationProp>();
+  const { user: currentUser, logout, updateUserDetails } = useAuth();
 
   // Add a try/catch block to handle missing context
   let contentPaddingBottom = 0;
@@ -99,7 +121,6 @@ const ProfileScreen: React.FC = () => {
     contentPaddingBottom = 80; // Default padding
   }
 
-  const { user: currentUser, logout } = useAuth();
   const isOwnProfile = !userId || (currentUser && userId === parseInt(String(currentUser.id), 10));
 
   // State
@@ -122,6 +143,13 @@ const ProfileScreen: React.FC = () => {
   const [isCommentsVisible, setCommentsVisible] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
   const [userChannelId, setUserChannelId] = useState<string | null>(null);
+  const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [premiumLoading, setPremiumLoading] = useState(true);
+
+  // Additional state for image uploads
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [bannerImage, setBannerImage] = useState<string | null>(user?.banner_image || null);
 
   // Default profile image
   const DEFAULT_PROFILE_IMAGE = 'https://via.placeholder.com/150';
@@ -137,6 +165,91 @@ const ProfileScreen: React.FC = () => {
     return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
+  // Local storage helper functions for banner
+  const getBannerImageKey = (userId: string | number): string => {
+    return `banner_image_${userId}`;
+  };
+
+  const saveBannerImageLocally = async (imageUri: string, userId: string | number): Promise<string> => {
+    try {
+      // Store the image URI directly in AsyncStorage for simplicity
+      const key = getBannerImageKey(userId);
+      await AsyncStorage.setItem(key, imageUri);
+      
+      console.log(`[ProfileScreen] Banner image URI saved locally: ${imageUri}`);
+      return imageUri;
+    } catch (error) {
+      console.error('[ProfileScreen] Error saving banner image locally:', error);
+      throw error;
+    }
+  };
+
+  const loadBannerImageFromLocal = async (userId: string | number): Promise<string | null> => {
+    try {
+      const key = getBannerImageKey(userId);
+      const savedUri = await AsyncStorage.getItem(key);
+      return savedUri;
+    } catch (error) {
+      console.error('[ProfileScreen] Error loading banner image from local:', error);
+      return null;
+    }
+  };
+
+  // Request storage permissions
+  const requestStoragePermission = async (): Promise<boolean> => {
+    try {
+      if (Platform.OS === 'android') {
+        console.log('[ProfileScreen] Requesting Android storage permission');
+        
+        const permission = Platform.Version >= 33 
+          ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES
+          : PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE;
+
+        const result = await PermissionsAndroid.request(permission, {
+          title: 'Storage Permission Required',
+          message: 'This app needs access to your storage to select images.',
+          buttonNeutral: 'Ask Me Later',
+          buttonNegative: 'Cancel',
+          buttonPositive: 'OK',
+        });
+
+        console.log('[ProfileScreen] Android storage permission result:', result);
+
+        if (result === PermissionsAndroid.RESULTS.GRANTED) {
+          return true;
+        } else if (result === PermissionsAndroid.RESULTS.DENIED) {
+          Alert.alert(
+            'Permission Required',
+            'Storage access is required to select images. Please try again.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Try Again', onPress: () => requestStoragePermission() },
+            ],
+          );
+          return false;
+        } else if (result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+          Alert.alert(
+            'Permission Blocked',
+            'Storage permission has been permanently denied. Please enable it from Settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            ],
+          );
+          return false;
+        }
+        return false;
+      } else {
+        // iOS - permissions handled by react-native-image-picker
+        return true;
+      }
+    } catch (error) {
+      console.error('[ProfileScreen] Error requesting storage permission:', error);
+      Alert.alert('Permission Error', 'Failed to request permission. Please try again.');
+      return false;
+    }
+  };
+
   // Fetch user data, followers, followings, and posts
   const fetchUserData = async () => {
     try {
@@ -150,11 +263,12 @@ const ProfileScreen: React.FC = () => {
       } else {
         const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
           method: 'GET',
-          headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
+          headers:
+            {
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
         });
 
         if (!response.ok) {
@@ -197,6 +311,14 @@ const ProfileScreen: React.FC = () => {
       }
 
       setUser(userData);
+      
+      // Load banner image from local storage if it's own profile
+      if (userData?.id && isOwnProfile) {
+        const localBannerUri = await loadBannerImageFromLocal(userData.id);
+        if (localBannerUri) {
+          setBannerImage(localBannerUri);
+        }
+      }
 
       // Fetch user's channel ID if this is their own profile
       if (isOwnProfile && currentUser?.id) {
@@ -207,6 +329,37 @@ const ProfileScreen: React.FC = () => {
           }
         } catch (error) {
           console.log('No channel found for user');
+        }
+
+        // Fetch premium status using WalletService and check-premium API
+        try {
+          setPremiumLoading(true);
+          console.log('ProfileScreen: Fetching premium status for user:', currentUser.id);
+          
+          const premiumResponse = await ApiService.checkPremium(currentUser.id);
+          console.log('ProfileScreen: Premium check response:', premiumResponse);
+          
+          if (premiumResponse && (premiumResponse.status === true || premiumResponse.status === 1)) {
+            // User has premium
+            setIsPremium(true);
+          } else {
+            // User doesn't have premium or API returned error
+            setIsPremium(false);
+          }
+        } catch (error: any) {
+          console.log('ProfileScreen: Error checking premium status:', error);
+          
+          // Check if the error message indicates no premium
+          const errorMessage = error?.message || error?.response?.data?.message || '';
+          if (errorMessage.toLowerCase().includes('no premium')) {
+            console.log('ProfileScreen: User has no premium subscription');
+            setIsPremium(false);
+          } else {
+            console.error('ProfileScreen: Unexpected error checking premium status:', error);
+            setIsPremium(false);
+          }
+        } finally {
+          setPremiumLoading(false);
         }
       }
 
@@ -274,6 +427,10 @@ const ProfileScreen: React.FC = () => {
       await fetchUserPosts(isOwnProfile ? currentUser?.id : String(userId));
     } catch (error) {
       console.error('Error fetching user data:', error);
+      if (isOwnProfile) {
+        setPremiumLoading(false);
+        setIsPremium(false);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -465,7 +622,8 @@ const ProfileScreen: React.FC = () => {
       icon: 'award',
       title: 'Premium Content',
       subtitle: 'Unlock exclusive videos',
-      onPress: () => navigation.navigate('Packages'), // Changed to 'Packages'
+      //@ts-ignore
+      onPress: () => navigation.navigate('SubscriptionScreen'),
       active: true,
     },
     {
@@ -473,7 +631,8 @@ const ProfileScreen: React.FC = () => {
       icon: 'shield',
       title: 'Privacy',
       subtitle: 'Privacy and security settings',
-      onPress: () => console.log('Navigate to privacy settings'),
+      //@ts-ignore
+      onPress: () => navigation.navigate('PrivacyPolicy'),
       active: false,
     },
     {
@@ -481,7 +640,7 @@ const ProfileScreen: React.FC = () => {
       icon: 'help-circle',
       title: 'Support',
       subtitle: 'Help center and contact us',
-      onPress: () => console.log('Navigate to support'),
+      onPress: () => navigation.navigate('Support' as never),
       active: false,
     },
   ];
@@ -510,10 +669,157 @@ const ProfileScreen: React.FC = () => {
       .substring(0, 2);
   };
 
+  // Banner image picker function - updated for local storage only
+  const pickBannerImage = async () => {
+    try {
+      if (!isOwnProfile || !user?.id) return;
+      
+      const hasPermission = await requestStoragePermission();
+      if (!hasPermission) return;
+
+      console.log('[ProfileScreen] Launching banner image picker');
+
+      const result = await launchImageLibrary({
+        mediaType: 'photo' as MediaType,
+        selectionLimit: 1,
+        includeBase64: false,
+        maxHeight: 1080,
+        maxWidth: 1920,
+        quality: 0.8,
+      });
+
+      if (result.didCancel) {
+        console.log('[ProfileScreen] User cancelled banner image selection');
+        return;
+      }
+
+      if (result.errorCode) {
+        console.error('[ProfileScreen] Banner image picker error:', result.errorCode, result.errorMessage);
+        Alert.alert('Error', `Failed to select image: ${result.errorMessage}`);
+        return;
+      }
+
+      if (result.assets && result.assets.length > 0) {
+        const image = result.assets[0];
+        console.log('[ProfileScreen] Selected banner image:', image.uri);
+
+        if (image.uri) {
+          setIsUploadingBanner(true);
+          
+          try {
+            // Save image URI locally (no file copying, just store the URI)
+            const localUri = await saveBannerImageLocally(image.uri, user.id);
+            setBannerImage(localUri);
+            console.log('[ProfileScreen] Banner image updated successfully');
+          } catch (error: any) {
+            console.error('[ProfileScreen] Banner save error:', error);
+            Alert.alert('Save Failed', error.message || 'Failed to save banner image');
+          } finally {
+            setIsUploadingBanner(false);
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('[ProfileScreen] Error picking banner image:', error);
+      Alert.alert('Error', 'Failed to select banner image. Please try again.');
+      setIsUploadingBanner(false);
+    }
+  };
+
+  // Avatar image picker function - updated to use correct API
+  const pickAvatarImage = async () => {
+    try {
+      if (!isOwnProfile || !user?.id) return;
+      
+      const hasPermission = await requestStoragePermission();
+      if (!hasPermission) return;
+
+      console.log('[ProfileScreen] Launching avatar image picker');
+
+      const result = await launchImageLibrary({
+        mediaType: 'photo' as MediaType,
+        selectionLimit: 1,
+        includeBase64: false,
+        maxHeight: 1080,
+        maxWidth: 1080,
+        quality: 0.8,
+      });
+
+      if (result.didCancel) {
+        console.log('[ProfileScreen] User cancelled avatar image selection');
+        return;
+      }
+
+      if (result.errorCode) {
+        console.error('[ProfileScreen] Avatar image picker error:', result.errorCode, result.errorMessage);
+        Alert.alert('Error', `Failed to select image: ${result.errorMessage}`);
+        return;
+      }
+
+      if (result.assets && result.assets.length > 0) {
+        const image = result.assets[0];
+        console.log('[ProfileScreen] Selected avatar image:', image.uri);
+
+        if (image.uri) {
+          setIsUploadingAvatar(true);
+          
+          try {
+            // Upload to Cloudflare
+            const uploadResult = await CloudflareUploadService.uploadFile(
+              image.uri,
+              'images',
+              `avatar_${Date.now()}.jpg`,
+              Number(user.id)
+            );
+
+            if (uploadResult.success) {
+              // Use the same API as EditProfile: /api/saveuserdetails
+              const updateData = {
+                id: Number(user.id),
+                name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+                firstname: user.firstName || '',
+                lastname: user.lastName || '',
+                gender: user.gender || '',
+                dob: user.dob || "1990-01-01",
+                profile_image: uploadResult.url, // Update profile image URL
+                profession: user.profession || '',
+                maternal_status: user.maternal_status || '',
+                address: user.address || '',
+                emailId: user.emailId || '',
+                longitude: user.longitude || "",
+                latitude: user.latitude || "",
+                pincode: user.pincode || "",
+                languages: 1,
+                interests: 3,
+                referal_code: ""
+              };
+
+              // Use the same updateUserDetails from AuthContext
+              await updateUserDetails(updateData);
+              
+              Alert.alert('Success', 'Profile picture updated successfully');
+            } else {
+              Alert.alert('Upload Failed', uploadResult.error || 'Failed to upload profile picture');
+            }
+          } catch (error: any) {
+            console.error('[ProfileScreen] Avatar upload error:', error);
+            Alert.alert('Upload Failed', error.message || 'Failed to upload profile picture');
+          } finally {
+            setIsUploadingAvatar(false);
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('[ProfileScreen] Error picking avatar image:', error);
+      Alert.alert('Error', 'Failed to select profile picture. Please try again.');
+      setIsUploadingAvatar(false);
+    }
+  };
+
   // Effects
   useEffect(() => {
     fetchUserData();
-  }, [userId]); // Assuming fetchUserData is memoized or stable
+  }, [userId]);
 
   // Render functions
   if (loading && !refreshing && !user) {
@@ -523,6 +829,8 @@ const ProfileScreen: React.FC = () => {
           <Header
             title={isOwnProfile ? 'Profile' : 'Profile'}
             showLogo={false}
+            showSearch={false}
+            showWallet={false}
           />
           <ProfilePageSkeleton />
         </View>
@@ -537,6 +845,8 @@ const ProfileScreen: React.FC = () => {
           <Header
             title={isOwnProfile ? 'Profile' : 'Profile'}
             showLogo={false}
+            showSearch={false}
+            showWallet={false}
           />
           <View style={styles.errorContainer}>
             <Text style={[styles.errorText, { color: colors.text.primary }]}>
@@ -551,12 +861,79 @@ const ProfileScreen: React.FC = () => {
     );
   }
 
+  const renderPremiumSection = () => {
+    if (!isOwnProfile) return null;
+
+    if (premiumLoading) {
+      return (
+        <View style={[styles.premiumContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+          <View style={styles.premiumLoadingContainer}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={[styles.premiumLoadingText, { color: colors.text.secondary }]}>
+              Checking premium status...
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    // Only show if user doesn't have premium
+    if (!isPremium) {
+      return (
+        <View style={[styles.premiumContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+          <LinearGradient
+            colors={['#FFD700', '#FFB300']}
+            style={styles.noPremiumCard}
+          >
+            <Text style={styles.crownIcon}>👑</Text>
+            <View style={styles.noPremiumTextContainer}>
+              <Text style={styles.noPremiumTitle}>Premium Plans</Text>
+              <Text style={styles.noPremiumSubtitle}>Unlock exclusive features!</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.upgradeButton}
+              onPress={() => navigation.navigate('SubscriptionScreen' as never)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.upgradeButtonText}>Upgrade</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      );
+    }
+
+    // If user has premium, show a minimal premium badge
+    return (
+      <View style={[styles.premiumContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+        <LinearGradient
+          colors={['#24d05a', '#1ba84a']}
+          style={styles.premiumActiveCard}
+        >
+          <Text style={styles.premiumActiveIcon}>✨</Text>
+          <View style={styles.premiumActiveTextContainer}>
+            <Text style={styles.premiumActiveTitle}>Premium Active</Text>
+            <Text style={styles.premiumActiveSubtitle}>Enjoying premium benefits</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.manageButton}
+            onPress={() => navigation.navigate('SubscriptionScreen' as never)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.manageButtonText}>Manage</Text>
+          </TouchableOpacity>
+        </LinearGradient>
+      </View>
+    );
+  };
+
   return (
     <ScreenTransition animationType="scale">
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Header
           title={isOwnProfile ? 'Profile' : user?.name || 'Profile'}
           showLogo={false}
+          showSearch={false}
+          showWallet={false}
         />
         <ScrollView
           style={styles.scrollView}
@@ -577,12 +954,28 @@ const ProfileScreen: React.FC = () => {
             end={{ x: 1, y: 0 }}
             style={styles.gradientHeader}
           >
+            {bannerImage && (
+              <Image 
+                source={{ uri: bannerImage }}
+                style={styles.bannerImage}
+                resizeMode="cover"
+              />
+            )}
             {isOwnProfile && (
-              <TouchableOpacity style={styles.cameraButton}>
-                <Icon name="camera" size={20} color="#fff" />
+              <TouchableOpacity 
+                style={styles.galleryButton} 
+                onPress={pickBannerImage}
+                disabled={isUploadingBanner}
+              >
+                {isUploadingBanner ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Icon name="image" size={20} color="#fff" />
+                )}
               </TouchableOpacity>
             )}
           </LinearGradient>
+          
           {/* Avatar */}
           <View style={styles.avatarContainer}>
             <LinearGradient colors={['#4080FF', '#9747FF']} style={styles.avatarGradient}>
@@ -596,13 +989,22 @@ const ProfileScreen: React.FC = () => {
                   <Text style={styles.avatarInitials}>{getUserInitials()}</Text>
                 )}
                 {isOwnProfile && (
-                  <TouchableOpacity style={styles.avatarCameraButton}>
-                    <Icon name="camera" size={14} color="#fff" />
+                  <TouchableOpacity 
+                    style={styles.avatarGalleryButton}
+                    onPress={pickAvatarImage}
+                    disabled={isUploadingAvatar}
+                  >
+                    {isUploadingAvatar ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Icon name="image" size={14} color="#fff" />
+                    )}
                   </TouchableOpacity>
                 )}
               </View>
             </LinearGradient>
           </View>
+          
           {/* Name, Username, Bio, Location */}
           <View style={styles.userInfoContainer}>
             <Text style={[styles.userName, { color: colors.text.primary }]}>
@@ -613,7 +1015,8 @@ const ProfileScreen: React.FC = () => {
               isOnline={user?.is_online || false}
               style={styles.lastSeen}
             />
-            <Text style={[styles.userHandle, { color: colors.text.secondary }]}>
+            <Text style={[styles.userHandle, { color: colors.text.secondary }]}
+              >
               @{user?.username || 'johndoe'}
             </Text>
             <Text style={[styles.userBio, { color: colors.text.secondary }]}>
@@ -626,8 +1029,10 @@ const ProfileScreen: React.FC = () => {
               </Text>
             </View>
           </View>
+          
           {/* Stats Row */}
-          <View style={[styles.statsContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+          <View style={[styles.statsContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}
+          >
             <TouchableOpacity style={styles.statItem} onPress={handlePostsPress}>
               <Text style={[styles.statValue, { color: colors.text.primary }]}>{posts.length}</Text>
               <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Posts</Text>
@@ -635,7 +1040,8 @@ const ProfileScreen: React.FC = () => {
             <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
             <TouchableOpacity style={styles.statItem} onPress={handleFollowersPress}>
               <Text style={[styles.statValue, { color: colors.text.primary }]}>
-                {(stats.followers || 0).toLocaleString()}
+                {(stats.followers || 0).toLocaleString()
+                }
               </Text>
               <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Followers</Text>
             </TouchableOpacity>
@@ -645,6 +1051,10 @@ const ProfileScreen: React.FC = () => {
               <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Following</Text>
             </TouchableOpacity>
           </View>
+          
+          {/* Premium Status Section - Only show for own profile */}
+          {renderPremiumSection()}
+          
           {/* Action Buttons for Other Users */}
           {!isOwnProfile && (
             <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 16 }}>
@@ -724,6 +1134,7 @@ const ProfileScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
           )}
+          
           {/* Edit Profile & Settings Buttons */}
           {isOwnProfile && (
             <View style={styles.actionButtonsContainer}>
@@ -739,6 +1150,7 @@ const ProfileScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
           )}
+          
           {/* Posts Grid */}
           <View style={styles.postsContainer}>
             {posts.map((post, index) => (
@@ -757,8 +1169,10 @@ const ProfileScreen: React.FC = () => {
             <BannerAdComponent />
           </View>
           
+          
           {/* Menu Section */}
-          <View style={[styles.menuContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+          <View style={[styles.menuContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}
+          >
             <Text style={[styles.menuTitle, { color: colors.text.primary }]}>Menu</Text>
             {menuItems.map((item) => (
               <TouchableOpacity
@@ -785,14 +1199,18 @@ const ProfileScreen: React.FC = () => {
               </TouchableOpacity>
             ))}
           </View>
+          
           <View style={{ marginVertical: 12 }}>
             <RectangleAdComponent />
           </View>
         </ScrollView>
+        
+        {/* Image Viewer Modal */}
         {showImageViewer && (
           <Modal visible={showImageViewer} transparent={true} onRequestClose={() => setShowImageViewer(false)}>
             <ImageViewer
-              imageUrls={posts.map(post => ({ url: getFullImageUrl(post.media_url) }))}
+              imageUrls={posts.map(post => ({ url: getFullImageUrl(post.media_url) }))
+              }
               index={imageViewerIndex}
               enableSwipeDown
               onSwipeDown={() => setShowImageViewer(false)}
@@ -809,6 +1227,8 @@ const ProfileScreen: React.FC = () => {
             </TouchableOpacity>
           </Modal>
         )}
+        
+        {/* Comments Modal */}
         {selectedPostId !== null && (
           <CommentScreen
             visible={isCommentsVisible}
@@ -832,14 +1252,41 @@ const styles = StyleSheet.create({
     height: 120,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  cameraButton: {
+  bannerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+  galleryButton: {
     position: 'absolute',
     top: 16,
     right: 16,
     backgroundColor: '#ffffff22',
     borderRadius: 16,
     padding: 6,
+    minWidth: 32,
+    minHeight: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarGalleryButton: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: '#4080FF',
+    borderRadius: 16,
+    padding: 3,
+    minWidth: 20,
+    minHeight: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   avatarContainer: {
     alignItems: 'center',
@@ -874,6 +1321,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 3,
   },
+  
   userInfoContainer: {
     alignItems: 'center',
     marginTop: 8,
@@ -1062,6 +1510,104 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#EEEEEE',
+  },
+  premiumContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    paddingVertical: 4,
+  },
+  premiumLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+  },
+  premiumLoadingText: {
+    marginLeft: 8,
+    fontSize: 14,
+  },
+  noPremiumCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginHorizontal: 4,
+  },
+  crownIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  noPremiumTextContainer: {
+    flex: 1,
+  },
+  noPremiumTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000000',
+    marginBottom: 2,
+  },
+  noPremiumSubtitle: {
+    fontSize: 13,
+    color: '#000000',
+    fontWeight: '500',
+  },
+  upgradeButton: {
+    backgroundColor: 'rgba(184, 134, 11, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#000000',
+  },
+  upgradeButtonText: {
+    color: '#000000',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  premiumActiveCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginHorizontal: 4,
+  },
+  premiumActiveIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  premiumActiveTextContainer: {
+    flex: 1,
+  },
+  premiumActiveTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  premiumActiveSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '500',
+  },
+  manageButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  manageButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 13,
   },
 });
 

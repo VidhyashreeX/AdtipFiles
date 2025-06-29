@@ -181,8 +181,8 @@ export const usePosts = (category: number = 0, userId?: number) => {
     },
     enabled: !!userId,
     staleTime: 2 * 60 * 1000, // 2 minutes for posts
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 };
 
@@ -215,7 +215,7 @@ export const useShorts = (userId?: string) => {
     },
     enabled: !!userId,
     staleTime: 5 * 60 * 1000, // 5 minutes for shorts
-    refetchOnMount: false,
+    refetchOnMount: true,
   });
 };
 
@@ -333,10 +333,11 @@ export const useLikeMutation = () => {
   const queryClientInstance = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ postId, isLiked }: { postId: string; isLiked: boolean }) => {
-      return ApiService.post('/api/like-post', {
-        post_id: postId,
-        action: isLiked ? 'unlike' : 'like'
+    mutationFn: async ({ postId, userId, isLiked }: { postId: number; userId: number; isLiked: boolean }) => {
+      return ApiService.likePost({
+        userId: userId,
+        postId: postId,
+        is_liked: !isLiked // Toggle the like state
       });
     },
     onMutate: async ({ postId, isLiked }) => {
@@ -355,8 +356,12 @@ export const useLikeMutation = () => {
           pages: old.pages?.map((page: any) => ({
             ...page,
             data: page.data?.map((post: any) => 
-              post.id.toString() === postId 
-                ? { ...post, likes: post.likes + (isLiked ? -1 : 1), isLiked: !isLiked }
+              post.id === postId 
+                ? { 
+                    ...post, 
+                    likeCount: post.likeCount + (isLiked ? -1 : 1), 
+                    is_liked: !isLiked 
+                  }
                 : post
             )
           }))
@@ -490,7 +495,7 @@ export const useUsers = (filters: {
     enabled: !!userId,
     staleTime: 2 * 60 * 1000, // 2 minutes for users
     refetchOnMount: true,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
   });
 };
 
@@ -558,8 +563,8 @@ export const useVideos = (categoryId: number = 0, userId?: number, searchQuery?:
     },
     enabled: true,
     staleTime: 3 * 60 * 1000, // 3 minutes for videos
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 };
 

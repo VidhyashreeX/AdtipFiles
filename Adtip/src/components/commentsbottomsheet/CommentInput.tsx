@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import {
   View,
   TextInput,
@@ -25,17 +25,27 @@ interface CommentInputProps {
   postId: number;
   onSubmit: (text: string) => Promise<void>;
   onFocus?: () => void;
+  onBlur?: () => void;
   replyTo?: { id: number; username: string } | null;
   onCancelReply?: () => void;
 }
 
-const CommentInput: React.FC<CommentInputProps> = ({
+export interface CommentInputRef {
+  focus: () => void;
+  blur: () => void;
+  clear: () => void;
+  getText: () => string;
+  setText: (text: string) => void;
+}
+
+const CommentInput = forwardRef<CommentInputRef, CommentInputProps>(({
   postId,
   onSubmit,
   onFocus,
+  onBlur,
   replyTo,
   onCancelReply,
-}) => {
+}, ref) => {
   const { colors } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -46,6 +56,29 @@ const CommentInput: React.FC<CommentInputProps> = ({
 
   const inputHeight = useSharedValue(40);
   const sendButtonScale = useSharedValue(0);
+
+  // Expose methods to parent component
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      inputRef.current?.focus();
+    },
+    blur: () => {
+      inputRef.current?.blur();
+    },
+    clear: () => {
+      setText('');
+      sendButtonScale.value = withSpring(0);
+    },
+    getText: () => text,
+    setText: (newText: string) => {
+      setText(newText);
+      if (newText.trim() && sendButtonScale.value === 0) {
+        sendButtonScale.value = withSpring(1);
+      } else if (!newText.trim() && sendButtonScale.value === 1) {
+        sendButtonScale.value = withSpring(0);
+      }
+    },
+  }));
 
   const handleSubmit = useCallback(async () => {
     if (!text.trim() || isSubmitting) return;
@@ -69,7 +102,8 @@ const CommentInput: React.FC<CommentInputProps> = ({
 
   const handleBlur = useCallback(() => {
     setIsFocused(false);
-  }, []);
+    onBlur?.();
+  }, [onBlur]);
 
   const handleTextChange = useCallback((newText: string) => {
     setText(newText);
@@ -168,7 +202,9 @@ const CommentInput: React.FC<CommentInputProps> = ({
       </View>
     </View>
   );
-};
+});
+
+CommentInput.displayName = 'CommentInput';
 
 const styles = StyleSheet.create({
   container: {
