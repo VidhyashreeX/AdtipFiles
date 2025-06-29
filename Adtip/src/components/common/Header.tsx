@@ -110,7 +110,7 @@ const Header: React.FC<HeaderProps> = ({
   
   // Memoize navigation functions
   const navigateToWallet = useCallback(() => navigation.navigate('Wallet' as never), [navigation]);
-  const navigateToPremium = useCallback(() => navigation.navigate('UpgradePremiumScreen' as never), [navigation]);
+  const navigateToPremium = useCallback(() => navigation.navigate('SubscriptionScreen' as never), [navigation]);
 
   // Memoize search handlers
   const handleSearchIconPress = useCallback(() => {

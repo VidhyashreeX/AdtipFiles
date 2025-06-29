@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import LottieView from 'lottie-react-native';
 import { useNavigation } from '@react-navigation/native';
 import LinearGradient from 'react-native-linear-gradient';
-// @ts-ignore
+
 import RazorpayCheckout from 'react-native-razorpay';
 
 const { width } = Dimensions.get('window');

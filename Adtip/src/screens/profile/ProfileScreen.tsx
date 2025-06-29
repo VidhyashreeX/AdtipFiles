@@ -34,6 +34,8 @@ import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 // Constants
 import { API_BASE_URL, API_ENDPOINTS } from '../../constants/api';
 import ApiService from '../../services/ApiService';
+import UserPremiumPlans from '../wallet/UserPremiumPlans';
+import WalletService from '../../services/WalletService';
 
 // Define navigation param list
 type RootStackParamList = {
@@ -121,6 +123,8 @@ const ProfileScreen: React.FC = () => {
   const [isCommentsVisible, setCommentsVisible] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
   const [userChannelId, setUserChannelId] = useState<string | null>(null);
+  const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [premiumLoading, setPremiumLoading] = useState(true);
 
   // Default profile image
   const DEFAULT_PROFILE_IMAGE = 'https://via.placeholder.com/150';
@@ -207,6 +211,37 @@ const ProfileScreen: React.FC = () => {
         } catch (error) {
           console.log('No channel found for user');
         }
+
+        // Fetch premium status using WalletService and check-premium API
+        try {
+          setPremiumLoading(true);
+          console.log('ProfileScreen: Fetching premium status for user:', currentUser.id);
+          
+          const premiumResponse = await ApiService.checkPremium(currentUser.id);
+          console.log('ProfileScreen: Premium check response:', premiumResponse);
+          
+          if (premiumResponse && (premiumResponse.status === true || premiumResponse.status === 1)) {
+            // User has premium
+            setIsPremium(true);
+          } else {
+            // User doesn't have premium or API returned error
+            setIsPremium(false);
+          }
+        } catch (error: any) {
+          console.log('ProfileScreen: Error checking premium status:', error);
+          
+          // Check if the error message indicates no premium
+          const errorMessage = error?.message || error?.response?.data?.message || '';
+          if (errorMessage.toLowerCase().includes('no premium')) {
+            console.log('ProfileScreen: User has no premium subscription');
+            setIsPremium(false);
+          } else {
+            console.error('ProfileScreen: Unexpected error checking premium status:', error);
+            setIsPremium(false);
+          }
+        } finally {
+          setPremiumLoading(false);
+        }
       }
 
       let fetchedFollowers: any[] = [];
@@ -273,6 +308,10 @@ const ProfileScreen: React.FC = () => {
       await fetchUserPosts(isOwnProfile ? currentUser?.id : String(userId));
     } catch (error) {
       console.error('Error fetching user data:', error);
+      if (isOwnProfile) {
+        setPremiumLoading(false);
+        setIsPremium(false);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -464,7 +503,8 @@ const ProfileScreen: React.FC = () => {
       icon: 'award',
       title: 'Premium Content',
       subtitle: 'Unlock exclusive videos',
-      onPress: () => navigation.navigate('Packages'), // Changed to 'Packages'
+      //@ts-ignore
+      onPress: () => navigation.navigate('SubscriptionScreen'), // Changed to 'Packages'
       active: true,
     },
     {
@@ -472,6 +512,7 @@ const ProfileScreen: React.FC = () => {
       icon: 'shield',
       title: 'Privacy',
       subtitle: 'Privacy and security settings',
+      //@ts-ignore
       onPress: () => navigation.navigate('PrivacyPolicy'),
       active: false,
     },
@@ -554,6 +595,71 @@ const ProfileScreen: React.FC = () => {
     );
   }
 
+  const renderPremiumSection = () => {
+    if (!isOwnProfile) return null;
+
+    if (premiumLoading) {
+      return (
+        <View style={[styles.premiumContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+          <View style={styles.premiumLoadingContainer}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={[styles.premiumLoadingText, { color: colors.text.secondary }]}>
+              Checking premium status...
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    // Only show if user doesn't have premium
+    if (!isPremium) {
+      return (
+        <View style={[styles.premiumContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+          <LinearGradient
+            colors={['#FFD700', '#FFB300']}
+            style={styles.noPremiumCard}
+          >
+            <Text style={styles.crownIcon}>👑</Text>
+            <View style={styles.noPremiumTextContainer}>
+              <Text style={styles.noPremiumTitle}>Premium Plans</Text>
+              <Text style={styles.noPremiumSubtitle}>Unlock exclusive features!</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.upgradeButton}
+              onPress={() => navigation.navigate('SubscriptionScreen' as never)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.upgradeButtonText}>Upgrade</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      );
+    }
+
+    // If user has premium, show a minimal premium badge
+    return (
+      <View style={[styles.premiumContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+        <LinearGradient
+          colors={['#24d05a', '#1ba84a']}
+          style={styles.premiumActiveCard}
+        >
+          <Text style={styles.premiumActiveIcon}>✨</Text>
+          <View style={styles.premiumActiveTextContainer}>
+            <Text style={styles.premiumActiveTitle}>Premium Active</Text>
+            <Text style={styles.premiumActiveSubtitle}>Enjoying premium benefits</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.manageButton}
+            onPress={() => navigation.navigate('SubscriptionScreen' as never)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.manageButtonText}>Manage</Text>
+          </TouchableOpacity>
+        </LinearGradient>
+      </View>
+    );
+  };
+
   return (
     <ScreenTransition animationType="scale">
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -588,6 +694,7 @@ const ProfileScreen: React.FC = () => {
               </TouchableOpacity>
             )}
           </LinearGradient>
+          
           {/* Avatar */}
           <View style={styles.avatarContainer}>
             <LinearGradient colors={['#4080FF', '#9747FF']} style={styles.avatarGradient}>
@@ -608,6 +715,7 @@ const ProfileScreen: React.FC = () => {
               </View>
             </LinearGradient>
           </View>
+          
           {/* Name, Username, Bio, Location */}
           <View style={styles.userInfoContainer}>
             <Text style={[styles.userName, { color: colors.text.primary }]}>
@@ -618,7 +726,8 @@ const ProfileScreen: React.FC = () => {
               isOnline={user?.is_online || false}
               style={styles.lastSeen}
             />
-            <Text style={[styles.userHandle, { color: colors.text.secondary }]}>
+            <Text style={[styles.userHandle, { color: colors.text.secondary }]}
+              >
               @{user?.username || 'johndoe'}
             </Text>
             <Text style={[styles.userBio, { color: colors.text.secondary }]}>
@@ -631,8 +740,10 @@ const ProfileScreen: React.FC = () => {
               </Text>
             </View>
           </View>
+          
           {/* Stats Row */}
-          <View style={[styles.statsContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+          <View style={[styles.statsContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}
+          >
             <TouchableOpacity style={styles.statItem} onPress={handlePostsPress}>
               <Text style={[styles.statValue, { color: colors.text.primary }]}>{posts.length}</Text>
               <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Posts</Text>
@@ -640,7 +751,8 @@ const ProfileScreen: React.FC = () => {
             <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
             <TouchableOpacity style={styles.statItem} onPress={handleFollowersPress}>
               <Text style={[styles.statValue, { color: colors.text.primary }]}>
-                {(stats.followers || 0).toLocaleString()}
+                {(stats.followers || 0).toLocaleString()
+                }
               </Text>
               <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Followers</Text>
             </TouchableOpacity>
@@ -650,6 +762,10 @@ const ProfileScreen: React.FC = () => {
               <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Following</Text>
             </TouchableOpacity>
           </View>
+          
+          {/* Premium Status Section - Only show for own profile */}
+          {renderPremiumSection()}
+          
           {/* Action Buttons for Other Users */}
           {!isOwnProfile && (
             <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 16 }}>
@@ -729,6 +845,7 @@ const ProfileScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
           )}
+          
           {/* Edit Profile & Settings Buttons */}
           {isOwnProfile && (
             <View style={styles.actionButtonsContainer}>
@@ -744,6 +861,7 @@ const ProfileScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
           )}
+          
           {/* Posts Grid */}
           <View style={styles.postsContainer}>
             {posts.map((post, index) => (
@@ -756,8 +874,10 @@ const ProfileScreen: React.FC = () => {
               </TouchableOpacity>
             ))}
           </View>
+          
           {/* Menu Section */}
-          <View style={[styles.menuContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+          <View style={[styles.menuContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}
+          >
             <Text style={[styles.menuTitle, { color: colors.text.primary }]}>Menu</Text>
             {menuItems.map((item) => (
               <TouchableOpacity
@@ -784,14 +904,18 @@ const ProfileScreen: React.FC = () => {
               </TouchableOpacity>
             ))}
           </View>
+          
           <View style={{ marginVertical: 12 }}>
             <RectangleAdComponent />
           </View>
         </ScrollView>
+        
+        {/* Image Viewer Modal */}
         {showImageViewer && (
           <Modal visible={showImageViewer} transparent={true} onRequestClose={() => setShowImageViewer(false)}>
             <ImageViewer
-              imageUrls={posts.map(post => ({ url: getFullImageUrl(post.media_url) }))}
+              imageUrls={posts.map(post => ({ url: getFullImageUrl(post.media_url) }))
+              }
               index={imageViewerIndex}
               enableSwipeDown
               onSwipeDown={() => setShowImageViewer(false)}
@@ -808,6 +932,8 @@ const ProfileScreen: React.FC = () => {
             </TouchableOpacity>
           </Modal>
         )}
+        
+        {/* Comments Modal */}
         {selectedPostId !== null && (
           <CommentScreen
             visible={isCommentsVisible}
@@ -1056,6 +1182,105 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EEEEEE',
   },
+  premiumContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    paddingVertical: 4,
+  },
+  premiumLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+  },
+  premiumLoadingText: {
+    marginLeft: 8,
+    fontSize: 14,
+  },
+  noPremiumCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginHorizontal: 4,
+  },
+  crownIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  noPremiumTextContainer: {
+    flex: 1,
+  },
+  noPremiumTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000000',
+    marginBottom: 2,
+  },
+  noPremiumSubtitle: {
+    fontSize: 13,
+    color: '#000000',
+    fontWeight: '500',
+  },
+  upgradeButton: {
+    backgroundColor: 'rgba(184, 134, 11, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#000000',
+  },
+  upgradeButtonText: {
+    color: '#000000',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  premiumActiveCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginHorizontal: 4,
+  },
+  premiumActiveIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  premiumActiveTextContainer: {
+    flex: 1,
+  },
+  premiumActiveTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  premiumActiveSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '500',
+  },
+  manageButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  manageButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  // ...existing styles...
 });
 
 export default ProfileScreen;
