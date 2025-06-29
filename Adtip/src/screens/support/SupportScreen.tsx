@@ -30,7 +30,7 @@ const SupportScreen: React.FC = () => {
       iconBgColor: '#F0F9FF',
       iconColor: '#0091FF',
     },
-    {
+    /*{
       id: 'chat',
       icon: 'message-circle',
       title: 'Live Chat',
@@ -47,7 +47,7 @@ const SupportScreen: React.FC = () => {
       onPress: () => console.log('Navigate to FAQs'),
       iconBgColor: '#FEF6FB',
       iconColor: '#CB1C8D',
-    },
+    },*/
   ];
 
   const renderContactMethod = (item: {
@@ -83,7 +83,10 @@ const SupportScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Help & Support"/>
+      <Header title="Help & Support"
+      showSearch={false}
+      showWallet={false}
+      />
       
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Welcome Card */}

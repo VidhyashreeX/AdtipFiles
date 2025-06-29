@@ -480,7 +480,7 @@ const ProfileScreen: React.FC = () => {
       icon: 'help-circle',
       title: 'Support',
       subtitle: 'Help center and contact us',
-      onPress: () => console.log('Navigate to support'),
+      onPress: () => navigation.navigate('Support' as never),
       active: false,
     },
   ];
@@ -522,6 +522,8 @@ const ProfileScreen: React.FC = () => {
           <Header
             title={isOwnProfile ? 'Profile' : 'Profile'}
             showLogo={false}
+            showSearch={false}
+            showWallet={false}
           />
           <ProfilePageSkeleton />
         </View>
@@ -536,6 +538,8 @@ const ProfileScreen: React.FC = () => {
           <Header
             title={isOwnProfile ? 'Profile' : 'Profile'}
             showLogo={false}
+            showSearch={false}
+            showWallet={false}
           />
           <View style={styles.errorContainer}>
             <Text style={[styles.errorText, { color: colors.text.primary }]}>
@@ -556,6 +560,8 @@ const ProfileScreen: React.FC = () => {
         <Header
           title={isOwnProfile ? 'Profile' : user?.name || 'Profile'}
           showLogo={false}
+          showSearch={false}
+          showWallet={false}
         />
         <ScrollView
           style={styles.scrollView}
