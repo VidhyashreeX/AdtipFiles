@@ -206,28 +206,30 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({
                 <TouchableOpacity
                   style={[
                     styles.option, 
+                    styles.disabledOption, // Add disabled style
                     {
-                      backgroundColor: isDarkMode ? colors.gray[800] : colors.gray[100],
+                      backgroundColor: isDarkMode ? colors.gray[900] : colors.gray[50],
                       borderWidth: isDarkMode ? 1 : 0,
-                      borderColor: isDarkMode ? colors.gray[700] : 'transparent',
+                      borderColor: isDarkMode ? colors.gray[800] : 'transparent',
                     }
                   ]}
-                  onPress={handleStartStream}
+                  onPress={() => {}} // Disable the press handler
+                  disabled={true} // Make it disabled
                 >
                   <View
                     style={[
                       styles.iconContainer,
-                      {backgroundColor: colors.info},
+                      {backgroundColor: colors.gray[400]}, // Use gray color for disabled state
                     ]}>
                     <Icon name="wifi" size={24} color={colors.white} />
                   </View>
-                  <Text style={[styles.optionText, {color: colors.text.primary}]}>
-                    Start Stream
+                  <Text style={[styles.optionText, {color: colors.text.tertiary}]}>
+                    Start Stream - Coming Soon!
                   </Text>
                   <Icon
                     name="chevron-right"
                     size={20}
-                    color={colors.text.tertiary}
+                    color={colors.text.disabled || colors.gray[400]}
                   />
                 </TouchableOpacity>
               </View>
@@ -300,6 +302,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     flex: 1,
+  },
+  disabledOption: {
+    opacity: 0.6,
   },
 });
 
