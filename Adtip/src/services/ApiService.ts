@@ -1832,6 +1832,8 @@ export default class ApiService {
     createdby: number;
     play_duration: string;
     video_Thumbnail: string;
+    is_paid_promotional?: boolean;
+    promotional_price?: number;
   }): Promise<{
     status: number;
     message: string;
@@ -1846,6 +1848,8 @@ export default class ApiService {
       createdby: number;
       play_duration: string;
       video_Thumbnail: string;
+      is_paid_promotional?: boolean;
+      promotional_price?: number;
     }>;
   }> {
     try {

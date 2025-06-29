@@ -44,6 +44,8 @@ interface TipTubeUploadRequest {
   createdby: number;
   play_duration: string;
   video_Thumbnail: string;
+  is_paid_promotional?: boolean;
+  promotional_price?: number;
 }
 
 interface TipTubeUploadResponse {
@@ -60,6 +62,8 @@ interface TipTubeUploadResponse {
     createdby: number;
     play_duration: string;
     video_Thumbnail: string;
+    is_paid_promotional?: boolean;
+    promotional_price?: number;
   }>;
 }
 
@@ -91,7 +95,8 @@ const TipTubeUploadScreen: React.FC = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState(1);
-  const [isPublic, setIsPublic] = useState(true);
+  const [isPaidVideo, setIsPaidVideo] = useState(false);
+  const [promotionalPrice, setPromotionalPrice] = useState('');
   const [selectedQuality, setSelectedQuality] = useState<'high' | 'medium' | 'low'>('medium');
 
   // Media State
@@ -437,6 +442,8 @@ const TipTubeUploadScreen: React.FC = () => {
         createdby: user.id,
         play_duration: videoDuration,
         video_Thumbnail: thumbnailUrl,
+        is_paid_promotional: isPaidVideo,
+        promotional_price: isPaidVideo ? parseFloat(promotionalPrice) : undefined,
       };
 
       console.log('[TipTubeUpload] Creating TipTube video with new API:', requestData);
@@ -481,6 +488,11 @@ const TipTubeUploadScreen: React.FC = () => {
 
       if (!selectedThumbnail) {
         Alert.alert('Error', 'Please select a thumbnail for your video.');
+        return;
+      }
+
+      if (isPaidVideo && (!promotionalPrice || parseFloat(promotionalPrice) <= 0)) {
+        Alert.alert('Error', 'Please enter a valid promotional price for paid video.');
         return;
       }
 
@@ -537,25 +549,21 @@ const TipTubeUploadScreen: React.FC = () => {
     return ratio > 0 ? `${ratio.toFixed(1)}% smaller` : '';
   };
 
+  // Handle paid video toggle
+  const handlePaidVideoToggle = (value: boolean) => {
+    setIsPaidVideo(value);
+    if (!value) {
+      setPromotionalPrice('');
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <Header 
         title="Upload Video" 
-        showBackButton 
-        onBackPress={() => {
-          if (isUploading || isCompressing) {
-            Alert.alert(
-              'Upload in Progress',
-              'Are you sure you want to cancel the upload?',
-              [
-                { text: 'Continue Upload', style: 'cancel' },
-                { text: 'Cancel Upload', style: 'destructive', onPress: () => navigation.goBack() },
-              ],
-            );
-          } else {
-            navigation.goBack();
-          }
-        }}
+        showSearch={false}
+        showWallet={false}
+        showPremium={true}
       />
 
       <KeyboardAvoidingView 
@@ -790,25 +798,52 @@ const TipTubeUploadScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            {/* Privacy Setting */}
+            {/* Paid Video Setting */}
             <View style={styles.inputGroup}>
               <View style={styles.switchRow}>
                 <View>
                   <Text style={[styles.switchLabel, { color: colors.text.primary }]}>
-                    Public Video
+                    Paid Video
                   </Text>
                   <Text style={[styles.switchDescription, { color: colors.text.secondary }]}>
-                    Anyone can view this video
+                    Enable to set a promotional price
                   </Text>
                 </View>
                 <Switch
-                  value={isPublic}
-                  onValueChange={setIsPublic}
+                  value={isPaidVideo}
+                  onValueChange={handlePaidVideoToggle}
                   trackColor={{ false: colors.gray?.[300], true: colors.primary }}
                   thumbColor={colors.white}
                   disabled={isUploading || isCompressing}
                 />
               </View>
+              
+              {/* Promotional Price Input */}
+              {isPaidVideo && (
+                <View style={styles.priceInputContainer}>
+                  <Text style={[styles.inputLabel, { color: colors.text.secondary, marginTop: 16 }]}>
+                    Promotional Price *
+                  </Text>
+                  <View style={[styles.priceInputWrapper, { 
+                    backgroundColor: isDarkMode ? colors.gray?.[800] : '#F8F9FA',
+                    borderColor: colors.border 
+                  }]}>
+                    <Text style={[styles.currencySymbol, { color: colors.text.secondary }]}>₹</Text>
+                    <TextInput
+                      style={[styles.priceInput, { color: colors.text.primary }]}
+                      value={promotionalPrice}
+                      onChangeText={setPromotionalPrice}
+                      placeholder="0.00"
+                      placeholderTextColor={colors.text.tertiary}
+                      keyboardType="numeric"
+                      editable={!isUploading && !isCompressing}
+                    />
+                  </View>
+                  <Text style={[styles.priceHelper, { color: colors.text.tertiary }]}>
+                    Set the price viewers will pay to watch this video
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -864,13 +899,13 @@ const TipTubeUploadScreen: React.FC = () => {
             style={[
               styles.uploadBtn,
               {
-                backgroundColor: (!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing)
+                backgroundColor: (!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing || (isPaidVideo && (!promotionalPrice || parseFloat(promotionalPrice) <= 0)))
                   ? colors.gray?.[400]
                   : colors.primary,
               }
             ]}
             onPress={handleUpload}
-            disabled={!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing}
+            disabled={!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing || (isPaidVideo && (!promotionalPrice || parseFloat(promotionalPrice) <= 0))}
           >
             {(isUploading || isCompressing) ? (
               <ActivityIndicator size="small" color={colors.white} />
@@ -1106,6 +1141,32 @@ const styles = StyleSheet.create({
   switchDescription: {
     fontSize: 12,
     marginTop: 2,
+  },
+  
+  // Price Input Styles
+  priceInputContainer: {
+    marginTop: 8,
+  },
+  priceInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+  },
+  currencySymbol: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginRight: 8,
+  },
+  priceInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+  },
+  priceHelper: {
+    fontSize: 12,
+    marginTop: 4,
   },
   
   // Progress Styles
