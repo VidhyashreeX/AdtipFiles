@@ -1869,4 +1869,48 @@ export default class ApiService {
       throw this.handleError(error);
     }
   }
+
+  /**
+   * Create a new post
+   */
+  static async createPost(data: {
+    user_id: number;
+    title: string;
+    content: string;
+    media_url: string;
+    media_type: 'video' | 'image' | 'text';
+    is_promoted: boolean;
+    video_category_id: number;
+    start_date: string;
+    end_date: string;
+    target_min_age?: number;
+    target_max_age?: number;
+    pay_per_view?: number;
+    reach_goal?: number;
+    duration_days?: number;
+    total_pay?: number;
+    platform_fee?: number;
+    post_target_locations?: string[];
+    post_target_genders?: string[];
+  }): Promise<{
+    status: boolean;
+    statusCode: number;
+    message: string;
+    data: {
+      post_id: number;
+      user_id: number;
+      title: string;
+      is_promoted: boolean;
+    };
+  }> {
+    try {
+      console.log('[ApiService] Creating post with data:', data);
+      const response = await this.post('/api/post', data);
+      console.log('[ApiService] Create post response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error creating post:', error);
+      throw this.handleError(error);
+    }
+  }
 }
