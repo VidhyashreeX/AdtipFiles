@@ -800,11 +800,30 @@ export default class ApiService {
   }
 
   /**
-   * Get ad passbook
+   * Get ad passbook for a user
    */
-  static async getAdPassbook(userId: number, page: number, limit: number): Promise<any> {
-    return this.get(`/passbook/get-passbook-by-userid/${userId}?page=${page}&limit=${limit}`);
+  static async getAdPassbook(userId: string | number): Promise<{
+    status: number;
+    message: string;
+    data: any[];
+  }> {
+    try {
+      console.log(`[ApiService] Fetching ad passbook for user ID: ${userId}`);
+      
+      const response = await this.get<{
+        status: number;
+        message: string;
+        data: any[];
+      }>(`/api/getadpassbook/${userId}`);
+      
+      console.log('[ApiService] Ad passbook response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error fetching ad passbook:', error);
+      throw this.handleError(error);
+    }
   }
+
   /**
    * Get FCM token for a user (Updated to use fcm-tokens-of-both-users API)
    * @param userId - The user ID to get FCM token for
