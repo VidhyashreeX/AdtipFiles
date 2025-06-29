@@ -690,36 +690,13 @@ export default function TipCallScreen() {
                 <View style={[styles.notificationBadge, { backgroundColor: colors.primary }]} />
               </TouchableOpacity>
 
-              {/* DND Button - rightmost */}
-              <TouchableOpacity
-                style={[
-                  styles.dndButtonHeader,
-                  {
-                    backgroundColor: isDndEnabled 
-                      ? colors.danger || '#EF4444' 
-                      : colors.success || '#22C55E',
-                    opacity: isDndLoading ? 0.6 : 1,
-                  }
-                ]}
-                onPress={handleDndToggle}
-                disabled={isDndLoading}
-                activeOpacity={0.8}
-              >
-                {isDndLoading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Icon 
-                      name={isDndEnabled ? "bell-off" : "bell"} 
-                      size={14} 
-                      color="#FFFFFF" 
-                    />
-                    <Text style={styles.dndButtonHeaderText}>
-                      {isDndEnabled ? 'DND' : 'Available'}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
+              {/* DND Toggle Switch */}
+              <DndToggleSwitch
+                isDndEnabled={isDndEnabled}
+                onToggle={handleDndToggle}
+                isLoading={isDndLoading}
+                colors={colors}
+              />
             </View>
           }
         />
@@ -844,56 +821,35 @@ const styles = StyleSheet.create({
     backgroundColor: '#EF4444',
   },
   
-  // Original DND button (remove or keep as backup)
-  dndButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    minWidth: 80,
+  // Remove old DND button styles and add new toggle switch styles
+  dndToggleContainer: {
     justifyContent: 'center',
-    gap: 4,
-  },
-  
-  // New header-specific DND button styles
-  dndButtonHeader: {
-    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    minWidth: 70,
+    marginLeft: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  
+  dndToggleCircle: {
+    position: 'absolute',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
-    gap: 3,
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
   },
   
-  dndButtonHeaderText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '600',
+  dndToggleLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  
-  dndButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  
-  dndStatusText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  
-  // Remove DND container since it's now in header
-  // dndContainer: {
-  //   flexDirection: 'row',
-  //   justifyContent: 'flex-end',
-  //   paddingHorizontal: 16,
-  //   paddingVertical: 8,
-  //   borderBottomWidth: StyleSheet.hairlineWidth,
-  //   borderBottomColor: '#E5E7EB',
-  // },
   
   // Filter Sections
   filtersSection: {
@@ -1173,3 +1129,54 @@ const styles = StyleSheet.create({
     height: 8,
   },
 });
+
+// Add this new component for the DND Toggle Switch
+const DndToggleSwitch: React.FC<{
+  isDndEnabled: boolean;
+  onToggle: () => void;
+  isLoading: boolean;
+  colors: any;
+}> = ({ isDndEnabled, onToggle, isLoading, colors }) => {
+  const switchWidth = 50;
+  const switchHeight = 26;
+  const circleSize = 22;
+  const circleOffset = 2;
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.dndToggleContainer,
+        {
+          width: switchWidth,
+          height: switchHeight,
+          backgroundColor: isDndEnabled ? '#EF4444' : '#22C55E', // Red for DND ON, Green for DND OFF
+          borderRadius: switchHeight / 2,
+          opacity: isLoading ? 0.6 : 1,
+        }
+      ]}
+      onPress={onToggle}
+      disabled={isLoading}
+      activeOpacity={0.8}
+    >
+      {isLoading ? (
+        <View style={styles.dndToggleLoadingContainer}>
+          <ActivityIndicator size="small" color="#FFFFFF" />
+        </View>
+      ) : (
+        <View
+          style={[
+            styles.dndToggleCircle,
+            {
+              width: circleSize,
+              height: circleSize,
+              borderRadius: circleSize / 2,
+              left: isDndEnabled ? circleOffset : switchWidth - circleSize - circleOffset,
+            }
+          ]}
+        >
+          <Icon name="moon" size={12} color="#666666" />
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
