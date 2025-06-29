@@ -307,7 +307,9 @@ const Header: React.FC<HeaderProps> = ({
 
       {/* --- RIGHT SECTION --- */}
       <View style={styles.rightSection}>
-        {rightComponent !== undefined ? renderNodeSafely(rightComponent, styles.title) : (
+        {rightComponent !== undefined ? (
+          renderNodeSafely(rightComponent, styles.title)
+        ) : (
           <>
             {rightIcon && onRightIconPress && (
               <TouchableOpacity

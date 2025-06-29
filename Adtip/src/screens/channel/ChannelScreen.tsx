@@ -366,7 +366,10 @@ const ChannelScreen: React.FC = () => {
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Header title="Channel" showBackButton />
+        <Header title="Channel"
+        showSearch={false}
+        showWallet={false}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
@@ -380,7 +383,8 @@ const ChannelScreen: React.FC = () => {
   if (!channelInfo) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Header title="Channel" showBackButton />
+        <Header title="Channel" showSearch={false}
+        showWallet={false} />
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: colors.text.primary }]}>
             Channel not found
@@ -398,7 +402,9 @@ const ChannelScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header title={channelInfo.channelName} showBackButton />
+      <Header title={channelInfo.channelName} 
+      showSearch={false}
+      showWallet={false} />
 
       <ScrollView
         style={styles.content}

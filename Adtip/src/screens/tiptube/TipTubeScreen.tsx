@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import Icon from 'react-native-vector-icons/Feather';
 
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
@@ -29,6 +30,7 @@ import {
   getFallbackThumbnailUrl 
 } from '../../utils/mediaUtils';
 import BannerAdComponent from '../../googleads/BannerAdComponent';
+import ApiService from '../../services/ApiService';
 
 // Get screen dimensions and create constants
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -108,6 +110,7 @@ const TipTubeScreen = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [previewingVideoId, setPreviewingVideoId] = useState<number | null>(null);
   const [selectedVideoId, setSelectedVideoId] = useState<number | null>(null);
+  const [userChannelId, setUserChannelId] = useState<string | null>(null);
 
   // Refs
   const flatListRef = useRef<FlatList>(null);
@@ -134,6 +137,26 @@ const TipTubeScreen = () => {
       console.log('[TipTubeScreen] Screen focused. Invalidating videos query to trigger refetch.');
       queryClient.invalidateQueries({ queryKey: ['videos', categoryId, user?.id, searchQuery] });
     }, [queryClient, categoryId, user?.id, searchQuery])
+  );
+
+  // Fetch user's channel ID
+  useFocusEffect(
+    useCallback(() => {
+      const fetchUserChannel = async () => {
+        if (user?.id) {
+          try {
+            const channelResponse = await ApiService.getChannelByUserId(Number(user.id));
+            if (channelResponse.status === 200 && channelResponse.data && channelResponse.data.length > 0) {
+              setUserChannelId(String(channelResponse.data[0].channelId));
+            }
+          } catch (error) {
+            console.log('No channel found for user');
+          }
+        }
+      };
+
+      fetchUserChannel();
+    }, [user?.id])
   );
 
   // Transform videos data for compatibility and proper typing
@@ -207,6 +230,26 @@ const TipTubeScreen = () => {
     // Clear cache to force fresh search results
     clearCache(`videos-${categoryId}`);
   }, [categoryId, clearCache]);
+
+  const handleMyChannel = useCallback(() => {
+    if (userChannelId && user?.id) {
+      // Note: Despite the parameter name being 'channelId', we pass the userId
+      // because the ChannelScreen API expects userId, not channelId
+      navigation.navigate('Channel', { channelId: String(user.id) });
+    } else {
+      // If no channel found, redirect to create channel
+      navigation.navigate('CreateChannel');
+    }
+  }, [userChannelId, user?.id, navigation]);
+
+  const handleAnalytics = useCallback(() => {
+    if (userChannelId) {
+      navigation.navigate('Analytics', { channelId: userChannelId });
+    } else {
+      // If no channel found, redirect to create channel
+      navigation.navigate('CreateChannel');
+    }
+  }, [userChannelId, navigation]);
 
   // Video player handler
   const openPlayer = useCallback((video: Video, layout: CardLayout) => {
@@ -339,6 +382,36 @@ const TipTubeScreen = () => {
           showWallet={false}
           onSearchQueryChange={handleSearch}
           onSearchSubmit={handleSearch}
+          rightComponent={
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {/* Analytics Icon */}
+              <TouchableOpacity
+                onPress={handleAnalytics}
+                style={[styles.headerIconButton, { marginRight: 8 }]}
+                activeOpacity={0.7}
+              >
+                <Icon name="bar-chart-2" size={20} color={colors.text.secondary} />
+              </TouchableOpacity>
+              
+              {/* Channel Icon */}
+              <TouchableOpacity
+                onPress={handleMyChannel}
+                style={[styles.headerIconButton, { marginRight: 8 }]}
+                activeOpacity={0.7}
+              >
+                <Icon name="tv" size={20} color={colors.text.secondary} />
+              </TouchableOpacity>
+              
+              {/* Search Icon */}
+              <TouchableOpacity 
+                onPress={() => {/* This will be handled by Header's internal search logic */}} 
+                style={styles.headerIconButton}
+                activeOpacity={0.7}
+              >
+                <Icon name="search" size={20} color={colors.text.secondary} />
+              </TouchableOpacity>
+            </View>
+          }
         />
         
         {initialLoading ? (
@@ -530,6 +603,12 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
   skeletonContent: {
     paddingTop: 0,
     width: '100%', // Ensure full width
+  },
+  headerIconButton: {
+    padding: 6,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 
