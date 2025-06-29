@@ -472,7 +472,7 @@ const ProfileScreen: React.FC = () => {
       icon: 'shield',
       title: 'Privacy',
       subtitle: 'Privacy and security settings',
-      onPress: () => console.log('Navigate to privacy settings'),
+      onPress: () => navigation.navigate('PrivacyPolicy'),
       active: false,
     },
     {

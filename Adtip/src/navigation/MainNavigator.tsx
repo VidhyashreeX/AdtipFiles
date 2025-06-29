@@ -69,6 +69,9 @@ import SubscriptionScreen from '../screens/packages/SubscriptionScreen';
 // Import ChatScreen
 import ChatScreen from '../screens/chat/ChatScreen';
 
+// Import PrivacyPolicyScreen
+import PrivacyPolicyScreen from '../screens/Privacy/PrivacyPolicyScreen';
+
 // Create stack navigator with proper typing
 const Stack = createNativeStackNavigator<MainNavigatorParamList>();
 
@@ -475,6 +478,11 @@ const MainNavigator = () => {
       {/* Add UpgradePremiumScreen */}
       <Stack.Screen name="UpgradePremiumScreen" component={UpgradePremiumScreen} />
       <Stack.Screen name="SubscriptionScreen" component={SubscriptionScreen} />
+      <Stack.Screen
+        name="PrivacyPolicy"
+        component={PrivacyPolicyScreen}
+        options={{ headerShown: false }}
+      />
     </Stack.Navigator>
   );
 };
