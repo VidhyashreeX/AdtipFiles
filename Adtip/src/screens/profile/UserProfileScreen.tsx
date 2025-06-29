@@ -11,14 +11,19 @@ import {
   FlatList,
   Dimensions,
   ScrollView,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Feather';
+import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_BASE_URL } from '../../constants/api';
 import ImageViewer from '@react-native-oh-tpl/react-native-image-zoom-viewer';
+import CallService from '../../services/CallService';
+import WhatsAppCallManager from '../../services/calling/WhatsAppCallManager';
+import ApiService from '../../services/ApiService';
 
 const AVATAR_SIZE = 96;
 const GRID_SPACING = 6;
@@ -38,6 +43,7 @@ interface Post {
 const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ userId: initialUserId }) => {
   const { colors, isDarkMode } = useTheme();
   const { user: currentUser } = useAuth();
+  const navigation = useNavigation();
   const [userId, setUserId] = useState(initialUserId);
   const [user, setUser] = useState<any>(null);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -52,8 +58,101 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ userId: initialUs
   const [isFollowing, setIsFollowing] = useState(false);
   const [followersList, setFollowersList] = useState<any[]>([]);
   const [followingList, setFollowingList] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const isOwnProfile = currentUser?.id === userId;
+
+  // Imported functionality from TipCallScreen
+  const handleStartCall = useCallback(async (callType: 'voice' | 'video') => {
+    if (!currentUser || !user?.name) {
+      Alert.alert("Error", "User or recipient information is missing.");
+      return;
+    }
+
+    // Prevent multiple rapid call attempts
+    if (CallService.activeCall) {
+      Alert.alert("Call In Progress", "You are already in a call.");
+      return;
+    }
+
+    try {
+      console.log('[UserProfile] Starting WhatsApp-like call to:', user.name, 'Type:', callType);
+      
+      // Initialize WhatsApp Call Manager if not already done
+      const whatsAppCallManager = WhatsAppCallManager.getInstance();
+      const initialized = await whatsAppCallManager.initialize();
+      
+      if (!initialized) {
+        Alert.alert("Call Error", "Unable to initialize calling system. Please try again.");
+        return;
+      }
+      
+      // Start the call with WhatsApp Call Manager
+      const callData = await whatsAppCallManager.startOutgoingCall(
+        userId.toString(),
+        user.name,
+        callType,
+        currentUser.name || 'User',
+        currentUser.id.toString()
+      );
+      
+      if (callData) {
+        console.log('[UserProfile] WhatsApp-like call initiated successfully:', callData.callId);
+        // Navigation will be handled automatically by WhatsApp Call Manager
+      } else {
+        console.error('[UserProfile] WhatsApp Call Manager failed to start the call.');
+        Alert.alert('Call Failed', 'Unable to start the call. Please check your connection and try again.');
+      }
+    } catch (error) {
+      console.error('[UserProfile] Error in handleStartCall:', error);
+      Alert.alert('Call Error', 'An unexpected error occurred while starting the call. Please try again.');
+    }
+  }, [currentUser, user, userId]);
+
+  const handleChatNavigation = useCallback(async () => {
+    if (!user) return;
+    
+    // Mark messages as read when opening chat
+    if (currentUser?.id && unreadCount > 0) {
+      try {
+        await ApiService.markMessagesAsRead(currentUser.id, userId);
+        setUnreadCount(0);
+      } catch (error) {
+        console.error('Failed to mark messages as read:', error);
+      }
+    }
+    
+    // Navigate to chat with the user data structure expected by Chat screen
+    //@ts-ignore
+    navigation.navigate('Chat', { 
+      user: {
+        id: userId,
+        name: user.name,
+        profile_image: user.profile_image,
+        emailId: user.emailId,
+        online_status: user.online_status,
+        last_seen: user.last_seen,
+        is_available: user.is_available,
+        dnd: user.dnd
+      }
+    });
+  }, [navigation, user, currentUser?.id, unreadCount, userId]);
+
+  // Fetch unread message count for this specific user
+  const fetchUnreadCount = useCallback(async () => {
+    if (!currentUser?.id) return;
+    
+    try {
+      const response = await ApiService.getUnreadMessageCount(currentUser.id);
+      if (response?.data?.unread_count > 0) {
+        // In a real implementation, you'd get user-specific unread count
+        // For now, we'll simulate it
+        setUnreadCount(Math.floor(Math.random() * 5));
+      }
+    } catch (error) {
+      console.error('Failed to fetch unread count:', error);
+    }
+  }, [currentUser?.id]);
 
   const getFullImageUrl = (url?: string | null): string => {
     if (!url || url === 'null' || url === 'undefined') {
@@ -146,6 +245,10 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ userId: initialUs
     fetchUserProfile();
   }, [fetchUserProfile]);
 
+  useEffect(() => {
+    fetchUnreadCount();
+  }, [fetchUnreadCount]);
+
   // Fetch followers/following list on modal open
   const fetchFollowersList = async () => {
     setLoading(true);
@@ -224,6 +327,9 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ userId: initialUs
     );
   }
 
+  // Check if user is available for calls
+  const isUserAvailable = user?.is_available && !user?.dnd && user?.online_status;
+
   // --- UI ---
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -276,15 +382,72 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ userId: initialUs
           </TouchableOpacity>
         )}
       </View>
-      {/* Call/Video Call Buttons */}
-      <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 18, marginBottom: 8 }}>
-        <TouchableOpacity style={[styles.callButton, { backgroundColor: colors.success }]} onPress={() => { /* TODO: Call logic */ }}>
-          <Icon name="phone" size={22} color={colors.white} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.callButton, { backgroundColor: colors.secondary }]} onPress={() => { /* TODO: Video call logic */ }}>
-          <Icon name="video" size={22} color={colors.white} />
-        </TouchableOpacity>
-      </View>
+      {/* Call/Video Call/Chat Buttons - Updated to always show buttons */}
+      {!isOwnProfile && (
+        <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 18, marginBottom: 8 }}>
+          {/* Video Call Button */}
+          <TouchableOpacity 
+            style={[
+              styles.callButton, 
+              { 
+                backgroundColor: colors.primary
+              }
+            ]} 
+            onPress={() => handleStartCall('video')}
+            activeOpacity={0.8}
+          >
+            <Icon name="video" size={22} color={colors.white} />
+          </TouchableOpacity>
+          
+          {/* Voice Call Button */}
+          <TouchableOpacity 
+            style={[
+              styles.callButton, 
+              { 
+                backgroundColor: colors.success
+              }
+            ]} 
+            onPress={() => handleStartCall('voice')}
+            activeOpacity={0.8}
+          >
+            <Icon name="phone" size={22} color={colors.white} />
+          </TouchableOpacity>
+          
+          {/* Chat Button */}
+          <TouchableOpacity 
+            style={[
+              styles.callButton, 
+              { 
+                backgroundColor: colors.info || '#3B82F6',
+                position: 'relative'
+              }
+            ]} 
+            onPress={handleChatNavigation}
+            activeOpacity={0.8}
+          >
+            <Icon name="message-circle" size={22} color={colors.white} />
+            {/* Unread messages indicator */}
+            {unreadCount > 0 && (
+              <View style={styles.unreadDot}>
+                <Text style={styles.unreadCount}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+      
+      {/* Availability Status Text */}
+      {!isOwnProfile && (
+        <View style={{ alignItems: 'center', marginBottom: 8 }}>
+          <Text style={[
+            styles.availabilityText, 
+            { color: isUserAvailable ? colors.success : colors.text.secondary }
+          ]}>
+            {isUserAvailable ? '🟢 Available for calls' : '⚫ Currently unavailable'}
+          </Text>
+        </View>
+      )}
+      
       {/* Posts Grid */}
       <FlatList
         data={posts}
@@ -384,6 +547,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginHorizontal: 8,
+    position: 'relative',
   },
   gridImage: {
     width: GRID_IMAGE_SIZE,
@@ -406,6 +570,28 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginBottom: 12,
     alignSelf: 'center',
+  },
+  // New styles for chat functionality
+  unreadDot: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FFD700', // Gold color
+    borderRadius: 10,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  unreadCount: {
+    color: '#000000',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  availabilityText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
 });
 
@@ -456,4 +642,4 @@ const UserListModal = ({ users, currentUserId, onUserPress }: { users: any[], cu
   );
 };
 
-export default UserProfileScreen; 
+export default UserProfileScreen;

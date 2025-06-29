@@ -139,8 +139,7 @@ const ContactCard: React.FC<{
   colors: any;
   isDarkMode: boolean;
 }> = ({ contact, onVideoCall, onVoiceCall, onChat, hasUnreadMessages, colors, isDarkMode }) => {
-  const isAvailable = contact.is_available && !contact.dnd && contact.online_status;
-  const avatarColor = isAvailable ? colors.success : colors.gray?.[400] || '#9CA3AF';
+  const avatarColor = colors.primary; // Always use primary color
   
   return (
     <View style={[
@@ -212,48 +211,38 @@ const ContactCard: React.FC<{
           )}
         </View>
 
-        {/* Action Buttons */}
-        {isAvailable && (
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.videoButton, { backgroundColor: colors.primary }]}
-              onPress={onVideoCall}
-              activeOpacity={0.8}
-            >
-              <Icon name="video" size={16} color="#FFFFFF" />
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.actionButton, styles.voiceButton, { backgroundColor: colors.success }]}
-              onPress={onVoiceCall}
-              activeOpacity={0.8}
-            >
-              <Icon name="phone" size={16} color="#FFFFFF" />
-            </TouchableOpacity>
-            
-            {/* Enhanced chat button with unread dot indicator */}
-            <TouchableOpacity
-              style={[styles.actionButton, styles.chatButton, { backgroundColor: colors.info || '#3B82F6' }]}
-              onPress={onChat}
-              activeOpacity={0.8}
-            >
-              <Icon name="message-circle" size={16} color="#FFFFFF" />
-              {hasUnreadMessages && (
-                <View style={styles.unreadDot}>
-                  {/* Gold dot for unread messages */}
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {!isAvailable && (
-          <View style={styles.unavailableContainer}>
-            <Text style={[styles.unavailableText, { color: colors.text.tertiary }]}>
-              Unavailable
-            </Text>
-          </View>
-        )}
+        {/* Action Buttons - Always Available */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.videoButton, { backgroundColor: colors.primary }]}
+            onPress={onVideoCall}
+            activeOpacity={0.8}
+          >
+            <Icon name="video" size={16} color="#FFFFFF" />
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.actionButton, styles.voiceButton, { backgroundColor: colors.success }]}
+            onPress={onVoiceCall}
+            activeOpacity={0.8}
+          >
+            <Icon name="phone" size={16} color="#FFFFFF" />
+          </TouchableOpacity>
+          
+          {/* Enhanced chat button with unread dot indicator */}
+          <TouchableOpacity
+            style={[styles.actionButton, styles.chatButton, { backgroundColor: colors.info || '#3B82F6' }]}
+            onPress={onChat}
+            activeOpacity={0.8}
+          >
+            <Icon name="message-circle" size={16} color="#FFFFFF" />
+            {hasUnreadMessages && (
+              <View style={styles.unreadDot}>
+                {/* Gold dot for unread messages */}
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
