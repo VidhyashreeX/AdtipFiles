@@ -1,6 +1,6 @@
 // src/components/common/Header.tsx
 import React, {useState, useRef, useMemo, useCallback} from 'react';
-import {View, Text, StyleSheet, Image, useWindowDimensions, Platform, TextInput, Keyboard} from 'react-native';
+import {View, Text, StyleSheet, Image, useWindowDimensions, Platform, TextInput, Keyboard, Animated} from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import Icon from 'react-native-vector-icons/Feather';
 import {useNavigation, useRoute} from '@react-navigation/native';
@@ -78,7 +78,7 @@ const Header: React.FC<HeaderProps> = ({
   onSearchSubmit,
   onSearchQueryChange,
   showSearch = true,
-  showPremium = true, // Default to true to show premium button everywhere
+  showPremium = true,
 }) => {
   const navigation = useNavigation();
   const route = useRoute();
@@ -92,6 +92,18 @@ const Header: React.FC<HeaderProps> = ({
 
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [searchQueryLocal, setSearchQueryLocal] = useState('');
+
+  // Animation for premium toggle
+  const toggleAnimation = useRef(new Animated.Value(isPremium ? 1 : 0)).current;
+
+  // Update animation when premium status changes
+  React.useEffect(() => {
+    Animated.timing(toggleAnimation, {
+      toValue: isPremium ? 1 : 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  }, [isPremium, toggleAnimation]);
 
   // Memoize expensive calculations
   const sizes = useMemo(() => getResponsiveSizes(screenWidth), [screenWidth]);
@@ -157,21 +169,54 @@ const Header: React.FC<HeaderProps> = ({
     return null;
   };
 
-  // Premium button component - only star icon
-  const renderPremiumButton = () => {
+  // Premium toggle switch component
+  const renderPremiumToggle = () => {
     if (!showPremium) return null;
+
+    const switchWidth = 44;
+    const switchHeight = 24;
+    const circleSize = 20;
+    const circleOffset = 2;
+
+    const backgroundColor = toggleAnimation.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['#FF4444', '#4CAF50'], // Red for off, Green for on
+    });
+
+    const circlePosition = toggleAnimation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [circleOffset, switchWidth - circleSize - circleOffset],
+    });
 
     return (
       <TouchableOpacity
-        style={styles.premiumButton}
+        style={[styles.premiumToggleContainer, { marginLeft: sizes.iconSpacing / 2 }]}
         onPress={navigateToPremium}
         activeOpacity={0.8}
       >
-        <Icon 
-          name={isPremium ? "star" : "star"} 
-          size={sizes.iconSize} 
-          color={isPremium ? "#FFD700" : colors.text.secondary}
-        />
+        <Animated.View
+          style={[
+            styles.premiumToggleBackground,
+            {
+              backgroundColor,
+              width: switchWidth,
+              height: switchHeight,
+              borderRadius: switchHeight / 2,
+            }
+          ]}
+        >
+          <Animated.View
+            style={[
+              styles.premiumToggleCircle,
+              {
+                width: circleSize,
+                height: circleSize,
+                borderRadius: circleSize / 2,
+                transform: [{ translateX: circlePosition }],
+              }
+            ]}
+          />
+        </Animated.View>
       </TouchableOpacity>
     );
   };
@@ -283,8 +328,8 @@ const Header: React.FC<HeaderProps> = ({
                 </TouchableOpacity>
               )
             )}
-            {/* Premium Button - Between search and wallet */}
-            {renderPremiumButton()}
+            {/* Premium Toggle Switch - Between search and wallet */}
+            {renderPremiumToggle()}
             {showWallet && (
               <TouchableOpacity
                 onPress={navigateToWallet}
@@ -381,12 +426,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   
-  // Premium Button Styles - simplified to just contain the star
-  premiumButton: {
-    marginLeft: 8,
+  // Premium Toggle Switch Styles
+  premiumToggleContainer: {
     padding: 6,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  premiumToggleBackground: {
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  premiumToggleCircle: {
+    backgroundColor: '#FFFFFF',
+    position: 'absolute',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
   },
   liveTimerContainer: {
     flexDirection: 'row',

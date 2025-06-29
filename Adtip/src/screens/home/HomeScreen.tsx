@@ -164,114 +164,57 @@ const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onPlayAndEa
   const flatListRef = useRef<FlatList>(null);
   const currentIndexRef = useRef(0);
   
-  // Define earn cards data for carousel
+  // Define earn cards data for carousel - Only show Play & Earn for now
   const earnCardsData = [
-    {
-      id: '1',
-      title: 'Watch & Earn',
-      description: 'Watch videos and earn rewards',
-      iconName: 'play-circle',
-      onPress: onWatchAndEarn,
-      gradientColors: ['#CC0000', '#EE2400', '#FF4D00' ],
-    },
+    // Watch & Earn is commented out but not removed
+    // {
+    //   id: '1',
+    //   title: 'Watch & Earn',
+    //   description: 'Watch videos and earn rewards',
+    //   iconName: 'play-circle',
+    //   onPress: onWatchAndEarn,
+    //   gradientColors: ['#CC0000', '#EE2400', '#FF4D00' ],
+    // },
     {
       id: '2',
       title: 'Play & Earn',
-      description: 'Play games and earn rewards',
+      description: 'Play games and earn double rewards',
       iconName: 'gamepad-2',
       onPress: onPlayAndEarn,
       gradientColors: ['#1565C0', '#1976D2', '#0D47A1'],
     },
   ];
 
-  // Create infinite data by duplicating items for seamless looping
-  const infiniteData = [
-    ...earnCardsData,
-    ...earnCardsData,
-    ...earnCardsData,
-  ];
-
-  // Auto-scroll functionality
-  useEffect(() => {
-    if (isLoading || !flatListRef.current) return;
-
-    const interval = setInterval(() => {
-      const nextIndex = (currentIndexRef.current + 1) % earnCardsData.length;
-      const actualIndex = earnCardsData.length + nextIndex; // Always use middle set for smooth infinite scroll
-      
-      currentIndexRef.current = nextIndex;
-      
-      flatListRef.current?.scrollToIndex({
-        index: actualIndex,
-        animated: true,
-      });
-    }, 5000); // Auto-scroll every 5 seconds
-
-    return () => clearInterval(interval);
-  }, [isLoading, earnCardsData.length]);
-
-  // Handle infinite scroll loop
-  const handleScrollEnd = useCallback((event: any) => {
-    const contentOffset = event.nativeEvent.contentOffset.x;
-    const itemWidth = screenWidth; // Full screen width for proper calculation
-    const newIndex = Math.round(contentOffset / itemWidth);
-    
-    // Reset position for infinite loop when reaching boundaries
-    if (newIndex >= earnCardsData.length * 2) {
-      // Jumped to end, reset to middle
-      setTimeout(() => {
-        flatListRef.current?.scrollToIndex({
-          index: earnCardsData.length,
-          animated: false,
-        });
-        currentIndexRef.current = 0;
-      }, 100);
-    } else if (newIndex < earnCardsData.length) {
-      // At the beginning, jump to middle equivalent
-      if (newIndex === 0) {
-        setTimeout(() => {
-          flatListRef.current?.scrollToIndex({
-            index: earnCardsData.length,
-            animated: false,
-          });
-          currentIndexRef.current = 0;
-        }, 100);
-      } else {
-        currentIndexRef.current = newIndex;
-      }
-    } else {
-      // In the middle set, update current index
-      currentIndexRef.current = newIndex - earnCardsData.length;
-    }
-  }, [earnCardsData.length]);
-
+  // Since we only have one item now, we don't need infinite scroll
+  // Just show the single Play & Earn card
   const renderEarnCard = ({ item, index }: { item: typeof earnCardsData[0], index: number }) => {
-    // Get the original item data for infinite loop
-    const originalItem = earnCardsData[index % earnCardsData.length];
-    
     return (
       <TouchableOpacity
         style={styles.earnCardCarouselItem}
-        onPress={originalItem.onPress}
+        onPress={item.onPress}
         activeOpacity={0.9}
       >
         <LinearGradient
-          colors={originalItem.gradientColors}
+          colors={item.gradientColors}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.earnCardGradient}
         >
           <View style={styles.earnCardContent}>
             <View style={styles.earnCardTextContainer}>
-              <Text style={styles.earnCardTitle}>{originalItem.title}</Text>
-              <Text style={styles.earnCardDescription}>{originalItem.description}</Text>
+              <Text style={styles.earnCardTitle}>{item.title}</Text>
+              <Text style={styles.earnCardDescription}>{item.description}</Text>
+              <LinearGradient
+                colors={['#FFD700', '#FFA500', '#FF8C00']} // Gold gradient
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.earnCardRewardBadge}
+              >
+                <Text style={styles.earnCardRewardText}>2x Rewards!</Text>
+              </LinearGradient>
             </View>
             <View style={styles.earnCardIconContainer}>
-              {originalItem.iconName === 'play-circle' ? (
-                <PlayCircle size={28} color="#FFFFFF" />
-              ) : (
-                <Gamepad2 size={28} color="#FFFFFF" />
-              )}
+              <Gamepad2 size={32} color="#FFFFFF" />
             </View>
           </View>
         </LinearGradient>
@@ -295,23 +238,21 @@ const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onPlayAndEa
         ref={flatListRef}
         horizontal
         showsHorizontalScrollIndicator={false}
-        data={infiniteData}
+        data={earnCardsData}
         renderItem={renderEarnCard}
         keyExtractor={(item, index) => `${item.id}-${index}`}
-        snapToInterval={screenWidth} // Full screen width for perfect snapping
+        snapToInterval={screenWidth}
         decelerationRate="fast"
         snapToAlignment="start"
         pagingEnabled={false}
         removeClippedSubviews={false}
-        onMomentumScrollEnd={handleScrollEnd}
-        initialScrollIndex={earnCardsData.length} // Start from the middle set
         getItemLayout={(data, index) => ({
           length: screenWidth,
           offset: screenWidth * index,
           index,
         })}
         contentContainerStyle={{
-          paddingHorizontal: 0, // No padding to ensure full width
+          paddingHorizontal: 0,
         }}
         ItemSeparatorComponent={() => <View style={{ width: 0 }} />}
       />
@@ -666,7 +607,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           title="Home" 
           showWallet={true}
           walletAmount={walletAmount}
-          showSearch={false}
+          showSearch={true}
         />
         <FlatList
           data={displayPosts}
@@ -863,6 +804,28 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  earnCardRewardBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 15,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#B8860B', // Dark gold border
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+  },
+  earnCardRewardText: {
+    color: '#000000', // Black text for better contrast
+    fontSize: 12,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(255, 255, 255, 0.3)', // Light shadow for depth
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
   },
 });
 

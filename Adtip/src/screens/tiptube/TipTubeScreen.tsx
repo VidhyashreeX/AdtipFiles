@@ -336,6 +336,7 @@ const TipTubeScreen = () => {
           title="TipTube" 
           showTipShortsIcon 
           showSearch={true}
+          showWallet={false}
           onSearchQueryChange={handleSearch}
           onSearchSubmit={handleSearch}
         />
