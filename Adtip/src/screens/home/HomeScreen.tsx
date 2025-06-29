@@ -17,10 +17,10 @@ import {
   Image,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import {useNavigation} from '@react-navigation/native';
-import Icon from 'react-native-vector-icons/Feather';
+import {useNavigation, useFocusEffect} from '@react-navigation/native';
+import {useQueryClient} from '@tanstack/react-query';
 // Import Lucide React Native icons
-import { PlayCircle, Gamepad2 } from 'lucide-react-native';
+import { PlayCircle, Gamepad2, WifiOff } from 'lucide-react-native';
 import CommentsBottomSheet from '../../components/commentsbottomsheet/CommentsBottomSheet';
 
 // Enhanced Contexts & Services
@@ -336,6 +336,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const navigation = useNavigation<AppNavigationProps>();
   const {contentPaddingBottom} = useTabNavigator();
   const {clearCache, invalidateData} = useDataContext();
+  const queryClient = useQueryClient();
   const styles = createHomeScreenStyles(colors);
 
   // UI state management (never blocks navigation)
@@ -363,6 +364,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   } = usePosts(
     selectedCategoryState ? parseInt(selectedCategoryState, 10) : 0,
     user?.id
+  );
+
+  // Fetch data whenever the screen comes into focus by invalidating and forcing refetch
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[HomeScreen] Screen focused. Invalidating and refetching posts.');
+      // Invalidate and force refetch
+      queryClient.invalidateQueries({ 
+        queryKey: ['posts', selectedCategoryState ? parseInt(selectedCategoryState, 10) : 0, user?.id],
+        refetchType: 'active' // Force active queries to refetch
+      });
+    }, [queryClient, selectedCategoryState, user?.id])
   );
 
   // Transform posts data for compatibility
@@ -608,9 +621,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     return (
       <ScreenTransition>
         <View style={styles.container}>
-        
           <View style={styles.errorContainer}>
-            <Icon name="wifi-off" size={48} color={colors.textSecondary} />
+            <WifiOff size={48} color={colors.textSecondary} />
             <Text style={[styles.errorTitle, { color: colors.text.primary }]}>
               {isOnline ? 'Something went wrong' : 'You\'re offline'}
             </Text>

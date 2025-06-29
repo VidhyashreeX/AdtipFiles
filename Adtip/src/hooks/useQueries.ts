@@ -181,8 +181,8 @@ export const usePosts = (category: number = 0, userId?: number) => {
     },
     enabled: !!userId,
     staleTime: 2 * 60 * 1000, // 2 minutes for posts
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 };
 
@@ -215,7 +215,7 @@ export const useShorts = (userId?: string) => {
     },
     enabled: !!userId,
     staleTime: 5 * 60 * 1000, // 5 minutes for shorts
-    refetchOnMount: false,
+    refetchOnMount: true,
   });
 };
 
@@ -495,7 +495,7 @@ export const useUsers = (filters: {
     enabled: !!userId,
     staleTime: 2 * 60 * 1000, // 2 minutes for users
     refetchOnMount: true,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
   });
 };
 
@@ -563,8 +563,8 @@ export const useVideos = (categoryId: number = 0, userId?: number, searchQuery?:
     },
     enabled: true,
     staleTime: 3 * 60 * 1000, // 3 minutes for videos
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 };
 

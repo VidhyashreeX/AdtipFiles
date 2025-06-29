@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
@@ -287,6 +288,7 @@ export default function TipCallScreen() {
   const { user } = useAuth();
   const { clearCache } = useDataContext();
   const netInfo = useNetInfo();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     CallService.resetCallState();
@@ -345,6 +347,18 @@ export default function TipCallScreen() {
     fetchNextPage: loadMoreUsers,
     hasNextPage: hasMoreUsers,
   } = useUsers(filters, user?.id);
+
+  // Fetch data whenever the screen comes into focus by invalidating and forcing refetch
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[TipCallScreen] Screen focused. Invalidating and refetching users.');
+      // Invalidate and force refetch
+      queryClient.invalidateQueries({ 
+        queryKey: ['users', filters, user?.id],
+        refetchType: 'active' // Force active queries to refetch
+      });
+    }, [queryClient, filters, user?.id])
+  );
 
   // Prefetch data for better performance
   // const { prefetchProfile } = usePrefetchData(); // Removed to avoid unnecessary API calls
