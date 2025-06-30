@@ -70,6 +70,7 @@ interface AnimatedVideoCardProps {
   onNavigateToChannel: () => void;
   index: number;
   isYouTubeLayout?: boolean; // Add this prop
+  onToggleComments?: () => void; // Add prop to toggle comments
 }
 
 // Utility function
@@ -97,7 +98,8 @@ const AnimatedVideoCard = React.memo<AnimatedVideoCardProps>(({
   colors, 
   onNavigateToChannel, 
   index,
-  isYouTubeLayout = false // Default to false for backward compatibility
+  isYouTubeLayout = false, // Default to false for backward compatibility
+  onToggleComments
 }) => {
   // Shared values for ultra-smooth animations
   const scale = useSharedValue(1);
@@ -384,8 +386,29 @@ const AnimatedVideoCard = React.memo<AnimatedVideoCardProps>(({
           <Text style={styles.videoTitle} numberOfLines={2}>{video.title}</Text>
         </View>
       </TouchableOpacity>
+      <TouchableOpacity 
+        style={styles.commentButton}
+        onPress={onToggleComments}
+      >
+        <Text style={styles.commentButtonText}>Comments</Text>
+      </TouchableOpacity>
     </Animated.View>
   );
+});
+
+const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
+  commentButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 4,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  commentButtonText: {
+    color: colors.white,
+    fontWeight: 'bold',
+  },
 });
 
 export default AnimatedVideoCard;

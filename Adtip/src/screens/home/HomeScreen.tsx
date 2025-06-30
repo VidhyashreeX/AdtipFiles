@@ -15,6 +15,7 @@ import {
   Modal,
   Dimensions,
   Image,
+  Alert,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import {useNavigation, useFocusEffect} from '@react-navigation/native';
@@ -51,6 +52,9 @@ import PostItemSkeleton from '../../components/skeletons/PostItemSkeleton';
 
 // Google Ads
 import BannerAdComponent from '../../googleads/BannerAdComponent';
+
+// Debug utilities
+import { generateVideoDebugReport } from '../../utils/debugUtils';
 
 // Types
 import {AppNavigationProps} from '../../types/navigation';
@@ -339,6 +343,54 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const categories = staticCategories;
   const stories: Story[] = [];
 
+  // Enhanced debug function for video issues
+  const debugVideoIssues = useCallback(async () => {
+    if (posts.length === 0) {
+      Alert.alert('Debug Info', 'No posts loaded yet. Please wait for posts to load first.');
+      return;
+    }
+
+    const videoPosts = posts.filter(post => post.media_type === 'video');
+    
+    if (videoPosts.length === 0) {
+      Alert.alert('Debug Info', 'No video posts found in current feed.');
+      return;
+    }
+
+    Alert.alert(
+      'Video Debug',
+      `Found ${videoPosts.length} video posts. Generate debug report?`,
+      [
+        { text: 'Cancel' },
+        { 
+          text: 'Generate Report', 
+          onPress: async () => {
+            try {
+              const report = await generateVideoDebugReport(posts);
+              console.log('[HomeScreen] Video Debug Report Generated');
+              Alert.alert(
+                'Debug Report Generated',
+                'Check the console logs for detailed video URL analysis. The report shows which videos are working and which are failing.',
+                [
+                  { text: 'OK' },
+                  { text: 'Copy Sample URL', onPress: () => {
+                    const firstVideoUrl = videoPosts[0]?.media_url;
+                    if (firstVideoUrl) {
+                      console.log('Sample Video URL:', firstVideoUrl);
+                      console.log('Base API URL:', API_BASE_URL);
+                    }
+                  }}
+                ]
+              );
+            } catch (error) {
+              Alert.alert('Error', 'Failed to generate debug report: ' + error);
+            }
+          }
+        }
+      ]
+    );
+  }, [posts]);
+
   // Optimistic mutations for instant UI feedback (now using the new hooks)
   const handleLikePost = useCallback((postId: number, isLiked: boolean) => {
     if (!user?.id) {
@@ -498,98 +550,72 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           onFollow={handleUserFollow}
         />
         
-        {/* Banner ad every 3 posts */}
-        {(index + 1) % 3 === 0 && (
-          <View style={styles.adSpacingContainer}>
-            <BannerAdComponent />
+        {/* Add debug button for the first video post (development only) */}
+        {__DEV__ && index === 0 && item.media_type === 'video' && (
+          <View style={styles.debugSection}>
+            <TouchableOpacity 
+              onPress={debugVideoIssues}
+              style={styles.debugButton}
+            >
+              <Text style={styles.debugButtonText}>🐛 Debug Video Issues</Text>
+            </TouchableOpacity>
           </View>
         )}
       </>
     );
-  }, [visiblePostIds, handlePostLike, handleCommentPress, handleUserProfilePress, handleUserFollow, getTimeAgo]);
+  }, [visiblePostIds, getTimeAgo, handlePostLike, handleCommentPress, handleUserProfilePress, handleUserFollow, debugVideoIssues, styles]);
 
-  // Header component that scrolls with the list
-  const renderScrollableHeader = useCallback(() => (
-    <View style={styles.headerContainer}>
-      <StoriesRow 
-        stories={displayStories}
-        onStoryPress={handleStoryPress}
-        onAddStoryPress={handleAddStoryPress}
-        isLoading={initialLoading}
-      />
-      
-      <CategoriesRow 
-        categories={displayCategories}
-        selectedCategory={selectedCategoryState}
-        onCategoryPress={handleCategoryPress}
-        isLoading={initialLoading}
-      />
-      
-      <EarnCardsRow 
-        onWatchAndEarn={handleWatchAndEarn}
-        onPlayAndEarn={handlePlayAndEarn}
-        isLoading={initialLoading}
-      />
-    </View>
-  ), [
-    styles.headerContainer, 
-    displayStories, 
-    handleStoryPress, 
-    handleAddStoryPress, 
-    initialLoading, 
-    displayCategories, 
-    selectedCategoryState, 
-    handleCategoryPress, 
-    handleWatchAndEarn, 
-    handlePlayAndEarn
-  ]);
-
-  // Footer component
-  const renderFooter = useCallback(() => {
-    if (postsLoadingMore) {
-      return (
-        <View style={styles.footerLoader}>
-          <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-            Loading more posts...
-          </Text>
-        </View>
-      );
-    }
+  // Render empty state
+  const renderEmptyState = useCallback(() => {
+    if (postsLoading) return null;
     
-    if (!hasMorePosts && displayPosts.length > 0) {
-      return (
-        <View style={styles.footerEnd}>
-          <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-            You've reached the end!
-          </Text>
-        </View>
-      );
-    }
-    
-    return null;
-  }, [postsLoadingMore, hasMorePosts, displayPosts.length, colors.primary, colors.textSecondary, styles.footerLoader, styles.footerText, styles.footerEnd]);
+    return (
+      <View style={styles.emptyState}>
+        <WifiOff size={48} color={colors.text.tertiary} />
+        <Text style={[styles.emptyStateTitle, {color: colors.text.primary}]}>No posts available</Text>
+        <Text style={[styles.emptyStateMessage, {color: colors.text.secondary}]}>
+          {isOnline ? 'Check back later for new content!' : 'Please check your internet connection'}
+        </Text>
+        <TouchableOpacity style={[styles.retryButton, {backgroundColor: colors.primary}]} onPress={handleRefresh}>
+          <Text style={{color: colors.white}}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }, [postsLoading, colors, isOnline, handleRefresh, styles]);
 
-  // Main render with enhanced error handling
-  if (postsError && displayPosts.length === 0) {
+  // Render loading state
+  if (initialLoading) {
     return (
       <ScreenTransition>
-        <View style={styles.container}>
+        <View style={[styles.container, {backgroundColor: colors.background}]}>
+          <Header title="Home" />
+          <ScrollView style={styles.content} contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}>
+            <StoriesRow stories={[]} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} isLoading={true} />
+            <CategoriesRow categories={[]} selectedCategory={null} onCategoryPress={handleCategoryPress} isLoading={true} />
+            <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} isLoading={true} />
+            <View style={styles.skeletonContainer}>
+              {Array(6).fill(0).map((_, index) => <PostItemSkeleton key={`skeleton-${index}`} />)}
+            </View>
+          </ScrollView>
+        </View>
+      </ScreenTransition>
+    );
+  }
+
+  // Error state
+  if (postsError) {
+    return (
+      <ScreenTransition>
+        <View style={[styles.container, {backgroundColor: colors.background}]}>
+          <Header title="Home" />
           <View style={styles.errorContainer}>
-            <WifiOff size={48} color={colors.textSecondary} />
-            <Text style={[styles.errorTitle, { color: colors.text.primary }]}>
-              {isOnline ? 'Something went wrong' : 'You\'re offline'}
+            <WifiOff size={48} color={colors.danger || '#FF0000'} />
+            <Text style={[styles.errorTitle, {color: colors.text.primary}]}>Something went wrong</Text>
+            <Text style={[styles.errorMessage, {color: colors.text.secondary}]}>
+              {postsError.message || 'Failed to load posts'}
             </Text>
-            <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>
-              {isOnline ? 'Failed to load posts. Please try again.' : 'Posts will load when you\'re back online.'}
-            </Text>
-            <TouchableOpacity 
-              style={[styles.retryButton, { backgroundColor: colors.primary }]}
-              onPress={handleRefresh}
-            >
-              <Text style={[styles.retryButtonText, { color: colors.white }]}>
-                Try Again
-              </Text>
+            <TouchableOpacity style={[styles.retryButton, {backgroundColor: colors.primary}]} onPress={handleRefresh}>
+              <Text style={{color: colors.white}}>Try Again</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -597,70 +623,54 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     );
   }
 
-  // Loading state with skeletons
-  if (initialLoading) {
-    return (
-      <ScreenTransition>
-        <View style={styles.container}>
-          <View style={styles.skeletonContainer}>
-            {Array(3).fill(0).map((_, index) => (
-              <PostItemSkeleton key={`skeleton-${index}`} />
-            ))}
-          </View>
-        </View>
-      </ScreenTransition>
-    );
-  }
-
-  // Main content
   return (
-    <ScreenTransition>
-      <View style={styles.container}>
-        <Header 
-          title="Home" 
-          showWallet={true}
-          walletAmount={walletAmount}
-          showSearch={true}
-        />
-        <FlatList
+          <ScreenTransition>
+        <View style={[styles.container, {backgroundColor: colors.background}]}>
+          <Header title="Home" />
+          <FlatList
           data={displayPosts}
           renderItem={renderPostItem}
           keyExtractor={(item, index) => `post-${item.id}-${index}`}
-          ListHeaderComponent={renderScrollableHeader}
-          ListFooterComponent={renderFooter}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
-            />
-          }
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.1}
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={10}
-          windowSize={10}
-          initialNumToRender={5}
-          getItemLayout={undefined} // Let FlatList calculate
-          viewabilityConfig={viewabilityConfig}
-          onViewableItemsChanged={onViewableItemsChanged}
-          contentContainerStyle={[
-            styles.contentContainer,
-            { paddingBottom: contentPaddingBottom + 20 }
-          ]}
+          style={styles.content}
+          contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}
           showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[colors.primary]} />}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.3}
+          removeClippedSubviews={false}
+          maxToRenderPerBatch={10}
+          updateCellsBatchingPeriod={50}
+          initialNumToRender={8}
+          windowSize={15}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          ListHeaderComponent={() => (
+            <>
+              <StoriesRow stories={displayStories} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} />
+              <CategoriesRow categories={displayCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} />
+              <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} />
+            </>
+          )}
+          ListEmptyComponent={renderEmptyState}
+          ListFooterComponent={() => 
+            postsLoadingMore ? (
+              <View style={styles.loadingMore}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[styles.loadingMoreText, {color: colors.text.secondary}]}>Loading more posts...</Text>
+              </View>
+            ) : null
+          }
         />
 
-        {/* Comments Bottom Sheet */}
+        {/* Comments Modal */}
         {selectedCommentPostId && (
           <CommentsBottomSheet
             visible={commentModalVisible}
+            onClose={() => {
+              setCommentModalVisible(false);
+              setSelectedCommentPostId(null);
+            }}
             postId={selectedCommentPostId}
-            onClose={() => setCommentModalVisible(false)}
-            initialCommentCount={
-              displayPosts.find(post => post.id === selectedCommentPostId)?.commentCount || 0
-            }
           />
         )}
 
@@ -668,11 +678,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
         <Modal
           visible={showUserProfileModal}
           animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => setShowUserProfileModal(false)}
+          onRequestClose={() => {
+            setShowUserProfileModal(false);
+            setSelectedUserId(null);
+          }}
         >
           {selectedUserId && (
-            <UserProfileScreen userId={selectedUserId} />
+            <UserProfileScreen
+              userId={selectedUserId}
+            />
           )}
         </Modal>
       </View>
@@ -680,183 +694,197 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   );
 };
 
-// Styles
+// Create home screen styles
 const createHomeScreenStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  contentContainer: {
-    flexGrow: 1,
-  },
-  headerContainer: {
-    backgroundColor: colors.background,
-  },
-  stickyBannerContainer: {
-    backgroundColor: colors.background,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    marginBottom: 8,
-  },
-  adSpacingContainer: {
-    backgroundColor: colors.background,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginVertical: 8,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderTopColor: colors.border,
-    borderBottomColor: colors.border,
-  },
-  storiesSection: {
-    paddingVertical: 16,
-  },
-  storiesContainer: {
-    paddingHorizontal: 16,
-  },
-  storiesContentContainer: {
-    gap: 12,
-  },
-  categoriesSection: {
-    paddingVertical: 12,
-  },
-  categoriesContainer: {
-    paddingHorizontal: 16,
-  },
-  categoriesContentContainer: {
-    gap: 8,
-  },
-  earnCardsSection: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 12,
-  },
-  earnCard: {
+  content: {
     flex: 1,
   },
-  footerLoader: {
+  scrollContent: {
+    flexGrow: 1,
+  },
+  // Debug styles (development only)
+  debugSection: {
+    padding: 16,
+    backgroundColor: 'rgba(255, 255, 0, 0.1)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 0, 0.3)',
+  },
+  debugButton: {
+    backgroundColor: 'rgba(255, 255, 0, 0.2)',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 0, 0.5)',
+  },
+  debugButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333333',
+  },
+  // ... rest of the existing styles remain the same ...
+  
+  // Stories section
+  storiesSection: {
+    paddingVertical: 12,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  storiesContainer: {
+    paddingLeft: 16,
+  },
+  storiesContentContainer: {
+    paddingRight: 16,
+  },
+
+  // Categories section
+  categoriesSection: {
+    paddingVertical: 12,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  categoriesContainer: {
+    paddingLeft: 16,
+  },
+  categoriesContentContainer: {
+    paddingRight: 16,
+  },
+
+  // Earn cards carousel section
+  earnCardsCarouselSection: {
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  earnCardsCarouselSkeletonContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  earnCardCarouselItem: {
+    width: screenWidth,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  earnCardGradient: {
+    borderRadius: 12,
+    padding: 16,
+    minHeight: 100,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  earnCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  earnCardTextContainer: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  earnCardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  earnCardDescription: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    opacity: 0.9,
+    marginBottom: 8,
+  },
+  earnCardRewardBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  earnCardRewardText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  earnCardIconContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Skeleton container
+  skeletonContainer: {
+    padding: 16,
+  },
+
+  // Banner ad
+  stickyBannerContainer: {
+    backgroundColor: colors.surface,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+
+  // Loading and error states
+  loadingMore: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-    gap: 8,
+    paddingVertical: 20,
   },
-  footerEnd: {
-    alignItems: 'center',
-    padding: 20,
-  },
-  footerText: {
+  loadingMoreText: {
+    marginLeft: 8,
     fontSize: 14,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    paddingVertical: 64,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyStateMessage: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    paddingHorizontal: 32,
   },
   errorTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     marginTop: 16,
     marginBottom: 8,
+    textAlign: 'center',
   },
   errorMessage: {
     fontSize: 14,
     textAlign: 'center',
+    lineHeight: 20,
     marginBottom: 24,
   },
   retryButton: {
-    paddingHorizontal: 24,
     paddingVertical: 12,
+    paddingHorizontal: 24,
     borderRadius: 8,
-  },
-  retryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  skeletonContainer: {
-    flex: 1,
-    padding: 16,
-    gap: 16,
-  },
-  earnCardsCarouselSkeletonContainer: {
-    paddingHorizontal: 8,
-  },
-  earnCardsCarouselSection: {
-    paddingVertical: 16,
-  },
-  earnCardsCarouselContainer: {
-    paddingHorizontal: 16,
-    gap: 16,
-  },
-  earnCardCarouselItem: {
-    width: screenWidth - 16, // Full width minus minimal padding
-    height: 120,
-    borderRadius: 16,
-    marginHorizontal: 8,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    overflow: 'hidden',
-  },
-  earnCardGradient: {
-    flex: 1,
-    borderRadius: 16,
-  },
-  earnCardContent: {
-    padding: 20,
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  earnCardTextContainer: {
-    flex: 1,
-  },
-  earnCardTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 6,
-  },
-  earnCardDescription: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    opacity: 0.9,
-  },
-  earnCardIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  earnCardRewardBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 15,
-    alignSelf: 'flex-start',
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#B8860B', // Dark gold border
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-  },
-  earnCardRewardText: {
-    color: '#000000', // Black text for better contrast
-    fontSize: 12,
-    fontWeight: 'bold',
-    textShadowColor: 'rgba(255, 255, 255, 0.3)', // Light shadow for depth
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 1,
   },
 });
 

@@ -8,6 +8,11 @@ import {
   RefreshControl,
   Dimensions,
   ActivityIndicator,
+  Alert,
+  Image,
+  TextInput,
+  StatusBar,
+  SafeAreaView,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -55,6 +60,8 @@ interface Video {
   isVerified?: boolean;
   channelId: number | string;
   price?: number;
+  isPaidPromotional: number;
+  contentCreatorPlanId: number;
 }
 
 interface CardLayout {
@@ -111,6 +118,12 @@ const TipTubeScreen = () => {
   const [previewingVideoId, setPreviewingVideoId] = useState<number | null>(null);
   const [selectedVideoId, setSelectedVideoId] = useState<number | null>(null);
   const [userChannelId, setUserChannelId] = useState<string | null>(null);
+  const [openPlayer, setOpenPlayer] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentCount, setCommentCount] = useState<number>(0);
+  const [newComment, setNewComment] = useState<string>('');
+  const [likedVideos, setLikedVideos] = useState<Set<number>>(new Set());
 
   // Refs
   const flatListRef = useRef<FlatList>(null);
@@ -159,6 +172,102 @@ const TipTubeScreen = () => {
     }, [user?.id])
   );
 
+  // Fetch comments for a video
+  const fetchComments = useCallback(async (videoId: number) => {
+    if (!user?.id) return;
+    try {
+      const commentCountResponse = await ApiService.getCommentOfVideo(videoId, 1, 10);
+      setCommentCount(commentCountResponse.total || 0);
+      
+      const commentsResponse = await ApiService.getCommentsOfVideos(user.id, videoId);
+      setComments(commentsResponse.data || []);
+    } catch (error) {
+      console.error('[TipTubeScreen] Error fetching comments:', error);
+    }
+  }, [user?.id]);
+
+  // Toggle comments section
+  const toggleComments = useCallback((videoId: number) => {
+    setShowComments(!showComments);
+    if (!showComments && videoId) {
+      fetchComments(videoId);
+    }
+  }, [showComments, fetchComments]);
+
+  // Handle liking a video
+  const handleLikeVideo = useCallback(async (video: Video) => {
+    if (!user?.id) {
+      Alert.alert('Error', 'You must be logged in to like videos.');
+      return;
+    }
+    const isLiked = likedVideos.has(video.id);
+    try {
+      await ApiService.saveVideoLike(video.id, user.id, isLiked ? 0 : 1, Number(video.channelId));
+      setLikedVideos(prev => {
+        const newSet = new Set(prev);
+        if (isLiked) {
+          newSet.delete(video.id);
+        } else {
+          newSet.add(video.id);
+        }
+        return newSet;
+      });
+    } catch (error) {
+      console.error('[TipTubeScreen] Error liking video:', error);
+      Alert.alert('Error', 'Failed to like the video. Please try again.');
+    }
+  }, [user?.id, likedVideos]);
+
+  // Handle adding a comment
+  const handleAddComment = useCallback(async (videoId: number) => {
+    if (!user?.id || !newComment.trim()) {
+      Alert.alert('Error', 'You must be logged in and enter a comment to post.');
+      return;
+    }
+    try {
+      await ApiService.saveVideoComment(videoId, user.id, newComment);
+      setNewComment('');
+      fetchComments(videoId);
+    } catch (error) {
+      console.error('[TipTubeScreen] Error adding comment:', error);
+      Alert.alert('Error', 'Failed to post comment. Please try again.');
+    }
+  }, [user?.id, newComment, fetchComments]);
+
+  // Handle liking a comment
+  const handleLikeComment = useCallback(async (commentId: number) => {
+    if (!user?.id) {
+      Alert.alert('Error', 'You must be logged in to like comments.');
+      return;
+    }
+    try {
+      await ApiService.saveVideoCommentLike(commentId, user.id);
+    } catch (error) {
+      console.error('[TipTubeScreen] Error liking comment:', error);
+      Alert.alert('Error', 'Failed to like the comment. Please try again.');
+    }
+  }, [user?.id]);
+
+  // Function to calculate relative time
+  const calculateRelativeTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSeconds = Math.floor(diffMs / 1000);
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    const diffMonths = Math.floor(diffDays / 30);
+    const diffYears = Math.floor(diffDays / 365);
+
+    if (diffSeconds < 60) return `${diffSeconds}s ago`;
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 30) return `${diffDays}d ago`;
+    if (diffMonths < 12) return `${diffMonths}mo ago`;
+    return `${diffYears}y ago`;
+  };
+
   // Transform videos data for compatibility and proper typing
   const videos = useMemo(() => {
     const allVideos = videosData?.pages?.flatMap(page => page?.data || []) || [];
@@ -177,12 +286,14 @@ const TipTubeScreen = () => {
       videoUrl: apiVideo.video_link || apiVideo.videoUrl || '',
       duration: parseInt(apiVideo.play_duration || apiVideo.duration || "0", 10),
       views: apiVideo.total_views || 0,
-      posted: apiVideo.createddate || "Recently",
+      posted: apiVideo.createddate ? calculateRelativeTime(apiVideo.createddate) : "Recently",
       avatar: apiVideo.channel_profile || getFallbackAvatarUrl(apiVideo.createdby || apiVideo.id),
       creatorName: apiVideo.channelName || apiVideo.channel_name || "Unknown Creator",
       isVerified: false,
       channelId: apiVideo.video_channel || apiVideo.channelId || apiVideo.createdby || 0,
-      price: apiVideo.price ? parseFloat(apiVideo.price) : undefined,
+      price: apiVideo.promotional_price ? parseFloat(apiVideo.promotional_price) : 0,
+      isPaidPromotional: apiVideo.is_paid_promotional || 0,
+      contentCreatorPlanId: apiVideo.content_creator_plan_id || 0
     }));
     
     console.log('[TipTubeScreen] Transformed videos:', {
@@ -252,7 +363,7 @@ const TipTubeScreen = () => {
   }, [userChannelId, navigation]);
 
   // Video player handler
-  const openPlayer = useCallback((video: Video, layout: CardLayout) => {
+  const openPlayerHandler = useCallback((video: Video, layout: CardLayout) => {
     console.log('[TipTubeScreen] Opening player for video:', video.id);
     
     setSelectedVideoId(video.id);
@@ -352,7 +463,7 @@ const TipTubeScreen = () => {
     <>
       <AnimatedVideoCard
         video={item}
-        onPress={(layout) => openPlayer(item, layout)}
+        onPress={(layout) => openPlayerHandler(item, layout)}
         onPressIn={() => setPreviewingVideoId(item.id)}
         onPressOut={() => setPreviewingVideoId(null)}
         isSelected={selectedVideoId === item.id}
@@ -362,6 +473,10 @@ const TipTubeScreen = () => {
         onNavigateToChannel={() => navigation.navigate('Channel', { channelId: item.channelId })}
         index={index}
         isYouTubeLayout={true} // Pass flag for YouTube-like layout
+        onToggleComments={() => {
+          setSelectedVideoId(item.id);
+          toggleComments(item.id);
+        }}
       />
       {/* Banner ad every 3 videos */}
       {(index + 1) % 3 === 0 && (
@@ -370,7 +485,118 @@ const TipTubeScreen = () => {
         </View>
       )}
     </>
-  ), [openPlayer, selectedVideoId, previewingVideoId, styles, colors, navigation]);
+  ), [openPlayerHandler, selectedVideoId, previewingVideoId, styles, colors, navigation, toggleComments]);
+
+  // Handle video press with view API calls
+  const handleVideoPress = useCallback(async (video: Video) => {
+    console.log('[TipTubeScreen] Video pressed:', { id: video.id, title: video.title, isPaid: video.isPaidPromotional });
+    
+    // Set the selected video ID for preview or playback
+    setSelectedVideoId(video.id);
+    
+    try {
+      // Call the appropriate API based on whether the video is paid or not
+      if (video.isPaidPromotional && video.contentCreatorPlanId > 0) {
+        console.log('[TipTubeScreen] Checking wallet balance for paid video:', { price: video.price });
+        
+        // Check wallet balance before playing paid video
+        const balanceResponse = await ApiService.getWalletBalance(user?.id || 0);
+        const balance = Number(balanceResponse.availableBalance || 0);
+        console.log('[TipTubeScreen] Wallet balance check:', { balance, price: video.price });
+        
+        if (balance < (video.price || 0)) {
+          Alert.alert(
+            'Insufficient Balance',
+            `This video costs ₹${(video.price || 0).toFixed(2)}. Your wallet balance is insufficient. Would you like to add funds?`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Add Funds', onPress: () => navigation.navigate('AddFunds') }
+            ]
+          );
+          return;
+        }
+        
+        Alert.alert(
+          'Confirm Purchase',
+          `This is a paid video. It costs ₹${(video.price || 0).toFixed(2)}. Do you want to proceed?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Yes', onPress: async () => {
+              await ApiService.viewPaidVideo(video.id);
+              console.log('[TipTubeScreen] Paid video view API called:', { reelId: video.id });
+              setOpenPlayer(true);
+            } }
+          ]
+        );
+      } else {
+        // For normal videos, call the normal view API and play immediately
+        await ApiService.viewNormalVideo(video.id);
+        console.log('[TipTubeScreen] Normal video view API called:', { reelId: video.id });
+        setOpenPlayer(true);
+      }
+    } catch (error) {
+      console.error('[TipTubeScreen] Error handling video press:', error);
+      Alert.alert('Error', 'There was an issue accessing this video. Please try again later.');
+    }
+  }, [user?.id, navigation]);
+
+  // Prevent autoplay for paid videos
+  useEffect(() => {
+    if (openPlayer && selectedVideoId) {
+      const selectedVideo = videos.find(v => v.id === selectedVideoId);
+      if (selectedVideo && selectedVideo.isPaidPromotional && selectedVideo.contentCreatorPlanId > 0) {
+        // Do not autoplay paid videos, wait for user confirmation
+        console.log('[TipTubeScreen] Paid video selected, preventing autoplay until confirmation');
+        setOpenPlayer(false);
+      }
+    }
+  }, [selectedVideoId, openPlayer, videos]);
+
+  // Render comments section
+  const renderCommentsSection = useCallback(() => {
+    if (!showComments || !selectedVideoId) return null;
+    return (
+      <View style={styles.commentsContainer}>
+        <Text style={styles.commentsTitle}>Comments ({commentCount})</Text>
+        {comments.length > 0 ? (
+          comments.map(comment => (
+            <View key={comment.id} style={styles.commentItem}>
+              <Image 
+                source={{ uri: comment.commentator_image || 'https://via.placeholder.com/40?text=User' }} 
+                style={styles.commentatorImage} 
+              />
+              <View style={styles.commentContent}>
+                <Text style={styles.commentatorName}>{comment.commentator_name || 'Anonymous'}</Text>
+                <Text style={styles.commentText}>{comment.comment}</Text>
+                <View style={styles.commentActions}>
+                  <TouchableOpacity onPress={() => handleLikeComment(comment.id)}>
+                    <Text style={styles.commentActionText}>Like ({comment.total_comment_like || 0})</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          ))
+        ) : (
+          <Text style={styles.noCommentsText}>No comments yet.</Text>
+        )}
+        <View style={styles.commentInputContainer}>
+          <TextInput
+            style={styles.commentInput}
+            value={newComment}
+            onChangeText={setNewComment}
+            placeholder="Add a comment..."
+          />
+          <TouchableOpacity onPress={() => {
+            if (selectedVideoId !== null) {
+              handleAddComment(Number(selectedVideoId));
+            }
+          }} style={styles.commentSendButton}>
+            <Text style={styles.commentSendButtonText}>Post</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }, [showComments, selectedVideoId, comments, commentCount, newComment, handleAddComment, handleLikeComment]);
 
   return (
     <ScreenTransition animationType="slide" skipAnimation={false}>
@@ -453,6 +679,7 @@ const TipTubeScreen = () => {
             showsVerticalScrollIndicator={false}
           />
         )}
+        {renderCommentsSection()}
       </View>
     </ScreenTransition>
   );
@@ -619,6 +846,94 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  commentsContainer: {
+    position: 'absolute',
+    bottom: 60,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+    padding: 15,
+    maxHeight: 300,
+  },
+  commentsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  commentItem: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
+  commentatorImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  commentContent: {
+    flex: 1,
+  },
+  commentatorName: {
+    fontWeight: 'bold',
+  },
+  commentText: {
+    marginTop: 2,
+  },
+  commentActions: {
+    flexDirection: 'row',
+    marginTop: 5,
+  },
+  commentActionText: {
+    marginRight: 15,
+    color: '#888',
+  },
+  noCommentsText: {
+    textAlign: 'center',
+    color: '#888',
+    padding: 20,
+  },
+  commentInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    paddingTop: 10,
+  },
+  commentInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 20,
+    padding: 10,
+    marginRight: 10,
+  },
+  commentSendButton: {
+    padding: 10,
+    backgroundColor: '#007AFF',
+    borderRadius: 20,
+  },
+  commentSendButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  actionBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  actionButton: {
+    alignItems: 'center',
+  },
+  actionButtonText: {
+    marginTop: 5,
+    fontSize: 12,
   },
 });
 

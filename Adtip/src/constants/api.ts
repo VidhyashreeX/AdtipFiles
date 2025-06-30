@@ -3,8 +3,11 @@
  */
 
 // Base URL for API calls
-export const API_BASE_URL = 'https://api.adtip.in';   // Your production URL   // local URL : http://localhost:7082  //PROD
+//export const API_BASE_URL = 'https://api.adtip.in';   // Your production URL   // local URL : http://localhost:7082  //PROD
 //export const API_BASE_URL = 'http://localhost:7082';   // Your production URL   // local URL : http://localhost:7082  //PROD
+export const API_BASE_URL = 'http://192.168.0.100:7082';   // Your production URL   // local URL : http://localhost:7082  //PROD
+
+
 
 
 // Firebase Cloud Functions URL for call notifications

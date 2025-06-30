@@ -18,6 +18,7 @@ interface VideoCardProps {
   price?: number;
   videoUrl?: string;
   onPress: () => void;
+  showPaidBadge?: boolean;
 }
 
 const VideoCard: React.FC<VideoCardProps> = ({
@@ -32,6 +33,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
   price,
   videoUrl,
   onPress,
+  showPaidBadge = false,
 }) => {
   const {colors} = useTheme();
   const [isHovering, setIsHovering] = useState(false);
@@ -91,7 +93,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
             <Text style={styles.premiumText}>Premium</Text>
           </View>
         )}
-        {price && price > 0 && (
+        {(showPaidBadge || (price && price > 0)) && (
           <View
             style={[
               styles.priceBadge,
@@ -104,7 +106,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
               color={colors.white}
               style={styles.badgeIcon}
             />
-            <Text style={styles.priceText}>${price.toFixed(2)}</Text>
+            <Text style={styles.priceText}>₹{(price || 0).toFixed(2)}</Text>
           </View>
         )}
       </View>

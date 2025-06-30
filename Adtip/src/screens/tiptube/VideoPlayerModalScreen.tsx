@@ -10,6 +10,8 @@ import {
   StatusBar,
   Platform,
   Dimensions,
+  Image,
+  TextInput,
 } from 'react-native';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import Video, { VideoRef } from 'react-native-video';
@@ -29,6 +31,8 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 import { useTheme } from '../../contexts/ThemeContext';
 import MemoizedRelatedVideoCard from '../../components/tiptube/MemoizedRelatedVideoCard';
 import { createSecureVideoSource } from '../../utils/mediaUtils';
+import ApiService from '../../services/ApiService';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Get screen dimensions
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -59,17 +63,33 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   return newArray;
 };
 
+// Helper to get a fallback avatar
+const getCommentatorAvatar = (img: any) => {
+  if (img && typeof img === 'string' && img.trim() !== '') {
+    return { uri: img };
+  }
+  // Use a nice random avatar
+  return { uri: 'https://ui-avatars.com/api/?name=User&background=random' };
+};
+
 // VideoPlayerModalScreen Component
 const VideoPlayerModalScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { video, cardLayout, upNextVideos } = route.params;
   const { isDarkMode, colors } = useTheme();
+  const { user } = useAuth ? useAuth() : { user: null };
   
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [videoSource, setVideoSource] = useState<any>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
   const videoPlayerRef = useRef<VideoRef | null>(null);
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentCount, setCommentCount] = useState<number>(0);
+  const [newComment, setNewComment] = useState<string>('');
+  const [isLiking, setIsLiking] = useState(false);
+  const [likedComments, setLikedComments] = useState<Set<number>>(new Set());
+  const [isVideoLiked, setIsVideoLiked] = useState(false);
 
   // Load secure video source
   useEffect(() => {
@@ -193,6 +213,80 @@ const VideoPlayerModalScreen: React.FC = () => {
 
   const styles = useMemo(() => createModalStyles(colors, isDarkMode), [colors, isDarkMode]);
 
+  // Fetch comments and count
+  const fetchComments = useCallback(async () => {
+    if (!video?.id) return;
+    try {
+      const commentCountResponse = await ApiService.getCommentOfVideo(Number(video.id), 1, 10);
+      const commentsResponse = await ApiService.getCommentsOfVideos(Number(user?.id), Number(video.id));
+      console.log('[VideoPlayerModal] commentCountResponse:', commentCountResponse);
+      console.log('[VideoPlayerModal] commentsResponse:', commentsResponse);
+
+      const count = Array.isArray(commentCountResponse) ? commentCountResponse.length : 0;
+      const comments = Array.isArray(commentsResponse) ? commentsResponse : [];
+
+      setCommentCount(count);
+      setComments(comments);
+
+      console.log('[VideoPlayerModal] Comments fetched:', {
+        count,
+        comments
+      });
+    } catch (error) {
+      console.error('[VideoPlayerModal] Error fetching comments:', error);
+    }
+  }, [video?.id, user?.id]);
+
+  useEffect(() => {
+    fetchComments();
+  }, [fetchComments]);
+
+  // Handle adding a comment
+  const handleAddComment = useCallback(async () => {
+    if (!user?.id || !newComment.trim()) return;
+    try {
+      await ApiService.saveVideoComment(Number(video.id), Number(user?.id), newComment);
+      setNewComment('');
+      fetchComments();
+    } catch (error) {
+      console.error('[VideoPlayerModal] Error adding comment:', error);
+    }
+  }, [user?.id, newComment, video?.id, fetchComments]);
+
+  // Handle liking a comment
+  const handleLikeComment = useCallback(async (commentId: number) => {
+    if (!user?.id) return;
+    try {
+      setIsLiking(true);
+      await ApiService.saveVideoCommentLike(commentId, Number(user?.id));
+      setLikedComments(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(commentId)) {
+          newSet.delete(commentId);
+        } else {
+          newSet.add(commentId);
+        }
+        return newSet;
+      });
+      fetchComments();
+    } catch (error) {
+      console.error('[VideoPlayerModal] Error liking comment:', error);
+    } finally {
+      setIsLiking(false);
+    }
+  }, [user?.id, fetchComments]);
+
+  // Handle liking the video
+  const handleLikeVideo = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      setIsVideoLiked((prev) => !prev);
+      await ApiService.saveVideoLike(Number(video.id), Number(user?.id), isVideoLiked ? 0 : 1, Number(video.channelId));
+    } catch (error) {
+      console.error('[VideoPlayerModal] Error liking video:', error);
+    }
+  }, [user?.id, video?.id, video?.channelId, isVideoLiked]);
+
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: 'transparent' }}>
       <StatusBar backgroundColor="transparent" barStyle="light-content" translucent />
@@ -293,9 +387,10 @@ const VideoPlayerModalScreen: React.FC = () => {
         
         {/* Content Section */}
         <View style={styles.contentSection}>
-          <ScrollView 
-            style={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ flexGrow: 1 }}
+            showsVerticalScrollIndicator={true}
             bounces={true}
             scrollEventThrottle={16}
           >
@@ -310,35 +405,89 @@ const VideoPlayerModalScreen: React.FC = () => {
               </View>
             </View>
 
+            {/* Comment Section - moved above Up next */}
+            <View style={[styles.commentCard, { minHeight: 120 }]}> 
+              <Text style={styles.commentsTitle}>
+                Comments ({commentCount})
+              </Text>
+              {/* Like Video Button */}
+              <TouchableOpacity onPress={handleLikeVideo} style={styles.likeVideoButton}>
+                <Text style={[styles.likeVideoButtonText, isVideoLiked ? styles.liked : styles.notLiked]}>
+                  {isVideoLiked ? '♥ Liked' : '♡ Like this video'}
+                </Text>
+              </TouchableOpacity>
+              {/* Comments List */}
+              {Array.isArray(comments) && comments.length > 0 ? (
+                comments.map((comment, idx) => (
+                  <View key={comment.id ? String(comment.id) : `comment-${idx}`} style={styles.commentItemRow}>
+                    <Image
+                      source={getCommentatorAvatar(comment.commentator_image)}
+                      style={styles.commentatorImage}
+                    />
+                    <View style={styles.commentContent}>
+                      <Text style={styles.commentatorName}>{comment.commentator_name || 'Anonymous'}</Text>
+                      <Text style={styles.commentText}>{comment.comment}</Text>
+                      <View style={styles.commentActions}>
+                        <TouchableOpacity onPress={() => handleLikeComment(comment.id)} disabled={isLiking}>
+                          <Text style={[styles.commentLikeText, likedComments.has(comment.id) ? styles.liked : styles.notLiked]}>
+                            {likedComments.has(comment.id) ? '♥' : '♡'} Like ({comment.total_comment_like || 0})
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.noCommentsText}>No comments yet.</Text>
+              )}
+              {/* Add Comment Input */}
+              <View style={styles.commentInputRow}>
+                <TextInput
+                  style={styles.commentInput}
+                  value={newComment}
+                  onChangeText={setNewComment}
+                  placeholder="Add a comment..."
+                  placeholderTextColor="#888"
+                />
+                <TouchableOpacity onPress={handleAddComment} style={styles.commentSendButton}>
+                  <Text style={styles.commentSendButtonText}>Post</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Up next section - now below comments */}
             <View style={styles.upNextSection}>
               <Text style={styles.upNextTitle}>Up next</Text>
-              
-              <ScrollView
-                showsVerticalScrollIndicator={true}
-                nestedScrollEnabled={true}
-                style={styles.upNextScrollView}
-                contentContainerStyle={styles.upNextScrollContent}
-                scrollEventThrottle={16}
-                bounces={true}
-              >
-                {upNextVideos.slice(0, 15).map((item: Video, index: number) => (
-                  <View
-                    key={`upnext-${item.id}`}
-                    style={styles.upNextVideoItem}
-                  >
-                    <MemoizedRelatedVideoCard 
-                      item={item} 
-                      onPress={() => {
-                        navigation.replace('VideoPlayerModal', {
-                          video: item,
-                          cardLayout: null,
-                          upNextVideos: shuffleArray(upNextVideos.filter((v: Video) => v.id !== video.id))
-                        });
-                      }} 
-                    />
-                  </View>
-                ))}
-              </ScrollView>
+              {upNextVideos && upNextVideos.length > 0 ? (
+                <ScrollView
+                  showsVerticalScrollIndicator={true}
+                  nestedScrollEnabled={true}
+                  style={styles.upNextScrollView}
+                  contentContainerStyle={styles.upNextScrollContent}
+                  scrollEventThrottle={16}
+                  bounces={true}
+                >
+                  {upNextVideos.slice(0, 15).map((item: Video, index: number) => (
+                    <View
+                      key={`upnext-${item.id}`}
+                      style={styles.upNextVideoItem}
+                    >
+                      <MemoizedRelatedVideoCard 
+                        item={item} 
+                        onPress={() => {
+                          navigation.replace('VideoPlayerModal', {
+                            video: item,
+                            cardLayout: null,
+                            upNextVideos: shuffleArray(upNextVideos.filter((v: Video) => v.id !== video.id))
+                          });
+                        }} 
+                      />
+                    </View>
+                  ))}
+                </ScrollView>
+              ) : (
+                <Text style={{ color: '#888', textAlign: 'center', marginVertical: 16 }}>No up next videos.</Text>
+              )}
             </View>
           </ScrollView>
         </View>
@@ -432,6 +581,100 @@ const createModalStyles = (colors: any, isDarkMode: boolean) => StyleSheet.creat
   },
   upNextVideoItem: {
     marginBottom: 12,
+  },
+  commentCard: {
+    backgroundColor: colors.cardSecondary,
+    borderRadius: 12,
+    marginHorizontal: 12,
+    marginTop: 16,
+    marginBottom: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  commentsTitle: {
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginBottom: 8,
+    color: colors.text.primary,
+  },
+  likeVideoButton: {
+    marginBottom: 12,
+    alignSelf: 'flex-start',
+  },
+  likeVideoButtonText: {
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  liked: {
+    color: '#e53935',
+  },
+  notLiked: {
+    color: colors.text.secondary,
+  },
+  commentItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  commentatorImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 10,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  commentContent: {
+    flex: 1,
+  },
+  commentatorName: {
+    fontWeight: 'bold',
+    color: colors.text.primary,
+  },
+  commentText: {
+    color: colors.text.primary,
+  },
+  commentActions: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+  commentLikeText: {
+    fontWeight: 'bold',
+    marginRight: 10,
+  },
+  noCommentsText: {
+    color: colors.text.secondary,
+    textAlign: 'center',
+    marginVertical: 16,
+  },
+  commentInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  commentInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 20,
+    padding: 10,
+    marginRight: 10,
+    backgroundColor: colors.background,
+    color: colors.text.primary,
+  },
+  commentSendButton: {
+    padding: 10,
+    backgroundColor: colors.primary,
+    borderRadius: 20,
+  },
+  commentSendButtonText: {
+    color: colors.white,
+    fontWeight: 'bold',
   },
 });
 

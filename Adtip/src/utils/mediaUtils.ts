@@ -42,21 +42,76 @@ export const getMediaHeaders = async (): Promise<Record<string, string>> => {
 };
 
 /**
- * Creates a secure video source object for react-native-video
+ * Enhanced video URL validation and correction
+ */
+export const validateAndFixVideoUrl = async (videoUrl?: string | null): Promise<string | null> => {
+  if (!videoUrl || videoUrl === 'null' || videoUrl === 'undefined') {
+    console.warn('[MediaUtils] Invalid video URL provided:', videoUrl);
+    return null;
+  }
+
+  // Clean the URL
+  let cleanUrl = videoUrl.trim();
+  
+  // Check if URL contains common video file extensions
+  const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v'];
+  const hasVideoExtension = videoExtensions.some(ext => cleanUrl.toLowerCase().includes(ext));
+  
+  if (!hasVideoExtension) {
+    console.warn('[MediaUtils] URL does not appear to be a video file:', cleanUrl);
+  }
+
+  // If it's already a full URL, validate it
+  if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+    try {
+      const url = new URL(cleanUrl);
+      console.log('[MediaUtils] Validated external video URL:', url.href);
+      return url.href;
+    } catch (error) {
+      console.error('[MediaUtils] Invalid URL format:', cleanUrl, error);
+      return null;
+    }
+  }
+
+  // If it's a relative URL, construct the full URL
+  try {
+    const fullUrl = `${API_BASE_URL}${cleanUrl.startsWith('/') ? '' : '/'}${cleanUrl}`;
+    const url = new URL(fullUrl);
+    console.log('[MediaUtils] Constructed video URL:', url.href);
+    return url.href;
+  } catch (error) {
+    console.error('[MediaUtils] Failed to construct valid URL:', cleanUrl, error);
+    return null;
+  }
+};
+
+/**
+ * Creates a secure video source object for react-native-video with enhanced validation
  */
 export const createSecureVideoSource = async (videoUrl?: string | null) => {
-  const secureUrl = await getSecureMediaUrl(videoUrl);
+  console.log('[MediaUtils] Creating secure video source for:', videoUrl);
   
-  if (!secureUrl) {
+  const validatedUrl = await validateAndFixVideoUrl(videoUrl);
+  
+  if (!validatedUrl) {
+    console.error('[MediaUtils] Failed to create valid video URL');
     return { uri: '' };
   }
 
   const headers = await getMediaHeaders();
   
-  return {
-    uri: secureUrl,
+  const source = {
+    uri: validatedUrl,
     headers: headers,
   };
+
+  console.log('[MediaUtils] Created video source:', {
+    uri: source.uri,
+    hasAuth: !!headers['Authorization'],
+    hasHeaders: Object.keys(headers).length > 0
+  });
+
+  return source;
 };
 
 /**
@@ -78,7 +133,7 @@ export const createSecureImageSource = async (imageUrl?: string | null) => {
 };
 
 /**
- * Validates if a media URL is accessible
+ * Enhanced media URL validation with actual network check
  */
 export const validateMediaUrl = async (mediaUrl?: string | null): Promise<boolean> => {
   try {
@@ -87,15 +142,68 @@ export const validateMediaUrl = async (mediaUrl?: string | null): Promise<boolea
 
     const headers = await getMediaHeaders();
     
+    console.log('[MediaUtils] Validating media URL:', secureUrl);
+    
     const response = await fetch(secureUrl, {
       method: 'HEAD',
       headers: headers,
     });
 
-    return response.ok;
+    const isValid = response.ok;
+    console.log('[MediaUtils] URL validation result:', {
+      url: secureUrl,
+      status: response.status,
+      statusText: response.statusText,
+      isValid
+    });
+
+    return isValid;
   } catch (error) {
-    console.error('Media URL validation failed:', error);
+    console.error('[MediaUtils] Media URL validation failed:', error);
     return false;
+  }
+};
+
+/**
+ * Test video URL accessibility and log detailed results
+ */
+export const testVideoUrl = async (videoUrl?: string | null): Promise<{
+  isValid: boolean;
+  error?: string;
+  status?: number;
+  finalUrl?: string;
+}> => {
+  try {
+    const validatedUrl = await validateAndFixVideoUrl(videoUrl);
+    
+    if (!validatedUrl) {
+      return {
+        isValid: false,
+        error: 'Invalid or malformed URL'
+      };
+    }
+
+    const headers = await getMediaHeaders();
+    
+    console.log('[MediaUtils] Testing video URL:', validatedUrl);
+    
+    const response = await fetch(validatedUrl, {
+      method: 'HEAD',
+      headers: headers,
+    });
+
+    return {
+      isValid: response.ok,
+      status: response.status,
+      finalUrl: validatedUrl,
+      error: response.ok ? undefined : `HTTP ${response.status}: ${response.statusText}`
+    };
+  } catch (error: any) {
+    console.error('[MediaUtils] Video URL test failed:', error);
+    return {
+      isValid: false,
+      error: error.message || 'Network error'
+    };
   }
 };
 
@@ -111,4 +219,12 @@ export const getFallbackAvatarUrl = (seed?: string | number): string => {
  */
 export const getFallbackThumbnailUrl = (videoId?: string | number): string => {
   return `https://via.placeholder.com/400x225/cccccc/666666?text=Video+${videoId || 'Preview'}`;
+};
+
+/**
+ * Fallback video URL generator (placeholder video)
+ */
+export const getFallbackVideoUrl = (): string => {
+  // Return a test video URL that should work
+  return 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
 };

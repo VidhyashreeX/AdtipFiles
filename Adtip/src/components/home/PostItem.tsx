@@ -14,7 +14,12 @@ import Video from 'react-native-video';
 import Icon from 'react-native-vector-icons/Feather';
 import { Heart, MessageCircle, Share2, UserPlus } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
-import { createSecureImageSource, createSecureVideoSource } from '../../utils/mediaUtils';
+import { 
+  createSecureImageSource, 
+  createSecureVideoSource, 
+  testVideoUrl, 
+  validateAndFixVideoUrl 
+} from '../../utils/mediaUtils';
 
 const {width} = Dimensions.get('window');
 
@@ -27,6 +32,7 @@ interface PostItemProps {
   likes: number;
   comments: number;
   timeAgo: string;
+  created_at?: string;
   media_type?: string;
   isPremium?: boolean;
   onLike: (id: number) => void;
@@ -41,6 +47,26 @@ interface PostItemProps {
   last_active?: string | null;
 }
 
+// Function to calculate relative time
+const calculateRelativeTime = (dateString: string): string => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  const diffMonths = Math.floor(diffDays / 30);
+  const diffYears = Math.floor(diffDays / 365);
+
+  if (diffSeconds < 60) return `${diffSeconds}s ago`;
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 30) return `${diffDays}d ago`;
+  if (diffMonths < 12) return `${diffMonths}mo ago`;
+  return `${diffYears}y ago`;
+};
+
 const PostItem: React.FC<PostItemProps> = ({
   id,
   username,
@@ -50,6 +76,7 @@ const PostItem: React.FC<PostItemProps> = ({
   likes,
   comments,
   timeAgo,
+  created_at,
   media_type,
   isPremium = false,
   onLike,
@@ -62,7 +89,8 @@ const PostItem: React.FC<PostItemProps> = ({
   userId,
   isVisible = false,
   last_active,
-}) => {  const {colors, isDarkMode} = useTheme();
+}) => {
+  const {colors, isDarkMode} = useTheme();
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [videoLoading, setVideoLoading] = useState(true);
@@ -74,11 +102,13 @@ const PostItem: React.FC<PostItemProps> = ({
   const [secureProfileImage, setSecureProfileImage] = useState<any>(null);
   const [securePostImage, setSecurePostImage] = useState<any>(null);
   const [secureVideoSource, setSecureVideoSource] = useState<any>(null);
+  const [videoUrlTested, setVideoUrlTested] = useState(false);
+  const [originalVideoUrl, setOriginalVideoUrl] = useState<string | null>(null);
 
   // Defensive: Ensure all text props are strings or numbers
   const safeUsername = typeof username === 'string' || typeof username === 'number' ? String(username) : '';
   const safeCaption = typeof caption === 'string' || typeof caption === 'number' ? String(caption) : '';
-  const safeTimeAgo = typeof timeAgo === 'string' || typeof timeAgo === 'number' ? String(timeAgo) : '';
+  const safeTimeAgo = created_at ? calculateRelativeTime(created_at) : (typeof timeAgo === 'string' || typeof timeAgo === 'number' ? String(timeAgo) : '');
   const safeLastActive = typeof last_active === 'string' || typeof last_active === 'number' ? String(last_active) : '';
 
   if (typeof username !== 'string' && typeof username !== 'number') {
@@ -94,7 +124,29 @@ const PostItem: React.FC<PostItemProps> = ({
     console.warn('PostItem: last_active is not a string/number', last_active);
   }
 
-  // Load secure media sources
+  // Enhanced video URL testing and validation
+  const testAndValidateVideoUrl = useCallback(async (url: string | null) => {
+    if (!url || videoUrlTested) return;
+    
+    console.log(`[PostItem ${id}] Testing video URL:`, url);
+    setOriginalVideoUrl(url);
+    
+    const testResult = await testVideoUrl(url);
+    setVideoUrlTested(true);
+    
+    console.log(`[PostItem ${id}] Video URL test result:`, testResult);
+    
+    if (!testResult.isValid) {
+      console.error(`[PostItem ${id}] Video URL failed validation:`, {
+        originalUrl: url,
+        error: testResult.error,
+        status: testResult.status
+      });
+      setVideoError(true);
+    }
+  }, [id, videoUrlTested]);
+
+  // Load secure media sources with enhanced error handling
   useEffect(() => {
     const loadSecureMedia = async () => {
       try {
@@ -107,7 +159,18 @@ const PostItem: React.FC<PostItemProps> = ({
         // Load secure post media
         if (postImage) {
           if (media_type === 'video') {
+            console.log(`[PostItem ${id}] Loading video:`, postImage);
+            
+            // Test the video URL first
+            await testAndValidateVideoUrl(postImage);
+            
+            // Create secure video source
             const secureVideo = await createSecureVideoSource(postImage);
+            console.log(`[PostItem ${id}] Created secure video source:`, {
+              hasUri: !!secureVideo.uri,
+              uri: secureVideo.uri,
+              hasHeaders: !!(secureVideo as any).headers
+            });
             setSecureVideoSource(secureVideo);
           } else {
             const secureImage = await createSecureImageSource(postImage);
@@ -115,97 +178,77 @@ const PostItem: React.FC<PostItemProps> = ({
           }
         }
       } catch (error) {
-        console.error('Failed to load secure media:', error);
+        console.error(`[PostItem ${id}] Failed to load secure media:`, error);
+        if (media_type === 'video') {
+          setVideoError(true);
+        }
       }
     };
 
     loadSecureMedia();
-  }, [profileImage, postImage, media_type]);
+  }, [profileImage, postImage, media_type, id, testAndValidateVideoUrl]);
 
   // Enhanced Video Playback Logic - INSTANT play/pause on visibility change
   useEffect(() => {
     if (media_type === 'video') {
-      if (isVisible) {
-        // INSTANT play when visible (only if not manually paused)
-        if (!wasManuallyPaused) {
-          setIsPlaying(true);
-        }
-        setVideoError(false);
+      if (isVisible && !wasManuallyPaused && !videoError) {
+        setIsPlaying(true);
       } else {
-        // INSTANT pause when out of view
         setIsPlaying(false);
-        // Reset manual pause state when video goes out of view completely
-        setWasManuallyPaused(false);
       }
     }
-  }, [isVisible, media_type, wasManuallyPaused]);
+  }, [isVisible, wasManuallyPaused, media_type, videoError]);
 
-  // Enhanced toggle play/pause with manual state tracking
   const togglePlayPause = useCallback(() => {
-    const newPlayingState = !isPlaying;
-    setIsPlaying(newPlayingState);
-    
-    // Track if user manually paused the video
-    if (!newPlayingState && isVisible) {
-      setWasManuallyPaused(true);
-    } else if (newPlayingState) {
-      setWasManuallyPaused(false);
+    if (media_type === 'video' && !videoError) {
+      setIsPlaying(prev => !prev);
+      setWasManuallyPaused(!isPlaying);
     }
-    
-    setShowControls(true);
-    // Reduced control timeout for better responsiveness
-    setTimeout(() => setShowControls(false), 1500);
-  }, [isPlaying, isVisible]);
+  }, [media_type, videoError, isPlaying]);
 
   const toggleMute = useCallback(() => {
-    setIsMuted(prev => !prev);
-    setShowControls(true);
-    // Reduced control timeout for better responsiveness
-    setTimeout(() => setShowControls(false), 1500);
-  }, []);
-
-  // Optimized video load handlers
-  const handleVideoLoadStart = useCallback(() => {
-    setVideoLoading(true);
-  }, []);
-
-  const handleVideoLoad = useCallback((meta: any) => {
-    setVideoDuration(meta.duration);
-    setVideoLoading(false);
-    // Auto-play immediately after load if visible and not manually paused
-    if (isVisible && !wasManuallyPaused) {
-      setIsPlaying(true);
+    if (media_type === 'video') {
+      setIsMuted(prev => !prev);
     }
-  }, [isVisible, wasManuallyPaused]);
+  }, [media_type]);
+
+  const handleVideoLoadStart = useCallback(() => {
+    console.log(`[PostItem ${id}] Video load started`);
+    setVideoLoading(true);
+  }, [id]);
+
+  const handleVideoLoad = useCallback((data: any) => {
+    console.log(`[PostItem ${id}] Video loaded successfully:`, {
+      duration: data.duration,
+      naturalSize: data.naturalSize
+    });
+    setVideoDuration(data.duration);
+    setVideoLoading(false);
+    setVideoError(false);
+  }, [id]);
 
   const handleVideoProgress = useCallback((progress: any) => {
     setVideoProgress(progress.currentTime);
   }, []);
 
   const handleVideoEnd = useCallback(() => {
+    console.log(`[PostItem ${id}] Video playback ended`);
     setIsPlaying(false);
     setWasManuallyPaused(false);
-  }, []);
+  }, [id]);
 
   const handleVideoError = useCallback((error: any) => {
-    console.error("Video playback error:", error);
+    console.error(`[PostItem ${id}] Video playback error:`, {
+      error: error,
+      originalUrl: originalVideoUrl,
+      secureVideoSource: secureVideoSource
+    });
+    
     setVideoError(true);
     setIsPlaying(false);
     setVideoLoading(false);
     setWasManuallyPaused(false);
-  }, []);
-
-  // Instant error reset when video comes back into view
-  useEffect(() => {
-    if (media_type === 'video' && isVisible && videoError) {
-      setVideoError(false);
-      setVideoLoading(true);
-      // Try to play immediately if visible
-      if (!wasManuallyPaused) {
-        setIsPlaying(true);
-      }
-    }
-  }, [isVisible, media_type, videoError, wasManuallyPaused]);
+  }, [id, originalVideoUrl, secureVideoSource]);
 
   const handleLikePress = () => {
     onLike(id);
@@ -258,6 +301,7 @@ const PostItem: React.FC<PostItemProps> = ({
             <UserPlus size={20} color={colors.primary} />
           </TouchableOpacity>
         </View>
+        
         {/* Media Content (Image or Video) */}
         <TouchableOpacity onPress={handlePostPress} activeOpacity={1}>
           <View style={styles.mediaContainer}>
@@ -298,6 +342,9 @@ const PostItem: React.FC<PostItemProps> = ({
                   {videoLoading && (
                     <View style={styles.videoOverlay}>
                       <ActivityIndicator size="large" color={colors.primary} />
+                      <Text style={[styles.loadingText, {color: colors.text.secondary}]}>
+                        Loading video...
+                      </Text>
                     </View>
                   )}
                   {(showControls || !isPlaying || !isVisible) && !videoLoading && (
@@ -322,25 +369,16 @@ const PostItem: React.FC<PostItemProps> = ({
                 </View>
               </TouchableWithoutFeedback>
             )}
+            
             {media_type === 'video' && videoError && (
               <View style={styles.errorMedia}>
                 <Icon name="alert-triangle" size={50} color={colors.danger || '#FF0000'} />
-                <Text style={[styles.errorText, {color: colors.text.secondary}]}>Video failed to load.</Text>
-                <TouchableOpacity 
-                  onPress={() => {
-                    setVideoError(false); 
-                    setVideoLoading(true);
-                    if (isVisible) {
-                      setIsPlaying(true);
-                      setWasManuallyPaused(false);
-                    }
-                  }} 
-                  style={styles.retryButton}
-                >
-                  <Text style={{color: colors.primary}}>Tap to Retry</Text>
-                </TouchableOpacity>
+                <Text style={[styles.errorText, {color: colors.text.secondary}]}>
+                  No media found
+                </Text>
               </View>
             )}
+            
             {!postImage && (
               <View style={[styles.placeholderMedia, { backgroundColor: colors.surface }]}>
                 <Icon name="image" size={50} color={colors.text.tertiary || '#CCCCCC'} />
@@ -354,6 +392,7 @@ const PostItem: React.FC<PostItemProps> = ({
             )}
           </View>
         </TouchableOpacity>
+        
         {/* Actions (Like, Comment, Share) */}
         <View style={styles.postActions}>
           <View style={styles.leftActions}>
@@ -401,7 +440,7 @@ const PostItem: React.FC<PostItemProps> = ({
   }
 };
 
-// Add new styles for the out-of-view overlay
+// Add new styles for the enhanced error handling
 const styles = StyleSheet.create({
   postContainer: {
     backgroundColor: '#FFFFFF',
@@ -463,6 +502,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
   videoControlOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
@@ -477,7 +521,6 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     padding: 5,
   },
-  // NEW STYLE: Out of view overlay
   outOfViewOverlay: {
     position: 'absolute',
     top: 10,
@@ -500,22 +543,17 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   errorText: {
+    fontSize: 16,
+    fontWeight: '500',
     textAlign: 'center',
     marginTop: 10,
-    fontSize: 14,
-  },
-  retryButton: {
-    marginTop: 15,
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    color: '#FFFFFF',
   },
   placeholderMedia: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F5F5F5',
   },
   placeholderText: {
     marginTop: 8,
@@ -525,14 +563,14 @@ const styles = StyleSheet.create({
   premiumBadge: {
     position: 'absolute',
     top: 10,
-    right: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    left: 10,
+    backgroundColor: 'rgba(255, 215, 0, 0.9)',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 5,
+    borderRadius: 4,
   },
   premiumText: {
-    color: '#FFD700',
+    color: '#000',
     fontSize: 12,
     fontWeight: 'bold',
   },
@@ -541,11 +579,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
+    paddingVertical: 12,
   },
   leftActions: {
     flexDirection: 'row',
+    alignItems: 'center',
   },
   actionButton: {
     marginRight: 16,
@@ -553,33 +591,29 @@ const styles = StyleSheet.create({
   },
   likesCount: {
     fontWeight: '600',
-    paddingHorizontal: 16,
-    paddingVertical: 4,
     fontSize: 14,
-    color: '#1A1A1A',
+    paddingHorizontal: 16,
+    marginBottom: 4,
   },
   caption: {
-    paddingHorizontal: 16,
-    paddingVertical: 4,
     fontSize: 14,
     lineHeight: 18,
-    color: '#1A1A1A',
+    paddingHorizontal: 16,
+    marginBottom: 4,
   },
   captionUsername: {
     fontWeight: '600',
   },
   commentsCount: {
-    paddingHorizontal: 16,
-    paddingVertical: 4,
     fontSize: 14,
-    color: '#666666',
+    paddingHorizontal: 16,
+    marginBottom: 4,
   },
   timeAgo: {
     fontSize: 12,
     paddingHorizontal: 16,
-    paddingBottom: 16,
-    color: '#666666',
+    marginBottom: 8,
   },
 });
 
-export default React.memo(PostItem);
+export default PostItem;

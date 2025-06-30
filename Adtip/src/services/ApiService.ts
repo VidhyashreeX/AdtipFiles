@@ -738,27 +738,14 @@ export default class ApiService {
     config?: AxiosRequestConfig,
   ): Promise<WalletBalanceResponse> {
     try {
-      console.log(`Fetching wallet balance for user ID: ${userId}`);
-      const formattedUserId = String(userId).trim();
-
       const response = await this.get<WalletBalanceResponse>(
-        `${ApiEndpoints.HOME_ENDPOINTS.GET_WALLET_BALANCE}/${formattedUserId}`,
+        `/api/wallet/balance/${userId}`,
         undefined,
         config,
       );
-      console.log('Wallet balance API response:', JSON.stringify(response));
       return response;
     } catch (error) {
-      if (axios.isCancel(error)) {
-        console.log('ApiService.getWalletBalance request canceled');
-        return { status: 0, message: 'Request canceled', availableBalance: '0.00' };
-      }
-      console.error('Error in getWalletBalance:', error);
-      return {
-        status: 0,
-        message: 'Failed to fetch wallet balance',
-        availableBalance: '0.00',
-      };
+      throw this.handleError(error);
     }
   }
 
@@ -1379,44 +1366,81 @@ export default class ApiService {
   // ===== VIDEO/SHORTS INTERACTION APIS =====
 
   /**
-   * Save video like/unlike
+   * Save video like
    */
-  static async saveVideoLike(data: {
-    videoId: number;
-    userId: number;
-    like: number; // 1 for like, 0 for unlike
-    videoCreatorId: number;
-  }): Promise<any> {
-    return this.post('/saveVideoLike', data);
+  static async saveVideoLike(reelId: number, userId: number, like: number, reelCreatorId: number): Promise<any> {
+    const payload = { reelId, userId, like, reelCreatorId };
+    console.log('[ApiService] Saving video like:', payload);
+    try {
+      const response = await this.post('/api/saveVideoLike', payload);
+      console.log('[ApiService] Video like saved:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('[ApiService] Error saving video like:', error);
+      throw error;
+    }
   }
 
   /**
    * Save video comment
    */
-  static async saveVideoComment(data: {
-    comment: string;
-    videoId: number;
-    createdBy: number;
-    parentCommetId?: number | null;
-  }): Promise<any> {
-    return this.post('/savevideocomment', data);
+  static async saveVideoComment(videoId: number, userId: number, comment: string): Promise<any> {
+    const payload = { videoId, userId, comment };
+    console.log('[ApiService] Saving video comment:', payload);
+    try {
+      const response = await this.post('/api/savevideocomment', payload);
+      console.log('[ApiService] Video comment saved:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('[ApiService] Error saving video comment:', error);
+      throw error;
+    }
   }
 
   /**
    * Save video comment like
    */
-  static async saveVideoCommentLike(data: {
-    commentId: number;
-    userId: number;
-  }): Promise<any> {
-    return this.post('/savevideocommentlike', data);
+  static async saveVideoCommentLike(commentId: number, userId: number): Promise<any> {
+    const payload = { commentId, userId };
+    console.log('[ApiService] Saving video comment like:', payload);
+    try {
+      const response = await this.post('/api/savevideocommentlike', payload);
+      console.log('[ApiService] Video comment like saved:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('[ApiService] Error saving video comment like:', error);
+      throw error;
+    }
   }
 
   /**
-   * Get comments of videos
+   * Get total comments count for a video
+   */
+  static async getCommentOfVideo(videoId: number, page: number, limit: number): Promise<any> {
+    console.log('[ApiService] Fetching comment count for video:', { videoId, page, limit });
+    try {
+      const response = await this.get(`/api/getCommentOfVideo/${videoId}/${page}/${limit}`);
+      console.log('[ApiService] Comment count fetched:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('[ApiService] Error fetching comment count:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get comments for a video
    */
   static async getCommentsOfVideos(userId: number, videoId: number): Promise<any> {
-    return this.get(`/getcommentsofvideos/${userId}/${videoId}`);
+    console.log('[ApiService] Fetching comments for video:', { userId, videoId });
+    try {
+      const response = await this.get(`/api/getcommentsofvideos/${userId}/${videoId}`);
+      console.log('[ApiService] Comments fetched:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('[ApiService] Error fetching comments:', error);
+      throw error;
+    }
   }
 
   // ===== FOLLOW/UNFOLLOW APIS =====
@@ -1910,6 +1934,30 @@ export default class ApiService {
       return response;
     } catch (error) {
       console.error('[ApiService] Error creating post:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  static async viewNormalVideo(videoId: number): Promise<any> {
+    try {
+      const response = await this.post(
+        `/api/viewNormalVideo`,
+        { reelId: videoId }
+      );
+      return response;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  static async viewPaidVideo(videoId: number): Promise<any> {
+    try {
+      const response = await this.post(
+        `/api/viewPaidVideo`,
+        { reelId: videoId }
+      );
+      return response;
+    } catch (error) {
       throw this.handleError(error);
     }
   }
