@@ -362,19 +362,39 @@ const TipTubeScreen = () => {
     }
   }, [userChannelId, navigation]);
 
-  // Video player handler
-  const openPlayerHandler = useCallback((video: Video, layout: CardLayout) => {
-    console.log('[TipTubeScreen] Opening player for video:', video.id);
-    
+  // Handle video press with view API calls
+  const handleVideoPress = useCallback(async (video: Video) => {
+    console.log('[TipTubeScreen] Video pressed:', { id: video.id, title: video.title, isPaid: video.isPaidPromotional });
     setSelectedVideoId(video.id);
-    
-    const shuffledVideos = shuffleArray(videos.filter((v: Video) => v.id !== video.id));
-    
-    navigation.navigate('VideoPlayerModal', {
-      video,
-      cardLayout: layout,
-      upNextVideos: shuffledVideos.slice(0, 10)
-    });
+    try {
+      if (video.isPaidPromotional && video.contentCreatorPlanId > 0) {
+        // Paid video: call viewPaidVideo
+        const response = await ApiService.viewPaidVideo(video.id);
+        if (response.status === true) {
+          // Use the video_link from the response if present
+          const videoUrl = response.data?.video_link || video.videoUrl;
+          navigation.navigate('VideoPlayerModal', {
+            video: { ...video, videoUrl },
+            upNextVideos: shuffleArray(videos.filter((v: Video) => v.id !== video.id)).slice(0, 10)
+          });
+        } else {
+          Alert.alert(
+            'Insufficient Balance',
+            'You do not have enough balance to watch this video.'
+          );
+        }
+      } else {
+        // Normal video: call viewNormalVideo and navigate
+        await ApiService.viewNormalVideo(video.id);
+        navigation.navigate('VideoPlayerModal', {
+          video,
+          upNextVideos: shuffleArray(videos.filter((v: Video) => v.id !== video.id)).slice(0, 10)
+        });
+      }
+    } catch (error) {
+      console.error('[TipTubeScreen] Error handling video press:', error);
+      Alert.alert('Error', 'There was an issue accessing this video. Please try again later.');
+    }
   }, [videos, navigation]);
 
   // Render helper functions
@@ -463,7 +483,7 @@ const TipTubeScreen = () => {
     <>
       <AnimatedVideoCard
         video={item}
-        onPress={(layout) => openPlayerHandler(item, layout)}
+        onPress={(layout) => handleVideoPress(item)}
         onPressIn={() => setPreviewingVideoId(item.id)}
         onPressOut={() => setPreviewingVideoId(null)}
         isSelected={selectedVideoId === item.id}
@@ -485,60 +505,7 @@ const TipTubeScreen = () => {
         </View>
       )}
     </>
-  ), [openPlayerHandler, selectedVideoId, previewingVideoId, styles, colors, navigation, toggleComments]);
-
-  // Handle video press with view API calls
-  const handleVideoPress = useCallback(async (video: Video) => {
-    console.log('[TipTubeScreen] Video pressed:', { id: video.id, title: video.title, isPaid: video.isPaidPromotional });
-    
-    // Set the selected video ID for preview or playback
-    setSelectedVideoId(video.id);
-    
-    try {
-      // Call the appropriate API based on whether the video is paid or not
-      if (video.isPaidPromotional && video.contentCreatorPlanId > 0) {
-        console.log('[TipTubeScreen] Checking wallet balance for paid video:', { price: video.price });
-        
-        // Check wallet balance before playing paid video
-        const balanceResponse = await ApiService.getWalletBalance(user?.id || 0);
-        const balance = Number(balanceResponse.availableBalance || 0);
-        console.log('[TipTubeScreen] Wallet balance check:', { balance, price: video.price });
-        
-        if (balance < (video.price || 0)) {
-          Alert.alert(
-            'Insufficient Balance',
-            `This video costs ₹${(video.price || 0).toFixed(2)}. Your wallet balance is insufficient. Would you like to add funds?`,
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Add Funds', onPress: () => navigation.navigate('AddFunds') }
-            ]
-          );
-          return;
-        }
-        
-        Alert.alert(
-          'Confirm Purchase',
-          `This is a paid video. It costs ₹${(video.price || 0).toFixed(2)}. Do you want to proceed?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Yes', onPress: async () => {
-              await ApiService.viewPaidVideo(video.id);
-              console.log('[TipTubeScreen] Paid video view API called:', { reelId: video.id });
-              setOpenPlayer(true);
-            } }
-          ]
-        );
-      } else {
-        // For normal videos, call the normal view API and play immediately
-        await ApiService.viewNormalVideo(video.id);
-        console.log('[TipTubeScreen] Normal video view API called:', { reelId: video.id });
-        setOpenPlayer(true);
-      }
-    } catch (error) {
-      console.error('[TipTubeScreen] Error handling video press:', error);
-      Alert.alert('Error', 'There was an issue accessing this video. Please try again later.');
-    }
-  }, [user?.id, navigation]);
+  ), [handleVideoPress, selectedVideoId, previewingVideoId, styles, colors, navigation, toggleComments]);
 
   // Prevent autoplay for paid videos
   useEffect(() => {
