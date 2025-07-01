@@ -500,14 +500,14 @@ export const useUsers = (filters: {
 };
 
 // Enhanced Videos hook for TipTube
-export const useVideos = (categoryId: number = 0, userId?: number, searchQuery?: string) => {
+export const useVideos = (categoryId: number = 0, userId?: number, searchQuery?: string, showChannelVideos?: boolean) => {
   const netInfo = useNetInfo();
 
   return useInfiniteQuery({
-    queryKey: ['videos', categoryId, userId, searchQuery],
+    queryKey: ['videos', categoryId, userId, searchQuery, showChannelVideos],
     queryFn: async ({ pageParam }) => {
       const page = pageParam as number;
-      const cacheKey = `videos-${categoryId}-${page}-${userId}-${searchQuery || ''}`;
+      const cacheKey = `videos-${categoryId}-${page}-${userId}-${searchQuery || ''}-${showChannelVideos || false}`;
       
       if (!netInfo.isConnected) {
         const cached = await CacheManager.get(cacheKey);
@@ -515,13 +515,21 @@ export const useVideos = (categoryId: number = 0, userId?: number, searchQuery?:
         throw new Error('No internet connection and no cached data');
       }
 
-      const response = await ApiService.getVideos(
-        userId || 0,
-        categoryId,
-        page,
-        searchQuery,
-        undefined // signal will be handled by React Query
-      );
+      // If showChannelVideos is true, we need to get videos from user's channel
+      let response;
+      if (showChannelVideos && userId) {
+        // Get videos from user's channel
+        response = await ApiService.getVideoByChannel(0, userId, userId); // 0 for all video types
+      } else {
+        // Get all videos as before
+        response = await ApiService.getVideos(
+          userId || 0,
+          categoryId,
+          page,
+          searchQuery,
+          undefined // signal will be handled by React Query
+        );
+      }
       
       console.log('[useVideos] API Response:', {
         response: response,

@@ -13,11 +13,14 @@ import {
   TextInput,
   StatusBar,
   SafeAreaView,
+  Switch,
+  Modal,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
+import RazorpayCheckout from 'react-native-razorpay';
 
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
@@ -36,6 +39,7 @@ import {
 } from '../../utils/mediaUtils';
 import BannerAdComponent from '../../googleads/BannerAdComponent';
 import ApiService from '../../services/ApiService';
+import ContentCreatorPlanToggle from '../../components/common/ContentCreatorPlanToggle';
 
 // Get screen dimensions and create constants
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -124,6 +128,16 @@ const TipTubeScreen = () => {
   const [commentCount, setCommentCount] = useState<number>(0);
   const [newComment, setNewComment] = useState<string>('');
   const [likedVideos, setLikedVideos] = useState<Set<number>>(new Set());
+  const [showChannelVideos, setShowChannelVideos] = useState(false);
+  const [showPlanModal, setShowPlanModal] = useState(false);
+
+  // Content Creator Plan State
+  const [creatorPlans, setCreatorPlans] = useState<any[]>([]);
+  const [selectedCreatorPlan, setSelectedCreatorPlan] = useState<any>(null);
+  const [creatorPlanStatus, setCreatorPlanStatus] = useState<any>(null);
+  const [showCreatorPremium, setShowCreatorPremium] = useState(false);
+  const [creatorPlanLoading, setCreatorPlanLoading] = useState(false);
+  const [showCreatorPlanModal, setShowCreatorPlanModal] = useState(false);
 
   // Refs
   const flatListRef = useRef<FlatList>(null);
@@ -138,7 +152,7 @@ const TipTubeScreen = () => {
     refetch: refreshVideos,
     fetchNextPage: loadMoreVideos,
     hasNextPage: hasMoreVideos,
-  } = useVideos(categoryId, user?.id, searchQuery);
+  } = useVideos(categoryId, user?.id, searchQuery, showChannelVideos);
 
   // Prefetch data for better performance
   const { prefetchProfile } = usePrefetchData();
@@ -148,8 +162,8 @@ const TipTubeScreen = () => {
   useFocusEffect(
     useCallback(() => {
       console.log('[TipTubeScreen] Screen focused. Invalidating videos query to trigger refetch.');
-      queryClient.invalidateQueries({ queryKey: ['videos', categoryId, user?.id, searchQuery] });
-    }, [queryClient, categoryId, user?.id, searchQuery])
+      queryClient.invalidateQueries({ queryKey: ['videos', categoryId, user?.id, searchQuery, showChannelVideos] });
+    }, [queryClient, categoryId, user?.id, searchQuery, showChannelVideos])
   );
 
   // Fetch user's channel ID
@@ -565,6 +579,81 @@ const TipTubeScreen = () => {
     );
   }, [showComments, selectedVideoId, comments, commentCount, newComment, handleAddComment, handleLikeComment]);
 
+  // Fetch plans and user plan status
+  useEffect(() => {
+    const fetchPlans = async () => {
+      setCreatorPlanLoading(true);
+      try {
+        const res = await ApiService.get('/content-creator-plans');
+        if (res.status) setCreatorPlans(res.data);
+      } catch (e) {}
+      setCreatorPlanLoading(false);
+    };
+    const fetchStatus = async () => {
+      try {
+        const res = await ApiService.get(`/content-creator/plan-status/${user?.id}`);
+        if (res.status) setCreatorPlanStatus(res.plan);
+        else setCreatorPlanStatus(null);
+      } catch (e) {}
+    };
+    fetchPlans();
+    fetchStatus();
+  }, [user?.id]);
+
+  const handleCreatorPayment = async () => {
+    if (!selectedCreatorPlan) return Alert.alert('Select a plan');
+    setCreatorPlanLoading(true);
+    try {
+      // Fetch Razorpay key from backend
+      const keyRes = await ApiService.getRazorpayDetails();
+      const razorpayKey = keyRes.api_key;
+      const res = await ApiService.post('/content-creator/subscribe', { plan_id: selectedCreatorPlan.id });
+      if (res.status && res.order) {
+        const order = res.order;
+        const options = {
+          description: selectedCreatorPlan.description,
+          image: '',
+          currency: order.currency,
+          key: razorpayKey,
+          amount: order.amount,
+          name: 'Content Creator Plan',
+          order_id: order.id,
+          prefill: {
+            email: user?.emailId || '',
+            contact: '',
+            name: user?.name || '',
+          },
+          theme: { color: '#00C853' },
+        };
+        RazorpayCheckout.open(options)
+          .then(async (paymentData: any) => {
+            await ApiService.post('/content-creator/payment-callback', paymentData);
+            const statusRes = await ApiService.get(`/content-creator/plan-status/${user?.id}`);
+            if (statusRes.status) setCreatorPlanStatus(statusRes.plan);
+            setShowCreatorPlanModal(false);
+            Alert.alert('Success', 'Plan activated!');
+          })
+          .catch((err: any) => {
+            Alert.alert('Payment Failed', err?.description || 'Try again');
+          });
+      } else {
+        Alert.alert('Error', res.message || 'Could not create order');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Payment failed');
+    }
+    setCreatorPlanLoading(false);
+  };
+
+  // Remove modal and plan UI from TipTubeScreen
+  // When toggling to premium, navigate to ContentCreatorSubscriptionScreen
+  const handleTogglePremium = (value: boolean) => {
+    setShowCreatorPremium(value);
+    if (value) {
+      navigation.navigate('ContentCreatorSubscriptionScreen');
+    }
+  };
+
   return (
     <ScreenTransition animationType="slide" skipAnimation={false}>
       <View style={styles.container}>
@@ -577,6 +666,8 @@ const TipTubeScreen = () => {
           onSearchSubmit={handleSearch}
           rightComponent={
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {/* Content Creator Plan Toggle */}
+              <ContentCreatorPlanToggle onPress={() => handleTogglePremium(true)} />
               {/* Analytics Icon */}
               <TouchableOpacity
                 onPress={handleAnalytics}
@@ -585,7 +676,6 @@ const TipTubeScreen = () => {
               >
                 <Icon name="bar-chart-2" size={20} color={colors.text.secondary} />
               </TouchableOpacity>
-              
               {/* Channel Icon */}
               <TouchableOpacity
                 onPress={handleMyChannel}
@@ -594,7 +684,6 @@ const TipTubeScreen = () => {
               >
                 <Icon name="tv" size={20} color={colors.text.secondary} />
               </TouchableOpacity>
-              
               {/* Search Icon */}
               <TouchableOpacity 
                 onPress={() => {/* This will be handled by Header's internal search logic */}} 
@@ -901,6 +990,112 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
   actionButtonText: {
     marginTop: 5,
     fontSize: 12,
+  },
+  channelToggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: colors.cardSecondary,
+    borderRadius: 16,
+  },
+  channelToggleLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text.secondary,
+    marginRight: 6,
+  },
+  channelToggleSwitch: {
+    width: 32,
+    height: 18,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+  },
+  planModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  planModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    width: '92%',
+    maxWidth: 420,
+  },
+  planModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  planModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.primary,
+  },
+  planModalClose: {
+    fontSize: 22,
+    color: colors.text.secondary,
+    padding: 4,
+  },
+  planComparisonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  planCardFree: {
+    flex: 1,
+    backgroundColor: '#f44336',
+    borderRadius: 12,
+    padding: 14,
+    marginRight: 8,
+  },
+  planCardPremium: {
+    flex: 1,
+    backgroundColor: '#009688',
+    borderRadius: 12,
+    padding: 14,
+    marginLeft: 8,
+  },
+  planCardTitleFree: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  planCardTitlePremium: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  planCardItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  planCardIcon: {
+    fontSize: 16,
+    marginRight: 6,
+    color: '#fff',
+  },
+  planCardText: {
+    color: '#fff',
+    fontSize: 14,
+    flex: 1,
+  },
+  planCardComing: {
+    color: '#e0f2f1',
+    fontSize: 13,
+  },
+  planCardHighlight: {
+    color: '#ffd600',
+    fontWeight: 'bold',
   },
 });
 

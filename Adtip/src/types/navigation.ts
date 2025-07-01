@@ -109,6 +109,7 @@ export type MainNavigatorParamList = {
   };
   UserPremiumPlans: undefined;
   SubscriptionScreen: undefined;
+  ContentCreatorSubscriptionScreen: undefined;
   PrivacyPolicy: undefined; // Add this line
 };
 

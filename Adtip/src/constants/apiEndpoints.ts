@@ -15,7 +15,7 @@ export const HOME_ENDPOINTS = {
   GET_WALLET_BALANCE: '/api/getfunds',
   LIST_POSTS: '/api/list-posts',
   CHECK_PREMIUM: '/api/check-premium',
-  GET_AD_PASSBOOK: '/getadpassbook',
+  GET_AD_PASSBOOK: '/api/getadpassbook',
   GET_CHANNEL_BY_USER_ID: '/api/getchannelbyuserid',
   SAVE_USER_POST_LIKE: '/api/save-user-post-like',
 };
@@ -92,14 +92,14 @@ export const EXPLORE_ENDPOINTS = {
 export const ADDITIONAL_ENDPOINTS = {
   // Guest endpoints (no login required)
   LIST_PREMIUM_POSTS: '/api/list-premium-posts',
-  GET_PUBLIC_VIDEOS: '/getpublicvideos', // + '/:categoryId/:offset'
-  GET_PUBLIC_SHOTS: '/getpublicshots',
+  GET_PUBLIC_VIDEOS: '/api/getpublicvideos', // + '/:categoryId/:offset'
+  GET_PUBLIC_SHOTS: '/api/getpublicshots',
   
   // Video interactions
-  SAVE_VIDEO_LIKE: '/saveVideoLike',
-  SAVE_VIDEO_COMMENT: '/savevideocomment',
-  SAVE_VIDEO_COMMENT_LIKE: '/savevideocommentlike',
-  GET_COMMENTS_OF_VIDEOS: '/getcommentsofvideos', // + '/:userId/:videoId'
+  SAVE_VIDEO_LIKE: '/api/saveVideoLike',
+  SAVE_VIDEO_COMMENT: '/api/savevideocomment',
+  SAVE_VIDEO_COMMENT_LIKE: '/api/savevideocommentlike',
+  GET_COMMENTS_OF_VIDEOS: '/api/getcommentsofvideos', // + '/:userId/:videoId'
   
   // Follow/Unfollow
   FOLLOW_USER: '/api/follow-user',
@@ -107,9 +107,9 @@ export const ADDITIONAL_ENDPOINTS = {
   // Channel management
   SAVE_MY_CHANNEL: '/api/savemychannel',
   UPDATE_CHANNEL: '/api/updatechanel',
-  GET_POPULAR_SHORT: '/getpopularshort', // + '/:videoType/:userId'
-  GET_VIDEO_BY_CHANNEL: '/getvideobychannel', // + '/:videoType/:channelId/:userId'
-  GET_FOLLOWED_CHANNELS: '/getlistoffollowedchannelbyuser', // + '/:userId'
+  GET_POPULAR_SHORT: '/api/getpopularshort', // + '/:videoType/:userId'
+  GET_VIDEO_BY_CHANNEL: '/api/getvideobychannel', // + '/:videoType/:channelId/:userId'
+  GET_FOLLOWED_CHANNELS: '/api/getlistoffollowedchannelbyuser', // + '/:userId'
   
   // Premium plans
   USER_PREMIUM_PLANS: '/api/user-premium-plans', // + '/:userId'
@@ -131,14 +131,14 @@ export const ADDITIONAL_ENDPOINTS = {
   
   // Celebration ads
   SAVE_CELEBRATION_ADS: '/api/savecelebrationadds',
-  GET_CELEBRATION_ADS: '/getcelebrationads',
-  SAVE_CELEBRATION_AD_VIEW: '/savecelebrationadview',
+  GET_CELEBRATION_ADS: '/api/getcelebrationads',
+  SAVE_CELEBRATION_AD_VIEW: '/api/savecelebrationadview',
   
   // Others
-  GET_SENT_NOTIFICATIONS: '/getsentnotification', // + '/:userId'
+  GET_SENT_NOTIFICATIONS: '/api/getsentnotification', // + '/:userId'
   UPDATE_USER: '/api/updateuser',
   UPLOAD_POST: '/api/post',
-  UPLOAD_SHOT: '/uploadshot',
+  UPLOAD_SHOT: '/api/uploadshot',
   GENERATE_PRESIGNED_URL: '/api/generatePresignedUrl',
   GET_REFERRAL_DETAILS: '/api/referral/details', // + '/:userId'
 };

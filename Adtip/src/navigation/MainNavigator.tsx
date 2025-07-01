@@ -66,6 +66,8 @@ import UpgradePremiumScreen from '../screens/wallet/UpgradePremiumScreen';
 // Import SubscriptionScreen
 import SubscriptionScreen from '../screens/packages/SubscriptionScreen';
 
+import ContentCreatorSubscriptionScreen from '../screens/packages/ContentCreatorSubscriptionScreen';
+
 // Import ChatScreen
 import ChatScreen from '../screens/chat/ChatScreen';
 
@@ -478,6 +480,7 @@ const MainNavigator = () => {
       {/* Add UpgradePremiumScreen */}
       <Stack.Screen name="UpgradePremiumScreen" component={UpgradePremiumScreen} />
       <Stack.Screen name="SubscriptionScreen" component={SubscriptionScreen} />
+      <Stack.Screen name="ContentCreatorSubscriptionScreen" component={ContentCreatorSubscriptionScreen} />
       <Stack.Screen
         name="PrivacyPolicy"
         component={PrivacyPolicyScreen}

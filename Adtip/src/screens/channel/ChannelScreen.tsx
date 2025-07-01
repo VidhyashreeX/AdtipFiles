@@ -12,6 +12,8 @@ import {
   ScrollView,
   RefreshControl,
   Dimensions,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -19,8 +21,20 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import Header from '../../components/common/Header';
 import ApiService from '../../services/ApiService';
-import { CheckCircle, Play, Calendar, Users, Eye, Bell, BellOff } from 'lucide-react-native';
-import { RootStackParamList } from '../../types/navigation';
+import CloudflareUploadService from '../../services/CloudflareUploadService';
+import { CheckCircle, Play, Calendar, Users, Eye, Bell, BellOff, Edit3, Camera, X } from 'lucide-react-native';
+import { MainNavigatorParamList } from '../../types/navigation';
+import { launchImageLibrary } from 'react-native-image-picker';
+
+// Utility function to shuffle array
+const shuffleArray = <T,>(array: T[]): T[] => {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+};
 
 const { width } = Dimensions.get('window');
 
@@ -49,10 +63,11 @@ interface Video {
   description: string;
   videoType: number; // 0 for TipTube, 1 for TipShorts
   videoLink: string;
+  is_shot: number; // 0 for video, 1 for short
 }
 
 const ChannelScreen: React.FC = () => {
-  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<StackNavigationProp<MainNavigatorParamList>>();
   const route = useRoute();
   const { colors } = useTheme();
   const { user } = useAuth();
@@ -61,18 +76,26 @@ const ChannelScreen: React.FC = () => {
   const [channelInfo, setChannelInfo] = useState<ChannelInfo | null>(null);
   const [videos, setVideos] = useState<Video[]>([]);
   const [shorts, setShorts] = useState<Video[]>([]);
-  const [selectedTab, setSelectedTab] = useState<'videos' | 'shorts' | 'about'>('videos');
+  const [homeContent, setHomeContent] = useState<Video[]>([]);
+  const [selectedTab, setSelectedTab] = useState<'home' | 'videos' | 'about'>('home');
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [videosLoading, setVideosLoading] = useState(false);
   const [shortsLoading, setShortsLoading] = useState(false);
+  const [homeLoading, setHomeLoading] = useState(false);
+  
+  // Edit modal states
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingChannelName, setEditingChannelName] = useState('');
+  const [editingDescription, setEditingDescription] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  // New state for plan modal
+  const [showPlanModal, setShowPlanModal] = useState(false);
 
   // Get channel ID from route params
-  // Note: Despite being called 'channelId', this parameter may contain userId
-  // when navigated from ProfileScreen, since the API expects userId
   const routeChannelId = (route.params as any)?.channelId || (route.params as any)?.userId;
   const isMyChannel = !routeChannelId || String(routeChannelId) === String(user?.id);
-  
-  // For the API call, we use the route parameter (which should contain userId for API compatibility)
   const channelId = isMyChannel ? user?.id : routeChannelId;
 
   const loadChannelData = useCallback(async () => {
@@ -84,8 +107,6 @@ const ChannelScreen: React.FC = () => {
     try {
       if (!refreshing) setLoading(true);
 
-      // Get channel information using userId (the channelId parameter should now contain the userId)
-      // The API expects userId, so we pass the channelId which now contains the userId
       const channelResponse = await ApiService.getChannelByUserId(channelId);
       
       if (channelResponse.status === 200 && channelResponse.data && channelResponse.data.length > 0) {
@@ -120,26 +141,86 @@ const ChannelScreen: React.FC = () => {
     }
   }, [channelId, refreshing]);
 
+  const loadHomeContent = useCallback(async () => {
+    if (!channelId || !user) return;
+
+    try {
+      setHomeLoading(true);
+      
+      // Load both videos and shorts for home tab
+      const [videosResponse, shortsResponse] = await Promise.all([
+        ApiService.getPopularShort(0, Number(channelId)), // Videos
+        ApiService.getPopularShort(1, Number(channelId))  // Shorts
+      ]);
+      
+      const allContent: Video[] = [];
+      
+      // Process videos
+      if (videosResponse.status === 200 && videosResponse.data) {
+        const formattedVideos: Video[] = videosResponse.data.map((video: any) => ({
+          id: String(video.id),
+          name: video.name || 'Untitled Video',
+          videoThumbnail: video.video_Thumbnail || 'https://via.placeholder.com/320x180',
+          playDuration: video.play_duration || '0:00',
+          views: Number(video.total_views || 0),
+          createdDate: video.createddate || new Date().toISOString(),
+          description: video.video_desciption || '',
+          videoType: 0,
+          videoLink: video.video_link || '',
+          is_shot: video.is_shot || 0,
+        }));
+        allContent.push(...formattedVideos);
+      }
+      
+      // Process shorts
+      if (shortsResponse.status === 200 && shortsResponse.data) {
+        const formattedShorts: Video[] = shortsResponse.data.map((video: any) => ({
+          id: String(video.id),
+          name: video.name || 'Untitled Short',
+          videoThumbnail: video.video_Thumbnail || 'https://via.placeholder.com/180x320',
+          playDuration: video.play_duration || '0:00',
+          views: Number(video.total_views || 0),
+          createdDate: video.createddate || new Date().toISOString(),
+          description: video.video_desciption || '',
+          videoType: 1,
+          videoLink: video.video_link || '',
+          is_shot: video.is_shot || 1,
+        }));
+        allContent.push(...formattedShorts);
+      }
+      
+      // Sort by creation date (newest first)
+      allContent.sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime());
+      
+      setHomeContent(allContent);
+    } catch (error: any) {
+      console.error('Error loading home content:', error);
+    } finally {
+      setHomeLoading(false);
+    }
+  }, [channelId, user]);
+
   const loadVideos = useCallback(async () => {
     if (!channelInfo || !user) return;
 
     try {
       setVideosLoading(true);
       
-      // Load TipTube videos (videoType = 0)
+      // Load videos using the new API
       const videosResponse = await ApiService.getVideoByChannel(0, Number(channelInfo.channelId), Number(user.id));
       
       if (videosResponse.status === 200 && videosResponse.data) {
         const formattedVideos: Video[] = videosResponse.data.map((video: any) => ({
           id: String(video.id),
-          name: video.name || video.title || 'Untitled Video',
-          videoThumbnail: video.videoThumbnail || video.thumbnail || 'https://via.placeholder.com/320x180',
-          playDuration: video.playDuration || video.duration || '0:00',
-          views: Number(video.views || 0),
-          createdDate: video.createdDate || video.created_at || new Date().toISOString(),
-          description: video.description || '',
+          name: video.name || 'Untitled Video',
+          videoThumbnail: video.video_Thumbnail || 'https://via.placeholder.com/320x180',
+          playDuration: video.play_duration || '0:00',
+          views: Number(video.total_views || 0),
+          createdDate: video.createddate || new Date().toISOString(),
+          description: video.video_desciption || '',
           videoType: 0,
-          videoLink: video.videoLink || video.video_url || '',
+          videoLink: video.video_link || '',
+          is_shot: video.is_shot || 0,
         }));
         
         setVideos(formattedVideos);
@@ -157,20 +238,21 @@ const ChannelScreen: React.FC = () => {
     try {
       setShortsLoading(true);
       
-      // Load TipShorts videos (videoType = 1)
+      // Load shorts using the new API
       const shortsResponse = await ApiService.getVideoByChannel(1, Number(channelInfo.channelId), Number(user.id));
       
       if (shortsResponse.status === 200 && shortsResponse.data) {
         const formattedShorts: Video[] = shortsResponse.data.map((video: any) => ({
           id: String(video.id),
-          name: video.name || video.title || 'Untitled Short',
-          videoThumbnail: video.videoThumbnail || video.thumbnail || 'https://via.placeholder.com/180x320',
-          playDuration: video.playDuration || video.duration || '0:00',
-          views: Number(video.views || 0),
-          createdDate: video.createdDate || video.created_at || new Date().toISOString(),
-          description: video.description || '',
+          name: video.name || 'Untitled Short',
+          videoThumbnail: video.video_Thumbnail || 'https://via.placeholder.com/180x320',
+          playDuration: video.play_duration || '0:00',
+          views: Number(video.total_views || 0),
+          createdDate: video.createddate || new Date().toISOString(),
+          description: video.video_desciption || '',
           videoType: 1,
-          videoLink: video.videoLink || video.video_url || '',
+          videoLink: video.video_link || '',
+          is_shot: video.is_shot || 1,
         }));
         
         setShorts(formattedShorts);
@@ -188,13 +270,13 @@ const ChannelScreen: React.FC = () => {
 
   useEffect(() => {
     if (channelInfo) {
-      if (selectedTab === 'videos') {
+      if (selectedTab === 'home') {
+        loadHomeContent();
+      } else if (selectedTab === 'videos') {
         loadVideos();
-      } else if (selectedTab === 'shorts') {
-        loadShorts();
       }
     }
-  }, [channelInfo, selectedTab, loadVideos, loadShorts]);
+  }, [channelInfo, selectedTab, loadHomeContent, loadVideos]);
 
   const handleSubscribe = async () => {
     if (!channelInfo || !user) return;
@@ -229,6 +311,167 @@ const ChannelScreen: React.FC = () => {
     }
   };
 
+  const handleEditChannel = () => {
+    if (!channelInfo) return;
+    
+    setEditingChannelName(channelInfo.channelName);
+    setEditingDescription(channelInfo.description);
+    setEditModalVisible(true);
+  };
+
+  const handleUpdateChannel = async () => {
+    if (!channelInfo || !user) return;
+
+    try {
+      setIsUpdating(true);
+
+      const updateData = {
+        id: Number(channelInfo.channelId),
+        channelName: editingChannelName,
+        channelDescription: editingDescription,
+        profileImageURL: channelInfo.profileImage,
+      };
+
+      const response = await ApiService.updateChannel(updateData);
+
+      if (response.status === 200) {
+        setChannelInfo(prev => prev ? {
+          ...prev,
+          channelName: editingChannelName,
+          description: editingDescription,
+        } : null);
+        setEditModalVisible(false);
+        Alert.alert('Success', 'Channel updated successfully');
+      } else {
+        throw new Error(response.message || 'Failed to update channel');
+      }
+    } catch (error: any) {
+      console.error('Error updating channel:', error);
+      Alert.alert('Error', 'Failed to update channel');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleVideoPress = useCallback(async (video: Video) => {
+    console.log('[ChannelScreen] Video pressed:', { id: video.id, name: video.name, is_shot: video.is_shot });
+    
+    try {
+      // For now, treat all videos as normal videos (not paid)
+      // You can add paid video logic here if needed
+      await ApiService.viewNormalVideo(Number(video.id));
+      
+      // Create video object for VideoPlayerModal
+      const videoForPlayer = {
+        id: Number(video.id),
+        title: video.name,
+        thumbnail: video.videoThumbnail,
+        videoUrl: video.videoLink,
+        duration: 0, // You might want to parse this from playDuration
+        views: video.views,
+        posted: video.createdDate,
+        avatar: channelInfo?.profileImage,
+        creatorName: channelInfo?.channelName || 'Unknown',
+        isVerified: channelInfo?.isVerified || false,
+        channelId: channelInfo?.channelId || '',
+        price: 0,
+        isPaidPromotional: 0,
+        contentCreatorPlanId: 0,
+      };
+
+      // Get up next videos from current content
+      const currentContent = selectedTab === 'home' ? homeContent : videos;
+      const upNextVideos = shuffleArray(currentContent.filter((v: Video) => v.id !== video.id))
+        .slice(0, 10)
+        .map((v: Video) => ({
+          id: Number(v.id),
+          title: v.name,
+          thumbnail: v.videoThumbnail,
+          videoUrl: v.videoLink,
+          duration: 0,
+          views: v.views,
+          posted: v.createdDate,
+          avatar: channelInfo?.profileImage,
+          creatorName: channelInfo?.channelName || 'Unknown',
+          isVerified: channelInfo?.isVerified || false,
+          channelId: channelInfo?.channelId || '',
+          price: 0,
+          isPaidPromotional: 0,
+          contentCreatorPlanId: 0,
+        }));
+
+      navigation.navigate('VideoPlayerModal', {
+        video: videoForPlayer,
+        cardLayout: null, // Add cardLayout parameter
+        upNextVideos
+      });
+    } catch (error) {
+      console.error('[ChannelScreen] Error handling video press:', error);
+      Alert.alert('Error', 'There was an issue accessing this video. Please try again later.');
+    }
+  }, [channelInfo, selectedTab, homeContent, videos, navigation]);
+
+  const handleImageUpload = async (type: 'profile' | 'cover') => {
+    if (!channelInfo || !user) return;
+
+    try {
+      setUploadingImage(true);
+
+      const result = await launchImageLibrary({
+        mediaType: 'photo',
+        quality: 0.8,
+        maxWidth: type === 'profile' ? 500 : 1200,
+        maxHeight: type === 'profile' ? 500 : 600,
+      });
+
+      if (result.didCancel || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const selectedImage = result.assets[0];
+      if (!selectedImage.uri) return;
+
+      // Upload to Cloudflare
+      const uploadResult = await CloudflareUploadService.uploadFile(
+        selectedImage.uri,
+        'images',
+        `${type}_${Date.now()}.jpg`,
+        Number(user.id)
+      );
+
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || 'Upload failed');
+      }
+
+      // Update channel with new image URL
+      const updateData = {
+        id: Number(channelInfo.channelId),
+        channelName: channelInfo.channelName,
+        channelDescription: channelInfo.description,
+        profileImageURL: type === 'profile' ? uploadResult.url : channelInfo.profileImage,
+        coverImageURL: type === 'cover' ? uploadResult.url : channelInfo.coverImage,
+      };
+
+      const response = await ApiService.updateChannel(updateData);
+
+      if (response.status === 200) {
+        setChannelInfo(prev => prev ? {
+          ...prev,
+          profileImage: type === 'profile' ? uploadResult.url : prev.profileImage,
+          coverImage: type === 'cover' ? uploadResult.url : prev.coverImage,
+        } : null);
+        Alert.alert('Success', `${type === 'profile' ? 'Profile' : 'Cover'} image updated successfully`);
+      } else {
+        throw new Error(response.message || 'Failed to update image');
+      }
+    } catch (error: any) {
+      console.error('Error uploading image:', error);
+      Alert.alert('Error', 'Failed to upload image');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const formatNumber = (num: number): string => {
     if (num >= 1000000) {
       return `${(num / 1000000).toFixed(1)}M`;
@@ -254,15 +497,7 @@ const ChannelScreen: React.FC = () => {
   const renderVideoItem = ({ item }: { item: Video }) => (
     <TouchableOpacity
       style={styles.videoItem}
-      onPress={() => {
-        if (item.videoType === 0) {
-          // Navigate to TipTube video
-          navigation.navigate('Video', { postId: Number(item.id) });
-        } else {
-          // Navigate to TipShorts
-          navigation.navigate('TipShorts', { shortId: item.id });
-        }
-      }}
+      onPress={() => handleVideoPress(item)}
     >
       <Image source={{ uri: item.videoThumbnail }} style={styles.videoThumbnail} />
       <View style={styles.videoDuration}>
@@ -288,7 +523,7 @@ const ChannelScreen: React.FC = () => {
   const renderShortItem = ({ item }: { item: Video }) => (
     <TouchableOpacity
       style={styles.shortItem}
-      onPress={() => navigation.navigate('TipShorts', { shortId: item.id })}
+      onPress={() => handleVideoPress(item)}
     >
       <Image source={{ uri: item.videoThumbnail }} style={styles.shortThumbnail} />
       <View style={styles.shortDuration}>
@@ -308,6 +543,14 @@ const ChannelScreen: React.FC = () => {
       </Text>
     </TouchableOpacity>
   );
+
+  const renderHomeItem = ({ item }: { item: Video }) => {
+    if (item.is_shot === 1) {
+      return renderShortItem({ item });
+    } else {
+      return renderVideoItem({ item });
+    }
+  };
 
   const renderAboutTab = () => (
     <View style={styles.aboutContainer}>
@@ -402,9 +645,9 @@ const ChannelScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header title={channelInfo.channelName} 
-      showSearch={false}
-      showWallet={false} />
+      <Header
+        title={channelInfo?.channelName || 'Channel'}
+      />
 
       <ScrollView
         style={styles.content}
@@ -413,14 +656,36 @@ const ChannelScreen: React.FC = () => {
         }
       >
         {/* Channel Banner */}
-        {channelInfo.coverImage && (
-          <Image source={{ uri: channelInfo.coverImage }} style={styles.banner} />
-        )}
+        <TouchableOpacity 
+          style={styles.bannerContainer}
+          onPress={() => isMyChannel && handleImageUpload('cover')}
+          disabled={!isMyChannel || uploadingImage}
+        >
+          {channelInfo.coverImage && (
+            <Image source={{ uri: channelInfo.coverImage }} style={styles.banner} />
+          )}
+          {isMyChannel && (
+            <View style={styles.bannerEditOverlay}>
+              <Camera size={20} color="#FFFFFF" />
+            </View>
+          )}
+        </TouchableOpacity>
 
         {/* Channel Header */}
         <View style={[styles.channelHeader, { backgroundColor: colors.background }]}>
           <View style={styles.channelInfoRow}>
-            <Image source={{ uri: channelInfo.profileImage }} style={styles.avatar} />
+            <TouchableOpacity 
+              style={styles.avatarContainer}
+              onPress={() => isMyChannel && handleImageUpload('profile')}
+              disabled={!isMyChannel || uploadingImage}
+            >
+              <Image source={{ uri: channelInfo.profileImage }} style={styles.avatar} />
+              {isMyChannel && (
+                <View style={[styles.avatarEditOverlay, { backgroundColor: colors.primary }]}>
+                  <Camera size={16} color="#FFFFFF" />
+                </View>
+              )}
+            </TouchableOpacity>
             <View style={styles.channelDetails}>
               <View style={styles.channelNameRow}>
                 <Text style={[styles.channelName, { color: colors.text.primary }]}>
@@ -436,43 +701,74 @@ const ChannelScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* Subscribe Button */}
-          <TouchableOpacity
-            style={[
-              styles.subscribeButton,
-              {
-                backgroundColor: channelInfo.isSubscribed ? colors.surface : colors.primary,
-                borderWidth: channelInfo.isSubscribed ? 1 : 0,
-                borderColor: colors.border,
-              }
-            ]}
-            onPress={handleSubscribe}
-            disabled={isSubscribing}
-          >
-            {isSubscribing ? (
-              <ActivityIndicator size="small" color={channelInfo.isSubscribed ? colors.text.primary : '#FFFFFF'} />
-            ) : (
-              <>
-                {channelInfo.isSubscribed ? (
-                  <BellOff size={16} color={colors.text.primary} />
-                ) : (
-                  <Bell size={16} color="#FFFFFF" />
-                )}
-                <Text
-                  style={[
-                    styles.subscribeButtonText,
-                    { color: channelInfo.isSubscribed ? colors.text.primary : '#FFFFFF', marginLeft: 8 }
-                  ]}
-                >
-                  {channelInfo.isSubscribed ? 'Subscribed' : 'Subscribe'}
+          {/* Action Buttons */}
+          <View style={styles.actionButtons}>
+            {isMyChannel ? (
+              <TouchableOpacity
+                style={[styles.editButton, { borderColor: colors.primary }]}
+                onPress={handleEditChannel}
+              >
+                <Edit3 size={16} color={colors.primary} />
+                <Text style={[styles.editButtonText, { color: colors.primary }]}>
+                  Edit
                 </Text>
-              </>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[
+                  styles.subscribeButton,
+                  {
+                    backgroundColor: channelInfo.isSubscribed ? colors.surface : colors.primary,
+                    borderWidth: channelInfo.isSubscribed ? 1 : 0,
+                    borderColor: colors.border,
+                  }
+                ]}
+                onPress={handleSubscribe}
+                disabled={isSubscribing}
+              >
+                {isSubscribing ? (
+                  <ActivityIndicator size="small" color={channelInfo.isSubscribed ? colors.text.primary : '#FFFFFF'} />
+                ) : (
+                  <>
+                    {channelInfo.isSubscribed ? (
+                      <BellOff size={16} color={colors.text.primary} />
+                    ) : (
+                      <Bell size={16} color="#FFFFFF" />
+                    )}
+                    <Text
+                      style={[
+                        styles.subscribeButtonText,
+                        { color: channelInfo.isSubscribed ? colors.text.primary : '#FFFFFF', marginLeft: 8 }
+                      ]}
+                    >
+                      {channelInfo.isSubscribed ? 'Subscribed' : 'Subscribe'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
+          </View>
         </View>
 
         {/* Tab Container */}
         <View style={[styles.tabContainer, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity
+            style={[
+              styles.tab,
+              selectedTab === 'home' && { ...styles.activeTab, borderBottomColor: colors.primary }
+            ]}
+            onPress={() => setSelectedTab('home')}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                { color: selectedTab === 'home' ? colors.primary : colors.text.secondary }
+              ]}
+            >
+              Home
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={[
               styles.tab,
@@ -487,23 +783,6 @@ const ChannelScreen: React.FC = () => {
               ]}
             >
               Videos
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              selectedTab === 'shorts' && { ...styles.activeTab, borderBottomColor: colors.primary }
-            ]}
-            onPress={() => setSelectedTab('shorts')}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                { color: selectedTab === 'shorts' ? colors.primary : colors.text.secondary }
-              ]}
-            >
-              Shorts
             </Text>
           </TouchableOpacity>
 
@@ -526,6 +805,28 @@ const ChannelScreen: React.FC = () => {
         </View>
 
         {/* Tab Content */}
+        {selectedTab === 'home' && (
+          <View style={styles.tabContent}>
+            {homeLoading ? (
+              <ActivityIndicator size="large" color={colors.primary} style={styles.tabLoading} />
+            ) : homeContent.length > 0 ? (
+              <FlatList
+                data={homeContent}
+                renderItem={renderHomeItem}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                showsVerticalScrollIndicator={false}
+              />
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={[styles.emptyStateText, { color: colors.text.secondary }]}>
+                  No content available
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {selectedTab === 'videos' && (
           <View style={styles.tabContent}>
             {videosLoading ? (
@@ -548,32 +849,131 @@ const ChannelScreen: React.FC = () => {
           </View>
         )}
 
-        {selectedTab === 'shorts' && (
-          <View style={styles.tabContent}>
-            {shortsLoading ? (
-              <ActivityIndicator size="large" color={colors.primary} style={styles.tabLoading} />
-            ) : shorts.length > 0 ? (
-              <FlatList
-                data={shorts}
-                renderItem={renderShortItem}
-                keyExtractor={(item) => item.id}
-                numColumns={2}
-                scrollEnabled={false}
-                showsVerticalScrollIndicator={false}
-                columnWrapperStyle={styles.shortsRow}
-              />
-            ) : (
-              <View style={styles.emptyState}>
-                <Text style={[styles.emptyStateText, { color: colors.text.secondary }]}>
-                  No shorts available
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
-
         {selectedTab === 'about' && renderAboutTab()}
       </ScrollView>
+
+      {/* Edit Channel Modal */}
+      <Modal
+        visible={editModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text.primary }]}>
+                Edit Channel
+              </Text>
+              <TouchableOpacity
+                onPress={() => setEditModalVisible(false)}
+                style={styles.closeButton}
+              >
+                <X size={24} color={colors.text.secondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={[styles.inputLabel, { color: colors.text.primary }]}>
+                Channel Name
+              </Text>
+              <TextInput
+                style={[styles.textInput, { 
+                  backgroundColor: colors.surface,
+                  color: colors.text.primary,
+                  borderColor: colors.border
+                }]}
+                value={editingChannelName}
+                onChangeText={setEditingChannelName}
+                placeholder="Enter channel name"
+                placeholderTextColor={colors.text.secondary}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={[styles.inputLabel, { color: colors.text.primary }]}>
+                Description
+              </Text>
+              <TextInput
+                style={[styles.textArea, { 
+                  backgroundColor: colors.surface,
+                  color: colors.text.primary,
+                  borderColor: colors.border
+                }]}
+                value={editingDescription}
+                onChangeText={setEditingDescription}
+                placeholder="Enter channel description"
+                placeholderTextColor={colors.text.secondary}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton, { borderColor: colors.border }]}
+                onPress={() => setEditModalVisible(false)}
+                disabled={isUpdating}
+              >
+                <Text style={[styles.cancelButtonText, { color: colors.text.secondary }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton, { backgroundColor: colors.primary }]}
+                onPress={handleUpdateChannel}
+                disabled={isUpdating}
+              >
+                {isUpdating ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.saveButtonText}>
+                    Save
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Plan Modal */}
+      <Modal
+        visible={showPlanModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPlanModal(false)}
+      >
+        <View style={styles.planModalBackdrop}>
+          <View style={styles.planModalContent}>
+            <View style={styles.planModalHeader}>
+              <Text style={styles.planModalTitle}>Content Creator Plans</Text>
+              <TouchableOpacity onPress={() => setShowPlanModal(false)}>
+                <Text style={styles.planModalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.planComparisonRow}>
+              <View style={styles.planCardFree}>
+                <Text style={styles.planCardTitleFree}>Free</Text>
+                <View style={styles.planCardItem}><Text style={styles.planCardIcon}>✔️</Text><Text style={styles.planCardText}>No earnings for uploads on TipTube & TipShort.</Text></View>
+                <View style={styles.planCardItem}><Text style={styles.planCardIcon}>✔️</Text><Text style={styles.planCardText}>Free Video upload only</Text></View>
+                <View style={styles.planCardItem}><Text style={styles.planCardIcon}>✔️</Text><Text style={styles.planCardText}>Earn 0.06 paisa per ad view</Text></View>
+                <View style={styles.planCardItem}><Text style={styles.planCardIcon}>✔️</Text><Text style={styles.planCardText}>Fan Call to earn 0.60 paisa <Text style={styles.planCardComing}> (coming soon)</Text></Text></View>
+                <View style={styles.planCardItem}><Text style={styles.planCardIcon}>✔️</Text><Text style={styles.planCardText}>Fan Video to earn 1 rs/- <Text style={styles.planCardComing}> (coming soon)</Text></Text></View>
+              </View>
+              <View style={styles.planCardPremium}>
+                <Text style={styles.planCardTitlePremium}>Premium</Text>
+                <View style={styles.planCardItem}><Text style={styles.planCardIcon}>✔️</Text><Text style={styles.planCardText}>Earnings for uploads on TipTube & TipShort</Text></View>
+                <View style={styles.planCardItem}><Text style={styles.planCardIcon}>✔️</Text><Text style={styles.planCardText}>Free & Paid video upload</Text></View>
+                <View style={styles.planCardItem}><Text style={styles.planCardIcon}>✔️</Text><Text style={[styles.planCardText, styles.planCardHighlight]}>To earn upto 10000/- rs per ad view</Text></View>
+                <View style={styles.planCardItem}><Text style={styles.planCardIcon}>✔️</Text><Text style={styles.planCardText}>Fan call to earn 4 rs/- <Text style={styles.planCardComing}> (coming soon)</Text></Text></View>
+                <View style={styles.planCardItem}><Text style={styles.planCardIcon}>✔️</Text><Text style={styles.planCardText}>Fan Video to earn 8 rs/- <Text style={styles.planCardComing}> (coming soon)</Text></Text></View>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -614,10 +1014,24 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: 'bold',
   },
+  bannerContainer: {
+    position: 'relative',
+  },
   banner: {
     width: '100%',
     height: 150,
     resizeMode: 'cover',
+  },
+  bannerEditOverlay: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   channelHeader: {
     padding: 16,
@@ -626,11 +1040,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 16,
   },
+  avatarContainer: {
+    position: 'relative',
+  },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
     marginRight: 16,
+  },
+  avatarEditOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   channelDetails: {
     flex: 1,
@@ -651,6 +1078,23 @@ const styles = StyleSheet.create({
   subscriberCount: {
     fontSize: 14,
     marginTop: 4,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  editButton: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   subscribeButton: {
     flexDirection: 'row',
@@ -828,6 +1272,167 @@ const styles = StyleSheet.create({
   joinedDate: {
     fontSize: 12,
     marginLeft: 8,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '90%',
+    maxWidth: 400,
+    borderRadius: 12,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+  },
+  textArea: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    minHeight: 80,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: 8,
+  },
+  cancelButton: {
+    borderWidth: 1,
+  },
+  saveButton: {
+    marginLeft: 8,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  planModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  planModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    width: '92%',
+    maxWidth: 420,
+  },
+  planModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  planModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#009688',
+  },
+  planModalClose: {
+    fontSize: 22,
+    color: '#333',
+    padding: 4,
+  },
+  planComparisonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  planCardFree: {
+    flex: 1,
+    backgroundColor: '#f44336',
+    borderRadius: 12,
+    padding: 14,
+    marginRight: 8,
+  },
+  planCardPremium: {
+    flex: 1,
+    backgroundColor: '#009688',
+    borderRadius: 12,
+    padding: 14,
+    marginLeft: 8,
+  },
+  planCardTitleFree: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  planCardTitlePremium: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  planCardItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  planCardIcon: {
+    fontSize: 16,
+    marginRight: 6,
+    color: '#fff',
+  },
+  planCardText: {
+    color: '#fff',
+    fontSize: 14,
+    flex: 1,
+  },
+  planCardComing: {
+    color: '#e0f2f1',
+    fontSize: 13,
+  },
+  planCardHighlight: {
+    color: '#ffd600',
+    fontWeight: 'bold',
   },
 });
 

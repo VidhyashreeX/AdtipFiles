@@ -1353,14 +1353,14 @@ export default class ApiService {
    * Get public videos for TipTube (no login required)
    */
   static async getPublicVideos(categoryId: number = 0, offset: number = 0): Promise<any> {
-    return this.get(`/getpublicvideos/${categoryId}/${offset}`);
+    return this.get(`/api/getpublicvideos/${categoryId}/${offset}`);
   }
 
   /**
    * Get public shots for TipShorts (no login required)
    */
   static async getPublicShots(): Promise<any> {
-    return this.get('/getpublicshots');
+    return this.get('/api/getpublicshots');
   }
 
   // ===== VIDEO/SHORTS INTERACTION APIS =====
@@ -1519,7 +1519,7 @@ export default class ApiService {
     play_duration: string;
     video_Thumbnail: string;
   }): Promise<any> {
-    return this.post('/uploadshot', data);
+    return this.post('/api/uploadshot', data);
   }
 
   /**
@@ -1561,21 +1561,21 @@ export default class ApiService {
    * Get popular shorts/videos for channel home
    */
   static async getPopularShort(videoType: number, userId: number): Promise<any> {
-    return this.get(`/getpopularshort/${videoType}/${userId}`);
+    return this.get(`/api/getpopularshort/${videoType}/${userId}`);
   }
 
   /**
    * Get videos by channel
    */
   static async getVideoByChannel(videoType: number, channelId: number, userId: number): Promise<any> {
-    return this.get(`/getvideobychannel/${videoType}/${channelId}/${userId}`);
+    return this.get(`/api/getvideobychannel/${videoType}/${channelId}/${userId}`);
   }
 
   /**
    * Get list of followed channels
    */
   static async getListOfFollowedChannelByUser(userId: number): Promise<any> {
-    return this.get(`/getlistoffollowedchannelbyuser/${userId}`);
+    return this.get(`/api/getlistoffollowedchannelbyuser/${userId}`);
   }
 
   // ===== PREMIUM PLAN APIS =====
@@ -1640,6 +1640,11 @@ export default class ApiService {
 
   static async getSubscriptionStatus(userId: number): Promise<any> {
     return this.get(`/api/subscriptions/status/${userId}`);
+  }
+
+  // Content Creator Subscription apis
+  static async getContentSubscriptionPlans(): Promise<any> {
+    return this.get('/api/content-premium-plans');
   }
 
   // ===== RAZORPAY INTEGRATION APIS =====
@@ -1733,7 +1738,7 @@ export default class ApiService {
     targetProfession?: string;
     limit?: number;
   }): Promise<any> {
-    return this.post('/getcelebrationads', data);
+    return this.post('/api/getcelebrationads', data);
   }
 
   /**
@@ -1743,7 +1748,7 @@ export default class ApiService {
     adId: number;
     userId: number;
   }): Promise<any> {
-    return this.post('/savecelebrationadview', data);
+    return this.post('/api/savecelebrationadview', data);
   }
 
   // ===== NOTIFICATIONS & EXPLORE APIS =====
@@ -1752,7 +1757,7 @@ export default class ApiService {
    * Get sent notifications
    */
   static async getSentNotifications(userId: number): Promise<any> {
-    return this.get(`/getsentnotification/${userId}`);
+    return this.get(`/api/getsentnotification/${userId}`);
   }
 
   /**
@@ -1956,6 +1961,28 @@ export default class ApiService {
         `/api/viewPaidVideo`,
         { reelId: videoId }
       );
+      return response;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  static async saveChannelFollowers(data: {
+    userId: number;
+    channelId: number;
+    follow: number; // 1 for follow, 0 for unfollow
+  }): Promise<any> {
+    try {
+      const response = await this.post('/api/saveChannelFollowers', data);
+      return response;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  static async getVideoWithUserContext(videoId: number, userId: number): Promise<any> {
+    try {
+      const response = await this.get(`/api/getvideo/${videoId}/${userId}`);
       return response;
     } catch (error) {
       throw this.handleError(error);

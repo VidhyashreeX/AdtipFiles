@@ -90,6 +90,8 @@ const VideoPlayerModalScreen: React.FC = () => {
   const [isLiking, setIsLiking] = useState(false);
   const [likedComments, setLikedComments] = useState<Set<number>>(new Set());
   const [isVideoLiked, setIsVideoLiked] = useState(false);
+  const [isFollowingChannel, setIsFollowingChannel] = useState(false);
+  const [isFollowLoading, setIsFollowLoading] = useState(false);
 
   // Load secure video source
   useEffect(() => {
@@ -287,6 +289,50 @@ const VideoPlayerModalScreen: React.FC = () => {
     }
   }, [user?.id, video?.id, video?.channelId, isVideoLiked]);
 
+  // Check if user is following the channel
+  const checkChannelFollowStatus = useCallback(async () => {
+    if (!user?.id || !video?.channelId) return;
+    try {
+      const videoDetails = await ApiService.getVideoWithUserContext(Number(video.id), Number(user.id));
+      console.log('[VideoPlayerModal] Video details with user context:', videoDetails);
+      
+      // Check if the video data contains follow status
+      if (videoDetails && videoDetails.data) {
+        const videoData = Array.isArray(videoDetails.data) ? videoDetails.data[0] : videoDetails.data;
+        setIsFollowingChannel(videoData?.is_following || false);
+      }
+    } catch (error) {
+      console.error('[VideoPlayerModal] Error checking channel follow status:', error);
+    }
+  }, [user?.id, video?.id, video?.channelId]);
+
+  // Handle follow/unfollow channel
+  const handleFollowChannel = useCallback(async () => {
+    if (!user?.id || !video?.channelId) return;
+    try {
+      setIsFollowLoading(true);
+      const followAction = isFollowingChannel ? 0 : 1;
+      
+      await ApiService.saveChannelFollowers({
+        userId: Number(user.id),
+        channelId: Number(video.channelId),
+        follow: followAction
+      });
+      
+      setIsFollowingChannel(!isFollowingChannel);
+      console.log('[VideoPlayerModal] Channel follow status updated:', !isFollowingChannel);
+    } catch (error) {
+      console.error('[VideoPlayerModal] Error following/unfollowing channel:', error);
+    } finally {
+      setIsFollowLoading(false);
+    }
+  }, [user?.id, video?.channelId, isFollowingChannel]);
+
+  // Check channel follow status when component mounts
+  useEffect(() => {
+    checkChannelFollowStatus();
+  }, [checkChannelFollowStatus]);
+
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: 'transparent' }}>
       <StatusBar backgroundColor="transparent" barStyle="light-content" translucent />
@@ -403,6 +449,32 @@ const VideoPlayerModalScreen: React.FC = () => {
                   {(video.views || 0).toLocaleString()} views • {video.posted}
                 </Text>
               </View>
+              
+              {/* Follow/Unfollow Channel Button */}
+              {user?.id && video?.channelId && user.id !== video.channelId && (
+                <TouchableOpacity 
+                  onPress={handleFollowChannel} 
+                  disabled={isFollowLoading}
+                  style={[
+                    styles.followChannelButton,
+                    isFollowingChannel ? styles.unfollowButton : styles.followButton
+                  ]}
+                >
+                  {isFollowLoading ? (
+                    <ActivityIndicator 
+                      size="small" 
+                      color={isFollowingChannel ? colors.text.primary : colors.white} 
+                    />
+                  ) : (
+                    <Text style={[
+                      styles.followChannelButtonText,
+                      isFollowingChannel ? styles.unfollowButtonText : styles.followButtonText
+                    ]}>
+                      {isFollowingChannel ? 'Unfollow Channel' : 'Follow Channel'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Comment Section - moved above Up next */}
@@ -675,6 +747,34 @@ const createModalStyles = (colors: any, isDarkMode: boolean) => StyleSheet.creat
   commentSendButtonText: {
     color: colors.white,
     fontWeight: 'bold',
+  },
+  followChannelButton: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    minWidth: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  followButton: {
+    backgroundColor: colors.primary,
+  },
+  unfollowButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  followChannelButtonText: {
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  followButtonText: {
+    color: colors.white,
+  },
+  unfollowButtonText: {
+    color: colors.text.primary,
   },
 });
 
