@@ -1,11 +1,12 @@
 // src/screens/media/VideoPreviewScreen.tsx
-import React, {useState, useRef} from 'react';
+import React, {useState, useRef, useEffect} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import {useNavigation, useRoute} from '@react-navigation/native';
 import Video from 'react-native-video';
@@ -21,16 +22,55 @@ const VideoPreviewScreen = () => {
 
   // Get video URI from route params
   // @ts-ignore
-  const {uri} = route.params || {};
+  const {postId} = route.params || {};
 
   // State
+  const [uri, setUri] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [isBuffering, setIsBuffering] = useState(true);
+  const [isBuffering, setIsBuffering] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const fetchVideoDetails = async () => {
+      if (!postId) {
+        Alert.alert('Error', 'No video ID provided.');
+        setIsLoading(false);
+        return;
+      }
+      try {
+        // This is a placeholder for your actual API call to get post details
+        // You should replace this with a call to your ApiService
+        // For example: const response = await ApiService.get(`/posts/${postId}`);
+        // const videoUrl = response.data.videoUrl;
+        
+        // Using a placeholder API for demonstration
+        const response = await fetch(`https://api.adtip.in/api/getpostdetails/${postId}`);
+        const data = await response.json();
+
+        if (data && data.data && data.data.media_url) {
+          let videoUrl = data.data.media_url;
+          if (!videoUrl.startsWith('http')) {
+            videoUrl = `https://api.adtip.in${videoUrl}`;
+          }
+          setUri(videoUrl);
+        } else {
+          throw new Error('Video URL not found in API response.');
+        }
+      } catch (error) {
+        console.error('Failed to fetch video details:', error);
+        Alert.alert('Error', 'Could not load video.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchVideoDetails();
+  }, [postId]);
 
   // Control timer ref
   const controlsTimerRef = useRef<any>(null);
@@ -123,9 +163,17 @@ const VideoPreviewScreen = () => {
     paddingRight: isFullscreen ? 0 : insets.right,
   };
 
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.containerBlack, styles.centered]}>
+        <ActivityIndicator size="large" color="#fff" />
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, styles.containerBlack, safeAreaStyle]}>
-      <StatusBar hidden={isFullscreen} />
+      
 
       <TouchableOpacity
         activeOpacity={1}
@@ -227,6 +275,10 @@ const styles = StyleSheet.create({
   },
   containerBlack: {
     backgroundColor: '#000',
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   videoContainer: {
     flex: 1,

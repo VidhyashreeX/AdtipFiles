@@ -62,7 +62,7 @@ const ExploreScreen: React.FC = () => {
   }, []);
 
   // Memoized render item for better performance
-  const renderItem = useCallback(({ item }: { item: ExploreItem }) => {
+  const renderItem = useCallback(({ item, index }: { item: ExploreItem, index: number }) => {
     const imageUrl = item.content_type === 'post' ? item.media_url : item.thumbnail;
     
     return (
@@ -72,8 +72,37 @@ const ExploreScreen: React.FC = () => {
           if (item.content_type === 'post') {
             navigation.navigate('VideoPreview', { postId: item.id.toString() });
           } else {
+            // Filter only for shorts and map to the expected format
+            const shortsOnly = exploreItems
+              .filter(i => i.content_type === 'shot')
+              .map(i => ({
+                id: i.id.toString(),
+                videoUrl: getFullImageUrl(i.media_url),
+                // Add other required fields for ShortVideo type, possibly with fallbacks
+                title: i.title || 'Untitled Short',
+                thumbnail: getFullImageUrl(i.thumbnail),
+                channel: {
+                  id: i.channel_id?.toString() || 'unknown',
+                  name: i.channel_name || 'Unknown Channel',
+                  avatar: getFullImageUrl(i.channel_avatar),
+                  verified: false,
+                  subscribers: 0,
+                },
+                views: i.views || 0,
+                likes: i.likes || 0,
+                duration: '0:00',
+                createdAt: new Date().toISOString(),
+                category: '1',
+                postedAt: new Date().toISOString(),
+                description: i.title || '',
+                comments: 0,
+              }));
+            
+            const selectedShortIndex = shortsOnly.findIndex(s => s.id === item.id.toString());
+
             navigation.navigate('TipShorts', { 
-              shortId: item.id.toString(),
+              shorts: shortsOnly,
+              startIndex: selectedShortIndex,
             });
           }
         }}

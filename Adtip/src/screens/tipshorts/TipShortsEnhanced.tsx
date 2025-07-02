@@ -32,7 +32,12 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Icon from 'react-native-vector-icons/Feather';
 import Video from 'react-native-video';
-import { useNavigation } from '@react-navigation/native';
+import {
+  useNavigation,
+  useRoute,
+  RouteProp,
+  useFocusEffect,
+} from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -87,6 +92,13 @@ interface PublicShot {
   is_paid_promotional: number;
   total_channel_followers: number;
 }
+
+type TipShortsRouteParams = {
+  shorts?: ShortVideo[];
+  startIndex?: number;
+};
+
+type TipShortsRouteProp = RouteProp<{ params: TipShortsRouteParams }, 'params'>;
 
 // Optimized Video Player Component with instant response
 const OptimizedVideoPlayer = memo(({
@@ -366,6 +378,7 @@ const ShortsSkeleton: React.FC = memo(() => {
 const TipShortsEnhanced = () => {
   const { colors } = useTheme();
   const navigation = useNavigation();
+  const route = useRoute<TipShortsRouteProp>();
   const { user } = useAuth();
   const { 
     isGloballyMuted, 
@@ -376,10 +389,13 @@ const TipShortsEnhanced = () => {
   } = useShorts();
   const insets = useSafeAreaInsets();
 
+  const passedShorts = route.params?.shorts;
+  const startIndex = route.params?.startIndex ?? 0;
+
   // Core states
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [shorts, setShorts] = useState<ShortVideo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [activeIndex, setActiveIndex] = useState(startIndex);
+  const [shorts, setShorts] = useState<ShortVideo[]>(passedShorts || []);
+  const [loading, setLoading] = useState(!passedShorts);
   const [error, setError] = useState<string | null>(null);
   
   // Interaction states
@@ -491,6 +507,12 @@ const TipShortsEnhanced = () => {
     if (now - lastFetchTime.current < 1000 && !reset) return;
     
     if (isFetchingMore && !reset) return;
+
+    // If shorts were passed via params, don't fetch initially
+    if (passedShorts && !reset) {
+      setLoading(false);
+      return;
+    }
 
     try {
       if (reset) {
@@ -846,8 +868,10 @@ const TipShortsEnhanced = () => {
       setGlobalPlayState(false);
     });
     
-    // Initial fetch
-    fetchShorts(true);
+    // Initial fetch only if no shorts were passed
+    if (!passedShorts) {
+      fetchShorts(true);
+    }
 
     return () => {
       unsubscribeFocus();
@@ -932,7 +956,7 @@ const TipShortsEnhanced = () => {
           offset: SCREEN_HEIGHT * index,
           index,
         })}
-        initialScrollIndex={0}
+        initialScrollIndex={startIndex}
         onRefresh={handleRefresh}
         refreshing={refreshing}
         windowSize={5}
