@@ -141,6 +141,7 @@ const TipTubeScreen = () => {
 
   // Refs
   const flatListRef = useRef<FlatList>(null);
+  const isFirstRun = useRef(true);
 
   // Enhanced data layer using React Query v5
   const categoryId = categoryToIdMap[selectedCategory] || 0;
@@ -157,13 +158,23 @@ const TipTubeScreen = () => {
   // Prefetch data for better performance
   const { prefetchProfile } = usePrefetchData();
 
-  // Fetch data whenever the screen comes into focus by invalidating the query.
-  // This marks the data as stale and triggers a refetch without blocking navigation.
+  // Fetch data on initial mount
+  useEffect(() => {
+    console.log('[TipTubeScreen] Component mounted. Triggering initial fetch.');
+    refreshVideos();
+  }, []); // Runs only once
+
+  // Refetch data on subsequent screen focuses
   useFocusEffect(
     useCallback(() => {
-      console.log('[TipTubeScreen] Screen focused. Invalidating videos query to trigger refetch.');
-      queryClient.invalidateQueries({ queryKey: ['videos', categoryId, user?.id, searchQuery, showChannelVideos] });
-    }, [queryClient, categoryId, user?.id, searchQuery, showChannelVideos])
+      if (isFirstRun.current) {
+        isFirstRun.current = false;
+        return;
+      }
+      
+      console.log('[TipTubeScreen] Screen focused. Refetching videos.');
+      refreshVideos();
+    }, [refreshVideos])
   );
 
   // Fetch user's channel ID

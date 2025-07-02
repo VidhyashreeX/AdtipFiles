@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useCallback, useMemo} from 'react';
+import React, {useEffect, useState, useCallback, useMemo, useRef} from 'react';
 import {
   View,
   Text,
@@ -321,6 +321,7 @@ export default function TipCallScreen() {
   const [isDndEnabled, setIsDndEnabled] = useState<boolean>(false);
   const [isDndLoading, setIsDndLoading] = useState<boolean>(false);
   const [unreadCounts, setUnreadCounts] = useState<{ [key: number]: number }>({});
+  const isFirstRun = useRef(true);
 
   const initialCallData = route.params?.initialCallNotificationData;
   const [incomingCallNotification, setIncomingCallNotification] = useState<any>(null);
@@ -337,20 +338,26 @@ export default function TipCallScreen() {
     hasNextPage: hasMoreUsers,
   } = useUsers(filters, user?.id);
 
-  // Fetch data whenever the screen comes into focus by invalidating and forcing refetch
+  // Fetch data on initial mount
+  useEffect(() => {
+    if (user?.id) {
+      console.log('[TipCallScreen] Component mounted. Triggering initial fetch.');
+      refreshUsers();
+    }
+  }, [user?.id]); // Runs once when user ID is available
+
+  // Refetch data on subsequent screen focuses
   useFocusEffect(
     useCallback(() => {
-      console.log('[TipCallScreen] Screen focused. Invalidating and refetching users.');
-      // Invalidate and force refetch
-      queryClient.invalidateQueries({ 
-        queryKey: ['users', filters, user?.id],
-        refetchType: 'active' // Force active queries to refetch
-      });
-    }, [queryClient, filters, user?.id])
+      if (isFirstRun.current) {
+        isFirstRun.current = false;
+        return;
+      }
+      
+      console.log('[TipCallScreen] Screen focused. Refetching users.');
+      refreshUsers();
+    }, [refreshUsers])
   );
-
-  // Prefetch data for better performance
-  // const { prefetchProfile } = usePrefetchData(); // Removed to avoid unnecessary API calls
 
   // Transform users data for compatibility
   const contacts = useMemo(() => {

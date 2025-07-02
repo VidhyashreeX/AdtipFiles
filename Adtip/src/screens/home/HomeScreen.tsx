@@ -323,6 +323,29 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     }, [queryClient, selectedCategoryState, user?.id])
   );
 
+  const isFirstRun = useRef(true);
+
+  // Fetch data on initial mount and when user changes
+  useEffect(() => {
+    if (user?.id) {
+      console.log('[HomeScreen] Component mounted or user changed. Triggering initial fetch.');
+      refreshPosts();
+    }
+  }, [user?.id]); // Runs once when user ID is available
+
+  // Refetch data on subsequent screen focuses
+  useFocusEffect(
+    useCallback(() => {
+      if (isFirstRun.current) {
+        isFirstRun.current = false;
+        return;
+      }
+      
+      console.log('[HomeScreen] Screen focused. Refetching posts.');
+      refreshPosts();
+    }, [refreshPosts])
+  );
+
   // Transform posts data for compatibility
   const posts = useMemo(() => {
     return postsData?.pages?.flatMap(page => page?.data || []) || [];
