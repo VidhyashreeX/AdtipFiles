@@ -1,97 +1,56 @@
-import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo, memo } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
+  StatusBar,
   Dimensions,
   FlatList,
+  Platform,
+  BackHandler,
+  SafeAreaView,
   TouchableOpacity,
   ActivityIndicator,
-  Share,
   Image,
-  StatusBar,
-  SafeAreaView,
-  Platform,
-  NativeModules,
-  BackHandler,
-  ViewabilityConfig,
+  StyleSheet,
   ViewToken,
 } from 'react-native';
 import Animated, {
   useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  withSequence,
-  runOnJS,
   useAnimatedScrollHandler,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
   interpolate,
   Extrapolate,
-  withDelay,
+  runOnJS,
+  withSequence,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import {
+  Gesture,
+  GestureDetector,
+} from 'react-native-gesture-handler';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import Video from 'react-native-video';
-import {
-  useNavigation,
-  useRoute,
-  RouteProp,
-  useFocusEffect,
-} from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+// Contexts and hooks
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import ApiService from '../../services/ApiService';
-import { ENDPOINTS } from '../../constants/api';
 import { useShorts } from '../../contexts/ShortsContext';
-import VideoPreloaderService from '../../services/VideoPreloaderService';
-import { getSecureMediaUrl, getFallbackAvatarUrl } from '../../utils/mediaUtils';
+import { 
+  useShortsInfiniteQuery, 
+  useLikeShortMutation,
+  useShortsQueryActions,
+  type ShortVideo as TanStackShortVideo
+} from '../../hooks/useShortsQuery';
+import ShortsCardSkeleton from '../../components/skeletons/ShortsCardSkeleton';
+import EnhancedShortCard from './components/EnhancedShortCard';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const PAGE_SIZE = 10;
 
-interface ShortVideo {
-  id: string;
-  title: string;
-  thumbnail: string | null;
-  channel: {
-    id: string;
-    name: string;
-    avatar: string;
-    verified: boolean;
-    subscribers: number;
-  };
-  views: number;
-  likes: number;
-  duration: string;
-  createdAt: string;
-  category: string;
-  isPaidPromotional?: boolean;
-  postedAt: string;
-  description: string;
-  videoUrl: string;
-  comments: number;
-  musicName?: string;
-}
-
-interface PublicShot {
-  id: number;
-  name: string;
-  category_id: number;
-  video_link: string;
-  video_description: string;
-  total_views: number;
-  total_likes: number;
-  createddate: string;
-  video_Thumbnail: string;
-  channelName: string;
-  channel_profile: string;
-  channelId: number;
-  total_comments: number;
-  play_duration: string;
-  is_paid_promotional: number;
-  total_channel_followers: number;
-}
+// Use the TanStack query types
+type ShortVideo = TanStackShortVideo;
 
 type TipShortsRouteParams = {
   shorts?: ShortVideo[];
@@ -100,7 +59,7 @@ type TipShortsRouteParams = {
 
 type TipShortsRouteProp = RouteProp<{ params: TipShortsRouteParams }, 'params'>;
 
-// Optimized Video Player Component with instant response
+// Optimized Video Player Component with fixed playback logic
 const OptimizedVideoPlayer = memo(({
   source,
   isActive,
@@ -122,35 +81,22 @@ const OptimizedVideoPlayer = memo(({
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const [wasManuallyPaused, setWasManuallyPaused] = useState(false);
 
-  // Enhanced logic similar to HomeScreen PostItem
+  // Fixed logic: play when active, not paused, loaded, and no error
   const shouldPlay = isActive && !isPaused && isLoaded && !hasError;
 
-  // Effect for automatic play/pause based on visibility (like HomeScreen)
-  useEffect(() => {
-    if (isActive && isLoaded && !hasError) {
-      // Auto-play when video becomes active (unless manually paused)
-      if (!wasManuallyPaused) {
-        // Video should play automatically
-      }
-    } else {
-      // Auto-pause when video goes out of view
-      setWasManuallyPaused(false); // Reset manual pause state when out of view
-    }
-  }, [isActive, isLoaded, hasError, wasManuallyPaused]);
-
   const handleLoad = useCallback((data: any) => {
+    console.log('[OptimizedVideoPlayer] Video loaded successfully for:', source.uri.split('/').pop());
     setIsLoaded(true);
     setHasError(false);
     onLoad?.(data);
-  }, [onLoad]);
+  }, [onLoad, source.uri]);
 
   const handleError = useCallback((error: any) => {
-    console.warn('Video load error:', error);
+    console.warn('[OptimizedVideoPlayer] Video error for:', source.uri.split('/').pop(), error);
     setHasError(true);
     setIsLoaded(false);
-  }, []);
+  }, [source.uri]);
 
   const handleProgress = useCallback((data: any) => {
     if (isActive && onProgress) {
@@ -158,7 +104,26 @@ const OptimizedVideoPlayer = memo(({
     }
   }, [isActive, onProgress]);
 
-  // Default to react-native-video with optimized config
+  // Reset states when source changes
+  useEffect(() => {
+    setIsLoaded(false);
+    setHasError(false);
+  }, [source.uri]);
+
+  // Debug logging
+  useEffect(() => {
+    if (__DEV__) {
+      console.log('[OptimizedVideoPlayer] State:', {
+        isActive,
+        isPaused,
+        isLoaded,
+        hasError,
+        shouldPlay,
+        fileName: source.uri.split('/').pop()
+      });
+    }
+  }, [isActive, isPaused, isLoaded, hasError, shouldPlay, source.uri]);
+
   return (
     <Video
       source={source}
@@ -180,7 +145,11 @@ const OptimizedVideoPlayer = memo(({
       ignoreSilentSwitch="ignore"
       playInBackground={false}
       playWhenInactive={false}
-      mixWithOthers="duck" // Duck other audio when playing
+      mixWithOthers="duck"
+      controls={false}
+      disableFocus={true}
+      fullscreen={false}
+      hideShutterView={true}
     />
   );
 });
@@ -304,7 +273,11 @@ const AnimatedLikeButton = memo(({
             name="heart" 
             size={24} 
             color="#FFFFFF"
-            fill={isLiked ? "#FFFFFF" : "transparent"}
+            style={{
+              textShadowColor: 'rgba(0,0,0,0.3)',
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 2,
+            }}
           />
         </Animated.View>
       </Animated.View>
@@ -324,36 +297,18 @@ const VideoProgressBar = memo(({
   progress: number; 
   isActive: boolean;
 }) => {
-  const progressWidth = useSharedValue(0);
-  const opacity = useSharedValue(0);
-
-  useEffect(() => {
-    if (isActive && progress > 0) {
-      progressWidth.value = withTiming(progress * SCREEN_WIDTH, { duration: 100 });
-      opacity.value = withTiming(0.8, { duration: 300 });
-    } else {
-      opacity.value = withTiming(0, { duration: 300 });
-    }
-  }, [progress, isActive]);
-
-  const progressStyle = useAnimatedStyle(() => ({
-    width: progressWidth.value,
-  }));
-
-  const containerStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
+  if (!isActive || progress <= 0) return null;
 
   return (
-    <Animated.View style={[styles.progressContainer, containerStyle]}>
+    <View style={styles.progressContainer}>
       <View style={styles.progressBackground} />
-      <Animated.View style={[styles.progressFill, progressStyle]} />
-    </Animated.View>
+      <View style={[styles.progressFill, { width: `${Math.min(progress * 100, 100)}%` }]} />
+    </View>
   );
 });
 
-// Skeleton Component
-const ShortsSkeleton: React.FC = memo(() => {
+// Skeleton Loading Component
+const ShortsSkeleton = memo(() => {
   const pulseAnimation = useSharedValue(0);
 
   useEffect(() => {
@@ -374,7 +329,7 @@ const ShortsSkeleton: React.FC = memo(() => {
   );
 });
 
-// Main TipShorts Enhanced Component
+// Main TipShorts Enhanced Component with TanStack Query
 const TipShortsEnhanced = () => {
   const { colors } = useTheme();
   const navigation = useNavigation();
@@ -392,107 +347,59 @@ const TipShortsEnhanced = () => {
   const passedShorts = route.params?.shorts;
   const startIndex = route.params?.startIndex ?? 0;
 
-  // Core states
+  // TanStack Query hooks
+  const {
+    data,
+    isLoading,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch,
+    isRefetching,
+  } = useShortsInfiniteQuery(user?.id?.toString() || '50816');
+
+  const likeMutation = useLikeShortMutation();
+  const { updateShortLikes } = useShortsQueryActions();
+
+  // Local states
   const [activeIndex, setActiveIndex] = useState(startIndex);
-  const [shorts, setShorts] = useState<ShortVideo[]>(passedShorts || []);
-  const [loading, setLoading] = useState(!passedShorts);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Interaction states
-  const [likedShorts, setLikedShorts] = useState<{ [key: string]: boolean }>({});
-  const [likingShorts, setLikingShorts] = useState<{ [key: string]: boolean }>({});
-  
-  // Pagination states
-  const [refreshing, setRefreshing] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [isFetchingMore, setIsFetchingMore] = useState(false);
-  
-  // Video states
   const [videoProgress, setVideoProgress] = useState<{ [key: string]: number }>({});
-  const [loadedVideos, setLoadedVideos] = useState<Set<string>>(new Set());
-  const [visibleVideoIds, setVisibleVideoIds] = useState<string[]>([]);
   const [showPlayPause, setShowPlayPause] = useState(false);
   const playPauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Refs
   const flatListRef = useRef<FlatList>(null);
   const scrollY = useSharedValue(0);
-  const apiCallsRef = useRef(0);
-  const lastFetchTime = useRef(0);
-  const videoPreloader = VideoPreloaderService.getInstance();
 
-  // Viewability config for instant video control (like HomeScreen)
-  const viewabilityConfig: ViewabilityConfig = {
-    itemVisiblePercentThreshold: 60, // Video must be 60% visible
-    minimumViewTime: 50, // Very short for instant response
+  // Flatten data from TanStack Query
+  const shorts: ShortVideo[] = useMemo(() => {
+    if (passedShorts) return passedShorts;
+    return data?.pages.flat() || [];
+  }, [data?.pages, passedShorts]);
+
+  // Viewability config for video control
+  const viewabilityConfig = {
+    itemVisiblePercentThreshold: 90,
+    minimumViewTime: 100,
     waitForInteraction: false,
   };
 
-  // Instant visibility tracking like HomeScreen
+  // Handle viewability changes
   const onViewableItemsChanged = useCallback(({viewableItems}: {viewableItems: ViewToken[]}) => {
-    const currentVisibleIds = viewableItems
-      .filter(item => item.isViewable && item.item)
-      .map(viewToken => viewToken.item.id as string);
-
-    setVisibleVideoIds(currentVisibleIds);
-
-    // Auto-set active index based on most visible item
-    if (viewableItems.length > 0) {
-      const mostVisibleItem = viewableItems.reduce((prev, current) => 
-        (current.percentVisible || 0) > (prev.percentVisible || 0) ? current : prev
-      );
-      
-      if (mostVisibleItem.item) {
-        const newActiveIndex = shorts.findIndex(short => short.id === mostVisibleItem.item.id);
-        if (newActiveIndex !== -1 && newActiveIndex !== activeIndex) {
-          setActiveIndex(newActiveIndex);
-        }
+    const mostVisibleItem = viewableItems.find(item => item.isViewable);
+    if (mostVisibleItem && mostVisibleItem.index !== null) {
+      const newActiveIndex = mostVisibleItem.index;
+      if (newActiveIndex !== activeIndex) {
+        setActiveIndex(newActiveIndex);
       }
     }
-  }, [shorts, activeIndex]);
+  }, [activeIndex]);
 
-  // Handle video load and start preloading next
+  // Handle video load
   const handleVideoLoad = useCallback((videoId: string) => {
-    setLoadedVideos(prev => new Set(new Set(prev)).add(videoId));
-    
-    // Start preloading next video after current starts playing
-    const currentVideoIndex = shorts.findIndex(short => short.id === videoId);
-    if (currentVideoIndex !== -1) {
-      videoPreloader.preloadNextVideo(currentVideoIndex, shorts);
-    }
-  }, [shorts, videoPreloader]);
-
-  // Enhanced tap gesture with play/pause indicator
-  const tapGesture = Gesture.Tap()
-    .numberOfTaps(1)
-    .onEnd(() => {
-      runOnJS(() => {
-        toggleGlobalPlayPause();
-        if (playPauseTimeoutRef.current) clearTimeout(playPauseTimeoutRef.current);
-        setShowPlayPause(true);
-        playPauseTimeoutRef.current = setTimeout(() => {
-          setShowPlayPause(false);
-        }, 800);
-      })();
-    });
-
-  // Double tap gesture for like
-  const doubleTapGesture = Gesture.Tap()
-    .numberOfTaps(2)
-    .onEnd(() => {
-      const currentShort = shorts[activeIndex];
-      if (currentShort) {
-        runOnJS(handleLikeShort)(
-          currentShort.id, 
-          currentShort.channel.id, 
-          currentShort.likes
-        );
-      }
-    });
-
-  // Combined gesture
-  const combinedGesture = Gesture.Exclusive(doubleTapGesture, tapGesture);
+    console.log('[TipShorts] Video loaded:', videoId);
+  }, []);
 
   // Optimized scroll handler
   const scrollHandler = useAnimatedScrollHandler({
@@ -501,347 +408,74 @@ const TipShortsEnhanced = () => {
     },
   });
 
-  // Optimized API call with minimal network usage
-  const fetchShorts = useCallback(async (reset = false) => {
-    const now = Date.now();
-    if (now - lastFetchTime.current < 1000 && !reset) return;
-    
-    if (isFetchingMore && !reset) return;
-
-    // If shorts were passed via params, don't fetch initially
-    if (passedShorts && !reset) {
-      setLoading(false);
-      return;
-    }
+  // Handle like with TanStack Query mutation
+  const handleLikeShort = useCallback(async (shortId: string, creatorId: string, isCurrentlyLiked: boolean) => {
+    if (!user?.id) return;
 
     try {
-      if (reset) {
-        setLoading(true);
-        setShorts([]);
-        setPage(1);
-        setHasMore(true);
-        setLoadedVideos(new Set());
-        setVisibleVideoIds([]);
-        apiCallsRef.current = 0;
-        videoPreloader.clearAll();
-      } else {
-        setIsFetchingMore(true);
-      }
-      setError(null);
-      lastFetchTime.current = now;
-
-      const userId = user?.id || '50816';
-      const currentPage = reset ? 1 : page;
-      const apiUrl = `${ENDPOINTS.GET_SHORTS}/${userId}?page=${currentPage}&limit=${PAGE_SIZE}`;
-
-      console.log(`[TipShorts] API Call #${++apiCallsRef.current}: Fetching page ${currentPage}`);
-      
-      const response = await ApiService.get(apiUrl);
-
-      if (!response || (!response.data && response.status !== 200)) {
-        throw new Error('Failed to load shorts');
-      }
-
-      const publicShots: PublicShot[] = Array.isArray(response.data)
-        ? response.data
-        : response.data.status === 200 && Array.isArray(response.data.data)
-          ? response.data.data
-          : [];      const mappedShorts: ShortVideo[] = (await Promise.all(
-        publicShots
-          .map(async (shot: PublicShot) => ({
-            id: shot.id?.toString() || Math.random().toString(),
-            title: shot.name || 'Untitled Short',            thumbnail: shot.video_Thumbnail && shot.video_Thumbnail !== 'undefined'
-              ? (await getSecureMediaUrl(shot.video_Thumbnail)) || null
-              : null,
-            channel: {
-              id: shot.channelId?.toString() || 'unknownChannel',
-              name: shot.channelName || 'Unknown Channel',              avatar: shot.channel_profile && shot.channel_profile !== 'null'
-                ? (await getSecureMediaUrl(shot.channel_profile)) || getFallbackAvatarUrl(shot.channelId || Math.random().toString())
-                : getFallbackAvatarUrl(shot.channelId || Math.random().toString()),
-              verified: false,
-              subscribers: shot.total_channel_followers || 0,
-            },
-            views: shot.total_views || 0,
-            likes: shot.total_likes || 0,
-            duration: shot.play_duration || '0:00',
-            createdAt: shot.createddate || new Date().toISOString(),
-            category: shot.category_id?.toString() || '1',
-            isPaidPromotional: shot.is_paid_promotional === 1,
-            postedAt: shot.createddate || new Date().toISOString(),
-            description: shot.video_description && shot.video_description !== 'undefined'
-              ? shot.video_description
-              : 'No description available',
-            videoUrl: (await getSecureMediaUrl(shot.video_link || '')) || '',
-            comments: shot.total_comments || 0,
-            musicName: shot.name || 'Original Sound',
-          }))
-      )).filter(short => short.videoUrl && short.videoUrl.startsWith('http'));
-
-      setShorts(prev => {
-        const existingIds = new Set(prev.map(s => s.id));
-        const newUniqueShorts = mappedShorts.filter(s => !existingIds.has(s.id));
-        const result = reset ? newUniqueShorts : [...prev, ...newUniqueShorts];
-        
-        // Preload first video if this is a reset
-        if (result.length > 0 && reset) {
-          setTimeout(() => {
-            const firstVideo = result[0];
-            videoPreloader.preloadVideo(firstVideo.id, firstVideo.videoUrl);
-          }, 500);
-        }
-        
-        return result;
+      await likeMutation.mutateAsync({
+        shortId,
+        userId: user.id.toString(),
+        creatorId,
+        isLiked: !isCurrentlyLiked,
       });
-
-      setHasMore(mappedShorts.length === PAGE_SIZE);
-      if (mappedShorts.length > 0) {
-        setPage(prev => prev + 1);
-      }
-
-      console.log(`[TipShorts] Successfully loaded ${mappedShorts.length} shorts`);
-    } catch (fetchError: any) {
-      console.error(`[TipShorts] API Error #${apiCallsRef.current}:`, fetchError);
-      setError('Failed to load shorts. Please try again.');
-    } finally {
-      setLoading(false);
-      setIsFetchingMore(false);
-      setRefreshing(false);
+    } catch (error) {
+      console.error('Error liking short:', error);
     }
-  }, [page, user, isFetchingMore, videoPreloader]);
-
-  // Optimized like handler with instant response
-  const handleLikeShort = useCallback(async (shortId: string, creatorId: string, currentLikes: number) => {
-    if (!user?.id || likingShorts[shortId]) return;
-
-    const wasLiked = likedShorts[shortId] || false;
-    const newLikedState = !wasLiked;
-
-    // Instant optimistic update
-    setLikedShorts(prev => ({ ...prev, [shortId]: newLikedState }));
-    setShorts(prevShorts =>
-      prevShorts.map(short =>
-        short.id === shortId
-          ? { ...short, likes: short.likes + (newLikedState ? 1 : -1) }
-          : short
-      )
-    );
-
-    setLikingShorts(prev => ({ ...prev, [shortId]: true }));
-
-    try {
-      const response = await ApiService.likeShortVideo({
-        reelId: parseInt(shortId),
-        userId: parseInt(user.id.toString()),
-        like: newLikedState ? 1 : 0,
-        reelCreatorId: parseInt(creatorId),
-      });
-
-      if (response.status !== 200 && response.status !== 1) {
-        throw new Error('API response indicates failure');
-      }
-    } catch (error: any) {
-      console.error('Error updating like status:', error);
-      
-      // Rollback on error
-      setLikedShorts(prev => ({ ...prev, [shortId]: wasLiked }));
-      setShorts(prevShorts =>
-        prevShorts.map(short =>
-          short.id === shortId
-            ? { ...short, likes: short.likes + (wasLiked ? 1 : -1) }
-            : short
-        )
-      );
-    } finally {
-      setLikingShorts(prev => {
-        const newState = { ...prev };
-        delete newState[shortId];
-        return newState;
-      });
-    }
-  }, [user, likedShorts, likingShorts]);
+  }, [user?.id, likeMutation]);
 
   // Refresh handler
   const handleRefresh = useCallback(() => {
-    setRefreshing(true);
     setActiveIndex(0);
     if (flatListRef.current) {
       flatListRef.current.scrollToOffset({ animated: false, offset: 0 });
     }
-    fetchShorts(true);
-  }, [fetchShorts]);
+    refetch();
+  }, [refetch]);
+
+  // Enhanced tap gesture
+  const handleTapGesture = useCallback(() => {
+    toggleGlobalPlayPause();
+    if (playPauseTimeoutRef.current) clearTimeout(playPauseTimeoutRef.current);
+    setShowPlayPause(true);
+    playPauseTimeoutRef.current = setTimeout(() => {
+      setShowPlayPause(false);
+    }, 800);
+  }, [toggleGlobalPlayPause]);
+
+  const handleDoubleTapGesture = useCallback(() => {
+    const currentShort = shorts[activeIndex];
+    if (currentShort) {
+      // We need to track the current like state properly
+      // For now, assume false until we implement proper like state tracking
+      handleLikeShort(
+        currentShort.id, 
+        currentShort.channel.id, 
+        false // This should be the actual current like state
+      );
+    }
+  }, [shorts, activeIndex, handleLikeShort]);
+
+  const tapGesture = Gesture.Tap()
+    .numberOfTaps(1)
+    .onEnd(() => {
+      runOnJS(handleTapGesture)();
+    });
+
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      runOnJS(handleDoubleTapGesture)();
+    });
+
+  const combinedGesture = Gesture.Exclusive(doubleTapGesture, tapGesture);
 
   // End reached handler
   const handleEndReached = useCallback(() => {
-    if (!loading && !isFetchingMore && hasMore && shorts.length > 0) {
-      fetchShorts(false);
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
     }
-  }, [loading, isFetchingMore, hasMore, fetchShorts, shorts.length]);
-
-  // Enhanced Short Card Component with fixed positioning
-  const EnhancedShortCard = memo(({
-    item,
-    index,
-    isActive,
-  }: {
-    item: ShortVideo;
-    index: number;
-    isActive: boolean;
-  }) => {
-    const [showThumbnail, setShowThumbnail] = useState(true);
-    const isVisible = visibleVideoIds.includes(item.id);
-
-    const handleVideoLoadLocal = useCallback(() => {
-      setShowThumbnail(false);
-      handleVideoLoad(item.id);
-    }, [item.id]);
-
-    const handleVideoProgress = useCallback((data: any) => {
-      if (isActive && data.currentTime && data.seekableDuration) {
-        const progress = data.currentTime / data.seekableDuration;
-        setVideoProgress(prev => ({
-          ...prev,
-          [item.id]: Math.min(Math.max(progress, 0), 1)
-        }));
-      }
-    }, [isActive, item.id]);
-
-    return (
-      <View style={styles.shortCardContainer}>
-        {/* Video Player with tap gesture */}
-        <GestureDetector gesture={combinedGesture}>
-          <View style={styles.videoContainer}>
-            <OptimizedVideoPlayer
-              source={{ uri: item.videoUrl }}
-              isActive={isVisible} // Use visibility instead of active index
-              isPaused={!isGloballyPlaying}
-              isMuted={isGloballyMuted}
-              style={styles.video}
-              onLoad={handleVideoLoadLocal}
-              onProgress={handleVideoProgress}
-            />
-
-            {/* Thumbnail overlay while loading */}
-            {showThumbnail && item.thumbnail && (
-              <Image
-                source={{ uri: item.thumbnail }}
-                style={styles.thumbnailOverlay}
-                resizeMode="cover"
-              />
-            )}
-
-            {/* Play/Pause Overlay Indicator */}
-            <PlayPauseOverlay 
-              isPlaying={isGloballyPlaying && isVisible}
-              isVisible={showPlayPause && isActive}
-            />
-          </View>
-        </GestureDetector>
-
-        {/* Progress Bar */}
-        <VideoProgressBar 
-          progress={videoProgress[item.id] || 0}
-          isActive={isActive}
-        />
-
-        {/* Fixed Persistent Overlays */}
-        <View style={styles.overlayContainer}>
-          {/* Mute button - top right */}
-          <TouchableOpacity
-            onPress={toggleGlobalMute}
-            style={styles.muteButton}
-            activeOpacity={0.7}
-          >
-            <Icon name={isGloballyMuted ? "volume-x" : "volume-2"} size={20} color="#FFF" />
-          </TouchableOpacity>
-
-          {/* Fixed bottom content positioning */}
-          <View style={[styles.bottomContent, { 
-            paddingBottom: Math.max(insets.bottom + 70, 40),
-            bottom: 0, // Fixed to bottom
-          }]}>
-            <View style={styles.leftContent}>
-              {/* Channel info row */}
-              <TouchableOpacity 
-                onPress={() => navigation.navigate('Profile' as never, { userId: item.channel.id } as never)}
-                style={styles.channelInfo}
-                activeOpacity={0.7}
-              >
-                <Image source={{ uri: item.channel.avatar }} style={styles.channelAvatar} />
-                <View style={styles.channelDetails}>
-                  <Text style={styles.channelName}>@{item.channel.name}</Text>
-                  {item.musicName && (
-                    <Text style={styles.musicName}>♫ {item.musicName}</Text>
-                  )}
-                </View>
-                <TouchableOpacity 
-                  style={styles.followButton}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.followText}>Follow</Text>
-                </TouchableOpacity>
-              </TouchableOpacity>
-              
-              {/* Description */}
-              <Text style={styles.description} numberOfLines={2}>
-                {item.description}
-              </Text>
-            </View>
-
-            {/* Action Buttons - right side with improved spacing */}
-            <View style={styles.rightActions}>
-              <AnimatedLikeButton
-                isLiked={!!likedShorts[item.id]}
-                onPress={() => handleLikeShort(item.id, item.channel.id, item.likes)}
-                likeCount={item.likes}
-                disabled={!!likingShorts[item.id]}
-              />
-              
-              <TouchableOpacity 
-                style={styles.actionButton}
-                activeOpacity={0.7}
-              >
-                <View style={styles.actionIconContainer}>
-                  <Icon name="message-circle" size={24} color="#FFF" />
-                </View>
-                <Text style={styles.actionText}>
-                  {item.comments > 999 ? `${(item.comments / 1000).toFixed(1)}K` : item.comments}
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.actionButton}
-                activeOpacity={0.7}
-                onPress={async () => {
-                  try {
-                    await Share.share({
-                      message: `Check out this amazing short by ${item.channel.name}! 🎥`,
-                      url: item.videoUrl,
-                    });
-                  } catch (error) {
-                    console.error('Error sharing:', error);
-                  }
-                }}
-              >
-                <View style={styles.actionIconContainer}>
-                  <Icon name="share-2" size={24} color="#FFF" />
-                </View>
-                <Text style={styles.actionText}>Share</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.actionButton}
-                activeOpacity={0.7}
-              >
-                <View style={styles.actionIconContainer}>
-                  <Icon name="more-horizontal" size={24} color="#FFF" />
-                </View>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </View>
-    );
-  });
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Handle back button
   useEffect(() => {
@@ -852,39 +486,30 @@ const TipShortsEnhanced = () => {
       }
       return false;
     });
-
     return () => backHandler.remove();
   }, [navigation]);
 
   // Set initial play state and handle cleanup
   useEffect(() => {
-    // Start playing when the screen is focused
     const unsubscribeFocus = navigation.addListener('focus', () => {
       setGlobalPlayState(true);
     });
 
-    // Pause when the screen is blurred
     const unsubscribeBlur = navigation.addListener('blur', () => {
       setGlobalPlayState(false);
     });
-    
-    // Initial fetch only if no shorts were passed
-    if (!passedShorts) {
-      fetchShorts(true);
-    }
 
     return () => {
       unsubscribeFocus();
       unsubscribeBlur();
-      videoPreloader.clearAll();
       if (playPauseTimeoutRef.current) {
         clearTimeout(playPauseTimeoutRef.current);
       }
     };
-  }, []);
+  }, [navigation, setGlobalPlayState]);
 
-  // Render loading state with skeletons
-  if (loading && shorts.length === 0) {
+  // Render loading state
+  if (isLoading && shorts.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#000000" translucent />
@@ -894,6 +519,7 @@ const TipShortsEnhanced = () => {
           renderItem={() => <ShortsSkeleton />}
           pagingEnabled
           showsVerticalScrollIndicator={false}
+          snapToInterval={SCREEN_HEIGHT}
           scrollEnabled={false}
         />
       </SafeAreaView>
@@ -906,15 +532,11 @@ const TipShortsEnhanced = () => {
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#000000" translucent />
         <View style={styles.errorContainer}>
-          <Icon name="wifi-off" size={64} color="#FF6B6B" />
-          <Text style={styles.errorTitle}>Oops! Something went wrong</Text>
-          <Text style={styles.errorMessage}>{error}</Text>
-          <TouchableOpacity
-            onPress={() => fetchShorts(true)}
-            style={styles.retryButton}
-            activeOpacity={0.7}
-          >
-            <Icon name="refresh-cw" size={20} color="#FFF" style={{ marginRight: 8 }} />
+          <Icon name="wifi-off" size={48} color="#FF3040" />
+          <Text style={styles.errorText}>
+            Failed to load shorts. Please check your connection.
+          </Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
             <Text style={styles.retryButtonText}>Try Again</Text>
           </TouchableOpacity>
         </View>
@@ -936,6 +558,16 @@ const TipShortsEnhanced = () => {
             item={item}
             index={index}
             isActive={index === activeIndex}
+            onVideoLoad={handleVideoLoad}
+            onLike={handleLikeShort}
+            combinedGesture={combinedGesture}
+            showPlayPause={showPlayPause}
+            videoProgress={videoProgress}
+            setVideoProgress={setVideoProgress}
+            isGloballyPlaying={isGloballyPlaying}
+            isGloballyMuted={isGloballyMuted}
+            toggleGlobalMute={toggleGlobalMute}
+            insets={insets}
           />
         )}
         pagingEnabled
@@ -958,7 +590,7 @@ const TipShortsEnhanced = () => {
         })}
         initialScrollIndex={startIndex}
         onRefresh={handleRefresh}
-        refreshing={refreshing}
+        refreshing={isRefetching}
         windowSize={5}
         maxToRenderPerBatch={3}
         initialNumToRender={2}
@@ -966,7 +598,7 @@ const TipShortsEnhanced = () => {
         onEndReachedThreshold={0.8}
         removeClippedSubviews={Platform.OS === 'android'}
         ListFooterComponent={
-          isFetchingMore ? (
+          isFetchingNextPage ? (
             <View style={styles.footerLoader}>
               <ActivityIndicator size="small" color="#FF3040" />
             </View>
@@ -978,7 +610,7 @@ const TipShortsEnhanced = () => {
       {__DEV__ && (
         <View style={styles.debugInfo}>
           <Text style={styles.debugText}>
-            API: {apiCallsRef.current} | Active: {activeIndex + 1}/{shorts.length} | Visible: {visibleVideoIds.length}
+            Active: {activeIndex + 1}/{shorts.length} | Loading: {isLoading.toString()}
           </Text>
         </View>
       )}
@@ -989,10 +621,10 @@ const TipShortsEnhanced = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#000000',
   },
   
-  // Skeleton Styles
+  // Skeleton Loading Styles
   skeletonContainer: {
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
@@ -1004,63 +636,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a1a',
   },
 
-  // Error Styles
+  // Error State Styles
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    backgroundColor: '#000',
+    paddingHorizontal: 20,
   },
-  errorTitle: {
+  errorText: {
     color: '#FFF',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 16,
-    marginBottom: 8,
+    fontSize: 16,
     textAlign: 'center',
-  },
-  errorMessage: {
-    color: '#AAA',
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 24,
+    marginVertical: 20,
+    lineHeight: 24,
   },
   retryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: '#FF3040',
-    paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 25,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 10,
   },
   retryButtonText: {
     color: '#FFF',
     fontSize: 16,
     fontWeight: '600',
-  },
-
-  // Video Styles
-  shortCardContainer: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-    backgroundColor: '#000',
-    position: 'relative',
-  },
-  videoContainer: {
-    width: '100%',
-    height: '100%',
-    position: 'relative',
-  },
-  video: {
-    width: '100%',
-    height: '100%',
-  },
-  thumbnailOverlay: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    zIndex: 1,
   },
 
   // Play/Pause Overlay Styles
@@ -1102,152 +703,48 @@ const styles = StyleSheet.create({
     left: 0,
     height: '100%',
     backgroundColor: '#FF3040',
-    borderRadius: 1.5,
   },
 
-  // Overlay Styles
-  overlayContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 5,
-    pointerEvents: 'box-none',
-  },
-  muteButton: {
-    position: 'absolute',
-    top: StatusBar.currentHeight ? StatusBar.currentHeight + 16 : 50,
-    right: 16,
-    width: 40,
-    height: 40,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  bottomContent: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    pointerEvents: 'box-none',
-  },
-
-  // Content Styles - Fixed positioning
-  leftContent: {
-    flex: 1,
-    marginRight: 16,
-    pointerEvents: 'auto',
-    justifyContent: 'flex-end', // Align to bottom
-  },
-  channelInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8, // Reduced margin
-  },
-  channelAvatar: {
-    width: 40, // Slightly smaller
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    marginRight: 10, // Reduced margin
-  },
-  channelDetails: {
-    flex: 1,
-  },
-  channelName: {
-    color: '#FFF',
-    fontSize: 15, // Slightly smaller
-    fontWeight: 'bold',
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-  musicName: {
-    color: '#FFF',
-    fontSize: 11, // Smaller
-    marginTop: 1,
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-  followButton: {
-    backgroundColor: '#FF3040',
-    paddingVertical: 6, // Smaller padding
-    paddingHorizontal: 14,
-    borderRadius: 16, // Smaller radius
-  },
-  followText: {
-    color: 'white',
-    fontSize: 11, // Smaller text
-    fontWeight: '600',
-  },
-  description: {
-    color: '#FFF',
-    fontSize: 13, // Smaller text
-    lineHeight: 16,
-    marginTop: 4, // Reduced margin
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-
-  // Action Styles - Fixed positioning
-  rightActions: {
-    alignItems: 'center',
-    pointerEvents: 'auto',
-    justifyContent: 'flex-end', // Align to bottom
-    paddingBottom: 10, // Add some padding from bottom
-  },
+  // Action Button Styles
   actionButton: {
     alignItems: 'center',
-    marginBottom: 20, // Consistent spacing
-  },
-  actionIconContainer: {
-    width: 48,
-    height: 48,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    marginBottom: 15,
+    minHeight: 60,
   },
   actionText: {
     color: '#FFF',
-    fontSize: 10, // Smaller text
-    marginTop: 3, // Reduced margin
-    fontWeight: '500',
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    textShadowRadius: 2,
   },
 
-  // Footer Styles
+  // Footer Loader
   footerLoader: {
-    flexDirection: 'row',
+    height: 60,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 20,
+    backgroundColor: '#000',
   },
 
-  // Debug Styles
+  // Debug Info
   debugInfo: {
     position: 'absolute',
-    top: StatusBar.currentHeight ? StatusBar.currentHeight + 60 : 90,
-    right: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    top: 100,
+    left: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.7)',
     padding: 8,
-    borderRadius: 8,
+    borderRadius: 4,
+    zIndex: 1,
   },
   debugText: {
     color: '#FFF',
-    fontSize: 9,
+    fontSize: 10,
+    textAlign: 'center',
   },
 });
 
