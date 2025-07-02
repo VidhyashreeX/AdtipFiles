@@ -29,7 +29,7 @@ class WalletService {
         );
       }
 
-      // Make API call with properly formatted userId
+      // Make API call with properly formatted userId using the correct endpoint
       const response = await ApiService.getWalletBalance(formattedUserId);
       console.log('WalletService: API response:', JSON.stringify(response));
 

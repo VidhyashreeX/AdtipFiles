@@ -739,7 +739,7 @@ export default class ApiService {
   ): Promise<WalletBalanceResponse> {
     try {
       const response = await this.get<WalletBalanceResponse>(
-        `/api/wallet/balance/${userId}`,
+        `/api/getfunds/${userId}`,
         undefined,
         config,
       );

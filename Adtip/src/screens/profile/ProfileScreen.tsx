@@ -150,6 +150,7 @@ const ProfileScreen: React.FC = () => {
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [bannerImage, setBannerImage] = useState<string | null>(user?.banner_image || null);
+  const [profileImage, setProfileImage] = useState<string | null>(user?.profile_image || null);
 
   // Default profile image
   const DEFAULT_PROFILE_IMAGE = 'https://via.placeholder.com/150';
@@ -159,7 +160,7 @@ const ProfileScreen: React.FC = () => {
     if (!url || url === 'null' || url === 'undefined') {
       return DEFAULT_PROFILE_IMAGE;
     }
-    if (url.startsWith('http')) {
+    if (url.startsWith('http') || url.startsWith('file://') || url.startsWith('content://')) {
       return url;
     }
     return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
@@ -191,6 +192,35 @@ const ProfileScreen: React.FC = () => {
       return savedUri;
     } catch (error) {
       console.error('[ProfileScreen] Error loading banner image from local:', error);
+      return null;
+    }
+  };
+
+  // Local storage helper functions for profile image
+  const getProfileImageKey = (userId: string | number): string => {
+    return `profile_image_${userId}`;
+  };
+
+  const saveProfileImageLocally = async (imageUri: string, userId: string | number): Promise<string> => {
+    try {
+      const storageKey = getProfileImageKey(userId);
+      await AsyncStorage.setItem(storageKey, imageUri);
+      console.log('[ProfileScreen] Profile image saved locally:', storageKey, imageUri);
+      return imageUri;
+    } catch (error) {
+      console.error('[ProfileScreen] Error saving profile image locally:', error);
+      throw error;
+    }
+  };
+
+  const loadProfileImageFromLocal = async (userId: string | number): Promise<string | null> => {
+    try {
+      const storageKey = getProfileImageKey(userId);
+      const localImageUri = await AsyncStorage.getItem(storageKey);
+      console.log('[ProfileScreen] Profile image loaded from local:', storageKey, localImageUri);
+      return localImageUri;
+    } catch (error) {
+      console.error('[ProfileScreen] Error loading profile image from local:', error);
       return null;
     }
   };
@@ -312,12 +342,23 @@ const ProfileScreen: React.FC = () => {
 
       setUser(userData);
       
-      // Load banner image from local storage if it's own profile
+      // Load banner and profile images from local storage if it's own profile
       if (userData?.id && isOwnProfile) {
         const localBannerUri = await loadBannerImageFromLocal(userData.id);
         if (localBannerUri) {
           setBannerImage(localBannerUri);
         }
+        
+        const localProfileUri = await loadProfileImageFromLocal(userData.id);
+        if (localProfileUri) {
+          console.log('[ProfileScreen] Loaded profile image from local storage:', localProfileUri);
+          setProfileImage(localProfileUri);
+        } else if (userData.profile_image) {
+          console.log('[ProfileScreen] Using profile image from user data:', userData.profile_image);
+          setProfileImage(userData.profile_image);
+        }
+      } else if (userData?.profile_image) {
+        setProfileImage(userData.profile_image);
       }
 
       // Fetch user's channel ID if this is their own profile
@@ -765,15 +806,19 @@ const ProfileScreen: React.FC = () => {
           
           try {
             // Upload to Cloudflare
+            console.log('[ProfileScreen] Starting avatar upload to Cloudflare...');
             const uploadResult = await CloudflareUploadService.uploadFile(
               image.uri,
               'images',
               `avatar_${Date.now()}.jpg`,
               Number(user.id)
             );
+            console.log('[ProfileScreen] Cloudflare upload result:', uploadResult);
 
             if (uploadResult.success) {
-              // Use the same API as EditProfile: /api/saveuserdetails
+              console.log('[ProfileScreen] Avatar upload successful, updating user details via API...');
+              
+              // Use the correct API endpoint: /api/saveuserdetails with proper request format
               const updateData = {
                 id: Number(user.id),
                 name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
@@ -781,7 +826,7 @@ const ProfileScreen: React.FC = () => {
                 lastname: user.lastName || '',
                 gender: user.gender || '',
                 dob: user.dob || "1990-01-01",
-                profile_image: uploadResult.url, // Update profile image URL
+                profile_image: uploadResult.url, // Update profile image URL with Cloudflare URL
                 profession: user.profession || '',
                 maternal_status: user.maternal_status || '',
                 address: user.address || '',
@@ -794,10 +839,27 @@ const ProfileScreen: React.FC = () => {
                 referal_code: ""
               };
 
-              // Use the same updateUserDetails from AuthContext
-              await updateUserDetails(updateData);
+              // Call the API directly using ApiService
+              const apiResponse = await ApiService.saveUserDetails(updateData);
+              console.log('[ProfileScreen] API response for profile image update:', apiResponse);
               
-              Alert.alert('Success', 'Profile picture updated successfully');
+              if (apiResponse && (apiResponse.status === 200 || apiResponse.status === 1)) {
+                // Save the image locally for fast display
+                await saveProfileImageLocally(uploadResult.url, user.id);
+                
+                // Update the local state to show the new image immediately
+                setProfileImage(uploadResult.url);
+                
+                // Update the user object with new profile image
+                if (updateUserDetails) {
+                  const userUpdateData = { profile_image: uploadResult.url };
+                  await updateUserDetails(userUpdateData);
+                }
+                
+                Alert.alert('Success', 'Profile picture updated successfully');
+              } else {
+                Alert.alert('Update Failed', 'Failed to update profile picture on server');
+              }
             } else {
               Alert.alert('Upload Failed', uploadResult.error || 'Failed to upload profile picture');
             }
@@ -820,6 +882,13 @@ const ProfileScreen: React.FC = () => {
   useEffect(() => {
     fetchUserData();
   }, [userId]);
+
+  // Initialize profile image state when user data changes
+  useEffect(() => {
+    if (user?.profile_image && !profileImage) {
+      setProfileImage(user.profile_image);
+    }
+  }, [user?.profile_image]);
 
   // Render functions
   if (loading && !refreshing && !user) {
@@ -980,9 +1049,9 @@ const ProfileScreen: React.FC = () => {
           <View style={styles.avatarContainer}>
             <LinearGradient colors={['#4080FF', '#9747FF']} style={styles.avatarGradient}>
               <View style={[styles.avatarWrapper, { backgroundColor: colors.card }]}>
-                {user?.profile_image ? (
+                {profileImage || user?.profile_image ? (
                   <Image
-                    source={{ uri: getFullImageUrl(user.profile_image) }}
+                    source={{ uri: getFullImageUrl(profileImage || user?.profile_image) }}
                     style={styles.avatarImage}
                   />
                 ) : (
