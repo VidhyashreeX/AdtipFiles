@@ -477,6 +477,10 @@ class WhatsAppCallManager {
       // Show outgoing call UI
       await this.showOutgoingCallNotification(callData);
 
+      // Initialize media for call BEFORE navigating to meeting screen
+      // This ensures mic and camera are ready immediately for video calls
+      this.initializeMediaForCall(callData.callId, callType === 'video');
+
       // Navigate to meeting screen
       this.navigateToMeetingScreen(callData);
 
@@ -1316,11 +1320,45 @@ class WhatsAppCallManager {
 
   /**
    * Initialize media for call
+   * BULLETPROOF FIX: Ensures that both mic and camera are initialized properly before navigation
    */
   public initializeMediaForCall(callId: string, isVideoCall: boolean): void {
     try {
+      // Initialize the media manager with proper settings
       this.mediaManager.initialize(callId, isVideoCall);
-      console.log('[WhatsAppCallManager] Media initialized for call:', callId);
+      
+      // BULLETPROOF FIX: For video calls, explicitly ensure camera is enabled
+      // This ensures that camera is ready BEFORE navigating to the meeting screen
+      if (isVideoCall) {
+        // Force camera to be on immediately
+        this.mediaManager.setCameraEnabled(true);
+        console.log('[WhatsAppCallManager] Camera enabled for video call');
+        
+        // CRITICAL FIX: Ensure speaker is enabled for video calls
+        this.mediaManager.setSpeakerEnabled(true);
+      }
+      
+      // Always ensure microphone is enabled for any call type
+      this.mediaManager.setMicEnabled(true);
+      
+      // Force a state update to ensure any subscribers are notified
+      this.mediaManager.forceUpdateMediaState({
+        micEnabled: true,
+        cameraEnabled: isVideoCall,
+        speakerEnabled: true, 
+        isVideoCall
+      });
+      
+      // Add a short delay to ensure camera has time to initialize
+      setTimeout(() => {
+        console.log('[WhatsAppCallManager] Double-checking camera state after initialization');
+        if (isVideoCall && !this.mediaManager.getMediaState().cameraEnabled) {
+          console.log('[WhatsAppCallManager] Re-enabling camera after initialization');
+          this.mediaManager.setCameraEnabled(true);
+        }
+      }, 500);
+      
+      console.log('[WhatsAppCallManager] Media initialized for call:', callId, 'isVideoCall:', isVideoCall);
     } catch (error) {
       console.error('[WhatsAppCallManager] Failed to initialize media:', error);
     }

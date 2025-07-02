@@ -16,6 +16,7 @@ import {
   Image,
   AppStateStatus,
   Vibration,
+  DeviceEventEmitter,
 } from 'react-native';
 import { useMeeting, useParticipant, RTCView } from '@videosdk.live/react-native-sdk';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
@@ -175,25 +176,31 @@ const CallControls: React.FC<CallControlsProps> = ({
 };
 
 /**
+ * Define the props interface for MeetingView
+ */
+interface MeetingViewProps {
+  meetingId: string;
+  callType: 'voice' | 'video';
+  token: string;
+  localParticipantId: string;
+  recipientName: string;
+}
+
+/**
  * The internal meeting view component - BULLETPROOF IMPLEMENTATION
  */
-const MeetingView = () => {
-  const { colors } = useTheme();
-  const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
+const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLocalParticipantId, recipientName }: MeetingViewProps) => {
   const { activeCall } = useCall();
-  const route = useRoute<MeetingScreenRouteProp>();
-  
-  // Get route params safely with comprehensive fallbacks (moved up to avoid duplication)
-  const { callType = 'voice', recipientName = 'Participant' } = route.params || {};
-  
-  // BULLETPROOF: Enhanced error handling with CallErrorHandler
-  const callErrorHandler = useRef(CallErrorHandler.getInstance()).current;
-  
-  // BULLETPROOF: Centralized media management
-  const whatsAppCallManager = useRef(WhatsAppCallManager.getInstance()).current;
-  const callMediaManager = useRef(CallMediaManager.getInstance()).current;
-  
-  // Enhanced state variables with bulletproof initialization
+  const whatsAppCallManager = WhatsAppCallManager.getInstance(); // Get instance directly
+  const callMediaManager = CallMediaManager.getInstance(); // Get instance directly 
+  const callErrorHandler = CallErrorHandler.getInstance(); // Get instance directly
+  const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
+  const route = useRoute<any>(); // Type as any to resolve route.params.meetingId error
+
+  // --- LINT FIX: Removed redundant meeting state ---
+  // We use meetingHooks from useMeeting instead of a separate meeting state
+
+  const [localParticipantId, setLocalParticipantId] = useState(initialLocalParticipantId);
   const [showControls, setShowControls] = useState(true);
   const [isEndingCall, setIsEndingCall] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
@@ -203,33 +210,16 @@ const MeetingView = () => {
   const [networkQuality, setNetworkQuality] = useState<'excellent' | 'good' | 'fair' | 'poor'>('excellent');
   const [isRecovering, setIsRecovering] = useState(false);
   
-  // BULLETPROOF: Media state from centralized manager (no local state!)
+  // BULLETPROOF: Media state from centralized manager. This is the single source of truth.
   const [mediaState, setMediaState] = useState<MediaState>(
     callMediaManager.getMediaState()
   );
   
   // Destructure media state for easy access
   const { micEnabled, cameraEnabled, speakerEnabled } = mediaState;
-
-  // Initialize media manager and listen for state changes
-  useEffect(() => {
-    const callId = route.params?.meetingId || activeCall?.callId || 'unknown';
-    
-    // Initialize media manager
-    callMediaManager.initialize(callId, callType === 'video');
-    
-    // Listen for media state changes from the manager via appEventEmitter
-    const handleMediaStateChange = (newState: MediaState) => {
-      setMediaState(newState);
-    };
-    
-    // Add event listener for media state changes
-    appEventEmitter.on('mediaStateChanged', handleMediaStateChange);
-    
-    return () => {
-      appEventEmitter.off('mediaStateChanged', handleMediaStateChange);
-    };
-  }, [callMediaManager, callType, route.params?.meetingId, activeCall?.callId]);
+  
+  // No need for additional media initialization - the WhatsAppCallManager's initializeMediaForCall
+  // has already initialized everything BEFORE navigating to MeetingScreen
   
   // BULLETPROOF: Enhanced ref management for proper cleanup
   const controlsOpacity = useRef(new Animated.Value(1)).current;
@@ -245,14 +235,20 @@ const MeetingView = () => {
   const errorRecoveryRef = useRef<{[key: string]: number}>({});
   const notificationSyncRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Use VideoSDK meeting hooks with BULLETPROOF error handling
+  // BULLETPROOF FIX: Use VideoSDK meeting hooks with error handling
+  // And initialize with the correct media state from our CallMediaManager
   const meetingHooks = useMeeting({
+    // The property names in useMeeting are different from our media state
+    // but we ensure they match our CallMediaManager's state
     onMeetingJoined: () => {
       console.log('[MeetingView] Meeting joined successfully');
       setHasJoined(true);
       setIsJoining(false);
       setCallState('connected');
       setShowControls(true);
+      
+      // Connect media management to VideoSDK meeting
+      whatsAppCallManager.setVideoSDKMeeting(meetingHooks);
       
       // Start call duration timer
       startCallDurationTimer();
@@ -296,7 +292,7 @@ const MeetingView = () => {
       
       // Use enhanced error handler for bulletproof error management
       const callId = activeCall?.callId || route.params?.meetingId;
-      callErrorHandler.handleError(error, callId, 'meeting_hook').then((recovered) => {
+      callErrorHandler.handleError(error, callId, 'meeting_hook').then((recovered: boolean) => {
         if (!recovered) {
           // Categorize errors properly for better handling
           if (isFatalError(error)) {
@@ -312,7 +308,7 @@ const MeetingView = () => {
             handleErrorRecovery(error, false);
           }
         }
-      }).catch((handlerError) => {
+      }).catch((handlerError: Error) => {
         console.error('[MeetingView] Error handler failed:', handlerError);
         // Fallback to basic error handling
         if (isFatalError(error)) {
@@ -336,9 +332,10 @@ const MeetingView = () => {
   } = meetingHooks || {};
 
   // Get local participant's video stream details using useParticipant hook
-  const { webcamStream, webcamOn, micStream, micOn } = useParticipant(localParticipant?.id || '');
+  const { webcamStream, micStream } = useParticipant(localParticipant?.id || '');
+  const { webcamOn, micOn } = useParticipant(localParticipant?.id);
 
-  // ✅ FIX: Explicitly join the meeting on component mount with retry logic
+  // ✅ BULLETPROOF FIX: Explicitly join the meeting on component mount with retry logic
   useEffect(() => {
     if (join && !hasJoined && !isJoining) {
       console.log('[MeetingView] Attempting to join meeting...');
@@ -346,8 +343,29 @@ const MeetingView = () => {
       
       const attemptJoin = async () => {
         try {
+          // CRITICAL FIX: Ensure that for video calls, camera is enabled before joining
+          if (callType === 'video' && !mediaState.cameraEnabled) {
+            console.log('[MeetingView] Pre-enabling camera for video call before joining');
+            await callMediaManager.setCameraEnabled(true);
+          }
+          
+          // Join the meeting
           await join();
           console.log('[MeetingView] Join call successful');
+          
+          // CRITICAL FIX: Force media state synchronization after successful join
+          if (callType === 'video') {
+            // Give VideoSDK a moment to initialize
+            setTimeout(() => {
+              if (isComponentMountedRef.current) {
+                console.log('[MeetingView] Forcing camera state after join');
+                callMediaManager.forceUpdateMediaState({
+                  ...mediaState,
+                  cameraEnabled: true
+                });
+              }
+            }, 500);
+          }
         } catch (error) {
           console.error('[MeetingView] Join failed:', error);
           setIsJoining(false);
@@ -389,33 +407,20 @@ const MeetingView = () => {
     }
   }, [meetingHooks, callMediaManager]);
 
-  // ✅ FIX: Auto-enable webcam for video calls - EVEN BEFORE JOINING (if possible)
+  // BULLETPROOF FIX: Synchronize meeting state with centralized media state
+  // This is crucial to handle any potential state mismatch between VideoSDK and our CallMediaManager
   useEffect(() => {
-    if (callType === 'video') {
-      // Enable camera as soon as possible, even during connecting state
-      if (!webcamOn && meetingHooks?.toggleWebcam) {
-        console.log('[MeetingView] 🎥 Auto-enabling webcam for video call...');
-        
-        // Try to enable camera immediately
-        try {
-          meetingHooks.toggleWebcam();
-          console.log('[MeetingView] 🎬 Early camera enabled');
-        } catch (error) {
-          console.log('[MeetingView] Camera toggle failed - will retry after join', error);
-          
-          // If failed, retry after joining
-          if (hasJoined && !webcamOn) {
-            console.log('[MeetingView] 🎬 Retry toggling webcam after join');
-            setTimeout(() => {
-              if (hasJoined && !webcamOn && meetingHooks?.toggleWebcam) {
-                meetingHooks.toggleWebcam();
-              }
-            }, 1000);
-          }
-        }
-      }
+    // Ensure meeting state matches our centralized media state
+    if (meetingHooks && hasJoined) {
+      // Synchronization now happens through the MediaManager's observer pattern
+      // Logging only for debugging
+      console.log(
+        '[MeetingView] Media state sync check:',
+        `mic: ${micOn}=${mediaState.micEnabled}`,
+        `webcam: ${webcamOn}=${mediaState.cameraEnabled}`
+      );
     }
-  }, [hasJoined, callType, webcamOn, meetingHooks]);
+  }, [hasJoined, meetingHooks, mediaState, micOn, webcamOn]);
 
   // New helper functions for call management
   const startCallDurationTimer = useCallback(() => {
@@ -482,24 +487,24 @@ const MeetingView = () => {
       
       // Navigate safely after small delay to let cleanup complete
       setTimeout(() => {
-        if (!navigationRef.current) return;
+        if (!navigation) return;
         
         // Safe navigation with multiple fallbacks
         try {
-          if (navigationRef.current.canGoBack()) {
-            navigationRef.current.goBack();
+          if (navigation.canGoBack()) {
+            navigation.goBack();
           } else {
-            navigationRef.current.reset({
+            navigation.reset({
               index: 0,
-              routes: [{ name: 'TipCall' }],
+              routes: [{ name: 'TipCall' as keyof MainNavigatorParamList }],
             });
           }
         } catch (error) {
           console.error('[MeetingView] Navigation error:', error);
           // Final fallback
-          navigationRef.current.reset({
+          navigation.reset({
             index: 0,
-            routes: [{ name: 'Home' }],
+            routes: [{ name: 'Home' as keyof MainNavigatorParamList }],
           });
         }
       }, 300);
@@ -508,19 +513,19 @@ const MeetingView = () => {
       
       // Even if there's an error, try to navigate away
       setTimeout(() => {
-        if (!navigationRef.current) return;
+        if (!navigation) return;
         
         try {
-          navigationRef.current.reset({
+          navigation.reset({
             index: 0,
-            routes: [{ name: 'TipCall' }],
+            routes: [{ name: 'TipCall' as keyof MainNavigatorParamList }],
           });
         } catch (navigationError) {
           console.error('[MeetingView] Final navigation error:', navigationError);
         }
       }, 300);
     }
-  }, [isEndingCall, leave, hasJoined, navigationRef, stopCallDurationTimer]);
+  }, [isEndingCall, leave, hasJoined, navigation, stopCallDurationTimer, callMediaManager]);
 
   const isFatalError = useCallback((error: any) => {
     const fatalErrorCodes = ['INVALID_TOKEN', 'TOKEN_EXPIRED', 'MEETING_ENDED', 'INVALID_PERMISSIONS'];
@@ -668,7 +673,7 @@ const MeetingView = () => {
       }
     };
   }, [ensureOngoingCallNotification]);
-
+  
 
 
   // Toggle mic - USE CENTRALIZED MEDIA MANAGER
@@ -676,7 +681,7 @@ const MeetingView = () => {
     await callMediaManager.toggleMic();
   }, [callMediaManager]);
 
-  // Toggle camera - ENHANCED WITH ULTRA-DETAILED DEBUGGING
+  // Toggle camera - BULLETPROOF IMPLEMENTATION WITH MULTI-LAYER APPROACH
   const handleToggleCamera = useCallback(async () => {
     console.log('[MeetingView] 📹 TOGGLE CAMERA INITIATED:', {
       currentWebcamOn: webcamOn,
@@ -688,43 +693,68 @@ const MeetingView = () => {
     });
     
     try {
-      // Direct use of VideoSDK toggleWebcam for more reliable control
+      // Force extra logging for debugging
+      DeviceEventEmitter.emit('logEvent', {
+        type: 'cameraToggle',
+        action: 'start',
+        webcamOn,
+        cameraEnabled
+      });
+    
+      // BULLETPROOF CAMERA TOGGLE: Coordinated approach between VideoSDK and CallMediaManager
+      
+      // 1. Toggle camera in our CallMediaManager first
+      await callMediaManager.toggleCamera();
+      console.log('[MeetingView] ✅ CallMediaManager toggleCamera completed');
+      
+      // 2. Direct use of VideoSDK toggleWebcam for guaranteed VideoSDK state change
       if (meetingHooks && meetingHooks.toggleWebcam) {
         console.log('[MeetingView] 🎬 Using VideoSDK toggleWebcam directly...');
         
-        // Use timeout promise to prevent hanging if toggleWebcam doesn't resolve
-        await Promise.race([
-          meetingHooks.toggleWebcam(),
-          new Promise(resolve => setTimeout(resolve, 2000))
-        ]);
+        // Get the state we just toggled to
+        const expectedCameraState = callMediaManager.getMediaState().cameraEnabled;
         
-        console.log('[MeetingView] ✅ VideoSDK toggleWebcam completed');
+        // Only toggle VideoSDK if it's not in the expected state
+        if (webcamOn !== expectedCameraState) {
+          // Use timeout promise to prevent hanging if toggleWebcam doesn't resolve
+          await Promise.race([
+            meetingHooks.toggleWebcam(),
+            new Promise(resolve => setTimeout(resolve, 2000))
+          ]);
+          
+          console.log('[MeetingView] ✅ VideoSDK toggleWebcam completed');
+        }
         
-        // Force update the media state to ensure UI reflects the change
-        callMediaManager.forceUpdateMediaState({
-          cameraEnabled: !webcamOn
-        });
-        
-        // Wait and log new state
+        // 3. Force update the media state to ensure UI and VideoSDK state are aligned
         setTimeout(() => {
-          console.log('[MeetingView] 📹 CAMERA STATE AFTER TOGGLE:', {
-            webcamOn,
-            hasWebcamStream: !!webcamStream,
-            streamId: webcamStream?.id || 'none',
-            hasTrack: !!webcamStream?.track,
-            trackEnabled: webcamStream?.track?.enabled,
-          });
-        }, 1000);
+          if (isComponentMountedRef.current) {
+            const localParticipantForUpdate = meetingHooks.localParticipant;
+            const actualWebcamState = localParticipantForUpdate?.webcamOn;
+            
+            // Only force update if there's still a mismatch
+            if (callMediaManager.getMediaState().cameraEnabled !== actualWebcamState) {
+              console.log('[MeetingView] 🔄 Forcing camera state alignment');
+              callMediaManager.forceUpdateMediaState({
+                cameraEnabled: !!actualWebcamState
+              });
+            }
+            
+            // Log the final state
+            console.log('[MeetingView] 📹 FINAL CAMERA STATE:', {
+              videoSDKWebcamOn: actualWebcamState,
+              mediaManagerCameraEnabled: callMediaManager.getMediaState().cameraEnabled,
+              hasWebcamStream: !!webcamStream,
+              streamId: webcamStream?.id || 'none'
+            });
+          }
+        }, 500);
       } else {
-        console.log('[MeetingView] 🎬 Using fallback callMediaManager...');
-        // Fallback to media manager
-        await callMediaManager.toggleCamera();
-        console.log('[MeetingView] ✅ callMediaManager camera toggle completed');
+        console.log('[MeetingView] ℹ️ No VideoSDK webcam control available, using CallMediaManager only');
       }
     } catch (error) {
       console.error('[MeetingView] ❌ Error toggling camera:', error);
     }
-  }, [callMediaManager, meetingHooks, webcamOn, cameraEnabled, webcamStream, localParticipant?.id]);
+  }, [callMediaManager, meetingHooks, webcamOn, cameraEnabled, webcamStream]);
 
   // Toggle speaker - USE CENTRALIZED MEDIA MANAGER
   const handleToggleSpeaker = useCallback(async () => {
@@ -764,94 +794,27 @@ const MeetingView = () => {
     // Implement more options functionality
   }, []);
 
-  // Early camera initialization method for video calls
-  const initializeCameraForVideoCall = useCallback(async () => {
-    if (callType === 'video') {
-      console.log('[MeetingView] 🔍 Early camera initialization started');
-      
-      // Add a flag to track initialization attempts
-      const attemptRef = useRef(0);
-      attemptRef.current += 1;
-      
-      // Don't try more than 3 times in quick succession
-      if (attemptRef.current > 3) {
-        console.log('[MeetingView] ⚠️ Too many camera initialization attempts, waiting...');
-        setTimeout(() => { attemptRef.current = 0 }, 5000);
-        return;
-      }
-      
-      try {
-        // First make sure camera is enabled in media manager
-        await callMediaManager.setCameraEnabled(true);
-        
-        // If webcam is not on yet, try to toggle it on
-        if (!webcamOn && meetingHooks?.toggleWebcam) {
-          console.log('[MeetingView] 🎬 Early toggleWebcam call');
-          await meetingHooks.toggleWebcam();
-          
-          // Add a small delay to let VideoSDK process the change
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          // Log whether it worked
-          console.log('[MeetingView] Camera toggle result check:', { 
-            webcamOn: webcamOn || false,
-            webcamStream: !!webcamStream,
-            streamId: webcamStream?.id || 'none'
-          });
-        }
-      } catch (error) {
-        console.log('[MeetingView] Early camera initialization error:', error);
-      }
+  // Simplified media state management - rely on centralized CallMediaManager
+  const handleMediaStateChange = useCallback((newState: MediaState) => {
+    if (isComponentMountedRef.current) {
+      setMediaState(newState);
     }
-  }, [callType, callMediaManager, webcamOn, webcamStream, meetingHooks]);
-  const attempts = useRef(0);
-  // Call the initialization right after component mounts
-  useEffect(() => {
-    if (callType === 'video') {
-      initializeCameraForVideoCall();
-    }
-    
-    // Periodically check and try to ensure camera is on during connecting state
-    const ensureCameraInterval = setInterval(() => {
-      if (callType === 'video' && callState === 'connecting' && !webcamOn && 
-          meetingHooks && typeof meetingHooks.toggleWebcam === 'function') {
-        
-        // Increment attempt counter
-        attempts.current += 1;
-        
-        // Only try a limited number of times
-        if (attempts.current <= 3) {
-          console.log(`[MeetingView] 🔄 Periodic camera check - trying to enable (attempt ${attempts.current}/3)`);
-          initializeCameraForVideoCall();
-        } else {
-          console.log('[MeetingView] ⚠️ Max camera initialization attempts reached');
-        }
-      }
-    }, 3000); // Increased from 2000ms to 3000ms to give more time between attempts
-    
-    return () => {
-      clearInterval(ensureCameraInterval);
-    };
-  }, [callType, callState, webcamOn, initializeCameraForVideoCall, meetingHooks]);
+  }, []);
 
-  // Initialize camera for video calls - USE CENTRALIZED MEDIA MANAGER and ENABLE EARLY
+  // This effect will handle media state initialization in a clean way
   useEffect(() => {
-    // Initialize camera immediately for video calls, even before connection is established
-    if (callType === 'video') {
-      console.log('[MeetingView] 📹 Early camera initialization for video call');
-      callMediaManager.setCameraEnabled(true);
-      
-      // Start camera preview immediately to ensure it's visible during connecting state
-      setTimeout(() => {
-        if (!webcamOn && callMediaManager) {
-          console.log('[MeetingView] 🎬 Forcing early camera preview');
-          callMediaManager.toggleCamera();
-        }
-      }, 500); // Short delay to ensure components are mounted
-    } else {
-      callMediaManager.setCameraEnabled(false);
-    }
-  }, [callType, callMediaManager, webcamOn]);
+    // Set up subscription to media state changes
+    const unsubscribe = callMediaManager.subscribe(handleMediaStateChange);
+    
+    // Set initial state
+    const initialState = callMediaManager.getMediaState();
+    handleMediaStateChange(initialState);
+    
+    // Clean up subscription
+    return () => {
+      unsubscribe();
+    };
+  }, [callMediaManager, handleMediaStateChange]);
 
   // Enhanced App State Handling - BULLETPROOF IMPLEMENTATION
   useEffect(() => {
@@ -1157,6 +1120,7 @@ const MeetingView = () => {
                       marginBottom: 8
                     }}>
                       {callState === 'connecting' ? 'Connecting...' : 'Activating camera...'}
+
                     </Text>
                     {callState === 'connecting' && (
                       <ActivityIndicator size="small" color="#00D4AA" />
@@ -1171,6 +1135,7 @@ const MeetingView = () => {
         {/* Call controls */}
         {showControls && (
           <Animated.View style={[styles.controlsWrapper, { opacity: controlsOpacity }]}>
+
             <CallControls
               micEnabled={micOn}
               cameraEnabled={webcamOn}
@@ -1220,6 +1185,7 @@ const MeetingView = () => {
           </View>
           <Text style={styles.recipientNameText}>{recipientName}</Text>
           <Text style={[styles.callStatusText, { color: getCallStatusColor() }]}>
+
             {getCallStatusText()}
           </Text>
           
@@ -1242,6 +1208,7 @@ const MeetingView = () => {
       {/* Call controls */}
       {showControls && (
         <Animated.View style={[styles.controlsWrapper, { opacity: controlsOpacity }]}>
+
           <CallControls
             micEnabled={micOn}
             cameraEnabled={webcamOn}
@@ -1266,6 +1233,10 @@ const MeetingView = () => {
 const MeetingScreen = () => {
   const route = useRoute<MeetingScreenRouteProp>();
   const { activeCall } = useCall();
+  
+  // BULLETPROOF FIX: Always get the latest media state from the centralized CallMediaManager
+  const callMediaManager = useRef(CallMediaManager.getInstance()).current;
+  const initialMediaState = callMediaManager.getMediaState();
   
   // Use route params with fallbacks
   const meetingId = route.params?.meetingId || activeCall?.meetingId;
@@ -1296,27 +1267,24 @@ const MeetingScreen = () => {
       <MeetingProvider
         config={{
           meetingId,
+          micEnabled: initialMediaState.micEnabled,
+          webcamEnabled: callType === 'video' ? true : initialMediaState.cameraEnabled,
           name: displayName,
-          micEnabled: true,
-          webcamEnabled: callType === 'video',
-          
-          // ✅ FIX: Use 'SEND_AND_RECV' mode which allows both sending and receiving streams
-          mode: 'SEND_AND_RECV' as const,
-
-          // 💡 OPTIMIZATION: Removed redundant/incorrect properties
-          // participantId is not a root config property.
-          // multiStream is true by default in CONFERENCE mode.
-          
           notification: {
             title: "Call in Progress",
             message: `${callType === 'video' ? 'Video' : 'Voice'} call with ${recipientName}`
           }
         }}
         token={token}
-        // ✅ FIX: Let the MeetingView handle joining logic
         joinWithoutUserInteraction={false}
       >
-        <MeetingView />
+        <MeetingView
+          meetingId={meetingId}
+          callType={callType}
+          token={token}
+          localParticipantId={activeCall?.callerId || ""}
+          recipientName={recipientName}
+        />
       </MeetingProvider>
     </CallErrorBoundary>
   );

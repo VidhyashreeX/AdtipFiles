@@ -184,17 +184,71 @@ class CallMediaManager {
    * Force set mic state (for external control)
    */
   public setMicEnabled(enabled: boolean): void {
-    if (this.mediaState.micEnabled !== enabled) {
-      this.toggleMic();
+    if (!this.initialized) {
+      console.warn('[CallMediaManager] Not initialized');
+      return;
+    }
+    
+    console.log('[CallMediaManager] Setting mic enabled:', enabled);
+    
+    if (this.mediaState.micEnabled === enabled) {
+      console.log('[CallMediaManager] Mic already in desired state');
+      return;
+    }
+    
+    try {
+      // Update state first
+      this.mediaState.micEnabled = enabled;
+      
+      // Use VideoSDK meeting if available
+      if (this.currentMeeting && typeof this.currentMeeting.toggleMic === 'function') {
+        this.currentMeeting.toggleMic();
+        console.log('[CallMediaManager] VideoSDK toggleMic called');
+      } else {
+        console.log('[CallMediaManager] No VideoSDK meeting available, state updated but mic not toggled');
+      }
+      
+      // Notify listeners
+      this.notifyListeners();
+      appEventEmitter.emit('mediaStateChanged', this.mediaState);
+    } catch (error) {
+      console.error('[CallMediaManager] Error setting mic enabled state:', error);
     }
   }
 
   /**
-   * Force set camera state (for external control)
+   * Set camera enabled state directly
    */
   public setCameraEnabled(enabled: boolean): void {
-    if (this.mediaState.cameraEnabled !== enabled) {
-      this.toggleCamera();
+    if (!this.initialized) {
+      console.warn('[CallMediaManager] Not initialized');
+      return;
+    }
+    
+    console.log('[CallMediaManager] Setting camera enabled:', enabled);
+    
+    if (this.mediaState.cameraEnabled === enabled) {
+      console.log('[CallMediaManager] Camera already in desired state');
+      return;
+    }
+    
+    try {
+      // Update state first
+      this.mediaState.cameraEnabled = enabled;
+      
+      // Use VideoSDK meeting if available
+      if (this.currentMeeting && typeof this.currentMeeting.toggleWebcam === 'function') {
+        this.currentMeeting.toggleWebcam();
+        console.log('[CallMediaManager] VideoSDK toggleWebcam called');
+      } else {
+        console.log('[CallMediaManager] No VideoSDK meeting available, state updated but camera not toggled');
+      }
+      
+      // Notify listeners
+      this.notifyListeners();
+      appEventEmitter.emit('mediaStateChanged', this.mediaState);
+    } catch (error) {
+      console.error('[CallMediaManager] Error setting camera enabled state:', error);
     }
   }
 
@@ -208,60 +262,43 @@ class CallMediaManager {
   }
 
   /**
-   * Get current media state
+   * Subscribe to media state changes
+   * Returns an unsubscribe function
+   */
+  public subscribe(listener: (state: MediaState) => void): () => void {
+    this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter(l => l !== listener);
+    };
+  }
+  
+  /**
+   * Get the current media state
    */
   public getMediaState(): MediaState {
     return { ...this.mediaState };
   }
-
+  
   /**
-   * Track a media stream/track
+   * Force update media state
    */
-  public trackMedia(trackId: string, type: 'audio' | 'video', stream?: any): void {
-    console.log(`[CallMediaManager] Tracking ${type} track:`, trackId);
-    
-    this.activeTracks.set(trackId, {
-      trackId,
-      type,
-      isActive: true,
-      stream,
-    });
+  public forceUpdateMediaState(partial: Partial<MediaState>): void {
+    this.mediaState = { ...this.mediaState, ...partial };
+    this.notifyListeners();
+    appEventEmitter.emit('mediaStateChanged', this.mediaState);
   }
-
+  
   /**
-   * Untrack a media stream/track
+   * Notify all listeners of state change
    */
-  public untrackMedia(trackId: string): void {
-    console.log('[CallMediaManager] Untracking media:', trackId);
-    
-    const track = this.activeTracks.get(trackId);
-    if (track) {
-      // Try to stop the track if it has stop method
-      if (track.stream && typeof track.stream.stop === 'function') {
-        try {
-          track.stream.stop();
-        } catch (error) {
-          console.warn('[CallMediaManager] Error stopping track:', error);
-        }
+  private notifyListeners(): void {
+    for (const listener of this.listeners) {
+      try {
+        listener({ ...this.mediaState });
+      } catch (error) {
+        console.error('[CallMediaManager] Error notifying listener:', error);
       }
-      
-      this.activeTracks.delete(trackId);
     }
-  }
-
-  /**
-   * Subscribe to media state changes
-   */
-  public subscribe(listener: (state: MediaState) => void): () => void {
-    this.listeners.push(listener);
-    
-    // Return unsubscribe function
-    return () => {
-      const index = this.listeners.indexOf(listener);
-      if (index > -1) {
-        this.listeners.splice(index, 1);
-      }
-    };
   }
 
   /**
@@ -449,20 +486,6 @@ class CallMediaManager {
   }
 
   /**
-   * Notify all listeners of state changes
-   */
-  private notifyListeners(): void {
-    const currentState = { ...this.mediaState };
-    this.listeners.forEach(listener => {
-      try {
-        listener(currentState);
-      } catch (error) {
-        console.warn('[CallMediaManager] Error notifying listener:', error);
-      }
-    });
-  }
-
-  /**
    * Check if media manager is initialized
    */
   public isInitialized(): boolean {
@@ -496,18 +519,6 @@ class CallMediaManager {
     }
     
     return { audio, video };
-  }
-
-  /**
-   * Force update media state
-   */
-  public forceUpdateMediaState(partialState: Partial<MediaState>): void {
-    this.mediaState = {
-      ...this.mediaState,
-      ...partialState
-    };
-    this.notifyListeners();
-    console.log('[CallMediaManager] Force updated media state:', partialState);
   }
 }
 
