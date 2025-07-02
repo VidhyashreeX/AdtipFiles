@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, Image, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Header from '../../components/common/Header';
-import { usePaginatedData } from '../../hooks/useDataLayer';
+import { useExplore } from '../../hooks/useQueries';
 import PostItemSkeleton from '../../components/skeletons/PostItemSkeleton';
+import { ExploreItem } from '../../types/api';
 
 // Constants
 const API_BASE_URL = 'https://api.adtip.in';
@@ -23,40 +25,30 @@ type RootStackParamList = {
 // Define navigation type
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-interface ExploreItem {
-  id: string;
-  type: 'post' | 'short';
-  imageUrl: string;
-  caption: string;
-}
-
 const ExploreScreen: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
+  const { user } = useAuth();
   const navigation = useNavigation<NavigationProp>();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   
-  const loggedInUserId = 56768; // Replace with actual user ID from auth context
+  const loggedInUserId = user?.id || 56768; // Use actual user ID or fallback
 
-  // Use the new data layer for better performance
+  // Use the explore hook with React Query
   const {
-    data: exploreItems,
+    data,
     isLoading: loading,
-    isLoadingMore,
+    isFetchingNextPage: isLoadingMore,
     error,
-    hasMore,
-    refresh,
-    loadMore,
-    isOnline,
-  } = usePaginatedData<ExploreItem>(
-    '/api/explore',
-    { loggined_user_id: loggedInUserId },
-    { 
-      enabled: true,
-      staleTime: 10 * 60 * 1000, // 10 minutes cache
-      cacheKey: 'explore-content'
-    }
-  );
+    hasNextPage: hasMore,
+    refetch: refresh,
+    fetchNextPage: loadMore,
+  } = useExplore(loggedInUserId);
+
+  // Flatten the paginated data
+  const exploreItems = useMemo(() => {
+    return data?.pages?.flatMap(page => page.data) || [];
+  }, [data]);
 
   // Helper function for full image URLs
   const getFullImageUrl = useCallback((url?: string | null): string => {
@@ -71,26 +63,28 @@ const ExploreScreen: React.FC = () => {
 
   // Memoized render item for better performance
   const renderItem = useCallback(({ item }: { item: ExploreItem }) => {
+    const imageUrl = item.content_type === 'post' ? item.media_url : item.thumbnail;
+    
     return (
       <TouchableOpacity
         style={styles.itemContainer}
         onPress={() => {
-          if (item.type === 'post') {
-            navigation.navigate('VideoPreview', { postId: item.id });
+          if (item.content_type === 'post') {
+            navigation.navigate('VideoPreview', { postId: item.id.toString() });
           } else {
             navigation.navigate('TipShorts', { 
-              shortId: item.id,
+              shortId: item.id.toString(),
             });
           }
         }}
         activeOpacity={0.8}
       >
         <Image
-          source={{ uri: getFullImageUrl(item.imageUrl) }}
+          source={{ uri: getFullImageUrl(imageUrl) }}
           style={styles.itemImage}
           resizeMode="cover"
         />
-        {item.type === 'short' && (
+        {item.content_type === 'shot' && (
           <View style={styles.shortIndicator}>
             <Icon name="play-circle" size={24} color="#fff" />
           </View>
@@ -113,12 +107,24 @@ const ExploreScreen: React.FC = () => {
   );
 
   // Memoized key extractor
-  const keyExtractor = useCallback((item: ExploreItem) => item.id, []);
+  const keyExtractor = useCallback((item: ExploreItem) => item.id.toString(), []);
+
+  // Handle load more
+  const handleLoadMore = useCallback(() => {
+    if (hasMore && !isLoadingMore) {
+      loadMore();
+    }
+  }, [hasMore, isLoadingMore, loadMore]);
+
+  // Handle refresh
+  const handleRefresh = useCallback(() => {
+    refresh();
+  }, [refresh]);
 
   // Loading skeleton component
   const renderLoadingSkeleton = useMemo(() => (
     <FlatList
-      data={Array(9).fill(null)}
+      data={Array(12).fill(null)} // Show 4 rows of 3 items = 12 skeletons
       numColumns={3}
       keyExtractor={(_, index) => `skeleton-${index}`}
       renderItem={() => (
@@ -127,6 +133,7 @@ const ExploreScreen: React.FC = () => {
         </View>
       )}
       scrollEnabled={false}
+      contentContainerStyle={styles.listContent}
     />
   ), [colors.surface]);
 
@@ -140,26 +147,19 @@ const ExploreScreen: React.FC = () => {
       {error && (
         <TouchableOpacity 
           style={[styles.retryButton, { backgroundColor: colors.primary }]}
-          onPress={refresh}
+          onPress={handleRefresh}
         >
           <Text style={styles.retryText}>Retry</Text>
         </TouchableOpacity>
       )}
     </View>
-  ), [colors, error, refresh]);
+  ), [colors, error, handleRefresh]);
 
-  // Network status indicator
+  // Network status indicator - simplified since React Query handles offline/online
   const NetworkIndicator = useMemo(() => {
-    if (!isOnline) {
-      return (
-        <View style={[styles.networkIndicator, { backgroundColor: colors.error }]}>
-          <Icon name="wifi-off" size={16} color="#FFF" />
-          <Text style={styles.networkText}>Offline Mode</Text>
-        </View>
-      );
-    }
+    // You can add network status checking here if needed
     return null;
-  }, [isOnline, colors.error]);
+  }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background}]}>
@@ -176,9 +176,9 @@ const ExploreScreen: React.FC = () => {
           numColumns={3}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          onEndReached={loadMore}
+          onEndReached={handleLoadMore}
           onEndReachedThreshold={0.5}
-          onRefresh={refresh}
+          onRefresh={handleRefresh}
           refreshing={loading && exploreItems.length > 0}
           ListFooterComponent={
             isLoadingMore ? (

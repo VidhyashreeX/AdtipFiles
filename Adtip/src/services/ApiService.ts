@@ -46,6 +46,8 @@ import {
   DeleteCommentResponse,
   ReportCommentRequest,
   ReportCommentResponse,
+  ExploreContentRequest,
+  ExploreContentResponse,
 } from '../types/api';
 
 // Interfaces moved from inside the class
@@ -1763,12 +1765,11 @@ export default class ApiService {
   /**
    * Get explore content
    */
-  static async getExploreContent(data: {
-    page: number;
-    limit: number;
-    loggined_user_id: number;
-  }): Promise<any> {
-    return this.post('/api/explore', data);
+  static async getExploreContent(data: ExploreContentRequest): Promise<ExploreContentResponse> {
+    console.log('🔍 Getting explore content with params:', data);
+    const response = await this.post('/api/explore', data);
+    console.log('📥 Explore API response:', response);
+    return response;
   }
 
   /**

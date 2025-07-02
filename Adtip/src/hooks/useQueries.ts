@@ -6,7 +6,7 @@ import ApiService from '../services/ApiService';
 import { ENDPOINTS } from '../constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { queryClient } from '../providers/QueryProvider';
-import { PostListResponse } from '../types/api';
+import { PostListResponse, ExploreContentResponse, ExploreItem as ApiExploreItem } from '../types/api';
 
 // Enhanced Types with proper interfaces
 interface Post {
@@ -35,12 +35,8 @@ interface Short {
   };
 }
 
-interface ExploreItem {
-  id: string;
-  type: 'post' | 'short';
-  imageUrl: string;
-  caption: string;
-}
+// Use the API type for ExploreItem
+type ExploreItem = ApiExploreItem;
 
 interface ShortsResponse {
   status: boolean;
@@ -140,20 +136,24 @@ export const useExplore = (userId?: number) => {
     queryFn: async ({ pageParam }) => {
       const page = pageParam as number;
       // Use ApiService for consistent auth and error handling.
-      const data = await ApiService.post(ENDPOINTS.EXPLORE, {
+      const data = await ApiService.getExploreContent({
         page,
-        limit: 15,
+        limit: 10,
         loggined_user_id: userId || 0,
       });
-      return data as ExploreResponse;
+      return data;
     },
     initialPageParam: 1,
-    getNextPageParam: (lastPage: ExploreResponse, allPages) => {
-      const hasMore = lastPage?.data?.length === 15;
-      return hasMore ? allPages.length + 1 : undefined;
+    getNextPageParam: (lastPage, allPages) => {
+      if (lastPage?.pagination?.current_page < lastPage?.pagination?.total_page) {
+        return lastPage.pagination.current_page + 1;
+      }
+      return undefined;
     },
     enabled: !!userId,
     staleTime: 10 * 60 * 1000, // 10 minutes for explore
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 };
 

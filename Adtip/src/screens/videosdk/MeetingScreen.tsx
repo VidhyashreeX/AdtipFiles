@@ -634,7 +634,7 @@ const MeetingView = () => {
     } catch (error) {
       console.error('[MeetingView] Error toggling camera:', error);
     }
-  }, [cameraEnabled, callMediaManager, meetingHooks]);
+  }, [callMediaManager, meetingHooks]);
 
   // Toggle speaker - USE CENTRALIZED MEDIA MANAGER
   const handleToggleSpeaker = useCallback(async () => {
@@ -682,30 +682,6 @@ const MeetingView = () => {
       callMediaManager.setCameraEnabled(false);
     }
   }, [callType, callMediaManager]);
-
-  // Enable webcam for video calls after meeting is joined
-  useEffect(() => {
-    // Only run this once when the meeting has been joined
-    if (callType === 'video' && hasJoined && meetingHooks?.toggleWebcam) {
-      const initializeCamera = async () => {
-        try {
-          // Check if the webcam is already enabled from the config
-          if (!webcamOn) {
-            console.log('[MeetingView] Meeting joined, initializing camera');
-            await meetingHooks.toggleWebcam();
-            console.log('[MeetingView] Camera initialized successfully');
-          } else {
-            console.log('[MeetingView] Camera already enabled');
-          }
-        } catch (error) {
-          console.error('[MeetingView] Error initializing camera:', error);
-        }
-      };
-
-      // Initialize the camera immediately, no setTimeout
-      initializeCamera();
-    }
-  }, [hasJoined, callType, meetingHooks, webcamOn]);
 
   // Enhanced App State Handling - BULLETPROOF IMPLEMENTATION
   useEffect(() => {
@@ -970,7 +946,7 @@ const MeetingView = () => {
           )}
           
           {/* Local participant (small self-view) */}
-          {localParticipant && (
+          {localParticipant && webcamOn && (
             <View style={styles.selfViewContainer}>
               <VideoSDKParticipantView
                 participant={localParticipant}
@@ -985,8 +961,8 @@ const MeetingView = () => {
         {showControls && (
           <Animated.View style={[styles.controlsWrapper, { opacity: controlsOpacity }]}>
             <CallControls
-              micEnabled={micEnabled}
-              cameraEnabled={cameraEnabled}
+              micEnabled={micOn}
+              cameraEnabled={webcamOn}
               speakerEnabled={speakerEnabled}
               callType={callType}
               onToggleMic={handleToggleMic}
@@ -1056,8 +1032,8 @@ const MeetingView = () => {
       {showControls && (
         <Animated.View style={[styles.controlsWrapper, { opacity: controlsOpacity }]}>
           <CallControls
-            micEnabled={micEnabled}
-            cameraEnabled={cameraEnabled}
+            micEnabled={micOn}
+            cameraEnabled={webcamOn}
             speakerEnabled={speakerEnabled}
             callType={callType}
             onToggleMic={handleToggleMic}

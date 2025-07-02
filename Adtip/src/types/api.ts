@@ -755,13 +755,51 @@ export interface ExploreContentRequest {
   loggined_user_id: number;
 }
 
+export interface ExploreItem {
+  // Post-specific fields
+  id: number;
+  user_id: number;
+  title?: string;
+  content: string;
+  media_url: string;
+  media_type?: string;
+  is_promoted?: number;
+  video_category_id?: number;
+  user_name: string;
+  user_profile_image: string | null;
+  address?: string | null;
+  premium_plan_id?: number;
+  post_promotion_id?: number | null;
+  target_min_age?: number | null;
+  target_max_age?: number | null;
+  reach_goal?: number | null;
+  duration_days?: number | null;
+  pay_per_view?: number | null;
+  total_pay?: number | null;
+  platform_fee?: number | null;
+  likeCount?: number;
+  commentCount?: number;
+  is_liked: boolean;
+  content_type: 'post' | 'shot';
+  
+  // Short/Shot-specific fields (when content_type is 'shot')
+  name?: string;
+  category_id?: number;
+  total_views?: number;
+  total_likes?: number;
+  thumbnail?: string;
+  channel_follow?: any;
+  channelId?: number;
+  total_comments?: number;
+}
+
 export interface ExploreContentResponse {
   status: boolean;
   message: string;
-  data: Post[]; // Reuse Post interface
+  data: ExploreItem[];
   pagination: {
     current_page: number;
-    total_pages: number;
+    total_page: number;
     total_count: number;
   };
 }
