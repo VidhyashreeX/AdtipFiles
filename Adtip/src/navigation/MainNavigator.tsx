@@ -74,6 +74,9 @@ import ChatScreen from '../screens/chat/ChatScreen';
 // Import PrivacyPolicyScreen
 import PrivacyPolicyScreen from '../screens/Privacy/PrivacyPolicyScreen';
 
+// Import PremiumUserScreen
+import PremiumUserScreen from '../screens/premium/PremiumUserScreen';
+
 // Create stack navigator with proper typing
 const Stack = createNativeStackNavigator<MainNavigatorParamList>();
 
@@ -314,6 +317,7 @@ const MainNavigator = () => {
   const EnhancedFollowersList = withWalletBalance(FollowersList);
   const EnhancedFollowingsList = withWalletBalance(FollowingsList);
   const EnhancedExploreScreen = withWalletBalance(ExploreScreen);
+  const EnhancedPremiumUserScreen = withWalletBalance(PremiumUserScreen);
   
   // CREATE THE ENHANCED VIDEO PLAYER MODAL SCREEN
   const EnhancedVideoPlayerModalScreen = withWalletBalance(VideoPlayerModalScreen);
@@ -480,6 +484,7 @@ const MainNavigator = () => {
       {/* Add UpgradePremiumScreen */}
       <Stack.Screen name="UpgradePremiumScreen" component={UpgradePremiumScreen} />
       <Stack.Screen name="SubscriptionScreen" component={SubscriptionScreen} />
+      <Stack.Screen name="PremiumUser" component={EnhancedPremiumUserScreen} />
       <Stack.Screen name="ContentCreatorSubscriptionScreen" component={ContentCreatorSubscriptionScreen} />
       <Stack.Screen
         name="PrivacyPolicy"

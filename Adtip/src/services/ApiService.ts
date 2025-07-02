@@ -1634,8 +1634,8 @@ export default class ApiService {
     return this.post('/api/subscriptions/create', { plan_id, user_id });
   }
 
-  static async cancelSubscription(): Promise<any> {
-    return this.post('/api/subscriptions/cancel', {});
+  static async cancelSubscription(user_id: number): Promise<any> {
+    return this.post('/api/subscriptions/cancel', { user_id });
   }
 
   static async getSubscriptionStatus(userId: number): Promise<any> {
@@ -1647,6 +1647,15 @@ export default class ApiService {
     return this.get('/api/content-premium-plans');
   }
 
+    // ===== SUBSCRIPTION APIS TEST=====
+    static async getSubscriptionPlansTest(): Promise<any> {
+      return this.get('/api/subscription-plans-test');
+    }
+  
+static async createSubscriptionTest(plan_id: string, user_id: number): Promise<any> {
+  return this.post('/api/subscriptions/create-test', { plan_id, user_id });
+}
+
   // ===== RAZORPAY INTEGRATION APIS =====
 
   /**
@@ -1654,6 +1663,10 @@ export default class ApiService {
    */
   static async getRazorpayDetails(): Promise<any> {
     return this.get('/api/razorpay-details');
+  }
+
+  static async getRazorpayDetailsTest(): Promise<any> {
+    return this.get('/api/razorpay-details-test');
   }
 
   /**
