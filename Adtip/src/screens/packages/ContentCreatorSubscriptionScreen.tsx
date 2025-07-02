@@ -110,8 +110,15 @@ const ContentCreatorSubscriptionScreen = () => {
             navigation.goBack();
         })
         .catch((error: any) => {
-            // handle failure
-            Alert.alert('Payment Failed', `Code: ${error.code}\nDescription: ${error.description}`);
+            // Show user-friendly messages for payment cancelled or failed
+            if (
+              error?.code === 'BAD_REQUEST_ERROR' &&
+              (error?.reason === 'payment_cancelled' || error?.description?.toLowerCase().includes('cancel'))
+            ) {
+              Alert.alert('Payment Cancelled', 'You cancelled the payment or did not complete it.', [{ text: 'OK' }]);
+            } else {
+              Alert.alert('Payment Failed', 'Something went wrong with your payment. Please try again.', [{ text: 'OK' }]);
+            }
         })
         .finally(() => {
             setPaymentProcessing(false);
@@ -172,8 +179,12 @@ const ContentCreatorSubscriptionScreen = () => {
           </View>
 
           {/* Premium Column */}
-          <View style={[styles.comparisonColumn, { backgroundColor: colors.primary + '10', borderColor: colors.primary, borderWidth: 1 }]}
-            pointerEvents={user?.isPremium ? 'none' : 'auto'}
+          <View
+            style={[
+              styles.comparisonColumn,
+              { backgroundColor: colors.primary + '10', borderColor: colors.primary, borderWidth: 1 }
+            ]}
+            pointerEvents={user?.is_premium ? 'none' : 'auto'}
           >
             <View style={styles.planTypeHeader}>
               <Text style={[styles.planTypeTitle, { color: colors.primary }]}>PREMIUM</Text>
@@ -346,12 +357,7 @@ const ContentCreatorSubscriptionScreen = () => {
               <Text style={[styles.summaryLabel, { color: colors.text.secondary }]}>
                 Plan: {selectedPlan.name}
               </Text>
-              <Text style={[styles.summaryValue, { color: colors.primary }]}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                ₹{selectedPlan.amount}
-              </Text>
+
             </View>
             <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
             <View style={styles.summaryRow}>

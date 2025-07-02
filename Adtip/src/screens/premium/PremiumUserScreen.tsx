@@ -228,13 +228,6 @@ const PremiumUserScreen = () => {
                   {formatDate(subscriptionData.current_end_at)}
                 </Text>
               </View>
-              
-              <View style={styles.detailRow}>
-                <Text style={[styles.detailLabel, { color: colors.text.secondary }]}>Payments Made</Text>
-                <Text style={[styles.detailValue, { color: colors.text.primary }]}>
-                  {subscriptionData.paid_count} of {subscriptionData.total_count}
-                </Text>
-              </View>
             </View>
 
             {/* Premium Benefits */}

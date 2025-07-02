@@ -111,6 +111,7 @@ export type MainNavigatorParamList = {
   SubscriptionScreen: undefined;
   ContentCreatorSubscriptionScreen: undefined;
   PremiumUser: undefined;
+  ContentCreatorPremium: undefined;
   PrivacyPolicy: undefined; // Add this line
 };
 

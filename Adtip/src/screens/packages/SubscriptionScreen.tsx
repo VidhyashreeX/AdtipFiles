@@ -37,7 +37,7 @@ const SubscriptionScreen = () => {
   useEffect(() => {
     const fetchPlans = async () => {
       try {
-        const response = await ApiService.getSubscriptionPlansTest();
+        const response = await ApiService.getSubscriptionPlans();
         if (response.status) {
           setPlans(response.plans);
           // Pre-select the middle plan
@@ -73,7 +73,7 @@ const SubscriptionScreen = () => {
 
     try {
       // Step 1: Create a subscription on Razorpay (no database storage yet)
-      const subResponse = await ApiService.createSubscriptionTest(selectedPlanId, user.id);
+      const subResponse = await ApiService.createSubscription(selectedPlanId, user.id);
 
       if (!subResponse.status || !subResponse.subscription_id) {
         throw new Error(subResponse.message || 'Failed to create subscription.');
@@ -82,7 +82,7 @@ const SubscriptionScreen = () => {
       const { subscription_id } = subResponse;
 
       // Step 2: Fetch Razorpay key from backend
-      const razorpayDetails = await ApiService.getRazorpayDetailsTest();
+      const razorpayDetails = await ApiService.getRazorpayDetails();
       const key = razorpayDetails.api_key;
       if (!key) {
         throw new Error('Could not fetch Razorpay key.');

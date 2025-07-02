@@ -77,6 +77,9 @@ import PrivacyPolicyScreen from '../screens/Privacy/PrivacyPolicyScreen';
 // Import PremiumUserScreen
 import PremiumUserScreen from '../screens/premium/PremiumUserScreen';
 
+// Import ContentCreatorPremiumScreen
+import ContentCreatorPremiumScreen from '../screens/premium/ContentCreatorPremiumScreen';
+
 // Create stack navigator with proper typing
 const Stack = createNativeStackNavigator<MainNavigatorParamList>();
 
@@ -485,6 +488,7 @@ const MainNavigator = () => {
       <Stack.Screen name="UpgradePremiumScreen" component={UpgradePremiumScreen} />
       <Stack.Screen name="SubscriptionScreen" component={SubscriptionScreen} />
       <Stack.Screen name="PremiumUser" component={EnhancedPremiumUserScreen} />
+      <Stack.Screen name="ContentCreatorPremium" component={ContentCreatorPremiumScreen} />
       <Stack.Screen name="ContentCreatorSubscriptionScreen" component={ContentCreatorSubscriptionScreen} />
       <Stack.Screen
         name="PrivacyPolicy"
