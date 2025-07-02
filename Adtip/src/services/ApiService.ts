@@ -1592,8 +1592,8 @@ export default class ApiService {
   /**
    * Get content premium plans
    */
-  static async getContentPremiumPlans(userId: number): Promise<any> {
-    return this.get(`/api/content-premium-plans/${userId}`);
+  static async getContentPremiumPlans(): Promise<any> {
+    return this.get('/api/content-premium-plans');
   }
 
   /**
@@ -1636,8 +1636,12 @@ export default class ApiService {
     return this.post('/api/subscriptions/create', { plan_id, user_id });
   }
 
-  static async cancelSubscription(): Promise<any> {
-    return this.post('/api/subscriptions/cancel', {});
+  static async cancelSubscription(user_id: number): Promise<any> {
+    return this.post('/api/subscriptions/cancel', { user_id });
+  }
+
+  static async cancelSubscriptionTest(user_id: number): Promise<any> {
+    return this.post('/api/subscriptions/cancel-test', { user_id });
   }
 
   static async getSubscriptionStatus(userId: number): Promise<any> {
@@ -1649,6 +1653,15 @@ export default class ApiService {
     return this.get('/api/content-premium-plans');
   }
 
+    // ===== SUBSCRIPTION APIS TEST=====
+    static async getSubscriptionPlansTest(): Promise<any> {
+      return this.get('/api/subscription-plans-test');
+    }
+  
+static async createSubscriptionTest(plan_id: string, user_id: number): Promise<any> {
+  return this.post('/api/subscriptions/create-test', { plan_id, user_id });
+}
+
   // ===== RAZORPAY INTEGRATION APIS =====
 
   /**
@@ -1656,6 +1669,10 @@ export default class ApiService {
    */
   static async getRazorpayDetails(): Promise<any> {
     return this.get('/api/razorpay-details');
+  }
+
+  static async getRazorpayDetailsTest(): Promise<any> {
+    return this.get('/api/razorpay-details-test');
   }
 
   /**
@@ -1988,5 +2005,21 @@ export default class ApiService {
     } catch (error) {
       throw this.handleError(error);
     }
+  }
+
+  static async createContentPremiumSubscription(plan_id: string, user_id: number): Promise<any> {
+    return this.post('/api/content-premium/create', { plan_id, user_id });
+  }
+
+  static async cancelContentPremiumSubscription(user_id: number): Promise<any> {
+    return this.post('/api/content-premium/cancel', { user_id });
+  }
+
+  static async getContentPremiumStatus(userId: number): Promise<any> {
+    return this.get(`/api/content-premium/status/${userId}`);
+  }
+
+  static async getContentPremiumRazorpayDetails(): Promise<any> {
+    return this.get('/api/content-premium/razorpay-details');
   }
 }

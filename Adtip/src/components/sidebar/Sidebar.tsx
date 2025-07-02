@@ -254,6 +254,8 @@ const Sidebar: React.FC = () => {
     {icon: 'book-open', label: 'My Ad Passbook', screen: 'AdPassbook'},
     {icon: 'user', label: 'View Profile', screen: 'Profile'},
     {icon: 'video', label: 'Tip Shorts', screen: 'TipShorts'},
+    {icon: 'award', label: 'Premium Status', screen: 'PremiumUser'},
+    {icon: 'award', label: 'Content Creator Premium Status', screen: 'ContentCreatorPremium'},
     {icon: 'settings', label: 'Settings', screen: 'Settings'},
     {icon: 'dollar-sign', label: 'My Earnings', screen: 'Earnings'},
   ], []);

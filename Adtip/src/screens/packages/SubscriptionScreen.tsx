@@ -72,7 +72,7 @@ const SubscriptionScreen = () => {
     setPaymentProcessing(true);
 
     try {
-      // Step 1: Create a subscription on your backend
+      // Step 1: Create a subscription on Razorpay (no database storage yet)
       const subResponse = await ApiService.createSubscription(selectedPlanId, user.id);
 
       if (!subResponse.status || !subResponse.subscription_id) {
@@ -105,13 +105,20 @@ const SubscriptionScreen = () => {
       console.log('Razorpay options:', options);
       RazorpayCheckout.open(options)
         .then((data: any) => {
-            // Payment is successful, webhook will handle the rest.
+            // Payment is successful, webhook will handle database storage
             Alert.alert('Success', 'Your subscription is being processed! You will be notified once it is active.');
             navigation.goBack();
         })
         .catch((error: any) => {
-            // handle failure
-            Alert.alert('Payment Failed', `Code: ${error.code}\nDescription: ${error.description}`);
+            // Show user-friendly messages for payment cancelled or failed
+            if (
+              error?.code === 'BAD_REQUEST_ERROR' &&
+              (error?.reason === 'payment_cancelled' || error?.description?.toLowerCase().includes('cancel'))
+            ) {
+              Alert.alert('Payment Cancelled', 'You cancelled the payment or did not complete it.', [{ text: 'OK' }]);
+            } else {
+              Alert.alert('Payment Failed', 'Something went wrong with your payment. Please try again.', [{ text: 'OK' }]);
+            }
         })
         .finally(() => {
             setPaymentProcessing(false);
@@ -179,7 +186,7 @@ const SubscriptionScreen = () => {
 
           {/* Premium Column */}
           <View style={[styles.comparisonColumn, { backgroundColor: colors.primary + '10', borderColor: colors.primary, borderWidth: 1 }]}
-            pointerEvents={user?.isPremium ? 'none' : 'auto'}
+            pointerEvents={user?.is_premium ? 'none' : 'auto'}
           >
             <View style={styles.planTypeHeader}>
               <Text style={[styles.planTypeTitle, { color: colors.primary }]}>PREMIUM</Text>
