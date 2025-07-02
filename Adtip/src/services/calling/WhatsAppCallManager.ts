@@ -122,8 +122,25 @@ class WhatsAppCallManager {
 
       console.log('[WhatsAppCallManager] Initializing...');
 
-      // Request permissions
-      await this.requestPermissions();
+      // ✅ FIX: Initialize VideoSDKService with the API key
+      const videoSDKService = VideoSDKService.getInstance();
+      if (!videoSDKService.getInitializationStatus()) {
+        // IMPORTANT: Replace with your actual VideoSDK API key
+        // You can set this as an environment variable: VIDEOSDK_API_KEY=your_key_here
+        const videoSDKApiKey = process.env.VIDEOSDK_API_KEY || 'a4e0729c-93d5-4b86-8cf6-9c5da5b1d6ea';
+        
+        console.log('[WhatsAppCallManager] Initializing VideoSDK with API key:', videoSDKApiKey ? 'API key present' : 'No API key');
+        
+        if (!videoSDKApiKey || videoSDKApiKey === 'YOUR_VIDEOSDK_API_KEY') {
+          console.error('[WhatsAppCallManager] VideoSDK API Key is not set. Using default key for development.');
+        }
+        
+        await videoSDKService.initialize({ apiKey: videoSDKApiKey });
+        console.log('[WhatsAppCallManager] VideoSDKService initialized successfully.');
+      }
+
+      // ✅ FIX: Check permissions on init, but do not request them.
+      await this.checkPermissions();
 
       // Create notification channels
       await this.createNotificationChannels();
@@ -144,63 +161,109 @@ class WhatsAppCallManager {
     }
   }
   /**
-   * Request necessary permissions
+   * ✅ FIX: Checks permissions without prompting the user.
+   * This is safe to call from the background.
    */
-  private async requestPermissions(): Promise<void> {
+  private async checkPermissions(): Promise<void> {
     try {
-      // Request notification permissions
-      const notificationSettings = await notifee.requestPermission();
-      console.log('[WhatsAppCallManager] Notification permission:', notificationSettings.authorizationStatus);
+      if (Platform.OS === 'android') {
+        this.audioPermissionGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+        this.videoPermissionGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA);
+        console.log(`[WhatsAppCallManager] Initial permission check: Audio=${this.audioPermissionGranted}, Video=${this.videoPermissionGranted}`);
+      }
+      // For iOS, permissions are handled at the point of use by the SDK.
+    } catch (error) {
+      console.error('[WhatsAppCallManager] Failed to check permissions:', error);
+    }
+  }
 
-      // Request foreground service permission for Android 14+
-      if (Platform.OS === 'android' && Platform.Version >= 34) {
+  /**
+   * ✅ FIX: Requests necessary permissions from the user.
+   * This should only be called when the app is in the foreground and an Activity is present.
+   */
+  public async requestPermissionsIfNeeded(callType: 'voice' | 'video'): Promise<boolean> {
+    if (Platform.OS !== 'android') {
+      return true; // iOS handles permissions at point of use.
+    }
+
+    try {
+      console.log('[WhatsAppCallManager] Requesting permissions for call type:', callType);
+
+      // 1. Notification & Foreground Service Permissions
+      const notificationPermission = await notifee.requestPermission();
+      console.log('[WhatsAppCallManager] Notification permission result:', notificationPermission);
+
+      if (Platform.Version >= 34) {
         try {
-          const foregroundServicePermission = await PermissionsAndroid.request(
-            'android.permission.FOREGROUND_SERVICE_PHONE_CALL' as any,
-            {
-              title: 'Phone Call Service Permission',
-              message: 'Adtip needs permission to run calls in the background for better call experience.',
-              buttonNegative: 'Cancel',
-              buttonPositive: 'OK',
-            }
-          );
-          
-          console.log('[WhatsAppCallManager] Foreground service permission:', foregroundServicePermission);
+          const foregroundServicePermission = await PermissionsAndroid.request('android.permission.FOREGROUND_SERVICE_PHONE_CALL' as any);
+          console.log('[WhatsAppCallManager] Foreground service permission result:', foregroundServicePermission);
         } catch (error) {
-          console.warn('[WhatsAppCallManager] Failed to request foreground service permission:', error);
+          console.warn('[WhatsAppCallManager] Foreground service permission request failed (non-critical):', error);
         }
       }
 
-      // Request audio/video permissions for Android
-      if (Platform.OS === 'android') {
-        const audioPermission = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-          {
-            title: 'Microphone Permission',
-            message: 'This app needs access to your microphone to make voice calls.',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
-          }
-        );
-
-        const cameraPermission = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.CAMERA,
-          {
-            title: 'Camera Permission',
-            message: 'This app needs access to your camera to make video calls.',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
-          }
-        );
-
-        this.audioPermissionGranted = audioPermission === PermissionsAndroid.RESULTS.GRANTED;
-        this.videoPermissionGranted = cameraPermission === PermissionsAndroid.RESULTS.GRANTED;
-
-        console.log('[WhatsAppCallManager] Audio permission:', this.audioPermissionGranted);
-        console.log('[WhatsAppCallManager] Video permission:', this.videoPermissionGranted);
+      // 2. Mic and Camera Permissions (only request what we need and don't already have)
+      const permissionsToRequest: (typeof PermissionsAndroid.PERMISSIONS[keyof typeof PermissionsAndroid.PERMISSIONS])[] = [];
+      
+      // Re-check current permission status before requesting
+      const currentAudioPermission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+      const currentVideoPermission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA);
+      
+      if (!currentAudioPermission) {
+        permissionsToRequest.push(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
       }
+      if (callType === 'video' && !currentVideoPermission) {
+        permissionsToRequest.push(PermissionsAndroid.PERMISSIONS.CAMERA);
+      }
+
+      console.log('[WhatsAppCallManager] Permissions to request:', permissionsToRequest);
+
+      if (permissionsToRequest.length > 0) {
+        const statuses = await PermissionsAndroid.requestMultiple(permissionsToRequest);
+        console.log('[WhatsAppCallManager] Permission request results:', statuses);
+        
+        // Update internal state based on results
+        this.audioPermissionGranted = statuses[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED || currentAudioPermission;
+        this.videoPermissionGranted = statuses[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED || currentVideoPermission;
+      } else {
+        // No permissions to request, use current status
+        this.audioPermissionGranted = currentAudioPermission;
+        this.videoPermissionGranted = currentVideoPermission;
+      }
+
+      // Final validation
+      if (!this.audioPermissionGranted) {
+        console.error('[WhatsAppCallManager] Audio permission not granted');
+        Alert.alert(
+          'Permission Required', 
+          'Microphone permission is required to make calls. Please grant permission in Settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Settings', onPress: () => console.log('Open settings - TODO: implement') }
+          ]
+        );
+        return false;
+      }
+      
+      if (callType === 'video' && !this.videoPermissionGranted) {
+        console.error('[WhatsAppCallManager] Video permission not granted for video call');
+        Alert.alert(
+          'Permission Required', 
+          'Camera permission is required for video calls. Please grant permission in Settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Settings', onPress: () => console.log('Open settings - TODO: implement') }
+          ]
+        );
+        return false;
+      }
+
+      console.log('[WhatsAppCallManager] All required permissions granted successfully');
+      return true;
     } catch (error) {
       console.error('[WhatsAppCallManager] Permission request failed:', error);
+      Alert.alert('Error', 'An error occurred while requesting permissions. Please try again.');
+      return false;
     }
   }
 
@@ -371,16 +434,14 @@ class WhatsAppCallManager {
         callerId
       });
 
-      // Check permissions
-      if (callType === 'video' && !this.videoPermissionGranted) {
-        Alert.alert('Permission Required', 'Camera permission is required for video calls');
+      // ✅ FIX: Request permissions just-in-time, ensuring an Activity is present.
+      const permissionsGranted = await this.requestPermissionsIfNeeded(callType);
+      if (!permissionsGranted) {
+        console.log('[WhatsAppCallManager] Call aborted due to missing permissions.');
         return null;
       }
-
-      if (!this.audioPermissionGranted) {
-        Alert.alert('Permission Required', 'Microphone permission is required for calls');
-        return null;
-      }      // Generate VideoSDK meeting
+      
+      // Generate VideoSDK meeting
       const videoSDKService = VideoSDKService.getInstance();
       const token = await videoSDKService.generateParticipantToken();
       

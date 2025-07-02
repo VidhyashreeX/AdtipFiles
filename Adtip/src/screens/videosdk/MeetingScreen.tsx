@@ -17,7 +17,7 @@ import {
   AppStateStatus,
   Vibration,
 } from 'react-native';
-import { useMeeting, useParticipant } from '@videosdk.live/react-native-sdk';
+import { useMeeting, useParticipant, RTCView } from '@videosdk.live/react-native-sdk';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MeetingProvider } from '@videosdk.live/react-native-sdk';
@@ -198,7 +198,6 @@ const MeetingView = () => {
   const [isEndingCall, setIsEndingCall] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
-  const [participants, setParticipants] = useState<any[]>([]);
   const [callDuration, setCallDuration] = useState(0);
   const [callState, setCallState] = useState<'connecting' | 'connected' | 'reconnecting' | 'ended'>('connecting');
   const [networkQuality, setNetworkQuality] = useState<'excellent' | 'good' | 'fair' | 'poor'>('excellent');
@@ -283,24 +282,11 @@ const MeetingView = () => {
     onParticipantJoined: (participant: any) => {
       console.log('[MeetingView] 👤 Participant joined:', participant?.displayName || participant?.id);
       
-      // Add participant to tracked participants list
-      setParticipants(prev => {
-        // Only add if not already in the list
-        if (!prev.find(p => p.id === participant.id)) {
-          return [...prev, {
-            id: participant.id,
-            displayName: participant.displayName || 'Guest',
-            micMuted: participant.micMuted
-          }];
-        }
-        return prev;
-      });
+      // The `participants` map from useMeeting is updated automatically.
+      // No need to manage a separate state here.
     },
     onParticipantLeft: (participant: any) => {
       console.log('[MeetingView] 👋 Participant left:', participant?.displayName || participant?.id);
-      
-      // Remove from tracked participants
-      setParticipants(prev => prev.filter(p => p.id !== participant.id));
       
       // Check if we're the only one left in the call
       checkIfAloneInCall();
@@ -346,10 +332,55 @@ const MeetingView = () => {
     toggleMic,
     toggleWebcam,
     localParticipant,
+    participants, // ✅ ADD: Get the full participants map
   } = meetingHooks || {};
 
   // Get local participant's video stream details using useParticipant hook
   const { webcamStream, webcamOn, micStream, micOn } = useParticipant(localParticipant?.id || '');
+
+  // ✅ FIX: Explicitly join the meeting on component mount with retry logic
+  useEffect(() => {
+    if (join && !hasJoined && !isJoining) {
+      console.log('[MeetingView] Attempting to join meeting...');
+      setIsJoining(true);
+      
+      const attemptJoin = async () => {
+        try {
+          await join();
+          console.log('[MeetingView] Join call successful');
+        } catch (error) {
+          console.error('[MeetingView] Join failed:', error);
+          setIsJoining(false);
+          
+          // Retry after a short delay
+          setTimeout(() => {
+            if (!hasJoined && isComponentMountedRef.current) {
+              console.log('[MeetingView] Retrying join...');
+              setIsJoining(true);
+              try {
+                join();
+              } catch (retryError: any) {
+                console.error('[MeetingView] Retry join failed:', retryError);
+                setIsJoining(false);
+              }
+            }
+          }, 2000);
+        }
+      };
+      
+      attemptJoin();
+    }
+
+    // Ensure component mount status is tracked for cleanup
+    isComponentMountedRef.current = true;
+    return () => {
+      isComponentMountedRef.current = false;
+      // Optional: leave meeting on unmount if desired
+      // if (leave) {
+      //   leave();
+      // }
+    };
+  }, [join, hasJoined, isJoining]);
 
   // Connect VideoSDK meeting to media manager for direct control
   useEffect(() => {
@@ -357,6 +388,34 @@ const MeetingView = () => {
       callMediaManager.setMeeting(meetingHooks);
     }
   }, [meetingHooks, callMediaManager]);
+
+  // ✅ FIX: Auto-enable webcam for video calls - EVEN BEFORE JOINING (if possible)
+  useEffect(() => {
+    if (callType === 'video') {
+      // Enable camera as soon as possible, even during connecting state
+      if (!webcamOn && meetingHooks?.toggleWebcam) {
+        console.log('[MeetingView] 🎥 Auto-enabling webcam for video call...');
+        
+        // Try to enable camera immediately
+        try {
+          meetingHooks.toggleWebcam();
+          console.log('[MeetingView] 🎬 Early camera enabled');
+        } catch (error) {
+          console.log('[MeetingView] Camera toggle failed - will retry after join', error);
+          
+          // If failed, retry after joining
+          if (hasJoined && !webcamOn) {
+            console.log('[MeetingView] 🎬 Retry toggling webcam after join');
+            setTimeout(() => {
+              if (hasJoined && !webcamOn && meetingHooks?.toggleWebcam) {
+                meetingHooks.toggleWebcam();
+              }
+            }, 1000);
+          }
+        }
+      }
+    }
+  }, [hasJoined, callType, webcamOn, meetingHooks]);
 
   // New helper functions for call management
   const startCallDurationTimer = useCallback(() => {
@@ -524,10 +583,10 @@ const MeetingView = () => {
   const checkIfAloneInCall = useCallback(() => {
     // After a participant leaves, check if we're alone
     // If alone for more than 30 seconds, prompt to end call
-    if (participants.length <= 1) {
+    if (participants.size <= 1) {
       // Set a timer that will prompt to end call if still alone
       const aloneTimer = setTimeout(() => {
-        if (participants.length <= 1 && callState === 'connected' && isComponentMountedRef.current) {
+        if (participants.size <= 1 && callState === 'connected' && isComponentMountedRef.current) {
           Alert.alert(
             'Still in call',
             'You appear to be alone in this call. Would you like to end it?',
@@ -617,24 +676,55 @@ const MeetingView = () => {
     await callMediaManager.toggleMic();
   }, [callMediaManager]);
 
-  // Toggle camera - USE CENTRALIZED MEDIA MANAGER
+  // Toggle camera - ENHANCED WITH ULTRA-DETAILED DEBUGGING
   const handleToggleCamera = useCallback(async () => {
-    console.log('[MeetingView] Toggling camera. Current state:', cameraEnabled);
+    console.log('[MeetingView] 📹 TOGGLE CAMERA INITIATED:', {
+      currentWebcamOn: webcamOn,
+      currentCameraEnabled: cameraEnabled,
+      hasToggleWebcam: !!meetingHooks?.toggleWebcam,
+      hasWebcamStream: !!webcamStream,
+      streamId: webcamStream?.id || 'none',
+      localParticipantId: localParticipant?.id,
+    });
     
     try {
       // Direct use of VideoSDK toggleWebcam for more reliable control
       if (meetingHooks && meetingHooks.toggleWebcam) {
-        await meetingHooks.toggleWebcam();
-        console.log('[MeetingView] Camera toggled directly with VideoSDK');
+        console.log('[MeetingView] 🎬 Using VideoSDK toggleWebcam directly...');
+        
+        // Use timeout promise to prevent hanging if toggleWebcam doesn't resolve
+        await Promise.race([
+          meetingHooks.toggleWebcam(),
+          new Promise(resolve => setTimeout(resolve, 2000))
+        ]);
+        
+        console.log('[MeetingView] ✅ VideoSDK toggleWebcam completed');
+        
+        // Force update the media state to ensure UI reflects the change
+        callMediaManager.forceUpdateMediaState({
+          cameraEnabled: !webcamOn
+        });
+        
+        // Wait and log new state
+        setTimeout(() => {
+          console.log('[MeetingView] 📹 CAMERA STATE AFTER TOGGLE:', {
+            webcamOn,
+            hasWebcamStream: !!webcamStream,
+            streamId: webcamStream?.id || 'none',
+            hasTrack: !!webcamStream?.track,
+            trackEnabled: webcamStream?.track?.enabled,
+          });
+        }, 1000);
       } else {
+        console.log('[MeetingView] 🎬 Using fallback callMediaManager...');
         // Fallback to media manager
         await callMediaManager.toggleCamera();
-        console.log('[MeetingView] Camera toggled via callMediaManager');
+        console.log('[MeetingView] ✅ callMediaManager camera toggle completed');
       }
     } catch (error) {
-      console.error('[MeetingView] Error toggling camera:', error);
+      console.error('[MeetingView] ❌ Error toggling camera:', error);
     }
-  }, [callMediaManager, meetingHooks]);
+  }, [callMediaManager, meetingHooks, webcamOn, cameraEnabled, webcamStream, localParticipant?.id]);
 
   // Toggle speaker - USE CENTRALIZED MEDIA MANAGER
   const handleToggleSpeaker = useCallback(async () => {
@@ -674,14 +764,94 @@ const MeetingView = () => {
     // Implement more options functionality
   }, []);
 
-  // Initialize camera for video calls - USE CENTRALIZED MEDIA MANAGER
+  // Early camera initialization method for video calls
+  const initializeCameraForVideoCall = useCallback(async () => {
+    if (callType === 'video') {
+      console.log('[MeetingView] 🔍 Early camera initialization started');
+      
+      // Add a flag to track initialization attempts
+      const attemptRef = useRef(0);
+      attemptRef.current += 1;
+      
+      // Don't try more than 3 times in quick succession
+      if (attemptRef.current > 3) {
+        console.log('[MeetingView] ⚠️ Too many camera initialization attempts, waiting...');
+        setTimeout(() => { attemptRef.current = 0 }, 5000);
+        return;
+      }
+      
+      try {
+        // First make sure camera is enabled in media manager
+        await callMediaManager.setCameraEnabled(true);
+        
+        // If webcam is not on yet, try to toggle it on
+        if (!webcamOn && meetingHooks?.toggleWebcam) {
+          console.log('[MeetingView] 🎬 Early toggleWebcam call');
+          await meetingHooks.toggleWebcam();
+          
+          // Add a small delay to let VideoSDK process the change
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Log whether it worked
+          console.log('[MeetingView] Camera toggle result check:', { 
+            webcamOn: webcamOn || false,
+            webcamStream: !!webcamStream,
+            streamId: webcamStream?.id || 'none'
+          });
+        }
+      } catch (error) {
+        console.log('[MeetingView] Early camera initialization error:', error);
+      }
+    }
+  }, [callType, callMediaManager, webcamOn, webcamStream, meetingHooks]);
+  const attempts = useRef(0);
+  // Call the initialization right after component mounts
   useEffect(() => {
     if (callType === 'video') {
+      initializeCameraForVideoCall();
+    }
+    
+    // Periodically check and try to ensure camera is on during connecting state
+    const ensureCameraInterval = setInterval(() => {
+      if (callType === 'video' && callState === 'connecting' && !webcamOn && 
+          meetingHooks && typeof meetingHooks.toggleWebcam === 'function') {
+        
+        // Increment attempt counter
+        attempts.current += 1;
+        
+        // Only try a limited number of times
+        if (attempts.current <= 3) {
+          console.log(`[MeetingView] 🔄 Periodic camera check - trying to enable (attempt ${attempts.current}/3)`);
+          initializeCameraForVideoCall();
+        } else {
+          console.log('[MeetingView] ⚠️ Max camera initialization attempts reached');
+        }
+      }
+    }, 3000); // Increased from 2000ms to 3000ms to give more time between attempts
+    
+    return () => {
+      clearInterval(ensureCameraInterval);
+    };
+  }, [callType, callState, webcamOn, initializeCameraForVideoCall, meetingHooks]);
+
+  // Initialize camera for video calls - USE CENTRALIZED MEDIA MANAGER and ENABLE EARLY
+  useEffect(() => {
+    // Initialize camera immediately for video calls, even before connection is established
+    if (callType === 'video') {
+      console.log('[MeetingView] 📹 Early camera initialization for video call');
       callMediaManager.setCameraEnabled(true);
+      
+      // Start camera preview immediately to ensure it's visible during connecting state
+      setTimeout(() => {
+        if (!webcamOn && callMediaManager) {
+          console.log('[MeetingView] 🎬 Forcing early camera preview');
+          callMediaManager.toggleCamera();
+        }
+      }, 500); // Short delay to ensure components are mounted
     } else {
       callMediaManager.setCameraEnabled(false);
     }
-  }, [callType, callMediaManager]);
+  }, [callType, callMediaManager, webcamOn]);
 
   // Enhanced App State Handling - BULLETPROOF IMPLEMENTATION
   useEffect(() => {
@@ -912,49 +1082,90 @@ const MeetingView = () => {
         {/* Video participants container */}
         <View style={styles.videoContainer}>
           {/* Remote participant (main view) */}
-          {participants.length > 0 && (
-            <View style={styles.largeVideo}>
-              {Array.from(meetingHooks?.participants?.values() || [])
-                .filter(p => p.id !== localParticipant?.id)
-                .slice(0, 1)
-                .map(remoteParticipant => (
-                  <VideoSDKParticipantView
-                    key={remoteParticipant.id}
-                    participant={remoteParticipant}
-                    isLocal={false}
-                    style={styles.largeVideo}
-                  />
-                ))
-              }
-              {/* Fallback if no remote participant */}
-              {Array.from(meetingHooks?.participants?.values() || []).filter(p => p.id !== localParticipant?.id).length === 0 && (
-                <View style={styles.videoPlaceholder}>
-                  <View style={styles.participantInitialContainer}>
-                    <Text style={styles.participantInitial}>
-                      {recipientName.charAt(0).toUpperCase()}
-                    </Text>
-                    <Text style={styles.recipientNameText}>
-                      {recipientName}
-                    </Text>
-                    <Text style={styles.callStatusText}>
-                      Connecting...
-                    </Text>
-                  </View>
+          {/* ✅ FIX: Improved remote participant rendering with proper VideoSDK integration */}
+          <View style={styles.largeVideo}>
+            {Array.from(participants.values())
+              .filter(p => p.id !== localParticipant?.id)
+              .slice(0, 1) // Render the first remote participant
+              .map(remoteParticipant => (
+                <VideoSDKParticipantView
+                  key={remoteParticipant.id}
+                  participant={remoteParticipant}
+                  isLocal={false}
+                />
+              ))
+            }
+            {/* Fallback if no remote participant is present */}
+            {participants.size <= 1 && (
+              <View style={styles.videoPlaceholder}>
+                <View style={styles.participantInitialContainer}>
+                  <Text style={styles.participantInitial}>
+                    {recipientName.charAt(0).toUpperCase()}
+                  </Text>
+                  <Text style={styles.recipientNameText}>
+                    {recipientName}
+                  </Text>
+                  <Text style={styles.callStatusText}>
+                    {callState === 'connecting' ? 'Connecting...' : 'Waiting for participant...'}
+                  </Text>
                 </View>
-              )}
-            </View>
-          )}
+              </View>
+            )}
+          </View>
           
           {/* Local participant (small self-view) */}
-          {localParticipant && webcamOn && (
-            <View style={styles.selfViewContainer}>
+          {/* ✅ ALWAYS SHOW CAMERA FEED: Even during connecting state */}
+          <View style={styles.selfViewContainer}>
+            {localParticipant ? (
               <VideoSDKParticipantView
                 participant={localParticipant}
                 isLocal={true}
                 style={styles.smallVideo}
               />
-            </View>
-          )}
+            ) : callType === 'video' && (
+              // When no localParticipant yet (connecting state), but camera is available
+              // Create a simple placeholder that shows camera feed using device camera
+              <View style={[styles.smallVideo, { backgroundColor: '#1F2C34' }]}>
+                {webcamStream && webcamStream.id && webcamOn ? (
+                  // Show camera feed when available
+                  <>
+                    <RTCView
+                      streamURL={webcamStream.id}
+                      objectFit="cover"
+                      style={styles.smallVideo}
+                      mirror={true}
+                      zOrder={0}
+                    />
+                    <View style={styles.localVideoOverlay}>
+                      <Text style={styles.localVideoStatus}>
+                        {callState === 'connecting' ? 'Connecting...' : 'You'}
+                      </Text>
+                    </View>
+                  </>
+                ) : (
+                  // Camera placeholder with status
+                  <View style={{
+                    flex: 1,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    backgroundColor: 'rgba(0,0,0,0.7)'
+                  }}>
+                    <Text style={{
+                      color: '#FFFFFF',
+                      fontSize: 12,
+                      textAlign: 'center',
+                      marginBottom: 8
+                    }}>
+                      {callState === 'connecting' ? 'Connecting...' : 'Activating camera...'}
+                    </Text>
+                    {callState === 'connecting' && (
+                      <ActivityIndicator size="small" color="#00D4AA" />
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
         </View>
         
         {/* Call controls */}
@@ -1089,22 +1300,21 @@ const MeetingScreen = () => {
           micEnabled: true,
           webcamEnabled: callType === 'video',
           
-          // Settings based on VideoSDK documentation
-          participantId: activeCall?.callId || undefined,
+          // ✅ FIX: Use 'SEND_AND_RECV' mode which allows both sending and receiving streams
+          mode: 'SEND_AND_RECV' as const,
+
+          // 💡 OPTIMIZATION: Removed redundant/incorrect properties
+          // participantId is not a root config property.
+          // multiStream is true by default in CONFERENCE mode.
           
-          // Media settings - use EXACT values from VideoSDK docs
-          multiStream: true,
-          mode: "SEND_AND_RECV", // Add this explicit mode
-          defaultCamera: "front", // Keep this as string
-          
-          // Notification settings
           notification: {
             title: "Call in Progress",
             message: `${callType === 'video' ? 'Video' : 'Voice'} call with ${recipientName}`
           }
         }}
         token={token}
-        joinWithoutUserInteraction={true}
+        // ✅ FIX: Let the MeetingView handle joining logic
+        joinWithoutUserInteraction={false}
       >
         <MeetingView />
       </MeetingProvider>
@@ -1183,6 +1393,19 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
     backgroundColor: '#000', // Add this to ensure visibility during loading
     zIndex: 10, // Add this to ensure it appears on top
+  },
+  localVideoOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    padding: 4,
+  },
+  localVideoStatus: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    textAlign: 'center',
   },
   videoPlaceholder: {
     width: '100%',

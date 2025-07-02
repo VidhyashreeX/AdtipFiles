@@ -456,7 +456,9 @@ const WalletScreen = () => {
   return (
     <ScreenTransition animationType="scale">
       <View style={[styles.container, {backgroundColor: colors.background}]}>
-        <Header title="My Wallet" />
+        <Header title="My Wallet"
+        showWallet = {false}
+        showSearch = {false} />
         <ScrollView
           contentContainerStyle={styles.contentContainer}
           keyboardShouldPersistTaps="handled"

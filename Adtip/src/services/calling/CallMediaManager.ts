@@ -497,6 +497,18 @@ class CallMediaManager {
     
     return { audio, video };
   }
+
+  /**
+   * Force update media state
+   */
+  public forceUpdateMediaState(partialState: Partial<MediaState>): void {
+    this.mediaState = {
+      ...this.mediaState,
+      ...partialState
+    };
+    this.notifyListeners();
+    console.log('[CallMediaManager] Force updated media state:', partialState);
+  }
 }
 
 export default CallMediaManager;
