@@ -8,7 +8,7 @@
  * No loading screens, no blocking initialization - just immediate UI.
  */
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { View, StatusBar } from 'react-native';
+import { View, StatusBar, Animated, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -31,6 +31,31 @@ interface UltraFastLoaderProps {
 
 // Create the RootStack inside UltraFastLoader
 const RootStack = createNativeStackNavigator<RootStackParamList>();
+
+const InitialLoadingScreen = () => {
+  const { colors } = useTheme();
+  const pulseAnimation = useRef(new Animated.Value(0.95)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnimation, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnimation, { toValue: 0.95, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+      <Animated.Image
+        // Assuming this is the correct path from LoginScreen.tsx
+        source={require('../../assets/images/logo.png')}
+        style={{ width: 150, height: 150, transform: [{ scale: pulseAnimation }] }}
+        resizeMode="contain"
+      />
+    </View>
+  );
+};
 
 const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({ 
   onInitializationComplete 
@@ -167,25 +192,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
     }
   }, [activeCall, isNavReady]);
 
-  // Render authentication loading state only while auth context is initializing
-  if (!isInitialized) {
-    return (
-      <SafeAreaView 
-        style={[
-          safeAreaStyles.container, 
-          { backgroundColor: colors.background }
-        ]} 
-        edges={safeAreaStyles.container.edges}
-      >
-        <StatusBar 
-          {...(isDarkMode ? statusBarConfig.dark : statusBarConfig.light)}
-        />
-        <View style={{ flex: 1, backgroundColor: colors.background }} />
-      </SafeAreaView>
-    );
-  }
-
-  // Always render the NavigationContainer with RootStack for consistent navigation
+  // --- START: Replace the entire return logic with this ---
   return (
     <SafeAreaView 
       style={[
@@ -206,18 +213,21 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
         }}
       >
         <RootStack.Navigator screenOptions={{ headerShown: false }}>
-          {shouldShowMainApp ? (
+          {!isInitialized ? (
+            <RootStack.Screen name="InitialLoading" component={InitialLoadingScreen} />
+          ) : shouldShowMainApp ? (
             <RootStack.Screen name="Main" component={MainNavigator} />
           ) : (
             <RootStack.Screen name="Auth" component={AuthNavigator} />
           )}
         </RootStack.Navigator>
         
-        {/* Move Sidebar inside NavigationContainer */}
-        {shouldShowMainApp && <Sidebar />}
+        {/* Show sidebar only when initialized and in the main app */}
+        {isInitialized && shouldShowMainApp && <Sidebar />}
       </NavigationContainer>
     </SafeAreaView>
   );
+  // --- END: Replacement ---
 };
 
 export default UltraFastLoader;

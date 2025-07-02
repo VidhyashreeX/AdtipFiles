@@ -81,86 +81,14 @@ interface VideosResponse {
   hasMore: boolean;
 }
 
-// Enhanced Cache manager with better type safety
-class CacheManager {
-  private static memoryCache = new Map<string, { data: any; timestamp: number; expiry: number }>();
-
-  static async set(key: string, data: any, ttl: number = 3600000): Promise<void> {
-    const item = { data, timestamp: Date.now(), expiry: Date.now() + ttl };
-    this.memoryCache.set(key, item);
-    
-    try {
-      await AsyncStorage.setItem(`cache:${key}`, JSON.stringify(item));
-    } catch (error) {
-      console.error('Failed to cache data:', error);
-    }
-  }
-
-  static async get(key: string): Promise<any | null> {
-    // Check memory cache first
-    const memoryItem = this.memoryCache.get(key);
-    if (memoryItem && memoryItem.expiry > Date.now()) {
-      return memoryItem.data;
-    }
-
-    // Check AsyncStorage
-    try {
-      const storedItem = await AsyncStorage.getItem(`cache:${key}`);
-      if (storedItem) {
-        const item = JSON.parse(storedItem);
-        if (item.expiry > Date.now()) {
-          this.memoryCache.set(key, item);
-          return item.data;
-        }
-      }
-    } catch (error) {
-      console.error('Failed to retrieve cached data:', error);
-    }
-
-    return null;
-  }
-
-  static clear(pattern?: string) {
-    if (pattern) {
-      // Clear specific pattern
-      for (const key of this.memoryCache.keys()) {
-        if (key.includes(pattern)) {
-          this.memoryCache.delete(key);
-        }
-      }
-      // Clear from AsyncStorage
-      AsyncStorage.getAllKeys().then(keys => {
-        const cacheKeys = keys.filter(key => key.startsWith('cache:') && key.includes(pattern));
-        AsyncStorage.multiRemove(cacheKeys);
-      });
-    } else {
-      // Clear all
-      this.memoryCache.clear();
-      AsyncStorage.getAllKeys().then(keys => {
-        const cacheKeys = keys.filter(key => key.startsWith('cache:'));
-        AsyncStorage.multiRemove(cacheKeys);
-      });
-    }
-  }
-}
-
 // Enhanced Posts hook with React Query v5 compatibility
 export const usePosts = (category: number = 0, userId?: number) => {
-  const netInfo = useNetInfo();
-
   return useInfiniteQuery({
     queryKey: ['posts', category, userId],
     queryFn: async ({ pageParam }) => {
       const page = pageParam as number;
-      const cacheKey = `posts-${category}-${page}-${userId}`;
       
-      // Try offline cache first
-      if (!netInfo.isConnected) {
-        const cached = await CacheManager.get(cacheKey);
-        if (cached) return cached;
-        throw new Error('No internet connection and no cached data');
-      }
-
+      // Directly call the ApiService. React Query handles offline logic.
       const data = await ApiService.listPosts({
         category,
         page,
@@ -168,8 +96,6 @@ export const usePosts = (category: number = 0, userId?: number) => {
         loggined_user_id: userId || 0
       });
 
-      // Cache the response
-      await CacheManager.set(cacheKey, data);
       return data;
     },
     initialPageParam: 1,
@@ -188,24 +114,12 @@ export const usePosts = (category: number = 0, userId?: number) => {
 
 // Enhanced Shorts hook
 export const useShorts = (userId?: string) => {
-  const netInfo = useNetInfo();
-
   return useInfiniteQuery({
     queryKey: ['shorts', userId],
     queryFn: async ({ pageParam }) => {
       const page = pageParam as number;
-      const cacheKey = `shorts-${page}-${userId}`;
-      
-      if (!netInfo.isConnected) {
-        const cached = await CacheManager.get(cacheKey);
-        if (cached) return cached;
-        throw new Error('No internet connection and no cached data');
-      }
-
+      // Directly call ApiService. React Query handles offline logic.
       const response = await ApiService.get(`${ENDPOINTS.GET_SHORTS}/${userId}?page=${page}&limit=20`);
-      
-      // Cache the response
-      await CacheManager.set(cacheKey, response);
       return response as ShortsResponse;
     },
     initialPageParam: 1,
@@ -221,38 +135,16 @@ export const useShorts = (userId?: string) => {
 
 // Enhanced Explore content hook
 export const useExplore = (userId?: number) => {
-  const netInfo = useNetInfo();
-
   return useInfiniteQuery({
     queryKey: ['explore', userId],
     queryFn: async ({ pageParam }) => {
       const page = pageParam as number;
-      const cacheKey = `explore-${page}-${userId}`;
-      
-      if (!netInfo.isConnected) {
-        const cached = await CacheManager.get(cacheKey);
-        if (cached) return cached;
-        throw new Error('No internet connection and no cached data');
-      }
-
-      const response = await fetch('https://api.adtip.in/api/explore', {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await AsyncStorage.getItem('accessToken')}`,
-        },
-        body: JSON.stringify({
-          page,
-          limit: 15,
-          loggined_user_id: userId || 0,
-        }),
+      // Use ApiService for consistent auth and error handling.
+      const data = await ApiService.post(ENDPOINTS.EXPLORE, {
+        page,
+        limit: 15,
+        loggined_user_id: userId || 0,
       });
-
-      const data = await response.json();
-      
-      // Cache the response
-      await CacheManager.set(cacheKey, data);
       return data as ExploreResponse;
     },
     initialPageParam: 1,
@@ -270,31 +162,20 @@ export const useWalletData = (userId?: string) => {
   return useQuery({
     queryKey: ['wallet', userId],
     queryFn: async (): Promise<WalletData> => {
-      const cacheKey = `wallet-${userId}`;
-      
-      // Always try to get fresh data for wallet
-      try {
-        const [balance, premium, transactions] = await Promise.allSettled([
-          ApiService.get(`/api/wallet/balance/${userId}`),
-          ApiService.get(`/api/wallet/premium/${userId}`),
-          ApiService.get(`/api/wallet/transactions/${userId}`)
-        ]);
+      // React Query's networkMode handles offline cases.
+      const [balance, premium, transactions] = await Promise.allSettled([
+        ApiService.get(`/api/wallet/balance/${userId}`),
+        ApiService.get(`/api/wallet/premium/${userId}`),
+        ApiService.get(`/api/wallet/transactions/${userId}`)
+      ]);
 
-        const result: WalletData = {
-          balance: balance.status === 'fulfilled' ? balance.value : null,
-          premium: premium.status === 'fulfilled' ? premium.value : null,
-          transactions: transactions.status === 'fulfilled' ? transactions.value : null,
-        };
+      const result: WalletData = {
+        balance: balance.status === 'fulfilled' ? balance.value : null,
+        premium: premium.status === 'fulfilled' ? premium.value : null,
+        transactions: transactions.status === 'fulfilled' ? transactions.value : null,
+      };
 
-        // Cache wallet data for offline use
-        await CacheManager.set(cacheKey, result, 60000); // 1 minute cache
-        return result;
-      } catch (error) {
-        // Fallback to cache on error
-        const cached = await CacheManager.get(cacheKey);
-        if (cached) return cached;
-        throw error;
-      }
+      return result;
     },
     enabled: !!userId,
     staleTime: 30 * 1000, // 30 seconds for wallet
@@ -304,23 +185,11 @@ export const useWalletData = (userId?: string) => {
 
 // Enhanced Profile data hook
 export const useProfile = (userId?: number) => {
-  const netInfo = useNetInfo();
-
   return useQuery({
     queryKey: ['profile', userId],
     queryFn: async () => {
-      const cacheKey = `profile-${userId}`;
-      
-      if (!netInfo.isConnected) {
-        const cached = await CacheManager.get(cacheKey);
-        if (cached) return cached;
-        throw new Error('No internet connection and no cached data');
-      }
-
+      // Directly call ApiService.
       const response = await ApiService.get(`/api/user/${userId}`);
-      
-      // Cache profile data
-      await CacheManager.set(cacheKey, response, 10 * 60 * 1000); // 10 minutes
       return response;
     },
     enabled: !!userId,
@@ -444,19 +313,10 @@ export const useUsers = (filters: {
   categoryFilter: number;
   searchQuery?: string;
 }, userId?: number) => {
-  const netInfo = useNetInfo();
-
   return useInfiniteQuery({
     queryKey: ['users', filters, userId],
     queryFn: async ({ pageParam }) => {
       const page = pageParam as number;
-      const cacheKey = `users-${JSON.stringify(filters)}-${page}-${userId}`;
-      
-      if (!netInfo.isConnected) {
-        const cached = await CacheManager.get(cacheKey);
-        if (cached) return cached;
-        throw new Error('No internet connection and no cached data');
-      }
 
       const requestData = {
         id: 0,
@@ -483,8 +343,6 @@ export const useUsers = (filters: {
         }
       };
 
-      // Cache the response
-      await CacheManager.set(cacheKey, transformedResponse);
       return transformedResponse;
     },
     initialPageParam: 1,
@@ -501,19 +359,10 @@ export const useUsers = (filters: {
 
 // Enhanced Videos hook for TipTube
 export const useVideos = (categoryId: number = 0, userId?: number, searchQuery?: string, showChannelVideos?: boolean) => {
-  const netInfo = useNetInfo();
-
   return useInfiniteQuery({
     queryKey: ['videos', categoryId, userId, searchQuery, showChannelVideos],
     queryFn: async ({ pageParam }) => {
       const page = pageParam as number;
-      const cacheKey = `videos-${categoryId}-${page}-${userId}-${searchQuery || ''}-${showChannelVideos || false}`;
-      
-      if (!netInfo.isConnected) {
-        const cached = await CacheManager.get(cacheKey);
-        if (cached) return cached;
-        throw new Error('No internet connection and no cached data');
-      }
 
       // If showChannelVideos is true, we need to get videos from user's channel
       let response;
@@ -531,24 +380,10 @@ export const useVideos = (categoryId: number = 0, userId?: number, searchQuery?:
         );
       }
       
-      console.log('[useVideos] API Response:', {
-        response: response,
-        responseData: response?.data,
-        hasNestedData: !!response?.data?.data,
-        directDataLength: Array.isArray(response?.data) ? response.data.length : 'not array',
-        nestedDataLength: Array.isArray(response?.data?.data) ? response.data.data.length : 'not array'
-      });
-      
       // Transform response to match expected format
       // The API returns { data: { data: [videos], status: 200, message: "..." } }
       const apiData = response?.data || response; // Handle both nested and direct response
       const videosArray = Array.isArray(apiData) ? apiData : (apiData?.data || []);
-      
-      console.log('[useVideos] Extracted videos array:', {
-        videosArray: videosArray,
-        length: videosArray.length,
-        firstVideo: videosArray[0]
-      });
       
       const transformedResponse = {
         status: response.status === 200 || apiData?.status === 200 || true,
@@ -560,8 +395,6 @@ export const useVideos = (categoryId: number = 0, userId?: number, searchQuery?:
         }
       };
 
-      // Cache the response
-      await CacheManager.set(cacheKey, transformedResponse);
       return transformedResponse;
     },
     initialPageParam: 1,
@@ -577,4 +410,4 @@ export const useVideos = (categoryId: number = 0, userId?: number, searchQuery?:
 };
 
 // Export cache manager and query client
-export { CacheManager, queryClient };
+export { queryClient };

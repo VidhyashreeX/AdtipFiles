@@ -7,12 +7,16 @@ const HORIZONTAL_PADDING = 16;
 const CARD_WIDTH = SCREEN_WIDTH - (HORIZONTAL_PADDING * 2);
 const THUMBNAIL_HEIGHT = (CARD_WIDTH * 9) / 16; // 16:9 aspect ratio to match TipTube
 
-const VideoCardSkeleton: React.FC<{ isYouTubeLayout?: boolean }> = ({ isYouTubeLayout = false }) => {
-  const { colors, isDarkMode } = useTheme();
+interface VideoCardSkeletonProps {
+  isYouTubeLayout?: boolean;
+}
+
+const VideoCardSkeleton: React.FC<VideoCardSkeletonProps> = ({ isYouTubeLayout = false }) => {
+  const { colors } = useTheme();
   const pulseAnimation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const animation = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnimation, {
           toValue: 1,
@@ -25,7 +29,13 @@ const VideoCardSkeleton: React.FC<{ isYouTubeLayout?: boolean }> = ({ isYouTubeL
           useNativeDriver: true,
         }),
       ]),
-    ).start();
+    );
+    
+    animation.start();
+    
+    return () => {
+      animation.stop();
+    };
   }, [pulseAnimation]);
 
   const pulseStyle = {
@@ -35,7 +45,7 @@ const VideoCardSkeleton: React.FC<{ isYouTubeLayout?: boolean }> = ({ isYouTubeL
     }),
   };
 
-  // YouTube-style skeleton
+  // YouTube-style skeleton (full width)
   if (isYouTubeLayout) {
     return (
       <View style={styles.youtubeSkeletonContainer}>
@@ -43,7 +53,7 @@ const VideoCardSkeleton: React.FC<{ isYouTubeLayout?: boolean }> = ({ isYouTubeL
         <View 
           style={[
             styles.youtubeThumbnailPlaceholder, 
-            { backgroundColor: colors.skeleton.background }
+            { backgroundColor: colors.skeleton?.background || colors.border }
           ]} 
         />
         
@@ -53,7 +63,7 @@ const VideoCardSkeleton: React.FC<{ isYouTubeLayout?: boolean }> = ({ isYouTubeL
           <View 
             style={[
               styles.youtubeAvatarPlaceholder, 
-              { backgroundColor: colors.skeleton.background }
+              { backgroundColor: colors.skeleton?.background || colors.border }
             ]} 
           />
           
@@ -63,14 +73,14 @@ const VideoCardSkeleton: React.FC<{ isYouTubeLayout?: boolean }> = ({ isYouTubeL
             <Animated.View 
               style={[
                 styles.youtubeTitleLine1, 
-                { backgroundColor: colors.skeleton.background }, 
+                { backgroundColor: colors.skeleton?.background || colors.border }, 
                 pulseStyle
               ]} 
             />
             <Animated.View 
               style={[
                 styles.youtubeTitleLine2, 
-                { backgroundColor: colors.skeleton.background }, 
+                { backgroundColor: colors.skeleton?.background || colors.border }, 
                 pulseStyle
               ]} 
             />
@@ -79,7 +89,7 @@ const VideoCardSkeleton: React.FC<{ isYouTubeLayout?: boolean }> = ({ isYouTubeL
             <Animated.View 
               style={[
                 styles.youtubeChannelName, 
-                { backgroundColor: colors.skeleton.background }, 
+                { backgroundColor: colors.skeleton?.background || colors.border }, 
                 pulseStyle
               ]} 
             />
@@ -88,7 +98,7 @@ const VideoCardSkeleton: React.FC<{ isYouTubeLayout?: boolean }> = ({ isYouTubeL
             <Animated.View 
               style={[
                 styles.youtubeStatsLine, 
-                { backgroundColor: colors.skeleton.background }, 
+                { backgroundColor: colors.skeleton?.background || colors.border }, 
                 pulseStyle
               ]} 
             />
@@ -107,7 +117,7 @@ const VideoCardSkeleton: React.FC<{ isYouTubeLayout?: boolean }> = ({ isYouTubeL
       <View 
         style={[
           styles.thumbnailPlaceholder, 
-          { backgroundColor: colors.skeleton.background }
+          { backgroundColor: colors.skeleton?.background || colors.border }
         ]} 
       />
       
@@ -117,7 +127,7 @@ const VideoCardSkeleton: React.FC<{ isYouTubeLayout?: boolean }> = ({ isYouTubeL
           <View 
             style={[
               styles.avatarPlaceholder, 
-              { backgroundColor: colors.skeleton.background }
+              { backgroundColor: colors.skeleton?.background || colors.border }
             ]} 
           />
           
@@ -126,14 +136,14 @@ const VideoCardSkeleton: React.FC<{ isYouTubeLayout?: boolean }> = ({ isYouTubeL
             <Animated.View 
               style={[
                 styles.textLine, 
-                { width: '70%', backgroundColor: colors.skeleton.background }, 
+                { width: '70%', backgroundColor: colors.skeleton?.background || colors.border }, 
                 pulseStyle
               ]} 
             />
             <Animated.View 
               style={[
                 styles.textLine, 
-                { width: '50%', backgroundColor: colors.skeleton.background, marginTop: 4 }, 
+                { width: '50%', backgroundColor: colors.skeleton?.background || colors.border, marginTop: 4 }, 
                 pulseStyle
               ]} 
             />
@@ -144,14 +154,14 @@ const VideoCardSkeleton: React.FC<{ isYouTubeLayout?: boolean }> = ({ isYouTubeL
         <Animated.View 
           style={[
             styles.titleLine, 
-            { width: '90%', backgroundColor: colors.skeleton.background, marginTop: 8 }, 
+            { width: '90%', backgroundColor: colors.skeleton?.background || colors.border, marginTop: 8 }, 
             pulseStyle
           ]} 
         />
         <Animated.View 
           style={[
             styles.titleLine, 
-            { width: '60%', backgroundColor: colors.skeleton.background, marginTop: 4 }, 
+            { width: '60%', backgroundColor: colors.skeleton?.background || colors.border, marginTop: 4 }, 
             pulseStyle
           ]} 
         />
@@ -161,14 +171,14 @@ const VideoCardSkeleton: React.FC<{ isYouTubeLayout?: boolean }> = ({ isYouTubeL
 };
 
 const styles = StyleSheet.create({
-  // YouTube-style skeleton styles
+  // YouTube-style skeleton styles (full width)
   youtubeSkeletonContainer: {
     backgroundColor: 'transparent',
     marginBottom: 16, // Match TipTube VERTICAL_SPACING
-    width: SCREEN_WIDTH, // Ensure full screen width
+    width: SCREEN_WIDTH, // Full screen width
   },
   youtubeThumbnailPlaceholder: {
-    width: SCREEN_WIDTH, // Full screen width to match TipTube
+    width: SCREEN_WIDTH, // Full screen width
     height: THUMBNAIL_HEIGHT, // Match TipTube thumbnail height calculation
   },
   youtubeInfoContainer: {
