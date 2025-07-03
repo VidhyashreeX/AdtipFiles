@@ -15,7 +15,9 @@ import {
   StyleSheet,
   Image,
   TextInput,
+  Modal,
 } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQueryClient } from '@tanstack/react-query';
@@ -39,12 +41,14 @@ import ContactSkeletonItem from '../../components/skeletons/ContactSkeletonItem'
 import { UserListRequest, UpdateUserRequest, UpdateUserResponse, Contact } from '../../types/api';
 import ApiService from '../../services/ApiService';
 import Icon from 'react-native-vector-icons/Feather';
+import { BanknoteArrowUp } from 'lucide-react-native';
 import messaging from '@react-native-firebase/messaging';
 import uuid from 'react-native-uuid';
 import UnifiedCallService from '../../services/calling/UnifiedCallService'; // Unified call service
 import RectangleAdComponent from '../../googleads/RectangleAdComponent';
 import { RootStackParamList, MainNavigatorParamList } from '../../types/navigation';
 import { useMissedCallsCount } from '../../hooks/useMissedCalls';
+import UserProfileScreen from '../profile/UserProfileScreen';
 
 // Define navigation stack param list
 type NavigationProp = NativeStackNavigationProp<MainNavigatorParamList, 'TipCall'>;
@@ -138,19 +142,24 @@ const ContactCard: React.FC<{
   hasUnreadMessages: boolean;
   colors: any;
   isDarkMode: boolean;
-}> = ({ contact, onVideoCall, onVoiceCall, onChat, hasUnreadMessages, colors, isDarkMode }) => {
+  onProfilePress?: () => void; // Added new prop for profile navigation
+}> = ({ contact, onVideoCall, onVoiceCall, onChat, hasUnreadMessages, colors, isDarkMode, onProfilePress }) => {
   const avatarColor = colors.primary; // Always use primary color
   
   return (
-    <View style={[
-      styles.contactCard,
-      {
-        backgroundColor: isDarkMode ? colors.card : '#FFFFFF',
-        borderColor: isDarkMode ? colors.border : '#F1F3F4',
-        shadowColor: isDarkMode ? '#000000' : '#000000',
-        shadowOpacity: isDarkMode ? 0.3 : 0.08,
-      }
-    ]}>
+    <TouchableOpacity 
+      style={[
+        styles.contactCard,
+        {
+          backgroundColor: isDarkMode ? colors.card : '#FFFFFF',
+          borderColor: isDarkMode ? colors.border : '#F1F3F4',
+          shadowColor: isDarkMode ? '#000000' : '#000000',
+          shadowOpacity: isDarkMode ? 0.3 : 0.08,
+        }
+      ]}
+      onPress={onProfilePress} // Added onPress handler
+      activeOpacity={0.8}
+    >
       <View style={styles.contactCardContent}>
         {/* Avatar Section */}
         <View style={styles.avatarSection}>
@@ -244,7 +253,7 @@ const ContactCard: React.FC<{
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -278,6 +287,10 @@ export default function TipCallScreen() {
   const { clearCache } = useDataContext();
   const netInfo = useNetInfo();
   const queryClient = useQueryClient();
+
+  // Premium status state
+  const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [premiumLoading, setPremiumLoading] = useState<boolean>(true);
 
   // Get missed calls count for badge
   const { count: missedCallsCount } = useMissedCallsCount(user?.id?.toString());
@@ -326,6 +339,8 @@ export default function TipCallScreen() {
   const [isDndEnabled, setIsDndEnabled] = useState<boolean>(false);
   const [isDndLoading, setIsDndLoading] = useState<boolean>(false);
   const [unreadCounts, setUnreadCounts] = useState<{ [key: number]: number }>({});
+  const [showUserProfileModal, setShowUserProfileModal] = useState<boolean>(false);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const isFirstRun = useRef(true);
 
   const initialCallData = route.params?.initialCallNotificationData;
@@ -433,6 +448,12 @@ export default function TipCallScreen() {
     
     navigation.navigate('Chat', { user: contact });
   }, [navigation, user?.id, unreadCounts]);
+
+  // Handle user profile modal
+  const handleUserProfilePress = useCallback((userId: number) => {
+    setSelectedUserId(userId);
+    setShowUserProfileModal(true);
+  }, []);
 
   // Initialize DND state from user data
   useEffect(() => {
@@ -586,6 +607,77 @@ export default function TipCallScreen() {
     }, [fetchUnreadCounts])
   );
 
+  // Fetch initial data
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[TipCallScreen] Screen focused, refreshing data');
+      refreshUsers();
+    }, [user?.id])
+  );
+
+  // Check premium status
+  useEffect(() => {
+    const checkPremiumStatus = async () => {
+      if (!user?.id) return;
+      
+      try {
+        setPremiumLoading(true);
+        console.log('[TipCallScreen] Checking premium status for user:', user.id);
+        
+        const premiumResponse = await ApiService.checkPremium(user.id);
+        console.log('[TipCallScreen] Premium check response:', premiumResponse);
+        
+        // Handle different API response formats
+        const isPremiumActive = !!(premiumResponse && 
+          (premiumResponse as any).status === true || 
+          (premiumResponse as any).status === 1);
+          
+        setIsPremium(isPremiumActive);
+      } catch (error) {
+        console.error('[TipCallScreen] Error checking premium status:', error);
+        setIsPremium(false);
+      } finally {
+        setPremiumLoading(false);
+      }
+    };
+    
+    checkPremiumStatus();
+  }, [user?.id]);
+
+  // Render premium banner section
+  const renderPremiumBanner = () => {
+    if (premiumLoading) {
+      return null; // Don't show anything while loading
+    }
+
+    // Only show if user doesn't have premium
+    if (!isPremium) {
+      return (
+        <View style={[styles.premiumContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+          <LinearGradient
+            colors={['#FFD700', '#FFB300']}
+            style={styles.premiumBanner}
+          >
+            <Text style={styles.crownIcon}>👑</Text>
+            <View style={styles.premiumTextContainer}>
+              <Text style={styles.premiumTitle}>Upgrade to Premium</Text>
+              <Text style={styles.premiumSubtitle}>Lower call rates (₹4/min) & ₹2 per call acceptance</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.upgradeButton}
+              onPress={() => navigation.navigate('SubscriptionScreen' as never)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.upgradeButtonText}>Upgrade</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      );
+    }
+
+    return null; // Don't show anything if user has premium
+  };
+
   // Render contact item
   const renderContactItem = ({ item }: { item: Contact }) => {
     return (
@@ -597,6 +689,7 @@ export default function TipCallScreen() {
         hasUnreadMessages={unreadCounts[item.id] > 0}
         colors={colors}
         isDarkMode={isDarkMode}
+        onProfilePress={() => handleUserProfilePress(item.id)} // Open profile modal
       />
     );
   };
@@ -688,13 +781,12 @@ export default function TipCallScreen() {
                 )}
               </TouchableOpacity>
 
-              {/* Notifications Icon - moved right */}
+              {/* Banknote Arrow Up Icon */}
               <TouchableOpacity
-                onPress={() => navigation.navigate('Notifications')}
+                onPress={() => console.log('[TipCallScreen] Banknote Arrow Up button pressed')}
                 style={[styles.headerIconButton, { marginRight: 8 }]}
               >
-                <Icon name="bell" size={20} color={colors.text.secondary} />
-                <View style={[styles.notificationBadge, { backgroundColor: colors.primary }]} />
+                <BanknoteArrowUp size={20} color={colors.primary} />
               </TouchableOpacity>
 
               {/* DND Toggle Switch */}
@@ -707,6 +799,9 @@ export default function TipCallScreen() {
             </View>
           }
         />
+
+        {/* Render premium banner if applicable */}
+        {renderPremiumBanner()}
 
         {/* Enhanced Filters Section */}
         <View style={[styles.filtersSection, { backgroundColor: colors.background }]}>
@@ -794,6 +889,22 @@ export default function TipCallScreen() {
             </View>
           )}
         </View>
+
+        {/* User Profile Modal */}
+        <Modal
+          visible={showUserProfileModal}
+          animationType="slide"
+          onRequestClose={() => {
+            setShowUserProfileModal(false);
+            setSelectedUserId(null);
+          }}
+        >
+          {selectedUserId && (
+            <UserProfileScreen
+              userId={selectedUserId}
+            />
+          )}
+        </Modal>
       </View>
     </ScreenTransition>
   );
@@ -1154,6 +1265,86 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     width: 8,
     height: 8,
+  },
+
+  // Premium Banner Styles
+  premiumContainer: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 0, // Reduced from 16 to 8 to decrease gap with Languages section
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    paddingVertical: 4,
+  },
+  premiumBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginHorizontal: 4,
+  },
+  crownIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  premiumTextContainer: {
+    flex: 1,
+  },
+  premiumTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000000',
+    marginBottom: 2,
+  },
+  premiumSubtitle: {
+    fontSize: 13,
+    color: '#000000',
+    fontWeight: '500',
+  },
+  upgradeButton: {
+    backgroundColor: 'rgba(184, 134, 11, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#000000',
+  },
+  upgradeButtonText: {
+    color: '#000000',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  
+  modalContent: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 16,
+    padding: 16,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  
+  closeButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    padding: 8,
   },
 });
 
