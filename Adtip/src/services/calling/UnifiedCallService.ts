@@ -125,6 +125,8 @@ const STORAGE_KEYS = {
 class UnifiedCallService {
   private static instance: UnifiedCallService;
   private isInitialized = false;
+  private initializationPromise: Promise<boolean> | null = null;
+  private initializationResolve: ((value: boolean) => void) | null = null;
   
   // ===== STATE MANAGEMENT =====
   private callState: CallState = {
@@ -181,13 +183,56 @@ class UnifiedCallService {
   // ===== INITIALIZATION =====
 
   /**
-   * Initialize the unified call service
+   * Initialize the unified call service with promise-based initialization
    */
-  public async initialize(): Promise<boolean> {
+  public initialize(): Promise<boolean> {
+    // Return existing promise if initialization is already in progress
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+
+    // Create a new initialization promise
+    this.initializationPromise = new Promise<boolean>((resolve) => {
+      this.initializationResolve = resolve;
+    });
+
+    // Start the actual initialization process
+    this._initialize();
+
+    return this.initializationPromise;
+  }
+
+  /**
+   * Ensure the service is initialized before proceeding with any call actions
+   */
+  public async ensureInitialized(): Promise<boolean> {
+    if (this.isInitialized) {
+      return true;
+    }
+
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+
+    return this.initialize();
+  }
+
+  /**
+   * Get initialization status synchronously
+   */
+  public getIsInitialized(): boolean {
+    return this.isInitialized;
+  }
+
+  /**
+   * Internal initialization method
+   */
+  private async _initialize(): Promise<void> {
     try {
       if (this.isInitialized) {
         console.log('[UnifiedCallService] Already initialized');
-        return true;
+        this.initializationResolve?.(true);
+        return;
       }
 
       console.log('[UnifiedCallService] Initializing unified call service...');
@@ -212,11 +257,14 @@ class UnifiedCallService {
 
       this.isInitialized = true;
       console.log('[UnifiedCallService] ✅ Initialized successfully');
-      return true;
+      this.initializationResolve?.(true);
 
     } catch (error) {
       console.error('[UnifiedCallService] ❌ Initialization failed:', error);
-      return false;
+      this.initializationResolve?.(false);
+      // Reset the promise so initialization can be retried
+      this.initializationPromise = null;
+      this.initializationResolve = null;
     }
   }
 
@@ -994,6 +1042,13 @@ class UnifiedCallService {
    */
   public async handleIncomingCall(callNotificationData: CallNotificationData): Promise<void> {
     try {
+      // ✅ CRITICAL: Ensure service is fully initialized before proceeding
+      const isReady = await this.ensureInitialized();
+      if (!isReady) {
+        console.error('[UnifiedCallService] Cannot handle incoming call, service initialization failed.');
+        return;
+      }
+
       console.log('[UnifiedCallService] Handling incoming call:', callNotificationData);
 
       // Check if caller is blocked - suppress call completely if blocked
@@ -1096,6 +1151,14 @@ class UnifiedCallService {
     callerId: string
   ): Promise<CallData | null> {
     try {
+      // ✅ CRITICAL: Ensure service is fully initialized before proceeding
+      const isReady = await this.ensureInitialized();
+      if (!isReady) {
+        console.error('[UnifiedCallService] Cannot start call, service initialization failed.');
+        Alert.alert('Error', 'Call service is not ready. Please restart the app and try again.');
+        return null;
+      }
+
       console.log('[UnifiedCallService] Starting outgoing call:', {
         recipientId,
         recipientName,

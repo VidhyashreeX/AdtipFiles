@@ -1,3 +1,29 @@
+/**
+ * IMPORTANT: For optimal performance and to prevent race conditions,
+ * ensure UnifiedCallService.getInstance().initialize() is called
+ * in your main App component and awaited before rendering the main app.
+ * 
+ * Example App.tsx pattern:
+ * 
+ * const App = () => {
+ *   const [isInitialized, setIsInitialized] = useState(false);
+ *   
+ *   useEffect(() => {
+ *     const initServices = async () => {
+ *       const success = await UnifiedCallService.getInstance().initialize();
+ *       setIsInitialized(success);
+ *     };
+ *     initServices();
+ *   }, []);
+ *   
+ *   if (!isInitialized) {
+ *     return <LoadingScreen />;
+ *   }
+ *   
+ *   return <MainNavigator />;
+ * };
+ */
+
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
@@ -229,6 +255,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   const [isEndingCall, setIsEndingCall] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [isInitializingService, setIsInitializingService] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [callState, setCallState] = useState<'connecting' | 'connected' | 'reconnecting' | 'ended'>('connecting');
   const [networkQuality, setNetworkQuality] = useState<'excellent' | 'good' | 'fair' | 'poor'>('excellent');
@@ -352,6 +379,24 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
       setIsJoining(true);
       (async () => {
         try {
+          // ✅ CRITICAL: Ensure UnifiedCallService is fully initialized before joining
+          console.log('[MeetingView] Ensuring UnifiedCallService is initialized before joining...');
+          setIsInitializingService(true);
+          const isServiceReady = await unifiedCallService.ensureInitialized();
+          setIsInitializingService(false);
+          
+          if (!isServiceReady) {
+            console.error('[MeetingView] UnifiedCallService initialization failed, aborting join');
+            Alert.alert(
+              'Service Error',
+              'Call service failed to initialize. Please restart the app and try again.',
+              [{ text: 'OK', onPress: () => setIsJoining(false) }],
+              { cancelable: false }
+            );
+            return;
+          }
+          console.log('[MeetingView] ✅ UnifiedCallService is ready, proceeding with join');
+
           // CRITICAL FIX: Ensure that for video calls, camera is enabled before joining
           if (callType === 'video') {
             if (!mediaState.cameraEnabled) {
@@ -371,6 +416,10 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
               return;
             }
           }
+
+          // Add a small delay to ensure VideoSDK is fully ready
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
           await join();
           console.log('[MeetingView] Join call successful');
           if (callType === 'video') {
@@ -386,6 +435,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
         } catch (error) {
           console.error('[MeetingView] Join failed:', error);
           setIsJoining(false);
+          setIsInitializingService(false);
           // Retry after a short delay, but only if not unmounting
           setTimeout(() => {
             if (!hasJoined && isComponentMountedRef.current && !isLeavingRef.current) {
@@ -1059,7 +1109,9 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
 
   // Enhanced UI for status display with network quality
   const getCallStatusText = () => {
-    if (callState === 'connecting') {
+    if (isInitializingService) {
+      return 'Initializing call service...';
+    } else if (callState === 'connecting') {
       return 'Connecting...';
     } else if (callState === 'reconnecting') {
       return `Reconnecting... (${reconnectionAttemptRef.current}/${maxReconnectionAttempts})`;
@@ -1072,7 +1124,9 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   };
 
   const getCallStatusColor = () => {
-    if (callState === 'connected') {
+    if (isInitializingService) {
+      return '#FF9800'; // Orange for initialization
+    } else if (callState === 'connected') {
       switch (networkQuality) {
         case 'excellent': return '#00D4AA';
         case 'good': return '#4CAF50';
@@ -1164,15 +1218,15 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
         <StatusBar barStyle="light-content" backgroundColor="#121212" />
         
         {/* Top call info bar */}
-        <View style={styles.callInfoBar}>
-          <View style={styles.callInfoContent}>
-            <Text style={styles.callDuration}>
-              {callState === 'connecting' ? 'Connecting...' : 
-               callState === 'reconnecting' ? 'Reconnecting...' : 
-               formatCallDuration(callDuration)}
-            </Text>
-            <Text style={styles.callEndToEndText}>End-to-end encrypted call</Text>
-          </View>
+        <View style={styles.callInfoBar}>        <View style={styles.callInfoContent}>
+          <Text style={styles.callDuration}>
+            {isInitializingService ? 'Initializing...' :
+             callState === 'connecting' ? 'Connecting...' : 
+             callState === 'reconnecting' ? 'Reconnecting...' : 
+             formatCallDuration(callDuration)}
+          </Text>
+          <Text style={styles.callEndToEndText}>End-to-end encrypted call</Text>
+        </View>
         </View>
         
         {/* Video participants container */}
@@ -1202,7 +1256,8 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
                     {recipientName}
                   </Text>
                   <Text style={styles.callStatusText}>
-                    {callState === 'connecting' ? 'Connecting...' : 'Waiting for participant...'}
+                    {isInitializingService ? 'Initializing call service...' :
+                     callState === 'connecting' ? 'Connecting...' : 'Waiting for participant...'}
                   </Text>
                 </View>
               </View>
@@ -1232,9 +1287,10 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
                     textAlign: 'center',
                     marginBottom: 8
                   }}>
-                    {callState === 'connecting' ? 'Connecting...' : 'Activating camera...'}
+                    {isInitializingService ? 'Initializing...' :
+                     callState === 'connecting' ? 'Connecting...' : 'Activating camera...'}
                   </Text>
-                  {callState === 'connecting' && (
+                  {(callState === 'connecting' || isInitializingService) && (
                     <ActivityIndicator size="small" color="#00D4AA" />
                   )}
                 </View>
@@ -1258,7 +1314,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
               onEndCall={handleEndCall}
               onSwitchCamera={handleSwitchCamera}
               onShowParticipants={handleShowParticipants}
-              isConnecting={isJoining || callState === 'connecting'}
+              isConnecting={isJoining || callState === 'connecting' || isInitializingService}
             />
           </Animated.View>
         )}
@@ -1275,7 +1331,8 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
       <View style={styles.callInfoBar}>
         <View style={styles.callInfoContent}>
           <Text style={styles.callDuration}>
-            {callState === 'connecting' ? 'Connecting...' : 
+            {isInitializingService ? 'Initializing...' :
+             callState === 'connecting' ? 'Connecting...' : 
              callState === 'reconnecting' ? 'Reconnecting...' : 
              formatCallDuration(callDuration)}
           </Text>
@@ -1332,7 +1389,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
             onEndCall={handleEndCall}
             onSwitchCamera={handleSwitchCamera}
             onShowParticipants={handleShowParticipants}
-            isConnecting={isJoining || callState === 'connecting'}
+            isConnecting={isJoining || callState === 'connecting' || isInitializingService}
           />
         </Animated.View>
       )}
