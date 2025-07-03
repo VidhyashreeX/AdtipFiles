@@ -107,6 +107,7 @@ export type MainNavigatorParamList = {
     displayName: string;
     isInitiator?: boolean;
     recipientName?: string;
+    callData?: any;
   };
   UserPremiumPlans: undefined;
   SubscriptionScreen: undefined;

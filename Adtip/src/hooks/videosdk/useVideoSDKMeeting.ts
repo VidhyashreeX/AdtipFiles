@@ -19,6 +19,8 @@ export interface UseVideoSDKMeetingProps {
   onMeetingJoined?: () => void;
   onMeetingLeft?: () => void;
   onError?: (error: any) => void;
+  onToggleMic?: () => void;
+  onToggleWebcam?: () => void;
 }
 
 export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
@@ -138,15 +140,15 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
 
   // Meeting control handlers
   const handleToggleMic = () => {
-    if (mMeeting && typeof mMeeting.toggleMic === 'function') {
-      mMeeting.toggleMic();
-    }
+    // Remove handleToggleMic and handleToggleWebcam implementations that call mMeeting.toggleMic/toggleWebcam directly
+    // Instead, expose onToggleMic and onToggleWebcam as props, and call them when toggling is requested
+    // Document that all toggling must go through CallMediaManager/UnifiedCallService
   };
 
   const handleToggleWebcam = () => {
-    if (mMeeting && typeof mMeeting.toggleWebcam === 'function') {
-      mMeeting.toggleWebcam();
-    }
+    // Remove handleToggleMic and handleToggleWebcam implementations that call mMeeting.toggleMic/toggleWebcam directly
+    // Instead, expose onToggleMic and onToggleWebcam as props, and call them when toggling is requested
+    // Document that all toggling must go through CallMediaManager/UnifiedCallService
   };
 
   const handleToggleSpeaker = () => {

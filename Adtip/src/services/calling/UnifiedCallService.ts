@@ -53,6 +53,8 @@ import CallMediaManager from './CallMediaManager';
 
 // ===== TYPES =====
 
+export type CallStatus = 'idle' | 'dialing' | 'ringing' | 'connecting' | 'connected' | 'ending' | 'ended' | 'cleanup_pending';
+
 export interface CallData {
   callId: string;
   meetingId: string;
@@ -65,7 +67,7 @@ export interface CallData {
   callerAvatar?: string;
   recipientAvatar?: string;
   isInitiator: boolean;
-  status: 'calling' | 'ringing' | 'connecting' | 'connected' | 'ended' | 'missed' | 'declined';
+  status: CallStatus;
   startTime?: number;
   endTime?: number;
   duration?: number;
@@ -85,7 +87,7 @@ export interface CallNotificationData {
 export interface CallState {
   isInCall: boolean;
   activeCall: CallData | null;
-  callStatus: 'dialing' | 'ringing' | 'connecting' | 'connected' | 'ended' | null;
+  callStatus: CallStatus;
   lastCallEndReason?: string;
 }
 
@@ -128,7 +130,7 @@ class UnifiedCallService {
   private callState: CallState = {
     isInCall: false,
     activeCall: null,
-    callStatus: null
+    callStatus: 'idle'
   };
   
   // ===== NOTIFICATION STATE =====
@@ -159,6 +161,9 @@ class UnifiedCallService {
   // ===== VIBRATION PATTERNS =====
   private readonly INCOMING_CALL_VIBRATION = [2, 1000, 1000, 2000];
   private readonly CALL_END_VIBRATION = [2, 200];
+  
+  // ===== CLEANUP =====
+  private isCleaningUp: boolean = false;
   
   // ===== SINGLETON =====
   private constructor() {
@@ -878,8 +883,6 @@ class UnifiedCallService {
         await this.handleIncomingFCMCall(data);
       } else if (data.type === 'CALL_ACCEPTED') {
         await this.handleCallAcceptedFCM(data);
-      } else if (data.type === 'CALL_DECLINED') {
-        await this.handleCallDeclinedFCM(data);
       } else if (data.type === 'CALL_ENDED') {
         await this.handleCallEndedFCM(data);
       }
@@ -922,8 +925,8 @@ class UnifiedCallService {
           callerId: callData.callerId,
           recipientId: currentUserId,
           isInitiator: false,
-          status: 'declined'
-        }, 'declined');
+          status: 'ended'
+        }, 'ended');
         return; // Exit early - no further processing
       }
 
@@ -1008,8 +1011,8 @@ class UnifiedCallService {
           callerId: callNotificationData.callerId,
           recipientId: await this.getCurrentUserId(),
           isInitiator: false,
-          status: 'declined'
-        }, 'declined');
+          status: 'ended'
+        }, 'ended');
         return; // Exit early - no further processing
       }
 
@@ -1026,8 +1029,8 @@ class UnifiedCallService {
           callerId: callNotificationData.callerId,
           recipientId: await this.getCurrentUserId(),
           isInitiator: false,
-          status: 'declined'
-        }, 'declined');
+          status: 'ended'
+        }, 'ended');
         return;
       }
 
@@ -1075,7 +1078,7 @@ class UnifiedCallService {
       this.updateCallState({
         isInCall: false,
         activeCall: null,
-        callStatus: null
+        callStatus: 'ended'
       });
     }
   }
@@ -1132,16 +1135,20 @@ class UnifiedCallService {
         callerId,
         recipientId,
         isInitiator: true,
-        status: 'calling',
+        status: 'dialing',
         startTime: Date.now()
       };
 
-      // Update call state
+      // Update call state IMMEDIATELY and synchronously before navigation
       this.updateCallState({
         isInCall: true,
         activeCall: callData,
         callStatus: 'dialing'
       });
+
+      // CRITICAL FIX: Force immediate event emission to ensure CallProvider syncs
+      // This prevents race conditions where MeetingScreen mounts before activeCall is set
+      appEventEmitter.emit('callStateChanged', this.callState);
 
       // Initialize media
       this.initializeMediaForCall(callData.callId, callType === 'video');
@@ -1152,7 +1159,7 @@ class UnifiedCallService {
       // Show outgoing call notification
       await this.showOutgoingCallNotification(callData);
 
-      // Navigate to meeting screen
+      // Navigate to meeting screen - this should happen after state is fully updated
       this.requestNavigationToMeetingScreen(callData);
 
       console.log('[UnifiedCallService] Outgoing call started:', callData.callId);
@@ -1237,14 +1244,14 @@ class UnifiedCallService {
       await this.hideIncomingCallNotification();
 
       // Update call status
-      targetCall.status = 'declined';
+      targetCall.status = 'ended';
       targetCall.endTime = Date.now();
       if (targetCall.startTime) {
         targetCall.duration = targetCall.endTime - targetCall.startTime;
       }
 
       // Send decline notification to caller
-      await this.sendCallStatusUpdate(targetCall, 'declined');
+      await this.sendCallStatusUpdate(targetCall, 'ended');
 
       // Clear call state
       this.updateCallState({
@@ -1474,12 +1481,12 @@ class UnifiedCallService {
   /**
    * Update call status (for compatibility with existing code)
    */
-  public updateCallStatus(status: 'calling' | 'ringing' | 'connecting' | 'connected' | 'ended' | 'missed' | 'declined'): void {
+  public updateCallStatus(status: CallStatus): void {
     if (this.callState.activeCall) {
       this.callState.activeCall.status = status;
       this.updateCallState({
         activeCall: this.callState.activeCall,
-        callStatus: status === 'ended' ? null : status as any
+        callStatus: status === 'ended' ? 'ended' : status
       });
     }
   }
@@ -1495,6 +1502,15 @@ class UnifiedCallService {
    * Clean up media resources
    */
   private cleanupMedia(): void {
+    if (this.isCleaningUp) {
+      console.log('[UnifiedCallService] Cleanup already in progress, skipping.');
+      return;
+    }
+    if (this.callState.callStatus !== 'ending' && this.callState.callStatus !== 'ended') {
+      console.log('[UnifiedCallService] Cleanup only allowed after call is ending or ended.');
+      return;
+    }
+    this.isCleaningUp = true;
     try {
       console.log('[UnifiedCallService] Cleaning up media resources');
       
@@ -1517,6 +1533,7 @@ class UnifiedCallService {
     } catch (error) {
       console.error('[UnifiedCallService] Failed to cleanup media:', error);
     }
+    this.isCleaningUp = false;
   }
 
   // ===== STATE MANAGEMENT =====
@@ -1526,20 +1543,20 @@ class UnifiedCallService {
    */
   private updateCallState(newState: Partial<CallState>): void {
     const previousState = { ...this.callState };
-    this.callState = { ...this.callState, ...newState };
-
-    console.log('[UnifiedCallService] Call state updated:', previousState, '->', this.callState);
-
-    // Save state to persistent storage
-    this.saveCallState();
-
-    // Emit state change event
-    appEventEmitter.emit('callStateChanged', this.callState);
-
-    // Trigger sync if not already syncing
-    if (!this.isSyncing) {
-      this.triggerSync();
+    const nextCallStatus = newState.callStatus ?? previousState.callStatus;
+    if (
+      previousState.callStatus &&
+      nextCallStatus &&
+      previousState.callStatus !== nextCallStatus &&
+      !this.isValidTransition(previousState.callStatus, nextCallStatus)
+    ) {
+      console.warn('[UnifiedCallService] Invalid call state transition:', previousState.callStatus, '->', nextCallStatus);
+      return;
     }
+    this.callState = { ...this.callState, ...newState };
+    console.log('[UnifiedCallService] Call state updated:', previousState, '->', this.callState);
+    this.saveCallState();
+    appEventEmitter.emit('callStateChanged', this.callState);
   }
 
   /**
@@ -1672,27 +1689,29 @@ class UnifiedCallService {
     try {
       console.log('[UnifiedCallService] Sending call notification to recipient:', callData.recipientId);
 
-      // Get recipient's FCM token
-      const recipientTokenInfo = await ApiService.getFCMToken(callData.recipientId, callData.callerId);
-      
-      if (!recipientTokenInfo) {
-        console.warn('[UnifiedCallService] No FCM token found for recipient');
+      // Get FCM tokens for both users in a single, efficient call
+      const { callerToken, recipientToken, callerPlatform, recipientPlatform } = 
+        await ApiService.getBothUsersFCMTokens(callData.callerId, callData.recipientId);
+
+      if (!recipientToken) {
+        console.warn('[UnifiedCallService] No FCM token found for recipient. Aborting call.');
+        Alert.alert('Could Not Reach User', 'The user you are trying to call is currently unavailable.');
+        await this.endCall(callData.callId);
         return;
       }
 
-      // Get caller's FCM token
-      const callerToken = await ApiService.getCurrentFCMToken();
-      
       if (!callerToken) {
-        console.warn('[UnifiedCallService] No FCM token for caller');
+        console.warn('[UnifiedCallService] No FCM token for caller. Aborting call.');
+        Alert.alert('Error', 'Your session seems to be invalid. Please log out and log back in.');
+        await this.endCall(callData.callId);
         return;
       }
 
-      // Send initiate call request
-      const payload = {
+      // Use the initiate-call API
+      await ApiService.initiateCall({
         calleeInfo: {
-          platform: recipientTokenInfo.platform,
-          token: recipientTokenInfo.token,
+          platform: recipientPlatform,
+          token: recipientToken,
         },
         callerInfo: {
           name: callData.callerName,
@@ -1700,27 +1719,22 @@ class UnifiedCallService {
         },
         videoSDKInfo: {
           meetingId: callData.meetingId,
-          token: callData.token,
+          token: callData.token, // This is the VideoSDK participant token
         },
-      };
+      });
 
-      const response = await ApiService.initiateCall(payload);
-      
-      if (response.success) {
-        console.log('[UnifiedCallService] Call notification sent successfully');
-      } else {
-        console.warn('[UnifiedCallService] Call notification response was false');
-      }
+      console.log('[UnifiedCallService] "initiate-call" notification sent successfully to recipient:', callData.recipientId);
 
     } catch (error) {
-      console.error('[UnifiedCallService] Failed to send call notification:', error);
+      console.error('[UnifiedCallService] Failed to send "initiate-call" notification:', error);
+      Alert.alert('Call Failed', 'Could not initiate the call. Please try again later.');
     }
   }
 
   /**
    * Send call status update
    */
-  private async sendCallStatusUpdate(callData: CallData, status: 'accepted' | 'declined' | 'ended'): Promise<void> {
+  private async sendCallStatusUpdate(callData: CallData, status: 'accepted' | 'ended'): Promise<void> {
     try {
       console.log('[UnifiedCallService] Sending call status update:', status);
 
@@ -1803,22 +1817,6 @@ class UnifiedCallService {
   }
 
   /**
-   * Handle call declined FCM
-   */
-  private async handleCallDeclinedFCM(data: any): Promise<void> {
-    try {
-      console.log('[UnifiedCallService] Call declined by recipient');
-      
-      if (this.callState.activeCall) {
-        await this.endCall();
-      }
-
-    } catch (error) {
-      console.error('[UnifiedCallService] Error handling call declined FCM:', error);
-    }
-  }
-
-  /**
    * Handle call ended FCM
    */
   private async handleCallEndedFCM(data: any): Promise<void> {
@@ -1863,6 +1861,15 @@ class UnifiedCallService {
    * Cleanup and destroy the service
    */
   public async cleanup(): Promise<void> {
+    if (this.isCleaningUp) {
+      console.log('[UnifiedCallService] Cleanup already in progress, skipping.');
+      return;
+    }
+    if (this.callState.callStatus !== 'ending' && this.callState.callStatus !== 'ended') {
+      console.log('[UnifiedCallService] Cleanup only allowed after call is ending or ended.');
+      return;
+    }
+    this.isCleaningUp = true;
     try {
       console.log('[UnifiedCallService] Cleaning up service');
 
@@ -1886,14 +1893,28 @@ class UnifiedCallService {
       this.updateCallState({
         isInCall: false,
         activeCall: null,
-        callStatus: null
+        callStatus: 'ended'
       });
 
       console.log('[UnifiedCallService] Service cleanup completed');
-
     } catch (error) {
       console.error('[UnifiedCallService] Failed to cleanup service:', error);
     }
+    this.isCleaningUp = false;
+  }
+
+  private isValidTransition(from: CallStatus, to: CallStatus): boolean {
+    const VALID_TRANSITIONS: Record<CallStatus, CallStatus[]> = {
+      idle: ['dialing', 'ringing'],
+      dialing: ['connecting', 'ending', 'ended'],
+      ringing: ['connecting', 'ending', 'ended'],
+      connecting: ['connected', 'ending', 'ended'],
+      connected: ['ending', 'ended'],
+      ending: ['ended', 'cleanup_pending'],
+      ended: ['idle', 'cleanup_pending'],
+      cleanup_pending: ['idle'],
+    };
+    return VALID_TRANSITIONS[from].includes(to);
   }
 }
 

@@ -34,18 +34,34 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
   const [callDuration, setCallDuration] = useState(0);
 
+  // Add a ref to track pending clear timeout
+  const clearActiveCallTimeout = React.useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     const handleCallStateChange = (data: any) => {
       console.log('[CallProvider] Received callStateChanged event:', data);
+      
       // CRITICAL FIX: Handle different event formats properly
       // Format 1: Full state object { isInCall: boolean; activeCall: ActiveCall | null }
       if (typeof data === 'object' && 'isInCall' in data) {
         if (data.isInCall && data.activeCall) {
           console.log('[CallProvider] Setting active call:', data.activeCall);
+          // Cancel any pending clear
+          if (clearActiveCallTimeout.current) {
+            clearTimeout(clearActiveCallTimeout.current);
+            clearActiveCallTimeout.current = null;
+          }
           setActiveCall(data.activeCall);
-        } else {
-          console.log('[CallProvider] Clearing active call.');
-          setActiveCall(null);
+        } else if (!data.isInCall || !data.activeCall) {
+          console.log('[CallProvider] Debouncing clear of active call.');
+          // Debounce clearing activeCall to allow navigation to complete
+          if (clearActiveCallTimeout.current) {
+            clearTimeout(clearActiveCallTimeout.current);
+          }
+          clearActiveCallTimeout.current = setTimeout(() => {
+            setActiveCall(null);
+            clearActiveCallTimeout.current = null;
+          }, 300); // 300ms delay
         }
       }
       // Format 2: Status update only { status: string; callId: string }
@@ -54,7 +70,17 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Don't clear activeCall for status-only events - these are just status updates
         // The full state change events will handle clearing when appropriate
       }
-      // Format 3: Unknown format - log but don't change state
+      // Format 3: Direct activeCall object (legacy format)
+      else if (data && typeof data === 'object' && 'callId' in data && 'meetingId' in data) {
+        console.log('[CallProvider] Setting activeCall from legacy format:', data);
+        // Cancel any pending clear
+        if (clearActiveCallTimeout.current) {
+          clearTimeout(clearActiveCallTimeout.current);
+          clearActiveCallTimeout.current = null;
+        }
+        setActiveCall(data as ActiveCall);
+      }
+      // Format 4: Unknown format - log but don't change state
       else {
         console.log('[CallProvider] Unknown event format, ignoring:', data);
       }

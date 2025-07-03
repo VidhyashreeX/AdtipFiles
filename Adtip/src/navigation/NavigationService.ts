@@ -4,7 +4,7 @@ import { RootStackParamList } from '../types/navigation';
 // Type the navigationRef with your RootStackParamList
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
-// Update helper functions to be more type-safe or rely on direct, typed navigationRef usage
+// Enhanced navigate function with Meeting screen support
 export function navigate<RouteName extends keyof RootStackParamList>(
   name: RouteName,
   params?: RootStackParamList[RouteName]
@@ -13,6 +13,27 @@ export function navigate<RouteName extends keyof RootStackParamList>(
     navigationRef.navigate(name as any, params as any);
   } else {
     console.warn('[NavigationService] Navigation not ready, skipping navigation to:', name);
+  }
+}
+
+// Special function to navigate to Meeting screen within MainNavigator
+export function navigateToMeeting(params: {
+  meetingId: string;
+  token: string;
+  displayName: string;
+  callType: 'voice' | 'video';
+  isInitiator?: boolean;
+  recipientName?: string;
+  callData?: any;
+}) {
+  if (navigationRef.isReady()) {
+    // Navigate to Main navigator, then to Meeting screen
+    (navigationRef as any).navigate('Main', { 
+      screen: 'Meeting', 
+      params: params 
+    });
+  } else {
+    console.warn('[NavigationService] Navigation not ready, skipping navigation to Meeting');
   }
 }
 
@@ -46,7 +67,7 @@ export function getCurrentRoute() {
   return null;
 }
 
-// Add helper function to navigate with retry logic
+// Enhanced navigateWithRetry for Meeting screen
 export function navigateWithRetry<RouteName extends keyof RootStackParamList>(
   name: RouteName,
   params?: RootStackParamList[RouteName],
@@ -64,6 +85,37 @@ export function navigateWithRetry<RouteName extends keyof RootStackParamList>(
       setTimeout(attemptNavigation, retryDelay);
     } else {
       console.error('[NavigationService] Failed to navigate after max retries:', name);
+    }
+  };
+  
+  attemptNavigation();
+}
+
+// Enhanced navigateWithRetry specifically for Meeting screen
+export function navigateToMeetingWithRetry(params: {
+  meetingId: string;
+  token: string;
+  displayName: string;
+  callType: 'voice' | 'video';
+  isInitiator?: boolean;
+  recipientName?: string;
+  callData?: any;
+}, maxRetries: number = 3, retryDelay: number = 100) {
+  let retries = 0;
+  
+  const attemptNavigation = () => {
+    if (navigationRef.isReady()) {
+      // Navigate to Main navigator, then to Meeting screen
+      (navigationRef as any).navigate('Main', { 
+        screen: 'Meeting', 
+        params: params 
+      });
+    } else if (retries < maxRetries) {
+      retries++;
+      console.log(`[NavigationService] Navigation not ready, retry ${retries}/${maxRetries} for Meeting`);
+      setTimeout(attemptNavigation, retryDelay);
+    } else {
+      console.error('[NavigationService] Failed to navigate to Meeting after max retries');
     }
   };
   

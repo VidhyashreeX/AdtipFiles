@@ -155,6 +155,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
 
   // Handle active call navigation
   useEffect(() => {
+    console.log('[UltraFastLoader] activeCall changed:', activeCall);
     if (!isNavReady || !activeCall || !navigationRef.isReady()) return;
     
     // CRITICAL FIX: Check if call is in an ending state to prevent navigation back to MeetingScreen

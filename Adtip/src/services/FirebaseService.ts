@@ -9,6 +9,7 @@ import NotificationService from './NotificationService';
 import { navigationRef } from '../navigation/NavigationService';
 import { appEventEmitter } from '../events/AppEventEmitter';
 import ApiService from './ApiService';
+import UnifiedCallService from './calling/UnifiedCallService';
 
 /**
  * CIRCULAR DEPENDENCY FIX:
@@ -218,7 +219,6 @@ class FirebaseService {
         .then((remoteMessage) => {
           if (remoteMessage) {
             console.log('[FCM] App opened from killed state by notification:', remoteMessage);
-            this._handleNotificationNavigation(remoteMessage);
           }
         })
         .catch((error) => {
@@ -228,7 +228,6 @@ class FirebaseService {
       // Handle notification when app is opened from background state
       const unsubscribeOnNotificationOpenedApp = msg.onNotificationOpenedApp((remoteMessage) => {
         console.log('[FCM] App opened from background by notification:', remoteMessage);
-        this._handleNotificationNavigation(remoteMessage);
       });
 
       // Handle foreground messages with enhanced handling
@@ -238,26 +237,27 @@ class FirebaseService {
         
         if (type === 'INCOMING_CALL' || remoteMessage?.data?.isIncomingCall === 'true') {
           console.log('[FCM] Incoming call received in foreground');
-          this._handleForegroundCall(remoteMessage);
+          // Call UnifiedCallService.handleIncomingCall
+          if (remoteMessage.data?.callData) {
+            try {
+              const callData = JSON.parse(remoteMessage.data.callData as string);
+              await UnifiedCallService.getInstance().handleIncomingCall(callData);
+            } catch (e) {
+              console.warn('[FCM] Failed to parse callData in foreground:', e);
+            }
+          }
         } else if (type === 'CALL_ACCEPTED') {
           console.log('[FCM] Call accepted event received.');
           if (remoteMessage.data?.callId) {
-            // Emit event instead of directly calling CallService
-            appEventEmitter.emit('callAcceptedFromFCM', remoteMessage.data.callId as string);
+            await UnifiedCallService.getInstance().acceptCall(remoteMessage.data.callId as string);
           }
         } else if (type === 'CALL_DECLINED') {
           console.log('[FCM] Call declined event received.');
-           if (remoteMessage.data?.callId) {
-            // Emit event instead of directly calling CallService
-            appEventEmitter.emit('callDeclinedFromFCM', remoteMessage.data.callId as string);
+          if (remoteMessage.data?.callId) {
+            await UnifiedCallService.getInstance().declineCall(remoteMessage.data.callId as string);
           }
         } else if (remoteMessage?.notification) {
-          // Handle standard notifications
-          NotificationService.displayLocalNotification(
-            remoteMessage.notification.title || 'New Notification',
-            remoteMessage.notification.body || '',
-            remoteMessage.data || {}
-          );
+          // TODO: Implement generic notification handler
         }
       });
 
@@ -285,63 +285,6 @@ class FirebaseService {
     } catch (error) {
       console.warn('[FCM] Failed to set up notification listeners:', error);
       return () => {};
-    }
-  }
-
-  private _handleForegroundCall(remoteMessage: FirebaseMessagingTypes.RemoteMessage): void {
-    console.log('[FCM] Processing foreground call:', remoteMessage.data);
-    if (remoteMessage.data?.callData) {
-        try {
-          const callData = JSON.parse(remoteMessage.data.callData as string);
-          
-          // Emit event instead of directly calling CallService
-          appEventEmitter.emit('incomingCallFromFCM', {
-            callId: callData.callInfo.callId,
-            meetingId: callData.videoSDKInfo.meetingId,
-            token: callData.videoSDKInfo.token,
-            callerId: callData.callerInfo.userId,
-            callerName: callData.callerInfo.name,
-            callerFcmToken: callData.callerInfo.token,
-            callType: callData.callInfo.callType,
-          });
-        } catch (e) {
-          console.warn('[FCM] Failed to parse callData in foreground:', e);
-        }
-    }
-  }
-
-  /**
-   * Handle notification navigation based on notification data
-   */
-  private _handleNotificationNavigation(remoteMessage: FirebaseMessagingTypes.RemoteMessage): void {
-    if (!remoteMessage.data) return;
-    let callInfo = null;
-    if (remoteMessage.data.info) {
-      try {
-        callInfo = JSON.parse(remoteMessage.data.info);
-      } catch (e) {
-        console.warn('[FCM] Failed to parse call info:', e);
-      }
-    }
-    const navigateTo = (screen: any, params: any) => {
-      navigationRef.isReady()
-        ? navigationRef.navigate(screen, params)
-        : this.delayedNavigation?.push?.({ screen, params });
-    };
-    if (callInfo && callInfo.callId && callInfo.meetingId && callInfo.token && callInfo.callerName && callInfo.callType) {
-      // Navigate to the meeting screen when the notification is tapped.
-      navigateTo('Meeting' as any, { meetingId: String(callInfo.meetingId), token: String(callInfo.token), callType: callInfo.callType === 'video' ? 'video' : 'voice', displayName: String(callInfo.callerName), isInitiator: false, recipientName: String(callInfo.callerName) });
-    } else if (remoteMessage.data.isIncomingCall === 'true') {
-      const { callId, meetingId, token, callerName, callType } = remoteMessage.data;
-      if (typeof callId === 'string' && typeof meetingId === 'string' && typeof token === 'string' && typeof callerName === 'string' && typeof callType === 'string') {
-        navigateTo('Meeting' as any, { meetingId: String(meetingId), token: String(token), callType: callType === 'video' ? 'video' : 'voice', displayName: String(callerName), isInitiator: false, recipientName: String(callerName) });
-      }
-    } else if (remoteMessage.data.type === 'chat' && typeof remoteMessage.data.chatId === 'string') {
-      navigateTo('Chat', { chatId: remoteMessage.data.chatId });
-    } else if (remoteMessage.data.type === 'new_content' && typeof remoteMessage.data.contentId === 'string') {
-      navigateTo('Content', { contentId: remoteMessage.data.contentId });
-    } else {
-      navigateTo('Home', {});
     }
   }
 
@@ -452,7 +395,7 @@ class FirebaseService {
   public async hasPermission() {
     if (!this.messagingReady) {
       console.log('[FCM] Messaging not ready, returning NOT_DETERMINED');
-      return (messaging().AuthorizationStatus || 0);
+      return AuthorizationStatus.NOT_DETERMINED;
     }
     return await messaging().hasPermission();
   }

@@ -190,7 +190,7 @@ interface MeetingViewProps {
  * The internal meeting view component - BULLETPROOF IMPLEMENTATION
  */
 const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLocalParticipantId, recipientName }: MeetingViewProps) => {
-  const { activeCall } = useCall();
+  const { activeCall: currentActiveCall } = useCall(); // Rename to avoid confusion
   const unifiedCallService = UnifiedCallService.getInstance(); // Get instance directly
   const callMediaManager = CallMediaManager.getInstance(); // Get instance directly 
   const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
@@ -198,6 +198,31 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
 
   // --- LINT FIX: Removed redundant meeting state ---
   // We use meetingHooks from useMeeting instead of a separate meeting state
+
+  // LATCH THE INITIAL CALL DATA FROM ROUTE PARAMS OR UNIFIEDCALLSERVICE
+  const latchedCallDataRef = useRef<{
+    meetingId: string;
+    callType: 'voice' | 'video';
+    token: string;
+    recipientName: string;
+  } | null>(null);
+
+  // Initialize latched call data on first render
+  if (!latchedCallDataRef.current) {
+    // Try UnifiedCallService first as it's the source of truth
+    const unifiedCall = unifiedCallService.getCurrentCall();
+    if (unifiedCall && unifiedCall.meetingId === meetingId) {
+      latchedCallDataRef.current = {
+        meetingId: unifiedCall.meetingId,
+        callType: unifiedCall.callType,
+        token: unifiedCall.token,
+        recipientName: unifiedCall.isInitiator ? unifiedCall.recipientName : unifiedCall.callerName
+      };
+    } else {
+      // Fallback to props (from route params)
+      latchedCallDataRef.current = { meetingId, callType, token, recipientName };
+    }
+  }
 
   const [localParticipantId, setLocalParticipantId] = useState(initialLocalParticipantId);
   const [showControls, setShowControls] = useState(true);
@@ -297,22 +322,11 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     },
     onError: (error: any) => {
       console.error('[MeetingView] ❌ Meeting error:', error);
-      
-      // Use enhanced error handling with UnifiedCallService
-      const callId = activeCall?.callId || route.params?.meetingId;
-      
-      // Categorize errors properly for better handling
+      setCallState('ended');
+      // If the error is fatal (e.g., websocket error, join failure), end the call
       if (isFatalError(error)) {
-        // Fatal errors require ending the call
-        setCallState('ended');
-        handleErrorRecovery(error, true);
-      } else if (isNetworkError(error)) {
-        // Network errors may be temporary, attempt reconnection
-        setCallState('reconnecting');
-        handleErrorRecovery(error, false);
-      } else {
-        // Other non-fatal errors, just notify
-        handleErrorRecovery(error, false);
+        console.log('[MeetingView] Fatal VideoSDK error detected, ending call.');
+        UnifiedCallService.getInstance().endCall();
       }
     },
   });
@@ -339,9 +353,23 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
       (async () => {
         try {
           // CRITICAL FIX: Ensure that for video calls, camera is enabled before joining
-          if (callType === 'video' && !mediaState.cameraEnabled) {
-            console.log('[MeetingView] Pre-enabling camera for video call before joining');
-            await callMediaManager.setCameraEnabled(true);
+          if (callType === 'video') {
+            if (!mediaState.cameraEnabled) {
+              console.log('[MeetingView] Pre-enabling camera for video call before joining');
+              await callMediaManager.setCameraEnabled(true);
+            }
+            // Verify camera is enabled
+            const verifiedState = callMediaManager.getMediaState();
+            if (!verifiedState.cameraEnabled) {
+              console.error('[MeetingView] ERROR: Camera could not be enabled before join. Aborting join.');
+              Alert.alert(
+                'Camera Error',
+                'Unable to enable camera for video call. Please check camera permissions and try again.',
+                [{ text: 'OK', onPress: () => setIsJoining(false) }],
+                { cancelable: false }
+              );
+              return;
+            }
           }
           await join();
           console.log('[MeetingView] Join call successful');
@@ -396,17 +424,28 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   }, [hasJoined, meetingHooks, mediaState, micOn, webcamOn]);
 
   // BULLETPROOF FIX: Listen for activeCall changes to prevent navigation loops
+  // BUT make it less aggressive - only exit if we don't have latched data to work with
   useEffect(() => {
-    // CRITICAL RACE CONDITION FIX: Handle call termination more aggressively
-    // This ensures navigation happens even if hasJoined is false (e.g., during connecting phase)
-    if (!activeCall && !isEndingCall && isComponentMountedRef.current) {
+    // CRITICAL RACE CONDITION FIX: Only handle external termination if we actually had an active call
+    // and don't have sufficient latched data to continue
+    if (!currentActiveCall && !isEndingCall && isComponentMountedRef.current) {
+      // BULLETPROOF FIX: Check if we have latched call data to continue with
+      const hasLatchedData = latchedCallDataRef.current && 
+                           latchedCallDataRef.current.meetingId && 
+                           latchedCallDataRef.current.token;
+      
+      if (hasLatchedData) {
+        console.log('[MeetingView] ActiveCall is null but we have latched data, continuing with meeting');
+        return;
+      }
+      
       // CRITICAL FIX: Check grace period to prevent premature termination
       if (connectedRecentlyRef.current) {
         console.log('[MeetingView] Ignoring null activeCall during post-connection grace period');
         return;
       }
       
-      console.log('[MeetingView] ActiveCall became null, call ended externally by UnifiedCallService');
+      console.log('[MeetingView] ActiveCall became null and no latched data, call ended externally by UnifiedCallService');
       
       // CRITICAL: Set a flag to prevent any further navigation attempts
       setIsEndingCall(true);
@@ -456,7 +495,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
         }
       }, 200); // Increased delay to allow UnifiedCallService to complete its operations
     }
-  }, [activeCall, isEndingCall, navigation, leave]);
+  }, [currentActiveCall, isEndingCall, navigation, leave]);
 
   // BULLETPROOF: Listen for call state changes from UnifiedCallService
   useEffect(() => {
@@ -535,59 +574,38 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }, []);
 
-  // Handle end call - MOVED UP to fix dependency issues
+  // Handle end call - REFACTORED: Only call UnifiedCallService.endCall and let state events handle navigation/cleanup
   const handleEndCall = useCallback(async () => {
     if (isEndingCall || isLeavingRef.current) return;
     isLeavingRef.current = true;
     setIsEndingCall(true);
-    setCallState('ended');
     try {
       const unifiedCallService = UnifiedCallService.getInstance();
       await unifiedCallService.endCall();
-      stopCallDurationTimer();
-      await callMediaManager.cleanup('call_ended_by_user');
-      if (leave && hasJoined) {
-        await Promise.race([
-          leave(),
-          new Promise(resolve => setTimeout(resolve, 2000))
-        ]);
-      }
-      setTimeout(() => {
-        if (!navigation || !isComponentMountedRef.current) return;
-        try {
-          const currentRoute = navigation.getState()?.routes?.[navigation.getState()?.index || 0]?.name;
-          if (currentRoute === 'Meeting') {
-            if (navigation.canGoBack()) {
-              navigation.goBack();
-            } else {
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'TipCall' as keyof MainNavigatorParamList }],
-              });
-            }
-          }
-        } catch (error) {
-          try {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'TipCall' as keyof MainNavigatorParamList }],
-            });
-          } catch (finalError) {}
-        }
-      }, 1000);
+      // Do not perform any direct cleanup or navigation here.
+      // Navigation and cleanup will be handled by callStateChanged event listeners.
     } catch (error) {
       setIsEndingCall(false);
       isLeavingRef.current = false;
     }
-  }, [isEndingCall, leave, hasJoined, stopCallDurationTimer, callMediaManager, navigation]);
+  }, [isEndingCall]);
 
+  // Helper to determine if error is fatal
   const isFatalError = useCallback((error: any) => {
-    const fatalErrorCodes = ['INVALID_TOKEN', 'TOKEN_EXPIRED', 'MEETING_ENDED', 'INVALID_PERMISSIONS'];
-    return error?.code && fatalErrorCodes.includes(error.code);
+    // Customize this logic as needed for your error objects
+    const fatalErrorCodes = [
+      'INVALID_TOKEN', 'TOKEN_EXPIRED', 'MEETING_ENDED', 'INVALID_PERMISSIONS', 'WEBSOCKET_ERROR', 'CONNECTION_ERROR', 'JOIN_FAILED', 'SOCKET_DISCONNECTED', 'SOCKET_ERROR', 'NETWORK_ERROR', 'SERVER_ERROR'
+    ];
+    // Check for code or message
+    if (error?.code && fatalErrorCodes.includes(error.code)) return true;
+    if (typeof error?.message === 'string') {
+      return fatalErrorCodes.some(code => error.message.toUpperCase().includes(code));
+    }
+    return false;
   }, []);
 
   const isNetworkError = useCallback((error: any) => {
-    const networkErrorCodes = ['CONNECTION_LOST', 'NETWORK_ERROR', 'RECONNECTION_FAILED'];
+    const networkErrorCodes = ['CONNECTION_LOST', 'RECONNECTION_FAILED'];
     return error?.code && networkErrorCodes.includes(error.code);
   }, []);
 
@@ -1072,39 +1090,38 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   // BULLETPROOF Component cleanup - ensures proper resource cleanup
   const cleanupRef = useRef(false);
   useEffect(() => {
-    return () => {
-      if (cleanupRef.current) return;
-      cleanupRef.current = true;
-      console.log('[MeetingView] Component unmounting, performing comprehensive cleanup');
-      isComponentMountedRef.current = false;
-      isLeavingRef.current = true;
-      stopCallDurationTimer();
-      if (hasJoined && leave && !isEndingCall) {
-        Promise.race([
-          leave(),
-          new Promise(resolve => setTimeout(resolve, 1000))
-        ]);
+    if (cleanupRef.current) return;
+    if (callState !== 'ended') return;
+    cleanupRef.current = true;
+    console.log('[MeetingView] Component unmounting, performing comprehensive cleanup');
+    isComponentMountedRef.current = false;
+    isLeavingRef.current = true;
+    stopCallDurationTimer();
+    if (hasJoined && leave && !isEndingCall) {
+      Promise.race([
+        leave(),
+        new Promise(resolve => setTimeout(resolve, 1000))
+      ]);
+    }
+    if (callTimerRef.current) {
+      clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+    }
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
+    }
+    if (notificationSyncRef.current) {
+      clearInterval(notificationSyncRef.current);
+      notificationSyncRef.current = null;
+    }
+    try {
+      const unifiedCallService = UnifiedCallService.getInstance();
+      const currentCall = unifiedCallService.getCurrentCall();
+      if (currentCall && currentCall.status !== 'ended') {
+        appEventEmitter.emit('meetingScreenUnmounting', { callId: currentCall.callId });
       }
-      if (callTimerRef.current) {
-        clearInterval(callTimerRef.current);
-        callTimerRef.current = null;
-      }
-      if (heartbeatIntervalRef.current) {
-        clearInterval(heartbeatIntervalRef.current);
-        heartbeatIntervalRef.current = null;
-      }
-      if (notificationSyncRef.current) {
-        clearInterval(notificationSyncRef.current);
-        notificationSyncRef.current = null;
-      }
-      try {
-        const unifiedCallService = UnifiedCallService.getInstance();
-        const currentCall = unifiedCallService.getCurrentCall();
-        if (currentCall && currentCall.status !== 'ended') {
-          appEventEmitter.emit('meetingScreenUnmounting', { callId: currentCall.callId });
-        }
-      } catch (error) {}
-    };
+    } catch (error) {}
   }, [stopCallDurationTimer, hasJoined, leave, isEndingCall]);
 
   // After meeting is joined, force VideoSDK state to match app state
@@ -1331,13 +1348,60 @@ const MeetingScreen = () => {
   const { activeCall } = useCall();
   const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
 
-  // Sticky call context: latch the call on mount
+  // CRITICAL FIX: Sticky call context - latch the call on mount and never clear it during the session
   const latchedCallRef = useRef<ActiveCall | null>(null);
-  if (!latchedCallRef.current && activeCall) {
-    latchedCallRef.current = activeCall;
+  const hasInitializedRef = useRef(false);
+
+  // Only initialize the latched call once when the component first mounts
+  if (!hasInitializedRef.current) {
+    hasInitializedRef.current = true;
+    
+    // Priority 1: Route params (most immediate source of truth on navigation)
+    if (route.params?.meetingId && route.params?.token) {
+      latchedCallRef.current = {
+        callId: `route_${Date.now()}`, // Generate ID since not in route params
+        meetingId: route.params.meetingId,
+        token: route.params.token,
+        callerName: route.params.displayName || 'User',
+        recipientName: route.params.recipientName || 'Participant',
+        callType: route.params.callType || 'voice',
+        callerId: '', // Not available in route params
+        recipientId: '', // Not available in route params
+        isInitiator: route.params.isInitiator ?? true,
+        status: 'connecting',
+        timestamp: Date.now()
+      } as ActiveCall;
+      console.log('[MeetingScreen] Latched call from route params:', latchedCallRef.current);
+    } 
+    // Priority 2: Current activeCall from context
+    else if (activeCall) {
+      latchedCallRef.current = activeCall;
+      console.log('[MeetingScreen] Latched call from context:', latchedCallRef.current);
+    }
+    // Priority 3: UnifiedCallService as last resort
+    else {
+      const unifiedCallService = UnifiedCallService.getInstance();
+      const currentCall = unifiedCallService.getCurrentCall();
+      if (currentCall) {
+        latchedCallRef.current = {
+          callId: currentCall.callId,
+          meetingId: currentCall.meetingId,
+          token: currentCall.token,
+          callerName: currentCall.callerName,
+          recipientName: currentCall.recipientName,
+          callType: currentCall.callType,
+          callerId: currentCall.callerId,
+          recipientId: currentCall.recipientId,
+          isInitiator: currentCall.isInitiator,
+          status: 'connecting',
+          timestamp: Date.now()
+        } as ActiveCall;
+        console.log('[MeetingScreen] Latched call from UnifiedCallService:', latchedCallRef.current);
+      }
+    }
   }
 
-  // Use latched call for all call-related logic
+  // Use latched call for all call-related logic - this prevents race conditions
   const latchedCall = latchedCallRef.current;
 
   // Use route params with fallbacks and dynamic updates
@@ -1399,20 +1463,61 @@ const MeetingScreen = () => {
   }, [activeCall, latchedCall, navigation]);
 
   if (!meetingId || !token || !displayName) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <StatusBar barStyle="light-content" backgroundColor="#121212" />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#00D4AA" />
-          <Text style={styles.loadingText}>Preparing call...</Text>
-          <Text style={styles.loadingText}>
-            {!meetingId ? 'Missing meeting ID' : 
-             !token ? 'Missing authentication token' : 
-             'Initializing call session'}
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
+    // Add a failsafe to check the latched call one last time
+    if (latchedCallRef.current && latchedCallRef.current.meetingId && latchedCallRef.current.token) {
+      // We have latched data, use it to prevent showing loading screen
+      const latchedMeetingId = latchedCallRef.current.meetingId;
+      const latchedToken = latchedCallRef.current.token;
+      const latchedDisplayName = latchedCallRef.current.callerName || 'User';
+      const latchedCallType = latchedCallRef.current.callType || 'voice';
+      const latchedRecipientName = latchedCallRef.current.recipientName || 'Participant';
+      
+      console.log('[MeetingScreen] Using latched data to prevent loading screen:', {
+        meetingId: latchedMeetingId,
+        displayName: latchedDisplayName,
+        callType: latchedCallType
+      });
+      
+      return (
+        <CallErrorBoundary>
+          <MeetingProvider
+            config={{
+              meetingId: latchedMeetingId,
+              micEnabled: CallMediaManager.getInstance().getMediaState().micEnabled,
+              webcamEnabled: latchedCallType === 'video' ? true : CallMediaManager.getInstance().getMediaState().cameraEnabled,
+              name: latchedDisplayName,
+              notification: {
+                title: 'Adtip Call',
+                message: 'You are in a call.',
+              },
+            }}
+            token={latchedToken}>
+            <MeetingView
+              meetingId={latchedMeetingId}
+              callType={latchedCallType}
+              token={latchedToken}
+              localParticipantId=""
+              recipientName={latchedRecipientName}
+            />
+          </MeetingProvider>
+        </CallErrorBoundary>
+      );
+    } else {
+      return (
+        <SafeAreaView style={styles.loadingContainer}>
+          <StatusBar barStyle="light-content" backgroundColor="#121212" />
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#00D4AA" />
+            <Text style={styles.loadingText}>Preparing call...</Text>
+            <Text style={styles.loadingText}>
+              {!meetingId ? 'Missing meeting ID' : 
+               !token ? 'Missing authentication token' : 
+               'Initializing call session'}
+            </Text>
+          </View>
+        </SafeAreaView>
+      );
+    }
   }
 
   return (

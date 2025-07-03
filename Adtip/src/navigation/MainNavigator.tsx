@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Easing } from 'react-native-reanimated';
 import { withFastLoading } from '../components/hoc/withFastLoading';
 import { MainNavigatorParamList } from '../types/navigation';
+import { appEventEmitter } from '../events/AppEventEmitter';
+// Import the navigation ref for global navigation
+import { navigationRef, navigateToMeeting } from './NavigationService';
 
 // Import navigators
 import TabNavigator from './TabNavigator';
@@ -288,6 +291,35 @@ const callTransitionConfig = {
  * Main application stack navigator (when user is authenticated)
  */
 const MainNavigator = () => {
+  // Remove the useNavigation hook - this was causing the issue
+  // const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
+
+  useEffect(() => {
+    const handleNavigateToMeeting = (params: any) => {
+      console.log('[MainNavigator] Received forceNavigateToMeeting event, navigating to Meeting screen.');
+      if (params && params.meetingId && params.token) {
+        // Use navigateToMeeting function for proper nested navigation
+        navigateToMeeting({
+          meetingId: params.meetingId,
+          token: params.token,
+          displayName: params.displayName,
+          callType: params.callType,
+          isInitiator: params.isInitiator,
+          recipientName: params.callData?.recipientName,
+          callData: params.callData,
+        });
+      } else {
+        console.error('[MainNavigator] Invalid parameters received for forceNavigateToMeeting event:', params);
+      }
+    };
+
+    appEventEmitter.on('forceNavigateToMeeting', handleNavigateToMeeting);
+
+    return () => {
+      appEventEmitter.off('forceNavigateToMeeting', handleNavigateToMeeting);
+    };
+  }, []); // Remove navigation dependency since we're using navigationRef
+
   // Wrap all individual screens with the wallet balance HOC
   const EnhancedCreatePostScreen = withWalletBalance(CreatePostScreen);
   const EnhancedSelectCategoryScreen = withWalletBalance(SelectCategoryScreen);
