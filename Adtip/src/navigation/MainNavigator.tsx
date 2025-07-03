@@ -54,6 +54,7 @@ import CameraRecordingScreen from '../screens/content/CameraRecordingScreen';
 
 // Add TipCall imports - Fix the import path
 import TipCallScreen from '../screens/tipcall/TipCallScreen';
+import MissedCallsScreen from '../screens/tipcall/MissedCallsScreen';
 // Import MeetingScreen
 import MeetingScreen from '../screens/videosdk/MeetingScreen';
 
@@ -326,6 +327,7 @@ const MainNavigator = () => {
   const EnhancedVideoPlayerModalScreen = withWalletBalance(VideoPlayerModalScreen);
     // Add TipCall screens with wallet balance HOC
   const EnhancedTipCallScreen = withWalletBalance(TipCallScreen);
+  const EnhancedMissedCallsScreen = withWalletBalance(MissedCallsScreen);
   // Enhanced MeetingScreen with wallet balance HOC
   const EnhancedMeetingScreen = withWalletBalance(MeetingScreen);
 
@@ -355,6 +357,12 @@ const MainNavigator = () => {
       <Stack.Screen 
         name="TipCall" 
         component={EnhancedTipCallScreen}
+        options={standardFastTransitionConfig}
+      />
+      {/* MissedCalls screen with standard transition */}
+      <Stack.Screen 
+        name="MissedCalls" 
+        component={EnhancedMissedCallsScreen}
         options={standardFastTransitionConfig}
       />
       {/* MeetingScreen with optimized transition for calls */}

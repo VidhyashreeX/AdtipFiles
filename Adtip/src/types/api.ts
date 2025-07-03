@@ -19,6 +19,15 @@ export interface ApiResponse<T> {
   status: number | boolean;
   message: string;
   data?: T;
+  pagination?: {
+    page?: number;
+    limit?: number;
+    totalRecords?: number;
+    current_page?: number;
+    total_pages?: number;
+    total_count?: number;
+    per_page?: number;
+  };
 }
 
 // Authentication types

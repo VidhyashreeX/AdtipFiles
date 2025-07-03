@@ -20,6 +20,7 @@ import {
   PremiumCheckResponse,
   UserListRequest,
   UserListResponse,
+  Contact,
   ReferralDetailsResponse,
   FcmTokenRequest,
   MissedCallsResponse,
@@ -2021,5 +2022,24 @@ static async createSubscriptionTest(plan_id: string, user_id: number): Promise<a
 
   static async getContentPremiumRazorpayDetails(): Promise<any> {
     return this.get('/api/content-premium/razorpay-details');
+  }
+
+  /**
+   * Get missed calls for a user
+   */
+  static async getMissedCalls(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<ApiResponse<Contact[]>> {
+    try {
+      const response = await this.get<ApiResponse<Contact[]>>(
+        `${ApiEndpoints.TIP_CALLS_ENDPOINTS.MISSED_CALLS}/${userId}`,
+        { page, limit },
+      );
+      return response;
+    } catch (error) {
+      throw this.handleError(error);
+    }
   }
 }

@@ -39,6 +39,7 @@ export type MainNavigatorParamList = {
   TipCall: { initialCallNotificationData?: CallNotificationData }; // TipCall now takes params
   TipShop: undefined;
   Chat: { user: Contact }; // Add this line
+  MissedCalls: undefined;
   Profile: {userId?: number};
   EditProfile: undefined;
   PostDetail: {postId: number};

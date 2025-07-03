@@ -44,6 +44,7 @@ import uuid from 'react-native-uuid';
 import UnifiedCallService from '../../services/calling/UnifiedCallService'; // Unified call service
 import RectangleAdComponent from '../../googleads/RectangleAdComponent';
 import { RootStackParamList, MainNavigatorParamList } from '../../types/navigation';
+import { useMissedCallsCount } from '../../hooks/useMissedCalls';
 
 // Define navigation stack param list
 type NavigationProp = NativeStackNavigationProp<MainNavigatorParamList, 'TipCall'>;
@@ -277,6 +278,9 @@ export default function TipCallScreen() {
   const { clearCache } = useDataContext();
   const netInfo = useNetInfo();
   const queryClient = useQueryClient();
+
+  // Get missed calls count for badge
+  const { count: missedCallsCount } = useMissedCallsCount(user?.id?.toString());
 
   useEffect(() => {
     // Reset call state using UnifiedCallService
@@ -669,15 +673,19 @@ export default function TipCallScreen() {
           showSearch={false}
           rightComponent={
             <View style={styles.headerRightContainer}>
-              {/* Search Icon - added to the left */}
+              {/* Missed Calls Icon - replaced search icon */}
               <TouchableOpacity
-                onPress={() => {
-                  // You can implement search modal here or use a different approach
-                  console.log('[TipCall] Search icon pressed');
-                }}
+                onPress={() => navigation.navigate('MissedCalls')}
                 style={[styles.headerIconButton, { marginRight: 12 }]}
               >
-                <Icon name="search" size={20} color={colors.text.secondary} />
+                <Icon name="phone-missed" size={20} color={colors.error} />
+                {missedCallsCount > 0 && (
+                  <View style={[styles.missedCallsBadge, { backgroundColor: colors.error }]}>
+                    <Text style={styles.missedCallsBadgeText}>
+                      {missedCallsCount > 99 ? '99+' : missedCallsCount.toString()}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
 
               {/* Notifications Icon - moved right */}
@@ -818,6 +826,26 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: '#EF4444',
+  },
+  
+  missedCallsBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  
+  missedCallsBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
   
   // Remove old DND button styles and add new toggle switch styles
