@@ -114,6 +114,7 @@ export type MainNavigatorParamList = {
   PremiumUser: undefined;
   ContentCreatorPremium: undefined;
   PrivacyPolicy: undefined; // Add this line
+  BlockedUsers: undefined; // Screen for managing blocked users
 };
 
 // This is the RootStackParamList for the Stack.Navigator in App.tsx

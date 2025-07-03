@@ -57,6 +57,8 @@ import TipCallScreen from '../screens/tipcall/TipCallScreen';
 import MissedCallsScreen from '../screens/tipcall/MissedCallsScreen';
 // Import MeetingScreen
 import MeetingScreen from '../screens/videosdk/MeetingScreen';
+// Import BlockedUsersScreen
+import BlockedUsersScreen from '../screens/blocklist/BlockedUsersScreen';
 
 // Add AddFundsScreen import
 import AddFundsScreen from '../screens/wallet/AddFundsScreen';
@@ -455,6 +457,7 @@ const MainNavigator = () => {
       <Stack.Screen name="Search" component={EnhancedSearchScreen} />
       <Stack.Screen name="Notifications" component={EnhancedNotificationScreen} />
       <Stack.Screen name="Settings" component={EnhancedSettingsScreen} />
+      <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={standardFastTransitionConfig} />
       <Stack.Screen name="Earnings" component={EnhancedEarningsScreen} />
       <Stack.Screen name="Referral" component={EnhancedReferralScreen} />
       <Stack.Screen name="WatchToEarn" component={EnhancedWatchToEarnScreen} />

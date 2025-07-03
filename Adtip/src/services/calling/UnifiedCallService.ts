@@ -48,6 +48,7 @@ import { v4 as uuid } from 'uuid';
 import { appEventEmitter } from '../../events/AppEventEmitter';
 import ApiService from '../ApiService';
 import VideoSDKService from '../videosdk/VideoSDKService';
+import BlocklistService from '../BlocklistService';
 import CallMediaManager from './CallMediaManager';
 
 // ===== TYPES =====
@@ -906,6 +907,26 @@ class UnifiedCallService {
         return;
       }
 
+      // Check if caller is blocked - suppress call completely if blocked
+      const blocklistService = BlocklistService.getInstance();
+      if (blocklistService.shouldBlockIncomingCall(callData.callerId)) {
+        console.log('[UnifiedCallService] FCM incoming call blocked from user:', callData.callerId);
+        // Silently decline the call without any UI or notifications
+        await this.sendCallStatusUpdate({
+          callId: callData.callId,
+          meetingId: callData.meetingId,
+          token: callData.token,
+          callerName: callData.callerName,
+          recipientName: 'Me',
+          callType: callData.callType,
+          callerId: callData.callerId,
+          recipientId: currentUserId,
+          isInitiator: false,
+          status: 'declined'
+        }, 'declined');
+        return; // Exit early - no further processing
+      }
+
       console.log('[UnifiedCallService] Processing incoming call:', callData.callId);
 
       // Create call data
@@ -971,6 +992,26 @@ class UnifiedCallService {
   public async handleIncomingCall(callNotificationData: CallNotificationData): Promise<void> {
     try {
       console.log('[UnifiedCallService] Handling incoming call:', callNotificationData);
+
+      // Check if caller is blocked - suppress call completely if blocked
+      const blocklistService = BlocklistService.getInstance();
+      if (blocklistService.shouldBlockIncomingCall(callNotificationData.callerId)) {
+        console.log('[UnifiedCallService] Incoming call blocked from user:', callNotificationData.callerId);
+        // Silently decline the call without any UI or notifications
+        await this.sendCallStatusUpdate({
+          callId: callNotificationData.callId,
+          meetingId: callNotificationData.meetingId,
+          token: callNotificationData.token,
+          callerName: callNotificationData.callerName,
+          recipientName: 'Me',
+          callType: callNotificationData.callType,
+          callerId: callNotificationData.callerId,
+          recipientId: await this.getCurrentUserId(),
+          isInitiator: false,
+          status: 'declined'
+        }, 'declined');
+        return; // Exit early - no further processing
+      }
 
       // Check if we're already in a call
       if (this.callState.isInCall) {

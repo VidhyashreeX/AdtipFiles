@@ -41,10 +41,12 @@ import ContactSkeletonItem from '../../components/skeletons/ContactSkeletonItem'
 import { UserListRequest, UpdateUserRequest, UpdateUserResponse, Contact } from '../../types/api';
 import ApiService from '../../services/ApiService';
 import Icon from 'react-native-vector-icons/Feather';
-import { BanknoteArrowUp } from 'lucide-react-native';
+import { Ban, BanknoteArrowUp } from 'lucide-react-native';
 import messaging from '@react-native-firebase/messaging';
 import uuid from 'react-native-uuid';
 import UnifiedCallService from '../../services/calling/UnifiedCallService'; // Unified call service
+import BlocklistService from '../../services/BlocklistService';
+import { useBlocklist } from '../../hooks/useBlocklist';
 import RectangleAdComponent from '../../googleads/RectangleAdComponent';
 import { RootStackParamList, MainNavigatorParamList } from '../../types/navigation';
 import { useMissedCallsCount } from '../../hooks/useMissedCalls';
@@ -143,7 +145,8 @@ const ContactCard: React.FC<{
   colors: any;
   isDarkMode: boolean;
   onProfilePress?: () => void; // Added new prop for profile navigation
-}> = ({ contact, onVideoCall, onVoiceCall, onChat, hasUnreadMessages, colors, isDarkMode, onProfilePress }) => {
+  onBlockUser?: () => void; // Added new prop for blocking user
+}> = ({ contact, onVideoCall, onVoiceCall, onChat, hasUnreadMessages, colors, isDarkMode, onProfilePress, onBlockUser }) => {
   const avatarColor = colors.primary; // Always use primary color
   
   return (
@@ -158,6 +161,7 @@ const ContactCard: React.FC<{
         }
       ]}
       onPress={onProfilePress} // Added onPress handler
+      onLongPress={onBlockUser} // Added long press handler for blocking
       activeOpacity={0.8}
     >
       <View style={styles.contactCardContent}>
@@ -294,6 +298,30 @@ export default function TipCallScreen() {
 
   // Get missed calls count for badge
   const { count: missedCallsCount } = useMissedCallsCount(user?.id?.toString());
+
+  // Blocklist functionality
+  const { 
+    blockedUsers, 
+    blockedUsersCount, 
+    isUserBlocked, 
+    blockUser, 
+    unblockUser, 
+    refreshBlocklist, 
+    isInitialized: blocklistInitialized 
+  } = useBlocklist();
+
+  // Initialize BlocklistService on mount
+  useEffect(() => {
+    const initializeBlocklist = async () => {
+      try {
+        const blocklistService = BlocklistService.getInstance();
+        await blocklistService.initialize();
+      } catch (error) {
+        console.error('[TipCallScreen] Failed to initialize blocklist:', error);
+      }
+    };
+    initializeBlocklist();
+  }, []);
 
   useEffect(() => {
     // Reset call state using UnifiedCallService
@@ -454,6 +482,38 @@ export default function TipCallScreen() {
     setSelectedUserId(userId);
     setShowUserProfileModal(true);
   }, []);
+
+  // Handle blocking a user
+  const handleBlockUser = useCallback((contact: Contact) => {
+    Alert.alert(
+      'Block User',
+      `Are you sure you want to block ${contact.name || 'this user'}? They won't be able to call you anymore.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await blockUser(contact.id.toString(), contact.name || 'Unknown User');
+              Alert.alert('Success', `${contact.name || 'User'} has been blocked.`);
+            } catch (error) {
+              console.error('[TipCallScreen] Failed to block user:', error);
+              Alert.alert('Error', 'Failed to block user. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  }, [blockUser]);
+
+  // Handle navigation to blocked users screen
+  const handleNavigateToBlockedUsers = useCallback(() => {
+    navigation.navigate('BlockedUsers' as never);
+  }, [navigation]);
 
   // Initialize DND state from user data
   useEffect(() => {
@@ -690,6 +750,7 @@ export default function TipCallScreen() {
         colors={colors}
         isDarkMode={isDarkMode}
         onProfilePress={() => handleUserProfilePress(item.id)} // Open profile modal
+        onBlockUser={() => handleBlockUser(item)} // Block user on long press
       />
     );
   };
@@ -766,7 +827,22 @@ export default function TipCallScreen() {
           showSearch={false}
           rightComponent={
             <View style={styles.headerRightContainer}>
-              {/* Missed Calls Icon - replaced search icon */}
+              {/* Ban Icon - Navigate to Blocked Users */}
+              <TouchableOpacity
+                onPress={handleNavigateToBlockedUsers}
+                style={[styles.headerIconButton, { marginRight: 12 }]}
+              >
+                <Ban size={20} color={colors.error} />
+                {blockedUsersCount > 0 && (
+                  <View style={[styles.blockedUsersBadge, { backgroundColor: colors.error }]}>
+                    <Text style={styles.blockedUsersBadgeText}>
+                      {blockedUsersCount > 99 ? '99+' : blockedUsersCount.toString()}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* Missed Calls Icon */}
               <TouchableOpacity
                 onPress={() => navigation.navigate('MissedCalls')}
                 style={[styles.headerIconButton, { marginRight: 12 }]}
@@ -950,6 +1026,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 4,
+  },
+  
+  blockedUsersBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  
+  blockedUsersBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
   
   missedCallsBadgeText: {
