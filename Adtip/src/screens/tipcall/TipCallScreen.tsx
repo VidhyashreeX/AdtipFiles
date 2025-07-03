@@ -863,9 +863,9 @@ export default function TipCallScreen() {
                 )}
               </TouchableOpacity>
 
-              {/* Banknote Arrow Up Icon */}
+              {/* Banknote Arrow Up Icon - Navigate to AddFundsScreen */}
               <TouchableOpacity
-                onPress={() => console.log('[TipCallScreen] Banknote Arrow Up button pressed')}
+                onPress={() => navigation.navigate('AddFundsScreen')}
                 style={[styles.headerIconButton, { marginRight: 8 }]}
               >
                 <BanknoteArrowUp size={20} color={colors.primary} />
