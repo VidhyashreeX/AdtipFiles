@@ -297,6 +297,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
 
+  // Add premium state
+  const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [premiumLoading, setPremiumLoading] = useState<boolean>(true);
+
   // Enhanced data layer using React Query v5 hooks
   const {
     data: postsData,
@@ -310,6 +314,24 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     selectedCategoryState ? parseInt(selectedCategoryState, 10) : 0,
     user?.id
   );
+
+  // Check premium status on mount/user change
+  useEffect(() => {
+    const checkPremiumStatus = async () => {
+      if (!user?.id) return;
+      try {
+        setPremiumLoading(true);
+        const premiumResponse: any = await ApiService.checkPremium(user.id);
+        const isPremiumActive = !!(premiumResponse && (premiumResponse.status === true || premiumResponse.status === 1));
+        setIsPremium(isPremiumActive);
+      } catch (error) {
+        setIsPremium(false);
+      } finally {
+        setPremiumLoading(false);
+      }
+    };
+    checkPremiumStatus();
+  }, [user?.id]);
 
   // Fetch data whenever the screen comes into focus by invalidating and forcing refetch
   useFocusEffect(
@@ -426,6 +448,49 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const handleFollowUser = useCallback((userId: number, isFollowing: boolean) => {
     followMutation.mutate({ userId, isFollowing });
   }, [followMutation]);
+
+  // Prefetch posts and profile data
+  const handlePostPress = useCallback((postId: number, userId: number) => {
+    // Navigate to post details - use 'as any' to handle navigation typing
+    navigation.navigate('PostDetail' as any, { postId, userId });
+    
+    // Prefetch post and author profile - fix type mismatch
+    prefetchPosts(postId);
+    prefetchProfile(userId);
+  }, [navigation, prefetchPosts, prefetchProfile]);
+
+  // Network-aware retry logic
+  const handleRetry = useCallback(async () => {
+    if (!isOnline) {
+      Alert.alert('No Internet', 'Please check your internet connection and try again.');
+      return;
+    }
+    
+    // Retry logic here
+    refreshPosts();
+  }, [isOnline, refreshPosts]);
+  
+  // Premium banner render function
+  const renderPremiumBanner = useCallback(() => {
+    if (premiumLoading) return null;
+    if (!isPremium) {
+      return (
+        <View style={[styles.premiumContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}> 
+          <LinearGradient colors={['#FFD700', '#FFB300']} style={styles.premiumBanner}>
+            <Text style={styles.crownIcon}>👑</Text>
+            <View style={styles.premiumTextContainer}>
+              <Text style={styles.premiumTitle}>Upgrade to Premium</Text>
+              <Text style={styles.premiumSubtitle}>Earn More Now!</Text>
+            </View>
+            <TouchableOpacity style={styles.upgradeButton} onPress={() => navigation.navigate('SubscriptionScreen' as never)} activeOpacity={0.8}>
+              <Text style={styles.upgradeButtonText}>Upgrade</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      );
+    }
+    return null;
+  }, [premiumLoading, isPremium, isDarkMode, colors, navigation]);
 
   // Use categories from API or fallback to static ones
   const displayCategories = categories || staticCategories;
@@ -669,6 +734,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           viewabilityConfig={viewabilityConfig}
           ListHeaderComponent={() => (
             <>
+              {renderPremiumBanner()}
               <StoriesRow stories={displayStories} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} />
               <CategoriesRow categories={displayCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} />
               <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} />
@@ -749,8 +815,6 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
     fontWeight: '600',
     color: '#333333',
   },
-  // ... rest of the existing styles remain the same ...
-  
   // Stories section
   storiesSection: {
     paddingVertical: 12,
@@ -908,6 +972,58 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 8,
+  },
+
+  // Premium banner styles
+  premiumContainer: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 0,
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    paddingVertical: 4,
+  },
+  premiumBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginHorizontal: 4,
+  },
+  crownIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  premiumTextContainer: {
+    flex: 1,
+  },
+  premiumTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000000',
+    marginBottom: 2,
+  },
+  premiumSubtitle: {
+    fontSize: 13,
+    color: '#000000',
+    fontWeight: '500',
+  },
+  upgradeButton: {
+    backgroundColor: 'rgba(184, 134, 11, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#000000',
+  },
+  upgradeButtonText: {
+    color: '#000000',
+    fontWeight: '600',
+    fontSize: 13,
   },
 });
 
