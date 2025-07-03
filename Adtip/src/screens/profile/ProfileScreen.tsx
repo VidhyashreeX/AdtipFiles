@@ -957,7 +957,7 @@ const ProfileScreen: React.FC = () => {
       <ScreenTransition animationType="scale">
         <View style={[styles.container, { backgroundColor: colors.background }]}>
           <Header
-            title={isOwnProfile ? 'Profile' : 'Profile'}
+            title=""
             showLogo={false}
             showSearch={false}
             showWallet={false}
@@ -973,7 +973,7 @@ const ProfileScreen: React.FC = () => {
       <ScreenTransition animationType="scale">
         <View style={[styles.container, { backgroundColor: colors.background }]}>
           <Header
-            title={isOwnProfile ? 'Profile' : 'Profile'}
+            title=""
             showLogo={false}
             showSearch={false}
             showWallet={false}
@@ -1060,7 +1060,7 @@ const ProfileScreen: React.FC = () => {
     <ScreenTransition animationType="scale">
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Header
-          title={isOwnProfile ? 'Profile' : user?.name || 'Profile'}
+          title=""
           showLogo={false}
           showSearch={false}
           showWallet={false}

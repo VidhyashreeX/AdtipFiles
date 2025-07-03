@@ -676,7 +676,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     return (
       <ScreenTransition>
         <View style={[styles.container, {backgroundColor: colors.background}]}>
-          <Header title="Home" />
+          <Header title="" />
           <ScrollView style={styles.content} contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}>
             <StoriesRow stories={[]} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} isLoading={true} />
             <CategoriesRow categories={[]} selectedCategory={null} onCategoryPress={handleCategoryPress} isLoading={true} />
@@ -695,7 +695,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     return (
       <ScreenTransition>
         <View style={[styles.container, {backgroundColor: colors.background}]}>
-          <Header title="Home" />
+          <Header title="" />
           <View style={styles.errorContainer}>
             <WifiOff size={48} color={colors.danger || '#FF0000'} />
             <Text style={[styles.errorTitle, {color: colors.text.primary}]}>Something went wrong</Text>
@@ -714,7 +714,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   return (
           <ScreenTransition>
         <View style={[styles.container, {backgroundColor: colors.background}]}>
-          <Header title="Home" />
+          <Header title="" />
           <FlatList
           data={displayPosts}
           renderItem={renderPostItem}

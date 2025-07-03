@@ -330,8 +330,14 @@ export const useUsers = (filters: {
         sortBy: {}
       };
 
-      const response = await ApiService.getAllUsersList(requestData);
+      // Use /api/users with POST method when filters are applied
+      // Use /api/allusers when "All" is selected (both language and interest are 0)
+      const useFilteredApi = filters.languageFilter !== 0 || filters.categoryFilter !== 0 || (filters.searchQuery && filters.searchQuery.trim() !== "");
       
+      const response = useFilteredApi 
+        ? await ApiService.getUsers(requestData)  // Uses /api/users POST
+        : await ApiService.getAllUsersList(requestData);  // Uses /api/allusers POST
+
       // Transform response to match expected format
       const transformedResponse = {
         status: Boolean(response?.status),

@@ -669,8 +669,8 @@ const TipTubeScreen = () => {
     <ScreenTransition animationType="slide" skipAnimation={false}>
       <View style={styles.container}>
         <Header 
-          title="TipTube" 
-          showTipShortsIcon 
+          title="" 
+          showTipShortsIcon={true}
           showSearch={true}
           showWallet={false}
           onSearchQueryChange={handleSearch}

@@ -76,7 +76,7 @@ interface Interest {
 // Constants for filters
 const LANGUAGES: Language[] = [
   {id: 0, name: 'All'},
-  {id: 12, name: 'English'},
+  {id: 1, name: 'English'},
   {id: 2, name: 'Hindi'},
   {id: 3, name: 'Bengali'},
   {id: 4, name: 'Telugu'},
@@ -560,16 +560,16 @@ export default function TipCallScreen() {
   const handleLanguageFilter = useCallback((languageId: number) => {
     console.log('[TipCall] Language filter changed to:', languageId);
     setLanguageFilter(languageId);
-    // Clear cache for better UX on filter change
-    clearCache(`users-${JSON.stringify(filters)}`);
-  }, [filters, clearCache]);
+    // Invalidate React Query cache instead of using clearCache
+    queryClient.invalidateQueries({ queryKey: ['users'] });
+  }, [queryClient]);
 
   const handleCategoryFilter = useCallback((categoryId: number) => {
     console.log('[TipCall] Category filter changed to:', categoryId);
     setCategoryFilter(categoryId);
-    // Clear cache for better UX on filter change
-    clearCache(`users-${JSON.stringify(filters)}`);
-  }, [filters, clearCache]);
+    // Invalidate React Query cache instead of using clearCache
+    queryClient.invalidateQueries({ queryKey: ['users'] });
+  }, [queryClient]);
 
   // Search handler - for header search functionality
   const handleSearch = useCallback((query: string) => {
@@ -830,11 +830,51 @@ export default function TipCallScreen() {
         
         {/* Updated Header with DND button in the same row */}
         <Header 
-          title="Tip Call" 
+          title="" 
           showWallet={false}
           showSearch={false}
           rightComponent={
             <View style={styles.headerRightContainer}>
+              {/* Search Icon - Search for users */}
+              <TouchableOpacity
+                onPress={() => {
+                  // Prompt user for search input
+                  Alert.prompt(
+                    'Search Users',
+                    'Enter name or user ID to search:',
+                    [
+                      {
+                        text: 'Cancel',
+                        style: 'cancel',
+                      },
+                      {
+                        text: 'Search',
+                        onPress: (text) => {
+                          if (text && text.trim()) {
+                            handleSearch(text.trim());
+                          }
+                        },
+                      },
+                      {
+                        text: 'Clear',
+                        onPress: () => {
+                          handleClearSearch();
+                        },
+                      },
+                    ],
+                    'plain-text',
+                    searchQuery
+                  );
+                }}
+                style={[styles.headerIconButton, { marginRight: 12 }]}
+              >
+                <Icon name="search" size={20} color={colors.text.primary} />
+                {/* Show indicator if search is active */}
+                {searchQuery && searchQuery.trim() && (
+                  <View style={[styles.searchActiveDot, { backgroundColor: colors.primary }]} />
+                )}
+              </TouchableOpacity>
+
               {/* Ban Icon - Navigate to Blocked Users */}
               <TouchableOpacity
                 onPress={handleNavigateToBlockedUsers}
@@ -1438,6 +1478,16 @@ const styles = StyleSheet.create({
     top: 16,
     right: 16,
     padding: 8,
+  },
+
+  // Missing searchActiveDot style for the search indicator
+  searchActiveDot: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
 });
 
