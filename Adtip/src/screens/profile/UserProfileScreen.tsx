@@ -21,7 +21,6 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_BASE_URL } from '../../constants/api';
 import ImageViewer from '@react-native-oh-tpl/react-native-image-zoom-viewer';
-import CallService from '../../services/CallService';
 import UnifiedCallService from '../../services/calling/UnifiedCallService';
 import ApiService from '../../services/ApiService';
 
@@ -70,7 +69,9 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ userId: initialUs
     }
 
     // Prevent multiple rapid call attempts
-    if (CallService.activeCall) {
+    const unifiedCallService = UnifiedCallService.getInstance();
+    const currentCallState = unifiedCallService.getCallState();
+    if (currentCallState.isInCall) {
       Alert.alert("Call In Progress", "You are already in a call.");
       return;
     }
@@ -78,17 +79,17 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ userId: initialUs
     try {
       console.log('[UserProfile] Starting WhatsApp-like call to:', user.name, 'Type:', callType);
       
-      // Initialize WhatsApp Call Manager if not already done
-      const whatsAppCallManager = UnifiedCallService.getInstance();
-      const initialized = await whatsAppCallManager.initialize();
+      // Initialize Unified Call Service if not already done
+      const unifiedCallService = UnifiedCallService.getInstance();
+      const initialized = await unifiedCallService.initialize();
       
       if (!initialized) {
         Alert.alert("Call Error", "Unable to initialize calling system. Please try again.");
         return;
       }
       
-      // Start the call with WhatsApp Call Manager
-      const callData = await whatsAppCallManager.startOutgoingCall(
+      // Start the call with Unified Call Service
+      const callData = await unifiedCallService.startOutgoingCall(
         userId.toString(),
         user.name,
         callType,

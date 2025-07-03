@@ -157,10 +157,21 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
   useEffect(() => {
     if (!isNavReady || !activeCall || !navigationRef.isReady()) return;
     
+    // CRITICAL FIX: Check if call is in an ending state to prevent navigation back to MeetingScreen
+    const isCallEnding = activeCall.status === 'ended';
+    const isCallMissed = activeCall.status === 'missed';
+    const isCallDeclined = activeCall.status === 'declined';
+    
+    if (isCallEnding || isCallMissed || isCallDeclined) {
+      console.log('[UltraFastLoader] Call is ending/ended, skipping navigation to avoid redirect back to MeetingScreen. Status:', activeCall.status);
+      return;
+    }
+    
     // Only navigate if the call is in a state that requires the meeting screen
     const shouldNavigate = activeCall.status === 'connected' || 
+                           activeCall.status === 'connecting' ||
                            (activeCall.status === 'ringing' && !activeCall.isInitiator) ||
-                           (activeCall.status === 'dialing' && activeCall.isInitiator);
+                           (activeCall.status === 'calling' && activeCall.isInitiator);
 
     if (shouldNavigate) {
       console.log('[UltraFastLoader] Active call detected, navigating to Meeting screen. Status:', activeCall.status);
@@ -181,10 +192,13 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
             // Check current route to avoid redundant navigation
             const currentRoute = navigationRef.getCurrentRoute();
             if (currentRoute?.name !== 'Meeting') {
+              console.log('[UltraFastLoader] Navigating to Meeting screen');
               (navigationRef as any).navigate('Main', {
                 screen: 'Meeting',
                 params: navigationParams,
               });
+            } else {
+              console.log('[UltraFastLoader] Already on Meeting screen, skipping navigation');
             }
           }
         }, 150);

@@ -1,7 +1,7 @@
 import React, { Component, ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { AlertTriangle } from 'lucide-react-native';
-import CallService from '../../services/CallService';
+import UnifiedCallService from '../../services/calling/UnifiedCallService';
 
 interface Props {
   children: ReactNode;
@@ -33,7 +33,8 @@ class CallErrorBoundary extends Component<Props, State> {
     
     // End any active call to prevent further issues
     try {
-      CallService.endCall('Error boundary triggered');
+      const unifiedCallService = UnifiedCallService.getInstance();
+      unifiedCallService.endCall('Error boundary triggered');
     } catch (e) {
       console.error('[CallErrorBoundary] Error ending call:', e);
     }
@@ -45,7 +46,8 @@ class CallErrorBoundary extends Component<Props, State> {
 
   handleEndCall = () => {
     try {
-      CallService.endCall('User ended call from error boundary');
+      const unifiedCallService = UnifiedCallService.getInstance();
+      unifiedCallService.endCall('User ended call from error boundary');
     } catch (error) {
       console.error('[CallErrorBoundary] Error ending call:', error);
     }

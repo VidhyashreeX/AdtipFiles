@@ -53,9 +53,6 @@ import FirebaseService from './src/services/FirebaseService';
 import VideoSDKService from './src/services/videosdk/VideoSDKService';
 import UnifiedCallService from './src/services/calling/UnifiedCallService';  // Unified call service (replacing all legacy services)
 
-import ApiService from './src/services/ApiService';
-import OngoingCallModule from './src/services/OngoingCallModule';
-import NotificationService from './src/services/NotificationService';
 import IncomingCallService from './src/services/IncomingCallService';
 
 // Constants

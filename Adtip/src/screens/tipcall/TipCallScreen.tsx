@@ -41,8 +41,7 @@ import ApiService from '../../services/ApiService';
 import Icon from 'react-native-vector-icons/Feather';
 import messaging from '@react-native-firebase/messaging';
 import uuid from 'react-native-uuid';
-import CallService from '../../services/CallService';
-import UnifiedCallService from '../../services/calling/UnifiedCallService'; // NEW: WhatsApp-like calling
+import UnifiedCallService from '../../services/calling/UnifiedCallService'; // Unified call service
 import RectangleAdComponent from '../../googleads/RectangleAdComponent';
 import { RootStackParamList, MainNavigatorParamList } from '../../types/navigation';
 
@@ -280,7 +279,9 @@ export default function TipCallScreen() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    CallService.resetCallState();
+    // Reset call state using UnifiedCallService
+    const unifiedCallService = UnifiedCallService.getInstance();
+    unifiedCallService.cleanup();
   }, []);
 
   // Request permissions on component mount
@@ -525,7 +526,9 @@ export default function TipCallScreen() {
     }
 
     // Prevent multiple rapid call attempts
-    if (CallService.activeCall) {
+    const unifiedCallService = UnifiedCallService.getInstance();
+    const currentCallState = unifiedCallService.getCallState();
+    if (currentCallState.isInCall) {
       Alert.alert("Call In Progress", "You are already in a call.");
       return;
     }
@@ -533,17 +536,17 @@ export default function TipCallScreen() {
     try {
       console.log('[TipCall] Starting WhatsApp-like call to:', recipient.name, 'Type:', callType);
       
-      // Initialize WhatsApp Call Manager if not already done
-      const whatsAppCallManager = UnifiedCallService.getInstance();
-      const initialized = await whatsAppCallManager.initialize();
+      // Initialize Unified Call Service if not already done
+      const unifiedCallService = UnifiedCallService.getInstance();
+      const initialized = await unifiedCallService.initialize();
       
       if (!initialized) {
         Alert.alert("Call Error", "Unable to initialize calling system. Please try again.");
         return;
       }
       
-      // Start the call with WhatsApp Call Manager
-      const callData = await whatsAppCallManager.startOutgoingCall(
+      // Start the call with Unified Call Service
+      const callData = await unifiedCallService.startOutgoingCall(
         recipient.id.toString(),
         recipient.name,
         callType,

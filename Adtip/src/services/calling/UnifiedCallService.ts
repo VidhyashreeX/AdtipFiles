@@ -48,7 +48,6 @@ import { v4 as uuid } from 'uuid';
 import { appEventEmitter } from '../../events/AppEventEmitter';
 import ApiService from '../ApiService';
 import VideoSDKService from '../videosdk/VideoSDKService';
-import { navigate, navigationRef } from '../../navigation/NavigationService';
 import CallMediaManager from './CallMediaManager';
 
 // ===== TYPES =====
@@ -848,7 +847,7 @@ class UnifiedCallService {
             break;
           case 'open_call':
             if (callId && this.callState.activeCall) {
-              this.navigateToMeetingScreen(this.callState.activeCall);
+              this.requestNavigationToMeetingScreen(this.callState.activeCall);
             }
             break;
           case 'mute_toggle':
@@ -957,7 +956,7 @@ class UnifiedCallService {
 
       // Navigate to appropriate screen based on call state
       if (this.callState.activeCall) {
-        this.navigateToMeetingScreen(this.callState.activeCall);
+        this.requestNavigationToMeetingScreen(this.callState.activeCall);
       }
     } catch (error) {
       console.error('[UnifiedCallService] Error handling FCM notification open:', error);
@@ -1113,7 +1112,7 @@ class UnifiedCallService {
       await this.showOutgoingCallNotification(callData);
 
       // Navigate to meeting screen
-      this.navigateToMeetingScreen(callData);
+      this.requestNavigationToMeetingScreen(callData);
 
       console.log('[UnifiedCallService] Outgoing call started:', callData.callId);
       return callData;
@@ -1160,7 +1159,7 @@ class UnifiedCallService {
       this.initializeMediaForCall(targetCall.callId, targetCall.callType === 'video');
 
       // Navigate to meeting screen
-      this.navigateToMeetingScreen(targetCall);
+      this.requestNavigationToMeetingScreen(targetCall);
 
       // Show ongoing call notification if app goes to background
       if (this.appState === 'background') {
@@ -1228,17 +1227,52 @@ class UnifiedCallService {
    * End ongoing call
    */
   public async endCall(callId?: string): Promise<void> {
+    let targetCall: CallData | null = null;
+    
     try {
-      const targetCall = callId ? 
+      targetCall = callId ? 
         (this.callState.activeCall?.callId === callId ? this.callState.activeCall : null) : 
         this.callState.activeCall;
 
       if (!targetCall) {
-        console.warn('[UnifiedCallService] No call to end');
+        // If no active call, check if we are in the process of starting one and clean up.
+        if (this.callState.callStatus === 'dialing' || this.callState.callStatus === 'connecting') {
+            console.warn('[UnifiedCallService] Ending call during dialing/connecting phase.');
+            this.updateCallState({
+                isInCall: false,
+                activeCall: null,
+                callStatus: 'ended',
+                lastCallEndReason: 'cancelled'
+            });
+            this.cleanupMedia();
+            await this.hideOngoingCallNotification();
+            await this.hideIncomingCallNotification();
+            
+            // Emit events to ensure all components are notified
+            appEventEmitter.emit('callEnded', { 
+              callId: 'unknown', 
+              reason: 'cancelled',
+              status: 'ended'
+            });
+            appEventEmitter.emit('callStateChanged', { 
+              status: 'ended', 
+              callId: 'unknown'
+            });
+        } else {
+            console.warn('[UnifiedCallService] No call to end');
+        }
         return;
       }
 
       console.log('[UnifiedCallService] Ending call:', targetCall.callId);
+
+      // CRITICAL FIX: First, update call state to 'ended' to prevent other systems from navigating back
+      console.log('[UnifiedCallService] Setting call state to ended to prevent navigation conflicts');
+      targetCall.status = 'ended';
+      targetCall.endTime = Date.now();
+      if (targetCall.startTime) {
+        targetCall.duration = targetCall.endTime - targetCall.startTime;
+      }
 
       // Stop vibration
       Vibration.cancel();
@@ -1247,20 +1281,16 @@ class UnifiedCallService {
       await this.hideIncomingCallNotification();
       await this.hideOngoingCallNotification();
 
-      // Update call status
-      targetCall.status = 'ended';
-      targetCall.endTime = Date.now();
-      if (targetCall.startTime) {
-        targetCall.duration = targetCall.endTime - targetCall.startTime;
-      }
-
       // Send end notification to other participant
       await this.sendCallStatusUpdate(targetCall, 'ended');
 
       // Show call ended notification
       await this.showCallEndedNotification(targetCall);
 
-      // Clear call state
+      // Clean up media
+      this.cleanupMedia();
+
+      // CRITICAL FIX: Update call state once with all necessary changes and proper event emission
       this.updateCallState({
         isInCall: false,
         activeCall: null,
@@ -1268,18 +1298,34 @@ class UnifiedCallService {
         lastCallEndReason: 'ended'
       });
 
-      // Clean up media
-      this.cleanupMedia();
+      // BULLETPROOF: Emit additional events to ensure all components are notified
+      appEventEmitter.emit('callEnded', { 
+        callId: targetCall.callId, 
+        reason: 'ended',
+        duration: targetCall.duration || 0
+      });
 
-      // Navigate away from meeting screen if currently there
-      if (navigationRef.current?.getCurrentRoute()?.name === 'Meeting') {
-        navigate('TipCall' as any); // Navigate back to TipCall screen
-      }
-
-      console.log('[UnifiedCallService] Call ended:', targetCall.callId);
+      console.log('[UnifiedCallService] Call ended successfully:', targetCall.callId);
 
     } catch (error) {
       console.error('[UnifiedCallService] Failed to end call:', error);
+      
+      // BULLETPROOF: Even if there's an error, ensure call state is cleared
+      try {
+        this.updateCallState({
+          isInCall: false,
+          activeCall: null,
+          callStatus: 'ended',
+          lastCallEndReason: 'error'
+        });
+        appEventEmitter.emit('callEnded', { 
+          callId: targetCall?.callId || 'unknown', 
+          reason: 'error',
+          error: (error as Error)?.message || 'Unknown error'
+        });
+      } catch (fallbackError) {
+        console.error('[UnifiedCallService] Failed to clear call state after error:', fallbackError);
+      }
     }
   }
 
@@ -1572,19 +1618,16 @@ class UnifiedCallService {
   // ===== HELPER METHODS =====
 
   /**
-   * Navigate to meeting screen
+   * Request navigation to meeting screen (event-based)
    */
-  private navigateToMeetingScreen(callData: CallData): void {
+  private requestNavigationToMeetingScreen(callData: CallData): void {
     try {
-      console.log('[UnifiedCallService] Navigating to meeting screen:', callData.callId);
+      console.log('[UnifiedCallService] Requesting navigation to meeting screen:', callData.callId);
 
-      // Emit navigation event
+      // CRITICAL FIX: Use event-based navigation instead of direct navigation
+      // This prevents race conditions with MeetingScreen's own navigation logic
       appEventEmitter.emit('forceNavigateToMeeting', {
-        activeCall: callData
-      });
-
-      // Direct navigation
-      navigate('Meeting' as any, {
+        activeCall: callData,
         meetingId: callData.meetingId,
         token: callData.token,
         callType: callData.callType,
@@ -1593,8 +1636,10 @@ class UnifiedCallService {
         callData: callData
       });
 
+      console.log('[UnifiedCallService] Navigation request emitted successfully');
+
     } catch (error) {
-      console.error('[UnifiedCallService] Failed to navigate to meeting screen:', error);
+      console.error('[UnifiedCallService] Failed to request navigation to meeting screen:', error);
     }
   }
 
