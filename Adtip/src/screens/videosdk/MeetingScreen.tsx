@@ -18,7 +18,7 @@ import {
   Vibration,
   DeviceEventEmitter,
 } from 'react-native';
-import { useMeeting, useParticipant, RTCView } from '@videosdk.live/react-native-sdk';
+import { useMeeting, useParticipant } from '@videosdk.live/react-native-sdk';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MeetingProvider } from '@videosdk.live/react-native-sdk';
@@ -37,7 +37,7 @@ import {
 import { MainNavigatorParamList } from '../../types/navigation';
 import { appEventEmitter } from '../../events/AppEventEmitter';
 import VideoCallInterface from '../../components/call/VideoCallInterface';
-import { VideoSDKParticipantView } from '../../components/videosdk';
+import { VideoSDKParticipantView, ParticipantView } from '../../components/videosdk';
 import notifee from '@notifee/react-native';
 import CallErrorBoundary from '../../components/common/CallErrorBoundary';
 
@@ -1045,16 +1045,16 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
         {/* Video participants container */}
         <View style={styles.videoContainer}>
           {/* Remote participant (main view) */}
-          {/* ✅ FIX: Improved remote participant rendering with proper VideoSDK integration */}
           <View style={styles.largeVideo}>
             {Array.from(participants.values())
               .filter(p => p.id !== localParticipant?.id)
               .slice(0, 1) // Render the first remote participant
               .map(remoteParticipant => (
-                <VideoSDKParticipantView
+                <ParticipantView
                   key={remoteParticipant.id}
-                  participant={remoteParticipant}
+                  participantId={remoteParticipant.id}
                   isLocal={false}
+                  style={styles.largeVideo}
                 />
               ))
             }
@@ -1077,56 +1077,34 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
           </View>
           
           {/* Local participant (small self-view) */}
-          {/* ✅ ALWAYS SHOW CAMERA FEED: Even during connecting state */}
           <View style={styles.selfViewContainer}>
             {localParticipant ? (
-              <VideoSDKParticipantView
-                participant={localParticipant}
+              <ParticipantView
+                participantId={localParticipant.id}
                 isLocal={true}
                 style={styles.smallVideo}
               />
-            ) : callType === 'video' && (
-              // When no localParticipant yet (connecting state), but camera is available
-              // Create a simple placeholder that shows camera feed using device camera
+            ) : (
+              /* Placeholder when no localParticipant yet */
               <View style={[styles.smallVideo, { backgroundColor: '#1F2C34' }]}>
-                {webcamStream && webcamStream.id && webcamOn ? (
-                  // Show camera feed when available
-                  <>
-                    <RTCView
-                      streamURL={webcamStream.id}
-                      objectFit="cover"
-                      style={styles.smallVideo}
-                      mirror={true}
-                      zOrder={0}
-                    />
-                    <View style={styles.localVideoOverlay}>
-                      <Text style={styles.localVideoStatus}>
-                        {callState === 'connecting' ? 'Connecting...' : 'You'}
-                      </Text>
-                    </View>
-                  </>
-                ) : (
-                  // Camera placeholder with status
-                  <View style={{
-                    flex: 1,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    backgroundColor: 'rgba(0,0,0,0.7)'
+                <View style={{
+                  flex: 1,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  backgroundColor: 'rgba(0,0,0,0.7)'
+                }}>
+                  <Text style={{
+                    color: '#FFFFFF',
+                    fontSize: 12,
+                    textAlign: 'center',
+                    marginBottom: 8
                   }}>
-                    <Text style={{
-                      color: '#FFFFFF',
-                      fontSize: 12,
-                      textAlign: 'center',
-                      marginBottom: 8
-                    }}>
-                      {callState === 'connecting' ? 'Connecting...' : 'Activating camera...'}
-
-                    </Text>
-                    {callState === 'connecting' && (
-                      <ActivityIndicator size="small" color="#00D4AA" />
-                    )}
-                  </View>
-                )}
+                    {callState === 'connecting' ? 'Connecting...' : 'Activating camera...'}
+                  </Text>
+                  {callState === 'connecting' && (
+                    <ActivityIndicator size="small" color="#00D4AA" />
+                  )}
+                </View>
               </View>
             )}
           </View>
@@ -1272,7 +1250,7 @@ const MeetingScreen = () => {
           name: displayName,
           notification: {
             title: "Call in Progress",
-            message: `${callType === 'video' ? 'Video' : 'Voice'} call with ${recipientName}`
+            message: `${callType === 'video' ? 'video' : 'voice'} call with ${recipientName}`
           }
         }}
         token={token}

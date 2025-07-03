@@ -11,9 +11,8 @@ import {
   Mic, MicOff, Video, VideoOff, Phone, 
   RotateCcw, MessageSquare, MoreVertical 
 } from 'lucide-react-native';
-import { RTCView, MediaStream } from '@videosdk.live/react-native-sdk';
-
-const { width, height } = Dimensions.get('window');
+import { ParticipantView } from '../videosdk';
+import { useParticipant } from '@videosdk.live/react-native-sdk';
 
 interface VideoCallInterfaceProps {
   participants: any[];
@@ -30,52 +29,32 @@ interface VideoCallInterfaceProps {
   localWebcamStream?: any;
 }
 
+// VideoParticipant component using ParticipantView
 const VideoParticipant = ({ 
-  participant, 
+  participantId, 
   isLarge = false, 
-  webcamStream, 
-  webcamOn 
+  isLocal = false,
+  displayName = ''
 }: { 
-  participant: any; 
+  participantId: string; 
   isLarge?: boolean;
-  webcamStream?: any;
-  webcamOn?: boolean;
+  isLocal?: boolean;
+  displayName?: string;
 }) => {
-  const renderVideoContent = () => {
-    if (webcamStream && webcamOn) {
-      return (
-        <RTCView
-          streamURL={new MediaStream([webcamStream.track]).toURL()}
-          objectFit="cover"
-          style={styles.participantVideo}
-          mirror={participant.isSelf} // Mirror local video
-        />
-      );
-    }
-
-    // Show placeholder when video is off or no stream
-    return (
-      <View style={styles.participantInitial}>
-        <Text style={styles.initialText}>{participant.name.charAt(0).toUpperCase()}</Text>
-      </View>
-    );
-  };
-
   return (
     <View style={[
       styles.participantContainer,
       isLarge ? styles.largeParticipant : styles.smallParticipant
     ]}>
-      <View style={styles.participantVideo}>
-        {renderVideoContent()}
-      </View>
+      <ParticipantView
+        participantId={participantId}
+        isLocal={isLocal}
+        style={isLarge ? styles.largeParticipant : styles.smallParticipant}
+      />
       <View style={styles.participantInfo}>
         <Text style={styles.participantName}>
-          {participant.isSelf ? 'You' : participant.name}
+          {isLocal ? 'You' : displayName}
         </Text>
-        {participant.micMuted && (
-          <MicOff size={14} color="#fff" style={styles.mutedIcon} />
-        )}
       </View>
     </View>
   );
@@ -109,10 +88,10 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
           participants.map((participant, index) => (
             <VideoParticipant 
               key={participant.id} 
-              participant={participant} 
+              participantId={participant.id} 
               isLarge={index === 0} 
-              webcamStream={participant.isSelf ? localWebcamStream : null}
-              webcamOn={participant.isSelf ? localWebcamOn : true}
+              isLocal={participant.isSelf}
+              displayName={participant.name}
             />
           ))
         ) : (
@@ -121,10 +100,10 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
             {/* Main participant (remote) */}
             {participants.length > 0 && (
               <VideoParticipant 
-                participant={participants.find(p => !p.isSelf) || participants[0]} 
+                participantId={participants.find(p => !p.isSelf)?.id || participants[0].id} 
                 isLarge={true} 
-                webcamStream={null} // Remote participant stream would come from VideoSDK
-                webcamOn={true} // This should come from remote participant state
+                isLocal={false}
+                displayName={participants.find(p => !p.isSelf)?.name || participants[0].name}
               />
             )}
             
@@ -132,9 +111,9 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
             {participants.length > 1 && (
               <View style={styles.selfViewWrapper}>
                 <VideoParticipant 
-                  participant={participants.find(p => p.isSelf) || participants[1]} 
-                  webcamStream={localWebcamStream}
-                  webcamOn={localWebcamOn}
+                  participantId={participants.find(p => p.isSelf)?.id || participants[1].id} 
+                  isLocal={true}
+                  displayName={participants.find(p => p.isSelf)?.name || participants[1].name}
                 />
               </View>
             )}

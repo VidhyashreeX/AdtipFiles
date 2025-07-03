@@ -1,0 +1,17 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build and Run Android - Video Calling Fix",
+			"type": "shell",
+			"command": "cd Adtip && npm run android",
+			"group": "build",
+			"isBackground": false,
+			"args": [],
+			"problemMatcher": [
+				"$tsc",
+				"$eslint-stylish"
+			]
+		}
+	]
+}

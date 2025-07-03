@@ -6,27 +6,28 @@ import {
   ViewStyle,
   Dimensions,
 } from 'react-native';
-import { RTCView } from '@videosdk.live/react-native-sdk';
+import { RTCView, MediaStream } from '@videosdk.live/react-native-sdk';
 import { useParticipant } from '@videosdk.live/react-native-sdk';
 import { Mic, MicOff, Video, VideoOff } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-interface VideoSDKParticipantViewProps {
-  participant: any; // VideoSDK participant object
-  isLocal: boolean;
+interface ParticipantViewProps {
+  participantId: string;
+  isLocal?: boolean;
   style?: ViewStyle;
 }
 
-const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
-  participant,
-  isLocal,
+// ParticipantView component following VideoSDK documentation pattern
+const ParticipantView: React.FC<ParticipantViewProps> = ({
+  participantId,
+  isLocal = false,
   style,
 }) => {
   const { colors } = useTheme();
 
-  // Access participant data directly from the hook - no intermediate state
+  // Access participant data directly from the hook following VideoSDK pattern
   const {
     displayName,
     webcamStream,
@@ -34,12 +35,12 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
     webcamOn,
     micOn,
     isActiveSpeaker,
-  } = useParticipant(participant.id);
+  } = useParticipant(participantId);
 
-  // FIX 5: ULTRA-DETAILED DEBUG LOGGING for RTCView issues
+  // Enhanced debugging and error handling following VideoSDK pattern
   React.useEffect(() => {
     const participantInfo = {
-      id: participant.id,
+      id: participantId,
       displayName: displayName || 'Unknown',
       isLocal,
       webcamOn,
@@ -50,17 +51,17 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
       isActiveSpeaker,
     };
     
-    console.log(`[VideoSDKParticipantView] 🎥 PARTICIPANT STATE UPDATE:`, participantInfo);
+    console.log(`[ParticipantView] 🎥 PARTICIPANT STATE UPDATE:`, participantInfo);
     
     if (webcamStream) {
-      console.log(`[VideoSDKParticipantView] 📹 STREAM DETAILS:`, {
+      console.log(`[ParticipantView] 📹 STREAM DETAILS:`, {
         streamId: webcamStream.id,
         track: webcamStream.track,
         trackKind: webcamStream.track?.kind,
         trackEnabled: webcamStream.track?.enabled,
         trackMuted: webcamStream.track?.muted,
         trackReadyState: webcamStream.track?.readyState,
-        participantId: participant.id,
+        participantId: participantId,
         isLocal,
       });
       
@@ -68,7 +69,7 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
       if (webcamStream.track) {
         const track = webcamStream.track as any; // Type assertion for event listeners
         const logTrackEvent = (event: string) => {
-          console.log(`[VideoSDKParticipantView] 🎬 TRACK EVENT ${event} for ${displayName || participant.id}:`, {
+          console.log(`[ParticipantView] 🎬 TRACK EVENT ${event} for ${displayName || participantId}:`, {
             kind: track.kind,
             enabled: track.enabled,
             muted: track.muted,
@@ -84,33 +85,33 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
             track.addEventListener('unmute', () => logTrackEvent('UNMUTE'));
           }
         } catch (error) {
-          console.log(`[VideoSDKParticipantView] Could not add track event listeners:`, error);
+          console.log(`[ParticipantView] Could not add track event listeners:`, error);
         }
       }
     }
     
-    if (webcamOn && webcamStream && webcamStream.id) {
-      console.log(`[VideoSDKParticipantView] ✅ SHOULD RENDER RTCView for ${displayName || participant.id}:`, {
+    if (webcamOn && webcamStream && webcamStream.track) {
+      console.log(`[ParticipantView] ✅ SHOULD RENDER VIDEO for ${displayName || participantId}:`, {
         streamId: webcamStream.id,
         isLocal,
         webcamOn,
         hasTrack: !!webcamStream.track
       });
     } else {
-      console.log(`[VideoSDKParticipantView] ❌ CANNOT RENDER RTCView for ${displayName || participant.id}:`, {
+      console.log(`[ParticipantView] ❌ CANNOT RENDER VIDEO for ${displayName || participantId}:`, {
         webcamOn,
         hasStream: !!webcamStream,
         streamId: webcamStream?.id || 'none',
-        reason: !webcamOn ? 'Camera off' : !webcamStream ? 'No stream' : !webcamStream.id ? 'No stream ID' : 'Unknown'
+        reason: !webcamOn ? 'Camera off' : !webcamStream ? 'No stream' : !webcamStream.track ? 'No track' : 'Unknown'
       });
     }
-  }, [webcamStream, webcamOn, micOn, displayName, participant.id, isLocal, isActiveSpeaker]);
+  }, [webcamStream, webcamOn, micOn, displayName, participantId, isLocal, isActiveSpeaker]);
   
-  // Render video or placeholder based on webcam state
+  // Render video or placeholder based on webcam state following VideoSDK pattern
   const renderContent = () => {
-    // ✅ FIX 5: ULTRA-ENHANCED video rendering with comprehensive debugging and error handling
-    if (webcamOn && webcamStream && webcamStream.id) {
-      console.log(`[VideoSDKParticipantView] 🎥 RENDERING RTCView for ${displayName || participant.id}:`, {
+    // Following VideoSDK documentation pattern: render video if webcam is on and stream exists
+    if (webcamOn && webcamStream) {
+      console.log(`[ParticipantView] 🎥 RENDERING VIDEO for ${displayName || participantId}:`, {
         streamId: webcamStream.id,
         isLocal,
         webcamOn,
@@ -118,57 +119,30 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
         trackEnabled: webcamStream.track?.enabled,
         trackMuted: webcamStream.track?.muted,
         trackReadyState: webcamStream.track?.readyState,
-        streamURL: webcamStream.id,
-        mirror: isLocal,
-        objectFit: 'cover',
-        zOrder: 0,
       });
       
+      // Using VideoSDK documentation pattern: RTCView with MediaStream exactly as documented
       return (
-        <View style={styles.container}>
-          <RTCView
-            streamURL={webcamStream.id}
-            objectFit="cover"
-            style={styles.videoStream}
-            mirror={isLocal}
-            zOrder={0}
-          />
-          
-          {/* Debug overlay for troubleshooting */}
-          {__DEV__ && (
-            <View style={{
-              position: 'absolute',
-              top: 5,
-              left: 5,
-              backgroundColor: 'rgba(0,0,0,0.7)',
-              padding: 4,
-              borderRadius: 4,
-            }}>
-              <Text style={{ color: 'white', fontSize: 10 }}>
-                Stream: {webcamStream.id.substring(0, 8)}...
-              </Text>
-              <Text style={{ color: 'white', fontSize: 10 }}>
-                Track: {webcamStream.track?.enabled ? '✅' : '❌'}
-              </Text>
-              <Text style={{ color: 'white', fontSize: 10 }}>
-                Ready: {webcamStream.track?.readyState || 'unknown'}
-              </Text>
-            </View>
-          )}
-        </View>
+        <RTCView
+          streamURL={new MediaStream([webcamStream.track]).toURL()}
+          objectFit="cover"
+          style={styles.videoStream}
+          mirror={isLocal}
+          zOrder={0}
+        />
       );
     }
 
-    // Show detailed placeholder for debugging
+    // Show placeholder when video is off or no stream (VideoSDK pattern)
     const noVideoReason = !webcamOn 
       ? 'Camera disabled' 
       : !webcamStream 
       ? 'No stream available' 
-      : !webcamStream.id 
-      ? 'Stream has no ID' 
+      : !webcamStream.track 
+      ? 'No track available' 
       : 'Unknown issue';
       
-    console.log(`[VideoSDKParticipantView] 📋 SHOWING PLACEHOLDER for ${displayName || participant.id}: ${noVideoReason}`);
+    console.log(`[ParticipantView] 📋 SHOWING PLACEHOLDER for ${displayName || participantId}: ${noVideoReason}`);
 
     return (
       <View style={[styles.videoPlaceholder, { backgroundColor: colors.surface }]}>
@@ -193,7 +167,7 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
             borderRadius: 4,
           }}>
             <Text style={[{ fontSize: 10 }, { color: colors.text.secondary }]}>
-              ID: {participant.id?.substring(0, 8)}...
+              ID: {participantId?.substring(0, 8)}...
             </Text>
             <Text style={[{ fontSize: 10 }, { color: colors.text.secondary }]}>
               Webcam: {webcamOn ? 'ON' : 'OFF'}
@@ -203,7 +177,7 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
             </Text>
             {webcamStream && (
               <Text style={[{ fontSize: 10 }, { color: colors.text.secondary }]}>
-                Stream ID: {webcamStream.id ? 'YES' : 'NO'}
+                Has Track: {webcamStream.track ? 'YES' : 'NO'}
               </Text>
             )}
           </View>
@@ -216,35 +190,37 @@ const VideoSDKParticipantView: React.FC<VideoSDKParticipantViewProps> = ({
     <View style={[styles.container, style]}>
       {renderContent()}
       
-      {/* Info overlay */}
-      <View style={styles.infoOverlay}>
-        <View style={styles.infoContainer}>
-          <Text style={styles.nameText} numberOfLines={1}>
-            {displayName || 'Unknown'} {isLocal && '(You)'}
-          </Text>
-          <View style={styles.statusIndicators}>
-            <View style={[
-              styles.statusIndicator, 
-              { backgroundColor: micOn ? '#00D4AA' : '#FF3B30' }
-            ]}>
-              {micOn ? 
-                <Mic size={12} color="#ffffff" /> : 
-                <MicOff size={12} color="#ffffff" />
-              }
-            </View>
-            
-            <View style={[
-              styles.statusIndicator, 
-              { backgroundColor: webcamOn ? '#00D4AA' : '#FF3B30' }
-            ]}>
-              {webcamOn ? 
-                <Video size={12} color="#ffffff" /> : 
-                <VideoOff size={12} color="#ffffff" />
-              }
+      {/* Info overlay - only show when video is playing */}
+      {webcamOn && webcamStream && (
+        <View style={styles.infoOverlay}>
+          <View style={styles.infoContainer}>
+            <Text style={styles.nameText} numberOfLines={1}>
+              {displayName || 'Unknown'} {isLocal && '(You)'}
+            </Text>
+            <View style={styles.statusIndicators}>
+              <View style={[
+                styles.statusIndicator, 
+                { backgroundColor: micOn ? '#00D4AA' : '#FF3B30' }
+              ]}>
+                {micOn ? 
+                  <Mic size={12} color="#ffffff" /> : 
+                  <MicOff size={12} color="#ffffff" />
+                }
+              </View>
+              
+              <View style={[
+                styles.statusIndicator, 
+                { backgroundColor: webcamOn ? '#00D4AA' : '#FF3B30' }
+              ]}>
+                {webcamOn ? 
+                  <Video size={12} color="#ffffff" /> : 
+                  <VideoOff size={12} color="#ffffff" />
+                }
+              </View>
             </View>
           </View>
         </View>
-      </View>
+      )}
     </View>
   );
 };
@@ -354,4 +330,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default VideoSDKParticipantView;
+export default ParticipantView;
