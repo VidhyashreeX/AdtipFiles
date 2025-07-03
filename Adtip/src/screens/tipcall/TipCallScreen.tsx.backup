@@ -42,7 +42,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import messaging from '@react-native-firebase/messaging';
 import uuid from 'react-native-uuid';
 import CallService from '../../services/CallService';
-import UnifiedCallService from '../../services/calling/UnifiedCallService'; // NEW: WhatsApp-like calling
+import WhatsAppCallManager from '../../services/calling/WhatsAppCallManager'; // NEW: WhatsApp-like calling
 import RectangleAdComponent from '../../googleads/RectangleAdComponent';
 import { RootStackParamList, MainNavigatorParamList } from '../../types/navigation';
 
@@ -534,7 +534,7 @@ export default function TipCallScreen() {
       console.log('[TipCall] Starting WhatsApp-like call to:', recipient.name, 'Type:', callType);
       
       // Initialize WhatsApp Call Manager if not already done
-      const whatsAppCallManager = UnifiedCallService.getInstance();
+      const whatsAppCallManager = WhatsAppCallManager.getInstance();
       const initialized = await whatsAppCallManager.initialize();
       
       if (!initialized) {

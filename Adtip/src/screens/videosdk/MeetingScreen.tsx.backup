@@ -24,7 +24,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MeetingProvider } from '@videosdk.live/react-native-sdk';
 import { useCall } from '../../contexts/CallProvider';
 import { useTheme } from '../../contexts/ThemeContext';
-import UnifiedCallService from '../../services/calling/UnifiedCallService';
+import WhatsAppCallManager from '../../services/calling/WhatsAppCallManager';
 import CallMediaManager, { MediaState } from '../../services/calling/CallMediaManager';
 import CallErrorHandler from '../../services/calling/CallErrorHandler';
 import CallService from '../../services/CallService';
@@ -191,7 +191,7 @@ interface MeetingViewProps {
  */
 const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLocalParticipantId, recipientName }: MeetingViewProps) => {
   const { activeCall } = useCall();
-  const unifiedCallService = UnifiedCallService.getInstance(); // Get instance directly
+  const whatsAppCallManager = WhatsAppCallManager.getInstance(); // Get instance directly
   const callMediaManager = CallMediaManager.getInstance(); // Get instance directly 
   const callErrorHandler = CallErrorHandler.getInstance(); // Get instance directly
   const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
@@ -248,7 +248,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
       setShowControls(true);
       
       // Connect media management to VideoSDK meeting
-      unifiedCallService.setVideoSDKMeeting(meetingHooks);
+      whatsAppCallManager.setVideoSDKMeeting(meetingHooks);
       
       // Start call duration timer
       startCallDurationTimer();
@@ -539,12 +539,12 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
 
   const updateCallState = useCallback((status: 'connecting' | 'connected' | 'reconnecting' | 'ended') => {
     try {
-      const unifiedCallService = UnifiedCallService.getInstance();
-      const currentCall = unifiedCallService.getCurrentCall();
+      const whatsAppCallManager = WhatsAppCallManager.getInstance();
+      const currentCall = whatsAppCallManager.getCurrentCall();
       if (currentCall) {
         // Map reconnecting to connecting for the call manager
         const mappedStatus = status === 'reconnecting' ? 'connecting' : status;
-        unifiedCallService.updateCallStatus(mappedStatus);
+        whatsAppCallManager.updateCallStatus(mappedStatus);
       }
       
       // Emit global event so other parts of the app can react
@@ -826,8 +826,8 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
         console.log('[MeetingView] App came to foreground');
         
         // Re-sync call state
-        const unifiedCallService = UnifiedCallService.getInstance();
-        const currentCall = unifiedCallService.getCurrentCall();
+        const whatsAppCallManager = WhatsAppCallManager.getInstance();
+        const currentCall = whatsAppCallManager.getCurrentCall();
         
         if (currentCall && currentCall.status !== 'ended') {
           // Verify meeting is still active and re-sync if needed

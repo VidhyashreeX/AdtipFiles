@@ -58,7 +58,7 @@ describe('WhatsAppCallManager', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    callManager = UnifiedCallService.getInstance();
+    callManager = WhatsAppCallManager.getInstance();
   });
 
   describe('Initialization', () => {
@@ -68,8 +68,8 @@ describe('WhatsAppCallManager', () => {
     });
 
     it('should be a singleton', () => {
-      const instance1 = UnifiedCallService.getInstance();
-      const instance2 = UnifiedCallService.getInstance();
+      const instance1 = WhatsAppCallManager.getInstance();
+      const instance2 = WhatsAppCallManager.getInstance();
       expect(instance1).toBe(instance2);
     });
   });

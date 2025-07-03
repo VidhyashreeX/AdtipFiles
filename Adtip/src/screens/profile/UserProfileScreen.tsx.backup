@@ -22,7 +22,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { API_BASE_URL } from '../../constants/api';
 import ImageViewer from '@react-native-oh-tpl/react-native-image-zoom-viewer';
 import CallService from '../../services/CallService';
-import UnifiedCallService from '../../services/calling/UnifiedCallService';
+import WhatsAppCallManager from '../../services/calling/WhatsAppCallManager';
 import ApiService from '../../services/ApiService';
 
 const AVATAR_SIZE = 96;
@@ -79,7 +79,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ userId: initialUs
       console.log('[UserProfile] Starting WhatsApp-like call to:', user.name, 'Type:', callType);
       
       // Initialize WhatsApp Call Manager if not already done
-      const whatsAppCallManager = UnifiedCallService.getInstance();
+      const whatsAppCallManager = WhatsAppCallManager.getInstance();
       const initialized = await whatsAppCallManager.initialize();
       
       if (!initialized) {

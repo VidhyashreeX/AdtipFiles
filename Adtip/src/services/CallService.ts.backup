@@ -44,8 +44,8 @@ class CallService {
 
   private constructor() {
     this.videoSDKService = VideoSDKService.getInstance();
-    this.whatsAppCallManager = UnifiedCallService.getInstance(); // NEW: WhatsApp-like calling
-    this.whatsAppNotificationService = UnifiedCallService.getInstance(); // NEW: Enhanced notifications
+    this.whatsAppCallManager = WhatsAppCallManager.getInstance(); // NEW: WhatsApp-like calling
+    this.whatsAppNotificationService = WhatsAppCallNotificationService.getInstance(); // NEW: Enhanced notifications
     this.initializeBackgroundHandling();
     this.setupForegroundServiceEventListeners();
     this.setupFCMEventListeners(); // NEW: Setup FCM event listeners

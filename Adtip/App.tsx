@@ -51,15 +51,12 @@ import { navigationRef, navigateWithRetry, getCurrentRoute, isNavigationReady } 
 // Services
 import FirebaseService from './src/services/FirebaseService';
 import VideoSDKService from './src/services/videosdk/VideoSDKService';
-import CallService from './src/services/CallService';
-import WhatsAppCallManager from './src/services/calling/WhatsAppCallManager';
-import CallSyncService from './src/services/calling/CallSyncService';
+import UnifiedCallService from './src/services/calling/UnifiedCallService';  // Unified call service (replacing all legacy services)
 
 import ApiService from './src/services/ApiService';
 import OngoingCallModule from './src/services/OngoingCallModule';
-import NotificationService from './src/services/NotificationService';  // CRITICAL FIX: Import NotificationService
-import IncomingCallService from './src/services/IncomingCallService';  // CRITICAL FIX: Import IncomingCallService
-import CallNotificationHandler from './src/services/calling/CallNotificationHandler';  // NEW: FCM call handler
+import NotificationService from './src/services/NotificationService';
+import IncomingCallService from './src/services/IncomingCallService';
 
 // Constants
 import { COLORS } from './src/constants/colors';
@@ -94,8 +91,7 @@ const AppNavigator = () => {
   const { activeCall, startCall } = useCall();
   const [firebaseReady, setFirebaseReady] = useState(false);
   const [videoSDKReady, setVideoSDKReady] = useState(false);
-  const [callServiceReady, setCallServiceReady] = useState(false);
-  const [whatsAppCallReady, setWhatsAppCallReady] = useState(false);
+  const [unifiedCallServiceReady, setUnifiedCallServiceReady] = useState(false);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -149,8 +145,7 @@ const AppNavigator = () => {
     // Initialize all services as ready immediately for ultra-fast app start
     setFirebaseReady(true);
     setVideoSDKReady(true);
-    setCallServiceReady(true);
-    setWhatsAppCallReady(true);
+    setUnifiedCallServiceReady(true);
     
     console.log('[App] All services marked as ready for instant app start');
   }, []);
@@ -210,33 +205,22 @@ const AppNavigator = () => {
       })();
     }, 200);
 
-    // Background WhatsApp Call Manager initialization
+    // Background Unified Call Service initialization
     setTimeout(() => {
       (async () => {
         try {
-          console.log('[App] Background: Initializing WhatsApp Call Manager...');
-          const whatsAppCallManager = WhatsAppCallManager.getInstance();
-          const callNotificationHandler = CallNotificationHandler.getInstance();
+          console.log('[App] Background: Initializing Unified Call Service...');
+          const unifiedCallService = UnifiedCallService.getInstance();
           
-          const success = await whatsAppCallManager.initialize();
-          const notificationSuccess = await callNotificationHandler.initialize();
+          const success = await unifiedCallService.initialize();
           
-          if (success && notificationSuccess) {
-            console.log('[App] Background: WhatsApp Call Manager initialized successfully');
-            
-            // Initialize CallSyncService
-            try {
-              const callSyncService = CallSyncService.getInstance();
-              await callSyncService.initialize();
-              console.log('[App] Background: Call Sync Service initialized successfully');
-            } catch (syncError) {
-              console.error('[App] Background: Call Sync Service initialization failed:', syncError);
-            }
+          if (success) {
+            console.log('[App] Background: Unified Call Service initialized successfully');
           } else {
-            console.warn('[App] Background: WhatsApp Call system initialization failed');
+            console.warn('[App] Background: Unified Call Service initialization failed');
           }
         } catch (error) {
-          console.error('[App] Background: WhatsApp Call system initialization error:', error);
+          console.error('[App] Background: Unified Call Service initialization error:', error);
         }
       })();
     }, 300);
@@ -268,14 +252,14 @@ const AppNavigator = () => {
     };
   }, [startCall]);
 
-  // Setup incoming call handling with WhatsApp Call Manager
+  // Setup incoming call handling with Unified Call Service
   useEffect(() => {
     const handleIncomingCallBroadcast = async (data: any) => {
       console.log('[App] Received incoming call broadcast:', data);
       
-      if (data && data.isIncomingCall && whatsAppCallReady) {
+      if (data && data.isIncomingCall && unifiedCallServiceReady) {
         try {
-          const whatsAppCallManager = WhatsAppCallManager.getInstance();
+          const unifiedCallService = UnifiedCallService.getInstance();
           
           // Create call notification data
           const callNotificationData = {
@@ -287,10 +271,10 @@ const AppNavigator = () => {
             token: data.token,
           };
           
-          // Handle incoming call with WhatsApp Call Manager
-          await whatsAppCallManager.handleIncomingCall(callNotificationData);
+          // Handle incoming call with Unified Call Service
+          await unifiedCallService.handleIncomingCall(callNotificationData);
           
-          console.log('[App] ✅ WhatsApp-like incoming call handled');
+          console.log('[App] ✅ Unified Call Service incoming call handled');
         } catch (error) {
           console.error('[App] Error handling incoming call broadcast:', error);
         }
@@ -304,7 +288,7 @@ const AppNavigator = () => {
     return () => {
       unsubscribe();
     };
-  }, [whatsAppCallReady]);
+  }, [unifiedCallServiceReady]);
 
   useEffect(() => {
     // Listen for native call actions (answer/decline)
@@ -318,10 +302,10 @@ const AppNavigator = () => {
         }
         // TODO: Fetch call details using sessionId if needed
         // Example: const callDetails = await ApiService.getCallDetails(event.sessionId);
-        // if (callDetails) { CallService.handleIncomingCallFromNative(callDetails); }
+        // if (callDetails) { UnifiedCallService.getInstance().handleIncomingCall(callDetails); }
         console.log('[App] Native answered call, sessionId:', event.sessionId);
       } else if (event.action === 'DECLINE') {
-        CallService.endCall('declined');
+        UnifiedCallService.getInstance().endCall('declined');
       }
     });
     return () => {
