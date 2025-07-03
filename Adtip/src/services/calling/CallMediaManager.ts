@@ -85,6 +85,21 @@ class CallMediaManager {
   public setMeeting(meeting: any): void {
     console.log('[CallMediaManager] Setting VideoSDK meeting reference');
     this.currentMeeting = meeting;
+    // Immediately sync VideoSDK state to match app state
+    if (meeting && meeting.localParticipant) {
+      if (typeof meeting.toggleWebcam === 'function') {
+        const sdkWebcamOn = meeting.localParticipant.webcamOn;
+        if (sdkWebcamOn !== this.mediaState.cameraEnabled) {
+          meeting.toggleWebcam();
+        }
+      }
+      if (typeof meeting.toggleMic === 'function') {
+        const sdkMicOn = meeting.localParticipant.micOn;
+        if (sdkMicOn !== this.mediaState.micEnabled) {
+          meeting.toggleMic();
+        }
+      }
+    }
   }
 
   /**

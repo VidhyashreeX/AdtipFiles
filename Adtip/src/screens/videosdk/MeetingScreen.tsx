@@ -22,7 +22,7 @@ import { useMeeting, useParticipant } from '@videosdk.live/react-native-sdk';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MeetingProvider } from '@videosdk.live/react-native-sdk';
-import { useCall } from '../../contexts/CallProvider';
+import { useCall, ActiveCall } from '../../contexts/CallProvider';
 import { useTheme } from '../../contexts/ThemeContext';
 import UnifiedCallService from '../../services/calling/UnifiedCallService';
 import CallMediaManager, { MediaState } from '../../services/calling/CallMediaManager';
@@ -234,6 +234,8 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   const callStartTimeRef = useRef(Date.now());
   const errorRecoveryRef = useRef<{[key: string]: number}>({});
   const notificationSyncRef = useRef<NodeJS.Timeout | null>(null);
+  const hasAttemptedJoinRef = useRef(false);
+  const isLeavingRef = useRef(false);
 
   // BULLETPROOF FIX: Use VideoSDK meeting hooks with error handling
   // And initialize with the correct media state from our CallMediaManager
@@ -331,28 +333,21 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
 
   // ✅ BULLETPROOF FIX: Explicitly join the meeting on component mount with retry logic
   useEffect(() => {
-    if (join && !hasJoined && !isJoining) {
-      console.log('[MeetingView] Attempting to join meeting...');
+    if (join && !hasJoined && !isJoining && !hasAttemptedJoinRef.current) {
+      hasAttemptedJoinRef.current = true;
       setIsJoining(true);
-      
-      const attemptJoin = async () => {
+      (async () => {
         try {
           // CRITICAL FIX: Ensure that for video calls, camera is enabled before joining
           if (callType === 'video' && !mediaState.cameraEnabled) {
             console.log('[MeetingView] Pre-enabling camera for video call before joining');
             await callMediaManager.setCameraEnabled(true);
           }
-          
-          // Join the meeting
           await join();
           console.log('[MeetingView] Join call successful');
-          
-          // CRITICAL FIX: Force media state synchronization after successful join
           if (callType === 'video') {
-            // Give VideoSDK a moment to initialize
             setTimeout(() => {
               if (isComponentMountedRef.current) {
-                console.log('[MeetingView] Forcing camera state after join');
                 callMediaManager.forceUpdateMediaState({
                   ...mediaState,
                   cameraEnabled: true
@@ -363,34 +358,18 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
         } catch (error) {
           console.error('[MeetingView] Join failed:', error);
           setIsJoining(false);
-          
-          // Retry after a short delay
+          // Retry after a short delay, but only if not unmounting
           setTimeout(() => {
-            if (!hasJoined && isComponentMountedRef.current) {
-              console.log('[MeetingView] Retrying join...');
-              setIsJoining(true);
-              try {
-                join();
-              } catch (retryError: any) {
-                console.error('[MeetingView] Retry join failed:', retryError);
-                setIsJoining(false);
-              }
+            if (!hasJoined && isComponentMountedRef.current && !isLeavingRef.current) {
+              hasAttemptedJoinRef.current = false;
             }
           }, 2000);
         }
-      };
-      
-      attemptJoin();
+      })();
     }
-
-    // Ensure component mount status is tracked for cleanup
     isComponentMountedRef.current = true;
     return () => {
       isComponentMountedRef.current = false;
-      // Optional: leave meeting on unmount if desired
-      // if (leave) {
-      //   leave();
-      // }
     };
   }, [join, hasJoined, isJoining]);
 
@@ -558,45 +537,26 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
 
   // Handle end call - MOVED UP to fix dependency issues
   const handleEndCall = useCallback(async () => {
-    if (isEndingCall) return;
-    
-    console.log('[MeetingView] handleEndCall triggered');
+    if (isEndingCall || isLeavingRef.current) return;
+    isLeavingRef.current = true;
     setIsEndingCall(true);
     setCallState('ended');
-    
     try {
-      // CRITICAL FIX: Use UnifiedCallService to handle call termination
-      // This ensures proper coordination with global call state, even if not fully joined.
       const unifiedCallService = UnifiedCallService.getInstance();
       await unifiedCallService.endCall();
-      
-      // Additional cleanup for MeetingScreen specific state
       stopCallDurationTimer();
-      
-      // BULLETPROOF: Clean up media manager 
       await callMediaManager.cleanup('call_ended_by_user');
-      
-      // Leave VideoSDK meeting if joined. If not joined, UnifiedCallService handles the cleanup.
       if (leave && hasJoined) {
-        console.log('[MeetingView] Leaving VideoSDK meeting');
         await Promise.race([
           leave(),
-          new Promise(resolve => setTimeout(resolve, 2000)) // Timeout for leaving
+          new Promise(resolve => setTimeout(resolve, 2000))
         ]);
       }
-      
-      console.log('[MeetingView] Call ended successfully, navigation handled by activeCall listener');
-      
-      // BULLETPROOF NAVIGATION: Add fallback navigation to ensure user gets back to TipCall
       setTimeout(() => {
         if (!navigation || !isComponentMountedRef.current) return;
-        
         try {
           const currentRoute = navigation.getState()?.routes?.[navigation.getState()?.index || 0]?.name;
           if (currentRoute === 'Meeting') {
-            console.log('[MeetingView] Fallback navigation - ensuring user gets back to TipCall screen');
-            
-            // Force navigation back to TipCall
             if (navigation.canGoBack()) {
               navigation.goBack();
             } else {
@@ -607,24 +567,17 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
             }
           }
         } catch (error) {
-          console.error('[MeetingView] Fallback navigation error:', error);
-          // Final fallback - force reset to TipCall
           try {
             navigation.reset({
               index: 0,
               routes: [{ name: 'TipCall' as keyof MainNavigatorParamList }],
             });
-          } catch (finalError) {
-            console.error('[MeetingView] Final fallback navigation failed:', finalError);
-          }
+          } catch (finalError) {}
         }
-      }, 1000); // Give activeCall listener a chance first, then fallback
-      
+      }, 1000);
     } catch (error) {
-      console.error('[MeetingView] Error ending call:', error);
-      
-      // Reset ending state if error occurs
       setIsEndingCall(false);
+      isLeavingRef.current = false;
     }
   }, [isEndingCall, leave, hasJoined, stopCallDurationTimer, callMediaManager, navigation]);
 
@@ -647,9 +600,6 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
         const mappedStatus = status === 'reconnecting' ? 'connecting' : status;
         unifiedCallService.updateCallStatus(mappedStatus);
       }
-      
-      // Emit global event so other parts of the app can react
-      appEventEmitter.emit('callStateChanged', { status, callId: currentCall?.callId });
     } catch (error) {
       console.error('[MeetingView] Error updating call state:', error);
     }
@@ -1120,36 +1070,21 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   };
 
   // BULLETPROOF Component cleanup - ensures proper resource cleanup
+  const cleanupRef = useRef(false);
   useEffect(() => {
-    isComponentMountedRef.current = true;
-    
     return () => {
+      if (cleanupRef.current) return;
+      cleanupRef.current = true;
       console.log('[MeetingView] Component unmounting, performing comprehensive cleanup');
       isComponentMountedRef.current = false;
-      
-      // Stop all timers first
+      isLeavingRef.current = true;
       stopCallDurationTimer();
-      
-      // CRITICAL FIX: Ensure VideoSDK meeting is properly left on component unmount
-      // This prevents memory leaks and ensures resources are released
       if (hasJoined && leave && !isEndingCall) {
-        console.log('[MeetingView] Leaving VideoSDK meeting on component unmount to prevent resource leaks');
-        try {
-          // Use a timeout to ensure cleanup doesn't hang
-          Promise.race([
-            leave(),
-            new Promise(resolve => setTimeout(resolve, 1000)) // 1 second timeout
-          ]).then(() => {
-            console.log('[MeetingView] VideoSDK meeting left successfully during cleanup');
-          }).catch((error) => {
-            console.error('[MeetingView] Error leaving meeting during cleanup:', error);
-          });
-        } catch (error) {
-          console.error('[MeetingView] Sync error leaving meeting during cleanup:', error);
-        }
+        Promise.race([
+          leave(),
+          new Promise(resolve => setTimeout(resolve, 1000))
+        ]);
       }
-      
-      // BULLETPROOF: Clear all timers and intervals
       if (callTimerRef.current) {
         clearInterval(callTimerRef.current);
         callTimerRef.current = null;
@@ -1162,22 +1097,48 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
         clearInterval(notificationSyncRef.current);
         notificationSyncRef.current = null;
       }
-      
-      // CRITICAL FIX: Notify UnifiedCallService that MeetingScreen is unmounting
-      // This prevents UnifiedCallService from trying to navigate back to a destroyed component
       try {
         const unifiedCallService = UnifiedCallService.getInstance();
         const currentCall = unifiedCallService.getCurrentCall();
         if (currentCall && currentCall.status !== 'ended') {
-          console.log('[MeetingView] Notifying UnifiedCallService of component unmount');
-          // This helps prevent navigation conflicts
           appEventEmitter.emit('meetingScreenUnmounting', { callId: currentCall.callId });
         }
-      } catch (error) {
-        console.error('[MeetingView] Error notifying UnifiedCallService during cleanup:', error);
-      }
+      } catch (error) {}
     };
   }, [stopCallDurationTimer, hasJoined, leave, isEndingCall]);
+
+  // After meeting is joined, force VideoSDK state to match app state
+  useEffect(() => {
+    if (hasJoined && meetingHooks && localParticipant) {
+      setTimeout(() => {
+        if (mediaState.cameraEnabled !== webcamOn && meetingHooks.toggleWebcam) {
+          meetingHooks.toggleWebcam();
+        }
+        if (mediaState.micEnabled !== micOn && meetingHooks.toggleMic) {
+          meetingHooks.toggleMic();
+        }
+      }, 200);
+    }
+  }, [hasJoined, meetingHooks, localParticipant, mediaState, webcamOn, micOn]);
+
+  // 1. Pre-initialize camera before join for video calls
+  useEffect(() => {
+    if (callType === 'video' && !mediaState.cameraEnabled) {
+      console.log('[MeetingView] Pre-initializing camera before join');
+      callMediaManager.setCameraEnabled(true);
+    }
+    // Optionally, test camera access here (dummy activation)
+  }, []);
+
+  // 2. Add robust logging for camera/mic state before and after join
+  useEffect(() => {
+    console.log('[MeetingView] Pre-join state:', {
+      cameraEnabled: mediaState.cameraEnabled,
+      micEnabled: mediaState.micEnabled,
+      webcamOn,
+      micOn
+    });
+  }, [mediaState, webcamOn, micOn]);
 
   // If it's a video call, render the video interface with VideoSDK streams
   if (callType === 'video') {
@@ -1368,47 +1329,74 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
 const MeetingScreen = () => {
   const route = useRoute<MeetingScreenRouteProp>();
   const { activeCall } = useCall();
-  
-  // BULLETPROOF FIX: Always get the latest media state from the centralized CallMediaManager
-  const callMediaManager = useRef(CallMediaManager.getInstance()).current;
-  const initialMediaState = callMediaManager.getMediaState();
-  
+  const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
+
+  // Sticky call context: latch the call on mount
+  const latchedCallRef = useRef<ActiveCall | null>(null);
+  if (!latchedCallRef.current && activeCall) {
+    latchedCallRef.current = activeCall;
+  }
+
+  // Use latched call for all call-related logic
+  const latchedCall = latchedCallRef.current;
+
   // Use route params with fallbacks and dynamic updates
-  const meetingId = route.params?.meetingId || activeCall?.meetingId;
-  const token = route.params?.token || activeCall?.token;
-  const displayName = route.params?.displayName || activeCall?.callerName || 'User';
-  const callType = route.params?.callType || activeCall?.callType || 'voice';
-  
+  const meetingId = route.params?.meetingId || latchedCall?.meetingId;
+  const token = route.params?.token || latchedCall?.token;
+  const displayName = route.params?.displayName || latchedCall?.callerName || 'User';
+  const callType = route.params?.callType || latchedCall?.callType || 'voice';
+
   // BULLETPROOF recipient name handling with better fallbacks
   const [recipientName, setRecipientName] = useState(() => {
-    // Prioritize route params, then activeCall, then fallback
-    const name = route.params?.recipientName || activeCall?.recipientName;
+    const name = route.params?.recipientName || latchedCall?.recipientName;
     return name && name.trim() !== '' ? name : 'Participant';
   });
-  
-  // BULLETPROOF: Update recipient name when activeCall changes with better validation
+
+  // Update recipient name when latchedCall changes
   useEffect(() => {
     const routeName = route.params?.recipientName;
-    const callName = activeCall?.recipientName;
-    
-    // Determine the best name to use
-    let updatedRecipientName = 'Participant'; // Default fallback
-    
+    const callName = latchedCall?.recipientName;
+    let updatedRecipientName = 'Participant';
     if (routeName && routeName.trim() !== '') {
       updatedRecipientName = routeName;
     } else if (callName && callName.trim() !== '') {
       updatedRecipientName = callName;
-    } else if (activeCall?.callerName && activeCall.callerName.trim() !== '') {
-      // If no recipient name, use caller name as fallback for incoming calls
-      updatedRecipientName = activeCall.callerName;
+    } else if (latchedCall?.callerName && latchedCall.callerName.trim() !== '') {
+      updatedRecipientName = latchedCall.callerName;
     }
-    
-    // Only update if the name actually changed and is valid
     if (updatedRecipientName !== recipientName && updatedRecipientName.trim() !== '') {
-      console.log('[MeetingScreen] Updating recipient name:', recipientName, '->', updatedRecipientName);
       setRecipientName(updatedRecipientName);
     }
-  }, [activeCall?.recipientName, activeCall?.callerName, route.params?.recipientName, recipientName]);
+  }, [latchedCall?.recipientName, latchedCall?.callerName, route.params?.recipientName, recipientName]);
+
+  // Only navigate away if a true end event is received
+  useEffect(() => {
+    if (activeCall && latchedCall && activeCall.callId === latchedCall.callId) {
+      if (['ended', 'missed', 'declined'].includes(activeCall.status)) {
+        // Navigate away if the call is truly ended
+        setTimeout(() => {
+          if (!navigation) return;
+          try {
+            const currentRoute = navigation.getState()?.routes?.[navigation.getState()?.index || 0]?.name;
+            if (currentRoute === 'Meeting') {
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'TipCall' as keyof MainNavigatorParamList }],
+              });
+            }
+          } catch (error) {
+            // Fallback navigation
+            try {
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'TipCall' as keyof MainNavigatorParamList }],
+              });
+            } catch (finalError) {}
+          }
+        }, 200);
+      }
+    }
+  }, [activeCall, latchedCall, navigation]);
 
   if (!meetingId || !token || !displayName) {
     return (
@@ -1432,8 +1420,8 @@ const MeetingScreen = () => {
       <MeetingProvider
         config={{
           meetingId,
-          micEnabled: initialMediaState.micEnabled,
-          webcamEnabled: callType === 'video' ? true : initialMediaState.cameraEnabled,
+          micEnabled: CallMediaManager.getInstance().getMediaState().micEnabled,
+          webcamEnabled: callType === 'video' ? true : CallMediaManager.getInstance().getMediaState().cameraEnabled,
           name: displayName,
           notification: {
             title: "Call in Progress",
@@ -1447,7 +1435,7 @@ const MeetingScreen = () => {
           meetingId={meetingId}
           callType={callType}
           token={token}
-          localParticipantId={activeCall?.callerId || ""}
+          localParticipantId={latchedCall?.callerId || ""}
           recipientName={recipientName}
         />
       </MeetingProvider>

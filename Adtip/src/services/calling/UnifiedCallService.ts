@@ -1290,15 +1290,7 @@ class UnifiedCallService {
             await this.hideIncomingCallNotification();
             
             // Emit events to ensure all components are notified
-            appEventEmitter.emit('callEnded', { 
-              callId: 'unknown', 
-              reason: 'cancelled',
-              status: 'ended'
-            });
-            appEventEmitter.emit('callStateChanged', { 
-              status: 'ended', 
-              callId: 'unknown'
-            });
+            appEventEmitter.emit('callStateChanged', this.callState);
         } else {
             console.warn('[UnifiedCallService] No call to end');
         }
@@ -1339,13 +1331,6 @@ class UnifiedCallService {
         lastCallEndReason: 'ended'
       });
 
-      // BULLETPROOF: Emit additional events to ensure all components are notified
-      appEventEmitter.emit('callEnded', { 
-        callId: targetCall.callId, 
-        reason: 'ended',
-        duration: targetCall.duration || 0
-      });
-
       console.log('[UnifiedCallService] Call ended successfully:', targetCall.callId);
 
     } catch (error) {
@@ -1359,11 +1344,7 @@ class UnifiedCallService {
           callStatus: 'ended',
           lastCallEndReason: 'error'
         });
-        appEventEmitter.emit('callEnded', { 
-          callId: targetCall?.callId || 'unknown', 
-          reason: 'error',
-          error: (error as Error)?.message || 'Unknown error'
-        });
+        appEventEmitter.emit('callStateChanged', this.callState);
       } catch (fallbackError) {
         console.error('[UnifiedCallService] Failed to clear call state after error:', fallbackError);
       }

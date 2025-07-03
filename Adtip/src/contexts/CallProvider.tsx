@@ -37,7 +37,6 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     const handleCallStateChange = (data: any) => {
       console.log('[CallProvider] Received callStateChanged event:', data);
-      
       // CRITICAL FIX: Handle different event formats properly
       // Format 1: Full state object { isInCall: boolean; activeCall: ActiveCall | null }
       if (typeof data === 'object' && 'isInCall' in data) {
@@ -61,14 +60,9 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     };
 
-    const handleCallEnded = (data: any) => {
-      console.log('[CallProvider] Received callEnded event:', data);
-      setActiveCall(null);
-    };
-
-    // Listen to call state changes
+    // Remove handleCallEnded logic for state changes
+    // Only listen to callStateChanged
     appEventEmitter.on('callStateChanged', handleCallStateChange);
-    appEventEmitter.on('callEnded', handleCallEnded);
     
     // Sync with existing call state on mount
     const currentCall = unifiedCallService.getCurrentCall();
@@ -79,7 +73,6 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     return () => {
       appEventEmitter.off('callStateChanged', handleCallStateChange);
-      appEventEmitter.off('callEnded', handleCallEnded);
     };
   }, [unifiedCallService]);
 
