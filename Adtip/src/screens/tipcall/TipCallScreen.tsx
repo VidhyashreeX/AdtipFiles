@@ -407,6 +407,14 @@ export default function TipCallScreen() {
     }, [refreshUsers])
   );
 
+  // Refresh blocklist when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[TipCallScreen] Screen focused. Refreshing blocklist.');
+      refreshBlocklist();
+    }, [refreshBlocklist])
+  );
+
   // Transform users data for compatibility
   const contacts = useMemo(() => {
     const allUsers = usersData?.pages?.flatMap(page => page?.data || []) || [];
@@ -834,11 +842,9 @@ export default function TipCallScreen() {
               >
                 <Ban size={20} color={colors.error} />
                 {blockedUsersCount > 0 && (
-                  <View style={[styles.blockedUsersBadge, { backgroundColor: colors.error }]}>
-                    <Text style={styles.blockedUsersBadgeText}>
-                      {blockedUsersCount > 99 ? '99+' : blockedUsersCount.toString()}
-                    </Text>
-                  </View>
+                  <Text style={styles.blockedUsersBadgeText}>
+                    {blockedUsersCount > 99 ? '99+' : blockedUsersCount.toString()}
+                  </Text>
                 )}
               </TouchableOpacity>
 
@@ -1028,22 +1034,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   
-  blockedUsersBadge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#EF4444',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-  },
   
   blockedUsersBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    color: '#EF4444',
+    fontSize: 12,
     fontWeight: 'bold',
     textAlign: 'center',
   },

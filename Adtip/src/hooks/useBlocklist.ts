@@ -37,8 +37,10 @@ export const useBlocklist = (): UseBlocklistReturn => {
   // Refresh blocklist from service
   const refreshBlocklist = useCallback(async () => {
     try {
+      // Ensure we're getting fresh data from the service
       const users = blocklistService.getBlockedUsers();
       setBlockedUsers(users);
+      console.log('[useBlocklist] Refreshed blocklist, users count:', users.length);
     } catch (error) {
       console.error('[useBlocklist] Failed to refresh blocklist:', error);
     }

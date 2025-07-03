@@ -13,6 +13,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Import contexts
 import { useAuth } from '../../contexts/AuthContext';
@@ -86,11 +87,39 @@ const EditProfile: React.FC = () => {
     "Business and Startups", "Music and Arts", "Travel and Adventure",
   ];
 
+  // Toggle interest selection
   const toggleInterest = (interest: string): void => {
     if (interests.includes(interest)) {
       setInterests(interests.filter(item => item !== interest));
     } else {
       setInterests([...interests, interest]);
+    }
+  };
+
+  // Save profile data to local storage
+  const saveProfileToLocalStorage = async (profileData: any): Promise<void> => {
+    try {
+      const userId = String(user?.id);
+      if (!userId) return;
+      
+      // Save each profile field separately
+      await AsyncStorage.setItem(`profile_firstName_${userId}`, profileData.firstname || '');
+      await AsyncStorage.setItem(`profile_lastName_${userId}`, profileData.lastname || '');
+      await AsyncStorage.setItem(`profile_name_${userId}`, profileData.name || '');
+      await AsyncStorage.setItem(`profile_email_${userId}`, profileData.emailId || '');
+      await AsyncStorage.setItem(`profile_address_${userId}`, profileData.address || '');
+      await AsyncStorage.setItem(`profile_bio_${userId}`, about || ''); // Save bio which is not in updateData
+      await AsyncStorage.setItem(`profile_gender_${userId}`, profileData.gender || '');
+      await AsyncStorage.setItem(`profile_profession_${userId}`, profileData.profession || '');
+      await AsyncStorage.setItem(`profile_maritalStatus_${userId}`, profileData.maternal_status || '');
+      await AsyncStorage.setItem(`profile_age_${userId}`, age || '');
+      
+      // Save interests as JSON string
+      await AsyncStorage.setItem(`profile_interests_${userId}`, JSON.stringify(interests));
+      
+      console.log('Profile data saved to local storage');
+    } catch (error) {
+      console.error('Error saving profile data to local storage:', error);
     }
   };
 
@@ -100,6 +129,12 @@ const EditProfile: React.FC = () => {
       return;
     }
 
+    // Validate age if it's provided
+    if (age && (parseInt(age) < 0 || parseInt(age) > 120)) {
+      Alert.alert('Error', 'Age must be between 0 and 120');
+      return;
+    }
+    
     setLoading(true);
     
     try {
@@ -126,6 +161,9 @@ const EditProfile: React.FC = () => {
 
       // Call the update API with proper type casting
       await updateUserDetails(updateData as any);
+      
+      // Save profile data to local storage
+      await saveProfileToLocalStorage(updateData);
       
       Alert.alert('Success', 'Profile updated successfully');
       navigation.goBack();
@@ -276,11 +314,18 @@ const EditProfile: React.FC = () => {
               }
             ]}
             value={age}
-            onChangeText={setAge}
-            placeholder="Enter your age"
+            onChangeText={(text) => {
+              // Allow only numbers and validate range 0-120
+              const numericValue = text.replace(/[^0-9]/g, '');
+              if (numericValue === '' || (parseInt(numericValue, 10) >= 0 && parseInt(numericValue, 10) <= 120)) {
+                setAge(numericValue);
+              }
+            }}
+            placeholder="Enter your age (0-120)"
             placeholderTextColor={colors.text.light}
             keyboardType="numeric"
-            editable={false} // Age is calculated from DOB
+            editable={!loading}
+            maxLength={3} // Limit input to 3 digits
           />
         </View>
 

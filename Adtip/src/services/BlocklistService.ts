@@ -159,6 +159,7 @@ class BlocklistService {
    * Get all blocked users
    */
   public getBlockedUsers(): BlockedUser[] {
+    console.log('[BlocklistService] Getting all blocked users, count:', this.blockedUsersData.length);
     return [...this.blockedUsersData];
   }
 

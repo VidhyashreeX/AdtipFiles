@@ -185,6 +185,53 @@ const ProfileScreen: React.FC = () => {
     }
   };
 
+  // Helper function to load profile data from local storage
+  const loadProfileFromLocalStorage = async (userId: string | number): Promise<Partial<User>> => {
+    try {
+      const idStr = String(userId);
+      
+      // Load individual profile fields
+      const firstName = await AsyncStorage.getItem(`profile_firstName_${idStr}`);
+      const lastName = await AsyncStorage.getItem(`profile_lastName_${idStr}`);
+      const name = await AsyncStorage.getItem(`profile_name_${idStr}`);
+      const emailId = await AsyncStorage.getItem(`profile_email_${idStr}`);
+      const address = await AsyncStorage.getItem(`profile_address_${idStr}`);
+      const bio = await AsyncStorage.getItem(`profile_bio_${idStr}`);
+      const gender = await AsyncStorage.getItem(`profile_gender_${idStr}`);
+      const profession = await AsyncStorage.getItem(`profile_profession_${idStr}`);
+      const maternal_status = await AsyncStorage.getItem(`profile_maritalStatus_${idStr}`);
+      const age = await AsyncStorage.getItem(`profile_age_${idStr}`);
+      
+      // Load interests
+      let interests: any[] = [];
+      const interestsJson = await AsyncStorage.getItem(`profile_interests_${idStr}`);
+      if (interestsJson) {
+        try {
+          interests = JSON.parse(interestsJson);
+        } catch (e) {
+          console.error('[ProfileScreen] Error parsing interests JSON:', e);
+        }
+      }
+      
+      return {
+        firstName: firstName || undefined,
+        lastName: lastName || undefined,
+        name: name || undefined,
+        emailId: emailId || undefined,
+        address: address || undefined,
+        bio: bio || undefined,
+        gender: gender || undefined,
+        profession: profession || undefined,
+        maternal_status: maternal_status || undefined,
+        interests: interests || undefined,
+        // Note: age is not part of the User interface, but we load it anyway
+      };
+    } catch (error) {
+      console.error('[ProfileScreen] Error loading profile from local storage:', error);
+      return {};
+    }
+  };
+
   const loadBannerImageFromLocal = async (userId: string | number): Promise<string | null> => {
     try {
       const key = getBannerImageKey(userId);
@@ -290,6 +337,20 @@ const ProfileScreen: React.FC = () => {
 
       if (isOwnProfile && currentUser) {
         userData = currentUser;
+        
+        // Check if we have locally stored profile data
+        if (currentUser.id) {
+          const localProfileData = await loadProfileFromLocalStorage(currentUser.id);
+          
+          // Merge with API data, preferring local data
+          if (localProfileData) {
+            userData = {
+              ...userData,
+              ...localProfileData
+            } as User;
+            console.log('[ProfileScreen] Loaded user data from local storage:', localProfileData);
+          }
+        }
       } else {
         const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
           method: 'GET',

@@ -56,7 +56,9 @@ const BlockedUsersScreen: React.FC = () => {
           onPress: async () => {
             try {
               await blocklistService.unblockUser(user.id);
+              // Make sure we properly refresh the list after unblocking
               await loadBlockedUsers();
+              // Explicitly notify the user about success
               Alert.alert('Success', `${user.name} has been unblocked.`);
             } catch (error) {
               console.error('[BlockedUsersScreen] Failed to unblock user:', error);
@@ -85,7 +87,9 @@ const BlockedUsersScreen: React.FC = () => {
           onPress: async () => {
             try {
               await blocklistService.clearBlocklist();
+              // Make sure we properly refresh the list after clearing
               await loadBlockedUsers();
+              // Explicitly notify the user about success  
               Alert.alert('Success', 'All users have been unblocked.');
             } catch (error) {
               console.error('[BlockedUsersScreen] Failed to clear blocklist:', error);
