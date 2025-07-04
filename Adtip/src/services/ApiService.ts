@@ -815,27 +815,42 @@ export default class ApiService {
   }
 
   /**
-   * Get FCM token for a user (Updated to use fcm-tokens-of-both-users API)
+   * Get FCM token for a user
    * @param userId - The user ID to get FCM token for
    * @param callerUserId - Optional caller user ID for batch request (for efficiency)
    */
-  static async getFCMToken(userId: string, callerUserId?: string): Promise<{ token: string; platform: 'ANDROID' | 'IOS' } | null> {
+  static async getFCMToken(userId: string, callerUserId?: string): Promise<{ token: string } | null> {
     try {
-      // Use the new batch API to get FCM tokens
-      const userIds = callerUserId ? [parseInt(callerUserId), parseInt(userId)] : [parseInt(userId)];
-      
-      const response = await this.getFcmTokensForUsers({ userIds });
-      
-      if (response && response.results) {
-        // Find the token for the requested userId
-        const targetUser = response.results.find(result => result.userId === parseInt(userId));
+      // If callerUserId is provided, use the batch API for efficiency
+      if (callerUserId) {
+        const userIds = [parseInt(callerUserId), parseInt(userId)];
+        const response = await this.getFcmTokensForUsers({ userIds });
         
-        if (targetUser && targetUser.status && targetUser.fcm_token) {
+        if (response && response.results) {
+          // Find the token for the requested userId
+          const targetUser = response.results.find(result => result.userId === parseInt(userId));
+          
+          if (targetUser && targetUser.status && targetUser.fcm_token) {
+            return {
+              token: targetUser.fcm_token,
+            };
+          }
+        }
+      } else {
+        // Use single user endpoint for individual requests
+        console.log(`[ApiService] Getting FCM token for single user: ${userId}`);
+        const response = await this.get<{ fcm_token: string; status: boolean }>(`/api/get-fcm-token/${userId}`);
+        
+        console.log(`[ApiService] Single user FCM token response:`, response);
+        
+        if (response && response.status && response.fcm_token) {
+          console.log(`[ApiService] Successfully extracted FCM token for user ${userId}:`, response.fcm_token);
           return {
-            token: targetUser.fcm_token,
-            platform: 'ANDROID', // Default to Android as per your requirement
+            token: response.fcm_token,
           };
         }
+        
+        console.warn(`[ApiService] No FCM token found in response for user ${userId}:`, response);
       }
       
       console.warn(`[ApiService] No FCM token found for user ${userId}`);
@@ -1010,16 +1025,14 @@ export default class ApiService {
   }
 
   /**
-   * Get FCM tokens for both caller and recipient users efficiently
+   * Get FCM tokens for both caller and recipient users
    * @param callerUserId - Caller's user ID
    * @param recipientUserId - Recipient's user ID
-   * @returns Object with both caller and recipient FCM token details
+   * @returns Object with both caller and recipient FCM tokens
    */
   static async getBothUsersFCMTokens(callerUserId: string, recipientUserId: string): Promise<{
     callerToken: string | null;
     recipientToken: string | null;
-    callerPlatform: 'ANDROID' | 'IOS';
-    recipientPlatform: 'ANDROID' | 'IOS';
   }> {
     try {
       const userIds = [parseInt(callerUserId), parseInt(recipientUserId)];
@@ -1027,8 +1040,6 @@ export default class ApiService {
       
       let callerToken = null;
       let recipientToken = null;
-      let callerPlatform: 'ANDROID' | 'IOS' = 'ANDROID';
-      let recipientPlatform: 'ANDROID' | 'IOS' = 'ANDROID';
       
       if (response && response.results) {
         const callerResult = response.results.find(result => result.userId === parseInt(callerUserId));
@@ -1046,17 +1057,29 @@ export default class ApiService {
       return {
         callerToken,
         recipientToken,
-        callerPlatform,
-        recipientPlatform,
       };
     } catch (error) {
       console.error(`[ApiService] Error fetching FCM tokens for users ${callerUserId} and ${recipientUserId}:`, error);
       return {
         callerToken: null,
         recipientToken: null,
-        callerPlatform: 'ANDROID',
-        recipientPlatform: 'ANDROID',
       };
+    }
+  }
+
+  /**
+   * Get recipient's FCM token from a call between two users
+   * @param callerUserId - The caller's user ID (first in array)
+   * @param recipientUserId - The recipient's user ID (second in array)
+   * @returns The recipient's FCM token or null if not found
+   */
+  static async getRecipientFCMToken(callerUserId: string, recipientUserId: string): Promise<string | null> {
+    try {
+      const tokens = await this.getBothUsersFCMTokens(callerUserId, recipientUserId);
+      return tokens.recipientToken;
+    } catch (error) {
+      console.error(`[ApiService] Error fetching recipient FCM token:`, error);
+      return null;
     }
   }
 
@@ -1286,7 +1309,7 @@ export default class ApiService {
     try {
       console.log('🚀 [ApiService] Making direct call to FCM Server for update-call:', FCM_SERVER_URL);
       
-      // Validate payload structure matches expected format exactly
+      // Validate payload structure matches expected format
       if (!payload.callerInfo || !payload.callerInfo.token || !payload.callerInfo.name || !payload.callerInfo.platform || !payload.type) {
         console.error('❌ [ApiService] Invalid payload structure:', JSON.stringify(payload, null, 2));
         throw new Error('Invalid payload: missing required fields in callerInfo or type');

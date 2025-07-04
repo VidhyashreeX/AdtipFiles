@@ -384,11 +384,11 @@ export interface FcmTokensRequest {
 }
 
 export interface FcmTokensResponse {
-  results: {
+  results: Array<{
     status: boolean;
     userId: number;
     fcm_token: string;
-  }[];
+  }>;
 }
 
 // Add these to your types/api.ts file

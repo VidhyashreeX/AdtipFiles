@@ -44,6 +44,7 @@ export const TIP_CALLS_ENDPOINTS = {
   GET_RTM_TOKEN: '/api/get-rtm-token',
   MISSED_CALLS: '/api/missed-calls',
   UPDATE_FCM_TOKEN: '/api/update-fcm-token',
+  GET_FCM_TOKEN: '/api/get-fcm-token', // Single user FCM token endpoint
   GET_FCM_TOKENS: '/api/fcm-tokens-of-both-users',
   SAVE_COMMENT: '/api/save-user-post-comment',
   GET_COMMENTS: '/api/posts', // Will be used as /api/posts/{postId}/comments

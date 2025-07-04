@@ -1822,39 +1822,40 @@ class UnifiedCallService {
   private async sendCallNotificationToRecipient(callData: CallData): Promise<void> {
     try {
       console.log('[UnifiedCallService] Sending call notification to recipient:', callData.recipientId);
+      console.log('[TipCall] Verifying recipient availability...');
 
-      // ✅ Actually fetch FCM tokens for both users
-      const { callerToken, recipientToken, callerPlatform, recipientPlatform } = 
-        await ApiService.getBothUsersFCMTokens(callData.callerId, callData.recipientId);
-
+      // ✅ Fetch recipient FCM token using single user endpoint
+      const recipientTokenData = await ApiService.getFCMToken(callData.recipientId);
+      
       // ✅ Check if recipient has an FCM token
-      if (!recipientToken) {
+      if (!recipientTokenData || !recipientTokenData.token) {
         console.warn('[UnifiedCallService] Recipient does not have an FCM token:', callData.recipientId);
         throw new Error('Recipient is not available for calls (no FCM token)');
       }
 
+      // ✅ Fetch caller FCM token using single user endpoint
+      const callerTokenData = await ApiService.getFCMToken(callData.callerId);
+      
       // ✅ Check if caller has an FCM token
-      if (!callerToken) {
+      if (!callerTokenData || !callerTokenData.token) {
         console.warn('[UnifiedCallService] Caller does not have an FCM token:', callData.callerId);
         throw new Error('Unable to initiate call (no caller FCM token)');
       }
 
       console.log('[UnifiedCallService] FCM tokens retrieved successfully:', {
-        callerHasToken: !!callerToken,
-        recipientHasToken: !!recipientToken,
-        callerPlatform,
-        recipientPlatform
+        callerHasToken: !!callerTokenData.token,
+        recipientHasToken: !!recipientTokenData.token,
       });
 
       // ✅ Send call notification with actual FCM tokens
       await ApiService.initiateCall({
         calleeInfo: {
-          platform: recipientPlatform,
-          token: recipientToken, // ✅ Now has actual token
+          platform: 'ANDROID', // Hardcoded to ANDROID as requested
+          token: recipientTokenData.token,
         },
         callerInfo: {
           name: callData.callerName,
-          token: callerToken, // ✅ Now has actual token
+          token: callerTokenData.token,
         },
         videoSDKInfo: {
           meetingId: callData.meetingId,
