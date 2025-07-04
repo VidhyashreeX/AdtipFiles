@@ -29,10 +29,10 @@ import Header from '../../components/common/Header';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import ApiService from '../../services/ApiService';
 import { launchImageLibrary, MediaType } from 'react-native-image-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import CloudflareUploadService from '../../services/CloudflareUploadService';
 import Video from 'react-native-video';
 import { createThumbnail } from 'react-native-create-thumbnail';
-import DateTimePicker from '@react-native-community/datetimepicker';
 
 // Define interfaces
 interface PostData {
@@ -107,11 +107,11 @@ const CreateCampaignScreen: React.FC = () => {
   const [endDate, setEndDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
   const [targetMinAge, setTargetMinAge] = useState(18);
   const [targetMaxAge, setTargetMaxAge] = useState(65);
-  const [payPerView, setPayPerView] = useState(3.0); // Changed to INR
+  const [payPerView, setPayPerView] = useState(2.0); // 0.5 to 5 INR range
   const [reachGoal, setReachGoal] = useState(10000);
   const [durationDays, setDurationDays] = useState(7);
-  const [totalPay, setTotalPay] = useState(30000.00); // Changed to INR
-  const [platformFee, setPlatformFee] = useState(1500.00); // Changed to INR
+  const [totalPay, setTotalPay] = useState(0); // Will be calculated
+  const [platformFee, setPlatformFee] = useState(0); // Will be calculated
   const [postTargetLocations, setPostTargetLocations] = useState<string[]>([]);
   const [postTargetGenders, setPostTargetGenders] = useState<string[]>(['male', 'female']);
 
@@ -137,6 +137,7 @@ const CreateCampaignScreen: React.FC = () => {
   const [isDraggingDuration, setIsDraggingDuration] = useState(false);
   const [isDraggingMinAge, setIsDraggingMinAge] = useState(false);
   const [isDraggingMaxAge, setIsDraggingMaxAge] = useState(false);
+  const [isDraggingPayPerView, setIsDraggingPayPerView] = useState(false);
 
   // Create pan responders for sliders
   const durationPanResponder = PanResponder.create({
@@ -184,6 +185,22 @@ const CreateCampaignScreen: React.FC = () => {
     },
     onPanResponderRelease: () => {
       setIsDraggingMaxAge(false);
+    },
+  });
+
+  const payPerViewPanResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => {
+      setIsDraggingPayPerView(true);
+    },
+    onPanResponderMove: (event, gestureState) => {
+      const { dx } = gestureState;
+      const newPayPerView = Math.max(0.5, Math.min(5, ((dx / SLIDER_WIDTH) * 4.5) + payPerView));
+      setPayPerView(Math.round(newPayPerView * 10) / 10); // Round to 1 decimal place
+    },
+    onPanResponderRelease: () => {
+      setIsDraggingPayPerView(false);
     },
   });
 
@@ -252,11 +269,17 @@ const CreateCampaignScreen: React.FC = () => {
       setSelectedMediaUri(postData.images[0].uri);
       setMediaType('image');
     }
+  }, []);
 
-    // Calculate platform fee (5% of total pay)
-    const calculatedPlatformFee = totalPay * 0.05;
+  // Calculate budget when pay per view, reach goal, or duration changes
+  useEffect(() => {
+    const baseBudget = payPerView * reachGoal * durationDays; // Include duration days
+    const calculatedPlatformFee = baseBudget * 0.10; // 10% platform fee
+    const calculatedTotalPay = baseBudget + calculatedPlatformFee;
+    
     setPlatformFee(calculatedPlatformFee);
-  }, [totalPay]);
+    setTotalPay(calculatedTotalPay);
+  }, [payPerView, reachGoal, durationDays]);
 
   // Update end date when duration changes
   useEffect(() => {
@@ -531,6 +554,21 @@ const CreateCampaignScreen: React.FC = () => {
       return;
     }
 
+    if (payPerView < 0.5 || payPerView > 5) {
+      Alert.alert('Error', 'Pay per view must be between ₹0.5 and ₹5.0');
+      return;
+    }
+
+    if (reachGoal < 100) {
+      Alert.alert('Error', 'Reach goal must be at least 100 people');
+      return;
+    }
+
+    if (totalPay <= 0) {
+      Alert.alert('Error', 'Total budget must be greater than ₹0');
+      return;
+    }
+
     try {
       setIsLoading(true);
       setIsUploading(true);
@@ -603,7 +641,10 @@ const CreateCampaignScreen: React.FC = () => {
   };
 
   const handlePreviewAd = () => {
-    Alert.alert('Preview', `Title: ${title}\nContent: ${content}\nMedia: ${mediaType}\nBudget: $${totalPay}`);
+    Alert.alert(
+      'Campaign Preview', 
+      `Title: ${title}\nContent: ${content}\nMedia: ${mediaType}\nPay Per View: ₹${payPerView}\nReach Goal: ${reachGoal.toLocaleString()} people\nTotal Budget: ₹${totalPay.toFixed(2)}\nDuration: ${durationDays} days`
+    );
   };
 
   // Date picker handlers
@@ -688,8 +729,7 @@ const CreateCampaignScreen: React.FC = () => {
                 </View>
               )}
               <TouchableOpacity 
-                style={[styles.changeButton, { backgroundColor: colors.primary }]
-                }
+                style={[styles.changeButton, { backgroundColor: colors.primary }]}
                 onPress={pickMedia}
                 disabled={isLoading}
               >
@@ -719,6 +759,76 @@ const CreateCampaignScreen: React.FC = () => {
                 Choose image or video
               </Text>
             </TouchableOpacity>
+          )}
+
+          {/* Campaign Title */}
+          <Text style={[styles.fieldLabel, { color: colors.text.secondary }]}>Campaign Title</Text>
+          <View style={[styles.inputContainer, { borderColor: isDarkMode ? colors.border : '#E5E7EB' }]}>
+            <TextInput
+              style={[styles.input, { color: colors.text.primary }]}
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Enter campaign title"
+              placeholderTextColor={colors.text.tertiary}
+              editable={!isLoading}
+              maxLength={100}
+            />
+          </View>
+
+          {/* Campaign Content */}
+          <Text style={[styles.fieldLabel, { color: colors.text.secondary }]}>Campaign Description</Text>
+          <View style={[styles.inputContainer, { borderColor: isDarkMode ? colors.border : '#E5E7EB', minHeight: 100 }]}>
+            <TextInput
+              style={[styles.input, { color: colors.text.primary, textAlignVertical: 'top' }]}
+              value={content}
+              onChangeText={setContent}
+              placeholder="Describe your campaign..."
+              placeholderTextColor={colors.text.tertiary}
+              multiline
+              numberOfLines={4}
+              editable={!isLoading}
+              maxLength={500}
+            />
+          </View>
+
+          {/* Category Selection */}
+          <Text style={[styles.fieldLabel, { color: colors.text.secondary }]}>Category</Text>
+          <TouchableOpacity
+            style={[
+              styles.dropdown,
+              { borderColor: isDarkMode ? colors.border : '#E5E7EB' },
+              categoryDropdownVisible && styles.dropdownActive
+            ]}
+            onPress={() => setCategoryDropdownVisible(!categoryDropdownVisible)}
+            disabled={isLoading}
+          >
+            <Text style={[styles.dropdownText, { color: colors.text.primary }]}>
+              {getSelectedCategoryName()}
+            </Text>
+            <Icon 
+              name={categoryDropdownVisible ? "chevron-up" : "chevron-down"} 
+              size={20} 
+              color={colors.text.tertiary} 
+            />
+          </TouchableOpacity>
+          
+          {categoryDropdownVisible && (
+            <View style={[styles.dropdownMenu, { borderColor: isDarkMode ? colors.border : '#E5E7EB', backgroundColor: isDarkMode ? colors.card : '#FFFFFF' }]}>
+              {categories.map((category) => (
+                <TouchableOpacity
+                  key={category.id}
+                  style={styles.dropdownItem}
+                  onPress={() => handleCategorySelect(category)}
+                >
+                  <Text style={[styles.dropdownText, { color: colors.text.primary }]}>
+                    {category.name}
+                  </Text>
+                  {videoCategoryId === category.id && (
+                    <Icon name="check" size={16} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
           )}
         </View>
 
@@ -1042,110 +1152,191 @@ const CreateCampaignScreen: React.FC = () => {
           </Modal>
         </View>
 
-        {/* Budget & Pricing Section */}
+        {/* Budget Configuration Section */}
         <View style={[styles.sectionCard, { backgroundColor: isDarkMode ? colors.card : '#FFFFFF' }]}>
           <View style={styles.sectionHeader}>
-            <Icon name="dollar-sign" size={20} color="#10B981" />
-            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Budget & Pricing</Text>
+            <Icon name="dollar-sign" size={20} color="#F59E0B" />
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Budget Configuration</Text>
           </View>
           
-          {/* Total Budget */}
-          <Text style={[styles.fieldLabel, { color: colors.text.secondary }]}>Total Budget (₹)</Text>
-          <View style={[styles.inputContainer, { borderColor: isDarkMode ? colors.border : '#E5E7EB' }]
-            }
-            pointerEvents={isLoading ? 'none' : 'auto'}
-          >
-            <TextInput
-              placeholder="30000.00"
-              placeholderTextColor={colors.text.tertiary}
-              style={[styles.input, { color: colors.text.primary }]}
-              value={totalPay.toString()}
-              onChangeText={(text) => setTotalPay(parseFloat(text) || 0)}
-              keyboardType="numeric"
-              editable={!isLoading}
-            />
-          </View>
-
           {/* Pay Per View */}
-          <Text style={[styles.fieldLabel, { color: colors.text.secondary }]}>Pay Per View (₹)</Text>
-          <View style={[styles.inputContainer, { borderColor: isDarkMode ? colors.border : '#E5E7EB' }]
-            }
-            pointerEvents={isLoading ? 'none' : 'auto'}
-          >
-            <TextInput
-              placeholder="3.00"
-              placeholderTextColor={colors.text.tertiary}
-              style={[styles.input, { color: colors.text.primary }]}
-              value={payPerView.toString()}
-              onChangeText={(text) => setPayPerView(parseFloat(text) || 0)}
-              keyboardType="numeric"
-              editable={!isLoading}
-            />
+          <Text style={[styles.fieldLabel, { color: colors.text.secondary }]}>Pay Per View: ₹{payPerView.toFixed(1)}</Text>
+          <View style={styles.sliderContainer}>
+            <Text style={styles.sliderLabel}>₹0.5</Text>
+            <View style={styles.sliderWrapper}>
+              <View style={[styles.sliderTrack, { backgroundColor: isDarkMode ? colors.gray[700] : '#E5E7EB' }]} />
+              <View 
+                style={[
+                  styles.sliderFill, 
+                  { 
+                    backgroundColor: colors.primary,
+                    width: `${((payPerView - 0.5) / 4.5) * 100}%`
+                  }
+                ]} 
+              />
+              <View 
+                style={[
+                  styles.sliderThumb,
+                  { 
+                    left: `${((payPerView - 0.5) / 4.5) * 100}%`,
+                    marginLeft: -10,
+                    borderColor: colors.primary,
+                    backgroundColor: isDarkMode ? colors.card : '#FFFFFF'
+                  }
+                ]}
+                {...payPerViewPanResponder.panHandlers}
+              />
+            </View>
+            <Text style={styles.sliderLabel}>₹5.0</Text>
           </View>
 
           {/* Reach Goal */}
           <Text style={[styles.fieldLabel, { color: colors.text.secondary }]}>Reach Goal (People)</Text>
-          <View style={[styles.inputContainer, { borderColor: isDarkMode ? colors.border : '#E5E7EB' }]}
-            pointerEvents={isLoading ? 'none' : 'auto'}
-          >
+          <View style={[styles.inputContainer, { borderColor: isDarkMode ? colors.border : '#E5E7EB' }]}>
             <TextInput
-              placeholder="10000"
-              placeholderTextColor={colors.text.tertiary}
               style={[styles.input, { color: colors.text.primary }]}
               value={reachGoal.toString()}
-              onChangeText={(text) => setReachGoal(parseInt(text) || 0)}
+              onChangeText={(text) => {
+                const numericValue = parseInt(text.replace(/[^0-9]/g, '')) || 0;
+                setReachGoal(numericValue);
+              }}
+              placeholder="Enter target reach"
+              placeholderTextColor={colors.text.tertiary}
               keyboardType="numeric"
               editable={!isLoading}
             />
           </View>
 
-          {/* Platform Fee (Auto-calculated) */}
-          <Text style={[styles.fieldLabel, { color: colors.text.secondary }]}>Platform Fee (5%)</Text>
-          <View style={[styles.inputContainer, { borderColor: isDarkMode ? colors.border : '#E5E7EB', backgroundColor: isDarkMode ? colors.gray[800] : '#F9FAFB' }]}>
-            <TextInput
-              style={[styles.input, { color: colors.text.secondary }]}
-              value={`₹${platformFee.toFixed(2)}`}
-              editable={false}
-            />
-          </View>
-
           {/* Budget Breakdown */}
-          <View style={[styles.budgetBreakdown, { backgroundColor: isDarkMode ? colors.gray[800] || '#374151' : '#F9FAFB' }]}>
+          <View style={[styles.budgetBreakdown, { backgroundColor: isDarkMode ? colors.gray[800] : '#F9FAFB' }]}>
+            <Text style={[styles.fieldLabel, { color: colors.text.secondary, marginBottom: 12 }]}>Budget Breakdown</Text>
+            
             <View style={styles.budgetBreakdownRow}>
               <Text style={[styles.budgetBreakdownLabel, { color: colors.text.secondary }]}>
-                Daily Budget:
+                Pay Per View × Reach Goal × Days
               </Text>
               <Text style={[styles.budgetBreakdownValue, { color: colors.text.primary }]}>
-                ₹{(totalPay / durationDays).toFixed(2)}
+                ₹{(payPerView * reachGoal * durationDays).toFixed(2)}
               </Text>
             </View>
+
             <View style={styles.budgetBreakdownRow}>
               <Text style={[styles.budgetBreakdownLabel, { color: colors.text.secondary }]}>
-                Platform Fee (5%):
+                Platform Fee (10%)
               </Text>
               <Text style={[styles.budgetBreakdownValue, { color: colors.text.primary }]}>
                 ₹{platformFee.toFixed(2)}
               </Text>
             </View>
-            <View style={styles.budgetBreakdownRow}>
-              <Text style={[styles.budgetBreakdownLabel, { color: colors.text.secondary }]}>
-                Ad Spend:
-              </Text>
-              <Text style={[styles.budgetBreakdownValue, { color: colors.text.primary }]}>
-                ₹{(totalPay - platformFee).toFixed(2)}
-              </Text>
-            </View>
+
             <View style={[styles.budgetBreakdownRow, { borderTopWidth: 1, borderTopColor: isDarkMode ? colors.border : '#E5E7EB', paddingTop: 8, marginTop: 8 }]}>
-              <Text style={[styles.budgetBreakdownLabel, { color: colors.text.primary, fontWeight: '600' }]}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                Total Budget:
+              <Text style={[styles.budgetBreakdownLabel, { color: colors.text.primary, fontWeight: '600' }]}>
+                Total Budget
               </Text>
-              <Text style={[styles.budgetBreakdownValue, { color: colors.primary, fontWeight: '600' }]}>
+              <Text style={[styles.budgetBreakdownValue, { color: colors.primary, fontWeight: '700', fontSize: 16 }]}>
                 ₹{totalPay.toFixed(2)}
               </Text>
             </View>
+
+            <View style={styles.budgetBreakdownRow}>
+              <Text style={[styles.budgetBreakdownLabel, { color: colors.text.secondary, fontSize: 12 }]}>
+                Daily Average
+              </Text>
+              <Text style={[styles.budgetBreakdownValue, { color: colors.text.secondary, fontSize: 12 }]}>
+                ₹{(totalPay / durationDays).toFixed(2)}/day
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Comprehensive Campaign Summary & Actions */}
+        <View style={[styles.sectionCard, { backgroundColor: isDarkMode ? colors.card : '#FFFFFF' }]}>
+          <View style={styles.sectionHeader}>
+            <Icon name="check-circle" size={20} color="#10B981" />
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Campaign Summary</Text>
+          </View>
+          
+          <View style={styles.summaryContainer}>
+            <View style={styles.summaryItem}>
+              <Text style={[styles.summaryItemLabel, { color: colors.text.secondary }]}>Title:</Text>
+              <Text style={[styles.summaryItemValue, { color: colors.text.primary }]} numberOfLines={1} ellipsizeMode="tail">
+                {title || 'Not set'}
+              </Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={[styles.summaryItemLabel, { color: colors.text.secondary }]}>Media Type:</Text>
+              <Text style={[styles.summaryItemValue, { color: colors.text.primary }]}>
+                {mediaType.charAt(0).toUpperCase() + mediaType.slice(1)}
+              </Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={[styles.summaryItemLabel, { color: colors.text.secondary }]}>Duration:</Text>
+              <Text style={[styles.summaryItemValue, { color: colors.text.primary }]}>
+                {durationDays} days
+              </Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={[styles.summaryItemLabel, { color: colors.text.secondary }]}>Pay Per View:</Text>
+              <Text style={[styles.summaryItemValue, { color: colors.text.primary }]}>
+                ₹{payPerView.toFixed(1)}
+              </Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={[styles.summaryItemLabel, { color: colors.text.secondary }]}>Reach Goal:</Text>
+              <Text style={[styles.summaryItemValue, { color: colors.text.primary }]}>
+                {reachGoal.toLocaleString()} people
+              </Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={[styles.summaryItemLabel, { color: colors.text.secondary }]}>Target Age:</Text>
+              <Text style={[styles.summaryItemValue, { color: colors.text.primary }]}>
+                {targetMinAge}-{targetMaxAge} years
+              </Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={[styles.summaryItemLabel, { color: colors.text.secondary }]}>Target Genders:</Text>
+              <Text style={[styles.summaryItemValue, { color: colors.text.primary }]}>
+                {postTargetGenders.join(', ')}
+              </Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={[styles.summaryItemLabel, { color: colors.text.secondary }]}>Target Locations:</Text>
+              <Text style={[styles.summaryItemValue, { color: colors.text.primary }]}>
+                {postTargetLocations.length > 0 ? `${postTargetLocations.length} selected` : 'None'}
+              </Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={[styles.summaryItemLabel, { color: colors.text.secondary }]}>Total Budget:</Text>
+              <Text style={[styles.summaryItemValue, { color: colors.primary, fontWeight: '600' }]}>
+                ₹{totalPay.toFixed(2)}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.quickActionsContainer}>
+            <TouchableOpacity
+              style={[styles.launchButton, { backgroundColor: colors.primary }]}
+              onPress={handleLaunchCampaign}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={[styles.launchButtonText, { color: isDarkMode ? '#000' : '#FFFFFF' }]}>
+                  Launch Campaign
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.secondaryButton, { borderColor: colors.border }]}
+              onPress={handlePreviewAd}
+              disabled={isLoading}
+            >
+              <Text style={[styles.secondaryButtonText, { color: colors.text.primary }]}>
+                Preview Ad
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -1177,96 +1368,6 @@ const CreateCampaignScreen: React.FC = () => {
             </View>
           </View>
         )}
-        
-        {/* Campaign Summary */}
-        <View style={[styles.sectionCard, { backgroundColor: isDarkMode ? colors.card : '#FFFFFF' }]}>
-          <View style={styles.sectionHeader}>
-            <Icon name="clipboard" size={20} color="#3B82F6" />
-            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Campaign Summary</Text>
-          </View>
-          
-          <View style={styles.summaryContainer}>
-            <View style={styles.summaryItem}>
-              <Text style={[styles.summaryItemLabel, { color: colors.text.secondary }]}>Title:</Text>
-              <Text style={[styles.summaryItemValue, { color: colors.text.primary }]}>
-                {title || 'Not set'}
-              </Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={[styles.summaryItemLabel, { color: colors.text.secondary }]}>Media Type:</Text>
-              <Text style={[styles.summaryItemValue, { color: colors.text.primary }]}>
-                {mediaType.charAt(0).toUpperCase() + mediaType.slice(1)}
-              </Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={[styles.summaryItemLabel, { color: colors.text.secondary }]}>Duration:</Text>
-              <Text style={[styles.summaryItemValue, { color: colors.text.primary }]}>
-                {durationDays} days
-              </Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={[styles.summaryItemLabel, { color: colors.text.secondary }]}>Target Age:</Text>
-              <Text style={[styles.summaryItemValue, { color: colors.text.primary }]}>
-                {targetMinAge}-{targetMaxAge} years
-              </Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={[styles.summaryItemLabel, { color: colors.text.secondary }]}>Target Locations:</Text>
-              <Text style={[styles.summaryItemValue, { color: colors.text.primary }]}>
-                {postTargetLocations.length > 0 ? `${postTargetLocations.length} selected` : 'None'}
-              </Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={[styles.summaryItemLabel, { color: colors.text.secondary }]}>Target Genders:</Text>
-              <Text style={[styles.summaryItemValue, { color: colors.text.primary }]}>
-                {postTargetGenders.join(', ')}
-              </Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={[styles.summaryItemLabel, { color: colors.text.secondary }]}>Reach Goal:</Text>
-              <Text style={[styles.summaryItemValue, { color: colors.text.primary }]}>
-                {reachGoal.toLocaleString()} people
-              </Text>
-            </View>
-          </View>
-        </View>
-        
-        {/* Quick Actions */}
-        <View style={styles.quickActionsContainer}>
-          <TouchableOpacity 
-            style={[
-              styles.launchButton, 
-              { backgroundColor: colors.primary },
-              isLoading && { opacity: 0.7 }
-            ]}
-            onPress={handleLaunchCampaign}
-            disabled={isLoading || !selectedMediaUri || !title.trim() || !content.trim() || postTargetLocations.length === 0}
-          >
-            {isLoading ? (
-              <ActivityIndicator size="small" color={isDarkMode ? '#000' : '#FFFFFF'} />
-            ) : (
-              <Text style={[styles.launchButtonText, { color: isDarkMode ? '#000' : '#FFFFFF' }]}>
-                {isUploading ? 'Uploading...' : 'Launch Campaign'}
-              </Text>
-            )}
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.secondaryButton, { borderColor: isDarkMode ? colors.border : '#E5E7EB' }]}
-            onPress={handleSaveAsDraft}
-            disabled={isLoading}
-          >
-            <Text style={[styles.secondaryButtonText, { color: colors.text.primary }]}>Save as Draft</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.secondaryButton, { borderColor: isDarkMode ? colors.border : '#E5E7EB' }]}
-            onPress={handlePreviewAd}
-            disabled={isLoading}
-          >
-            <Text style={[styles.secondaryButtonText, { color: colors.text.primary }]}>Preview Ad</Text>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
