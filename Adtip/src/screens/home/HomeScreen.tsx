@@ -35,6 +35,7 @@ import {API_BASE_URL} from '../../constants/api';
 import { usePosts, useLikeMutation, useFollowMutation, usePrefetchData } from '../../hooks/useQueries';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
+import PubScaleService from '../../services/PubScaleService';
 
 // Components
 import Header from '../../components/common/Header';
@@ -161,16 +162,17 @@ const CategoriesRow: React.FC<CategoriesRowProps> = ({ categories, selectedCateg
 interface EarnCardsRowProps { 
   onWatchAndEarn: () => void; 
   onPlayAndEarn: () => void; 
+  onInstallToEarn: () => void; 
   isLoading?: boolean; 
 }
 
-const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onPlayAndEarn, isLoading }) => {
+const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onPlayAndEarn, onInstallToEarn, isLoading }) => {
   const {colors} = useTheme();
   const styles = createHomeScreenStyles(colors);
   const flatListRef = useRef<FlatList>(null);
   const currentIndexRef = useRef(0);
   
-  // Define earn cards data for carousel - Only show Play & Earn for now
+  // Define earn cards data for carousel
   const earnCardsData = [
     // Watch & Earn is commented out but not removed
     // {
@@ -188,6 +190,14 @@ const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onPlayAndEa
       iconName: 'gamepad-2',
       onPress: onPlayAndEarn,
       gradientColors: ['#1565C0', '#1976D2', '#0D47A1'],
+    },
+    {
+      id: '3',
+      title: 'Install to Earn',
+      description: 'Complete tasks to earn rewards',
+      iconName: 'gamepad-2',
+      onPress: onInstallToEarn,
+      gradientColors: ['#FF6B35', '#FF8E53', '#E55A2B'],
     },
   ];
 
@@ -263,6 +273,8 @@ const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onPlayAndEa
         ItemSeparatorComponent={() => <View style={{ width: 0 }} />}
       />
     </View>
+    
+
   );
 };
 
@@ -299,6 +311,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [isGloballyMuted, setIsGloballyMuted] = useState(true);
+  const [offerwallLoading, setOfferwallLoading] = useState(false);
 
   // Add premium state
   const [isPremium, setIsPremium] = useState<boolean>(false);
@@ -573,6 +586,31 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     navigation.navigate('PlayToEarn' as never);
   }, [navigation]);
 
+  const handleInstallToEarn = useCallback(async () => {
+    console.log('Install to earn pressed');
+    try {
+      // Initialize with user ID if available
+      const userId = user?.id ? String(user.id) : 'anonymous-user';
+      
+      // Show loading indicator
+      setOfferwallLoading(true);
+      
+      // Show the offerwall directly
+      await PubScaleService.showOfferwall();
+      
+      console.log('Offerwall launched successfully');
+    } catch (error) {
+      console.error('Failed to show offerwall:', error);
+      Alert.alert(
+        'Error',
+        'Failed to load offerwall. Please try again later.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setOfferwallLoading(false);
+    }
+  }, [user?.id]);
+
   const handlePostLike = useCallback((postId: number) => {
     // Find current like state and optimistically update
     const post = displayPosts.find(p => p.id === postId);
@@ -712,7 +750,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           <ScrollView style={styles.content} contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}>
             <StoriesRow stories={[]} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} isLoading={true} />
             <CategoriesRow categories={[]} selectedCategory={null} onCategoryPress={handleCategoryPress} isLoading={true} />
-            <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} isLoading={true} />
+            <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} onInstallToEarn={handleInstallToEarn} isLoading={true} />
             <View style={styles.skeletonContainer}>
               {Array(6).fill(0).map((_, index) => <PostItemSkeleton key={`skeleton-${index}`} />)}
             </View>
@@ -769,7 +807,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
               {renderPremiumBanner()}
               <StoriesRow stories={displayStories} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} />
               <CategoriesRow categories={displayCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} />
-              <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} />
+              <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} onInstallToEarn={handleInstallToEarn} />
             </>
           )}
           ListEmptyComponent={renderEmptyState}

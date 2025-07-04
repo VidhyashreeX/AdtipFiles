@@ -26,6 +26,8 @@ class MainApplication : Application(), ReactApplication {
         // Add manually linked VideoSDK packages
         packages.add(WebRTCModulePackage())
         packages.add(InCallManagerPackage())
+        // pubscale
+        packages.add(PubscaleOfferwallPackage())
         
         return packages
       }

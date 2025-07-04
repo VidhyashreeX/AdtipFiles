@@ -21,8 +21,9 @@ export const API_TIMEOUT = 30000;
 // export const PUBSCALE_BASE_URL = 'https://wow.pubscale.com';
 // export const PUBSCALE_APP_ID = '39604779';
 
-// Temporary fallback for commented PubScale integration
-export const PUBSCALE_APP_ID = '';
+// PubScale integration
+export const PUBSCALE_APP_ID = '39604779';
+export const PUBSCALE_BASE_URL = 'https://offerwall.pubscale.com';
 
 // API Endpoints
 export const API_ENDPOINTS = {

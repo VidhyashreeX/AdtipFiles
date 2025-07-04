@@ -53,6 +53,7 @@ import { navigationRef, navigateWithRetry, getCurrentRoute, isNavigationReady } 
 import FirebaseService from './src/services/FirebaseService';
 import VideoSDKService from './src/services/videosdk/VideoSDKService';
 import UnifiedCallService from './src/services/calling/UnifiedCallService';  // Unified call service (replacing all legacy services)
+import PubScaleService from './src/services/PubScaleService';
 
 import IncomingCallService from './src/services/IncomingCallService';
 
@@ -260,6 +261,19 @@ const AppNavigator = () => {
           console.log('[App] Background: Phone call permissions request failed (not critical):', error);
         }
       }, 1000); // Reduced from 2000ms to 1000ms
+    }
+
+    // Background PubScale initialization - delayed to not impact UI
+    if (isAuthenticated && user?.id) {
+      setTimeout(async () => {
+        try {
+          console.log('[App] Background: Initializing PubScale service...');
+          await PubScaleService.initialize(String(user.id));
+          console.log('[App] Background: PubScale service initialized successfully');
+        } catch (error) {
+          console.log('[App] Background: PubScale service initialization failed (not critical):', error);
+        }
+      }, 1500); // Initialize after other services
     }
   }, [isInitialized, isAuthenticated]);
 
