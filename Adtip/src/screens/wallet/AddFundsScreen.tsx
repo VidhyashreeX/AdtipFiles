@@ -9,6 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { Zap } from 'lucide-react-native';
 import Header from '../../components/common/Header';
 
 const AMOUNTS = [50, 200, 500, 1000, 5000, 10000, 50000, 100000];
@@ -159,7 +160,7 @@ const AddFundsScreen = () => {
       color: '#FF9800'
     },
     {
-      icon: 'account_balance_wallet',
+      icon: 'zap',
       title: 'Quick Transactions',
       description: 'Fast and secure payment processing',
       color: '#9C27B0'
@@ -178,7 +179,11 @@ const AddFundsScreen = () => {
       ]}
     >
       <View style={[styles.benefitIcon, { backgroundColor: benefit.color + '20' }]}>
-        <Icon name={benefit.icon} size={24} color={benefit.color} />
+        {benefit.icon === 'zap' ? (
+          <Zap size={24} color={benefit.color} />
+        ) : (
+          <Icon name={benefit.icon} size={24} color={benefit.color} />
+        )}
       </View>
       <Text style={[styles.benefitTitle, { color: (colors.text?.primary || colors.text) as string }]}>
         {benefit.title}
@@ -200,10 +205,11 @@ const AddFundsScreen = () => {
           styles.amountCard,
           {
             backgroundColor: isSelected 
-              ? colors.primary + '20' 
+              ? colors.primary + '15' 
               : (isDarkMode ? colors.card : colors.surface),
-            borderColor: isSelected ? colors.primary : (isDarkMode ? colors.border : '#E0E0E0'),
-            borderWidth: isSelected ? 2 : 1
+            borderColor: isSelected ? colors.primary : (isDarkMode ? colors.border : '#E8E8E8'),
+            borderWidth: isSelected ? 2 : 1,
+            transform: isSelected ? [{ scale: 1.02 }] : [{ scale: 1 }],
           }
         ]}
         onPress={() => setSelectedAmount(amount)}
@@ -346,7 +352,8 @@ const styles = StyleSheet.create({
   },
   benefitsSection: {
     paddingHorizontal: 20,
-    paddingVertical: 24,
+    paddingTop: 8,
+    paddingBottom: 16,
   },
   sectionTitle: {
     fontSize: 22,
@@ -418,11 +425,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    borderWidth: 1,
   },
   popularBadge: {
     position: 'absolute',
