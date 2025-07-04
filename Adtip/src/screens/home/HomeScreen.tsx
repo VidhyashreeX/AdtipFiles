@@ -23,7 +23,7 @@ import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 // Import Lucide React Native icons
 import { PlayCircle, Gamepad2, WifiOff, Share2 } from 'lucide-react-native';
-import CommentsBottomSheet from '../../components/commentsbottomsheet/CommentsBottomSheet';
+import PostWithComments from '../../components/home/PostWithComments';
 
 // Enhanced Contexts & Services
 import {useTheme} from '../../contexts/ThemeContext';
@@ -764,13 +764,17 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
         {/* Comments Modal */}
         {selectedCommentPostId && (
-          <CommentsBottomSheet
+          <PostWithComments
             visible={commentModalVisible}
             onClose={() => {
               setCommentModalVisible(false);
               setSelectedCommentPostId(null);
             }}
             postId={selectedCommentPostId}
+            userId={user?.id ? Number(user.id) : 0}
+            initialCommentCount={
+              displayPosts.find(post => post.id === selectedCommentPostId)?.commentCount || 0
+            }
           />
         )}
 

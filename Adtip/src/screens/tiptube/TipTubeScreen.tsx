@@ -42,6 +42,7 @@ import {
 import BannerAdComponent from '../../googleads/BannerAdComponent';
 import ApiService from '../../services/ApiService';
 import ContentCreatorPlanToggle from '../../components/common/ContentCreatorPlanToggle';
+import VideoCommentsModal from '../../components/tiptube/VideoCommentsModal';
 
 // Get screen dimensions and create constants
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -128,9 +129,6 @@ const TipTubeScreen = () => {
   const [userChannelId, setUserChannelId] = useState<string | null>(null);
   const [openPlayer, setOpenPlayer] = useState(false);
   const [showComments, setShowComments] = useState(false);
-  const [comments, setComments] = useState<any[]>([]);
-  const [commentCount, setCommentCount] = useState<number>(0);
-  const [newComment, setNewComment] = useState<string>('');
   const [likedVideos, setLikedVideos] = useState<Set<number>>(new Set());
   const [showChannelVideos, setShowChannelVideos] = useState(false);
   const [showPlanModal, setShowPlanModal] = useState(false);
@@ -217,26 +215,12 @@ const TipTubeScreen = () => {
   );
 
   // Fetch comments for a video
-  const fetchComments = useCallback(async (videoId: number) => {
-    if (!user?.id) return;
-    try {
-      const commentCountResponse = await ApiService.getCommentOfVideo(videoId, 1, 10);
-      setCommentCount(commentCountResponse.total || 0);
-      
-      const commentsResponse = await ApiService.getCommentsOfVideos(user.id, videoId);
-      setComments(commentsResponse.data || []);
-    } catch (error) {
-      console.error('[TipTubeScreen] Error fetching comments:', error);
-    }
-  }, [user?.id]);
+
 
   // Toggle comments section
   const toggleComments = useCallback((videoId: number) => {
     setShowComments(!showComments);
-    if (!showComments && videoId) {
-      fetchComments(videoId);
-    }
-  }, [showComments, fetchComments]);
+  }, [showComments]);
 
   // Handle liking a video
   const handleLikeVideo = useCallback(async (video: Video) => {
@@ -263,34 +247,9 @@ const TipTubeScreen = () => {
   }, [user?.id, likedVideos]);
 
   // Handle adding a comment
-  const handleAddComment = useCallback(async (videoId: number) => {
-    if (!user?.id || !newComment.trim()) {
-      Alert.alert('Error', 'You must be logged in and enter a comment to post.');
-      return;
-    }
-    try {
-      await ApiService.saveVideoComment(videoId, user.id, newComment);
-      setNewComment('');
-      fetchComments(videoId);
-    } catch (error) {
-      console.error('[TipTubeScreen] Error adding comment:', error);
-      Alert.alert('Error', 'Failed to post comment. Please try again.');
-    }
-  }, [user?.id, newComment, fetchComments]);
 
-  // Handle liking a comment
-  const handleLikeComment = useCallback(async (commentId: number) => {
-    if (!user?.id) {
-      Alert.alert('Error', 'You must be logged in to like comments.');
-      return;
-    }
-    try {
-      await ApiService.saveVideoCommentLike(commentId, user.id);
-    } catch (error) {
-      console.error('[TipTubeScreen] Error liking comment:', error);
-      Alert.alert('Error', 'Failed to like the comment. Please try again.');
-    }
-  }, [user?.id]);
+
+
 
   // Function to calculate relative time
   const calculateRelativeTime = (dateString: string): string => {
@@ -569,52 +528,6 @@ const TipTubeScreen = () => {
     }
   }, [selectedVideoId, openPlayer, videos]);
 
-  // Render comments section
-  const renderCommentsSection = useCallback(() => {
-    if (!showComments || !selectedVideoId) return null;
-    return (
-      <View style={styles.commentsContainer}>
-        <Text style={styles.commentsTitle}>Comments ({commentCount})</Text>
-        {comments.length > 0 ? (
-          comments.map(comment => (
-            <View key={comment.id} style={styles.commentItem}>
-              <Image 
-                source={{ uri: comment.commentator_image || 'https://via.placeholder.com/40?text=User' }} 
-                style={styles.commentatorImage} 
-              />
-              <View style={styles.commentContent}>
-                <Text style={styles.commentatorName}>{comment.commentator_name || 'Anonymous'}</Text>
-                <Text style={styles.commentText}>{comment.comment}</Text>
-                <View style={styles.commentActions}>
-                  <TouchableOpacity onPress={() => handleLikeComment(comment.id)}>
-                    <Text style={styles.commentActionText}>Like ({comment.total_comment_like || 0})</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          ))
-        ) : (
-          <Text style={styles.noCommentsText}>No comments yet.</Text>
-        )}
-        <View style={styles.commentInputContainer}>
-          <TextInput
-            style={styles.commentInput}
-            value={newComment}
-            onChangeText={setNewComment}
-            placeholder="Add a comment..."
-          />
-          <TouchableOpacity onPress={() => {
-            if (selectedVideoId !== null) {
-              handleAddComment(Number(selectedVideoId));
-            }
-          }} style={styles.commentSendButton}>
-            <Text style={styles.commentSendButtonText}>Post</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }, [showComments, selectedVideoId, comments, commentCount, newComment, handleAddComment, handleLikeComment]);
-
   // Fetch plans and user plan status
   useEffect(() => {
     const fetchPlans = async () => {
@@ -771,7 +684,16 @@ const TipTubeScreen = () => {
             showsVerticalScrollIndicator={false}
           />
         )}
-        {renderCommentsSection()}
+
+        {/* Reddit-style Video Comments Modal */}
+        {selectedVideoId && (
+          <VideoCommentsModal
+            visible={showComments}
+            onClose={() => setShowComments(false)}
+            videoId={selectedVideoId}
+            userId={user?.id ? Number(user.id) : 0}
+          />
+        )}
       </View>
     </ScreenTransition>
   );
