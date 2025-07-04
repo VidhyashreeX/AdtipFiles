@@ -11,6 +11,7 @@ import {
   Platform,
   Dimensions,
   Image,
+  Share,
 } from 'react-native';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import Video, { VideoRef } from 'react-native-video';
@@ -26,6 +27,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Heart, Share as ShareIcon } from 'lucide-react-native';
 
 import { useTheme } from '../../contexts/ThemeContext';
 import MemoizedRelatedVideoCard from '../../components/tiptube/MemoizedRelatedVideoCard';
@@ -33,6 +35,7 @@ import VideoCommentsModal from '../../components/tiptube/VideoCommentsModal';
 import { createSecureVideoSource } from '../../utils/mediaUtils';
 import ApiService from '../../services/ApiService';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCommentCount } from '../../hooks/useComments';
 
 // Get screen dimensions
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -81,6 +84,9 @@ const VideoPlayerModalScreen: React.FC = () => {
   const [isVideoLiked, setIsVideoLiked] = useState(false);
   const [isFollowingChannel, setIsFollowingChannel] = useState(false);
   const [isFollowLoading, setIsFollowLoading] = useState(false);
+
+  // Get comment count for preview
+  const { data: commentCount = 0 } = useCommentCount({ videoId: video.id });
 
   // Load secure video source
   useEffect(() => {
@@ -214,6 +220,24 @@ const VideoPlayerModalScreen: React.FC = () => {
       console.error('[VideoPlayerModal] Error liking video:', error);
     }
   }, [user?.id, video?.id, video?.channelId, isVideoLiked]);
+
+  // Handle sharing the video
+  const handleShareVideo = useCallback(async () => {
+    try {
+      const deepLink = `https://adtip.in/tiptube?videoId=${video.id}`;
+      const shareMessage = `Check out this video: ${video.title}\n\n${deepLink}`;
+      
+      await Share.share({
+        message: shareMessage,
+        url: deepLink,
+        title: video.title,
+      });
+      
+      console.log('[VideoPlayerModal] Video shared successfully');
+    } catch (error) {
+      console.error('[VideoPlayerModal] Error sharing video:', error);
+    }
+  }, [video.id, video.title]);
 
   // Check if user is following the channel
   const checkChannelFollowStatus = useCallback(async () => {
@@ -403,25 +427,50 @@ const VideoPlayerModalScreen: React.FC = () => {
               )}
             </View>
 
-            {/* Comment Section */}
-            <View style={[styles.commentCard, { minHeight: 120 }]}> 
-              {/* Like Video Button */}
-              <TouchableOpacity onPress={handleLikeVideo} style={styles.likeVideoButton}>
-                <Text style={[styles.likeVideoButtonText, isVideoLiked ? styles.liked : styles.notLiked]}>
-                  {isVideoLiked ? '♥ Liked' : '♡ Like this video'}
-                </Text>
-              </TouchableOpacity>
-              
-              {/* Comments Button */}
-              <TouchableOpacity 
-                onPress={() => setShowComments(true)} 
-                style={styles.commentsButton}
-              >
-                <Text style={styles.commentsButtonText}>
-                  💬 View Comments
-                </Text>
-              </TouchableOpacity>
+            {/* Action Buttons Section */}
+            <View style={styles.actionButtonsContainer}>
+              <View style={styles.actionButtonsRow}>
+                {/* Like Button */}
+                <TouchableOpacity onPress={handleLikeVideo} style={styles.actionButton}>
+                  <View style={styles.actionButtonContent}>
+                    <Heart 
+                      size={20} 
+                      color={isVideoLiked ? '#e53935' : colors.text.secondary}
+                      fill={isVideoLiked ? '#e53935' : 'transparent'}
+                    />
+                    <Text style={[styles.actionButtonText, isVideoLiked ? styles.liked : styles.notLiked]}>
+                      {isVideoLiked ? 'Liked' : 'Like'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+                
+                {/* Share Button */}
+                <TouchableOpacity onPress={handleShareVideo} style={styles.actionButton}>
+                  <View style={styles.actionButtonContent}>
+                    <ShareIcon 
+                      size={20} 
+                      color={colors.text.secondary}
+                    />
+                    <Text style={[styles.actionButtonText, styles.notLiked]}>
+                      Share
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
             </View>
+
+            {/* Comments Preview Section */}
+            <TouchableOpacity 
+              onPress={() => setShowComments(true)} 
+              style={styles.commentsPreviewContainer}
+            >
+              <Text style={styles.commentsPreviewTitle}>
+                Comments {commentCount > 0 && `• ${commentCount}`}
+              </Text>
+              <Text style={styles.commentsPreviewSubtitle}>
+                {commentCount > 0 ? 'Tap to view all comments' : 'Be the first to comment'}
+              </Text>
+            </TouchableOpacity>
 
             {/* Up next section - now below comments */}
             <View style={styles.upNextSection}>
@@ -573,25 +622,60 @@ const createModalStyles = (colors: any, isDarkMode: boolean) => StyleSheet.creat
     shadowRadius: 4,
     elevation: 2,
   },
-  commentsTitle: {
-    fontWeight: 'bold',
-    fontSize: 16,
-    marginBottom: 8,
-    color: colors.text.primary,
+  actionButtonsContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: isDarkMode ? '#272727' : '#e0e0e0',
   },
-  likeVideoButton: {
-    marginBottom: 12,
-    alignSelf: 'flex-start',
+  actionButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingHorizontal: 40,
   },
-  likeVideoButtonText: {
-    fontWeight: 'bold',
-    fontSize: 15,
+  actionButton: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    minWidth: 80,
+  },
+  actionButtonContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 4,
   },
   liked: {
     color: '#e53935',
   },
   notLiked: {
     color: colors.text.secondary,
+  },
+  commentsPreviewContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 0.5,
+    borderBottomColor: isDarkMode ? '#272727' : '#e0e0e0',
+  },
+  commentsPreviewTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: isDarkMode ? '#f1f1f1' : '#0f0f0f',
+    marginBottom: 4,
+  },
+  commentsPreviewSubtitle: {
+    fontSize: 14,
+    color: isDarkMode ? '#aaa' : '#606060',
+  },
+  commentsTitle: {
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginBottom: 8,
+    color: colors.text.primary,
   },
   commentsButton: {
     backgroundColor: colors.primary,

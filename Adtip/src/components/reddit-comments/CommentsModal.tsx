@@ -58,7 +58,7 @@ const CommentsModal: React.FC<CommentsModalProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const { colors, isDarkMode } = useTheme();
-  const [modalHeight] = useState(SCREEN_HEIGHT * 0.8);
+  const [modalHeight] = useState(SCREEN_HEIGHT * 0.85);
   
   const translateY = useRef(new Animated.Value(modalHeight)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -166,7 +166,7 @@ const CommentsModal: React.FC<CommentsModalProps> = ({
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
             <Text style={[styles.title, { color: colors.text.primary }]}>
-              {title} {commentCount > 0 && `(${commentCount})`}
+              Comments {commentCount > 0 && `• ${commentCount}`}
             </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <X size={24} color={colors.text.primary} />
@@ -209,24 +209,24 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: -2,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
   },
   handleBar: {
-    width: 40,
+    width: 36,
     height: 4,
     backgroundColor: '#DDD',
     borderRadius: 2,
     alignSelf: 'center',
-    marginTop: 8,
+    marginTop: 12,
     marginBottom: 8,
   },
   header: {
@@ -234,17 +234,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    paddingBottom: 16,
+    borderBottomWidth: 0.5,
     borderBottomColor: '#E0E0E0',
   },
   title: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
     color: '#1A1A1B',
   },
   closeButton: {
-    padding: 4,
+    padding: 8,
+    borderRadius: 20,
   },
   content: {
     flex: 1,

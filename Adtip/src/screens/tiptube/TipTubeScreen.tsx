@@ -15,14 +15,12 @@ import {
   SafeAreaView,
   Switch,
   Modal,
-  Share,
 } from 'react-native';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
 import RazorpayCheckout from 'react-native-razorpay';
-import { Share2 } from 'lucide-react-native';
 
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
@@ -507,12 +505,6 @@ const TipTubeScreen = () => {
           <BannerAdComponent />
         </View>
       )}
-      <TouchableOpacity onPress={() => {
-        const deepLink = `https://adtip.in/tiptube?videoId=${item.id}`;
-        Share.share({ message: `Check out this video: ${deepLink}` });
-      }}>
-        <Share2 size={20} color={colors.primary} />
-      </TouchableOpacity>
     </>
   ), [handleVideoPress, selectedVideoId, previewingVideoId, styles, colors, navigation, toggleComments]);
 
