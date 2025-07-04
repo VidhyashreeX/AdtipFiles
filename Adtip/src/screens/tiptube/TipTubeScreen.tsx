@@ -20,6 +20,7 @@ import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/nativ
 import { useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
+import { CirclePlay } from 'lucide-react-native';
 import RazorpayCheckout from 'react-native-razorpay';
 
 import { useTheme } from '../../contexts/ThemeContext';
@@ -363,6 +364,10 @@ const TipTubeScreen = () => {
     }
   }, [userChannelId, navigation]);
 
+  const handleNavigateToTipShorts = useCallback(() => {
+    navigation.navigate('TipShorts');
+  }, [navigation]);
+
   // Handle video press with view API calls
   const handleVideoPress = useCallback(async (video: Video) => {
     console.log('[TipTubeScreen] Video pressed:', { id: video.id, title: video.title, isPaid: video.isPaidPromotional });
@@ -607,6 +612,14 @@ const TipTubeScreen = () => {
           onSearchSubmit={handleSearch}
           rightComponent={
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {/* TipShorts Navigation Icon */}
+              <TouchableOpacity
+                onPress={handleNavigateToTipShorts}
+                style={[styles.headerIconButton, { marginRight: 8 }]}
+                activeOpacity={0.7}
+              >
+                <CirclePlay size={20} color={colors.text.secondary} />
+              </TouchableOpacity>
               {/* Content Creator Plan Toggle */}
               <ContentCreatorPlanToggle onPress={() => handleTogglePremium(true)} />
               {/* Analytics Icon */}
