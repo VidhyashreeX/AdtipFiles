@@ -1369,6 +1369,13 @@ class UnifiedCallService {
 
       console.log('[UnifiedCallService] Ending call:', targetCall.callId);
 
+      // NEW: Explicitly command the MeetingScreen to leave the VideoSDK meeting.
+      console.log('[UnifiedCallService] Emitting leaveCurrentCall event.');
+      appEventEmitter.emit('leaveCurrentCall', { callId: targetCall.callId });
+
+      // CRITICAL FIX: First, update call state to 'ending' to allow cleanup functions to run.
+      this.updateCallState({ callStatus: 'ending' });
+
       // CRITICAL FIX: First, update call state to 'ended' to prevent other systems from navigating back
       console.log('[UnifiedCallService] Setting call state to ended to prevent navigation conflicts');
       targetCall.status = 'ended';
@@ -1495,7 +1502,7 @@ class UnifiedCallService {
    */
   public async toggleCamera(): Promise<boolean> {
     try {
-      const newState = await this.mediaManager.toggleCamera();
+      const newState = await this.mediaManager.toggleWebcam();
       this.mediaState.cameraEnabled = newState;
       appEventEmitter.emit('mediaStateChanged', this.mediaState);
       return newState;

@@ -372,6 +372,25 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   const { webcamStream, micStream } = useParticipant(localParticipant?.id || '');
   const { webcamOn, micOn } = useParticipant(localParticipant?.id);
 
+  // NEW: Add a listener for the 'leaveCurrentCall' event from the service.
+  useEffect(() => {
+    const handleLeaveRequest = (event: { callId: string }) => {
+      console.log('[MeetingView] Received leaveCurrentCall event from service.');
+      if (leave && !isLeavingRef.current) {
+        console.log('[MeetingView] Executing leave() from event listener.');
+        isLeavingRef.current = true;
+        leave();
+      }
+    };
+
+    appEventEmitter.on('leaveCurrentCall', handleLeaveRequest);
+
+    return () => {
+      appEventEmitter.off('leaveCurrentCall', handleLeaveRequest);
+    };
+  }, [leave]); // Dependency on `leave` ensures it's available.
+
+
   // ✅ BULLETPROOF FIX: Explicitly join the meeting on component mount with retry logic
   useEffect(() => {
     if (join && !hasJoined && !isJoining && !hasAttemptedJoinRef.current) {
@@ -458,20 +477,17 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     }
   }, [meetingHooks, callMediaManager]);
 
-  // BULLETPROOF FIX: Synchronize meeting state with centralized media state
-  // This is crucial to handle any potential state mismatch between VideoSDK and our CallMediaManager
+  // BULLETPROOF FIX: Synchronize CallMediaManager state FROM VideoSDK state.
+  // This is the core of the fix. It ensures that the SDK is the source of truth
+  // and our centralized manager passively updates itself to match.
   useEffect(() => {
-    // Ensure meeting state matches our centralized media state
-    if (meetingHooks && hasJoined) {
-      // Synchronization now happens through the MediaManager's observer pattern
-      // Logging only for debugging
-      console.log(
-        '[MeetingView] Media state sync check:',
-        `mic: ${micOn}=${mediaState.micEnabled}`,
-        `webcam: ${webcamOn}=${mediaState.cameraEnabled}`
-      );
+    if (hasJoined) {
+      // The `micOn` and `webcamOn` from useParticipant are the ground truth.
+      // We sync our manager with this truth whenever it changes.
+      callMediaManager.syncStateFromSDK({ micOn, webcamOn });
     }
-  }, [hasJoined, meetingHooks, mediaState, micOn, webcamOn]);
+  }, [hasJoined, micOn, webcamOn, callMediaManager]);
+
 
   // BULLETPROOF FIX: Listen for activeCall changes to prevent navigation loops
   // BUT make it less aggressive - only exit if we don't have latched data to work with
@@ -791,86 +807,20 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   }, [ensureOngoingCallNotification]);
   
 
-
   // Toggle mic - USE CENTRALIZED MEDIA MANAGER
   const handleToggleMic = useCallback(async () => {
+    // The UI action is simple: just tell the manager what to do.
     await callMediaManager.toggleMic();
   }, [callMediaManager]);
 
-  // Toggle camera - BULLETPROOF IMPLEMENTATION WITH MULTI-LAYER APPROACH
+  // Toggle camera - SIMPLIFIED & RELIABLE IMPLEMENTATION
   const handleToggleCamera = useCallback(async () => {
-    console.log('[MeetingView] 📹 TOGGLE CAMERA INITIATED:', {
-      currentWebcamOn: webcamOn,
-      currentCameraEnabled: cameraEnabled,
-      hasToggleWebcam: !!meetingHooks?.toggleWebcam,
-      hasWebcamStream: !!webcamStream,
-      streamId: webcamStream?.id || 'none',
-      localParticipantId: localParticipant?.id,
-    });
-    
-    try {
-      // Force extra logging for debugging
-      DeviceEventEmitter.emit('logEvent', {
-        type: 'cameraToggle',
-        action: 'start',
-        webcamOn,
-        cameraEnabled
-      });
-    
-      // BULLETPROOF CAMERA TOGGLE: Coordinated approach between VideoSDK and CallMediaManager
-      
-      // 1. Toggle camera in our CallMediaManager first
-      await callMediaManager.toggleCamera();
-      console.log('[MeetingView] ✅ CallMediaManager toggleCamera completed');
-      
-      // 2. Direct use of VideoSDK toggleWebcam for guaranteed VideoSDK state change
-      if (meetingHooks && meetingHooks.toggleWebcam) {
-        console.log('[MeetingView] 🎬 Using VideoSDK toggleWebcam directly...');
-        
-        // Get the state we just toggled to
-        const expectedCameraState = callMediaManager.getMediaState().cameraEnabled;
-        
-        // Only toggle VideoSDK if it's not in the expected state
-        if (webcamOn !== expectedCameraState) {
-          // Use timeout promise to prevent hanging if toggleWebcam doesn't resolve
-          await Promise.race([
-            meetingHooks.toggleWebcam(),
-            new Promise(resolve => setTimeout(resolve, 2000))
-          ]);
-          
-          console.log('[MeetingView] ✅ VideoSDK toggleWebcam completed');
-        }
-        
-        // 3. Force update the media state to ensure UI and VideoSDK state are aligned
-        setTimeout(() => {
-          if (isComponentMountedRef.current) {
-            const localParticipantForUpdate = meetingHooks.localParticipant;
-            const actualWebcamState = localParticipantForUpdate?.webcamOn;
-            
-            // Only force update if there's still a mismatch
-            if (callMediaManager.getMediaState().cameraEnabled !== actualWebcamState) {
-              console.log('[MeetingView] 🔄 Forcing camera state alignment');
-              callMediaManager.forceUpdateMediaState({
-                cameraEnabled: !!actualWebcamState
-              });
-            }
-            
-            // Log the final state
-            console.log('[MeetingView] 📹 FINAL CAMERA STATE:', {
-              videoSDKWebcamOn: actualWebcamState,
-              mediaManagerCameraEnabled: callMediaManager.getMediaState().cameraEnabled,
-              hasWebcamStream: !!webcamStream,
-              streamId: webcamStream?.id || 'none'
-            });
-          }
-        }, 500);
-      } else {
-        console.log('[MeetingView] ℹ️ No VideoSDK webcam control available, using CallMediaManager only');
-      }
-    } catch (error) {
-      console.error('[MeetingView] ❌ Error toggling camera:', error);
-    }
-  }, [callMediaManager, meetingHooks, webcamOn, cameraEnabled, webcamStream]);
+    // The UI action is simple: just tell the manager what to do.
+    // The manager is responsible for interacting with the SDK.
+    // The UI will update automatically when the SDK state changes,
+    // which is detected by the `syncStateFromSDK` useEffect hook.
+    await callMediaManager.toggleWebcam();
+  }, [callMediaManager]);
 
   // Toggle speaker - USE CENTRALIZED MEDIA MANAGER
   const handleToggleSpeaker = useCallback(async () => {
@@ -1179,6 +1129,8 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   }, [stopCallDurationTimer, hasJoined, leave, isEndingCall]);
 
   // After meeting is joined, force VideoSDK state to match app state
+  //Removed to fix race condition where VideoSDK state was not in sync with app state
+  /*
   useEffect(() => {
     if (hasJoined && meetingHooks && localParticipant) {
       setTimeout(() => {
@@ -1191,7 +1143,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
       }, 200);
     }
   }, [hasJoined, meetingHooks, localParticipant, mediaState, webcamOn, micOn]);
-
+  */
   // 1. Pre-initialize camera before join for video calls
   useEffect(() => {
     if (callType === 'video' && !mediaState.cameraEnabled) {

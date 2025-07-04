@@ -79,88 +79,70 @@ class CallMediaManager {
     appEventEmitter.emit('mediaStateChanged', this.mediaState);
   }
 
+  private notifyListeners = () => {
+    this.listeners.forEach(listener => listener(this.mediaState));
+  };
+
   /**
    * Set the VideoSDK meeting reference for direct control
    */
   public setMeeting(meeting: any): void {
     console.log('[CallMediaManager] Setting VideoSDK meeting reference');
     this.currentMeeting = meeting;
-    // Immediately sync VideoSDK state to match app state
-    if (meeting && meeting.localParticipant) {
-      if (typeof meeting.toggleWebcam === 'function') {
-        const sdkWebcamOn = meeting.localParticipant.webcamOn;
-        if (sdkWebcamOn !== this.mediaState.cameraEnabled) {
-          meeting.toggleWebcam();
-        }
-      }
-      if (typeof meeting.toggleMic === 'function') {
-        const sdkMicOn = meeting.localParticipant.micOn;
-        if (sdkMicOn !== this.mediaState.micEnabled) {
-          meeting.toggleMic();
-        }
-      }
+    // IMPORTANT: Conflicting sync logic that caused race conditions has been removed.
+    // State synchronization is now handled unidirectionally from MeetingScreen.
+  }
+
+  /**
+   * Passively updates the manager's state from the SDK without triggering a command back.
+   * This is the primary method for keeping the manager in sync with the ground truth from the SDK.
+   * @param sdkState An object containing the current media state from the VideoSDK.
+   */
+  public syncStateFromSDK(sdkState: { micOn: boolean; webcamOn: boolean }): void {
+    const { micOn, webcamOn } = sdkState;
+    const currentState = this.mediaState;
+
+    // Check if the SDK state is different from the manager's state
+    const micStateChanged = currentState.micEnabled !== micOn;
+    const cameraStateChanged = currentState.cameraEnabled !== webcamOn;
+
+    if (micStateChanged || cameraStateChanged) {
+      console.log(`[CallMediaManager] Syncing state FROM SDK. Mic: ${micOn}, Cam: ${webcamOn}`);
+      this.mediaState = {
+        ...currentState,
+        micEnabled: micOn,
+        cameraEnabled: webcamOn,
+      };
+      this.notifyListeners();
     }
   }
 
   /**
-   * Toggle microphone
+   * Toggles the microphone. This is the single source for this user action.
+   * It updates its own state, then tells the SDK to change.
    */
-  public async toggleMic(): Promise<boolean> {
-    if (!this.initialized) {
-      console.warn('[CallMediaManager] Not initialized');
-      return false;
-    }
-
-    try {
-      const newState = !this.mediaState.micEnabled;
-      
-      // Use VideoSDK meeting if available
-      if (this.currentMeeting && typeof this.currentMeeting.toggleMic === 'function') {
-        this.currentMeeting.toggleMic();
-      }
-      
-      // Update state
-      this.mediaState.micEnabled = newState;
-      this.notifyListeners();
-      appEventEmitter.emit('mediaStateChanged', this.mediaState);
-      
-      console.log('[CallMediaManager] Mic toggled:', newState ? 'ON' : 'OFF');
-      return newState;
-    } catch (error) {
-      console.error('[CallMediaManager] Error toggling mic:', error);
-      return this.mediaState.micEnabled;
-    }
-  }
+  public toggleMic = (): void => {
+    if (!this.currentMeeting) return;
+    // The desired new state is the opposite of the current state
+    const newMicState = !this.mediaState.micEnabled;
+    this.mediaState.micEnabled = newMicState;
+    this.currentMeeting.toggleMic();
+    console.log(`[CallMediaManager] Toggled mic. New state: ${newMicState}`);
+    this.notifyListeners();
+  };
 
   /**
-   * Toggle camera
+   * Toggles the webcam. This is the single source for this user action.
+   * It updates its own state, then tells the SDK to change.
    */
-  public async toggleCamera(): Promise<boolean> {
-    if (!this.initialized) {
-      console.warn('[CallMediaManager] Not initialized');
-      return false;
-    }
-
-    try {
-      const newState = !this.mediaState.cameraEnabled;
-      
-      // Use VideoSDK meeting if available
-      if (this.currentMeeting && typeof this.currentMeeting.toggleWebcam === 'function') {
-        this.currentMeeting.toggleWebcam();
-      }
-      
-      // Update state
-      this.mediaState.cameraEnabled = newState;
-      this.notifyListeners();
-      appEventEmitter.emit('mediaStateChanged', this.mediaState);
-      
-      console.log('[CallMediaManager] Camera toggled:', newState ? 'ON' : 'OFF');
-      return newState;
-    } catch (error) {
-      console.error('[CallMediaManager] Error toggling camera:', error);
-      return this.mediaState.cameraEnabled;
-    }
-  }
+  public toggleWebcam = (): void => {
+    if (!this.currentMeeting) return;
+    const newWebcamState = !this.mediaState.cameraEnabled;
+    this.mediaState.cameraEnabled = newWebcamState;
+    this.currentMeeting.toggleWebcam();
+    console.log(`[CallMediaManager] Toggled webcam. New state: ${newWebcamState}`);
+    this.notifyListeners();
+  };
 
   /**
    * Toggle speaker
@@ -303,19 +285,6 @@ class CallMediaManager {
     appEventEmitter.emit('mediaStateChanged', this.mediaState);
   }
   
-  /**
-   * Notify all listeners of state change
-   */
-  private notifyListeners(): void {
-    for (const listener of this.listeners) {
-      try {
-        listener({ ...this.mediaState });
-      } catch (error) {
-        console.error('[CallMediaManager] Error notifying listener:', error);
-      }
-    }
-  }
-
   /**
    * BULLETPROOF: Complete media cleanup
    * This is called when a call ends from ANY source (UI, notification, etc.)
