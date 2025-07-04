@@ -415,5 +415,14 @@ export const useVideos = (categoryId: number = 0, userId?: number, searchQuery?:
   });
 };
 
+// Export comment hooks for better organization
+export { 
+  useComments, 
+  useCommentCount, 
+  useAddComment, 
+  useLikeComment, 
+  useDeleteComment 
+} from './useComments';
+
 // Export cache manager and query client
 export { queryClient };

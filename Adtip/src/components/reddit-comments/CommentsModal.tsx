@@ -11,9 +11,11 @@ import {
   TouchableWithoutFeedback,
   StatusBar,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../../contexts/ThemeContext';
 import CommentsList from './CommentsList';
 import { Comment } from '../../types/Comment';
 
@@ -55,6 +57,7 @@ const CommentsModal: React.FC<CommentsModalProps> = ({
   commentCount = 0,
 }) => {
   const insets = useSafeAreaInsets();
+  const { colors, isDarkMode } = useTheme();
   const [modalHeight] = useState(SCREEN_HEIGHT * 0.8);
   
   const translateY = useRef(new Animated.Value(modalHeight)).current;
@@ -129,7 +132,10 @@ const CommentsModal: React.FC<CommentsModalProps> = ({
       statusBarTranslucent
       animationType="none"
     >
-      <StatusBar backgroundColor="rgba(0,0,0,0.5)" barStyle="light-content" />
+      <StatusBar 
+        backgroundColor={isDarkMode ? "rgba(0,0,0,0.8)" : "rgba(0,0,0,0.5)"} 
+        barStyle={isDarkMode ? "light-content" : "light-content"} 
+      />
       
       {/* Backdrop */}
       <TouchableWithoutFeedback onPress={handleBackdropPress}>
@@ -137,48 +143,54 @@ const CommentsModal: React.FC<CommentsModalProps> = ({
       </TouchableWithoutFeedback>
 
       {/* Modal Content */}
-      <Animated.View 
-        style={[
-          styles.modalContainer,
-          {
-            height: modalHeight,
-            paddingTop: insets.top,
-            paddingBottom: insets.bottom,
-            transform: [{ translateY }],
-          },
-        ]}
-        {...panResponder.panHandlers}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoidingView}
       >
-        {/* Handle bar */}
-        <View style={styles.handleBar} />
+        <Animated.View 
+          style={[
+            styles.modalContainer,
+            {
+              backgroundColor: colors.surface,
+              height: modalHeight,
+              paddingTop: insets.top,
+              paddingBottom: insets.bottom,
+              transform: [{ translateY }],
+            },
+          ]}
+          {...panResponder.panHandlers}
+        >
+          {/* Handle bar */}
+          <View style={[styles.handleBar, { backgroundColor: colors.border }]} />
 
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>
-            {title} {commentCount > 0 && `(${commentCount})`}
-          </Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <X size={24} color="#1A1A1B" />
-          </TouchableOpacity>
-        </View>
+          {/* Header */}
+          <View style={[styles.header, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.title, { color: colors.text.primary }]}>
+              {title} {commentCount > 0 && `(${commentCount})`}
+            </Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <X size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          </View>
 
-        {/* Comments List */}
-        <View style={styles.content}>
-          <CommentsList
-            comments={comments}
-            loading={loading}
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            hasMore={hasMore}
-            onLoadMore={onLoadMore}
-            error={error}
-            userId={userId}
-            onAddComment={onAddComment}
-            onLikeComment={onLikeComment}
-            onDeleteComment={onDeleteComment}
-          />
-        </View>
-      </Animated.View>
+          {/* Comments List */}
+          <View style={styles.content}>
+            <CommentsList
+              comments={comments}
+              loading={loading}
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              hasMore={hasMore}
+              onLoadMore={onLoadMore}
+              error={error}
+              userId={userId}
+              onAddComment={onAddComment}
+              onLikeComment={onLikeComment}
+              onDeleteComment={onDeleteComment}
+            />
+          </View>
+        </Animated.View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
@@ -187,6 +199,9 @@ const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
   },
   modalContainer: {
     position: 'absolute',

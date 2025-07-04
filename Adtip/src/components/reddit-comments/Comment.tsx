@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { Heart, MessageCircle, Trash2 } from 'lucide-react-native';
+import { useTheme } from '../../contexts/ThemeContext';
 import { Comment } from '../../types/Comment';
 
 interface CommentItemProps {
@@ -22,6 +23,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
   depth = 0,
   maxDepth = 5,
 }) => {
+  const { colors } = useTheme();
   const [showReplies, setShowReplies] = useState(false);
 
   const handleLike = useCallback(() => {
@@ -57,10 +59,14 @@ const CommentItem: React.FC<CommentItemProps> = ({
   const profileImage = comment.user_profile_image || comment.commentator_image;
 
   return (
-    <View style={[styles.container, depth > 0 && styles.replyContainer]}>
+    <View style={[
+      styles.container, 
+      { backgroundColor: colors.surface },
+      depth > 0 && styles.replyContainer
+    ]}>
       {/* Indentation line for nested comments */}
       {depth > 0 && (
-        <View style={[styles.indentLine, { marginLeft: depth * 15 }]} />
+        <View style={[styles.indentLine, { backgroundColor: colors.border, marginLeft: depth * 15 }]} />
       )}
       
       <View style={styles.commentContent}>
@@ -75,32 +81,32 @@ const CommentItem: React.FC<CommentItemProps> = ({
         {/* Comment Body */}
         <View style={styles.commentBody}>
           {/* Username */}
-          <Text style={styles.username}>{displayName}</Text>
+          <Text style={[styles.username, { color: colors.text.primary }]}>{displayName}</Text>
           
           {/* Comment Content */}
-          <Text style={styles.content}>{displayContent}</Text>
+          <Text style={[styles.content, { color: colors.text.secondary }]}>{displayContent}</Text>
           
           {/* Actions */}
           <View style={styles.footer}>
             <Pressable onPress={handleLike} style={styles.actionButton}>
               <Heart 
                 size={14} 
-                color={comment.is_liked ? "#FF4500" : "gray"} 
-                fill={comment.is_liked ? "#FF4500" : "transparent"}
+                color={comment.is_liked ? colors.primary : colors.text.tertiary} 
+                fill={comment.is_liked ? colors.primary : "transparent"}
               />
               {displayLikeCount > 0 && (
-                <Text style={styles.actionText}>{displayLikeCount}</Text>
+                <Text style={[styles.actionText, { color: colors.text.tertiary }]}>{displayLikeCount}</Text>
               )}
             </Pressable>
             
             <Pressable onPress={handleReply} style={styles.actionButton}>
-              <MessageCircle size={14} color="gray" />
-              <Text style={styles.actionText}>Reply</Text>
+              <MessageCircle size={14} color={colors.text.tertiary} />
+              <Text style={[styles.actionText, { color: colors.text.tertiary }]}>Reply</Text>
             </Pressable>
             
             {canShowReplies && (
               <Pressable onPress={toggleReplies} style={styles.actionButton}>
-                <Text style={styles.actionText}>
+                <Text style={[styles.actionText, { color: colors.text.tertiary }]}>
                   {showReplies ? 'Hide replies' : `Show ${comment.replies?.length} replies`}
                 </Text>
               </Pressable>
@@ -108,8 +114,8 @@ const CommentItem: React.FC<CommentItemProps> = ({
             
             {isOwnComment && (
               <Pressable onPress={handleDelete} style={styles.actionButton}>
-                <Trash2 size={14} color="gray" />
-                <Text style={styles.actionText}>Delete</Text>
+                <Trash2 size={14} color={colors.text.tertiary} />
+                <Text style={[styles.actionText, { color: colors.text.tertiary }]}>Delete</Text>
               </Pressable>
             )}
           </View>
@@ -145,7 +151,6 @@ const styles = StyleSheet.create({
   replyContainer: {
     marginLeft: 20,
     borderLeftWidth: 1,
-    borderLeftColor: '#e0e0e0',
     paddingLeft: 10,
   },
   indentLine: {
@@ -154,7 +159,6 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 1,
-    backgroundColor: '#e0e0e0',
   },
   commentContent: {
     flexDirection: 'row',
@@ -177,12 +181,10 @@ const styles = StyleSheet.create({
   username: {
     fontWeight: 'bold',
     fontSize: 14,
-    color: '#1A1A1B',
     marginBottom: 2,
   },
   content: {
     fontSize: 14,
-    color: '#1A1A1B',
     lineHeight: 20,
     marginBottom: 8,
   },
@@ -198,7 +200,6 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontSize: 12,
-    color: '#787C7E',
     marginLeft: 4,
   },
   repliesContainer: {

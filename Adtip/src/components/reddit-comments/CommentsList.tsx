@@ -10,8 +10,11 @@ import {
   Pressable,
   Keyboard,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { X, ArrowUp } from 'lucide-react-native';
+import { useTheme } from '../../contexts/ThemeContext';
 import CommentItem from './Comment';
 import { Comment } from '../../types/Comment';
 
@@ -42,6 +45,7 @@ const CommentsList: React.FC<CommentsListProps> = ({
   onLikeComment,
   onDeleteComment,
 }) => {
+  const { colors, isDarkMode } = useTheme();
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
@@ -105,46 +109,78 @@ const CommentsList: React.FC<CommentsListProps> = ({
     if (!loading || refreshing) return null;
     return (
       <View style={styles.footer}>
-        <ActivityIndicator size="small" color="#0080ff" />
+        <ActivityIndicator size="small" color={colors.primary} />
       </View>
     );
-  }, [loading, refreshing]);
+  }, [loading, refreshing, colors.primary]);
 
   const renderEmpty = useCallback(() => {
     if (loading && !refreshing) {
       return (
         <View style={styles.emptyContainer}>
-          <ActivityIndicator size="large" color="#0080ff" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       );
     }
     if (error) {
       return (
         <View style={styles.emptyContainer}>
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
         </View>
       );
     }
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>
+        <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
           No comments yet. Be the first to comment!
         </Text>
       </View>
     );
-  }, [loading, refreshing, error]);
+  }, [loading, refreshing, error, colors]);
 
   return (
-    <View style={styles.container}>
-      {/* Comment input */}
-      <View style={styles.inputContainer}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Comments list */}
+      <FlatList
+        data={comments}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={renderCommentItem}
+        ListEmptyComponent={renderEmpty}
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh}
+            tintColor={colors.text.secondary}
+            colors={[colors.primary]}
+          />
+        }
+        onEndReached={hasMore ? onLoadMore : undefined}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={renderFooter}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: 80 } // Add space for input at bottom
+        ]}
+      />
+
+      {/* Fixed Comment input at bottom */}
+      <View style={[
+        styles.inputContainer, 
+        { 
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+        }
+      ]}>
         {replyTo && (
-          <View style={styles.replyingToContainer}>
-            <Text style={styles.replyingToText}>
-              Replying to <Text style={styles.username}>{replyTo.user_name || replyTo.commentator_name}</Text>
+          <View style={[styles.replyingToContainer, { backgroundColor: colors.background }]}>
+            <Text style={[styles.replyingToText, { color: colors.text.secondary }]}>
+              Replying to <Text style={[styles.username, { color: colors.primary }]}>
+                {replyTo.user_name || replyTo.commentator_name}
+              </Text>
             </Text>
             <Pressable onPress={cancelReply}>
-              <X size={16} color="gray" />
+              <X size={16} color={colors.text.secondary} />
             </Pressable>
           </View>
         )}
@@ -152,10 +188,18 @@ const CommentsList: React.FC<CommentsListProps> = ({
         <View style={styles.inputRow}>
           <TextInput
             ref={inputRef}
-            style={styles.input}
+            style={[
+              styles.input,
+              { 
+                backgroundColor: colors.background,
+                color: colors.text.primary,
+                borderColor: colors.border,
+              }
+            ]}
             value={newComment}
             onChangeText={setNewComment}
             placeholder={replyTo ? "Write a reply..." : "Write a comment..."}
+            placeholderTextColor={colors.text.tertiary}
             multiline
             maxLength={500}
           />
@@ -165,7 +209,9 @@ const CommentsList: React.FC<CommentsListProps> = ({
             disabled={submitting || !newComment.trim()}
             style={[
               styles.submitButton,
-              (!newComment.trim() || submitting) && styles.disabledButton
+              {
+                backgroundColor: newComment.trim() ? colors.primary : colors.border,
+              }
             ]}
           >
             {submitting ? (
@@ -176,22 +222,6 @@ const CommentsList: React.FC<CommentsListProps> = ({
           </Pressable>
         </View>
       </View>
-
-      {/* Comments list */}
-      <FlatList
-        data={comments}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={renderCommentItem}
-        ListEmptyComponent={renderEmpty}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        onEndReached={hasMore ? onLoadMore : undefined}
-        onEndReachedThreshold={0.5}
-        ListFooterComponent={renderFooter}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-      />
     </View>
   );
 };
@@ -199,13 +229,22 @@ const CommentsList: React.FC<CommentsListProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   inputContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
   },
   replyingToContainer: {
     flexDirection: 'row',
@@ -266,12 +305,10 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#787C7E',
     textAlign: 'center',
   },
   errorText: {
     fontSize: 16,
-    color: '#E74C3C',
     textAlign: 'center',
   },
 });
