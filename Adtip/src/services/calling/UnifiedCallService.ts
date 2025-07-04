@@ -1412,6 +1412,8 @@ class UnifiedCallService {
     } finally {
       this.isEndingCallInProgress = false;
       console.log('[UnifiedCallService] endCall finally: isEndingCallInProgress reset to false');
+      // Ensure full cleanup after call ends
+      await this.cleanup();
     }
   }
 

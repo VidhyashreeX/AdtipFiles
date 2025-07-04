@@ -1140,6 +1140,8 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
       if (currentCall && currentCall.status !== 'ended') {
         appEventEmitter.emit('meetingScreenUnmounting', { callId: currentCall.callId });
       }
+      // Failsafe: ensure full cleanup on unmount
+      unifiedCallService.cleanup();
     } catch (error) {}
   }, [stopCallDurationTimer, hasJoined, leave, isEndingCall]);
 
