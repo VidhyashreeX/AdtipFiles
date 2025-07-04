@@ -50,6 +50,8 @@ import ApiService from '../ApiService';
 import VideoSDKService from '../videosdk/VideoSDKService';
 import BlocklistService from '../BlocklistService';
 import CallMediaManager from './CallMediaManager';
+import CallBillingService from './CallBillingService';
+import WalletService from '../WalletService';
 
 // ===== TYPES =====
 
@@ -149,6 +151,9 @@ class UnifiedCallService {
     isVideoCall: false
   };
   
+  // ===== BILLING MANAGEMENT =====
+  private billingService: CallBillingService;
+  
   // ===== APP STATE =====
   private appState: AppStateStatus = 'active';
   private audioPermissionGranted = false;
@@ -171,7 +176,9 @@ class UnifiedCallService {
   // ===== SINGLETON =====
   private constructor() {
     this.mediaManager = CallMediaManager.getInstance();
+    this.billingService = CallBillingService.getInstance();
     this.setupAppStateListener();
+    this.setupBillingEventListeners();
   }
 
   public static getInstance(): UnifiedCallService {
@@ -1168,6 +1175,34 @@ class UnifiedCallService {
         callerId
       });
 
+      // Pre-check wallet balance to ensure call viability
+      try {
+        const currentUserId = callerId;
+        const currentBalance = parseFloat(await WalletService.getWalletBalance(parseInt(currentUserId)));
+        const premiumStatus = await WalletService.checkPremiumStatus(parseInt(currentUserId));
+        
+        // Calculate if user can afford at least 30 seconds of call time
+        const billingInfo = await this.billingService.calculateCallBilling(
+          currentUserId,
+          callType,
+          currentBalance,
+          premiumStatus.isPremium
+        );
+        
+        if (billingInfo.maxDurationSeconds < 30) {
+          throw new Error(`Insufficient balance for ${callType} call. Minimum 30 seconds required.`);
+        }
+        
+        console.log('[UnifiedCallService] Balance check passed:', {
+          balance: currentBalance,
+          maxDuration: billingInfo.maxDurationSeconds,
+          isPremium: premiumStatus.isPremium
+        });
+      } catch (error) {
+        console.error('[UnifiedCallService] Balance check failed:', error);
+        throw error;
+      }
+
       // Request permissions
       const permissionsGranted = await this.requestPermissionsIfNeeded(callType);
       if (!permissionsGranted) {
@@ -1396,6 +1431,10 @@ class UnifiedCallService {
       await this.showCallEndedNotification(targetCall);
       console.log('[UnifiedCallService] Call ended notification shown.');
 
+      console.log('[UnifiedCallService] Stopping call billing...');
+      this.billingService.stopCallBilling();
+      console.log('[UnifiedCallService] Call billing stopped.');
+
       console.log('[UnifiedCallService] Cleaning up media...');
       this.cleanupMedia();
       console.log('[UnifiedCallService] Media cleaned up.');
@@ -1555,7 +1594,19 @@ class UnifiedCallService {
    */
   public updateCallStatus(status: CallStatus): void {
     if (this.callState.activeCall) {
+      const previousStatus = this.callState.activeCall.status;
       this.callState.activeCall.status = status;
+      
+      // Start billing when call becomes connected
+      if (status === 'connected' && previousStatus !== 'connected') {
+        this.startCallBilling();
+      }
+      
+      // Stop billing when call ends
+      if (status === 'ended' || status === 'ending') {
+        this.billingService.stopCallBilling();
+      }
+      
       this.updateCallState({
         activeCall: this.callState.activeCall,
         callStatus: status === 'ended' ? 'ended' : status
@@ -1962,6 +2013,81 @@ class UnifiedCallService {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 
+  // ===== BILLING MANAGEMENT =====
+
+  /**
+   * Setup billing event listeners
+   */
+  private setupBillingEventListeners(): void {
+    // Listen for billing warnings
+    appEventEmitter.on('callBillingWarning', (data) => {
+      console.log('[UnifiedCallService] Billing warning:', data);
+      appEventEmitter.emit('showCallWarning', data);
+    });
+
+    // Listen for automatic call end due to insufficient balance
+    appEventEmitter.on('callEndDueToBalance', async (data) => {
+      console.log('[UnifiedCallService] Ending call due to insufficient balance:', data);
+      await this.endCall('insufficient_balance');
+    });
+  }
+
+  /**
+   * Start call billing when call becomes connected
+   */
+  private async startCallBilling(): Promise<void> {
+    if (!this.callState.activeCall) {
+      console.warn('[UnifiedCallService] Cannot start billing without active call');
+      return;
+    }
+
+    try {
+      const currentUserId = await this.getCurrentUserId();
+      if (!currentUserId) {
+        console.error('[UnifiedCallService] Cannot start billing without user ID');
+        return;
+      }
+
+      // Get current wallet balance and premium status
+      const currentBalance = parseFloat(await WalletService.getWalletBalance(parseInt(currentUserId)));
+      const premiumStatus = await WalletService.checkPremiumStatus(parseInt(currentUserId));
+
+      console.log('[UnifiedCallService] Starting call billing:', {
+        callId: this.callState.activeCall.callId,
+        callType: this.callState.activeCall.callType,
+        currentBalance,
+        isPremium: premiumStatus.isPremium
+      });
+
+      // Start billing service
+      await this.billingService.startCallBilling(
+        this.callState.activeCall.callId,
+        currentUserId,
+        this.callState.activeCall.callType,
+        currentBalance,
+        premiumStatus.isPremium
+      );
+
+    } catch (error) {
+      console.error('[UnifiedCallService] Error starting call billing:', error);
+      // Don't fail the call if billing setup fails, just log the error
+    }
+  }
+
+  /**
+   * Get current billing status
+   */
+  public getCurrentBillingStatus() {
+    return this.billingService.getCurrentBillingStatus();
+  }
+
+  /**
+   * Get call rates for display
+   */
+  public getCallRates() {
+    return this.billingService.getCallRates();
+  }
+
   // ===== CLEANUP =====
 
   /**
@@ -1982,6 +2108,9 @@ class UnifiedCallService {
 
       // Stop background sync
       this.stopBackgroundSync();
+
+      // Stop billing
+      this.billingService.stopCallBilling();
 
       // Clear timers
       if (this.syncDebounceTimer) {

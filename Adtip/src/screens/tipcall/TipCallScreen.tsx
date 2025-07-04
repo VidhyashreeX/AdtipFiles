@@ -47,6 +47,7 @@ import messaging from '@react-native-firebase/messaging';
 import uuid from 'react-native-uuid';
 import UnifiedCallService from '../../services/calling/UnifiedCallService'; // Unified call service
 import BlocklistService from '../../services/BlocklistService';
+import WalletService from '../../services/WalletService';
 import { useBlocklist } from '../../hooks/useBlocklist';
 import RectangleAdComponent from '../../googleads/RectangleAdComponent';
 import { RootStackParamList, MainNavigatorParamList } from '../../types/navigation';
@@ -671,89 +672,154 @@ export default function TipCallScreen() {
       return;
     }
 
-    // Prevent multiple rapid call attempts
-    const unifiedCallService = UnifiedCallService.getInstance();
-    const currentCallState = unifiedCallService.getCallState();
-    if (currentCallState.isInCall) {
-      Alert.alert("Call In Progress", "You are already in a call.");
-      return;
+    // Calculate and show maximum call duration based on balance
+    try {
+      const callService = UnifiedCallService.getInstance();
+      const callRates = callService.getCallRates();
+      const { isPremium } = await WalletService.checkPremiumStatus(user.id);
+      
+      let ratePerMinute: number;
+      if (callType === 'voice') {
+        ratePerMinute = isPremium ? callRates.voicePremium : callRates.voiceNonPremium;
+      } else {
+        ratePerMinute = isPremium ? callRates.videoPremium : callRates.videoNonPremium;
+      }
+      
+      const maxMinutes = Math.floor(currentBalance / ratePerMinute);
+      const maxDurationText = maxMinutes >= 60 
+        ? `${Math.floor(maxMinutes / 60)}h ${maxMinutes % 60}m`
+        : `${maxMinutes}m`;
+      
+      console.log('[TipCall] Call duration calculation:', {
+        balance: currentBalance,
+        isPremium,
+        ratePerMinute,
+        maxMinutes,
+        callType
+      });
+
+      // Show confirmation with call duration info
+      Alert.alert(
+        `Start ${callType === 'voice' ? 'Voice' : 'Video'} Call`,
+        `Call to ${recipient.name}\n\nRate: ₹${ratePerMinute}/min ${isPremium ? '(Premium)' : ''}\nMax duration: ${maxDurationText}\nBalance: ₹${currentBalance.toFixed(2)}`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Start Call',
+            style: 'default',
+            onPress: () => initiateCall(),
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('[TipCall] Error calculating call duration:', error);
+      // If calculation fails, still allow the call but without duration info
+      Alert.alert(
+        `Start ${callType === 'voice' ? 'Voice' : 'Video'} Call`,
+        `Call to ${recipient.name}?`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Start Call',
+            style: 'default',
+            onPress: () => initiateCall(),
+          },
+        ]
+      );
     }
 
-    try {
-      console.log('[TipCall] Starting WhatsApp-like call to:', recipient.name, 'Type:', callType);
-      
-      // ✅ Check if recipient is available before starting call
+    async function initiateCall() {
+      // Prevent multiple rapid call attempts
+      const unifiedCallService = UnifiedCallService.getInstance();
+      const currentCallState = unifiedCallService.getCallState();
+      if (currentCallState.isInCall) {
+        Alert.alert("Call In Progress", "You are already in a call.");
+        return;
+      }
+
       try {
-        console.log('[TipCall] Verifying recipient availability...');
-        const recipientFCMData = await ApiService.getFCMToken(recipient.id.toString());
-        if (!recipientFCMData?.token) {
-          Alert.alert(
-            "Recipient Unavailable", 
-            `${recipient.name} is not available to receive calls right now.`
-          );
+        console.log('[TipCall] Starting WhatsApp-like call to:', recipient.name, 'Type:', callType);
+        
+        // ✅ Check if recipient is available before starting call
+        try {
+          console.log('[TipCall] Verifying recipient availability...');
+          const recipientFCMData = await ApiService.getFCMToken(recipient.id.toString());
+          if (!recipientFCMData?.token) {
+            Alert.alert(
+              "Recipient Unavailable", 
+              `${recipient.name} is not available to receive calls right now.`
+            );
+            return;
+          }
+          console.log('[TipCall] Recipient is available for calls');
+        } catch (error) {
+          console.error('[TipCall] Error checking recipient availability:', error);
+          Alert.alert("Error", "Unable to verify recipient availability. Please try again.");
           return;
         }
-        console.log('[TipCall] Recipient is available for calls');
-      } catch (error) {
-        console.error('[TipCall] Error checking recipient availability:', error);
-        Alert.alert("Error", "Unable to verify recipient availability. Please try again.");
-        return;
-      }
-      
-      // Initialize Unified Call Service if not already done
-      const initialized = await unifiedCallService.initialize();
-      
-      if (!initialized) {
-        Alert.alert("Call Error", "Unable to initialize calling system. Please try again.");
-        return;
-      }
-      
-      // Start the call with Unified Call Service
-      const callData = await unifiedCallService.startOutgoingCall(
-        recipient.id.toString(),
-        recipient.name,
-        callType,
-        user.name || 'User',
-        user.id.toString()
-      );
-      
-      if (callData) {
-        console.log('[TipCall] WhatsApp-like call initiated successfully:', callData.callId);
-        // Navigation will be handled automatically by WhatsApp Call Manager
-      } else {
-        console.error('[TipCall] WhatsApp Call Manager failed to start the call.');
-        Alert.alert('Call Failed', 'Unable to start the call. Please check your connection and try again.');
-      }
-    } catch (error: any) {
-      console.error('[TipCall] Error in handleStartCall:', error);
-      
-      // ✅ Handle specific FCM token errors
-      if (error.message?.includes('no FCM token')) {
-        if (error.message.includes('Recipient')) {
-          Alert.alert(
-            "Recipient Unavailable", 
-            `${recipient.name} is not available to receive calls right now.`
-          );
-        } else if (error.message.includes('Caller')) {
-          Alert.alert(
-            "Call Error", 
-            "Unable to initiate call. Please check your internet connection and try again."
-          );
-        } else {
-          Alert.alert(
-            "Call Error", 
-            "Unable to initiate call. Please try again later."
-          );
+        
+        // Initialize Unified Call Service if not already done
+        const callService = UnifiedCallService.getInstance();
+        const initialized = await callService.initialize();
+        
+        if (!initialized) {
+          Alert.alert("Call Error", "Unable to initialize calling system. Please try again.");
+          return;
         }
-      } else if (error.message?.includes('Network connection error')) {
-        Alert.alert(
-          "Network Error", 
-          "Please check your internet connection and try again."
+        
+        // Start the call with Unified Call Service
+        const callData = await callService.startOutgoingCall(
+          recipient.id.toString(),
+          recipient.name || 'Unknown',
+          callType,
+          user?.name || 'User',
+          user?.id.toString() || '0'
         );
-      } else if (error.message?.includes('Call failed')) {
-        Alert.alert("Call Failed", error.message.replace('Call failed: ', ''));
-      } else {
-        Alert.alert('Call Error', 'An unexpected error occurred while starting the call. Please try again.');
+        
+        if (callData) {
+          console.log('[TipCall] WhatsApp-like call initiated successfully:', callData.callId);
+          // Navigation will be handled automatically by WhatsApp Call Manager
+        } else {
+          console.error('[TipCall] WhatsApp Call Manager failed to start the call.');
+          Alert.alert('Call Failed', 'Unable to start the call. Please check your connection and try again.');
+        }
+      } catch (error: any) {
+        console.error('[TipCall] Error in handleStartCall:', error);
+        
+        // ✅ Handle specific FCM token errors
+        if (error.message?.includes('no FCM token')) {
+          if (error.message.includes('Recipient')) {
+            Alert.alert(
+              "Recipient Unavailable", 
+              `${recipient.name} is not available to receive calls right now.`
+            );
+          } else if (error.message.includes('Caller')) {
+            Alert.alert(
+              "Call Error", 
+              "Unable to initiate call. Please check your internet connection and try again."
+            );
+          } else {
+            Alert.alert(
+              "Call Error", 
+              "Unable to initiate call. Please try again later."
+            );
+          }
+        } else if (error.message?.includes('Network connection error')) {
+          Alert.alert(
+            "Network Error", 
+            "Please check your internet connection and try again."
+          );
+        } else if (error.message?.includes('Call failed')) {
+          Alert.alert("Call Failed", error.message.replace('Call failed: ', ''));
+        } else {
+          Alert.alert('Call Error', 'An unexpected error occurred while starting the call. Please try again.');
+        }
       }
     }
   }, [user, balance, navigation]);
