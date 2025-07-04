@@ -23,6 +23,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useWallet } from '../../contexts/WalletContext';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import { useDataContext } from '../../providers/DataProvider';
 import { useNetInfo } from '@react-native-community/netinfo';
@@ -288,6 +289,7 @@ export default function TipCallScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
+  const { balance } = useWallet();
   const { clearCache } = useDataContext();
   const netInfo = useNetInfo();
   const queryClient = useQueryClient();
@@ -583,38 +585,89 @@ export default function TipCallScreen() {
     setSearchQuery('');
   }, []);
 
-  // DND (Do Not Disturb) Toggle Handler
+  // DND (Do Not Disturb) Toggle Handler with confirmation
   const handleDndToggle = useCallback(async () => {
-    try {
-      setIsDndLoading(true);
-      
-      const newDndState = !isDndEnabled;
-      console.log('[TipCall] Toggling DND to:', newDndState);
-      
-      const updateData: UpdateUserRequest = {
-        id: user!.id,
-        dnd: newDndState ? 1 : 0, // Convert boolean to number
-      };
-      
-      const response: UpdateUserResponse = await ApiService.updateUser(updateData);
-      
-      if (response.status) { // UpdateUserResponse has status as boolean
-        setIsDndEnabled(newDndState);
-        console.log('[TipCall] DND updated successfully');
-      } else {
-        throw new Error(response.message || 'Failed to update DND status');
-      }
-    } catch (error: any) {
-      console.error('[TipCall] Error toggling DND:', error);
-      Alert.alert('Error', 'Failed to update Do Not Disturb status. Please try again.');
-    } finally {
-      setIsDndLoading(false);
-    }
+    const newDndState = !isDndEnabled;
+    const actionText = newDndState ? 'enable' : 'disable';
+    const statusText = newDndState ? 'ON' : 'OFF';
+    const description = newDndState 
+      ? 'You will not receive any incoming call notifications when DND is ON.'
+      : 'You will start receiving incoming call notifications when DND is OFF.';
+
+    Alert.alert(
+      `Turn DND ${statusText}?`,
+      description,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: `Turn ${statusText}`,
+          style: newDndState ? 'destructive' : 'default',
+          onPress: async () => {
+            try {
+              setIsDndLoading(true);
+              
+              console.log('[TipCall] Toggling DND to:', newDndState);
+              
+              const updateData: UpdateUserRequest = {
+                id: user!.id,
+                dnd: newDndState ? 1 : 0, // Convert boolean to number
+              };
+              
+              const response: UpdateUserResponse = await ApiService.updateUser(updateData);
+              
+              if (response.status) { // UpdateUserResponse has status as boolean
+                setIsDndEnabled(newDndState);
+                console.log('[TipCall] DND updated successfully');
+                Alert.alert(
+                  'Success',
+                  `Do Not Disturb has been turned ${statusText.toLowerCase()}.`
+                );
+              } else {
+                throw new Error(response.message || 'Failed to update DND status');
+              }
+            } catch (error: any) {
+              console.error('[TipCall] Error toggling DND:', error);
+              Alert.alert('Error', 'Failed to update Do Not Disturb status. Please try again.');
+            } finally {
+              setIsDndLoading(false);
+            }
+          },
+        },
+      ]
+    );
   }, [isDndEnabled, user]);
 
   const handleStartCall = useCallback(async (recipient: Contact, callType: 'voice' | 'video') => {
     if (!user || !recipient.name) {
       Alert.alert("Error", "User or recipient information is missing.");
+      return;
+    }
+
+    // Check wallet balance before starting call
+    const currentBalance = parseFloat(balance || '0');
+    const minimumBalance = 1; // Minimum balance required for calls (₹1)
+    
+    if (currentBalance < minimumBalance) {
+      Alert.alert(
+        "Insufficient Funds",
+        `You need at least ₹${minimumBalance} to make calls. Please add funds to your wallet.`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Add Funds',
+            style: 'default',
+            onPress: () => {
+              navigation.navigate('AddFundsScreen' as never);
+            },
+          },
+        ]
+      );
       return;
     }
 
@@ -703,7 +756,7 @@ export default function TipCallScreen() {
         Alert.alert('Call Error', 'An unexpected error occurred while starting the call. Please try again.');
       }
     }
-  }, [user]);
+  }, [user, balance, navigation]);
 
   // Prefetch profile data only for the current user (not for all contacts)
   // Commented out to avoid unnecessary API calls in TipCallScreen
