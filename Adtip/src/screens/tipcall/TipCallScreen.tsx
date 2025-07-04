@@ -48,6 +48,7 @@ import uuid from 'react-native-uuid';
 import UnifiedCallService from '../../services/calling/UnifiedCallService'; // Unified call service
 import BlocklistService from '../../services/BlocklistService';
 import WalletService from '../../services/WalletService';
+import { formatPremiumExpiryDate } from '../../utils/dateUtils';
 import { useBlocklist } from '../../hooks/useBlocklist';
 import RectangleAdComponent from '../../googleads/RectangleAdComponent';
 import { RootStackParamList, MainNavigatorParamList } from '../../types/navigation';
@@ -298,6 +299,7 @@ export default function TipCallScreen() {
   // Premium status state
   const [isPremium, setIsPremium] = useState<boolean>(false);
   const [premiumLoading, setPremiumLoading] = useState<boolean>(true);
+  const [premiumData, setPremiumData] = useState<any>(null);
 
   // Get missed calls count for badge
   const { count: missedCallsCount } = useMissedCallsCount(user?.id?.toString());
@@ -865,9 +867,11 @@ export default function TipCallScreen() {
           (premiumResponse as any).status === 1);
           
         setIsPremium(isPremiumActive);
+        setPremiumData(isPremiumActive ? premiumResponse : null);
       } catch (error) {
         console.error('[TipCallScreen] Error checking premium status:', error);
         setIsPremium(false);
+        setPremiumData(null);
       } finally {
         setPremiumLoading(false);
       }
@@ -882,7 +886,7 @@ export default function TipCallScreen() {
       return null; // Don't show anything while loading
     }
 
-    // Only show if user doesn't have premium
+    // Show upgrade banner if user doesn't have premium
     if (!isPremium) {
       return (
         <View style={[styles.premiumContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
@@ -905,9 +909,32 @@ export default function TipCallScreen() {
           </LinearGradient>
         </View>
       );
+    } else {
+      // Show premium active banner with expiry date
+      return (
+        <View style={[styles.premiumContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+          <LinearGradient
+            colors={['#4CAF50', '#45A049']}
+            style={styles.premiumBanner}
+          >
+            <Text style={styles.crownIcon}>👑</Text>
+            <View style={styles.premiumTextContainer}>
+              <Text style={styles.premiumTitle}>Premium Active</Text>
+              <Text style={styles.premiumSubtitle}>
+                {premiumData?.end_time ? `Expires: ${formatPremiumExpiryDate(premiumData.end_time)}` : 'Enjoying lower call rates'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.upgradeButton}
+              onPress={() => navigation.navigate('SubscriptionScreen' as never)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.upgradeButtonText}>Manage</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      );
     }
-
-    return null; // Don't show anything if user has premium
   };
 
   // Render contact item

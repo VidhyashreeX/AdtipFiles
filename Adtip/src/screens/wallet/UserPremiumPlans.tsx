@@ -7,6 +7,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import WalletService from '../../services/WalletService';
 import ApiService from '../../services/ApiService';
+import { formatPremiumExpiryDate } from '../../utils/dateUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -57,11 +58,10 @@ const UserPremiumPlans: React.FC<{ isPremiumProp?: boolean }> = ({ isPremiumProp
         const premiumResponse = await ApiService.checkPremium(user.id);
         console.log('UserPremiumPlans: Premium check response:', premiumResponse);
         
-        if (premiumResponse && (premiumResponse.status === true || premiumResponse.status === 1)) {
+        // Handle check-premium API response format
+        if (premiumResponse && !premiumResponse.is_premium_expired) {
           setIsPremium(true);
-          if (premiumResponse.data) {
-            setPremiumPlan(premiumResponse.data);
-          }
+          setPremiumPlan(premiumResponse); // Store the direct premium response
         } else {
           setIsPremium(false);
           setPremiumPlan(null);
@@ -181,6 +181,22 @@ const UserPremiumPlans: React.FC<{ isPremiumProp?: boolean }> = ({ isPremiumProp
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 32 }} />
       ) : error ? (
         <Text style={{ color: colors.error, marginTop: 24 }}>{error}</Text>
+      ) : isPremium && premiumPlan && premiumPlan.end_time ? (
+        // Show premium active banner when premium is detected from check-premium API
+        <LinearGradient
+          colors={['#4CAF50', '#45A049']}
+          style={[styles.planBar, { borderColor: '#4CAF50' }]}
+        >
+          <View style={styles.planBarRow}>
+            <Text style={[styles.planName, { color: '#FFFFFF' }]}>✨ Premium Active</Text>
+            <Text style={[styles.status, { color: '#FFFFFF' }]}>ACTIVE</Text>
+          </View>
+          <View style={styles.planBarRow}>
+            <Text style={[styles.expiry, { color: 'rgba(255, 255, 255, 0.9)' }]}>
+              Expires: {formatPremiumExpiryDate(premiumPlan.end_time)}
+            </Text>
+          </View>
+        </LinearGradient>
       ) : plans.length === 0 && !subscription ? (
         <LinearGradient
           colors={GOLD_GRADIENT}

@@ -44,6 +44,7 @@ import { API_BASE_URL, API_ENDPOINTS } from '../../constants/api';
 import ApiService from '../../services/ApiService';
 import UserPremiumPlans from '../wallet/UserPremiumPlans';
 import WalletService from '../../services/WalletService';
+import { formatPremiumExpiryDate } from '../../utils/dateUtils';
 
 // Define navigation param list
 type RootStackParamList = {
@@ -146,6 +147,7 @@ const ProfileScreen: React.FC = () => {
   const [userChannelId, setUserChannelId] = useState<string | null>(null);
   const [isPremium, setIsPremium] = useState<boolean>(false);
   const [premiumLoading, setPremiumLoading] = useState(true);
+  const [premiumData, setPremiumData] = useState<any>(null);
 
   // Additional state for image uploads
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
@@ -445,9 +447,11 @@ const ProfileScreen: React.FC = () => {
           if (premiumResponse && (premiumResponse.status === true || premiumResponse.status === 1)) {
             // User has premium
             setIsPremium(true);
+            setPremiumData(premiumResponse);
           } else {
             // User doesn't have premium or API returned error
             setIsPremium(false);
+            setPremiumData(null);
           }
         } catch (error: any) {
           console.log('ProfileScreen: Error checking premium status:', error);
@@ -457,9 +461,11 @@ const ProfileScreen: React.FC = () => {
           if (errorMessage.toLowerCase().includes('no premium')) {
             console.log('ProfileScreen: User has no premium subscription');
             setIsPremium(false);
+            setPremiumData(null);
           } else {
             console.error('ProfileScreen: Unexpected error checking premium status:', error);
             setIsPremium(false);
+            setPremiumData(null);
           }
         } finally {
           setPremiumLoading(false);
@@ -1041,7 +1047,7 @@ const ProfileScreen: React.FC = () => {
       );
     }
 
-    // If user has premium, show a minimal premium badge
+    // If user has premium, show premium card with expiry date
     return (
       <View style={[styles.premiumContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
         <LinearGradient
@@ -1051,7 +1057,9 @@ const ProfileScreen: React.FC = () => {
           <Text style={styles.premiumActiveIcon}>✨</Text>
           <View style={styles.premiumActiveTextContainer}>
             <Text style={styles.premiumActiveTitle}>Premium Active</Text>
-            <Text style={styles.premiumActiveSubtitle}>Enjoying premium benefits</Text>
+            <Text style={styles.premiumActiveSubtitle}>
+              {premiumData?.end_time ? `Expires: ${formatPremiumExpiryDate(premiumData.end_time)}` : 'Enjoying premium benefits'}
+            </Text>
           </View>
           <TouchableOpacity
             style={styles.manageButton}

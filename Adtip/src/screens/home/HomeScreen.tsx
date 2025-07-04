@@ -34,6 +34,7 @@ import ApiService from '../../services/ApiService';
 import {API_BASE_URL} from '../../constants/api';
 import { usePosts, useLikeMutation, useFollowMutation, usePrefetchData } from '../../hooks/useQueries';
 import { useNetInfo } from '@react-native-community/netinfo';
+import { formatPremiumExpiryDate } from '../../utils/dateUtils';
 
 // Components
 import Header from '../../components/common/Header';
@@ -302,6 +303,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   // Add premium state
   const [isPremium, setIsPremium] = useState<boolean>(false);
   const [premiumLoading, setPremiumLoading] = useState<boolean>(true);
+  const [premiumData, setPremiumData] = useState<any>(null);
 
   // Enhanced data layer using React Query v5 hooks
   const {
@@ -326,8 +328,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
         const premiumResponse: any = await ApiService.checkPremium(user.id);
         const isPremiumActive = !!(premiumResponse && (premiumResponse.status === true || premiumResponse.status === 1));
         setIsPremium(isPremiumActive);
+        setPremiumData(isPremiumActive ? premiumResponse : null);
       } catch (error) {
         setIsPremium(false);
+        setPremiumData(null);
       } finally {
         setPremiumLoading(false);
       }
@@ -490,9 +494,26 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           </LinearGradient>
         </View>
       );
+    } else {
+      // Show premium active banner with expiry date
+      return (
+        <View style={[styles.premiumContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+          <LinearGradient colors={['#4CAF50', '#45A049']} style={styles.premiumBanner}>
+            <Text style={styles.crownIcon}>👑</Text>
+            <View style={styles.premiumTextContainer}>
+              <Text style={styles.premiumTitle}>Premium Active</Text>
+              <Text style={styles.premiumSubtitle}>
+                {premiumData?.end_time ? `Expires: ${formatPremiumExpiryDate(premiumData.end_time)}` : 'Premium Features Unlocked'}
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.upgradeButton} onPress={() => navigation.navigate('SubscriptionScreen' as never)} activeOpacity={0.8}>
+              <Text style={styles.upgradeButtonText}>Manage</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      );
     }
-    return null;
-  }, [premiumLoading, isPremium, isDarkMode, colors, navigation]);
+  }, [premiumLoading, isPremium, premiumData, isDarkMode, colors, navigation]);
 
   // Use categories from API or fallback to static ones
   const displayCategories = categories || staticCategories;
@@ -772,6 +793,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             }}
             postId={selectedCommentPostId}
             userId={user?.id ? Number(user.id) : 0}
+            //@ts-ignore
             initialCommentCount={
               displayPosts.find(post => post.id === selectedCommentPostId)?.commentCount || 0
             }
