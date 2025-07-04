@@ -29,6 +29,7 @@ import { getApps } from '@react-native-firebase/app';
 import messaging from '@react-native-firebase/messaging';
 import mobileAds from 'react-native-google-mobile-ads';
 import { useAppOpenAd } from './src/googleads/AppOpenAdManager';
+import notifee from '@notifee/react-native';
 
 // Contexts
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -206,6 +207,11 @@ const AppNavigator = () => {
     setTimeout(() => {
       (async () => {
         try {
+          // Request Notifee permissions here
+          console.log('[App] Background: Requesting Notifee permissions...');
+          await notifee.requestPermission();
+          console.log('[App] Background: Notifee permissions granted.');
+
           console.log('[App] Background: Initializing Unified Call Service...');
           const unifiedCallService = UnifiedCallService.getInstance();
           

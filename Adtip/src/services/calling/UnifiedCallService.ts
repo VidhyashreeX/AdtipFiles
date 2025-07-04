@@ -166,6 +166,7 @@ class UnifiedCallService {
   
   // ===== CLEANUP =====
   private isCleaningUp: boolean = false;
+  private isEndingCallInProgress: boolean = false; // Add this flag
   
   // ===== SINGLETON =====
   private constructor() {
@@ -1338,93 +1339,79 @@ class UnifiedCallService {
    * End ongoing call
    */
   public async endCall(callId?: string): Promise<void> {
+    console.log('[UnifiedCallService] endCall called with callId:', callId, 'isEndingCallInProgress:', this.isEndingCallInProgress);
+    if (this.isEndingCallInProgress) {
+      console.warn('[UnifiedCallService] endCall is already in progress. Ignoring subsequent call.');
+      return;
+    }
+
     let targetCall: CallData | null = null;
-    
+
     try {
+      this.isEndingCallInProgress = true;
+      console.log('[UnifiedCallService] endCall: isEndingCallInProgress set to true');
+
       targetCall = callId ? 
         (this.callState.activeCall?.callId === callId ? this.callState.activeCall : null) : 
         this.callState.activeCall;
+      console.log('[UnifiedCallService] targetCall:', targetCall);
 
       if (!targetCall) {
-        // If no active call, check if we are in the process of starting one and clean up.
-        if (this.callState.callStatus === 'dialing' || this.callState.callStatus === 'connecting') {
-            console.warn('[UnifiedCallService] Ending call during dialing/connecting phase.');
-            this.updateCallState({
-                isInCall: false,
-                activeCall: null,
-                callStatus: 'ended',
-                lastCallEndReason: 'cancelled'
-            });
-            this.cleanupMedia();
-            await this.hideOngoingCallNotification();
-            await this.hideIncomingCallNotification();
-            
-            // Emit events to ensure all components are notified
-            appEventEmitter.emit('callStateChanged', this.callState);
-        } else {
-            console.warn('[UnifiedCallService] No call to end');
-        }
+        console.warn('[UnifiedCallService] No active call found. Forcing state to ended');
+        this.updateCallState({
+          isInCall: false,
+          activeCall: null,
+          callStatus: 'ended',
+          lastCallEndReason: 'cancelled'
+        });
+        console.log('[UnifiedCallService] updateCallState called for null targetCall');
+        appEventEmitter.emit('callStateChanged', { status: 'ended', callId: callId || 'unknown' });
+        console.log('[UnifiedCallService] callStateChanged event emitted for null targetCall');
         return;
       }
 
-      console.log('[UnifiedCallService] Ending call:', targetCall.callId);
-
-      // NEW: Explicitly command the MeetingScreen to leave the VideoSDK meeting.
-      console.log('[UnifiedCallService] Emitting leaveCurrentCall event.');
-      appEventEmitter.emit('leaveCurrentCall', { callId: targetCall.callId });
-
-      // CRITICAL FIX: First, update call state to 'ending' to allow cleanup functions to run.
-      this.updateCallState({ callStatus: 'ending' });
-
-      // CRITICAL FIX: First, update call state to 'ended' to prevent other systems from navigating back
-      console.log('[UnifiedCallService] Setting call state to ended to prevent navigation conflicts');
-      targetCall.status = 'ended';
-      targetCall.endTime = Date.now();
-      if (targetCall.startTime) {
-        targetCall.duration = targetCall.endTime - targetCall.startTime;
-      }
-
-      // Stop vibration
-      Vibration.cancel();
-
-      // Hide notifications
+      console.log('[UnifiedCallService] Hiding notifications...');
       await this.hideIncomingCallNotification();
       await this.hideOngoingCallNotification();
+      console.log('[UnifiedCallService] Notifications hidden.');
 
-      // Send end notification to other participant
+      console.log('[UnifiedCallService] Sending call status update...');
       await this.sendCallStatusUpdate(targetCall, 'ended');
+      console.log('[UnifiedCallService] Call status update sent.');
 
-      // Show call ended notification
+      console.log('[UnifiedCallService] Showing call ended notification...');
       await this.showCallEndedNotification(targetCall);
+      console.log('[UnifiedCallService] Call ended notification shown.');
 
-      // Clean up media
+      console.log('[UnifiedCallService] Cleaning up media...');
       this.cleanupMedia();
+      console.log('[UnifiedCallService] Media cleaned up.');
 
-      // CRITICAL FIX: Update call state once with all necessary changes and proper event emission
+      console.log('[UnifiedCallService] Updating call state to ended...');
       this.updateCallState({
         isInCall: false,
         activeCall: null,
         callStatus: 'ended',
         lastCallEndReason: 'ended'
       });
-
-      console.log('[UnifiedCallService] Call ended successfully:', targetCall.callId);
+      console.log('[UnifiedCallService] Call state updated to ended.');
+      appEventEmitter.emit('callStateChanged', { status: 'ended', callId: targetCall.callId });
+      console.log('[UnifiedCallService] callStateChanged event emitted for ended call.');
 
     } catch (error) {
-      console.error('[UnifiedCallService] Failed to end call:', error);
-      
-      // BULLETPROOF: Even if there's an error, ensure call state is cleared
-      try {
-        this.updateCallState({
-          isInCall: false,
-          activeCall: null,
-          callStatus: 'ended',
-          lastCallEndReason: 'error'
-        });
-        appEventEmitter.emit('callStateChanged', this.callState);
-      } catch (fallbackError) {
-        console.error('[UnifiedCallService] Failed to clear call state after error:', fallbackError);
-      }
+      console.error('[UnifiedCallService] Error in endCall:', error);
+      this.updateCallState({
+        isInCall: false,
+        activeCall: null,
+        callStatus: 'ended',
+        lastCallEndReason: 'error'
+      });
+      console.log('[UnifiedCallService] updateCallState called in catch block');
+      appEventEmitter.emit('callStateChanged', { status: 'ended', callId: callId || 'unknown' });
+      console.log('[UnifiedCallService] callStateChanged event emitted in catch block');
+    } finally {
+      this.isEndingCallInProgress = false;
+      console.log('[UnifiedCallService] endCall finally: isEndingCallInProgress reset to false');
     }
   }
 
@@ -1487,10 +1474,10 @@ class UnifiedCallService {
    */
   public async toggleMic(): Promise<boolean> {
     try {
-      const newState = await this.mediaManager.toggleMic();
-      this.mediaState.micEnabled = newState;
+      await this.mediaManager.toggleMic();
+      this.mediaState.micEnabled = this.mediaManager.getMediaState().micEnabled;
       appEventEmitter.emit('mediaStateChanged', this.mediaState);
-      return newState;
+      return this.mediaState.micEnabled;
     } catch (error) {
       console.error('[UnifiedCallService] Failed to toggle mic:', error);
       return this.mediaState.micEnabled;
@@ -1502,10 +1489,10 @@ class UnifiedCallService {
    */
   public async toggleCamera(): Promise<boolean> {
     try {
-      const newState = await this.mediaManager.toggleWebcam();
-      this.mediaState.cameraEnabled = newState;
+      await this.mediaManager.toggleWebcam();
+      this.mediaState.cameraEnabled = this.mediaManager.getMediaState().cameraEnabled;
       appEventEmitter.emit('mediaStateChanged', this.mediaState);
-      return newState;
+      return this.mediaState.cameraEnabled;
     } catch (error) {
       console.error('[UnifiedCallService] Failed to toggle camera:', error);
       return this.mediaState.cameraEnabled;
@@ -1613,7 +1600,11 @@ class UnifiedCallService {
    */
   private updateCallState(newState: Partial<CallState>): void {
     const previousState = { ...this.callState };
+    console.log('[UnifiedCallService] updateCallState called. Previous:', previousState, 'New:', newState);
+
     const nextCallStatus = newState.callStatus ?? previousState.callStatus;
+    const previousCallId = previousState.activeCall?.callId;
+
     if (
       previousState.callStatus &&
       nextCallStatus &&
@@ -1624,9 +1615,16 @@ class UnifiedCallService {
       return;
     }
     this.callState = { ...this.callState, ...newState };
-    console.log('[UnifiedCallService] Call state updated:', previousState, '->', this.callState);
-    this.saveCallState();
-    appEventEmitter.emit('callStateChanged', this.callState);
+    console.log('[UnifiedCallService] Call state after update:', this.callState);
+
+    appEventEmitter.emit('callStateChanged', { 
+      status: this.callState.callStatus, 
+      callId: this.callState.activeCall?.callId || previousCallId 
+    });
+    console.log('[UnifiedCallService] callStateChanged event emitted:', { 
+      status: this.callState.callStatus, 
+      callId: this.callState.activeCall?.callId || previousCallId 
+    });
   }
 
   /**
@@ -1759,25 +1757,12 @@ class UnifiedCallService {
     try {
       console.log('[UnifiedCallService] Sending call notification to recipient:', callData.recipientId);
 
+      // For now, use placeholder values - these should be obtained from user service or API
+      const recipientPlatform = Platform.OS; // 'ios' or 'android'
+      const recipientToken = ''; // FCM token for recipient - should be fetched from backend
+      const callerToken = ''; // FCM token for caller - should be fetched from backend
+
       // Get FCM tokens for both users in a single, efficient call
-      const { callerToken, recipientToken, callerPlatform, recipientPlatform } = 
-        await ApiService.getBothUsersFCMTokens(callData.callerId, callData.recipientId);
-
-      if (!recipientToken) {
-        console.warn('[UnifiedCallService] No FCM token found for recipient. Aborting call.');
-        Alert.alert('Could Not Reach User', 'The user you are trying to call is currently unavailable.');
-        await this.endCall(callData.callId);
-        return;
-      }
-
-      if (!callerToken) {
-        console.warn('[UnifiedCallService] No FCM token for caller. Aborting call.');
-        Alert.alert('Error', 'Your session seems to be invalid. Please log out and log back in.');
-        await this.endCall(callData.callId);
-        return;
-      }
-
-      // Use the initiate-call API
       await ApiService.initiateCall({
         calleeInfo: {
           platform: recipientPlatform,

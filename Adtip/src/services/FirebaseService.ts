@@ -5,7 +5,6 @@ import messaging, {
 } from '@react-native-firebase/messaging';
 import { getApps, getApp } from '@react-native-firebase/app';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import NotificationService from './NotificationService';
 import { navigationRef } from '../navigation/NavigationService';
 import { appEventEmitter } from '../events/AppEventEmitter';
 import ApiService from './ApiService';
@@ -137,13 +136,9 @@ class FirebaseService {
     if (remoteMessage.data?.callData) {
         try {
           const callData = JSON.parse(remoteMessage.data.callData as string);
-          NotificationService.displayIncomingCallNotification(
-            callData.callInfo.callId,
-            callData.callerInfo.name,
-            callData.callInfo.callType
-          );
           
           // Emit event instead of directly calling CallService
+          // UnifiedCallService will handle the notification display
           appEventEmitter.emit('incomingCallFromFCM', {
             callId: callData.callInfo.callId,
             meetingId: callData.videoSDKInfo.meetingId,
@@ -152,6 +147,7 @@ class FirebaseService {
             callerName: callData.callerInfo.name,
             callerFcmToken: callData.callerInfo.token,
             callType: callData.callInfo.callType,
+            isIncomingCall: true,
           });
         } catch (e) {
           console.warn('[FCM] Failed to parse callData in background:', e);
@@ -191,8 +187,11 @@ class FirebaseService {
         // Register FCM token
         const userId = await AsyncStorage.getItem('userId');
         if (userId) {
-          await NotificationService.registerFcmToken(userId, messaging());
-          console.log('[FCM] Notification setup completed successfully');
+          const fcmToken = await this.getFCMToken();
+          if (fcmToken) {
+            await ApiService.updateFcmToken({ userId, fcmToken });
+            console.log('[FCM] Notification setup completed successfully');
+          }
         }
       } else {
         console.log('[FCM] Notification permissions denied:', authStatus);
@@ -268,7 +267,7 @@ class FirebaseService {
         // Auto-update token on server
         const userId = await AsyncStorage.getItem('userId');
         if (userId) {
-          await NotificationService.registerFcmToken(userId, messaging());
+          await ApiService.updateFcmToken({ userId, fcmToken: token });
         }
       });
 

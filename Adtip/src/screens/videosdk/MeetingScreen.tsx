@@ -388,10 +388,10 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     return () => {
       appEventEmitter.off('leaveCurrentCall', handleLeaveRequest);
     };
-  }, [leave]); // Dependency on `leave` ensures it's available.
+  }, [leave]); // FIX: Add `leave` as a dependency
 
 
-  // ✅ BULLETPROOF FIX: Explicitly join the meeting on component mount with retry logic
+  // BULLETPROOF FIX: Explicitly join the meeting on component mount with retry logic
   useEffect(() => {
     if (join && !hasJoined && !isJoining && !hasAttemptedJoinRef.current) {
       hasAttemptedJoinRef.current = true;
@@ -488,7 +488,8 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     }
   }, [hasJoined, micOn, webcamOn, callMediaManager]);
 
-
+  /*
+  //Removed due to end call issues
   // BULLETPROOF FIX: Listen for activeCall changes to prevent navigation loops
   // BUT make it less aggressive - only exit if we don't have latched data to work with
   useEffect(() => {
@@ -562,23 +563,31 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
       }, 200); // Increased delay to allow UnifiedCallService to complete its operations
     }
   }, [currentActiveCall, isEndingCall, navigation, leave]);
-
+  */
   // BULLETPROOF: Listen for call state changes from UnifiedCallService
   useEffect(() => {
     const handleCallStateChange = (event: { status: string; callId: string }) => {
-      if (event.status === 'ended' && !isEndingCall && isComponentMountedRef.current) {
-        console.log('[MeetingView] Call ended externally by UnifiedCallService');
+      // Only act if the event is for the current call
+      const currentCallId = latchedCallDataRef.current?.meetingId;
+      if (!currentCallId) return;
+
+      if (event.status === 'ended' && isComponentMountedRef.current) {
+        console.log('[MeetingView] Call ended event received from UnifiedCallService. Navigating away.');
         setCallState('ended');
-        setIsEndingCall(true);
         
-        // Navigate away without calling handleEndCall again
+        // Prevent multiple navigation attempts but allow the first one
+        if (!isEndingCall) {
+          setIsEndingCall(true);
+        }
+        
+        // Navigate away
         setTimeout(() => {
           if (!navigation || !isComponentMountedRef.current) return;
           
           try {
             const currentRoute = navigation.getState()?.routes?.[navigation.getState()?.index || 0]?.name;
             if (currentRoute === 'Meeting') {
-              console.log('[MeetingView] Navigating away due to external call end via callStateChanged');
+              console.log('[MeetingView] Navigating away due to callStateChanged event.');
               if (navigation.canGoBack()) {
                 navigation.goBack();
               } else {
@@ -610,7 +619,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     return () => {
       appEventEmitter.off('callStateChanged', handleCallStateChange);
     };
-  }, [isEndingCall, navigation]);
+  }, [navigation]); // Removed isEndingCall dependency to prevent blocking
 
   // New helper functions for call management
   const startCallDurationTimer = useCallback(() => {
@@ -642,17 +651,23 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
 
   // Handle end call - REFACTORED: Only call UnifiedCallService.endCall and let state events handle navigation/cleanup
   const handleEndCall = useCallback(async () => {
-    if (isEndingCall || isLeavingRef.current) return;
-    isLeavingRef.current = true;
-    setIsEndingCall(true);
+    console.log('[MeetingView] handleEndCall triggered. isEndingCall:', isEndingCall);
+
+    if (isEndingCall) {
+      console.log('[MeetingView] Call is already ending. Ignoring subsequent trigger.');
+      return;
+    }
+
+    setIsEndingCall(true); // Set state immediately to prevent re-entry
+    console.log('[MeetingView] setIsEndingCall(true) called, calling UnifiedCallService.endCall()');
+
     try {
-      const unifiedCallService = UnifiedCallService.getInstance();
-      await unifiedCallService.endCall();
-      // Do not perform any direct cleanup or navigation here.
-      // Navigation and cleanup will be handled by callStateChanged event listeners.
+      await UnifiedCallService.getInstance().endCall();
+      console.log('[MeetingView] UnifiedCallService.endCall() resolved');
+      // Navigation is now handled by the `callStateChanged` event listener.
     } catch (error) {
-      setIsEndingCall(false);
-      isLeavingRef.current = false;
+      console.error('[MeetingView] Error during handleEndCall -> unifiedCallService.endCall():', error);
+      setIsEndingCall(false); 
     }
   }, [isEndingCall]);
 
@@ -1444,30 +1459,37 @@ const MeetingScreen = () => {
 
   // Only navigate away if a true end event is received
   useEffect(() => {
-    if (activeCall && latchedCall && activeCall.callId === latchedCall.callId) {
-      if (['ended', 'missed', 'declined'].includes(activeCall.status)) {
-        // Navigate away if the call is truly ended
-        setTimeout(() => {
-          if (!navigation) return;
-          try {
-            const currentRoute = navigation.getState()?.routes?.[navigation.getState()?.index || 0]?.name;
-            if (currentRoute === 'Meeting') {
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'TipCall' as keyof MainNavigatorParamList }],
-              });
-            }
-          } catch (error) {
-            // Fallback navigation
-            try {
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'TipCall' as keyof MainNavigatorParamList }],
-              });
-            } catch (finalError) {}
+    console.log('[MeetingScreen] activeCall changed:', activeCall, 'latchedCall:', latchedCall);
+    // Navigate away if the call is truly ended or activeCall is null
+    if (
+      (!activeCall) ||
+      (activeCall && ['ended', 'missed', 'declined'].includes(activeCall.status))
+    ) {
+      console.log('[MeetingScreen] Detected call end or activeCall is null. Navigating away from Meeting screen.');
+      setTimeout(() => {
+        if (!navigation) return;
+        try {
+          const currentRoute = navigation.getState()?.routes?.[navigation.getState()?.index || 0]?.name;
+          if (currentRoute === 'Meeting') {
+            console.log('[MeetingScreen] Navigation reset to TipCall.');
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'TipCall' as keyof MainNavigatorParamList }],
+            });
           }
-        }, 200);
-      }
+        } catch (error) {
+          // Fallback navigation
+          try {
+            console.log('[MeetingScreen] Fallback navigation reset to TipCall.');
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'TipCall' as keyof MainNavigatorParamList }],
+            });
+          } catch (finalError) {
+            console.error('[MeetingScreen] Final navigation fallback failed:', finalError);
+          }
+        }
+      }, 200);
     }
   }, [activeCall, latchedCall, navigation]);
 
