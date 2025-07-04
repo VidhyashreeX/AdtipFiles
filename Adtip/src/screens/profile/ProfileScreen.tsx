@@ -59,6 +59,7 @@ type RootStackParamList = {
   Earnings: undefined;
   Packages: undefined;
   ChoosePackages: undefined;
+  Referral: undefined;
 };
 
 // Define navigation type
@@ -717,6 +718,14 @@ const ProfileScreen: React.FC = () => {
       title: 'My Earnings',
       subtitle: 'Track your daily rewards',
       onPress: () => navigation.navigate('Earnings'),
+      active: false,
+    },
+    {
+      id: 'referral',
+      icon: 'users',
+      title: 'Refer & Earn',
+      subtitle: 'Invite friends and earn rewards',
+      onPress: () => navigation.navigate('Referral'),
       active: false,
     },
     {
