@@ -1229,8 +1229,21 @@ class UnifiedCallService {
       console.log('[UnifiedCallService] Outgoing call started:', callData.callId);
       return callData;
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('[UnifiedCallService] Failed to start outgoing call:', error);
+      
+      // ✅ Handle specific FCM token errors
+      if (error.message?.includes('no FCM token')) {
+        // Don't show generic error, let the calling component handle it
+        throw error;
+      } else if (error.message?.includes('Call failed')) {
+        // Re-throw specific call failure messages
+        throw error;
+      } else {
+        // Generic error
+        Alert.alert('Call Failed', 'Could not initiate the call. Please try again later.');
+      }
+      
       return null;
     }
   }
@@ -1759,20 +1772,38 @@ class UnifiedCallService {
     try {
       console.log('[UnifiedCallService] Sending call notification to recipient:', callData.recipientId);
 
-      // For now, use placeholder values - these should be obtained from user service or API
-      const recipientPlatform = Platform.OS; // 'ios' or 'android'
-      const recipientToken = ''; // FCM token for recipient - should be fetched from backend
-      const callerToken = ''; // FCM token for caller - should be fetched from backend
+      // ✅ Actually fetch FCM tokens for both users
+      const { callerToken, recipientToken, callerPlatform, recipientPlatform } = 
+        await ApiService.getBothUsersFCMTokens(callData.callerId, callData.recipientId);
 
-      // Get FCM tokens for both users in a single, efficient call
+      // ✅ Check if recipient has an FCM token
+      if (!recipientToken) {
+        console.warn('[UnifiedCallService] Recipient does not have an FCM token:', callData.recipientId);
+        throw new Error('Recipient is not available for calls (no FCM token)');
+      }
+
+      // ✅ Check if caller has an FCM token
+      if (!callerToken) {
+        console.warn('[UnifiedCallService] Caller does not have an FCM token:', callData.callerId);
+        throw new Error('Unable to initiate call (no caller FCM token)');
+      }
+
+      console.log('[UnifiedCallService] FCM tokens retrieved successfully:', {
+        callerHasToken: !!callerToken,
+        recipientHasToken: !!recipientToken,
+        callerPlatform,
+        recipientPlatform
+      });
+
+      // ✅ Send call notification with actual FCM tokens
       await ApiService.initiateCall({
         calleeInfo: {
           platform: recipientPlatform,
-          token: recipientToken,
+          token: recipientToken, // ✅ Now has actual token
         },
         callerInfo: {
           name: callData.callerName,
-          token: callerToken,
+          token: callerToken, // ✅ Now has actual token
         },
         videoSDKInfo: {
           meetingId: callData.meetingId,
@@ -1782,9 +1813,28 @@ class UnifiedCallService {
 
       console.log('[UnifiedCallService] "initiate-call" notification sent successfully to recipient:', callData.recipientId);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('[UnifiedCallService] Failed to send "initiate-call" notification:', error);
-      Alert.alert('Call Failed', 'Could not initiate the call. Please try again later.');
+      
+      // ✅ Provide specific error messages based on error response
+      if (error.message?.includes('no FCM token')) {
+        // This error will be handled by the calling component to show user-friendly message
+        throw error;
+      } else if (error.response?.status === 400) {
+        // Check if it's a specific FCM token error from backend
+        const errorData = error.response?.data;
+        if (errorData?.error === 'RECIPIENT_NO_FCM_TOKEN') {
+          throw new Error('Recipient is not available for calls (no FCM token)');
+        } else if (errorData?.error === 'CALLER_NO_FCM_TOKEN') {
+          throw new Error('Unable to initiate call (no caller FCM token)');
+        } else {
+          throw new Error('Call failed: Invalid call data or recipient not available');
+        }
+      } else if (error.code === 'NETWORK_ERROR' || error.message?.includes('Network Error')) {
+        throw new Error('Call failed: Network connection error. Please check your internet connection.');
+      } else {
+        throw new Error('Call failed: Could not initiate the call. Please try again later.');
+      }
     }
   }
 

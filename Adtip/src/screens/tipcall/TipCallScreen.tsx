@@ -629,8 +629,25 @@ export default function TipCallScreen() {
     try {
       console.log('[TipCall] Starting WhatsApp-like call to:', recipient.name, 'Type:', callType);
       
+      // ✅ Check if recipient is available before starting call
+      try {
+        console.log('[TipCall] Verifying recipient availability...');
+        const recipientFCMData = await ApiService.getFCMToken(recipient.id.toString());
+        if (!recipientFCMData?.token) {
+          Alert.alert(
+            "Recipient Unavailable", 
+            `${recipient.name} is not available to receive calls right now.`
+          );
+          return;
+        }
+        console.log('[TipCall] Recipient is available for calls');
+      } catch (error) {
+        console.error('[TipCall] Error checking recipient availability:', error);
+        Alert.alert("Error", "Unable to verify recipient availability. Please try again.");
+        return;
+      }
+      
       // Initialize Unified Call Service if not already done
-      const unifiedCallService = UnifiedCallService.getInstance();
       const initialized = await unifiedCallService.initialize();
       
       if (!initialized) {
@@ -654,9 +671,37 @@ export default function TipCallScreen() {
         console.error('[TipCall] WhatsApp Call Manager failed to start the call.');
         Alert.alert('Call Failed', 'Unable to start the call. Please check your connection and try again.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[TipCall] Error in handleStartCall:', error);
-      Alert.alert('Call Error', 'An unexpected error occurred while starting the call. Please try again.');
+      
+      // ✅ Handle specific FCM token errors
+      if (error.message?.includes('no FCM token')) {
+        if (error.message.includes('Recipient')) {
+          Alert.alert(
+            "Recipient Unavailable", 
+            `${recipient.name} is not available to receive calls right now.`
+          );
+        } else if (error.message.includes('Caller')) {
+          Alert.alert(
+            "Call Error", 
+            "Unable to initiate call. Please check your internet connection and try again."
+          );
+        } else {
+          Alert.alert(
+            "Call Error", 
+            "Unable to initiate call. Please try again later."
+          );
+        }
+      } else if (error.message?.includes('Network connection error')) {
+        Alert.alert(
+          "Network Error", 
+          "Please check your internet connection and try again."
+        );
+      } else if (error.message?.includes('Call failed')) {
+        Alert.alert("Call Failed", error.message.replace('Call failed: ', ''));
+      } else {
+        Alert.alert('Call Error', 'An unexpected error occurred while starting the call. Please try again.');
+      }
     }
   }, [user]);
 
