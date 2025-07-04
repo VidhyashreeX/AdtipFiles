@@ -16,12 +16,13 @@ import {
   Dimensions,
   Image,
   Alert,
+  Share,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 // Import Lucide React Native icons
-import { PlayCircle, Gamepad2, WifiOff } from 'lucide-react-native';
+import { PlayCircle, Gamepad2, WifiOff, Share2 } from 'lucide-react-native';
 import CommentsBottomSheet from '../../components/commentsbottomsheet/CommentsBottomSheet';
 
 // Enhanced Contexts & Services
@@ -296,6 +297,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const [selectedCommentPostId, setSelectedCommentPostId] = useState<number | null>(null);
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [isGloballyMuted, setIsGloballyMuted] = useState(true);
 
   // Add premium state
   const [isPremium, setIsPremium] = useState<boolean>(false);
@@ -601,6 +603,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     setVisiblePostIds(currentVisibleIds);
   }, []);
 
+  const handleToggleGlobalMute = useCallback(() => {
+    setIsGloballyMuted(prev => !prev);
+  }, []);
+
   // Render post item with enhanced data handling
   const renderPostItem = useCallback(({ item, index }: { item: Post; index: number }) => {
     const isVisible = visiblePostIds.includes(item.id);
@@ -630,9 +636,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           userId={item.user_id}
           isVisible={isVisible}
           last_active={item.last_active}
+          isGloballyMuted={isGloballyMuted}
+          onToggleGlobalMute={handleToggleGlobalMute}
           onLike={handlePostLike}
           onComment={handleCommentPress}
-          onShare={(postId: number) => console.log('Share post:', postId)}
+          onShare={(postId: number) => {
+            const deepLink = `https://adtip.in/tiptube?videoId=${postId}`;
+            Share.share({ message: `Check out this video: ${deepLink}` });
+          }}
           onPostPress={(postId: number) => console.log('Post pressed:', postId)}
           onUserPress={handleUserProfilePress}
           onFollow={handleUserFollow}
@@ -651,7 +662,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
         )}
       </>
     );
-  }, [visiblePostIds, getTimeAgo, handlePostLike, handleCommentPress, handleUserProfilePress, handleUserFollow, debugVideoIssues, styles]);
+  }, [visiblePostIds, getTimeAgo, handlePostLike, handleCommentPress, handleUserProfilePress, handleUserFollow, debugVideoIssues, styles, isGloballyMuted, handleToggleGlobalMute]);
 
   // Render empty state
   const renderEmptyState = useCallback(() => {

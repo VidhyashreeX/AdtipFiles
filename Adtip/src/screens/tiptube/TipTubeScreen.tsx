@@ -15,12 +15,14 @@ import {
   SafeAreaView,
   Switch,
   Modal,
+  Share,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
 import RazorpayCheckout from 'react-native-razorpay';
+import { Share2 } from 'lucide-react-native';
 
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
@@ -115,6 +117,8 @@ const TipTubeScreen = () => {
   const { clearCache } = useDataContext();
   const navigation = useNavigation<any>();
   const netInfo = useNetInfo();
+  const route = useRoute();
+  const videoId: string | undefined = (route.params && typeof route.params === 'object' && 'videoId' in route.params) ? String((route.params as any).videoId) : undefined;
 
   // UI state management (decoupled from navigation)
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -158,11 +162,26 @@ const TipTubeScreen = () => {
   // Prefetch data for better performance
   const { prefetchProfile } = usePrefetchData();
 
+  // Define or use existing fetch logic
+  const fetchVideoById = async (id: string | number) => {
+    // Implement logic to fetch and set the video by id
+    // If you already have this logic, use it here
+  };
+  const fetchFeed = async () => {
+    // Implement logic to fetch the feed
+    // If you already have this logic, use it here
+  };
+
   // Fetch data on initial mount
   useEffect(() => {
-    console.log('[TipTubeScreen] Component mounted. Triggering initial fetch.');
-    refreshVideos();
-  }, []); // Runs only once
+    if (videoId) {
+      fetchVideoById(videoId).then(() => {
+        fetchFeed();
+      });
+    } else {
+      fetchFeed();
+    }
+  }, [videoId]);
 
   // Refetch data on subsequent screen focuses
   useFocusEffect(
@@ -529,6 +548,12 @@ const TipTubeScreen = () => {
           <BannerAdComponent />
         </View>
       )}
+      <TouchableOpacity onPress={() => {
+        const deepLink = `https://adtip.in/tiptube?videoId=${item.id}`;
+        Share.share({ message: `Check out this video: ${deepLink}` });
+      }}>
+        <Share2 size={20} color={colors.primary} />
+      </TouchableOpacity>
     </>
   ), [handleVideoPress, selectedVideoId, previewingVideoId, styles, colors, navigation, toggleComments]);
 

@@ -16,7 +16,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Feather';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_BASE_URL } from '../../constants/api';
@@ -39,11 +39,13 @@ interface Post {
   media_type?: string;
 }
 
-const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ userId: initialUserId }) => {
+const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
   const { colors, isDarkMode } = useTheme();
   const { user: currentUser } = useAuth();
   const navigation = useNavigation();
-  const [userId, setUserId] = useState(initialUserId);
+  const route = useRoute();
+  const userIdFromParams = route.params && typeof route.params === 'object' && 'userId' in route.params ? Number(route.params.userId) : undefined;
+  const [userId, setUserId] = useState<number>(userIdFromParams ?? props.userId ?? 0);
   const [user, setUser] = useState<any>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [followersCount, setFollowersCount] = useState(0);
@@ -60,6 +62,12 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ userId: initialUs
   const [unreadCount, setUnreadCount] = useState(0);
 
   const isOwnProfile = currentUser?.id === userId;
+
+  useEffect(() => {
+    if (userIdFromParams && userIdFromParams !== userId) {
+      setUserId(userIdFromParams);
+    }
+  }, [userIdFromParams]);
 
   // Imported functionality from TipCallScreen
   const handleStartCall = useCallback(async (callType: 'voice' | 'video') => {

@@ -13,6 +13,7 @@ import {
   Image,
   StyleSheet,
   ViewToken,
+  Share,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -33,6 +34,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import Video from 'react-native-video';
+import { Share2 } from 'lucide-react-native';
 
 // Contexts and hooks
 import { useAuth } from '../../contexts/AuthContext';
@@ -55,6 +57,7 @@ type ShortVideo = TanStackShortVideo;
 type TipShortsRouteParams = {
   shorts?: ShortVideo[];
   startIndex?: number;
+  shortId?: string;
 };
 
 type TipShortsRouteProp = RouteProp<{ params: TipShortsRouteParams }, 'params'>;
@@ -344,8 +347,25 @@ const TipShortsEnhanced = () => {
   } = useShorts();
   const insets = useSafeAreaInsets();
 
-  const passedShorts = route.params?.shorts;
-  const startIndex = route.params?.startIndex ?? 0;
+  // Safe parameter destructuring to prevent undefined access
+  const { shorts: passedShorts, startIndex = 0, shortId } = route.params || {};
+
+  // Debug logging for route params
+  useEffect(() => {
+    if (__DEV__) {
+      console.log('[TipShortsEnhanced] Route params:', {
+        passedShorts: passedShorts?.length || 0,
+        startIndex,
+        shortId,
+        hasParams: !!route.params
+      });
+      
+      // Additional deep link logging
+      if (shortId) {
+        console.log('[TipShortsEnhanced] Deep link detected for shortId:', shortId);
+      }
+    }
+  }, [route.params, passedShorts, startIndex, shortId]);
 
   // TanStack Query hooks
   const {
@@ -374,9 +394,13 @@ const TipShortsEnhanced = () => {
 
   // Flatten data from TanStack Query
   const shorts: ShortVideo[] = useMemo(() => {
-    if (passedShorts) return passedShorts;
-    return data?.pages.flat() || [];
+    if (passedShorts && passedShorts.length > 0) return passedShorts;
+    return data?.pages?.flat() || [];
   }, [data?.pages, passedShorts]);
+
+  useEffect(() => {
+    console.log('[TipShortsEnhanced] shorts array:', shorts);
+  }, [shorts]);
 
   // Viewability config for video control
   const viewabilityConfig = {
@@ -507,6 +531,57 @@ const TipShortsEnhanced = () => {
       }
     };
   }, [navigation, setGlobalPlayState]);
+
+  // Implement scroll to specific short for deep linking
+  const scrollToShort = useCallback((id: string) => {
+    if (!id || !shorts || shorts.length === 0 || !flatListRef.current) {
+      console.warn('[TipShortsEnhanced] Cannot scroll to short: missing data or refs');
+      return;
+    }
+
+    const index = shorts.findIndex(s => s.id === id);
+    if (index !== -1) {
+      console.log(`[TipShortsEnhanced] Scrolling to short ${id} at index ${index}`);
+      setActiveIndex(index);
+      try {
+        flatListRef.current.scrollToIndex({
+          index,
+          animated: true, // Changed to true for better UX
+        });
+      } catch (error) {
+        console.warn('[TipShortsEnhanced] Error scrolling to index:', error);
+        // Fallback to offset-based scrolling
+        flatListRef.current.scrollToOffset({
+          offset: index * SCREEN_HEIGHT,
+          animated: true, // Changed to true for better UX
+        });
+      }
+    } else {
+      console.warn(`[TipShortsEnhanced] Deep linked short with id ${id} not found in the current list.`);
+      // If the specific short isn't in the current list, we could potentially
+      // implement a search or fetch specific short functionality here
+    }
+  }, [shorts]);
+
+  // Enhanced deep link handling with better timing
+  useEffect(() => {
+    if (shortId && shorts.length > 0) {
+      // Add a small delay to ensure the list is fully rendered
+      const timer = setTimeout(() => {
+        scrollToShort(shortId);
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [shortId, scrollToShort, shorts.length]);
+
+  // Defensive: If shorts is empty after deep link, trigger a refetch
+  useEffect(() => {
+    if ((!shorts || shorts.length === 0) && !isLoading && !error) {
+      console.log('[TipShortsEnhanced] No shorts available, triggering refetch');
+      refetch();
+    }
+  }, [shorts, isLoading, error, refetch]);
 
   // Render loading state
   if (isLoading && shorts.length === 0) {

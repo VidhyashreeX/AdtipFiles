@@ -11,8 +11,7 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import Video from 'react-native-video';
-import Icon from 'react-native-vector-icons/Feather';
-import { Heart, MessageCircle, Share2, UserPlus } from 'lucide-react-native';
+import { Heart, MessageCircle, Share2, UserPlus, Play, Pause, VolumeX, Volume2, AlertTriangle, Image as ImageIcon } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { 
   createSecureImageSource, 
@@ -45,6 +44,8 @@ interface PostItemProps {
   userId: number;
   isVisible?: boolean;
   last_active?: string | null;
+  isGloballyMuted?: boolean;
+  onToggleGlobalMute?: () => void;
 }
 
 // Function to calculate relative time
@@ -89,10 +90,11 @@ const PostItem: React.FC<PostItemProps> = ({
   userId,
   isVisible = false,
   last_active,
+  isGloballyMuted = true,
+  onToggleGlobalMute = () => {},
 }) => {
   const {colors, isDarkMode} = useTheme();
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
   const [videoLoading, setVideoLoading] = useState(true);
   const [showControls, setShowControls] = useState(false);
   const [videoDuration, setVideoDuration] = useState(0);
@@ -208,9 +210,9 @@ const PostItem: React.FC<PostItemProps> = ({
 
   const toggleMute = useCallback(() => {
     if (media_type === 'video') {
-      setIsMuted(prev => !prev);
+      onToggleGlobalMute();
     }
-  }, [media_type]);
+  }, [media_type, onToggleGlobalMute]);
 
   const handleVideoLoadStart = useCallback(() => {
     console.log(`[PostItem ${id}] Video load started`);
@@ -322,7 +324,7 @@ const PostItem: React.FC<PostItemProps> = ({
                     resizeMode="cover"
                     repeat={true}
                     paused={!isPlaying} // Instant pause/play response
-                    muted={isMuted}
+                    muted={isGloballyMuted}
                     onLoadStart={handleVideoLoadStart}
                     onLoad={handleVideoLoad}
                     onProgress={handleVideoProgress}
@@ -349,16 +351,20 @@ const PostItem: React.FC<PostItemProps> = ({
                   )}
                   {(showControls || !isPlaying || !isVisible) && !videoLoading && (
                     <TouchableOpacity onPress={togglePlayPause} style={styles.videoControlOverlay}>
-                      <Icon 
-                        name={isPlaying && isVisible ? 'pause-circle' : 'play-circle'} 
-                        size={50} 
-                        color="white" 
-                      />
+                      {isPlaying && isVisible ? (
+                        <Pause size={50} color="white" />
+                      ) : (
+                        <Play size={50} color="white" fill="white" />
+                      )}
                     </TouchableOpacity>
                   )}
                   {(showControls || !isPlaying) && !videoLoading && isVisible && (
                     <TouchableOpacity onPress={toggleMute} style={styles.muteButton}>
-                      <Icon name={isMuted ? 'volume-x' : 'volume-2'} size={24} color="white" />
+                      {isGloballyMuted ? (
+                        <VolumeX size={24} color="white" />
+                      ) : (
+                        <Volume2 size={24} color="white" />
+                      )}
                     </TouchableOpacity>
                   )}
                   {!isVisible && (
@@ -372,7 +378,7 @@ const PostItem: React.FC<PostItemProps> = ({
             
             {media_type === 'video' && videoError && (
               <View style={styles.errorMedia}>
-                <Icon name="alert-triangle" size={50} color={colors.danger || '#FF0000'} />
+                <AlertTriangle size={50} color={colors.danger || '#FF0000'} />
                 <Text style={[styles.errorText, {color: colors.text.secondary}]}>
                   No media found
                 </Text>
@@ -381,7 +387,7 @@ const PostItem: React.FC<PostItemProps> = ({
             
             {!postImage && (
               <View style={[styles.placeholderMedia, { backgroundColor: colors.surface }]}>
-                <Icon name="image" size={50} color={colors.text.tertiary || '#CCCCCC'} />
+                <ImageIcon size={50} color={colors.text.tertiary || '#CCCCCC'} />
                 <Text style={[styles.placeholderText, { color: colors.text.tertiary }]}>No media</Text>
               </View>
             )}

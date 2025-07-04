@@ -83,6 +83,29 @@ const ThemeAwareStatusBar = () => {
   );
 };
 
+// Define deep linking config
+const linking = {
+  prefixes: ['adtip://', 'https://adtip.com'],
+  config: {
+    screens: {
+      Main: {
+        screens: {
+          TipTube: 'tiptube',
+          TipShorts: {
+            path: 'tipshorts/:shortId',
+            parse: { shortId: (id: string) => id },
+          },
+          Profile: {
+            path: 'user/:userId',
+            parse: { userId: (id: string) => Number(id) },
+          },
+          // Add more screens as needed
+        },
+      },
+    },
+  },
+};
+
 // AppNavigator with Services - Ultra Fast with Authentication-aware UltraFastLoader
 const AppNavigator = () => {
   const { isAuthenticated, isInitialized, user } = useAuth();
@@ -142,8 +165,6 @@ const AppNavigator = () => {
   useEffect(() => {
     // Initialize all services as ready immediately for ultra-fast app start
     setFirebaseReady(true);
-    setVideoSDKReady(true);
-    setUnifiedCallServiceReady(true);
     
     console.log('[App] All services marked as ready for instant app start');
   }, []);
@@ -323,9 +344,10 @@ const AppNavigator = () => {
 
   // Only show UserDetails screen if authenticated but missing user name
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} linking={linking} fallback={<Text>Loading...</Text>}>
       <RootStack.Navigator screenOptions={{ headerShown: false }}>
         <RootStack.Screen name="UserDetails" component={UserDetailsScreen} />
+        <RootStack.Screen name="Main" component={MainNavigator} />
       </RootStack.Navigator>
     </NavigationContainer>
   );

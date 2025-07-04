@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
 import Icon from 'react-native-vector-icons/Feather';
-import { type ShortVideo } from '../../hooks/useShortsQuery';
+import { type ShortVideo } from '../../../hooks/useShortsQuery';
+import { Share2 } from 'lucide-react-native';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -173,7 +174,6 @@ const AnimatedLikeButton = memo(({
           name="heart" 
           size={24} 
           color={isLiked ? "#FFFFFF" : "#FFFFFF"}
-          fill={isLiked ? "#FFFFFF" : "none"}
         />
       </View>
       
@@ -329,17 +329,22 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
               activeOpacity={0.7}
               onPress={async () => {
                 try {
-                  await Share.share({
-                    message: `Check out this amazing short by ${item.channel.name}! 🎥`,
-                    url: item.videoUrl,
-                  });
+                  const deepLink = `https://adtip.in/tipshorts/${item.id}`;
+                  const shareContent = {
+                    message: `Check out this amazing short video by ${item.channel.name}! ${deepLink}`,
+                    url: deepLink,
+                    title: `${item.channel.name} - Short Video`,
+                  };
+                  
+                  await Share.share(shareContent);
+                  console.log('[EnhancedShortCard] Successfully shared deep link:', deepLink);
                 } catch (error) {
-                  console.error('Error sharing:', error);
+                  console.error('[EnhancedShortCard] Error sharing:', error);
                 }
               }}
             >
               <View style={styles.actionIconContainer}>
-                <Icon name="share-2" size={24} color="#FFF" />
+                <Share2 size={24} color="#FFF" />
               </View>
               <Text style={styles.actionText}>Share</Text>
             </TouchableOpacity>
