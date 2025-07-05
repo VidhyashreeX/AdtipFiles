@@ -1,6 +1,7 @@
 import { AppOpenAd, AdEventType, TestIds } from 'react-native-google-mobile-ads';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, AppState, AppStateStatus } from 'react-native';
+import UnifiedCallService from '../services/calling/UnifiedCallService';
 
 // Test Ad Unit ID (for development/testing)
 const TEST_APP_OPEN_AD_UNIT_ID = TestIds.APP_OPEN; // Official Google test ID for app open ads
@@ -89,6 +90,15 @@ export function useAppOpenAd() {
         nextAppState === 'active' && 
         !isAdCurrentlyShowing
       ) {
+        // ✅ FIX: Check if a call is in progress before showing an ad
+        const callService = UnifiedCallService.getInstance();
+        const callState = callService.getCallState();
+
+        if (callState.isInCall) {
+          console.log('[AppOpenAdManager] Suppressing ad because a call is active.');
+          return;
+        }
+
         console.log('App came to foreground, showing app open ad immediately');
         hasShownOnThisSession = false; // Reset session flag for new foreground session
         // Show immediately on foreground - user must "continue to app"
@@ -207,4 +217,4 @@ export function useAppOpenAd() {
     forceLoadAd, // Force reload an ad
     isAdCurrentlyShowing: adVisible // Current showing state
   };
-} 
+}
