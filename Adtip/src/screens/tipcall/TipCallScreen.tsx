@@ -371,6 +371,7 @@ export default function TipCallScreen() {
   const [languageFilter, setLanguageFilter] = useState<number>(0);
   const [categoryFilter, setCategoryFilter] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isTipCallSearchActive, setIsTipCallSearchActive] = useState<boolean>(false);
   const [isDndEnabled, setIsDndEnabled] = useState<boolean>(false);
   const [isDndLoading, setIsDndLoading] = useState<boolean>(false);
   const [unreadCounts, setUnreadCounts] = useState<{ [key: number]: number }>({});
@@ -578,16 +579,29 @@ export default function TipCallScreen() {
     queryClient.invalidateQueries({ queryKey: ['users'] });
   }, [queryClient]);
 
-  // Search handler - for header search functionality
-  const handleSearch = useCallback((query: string) => {
-    console.log('[TipCall] Search query:', query);
+  // TipCall search handlers
+  const handleTipCallSearch = useCallback((query: string) => {
+    console.log('[TipCall] TipCall search submitted:', query);
     setSearchQuery(query);
+    setIsTipCallSearchActive(false);
   }, []);
+
+  const handleTipCallSearchChange = useCallback((query: string) => {
+    console.log('[TipCall] TipCall search query changed:', query);
+    setSearchQuery(query || '');
+  }, []);
+
+  const handleTipCallSearchSubmit = useCallback(() => {
+    if (searchQuery && searchQuery.trim()) {
+      handleTipCallSearch(searchQuery.trim());
+    }
+  }, [searchQuery, handleTipCallSearch]);
 
   // Clear search handler
   const handleClearSearch = useCallback(() => {
     console.log('[TipCall] Clearing search');
     setSearchQuery('');
+    setIsTipCallSearchActive(false);
   }, []);
 
   // DND (Do Not Disturb) Toggle Handler with confirmation
@@ -1021,44 +1035,38 @@ export default function TipCallScreen() {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar backgroundColor={colors.background} barStyle={isDarkMode ? "light-content" : "dark-content"} />
         
-        {/* Updated Header with DND button in the same row */}
+        {/* Updated Header with TipCall search functionality */}
         <Header 
           title="" 
           showWallet={false}
           showSearch={false}
+          centerComponent={
+            isTipCallSearchActive ? (
+              <View style={styles.tipCallSearchContainer}>
+                <TextInput
+                  style={[styles.tipCallSearchInput, { color: colors.text.primary, borderColor: colors.border }]}
+                  placeholder="Search users..."
+                  placeholderTextColor={colors.text.secondary}
+                  value={searchQuery || ''}
+                  onChangeText={handleTipCallSearchChange}
+                  onSubmitEditing={handleTipCallSearchSubmit}
+                  autoFocus={true}
+                  returnKeyType="search"
+                />
+                <TouchableOpacity 
+                  onPress={() => setIsTipCallSearchActive(false)}
+                  style={styles.tipCallSearchClearButton}
+                >
+                  <Icon name="x" size={16} color={colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
+            ) : undefined
+          }
           rightComponent={
             <View style={styles.headerRightContainer}>
-              {/* Search Icon - Search for users */}
+              {/* TipCall Search Icon */}
               <TouchableOpacity
-                onPress={() => {
-                  // Prompt user for search input
-                  Alert.prompt(
-                    'Search Users',
-                    'Enter name or user ID to search:',
-                    [
-                      {
-                        text: 'Cancel',
-                        style: 'cancel',
-                      },
-                      {
-                        text: 'Search',
-                        onPress: (text) => {
-                          if (text && text.trim()) {
-                            handleSearch(text.trim());
-                          }
-                        },
-                      },
-                      {
-                        text: 'Clear',
-                        onPress: () => {
-                          handleClearSearch();
-                        },
-                      },
-                    ],
-                    'plain-text',
-                    searchQuery
-                  );
-                }}
+                onPress={() => setIsTipCallSearchActive(true)}
                 style={[styles.headerIconButton, { marginRight: 12 }]}
               >
                 <Icon name="search" size={20} color={colors.text.primary} />
@@ -1172,6 +1180,19 @@ export default function TipCallScreen() {
             </ScrollView>
           </View>
         </View>
+
+        {/* Search Indicator */}
+        {searchQuery && searchQuery.trim() && (
+          <View style={styles.searchIndicator}>
+            <Icon name="search" size={16} color={colors.primary} />
+            <Text style={[styles.searchIndicatorText, {color: colors.primary}]}>
+              Search results for "{searchQuery.trim()}"
+            </Text>
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Icon name="x" size={16} color={colors.text.secondary} />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Content Section */}
         <View style={styles.contentSection}>
@@ -1685,6 +1706,44 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+
+  // TipCall Search Styles
+  tipCallSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingHorizontal: 12,
+  },
+  tipCallSearchInput: {
+    flex: 1,
+    height: 36,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    backgroundColor: '#F8F9FA',
+  },
+  tipCallSearchClearButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+
+  // Search Indicator Styles
+  searchIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F8F9FA',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E7EB',
+  },
+  searchIndicatorText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
+    flex: 1,
   },
 });
 
