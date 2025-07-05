@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useCallback} from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,13 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
+import {useNotifications, useUnreadNotificationCount, useMarkNotificationAsRead, useMarkAllNotificationsAsRead} from '../../hooks/useQueries';
+import {useAuth} from '../../contexts/AuthContext';
 
 interface Notification {
   id: string;
@@ -24,63 +27,14 @@ interface Notification {
 
 const NotificationScreen: React.FC = () => {
   const {colors} = useTheme();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const {user} = useAuth();
+  const userId = user?.id || 0;
 
-  useEffect(() => {
-    loadNotifications();
-  }, []);
-
-  const loadNotifications = () => {
-    // Simulate API call
-    setTimeout(() => {
-      const mockNotifications: Notification[] = [
-        {
-          id: '1',
-          title: 'New Like',
-          message: 'John liked your post',
-          type: 'like',
-          timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
-          isRead: false,
-        },
-        {
-          id: '2',
-          title: 'New Comment',
-          message: 'Sarah commented on your video',
-          type: 'comment',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-          isRead: true,
-        },
-        {
-          id: '3',
-          title: 'New Follower',
-          message: 'Mike started following you',
-          type: 'follow',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-          isRead: false,
-        },
-        {
-          id: '4',
-          title: 'Reward Earned',
-          message: 'You earned $5.00 from ad completion',
-          type: 'reward',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2), // 2 days ago
-          isRead: true,
-        },
-        {
-          id: '5',
-          title: 'System Update',
-          message: 'New features are now available',
-          type: 'system',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3), // 3 days ago
-          isRead: true,
-        },
-      ];
-
-      setNotifications(mockNotifications);
-      setIsLoading(false);
-    }, 1000);
-  };
+  // TanStack Query hooks
+  const notificationsQuery = useNotifications(userId);
+  const unreadCountQuery = useUnreadNotificationCount(userId);
+  const markAsReadMutation = useMarkNotificationAsRead();
+  const markAllAsReadMutation = useMarkAllNotificationsAsRead();
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -136,23 +90,18 @@ const NotificationScreen: React.FC = () => {
     }
   };
 
-  const markAsRead = (notificationId: string) => {
-    setNotifications(prev =>
-      prev.map(notification =>
-        notification.id === notificationId
-          ? {...notification, isRead: true}
-          : notification,
-      ),
-    );
-  };
+  const markAsRead = useCallback((notificationId: string) => {
+    markAsReadMutation.mutate({
+      userId,
+      notificationId: parseInt(notificationId)
+    });
+  }, [markAsReadMutation, userId]);
 
-  const markAllAsRead = () => {
-    setNotifications(prev =>
-      prev.map(notification => ({...notification, isRead: true})),
-    );
-  };
+  const markAllAsRead = useCallback(() => {
+    markAllAsReadMutation.mutate(userId);
+  }, [markAllAsReadMutation, userId]);
 
-  const deleteNotification = (notificationId: string) => {
+  const deleteNotification = useCallback((notificationId: string) => {
     Alert.alert(
       'Delete Notification',
       'Are you sure you want to delete this notification?',
@@ -162,16 +111,15 @@ const NotificationScreen: React.FC = () => {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            setNotifications(prev =>
-              prev.filter(notification => notification.id !== notificationId),
-            );
+            // TODO: Implement delete notification API
+            console.log('Delete notification:', notificationId);
           },
         },
       ],
     );
-  };
+  }, []);
 
-  const handleNotificationPress = (notification: Notification) => {
+  const handleNotificationPress = useCallback((notification: Notification) => {
     if (!notification.isRead) {
       markAsRead(notification.id);
     }
@@ -181,14 +129,33 @@ const NotificationScreen: React.FC = () => {
       // Navigate to specific screen
       console.log('Navigate to:', notification.actionUrl);
     }
+  }, [markAsRead]);
+
+  // Transform API data to match our interface
+  const transformNotifications = (apiData: any[]): Notification[] => {
+    return apiData.map(item => ({
+      id: item.id?.toString() || '',
+      title: item.title || item.type || 'Notification',
+      message: item.message || item.content || '',
+      type: item.type || 'system',
+      timestamp: new Date(item.created_at || item.timestamp || Date.now()),
+      isRead: item.is_read || item.read || false,
+      actionUrl: item.action_url || item.url,
+    }));
   };
+
+  const notifications = notificationsQuery.data?.pages?.flatMap(page => 
+    transformNotifications(page?.data || [])
+  ) || [];
+
+  const unreadCount = unreadCountQuery.data?.unread_count || 0;
 
   const renderNotification = ({item}: {item: Notification}) => (
     <TouchableOpacity
       style={[
         styles.notificationItem,
         {backgroundColor: item.isRead ? 'transparent' : colors.surface},
-        {borderBottomColor: colors.border.light},
+        {borderBottomColor: colors.border},
       ]}
       onPress={() => handleNotificationPress(item)}
       onLongPress={() => deleteNotification(item.id)}>
@@ -222,7 +189,19 @@ const NotificationScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const renderFooter = () => {
+    if (notificationsQuery.isFetchingNextPage) {
+      return (
+        <View style={styles.loadingMoreContainer}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={[styles.loadingMoreText, {color: colors.text.secondary}]}>
+            Loading more...
+          </Text>
+        </View>
+      );
+    }
+    return null;
+  };
 
   return (
     <SafeAreaView
@@ -233,9 +212,10 @@ const NotificationScreen: React.FC = () => {
           unreadCount > 0 ? (
             <TouchableOpacity
               onPress={markAllAsRead}
-              style={styles.markAllButton}>
+              style={styles.markAllButton}
+              disabled={markAllAsReadMutation.isPending}>
               <Text style={[styles.markAllText, {color: colors.primary}]}>
-                Mark all read
+                {markAllAsReadMutation.isPending ? 'Marking...' : 'Mark all read'}
               </Text>
             </TouchableOpacity>
           ) : null
@@ -255,8 +235,9 @@ const NotificationScreen: React.FC = () => {
         </View>
       )}
 
-      {isLoading ? (
+      {notificationsQuery.isLoading ? (
         <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, {color: colors.text.secondary}]}>
             Loading notifications...
           </Text>
@@ -268,6 +249,9 @@ const NotificationScreen: React.FC = () => {
           keyExtractor={item => item.id}
           style={styles.notificationsList}
           showsVerticalScrollIndicator={false}
+          onEndReached={() => notificationsQuery.fetchNextPage()}
+          onEndReachedThreshold={0.1}
+          ListFooterComponent={renderFooter}
         />
       ) : (
         <View style={styles.emptyContainer}>
@@ -354,6 +338,15 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
+    marginTop: 8,
+  },
+  loadingMoreContainer: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  loadingMoreText: {
+    fontSize: 14,
+    marginTop: 8,
   },
   emptyContainer: {
     flex: 1,

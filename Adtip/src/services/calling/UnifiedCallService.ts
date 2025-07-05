@@ -895,13 +895,33 @@ class UnifiedCallService {
     try {
       const { notification, pressAction } = detail;
       const callId = notification?.data?.callId;
-
+      console.log('[UnifiedCallService] Notification event received:', {
+        type,
+        pressAction: pressAction?.id,
+        callId,
+        hasActiveCall: !!this.callState.activeCall,
+        appState: this.appState,
+      });
+      
       if ((type === EventType.ACTION_PRESS || type === EventType.PRESS) && pressAction) {
         switch (pressAction.id) {
           case 'accept_call':
+            if (!this.callState.activeCall) {
+              console.warn('[UnifiedCallService] No active call to accept');
+              return;
+            }
+            // Stop vibration immediately
+            Vibration.cancel();
+            // Hide notification immediately to improve UX
+            await this.hideIncomingCallNotification();
+            // Accept the call
             await this.acceptCall(callId);
             break;
           case 'decline_call':
+            if (!this.callState.activeCall) {
+              console.warn('[UnifiedCallService] No active call to decline');
+              return;
+            }
             await this.declineCall(callId);
             break;
           case 'end_call':
@@ -918,29 +938,57 @@ class UnifiedCallService {
           case 'speaker_toggle':
             await this.toggleSpeaker();
             break;
+          default:
+            console.warn('[UnifiedCallService] Unknown notification action:', pressAction.id);
         }
       }
     } catch (error) {
       console.error('[UnifiedCallService] Error handling notification event:', error);
+      // Add extra protection against crashes
+      if (this.callState.activeCall) {
+        this.hideIncomingCallNotification().catch(() => {});
+      }
     }
   }
 
   /**
    * Handle FCM call notification
    */
-  private async handleFCMCallNotification(remoteMessage: FirebaseMessagingTypes.RemoteMessage): Promise<void> {
+  public async handleFCMCallNotification(remoteMessage: FirebaseMessagingTypes.RemoteMessage): Promise<void> {
     try {
       const { data } = remoteMessage;
-      if (!data || !data.type) return;
+      if (!data) return;
 
-      console.log('[UnifiedCallService] Processing FCM call notification:', data.type);
+      console.log('[UnifiedCallService] Processing FCM call notification:', data);
 
-      if (data.type === 'CALL_INITIATION' || data.type === 'call') {
-        await this.handleIncomingFCMCall(data);
-      } else if (data.type === 'CALL_ACCEPTED') {
-        await this.handleCallAcceptedFCM(data);
-      } else if (data.type === 'CALL_ENDED') {
-        await this.handleCallEndedFCM(data);
+      // ✅ FIX: Parse the info field first to get the actual type
+      let callType = data.type;
+      let parsedInfo = null;
+
+      if (typeof data.info === 'string') {
+        try {
+          parsedInfo = JSON.parse(data.info);
+          callType = parsedInfo.type || data.type;
+          console.log('[UnifiedCallService] Parsed info field, call type:', callType);
+        } catch (error) {
+          console.warn('[UnifiedCallService] Failed to parse FCM info field:', error);
+        }
+      }
+
+      if (!callType) {
+        console.log('[UnifiedCallService] No call type found in FCM message');
+        return;
+      }
+
+      console.log('[UnifiedCallService] Processing FCM call notification:', callType);
+
+      if (callType === 'CALL_INITIATED' || callType === 'CALL_INITIATION' || callType === 'call') {
+        // ✅ FIX: Pass the parsed info data to handleIncomingFCMCall
+        await this.handleIncomingFCMCall(parsedInfo || data);
+      } else if (callType === 'CALL_ACCEPTED') {
+        await this.handleCallAcceptedFCM(parsedInfo || data);
+      } else if (callType === 'CALL_ENDED') {
+        await this.handleCallEndedFCM(parsedInfo || data);
       }
     } catch (error) {
       console.error('[UnifiedCallService] Error handling FCM call notification:', error);
@@ -952,9 +1000,16 @@ class UnifiedCallService {
    */
   private async handleIncomingFCMCall(data: any): Promise<void> {
     try {
+      console.log('[UnifiedCallService] handleIncomingFCMCall called with data:', data);
+      
       // Parse call data
       const callData = this.parseFCMCallData(data);
-      if (!callData) return;
+      if (!callData) {
+        console.error('[UnifiedCallService] Failed to parse call data');
+        return;
+      }
+
+      console.log('[UnifiedCallService] Parsed call data:', callData);
 
       // Check if this is actually an incoming call for current user
       const currentUserId = await this.getCurrentUserId();
@@ -1291,45 +1346,87 @@ class UnifiedCallService {
       const targetCall = callId ? 
         (this.callState.activeCall?.callId === callId ? this.callState.activeCall : null) : 
         this.callState.activeCall;
-
+      console.log('[UnifiedCallService] acceptCall called', { callId, targetCall, appState: this.appState });
       if (!targetCall) {
         console.warn('[UnifiedCallService] No call to accept');
         return;
       }
-
-      console.log('[UnifiedCallService] Accepting call:', targetCall.callId);
-
       // Stop vibration
       Vibration.cancel();
-
       // Hide incoming call notification
       await this.hideIncomingCallNotification();
-
       // Update call status
       targetCall.status = 'connecting';
       this.updateCallState({
         activeCall: targetCall,
         callStatus: 'connecting'
       });
-
       // Send acceptance notification to caller
       await this.sendCallStatusUpdate(targetCall, 'accepted');
-
       // Initialize media
       this.initializeMediaForCall(targetCall.callId, targetCall.callType === 'video');
-
-      // Navigate to meeting screen
+      // Navigation: use robust logic
       this.requestNavigationToMeetingScreen(targetCall);
-
       // Show ongoing call notification if app goes to background
       if (this.appState === 'background') {
         await this.showOngoingCallNotification();
       }
-
       console.log('[UnifiedCallService] Call accepted:', targetCall.callId);
-
     } catch (error) {
       console.error('[UnifiedCallService] Failed to accept call:', error);
+      this.updateCallState({
+        isInCall: false,
+        activeCall: null,
+        callStatus: 'ended'
+      });
+    }
+  }
+
+  /**
+   * Request navigation to meeting screen (event-based)
+   */
+  private _pendingNavigation: any = null;
+  private _pendingNavSubscription: any = null;
+  private requestNavigationToMeetingScreen(callData: CallData): void {
+    try {
+      console.log('[UnifiedCallService] Requesting navigation to meeting screen:', callData.callId, 'appState:', this.appState);
+      
+      if (!callData.meetingId || !callData.token) {
+        console.error('[UnifiedCallService] Invalid call data for navigation:', {
+          meetingId: callData.meetingId,
+          hasToken: !!callData.token
+        });
+        return;
+      }
+      
+      // Prepare navigation params
+      const navigationParams = {
+        activeCall: callData,
+        meetingId: callData.meetingId,
+        token: callData.token,
+        callType: callData.callType,
+        displayName: callData.isInitiator ? callData.callerName : callData.recipientName,
+        isInitiator: callData.isInitiator,
+        callData: callData,
+        recipientName: callData.isInitiator ? callData.recipientName : callData.callerName
+      };
+      
+      // For notification-triggered navigation, use the enhanced navigation method
+      // that has better retry logic and handling
+      if (this.appState !== 'active') {
+        console.log('[UnifiedCallService] App not active, using enhanced notification navigation');
+        
+        // Import the NavigationService here to avoid circular dependencies
+        const NavigationService = require('../../navigation/NavigationService');
+        NavigationService.navigateToMeetingFromNotification(navigationParams);
+      } else {
+        // For normal in-app navigation, use the standard event emission
+        console.log('[UnifiedCallService] Emitting forceNavigateToMeeting event');
+        appEventEmitter.emit('forceNavigateToMeeting', navigationParams);
+      }
+      
+    } catch (error) {
+      console.error('[UnifiedCallService] Failed to request navigation to meeting screen:', error);
     }
   }
 
@@ -1791,32 +1888,6 @@ class UnifiedCallService {
   // ===== HELPER METHODS =====
 
   /**
-   * Request navigation to meeting screen (event-based)
-   */
-  private requestNavigationToMeetingScreen(callData: CallData): void {
-    try {
-      console.log('[UnifiedCallService] Requesting navigation to meeting screen:', callData.callId);
-
-      // CRITICAL FIX: Use event-based navigation instead of direct navigation
-      // This prevents race conditions with MeetingScreen's own navigation logic
-      appEventEmitter.emit('forceNavigateToMeeting', {
-        activeCall: callData,
-        meetingId: callData.meetingId,
-        token: callData.token,
-        callType: callData.callType,
-        displayName: callData.isInitiator ? callData.callerName : callData.recipientName,
-        isInitiator: callData.isInitiator,
-        callData: callData
-      });
-
-      console.log('[UnifiedCallService] Navigation request emitted successfully');
-
-    } catch (error) {
-      console.error('[UnifiedCallService] Failed to request navigation to meeting screen:', error);
-    }
-  }
-
-  /**
    * Send call notification to recipient
    */
   private async sendCallNotificationToRecipient(callData: CallData): Promise<void> {
@@ -1913,12 +1984,15 @@ class UnifiedCallService {
    */
   private parseFCMCallData(data: any): CallNotificationData | null {
     try {
+      console.log('[UnifiedCallService] Parsing FCM call data:', data);
+      
       // Handle nested JSON structures
       let callData = data;
       
       if (typeof data.info === 'string') {
         try {
           callData = JSON.parse(data.info);
+          console.log('[UnifiedCallService] Successfully parsed info field:', callData);
         } catch (error) {
           console.warn('[UnifiedCallService] Failed to parse FCM info field:', error);
         }
@@ -1931,8 +2005,11 @@ class UnifiedCallService {
         ? callData.videoSDKInfo as any 
         : {};
 
+      // ✅ FIX: Use uuid as callId if available, otherwise generate one
+      const callId = String(callData.uuid || callData.callId || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+
       const parsedData: CallNotificationData = {
-        callId: String(callData.callId || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`),
+        callId,
         callerName: String(callerInfo.name || callData.callerName || 'Unknown Caller'),
         callType: (String(callData.callType || 'voice') === 'video' ? 'video' : 'voice') as 'voice' | 'video',
         callerId: String(callerInfo.userId || callData.callerId || 'unknown'),
@@ -1941,6 +2018,8 @@ class UnifiedCallService {
         callerAvatar: (callerInfo.avatarUrl || callData.callerAvatar) ? String(callerInfo.avatarUrl || callData.callerAvatar) : undefined,
         callerFcmToken: String(callerInfo.token || ''),
       };
+
+      console.log('[UnifiedCallService] Parsed call data:', parsedData);
 
       // Validate required fields
       if (!parsedData.callId || !parsedData.callerName || !parsedData.meetingId || !parsedData.token) {

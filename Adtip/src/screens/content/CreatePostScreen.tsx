@@ -31,6 +31,7 @@ import CategoryChip from '../../components/common/CategoryChip';
 import {useTheme} from '../../contexts/ThemeContext';
 import ApiService from '../../services/ApiService';
 import CloudflareUploadService from '../../services/CloudflareUploadService';
+import { useCreatePost } from '../../hooks/useQueries';
 
 const CreatePostScreen = () => {
   const {colors, isDarkMode} = useTheme();
@@ -42,12 +43,14 @@ const CreatePostScreen = () => {
   const [images, setImages] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
   const [isPromoted, setIsPromoted] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState<string>('');
   
   // Upload progress state
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // TanStack Query mutation
+  const createPostMutation = useCreatePost();
   
   const textInputRef = useRef<TextInput>(null);
   
@@ -280,8 +283,6 @@ const CreatePostScreen = () => {
     }
 
     try {
-      setIsLoading(true);
-
       // Upload images first if any
       let mediaUrls: string[] = [];
       if (images.length > 0) {
@@ -307,28 +308,22 @@ const CreatePostScreen = () => {
 
       console.log('[CreatePost] Creating post with data:', postData);
 
-      // Create post using API
-      const response = await ApiService.createPost(postData);
+      // Create post using TanStack Query mutation
+      await createPostMutation.mutateAsync(postData);
 
-      console.log('[CreatePost] Post creation response:', response);
-
-      if (response.status && response.statusCode === 201) {
-        // Show success message
-        Alert.alert(
-          'Success',
-          isPromoted 
-            ? 'Your promoted post has been created successfully!' 
-            : 'Your post has been published successfully!',
-          [
-            {
-              text: 'OK',
-              onPress: () => navigation.goBack(),
-            },
-          ]
-        );
-      } else {
-        throw new Error(response.message || 'Failed to create post');
-      }
+      // Show success message
+      Alert.alert(
+        'Success',
+        isPromoted 
+          ? 'Your promoted post has been created successfully!' 
+          : 'Your post has been published successfully!',
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.goBack(),
+          },
+        ]
+      );
     } catch (error: any) {
       console.error('[CreatePost] Error creating post:', error);
       
@@ -346,12 +341,10 @@ const CreatePostScreen = () => {
       }
       
       Alert.alert('Error', errorMessage);
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  const isDisabled = isLoading || isUploading || !title.trim() || (!content.trim() && images.length === 0);
+  const isDisabled = createPostMutation.isPending || isUploading || !title.trim() || (!content.trim() && images.length === 0);
   const publishOpacity = isDisabled ? 0.5 : 1;
 
   return (
@@ -368,7 +361,7 @@ const CreatePostScreen = () => {
             onPress={handlePublish}
             disabled={isDisabled}
             style={{ opacity: publishOpacity }}>
-            {isLoading || isUploading ? (
+            {createPostMutation.isPending || isUploading ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : (
               <Text style={[{color: colors.primary}, styles.publishText]}>
@@ -393,7 +386,7 @@ const CreatePostScreen = () => {
               value={title}
               onChangeText={setTitle}
               maxLength={100}
-              editable={!isLoading && !isUploading}
+              editable={!createPostMutation.isPending && !isUploading}
             />
 
             {/* Content Input */}
@@ -406,7 +399,7 @@ const CreatePostScreen = () => {
               value={content}
               onChangeText={setContent}
               maxLength={2000}
-              editable={!isLoading && !isUploading}
+              editable={!createPostMutation.isPending && !isUploading}
             />
 
             {/* Image preview section */}
@@ -424,7 +417,7 @@ const CreatePostScreen = () => {
                         {backgroundColor: colors.error},
                       ]}
                       onPress={() => handleRemoveImage(index)}
-                      disabled={isLoading || isUploading}>
+                      disabled={createPostMutation.isPending || isUploading}>
                       <Icon name="x" size={12} color={colors.white} />
                     </TouchableOpacity>
                   </View>
@@ -462,7 +455,7 @@ const CreatePostScreen = () => {
                 />
                 <TouchableOpacity 
                   onPress={() => setSelectedCategory(null)}
-                  disabled={isLoading || isUploading}>
+                  disabled={createPostMutation.isPending || isUploading}>
                   <Icon name="x" size={16} color={colors.text.tertiary} />
                 </TouchableOpacity>
               </View>
@@ -501,7 +494,7 @@ const CreatePostScreen = () => {
                     true: colors.primary + '40',
                   }}
                   thumbColor={isPromoted ? colors.primary : colors.gray?.[500]}
-                  disabled={isLoading || isUploading}
+                  disabled={createPostMutation.isPending || isUploading}
                 />
               </View>
             </View>
@@ -513,22 +506,22 @@ const CreatePostScreen = () => {
           <TouchableOpacity
             style={styles.actionButton}
             onPress={handlePickImage}
-            disabled={isLoading || isUploading}>
-            <Icon name="image" size={22} color={isLoading || isUploading ? colors.text.tertiary : colors.primary} />
+            disabled={createPostMutation.isPending || isUploading}>
+            <Icon name="image" size={22} color={createPostMutation.isPending || isUploading ? colors.text.tertiary : colors.primary} />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.actionButton}
             onPress={handleTakePhoto}
-            disabled={isLoading || isUploading}>
-            <Icon name="camera" size={22} color={isLoading || isUploading ? colors.text.tertiary : colors.primary} />
+            disabled={createPostMutation.isPending || isUploading}>
+            <Icon name="camera" size={22} color={createPostMutation.isPending || isUploading ? colors.text.tertiary : colors.primary} />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.actionButton}
             onPress={handleSelectCategory}
-            disabled={isLoading || isUploading}>
-            <Icon name="tag" size={22} color={isLoading || isUploading ? colors.text.tertiary : colors.primary} />
+            disabled={createPostMutation.isPending || isUploading}>
+            <Icon name="tag" size={22} color={createPostMutation.isPending || isUploading ? colors.text.tertiary : colors.primary} />
           </TouchableOpacity>
 
           <View style={styles.imageCountWrapper}>

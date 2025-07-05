@@ -25,6 +25,13 @@ import CloudflareUploadService from '../../services/CloudflareUploadService';
 import { CheckCircle, Play, Calendar, Users, Eye, Bell, BellOff, Edit3, Camera, X } from 'lucide-react-native';
 import { MainNavigatorParamList } from '../../types/navigation';
 import { launchImageLibrary } from 'react-native-image-picker';
+import { 
+  useChannelData, 
+  useChannelVideos, 
+  usePopularContent, 
+  useFollowUser, 
+  useUpdateChannel 
+} from '../../hooks/useQueries';
 
 // Utility function to shuffle array
 const shuffleArray = <T,>(array: T[]): T[] => {
@@ -71,17 +78,8 @@ const ChannelScreen: React.FC = () => {
   const route = useRoute();
   const { colors } = useTheme();
   const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [channelInfo, setChannelInfo] = useState<ChannelInfo | null>(null);
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [shorts, setShorts] = useState<Video[]>([]);
-  const [homeContent, setHomeContent] = useState<Video[]>([]);
   const [selectedTab, setSelectedTab] = useState<'home' | 'videos' | 'about'>('home');
   const [isSubscribing, setIsSubscribing] = useState(false);
-  const [videosLoading, setVideosLoading] = useState(false);
-  const [shortsLoading, setShortsLoading] = useState(false);
-  const [homeLoading, setHomeLoading] = useState(false);
   
   // Edit modal states
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -98,185 +96,133 @@ const ChannelScreen: React.FC = () => {
   const isMyChannel = !routeChannelId || String(routeChannelId) === String(user?.id);
   const channelId = isMyChannel ? user?.id : routeChannelId;
 
-  const loadChannelData = useCallback(async () => {
-    if (!channelId) {
-      Alert.alert('Error', 'User ID not provided');
-      return;
-    }
+  // TanStack Query hooks
+  const { 
+    data: channelData, 
+    isLoading: channelLoading, 
+    refetch: refetchChannel,
+    error: channelError 
+  } = useChannelData(Number(channelId));
 
-    try {
-      if (!refreshing) setLoading(true);
+  const { 
+    data: videosData, 
+    isLoading: videosLoading, 
+    refetch: refetchVideos 
+  } = useChannelVideos(Number(channelId), Number(user?.id), 0);
 
-      const channelResponse = await ApiService.getChannelByUserId(channelId);
-      
-      if (channelResponse.status === 200 && channelResponse.data && channelResponse.data.length > 0) {
-        const channel = channelResponse.data[0];
-        
-        const channelInfo: ChannelInfo = {
-          channelId: String(channel.channelId),
-          channelName: channel.channelName || 'Unknown Channel',
-          description: channel.description || 'No description available',
-          profileImage: channel.profileImage || `https://api.dicebear.com/9.x/identicon/svg?seed=${channelId}`,
-          coverImage: channel.profileCoverImage,
-          totalSubscribers: Number(channel.totalSubscribers || 0),
-          totalVideos: Number(channel.totalVideos || 0),
-          totalViews: Number(channel.total_ads_view || 0),
-          isSubscribed: Boolean(channel.isSubscribed),
-          isVerified: Boolean(channel.isVerified),
-          createdDate: channel.createddate || new Date().toISOString(),
-          createdBy: Number(channel.createdBy || channelId),
-        };
+  const { 
+    data: shortsData, 
+    isLoading: shortsLoading, 
+    refetch: refetchShorts 
+  } = useChannelVideos(Number(channelId), Number(user?.id), 1);
 
-        setChannelInfo(channelInfo);
-      } else {
-        throw new Error('Channel not found');
-      }
+  const { 
+    data: popularVideosData, 
+    isLoading: popularVideosLoading 
+  } = usePopularContent(0, Number(channelId));
 
-    } catch (error: any) {
-      console.error('Error loading channel data:', error);
+  const { 
+    data: popularShortsData, 
+    isLoading: popularShortsLoading 
+  } = usePopularContent(1, Number(channelId));
+
+  // Mutations
+  const followUserMutation = useFollowUser();
+  const updateChannelMutation = useUpdateChannel();
+
+  // Transform channel data
+  const channelInfo: ChannelInfo | null = channelData?.data?.[0] ? {
+    channelId: String(channelData.data[0].channelId),
+    channelName: channelData.data[0].channelName || 'Unknown Channel',
+    description: channelData.data[0].description || 'No description available',
+    profileImage: channelData.data[0].profileImage || `https://api.dicebear.com/9.x/identicon/svg?seed=${channelId}`,
+    coverImage: channelData.data[0].profileCoverImage,
+    totalSubscribers: Number(channelData.data[0].totalSubscribers || 0),
+    totalVideos: Number(channelData.data[0].totalVideos || 0),
+    totalViews: Number(channelData.data[0].total_ads_view || 0),
+    isSubscribed: Boolean(channelData.data[0].isSubscribed),
+    isVerified: Boolean(channelData.data[0].isVerified),
+    createdDate: channelData.data[0].createddate || new Date().toISOString(),
+    createdBy: Number(channelData.data[0].createdBy || channelId),
+  } : null;
+
+  // Transform videos data
+  const videos: Video[] = videosData?.pages?.flatMap(page => 
+    page?.data?.map((video: any) => ({
+      id: String(video.id),
+      name: video.name || 'Untitled Video',
+      videoThumbnail: video.video_Thumbnail || 'https://via.placeholder.com/320x180',
+      playDuration: video.play_duration || '0:00',
+      views: Number(video.total_views || 0),
+      createdDate: video.createddate || new Date().toISOString(),
+      description: video.video_desciption || '',
+      videoType: 0,
+      videoLink: video.video_link || '',
+      is_shot: video.is_shot || 0,
+    })) || []
+  ) || [];
+
+  // Transform shorts data
+  const shorts: Video[] = shortsData?.pages?.flatMap(page => 
+    page?.data?.map((video: any) => ({
+      id: String(video.id),
+      name: video.name || 'Untitled Short',
+      videoThumbnail: video.video_Thumbnail || 'https://via.placeholder.com/180x320',
+      playDuration: video.play_duration || '0:00',
+      views: Number(video.total_views || 0),
+      createdDate: video.createddate || new Date().toISOString(),
+      description: video.video_desciption || '',
+      videoType: 1,
+      videoLink: video.video_link || '',
+      is_shot: video.is_shot || 1,
+    })) || []
+  ) || [];
+
+  // Transform home content (combine popular videos and shorts)
+  const homeContent: Video[] = [
+    ...(popularVideosData?.data?.map((video: any) => ({
+      id: String(video.id),
+      name: video.name || 'Untitled Video',
+      videoThumbnail: video.video_Thumbnail || 'https://via.placeholder.com/320x180',
+      playDuration: video.play_duration || '0:00',
+      views: Number(video.total_views || 0),
+      createdDate: video.createddate || new Date().toISOString(),
+      description: video.video_desciption || '',
+      videoType: 0,
+      videoLink: video.video_link || '',
+      is_shot: video.is_shot || 0,
+    })) || []),
+    ...(popularShortsData?.data?.map((video: any) => ({
+      id: String(video.id),
+      name: video.name || 'Untitled Short',
+      videoThumbnail: video.video_Thumbnail || 'https://via.placeholder.com/180x320',
+      playDuration: video.play_duration || '0:00',
+      views: Number(video.total_views || 0),
+      createdDate: video.createddate || new Date().toISOString(),
+      description: video.video_desciption || '',
+      videoType: 1,
+      videoLink: video.video_link || '',
+      is_shot: video.is_shot || 1,
+    })) || [])
+  ].sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime());
+
+    const homeLoading = popularVideosLoading || popularShortsLoading;
+
+  // Handle channel error
+  useEffect(() => {
+    if (channelError) {
       Alert.alert('Error', 'Failed to load channel information');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
     }
-  }, [channelId, refreshing]);
+  }, [channelError]);
 
-  const loadHomeContent = useCallback(async () => {
-    if (!channelId || !user) return;
-
-    try {
-      setHomeLoading(true);
-      
-      // Load both videos and shorts for home tab
-      const [videosResponse, shortsResponse] = await Promise.all([
-        ApiService.getPopularShort(0, Number(channelId)), // Videos
-        ApiService.getPopularShort(1, Number(channelId))  // Shorts
-      ]);
-      
-      const allContent: Video[] = [];
-      
-      // Process videos
-      if (videosResponse.status === 200 && videosResponse.data) {
-        const formattedVideos: Video[] = videosResponse.data.map((video: any) => ({
-          id: String(video.id),
-          name: video.name || 'Untitled Video',
-          videoThumbnail: video.video_Thumbnail || 'https://via.placeholder.com/320x180',
-          playDuration: video.play_duration || '0:00',
-          views: Number(video.total_views || 0),
-          createdDate: video.createddate || new Date().toISOString(),
-          description: video.video_desciption || '',
-          videoType: 0,
-          videoLink: video.video_link || '',
-          is_shot: video.is_shot || 0,
-        }));
-        allContent.push(...formattedVideos);
-      }
-      
-      // Process shorts
-      if (shortsResponse.status === 200 && shortsResponse.data) {
-        const formattedShorts: Video[] = shortsResponse.data.map((video: any) => ({
-          id: String(video.id),
-          name: video.name || 'Untitled Short',
-          videoThumbnail: video.video_Thumbnail || 'https://via.placeholder.com/180x320',
-          playDuration: video.play_duration || '0:00',
-          views: Number(video.total_views || 0),
-          createdDate: video.createddate || new Date().toISOString(),
-          description: video.video_desciption || '',
-          videoType: 1,
-          videoLink: video.video_link || '',
-          is_shot: video.is_shot || 1,
-        }));
-        allContent.push(...formattedShorts);
-      }
-      
-      // Sort by creation date (newest first)
-      allContent.sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime());
-      
-      setHomeContent(allContent);
-    } catch (error: any) {
-      console.error('Error loading home content:', error);
-    } finally {
-      setHomeLoading(false);
-    }
-  }, [channelId, user]);
-
-  const loadVideos = useCallback(async () => {
-    if (!channelInfo || !user) return;
-
-    try {
-      setVideosLoading(true);
-      
-      // Load videos using the new API
-      const videosResponse = await ApiService.getVideoByChannel(0, Number(channelInfo.channelId), Number(user.id));
-      
-      if (videosResponse.status === 200 && videosResponse.data) {
-        const formattedVideos: Video[] = videosResponse.data.map((video: any) => ({
-          id: String(video.id),
-          name: video.name || 'Untitled Video',
-          videoThumbnail: video.video_Thumbnail || 'https://via.placeholder.com/320x180',
-          playDuration: video.play_duration || '0:00',
-          views: Number(video.total_views || 0),
-          createdDate: video.createddate || new Date().toISOString(),
-          description: video.video_desciption || '',
-          videoType: 0,
-          videoLink: video.video_link || '',
-          is_shot: video.is_shot || 0,
-        }));
-        
-        setVideos(formattedVideos);
-      }
-    } catch (error: any) {
-      console.error('Error loading videos:', error);
-    } finally {
-      setVideosLoading(false);
-    }
-  }, [channelInfo, user]);
-
-  const loadShorts = useCallback(async () => {
-    if (!channelInfo || !user) return;
-
-    try {
-      setShortsLoading(true);
-      
-      // Load shorts using the new API
-      const shortsResponse = await ApiService.getVideoByChannel(1, Number(channelInfo.channelId), Number(user.id));
-      
-      if (shortsResponse.status === 200 && shortsResponse.data) {
-        const formattedShorts: Video[] = shortsResponse.data.map((video: any) => ({
-          id: String(video.id),
-          name: video.name || 'Untitled Short',
-          videoThumbnail: video.video_Thumbnail || 'https://via.placeholder.com/180x320',
-          playDuration: video.play_duration || '0:00',
-          views: Number(video.total_views || 0),
-          createdDate: video.createddate || new Date().toISOString(),
-          description: video.video_desciption || '',
-          videoType: 1,
-          videoLink: video.video_link || '',
-          is_shot: video.is_shot || 1,
-        }));
-        
-        setShorts(formattedShorts);
-      }
-    } catch (error: any) {
-      console.error('Error loading shorts:', error);
-    } finally {
-      setShortsLoading(false);
-    }
-  }, [channelInfo, user]);
-
-  useEffect(() => {
-    loadChannelData();
-  }, [loadChannelData]);
-
-  useEffect(() => {
-    if (channelInfo) {
-      if (selectedTab === 'home') {
-        loadHomeContent();
-      } else if (selectedTab === 'videos') {
-        loadVideos();
-      }
-    }
-  }, [channelInfo, selectedTab, loadHomeContent, loadVideos]);
+  // Handle refresh
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([
+      refetchChannel(),
+      refetchVideos(),
+      refetchShorts()
+    ]);
+  }, [refetchChannel, refetchVideos, refetchShorts]);
 
   const handleSubscribe = async () => {
     if (!channelInfo || !user) return;
@@ -290,19 +236,11 @@ const ChannelScreen: React.FC = () => {
         action: channelInfo.isSubscribed ? 'unfollow' : 'follow' as 'follow' | 'unfollow',
       };
 
-      const response = await ApiService.followUser(followData);
-
-      if (response.status) {
-        setChannelInfo(prev => prev ? {
-          ...prev,
-          isSubscribed: !prev.isSubscribed,
-          totalSubscribers: prev.isSubscribed ? 
-            Math.max(0, prev.totalSubscribers - 1) : 
-            prev.totalSubscribers + 1,
-        } : null);
-      } else {
-        throw new Error(response.message || 'Failed to update subscription');
-      }
+      await followUserMutation.mutateAsync(followData);
+      
+      // The mutation will automatically invalidate and refetch the channel data
+      // so we don't need to manually update the state
+      
     } catch (error: any) {
       console.error('Error subscribing/unsubscribing:', error);
       Alert.alert('Error', 'Failed to update subscription');
@@ -332,19 +270,12 @@ const ChannelScreen: React.FC = () => {
         profileImageURL: channelInfo.profileImage,
       };
 
-      const response = await ApiService.updateChannel(updateData);
-
-      if (response.status === 200) {
-        setChannelInfo(prev => prev ? {
-          ...prev,
-          channelName: editingChannelName,
-          description: editingDescription,
-        } : null);
-        setEditModalVisible(false);
-        Alert.alert('Success', 'Channel updated successfully');
-      } else {
-        throw new Error(response.message || 'Failed to update channel');
-      }
+      await updateChannelMutation.mutateAsync(updateData);
+      
+      // The mutation will automatically invalidate and refetch the channel data
+      setEditModalVisible(false);
+      Alert.alert('Success', 'Channel updated successfully');
+      
     } catch (error: any) {
       console.error('Error updating channel:', error);
       Alert.alert('Error', 'Failed to update channel');
@@ -455,11 +386,8 @@ const ChannelScreen: React.FC = () => {
       const response = await ApiService.updateChannel(updateData);
 
       if (response.status === 200) {
-        setChannelInfo(prev => prev ? {
-          ...prev,
-          profileImage: type === 'profile' ? uploadResult.url : prev.profileImage,
-          coverImage: type === 'cover' ? uploadResult.url : prev.coverImage,
-        } : null);
+        // The image upload is handled by the mutation, no need to manually update state
+        // The channel data will be refetched automatically
         Alert.alert('Success', `${type === 'profile' ? 'Profile' : 'Cover'} image updated successfully`);
       } else {
         throw new Error(response.message || 'Failed to update image');
@@ -602,11 +530,10 @@ const ChannelScreen: React.FC = () => {
   );
 
   const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    loadChannelData();
-  }, [loadChannelData]);
+    handleRefresh();
+  }, [handleRefresh]);
 
-  if (loading) {
+  if (channelLoading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Header title="Channel"
@@ -634,7 +561,7 @@ const ChannelScreen: React.FC = () => {
           </Text>
           <TouchableOpacity
             style={[styles.retryButton, { backgroundColor: colors.primary }]}
-            onPress={() => loadChannelData()}
+            onPress={() => handleRefresh()}
           >
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
@@ -652,7 +579,7 @@ const ChannelScreen: React.FC = () => {
       <ScrollView
         style={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={channelLoading} onRefresh={onRefresh} />
         }
       >
         {/* Channel Banner */}

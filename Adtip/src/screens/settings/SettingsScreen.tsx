@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useCallback} from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,8 @@ import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 import {useNavigation} from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
-import ScreenTransition from '../../components/common/ScreenTransition'; // ADD THIS IMPORT
+import ScreenTransition from '../../components/common/ScreenTransition';
+import {useUserSettings, useUpdateUserSettings} from '../../hooks/useQueries';
 
 interface SettingItem {
   id: string;
@@ -31,8 +32,14 @@ interface SettingItem {
 const SettingsScreen: React.FC = () => {
   const {colors, isDarkMode, toggleTheme, setDarkMode} = useTheme();
   const navigation = useNavigation();
-  const { logout, loading: authLoading } = useAuth();
-  const [settings, setSettings] = useState({
+  const { logout, loading: authLoading, user } = useAuth();
+  const userId = user?.id || 0;
+
+  // TanStack Query hooks
+  const userSettingsQuery = useUserSettings(userId);
+  const updateSettingsMutation = useUpdateUserSettings();
+
+  const [localSettings, setLocalSettings] = useState({
     pushNotifications: true,
     emailNotifications: false,
     darkMode: isDarkMode,
@@ -41,9 +48,26 @@ const SettingsScreen: React.FC = () => {
     analytics: true,
   });
 
-  const updateSetting = (key: string, value: boolean) => {
-    setSettings(prev => ({...prev, [key]: value}));
-  };
+  // Update local settings when API data loads
+  React.useEffect(() => {
+    if (userSettingsQuery.data) {
+      setLocalSettings(prev => ({
+        ...prev,
+        ...userSettingsQuery.data,
+        darkMode: isDarkMode, // Keep theme setting local
+      }));
+    }
+  }, [userSettingsQuery.data, isDarkMode]);
+
+  const updateSetting = useCallback((key: string, value: boolean) => {
+    setLocalSettings(prev => ({...prev, [key]: value}));
+    
+    // Update settings via API
+    updateSettingsMutation.mutate({
+      user_id: userId,
+      [key]: value
+    });
+  }, [updateSettingsMutation, userId]);
 
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -95,7 +119,7 @@ const SettingsScreen: React.FC = () => {
           subtitle: 'Receive notifications on your device',
           type: 'toggle',
           icon: 'bell',
-          value: settings.pushNotifications,
+          value: localSettings.pushNotifications,
           onToggle: (value: boolean) =>
             updateSetting('pushNotifications', value),
         },
@@ -105,7 +129,7 @@ const SettingsScreen: React.FC = () => {
           subtitle: 'Receive notifications via email',
           type: 'toggle',
           icon: 'mail',
-          value: settings.emailNotifications,
+          value: localSettings.emailNotifications,
           onToggle: (value: boolean) =>
             updateSetting('emailNotifications', value),
         },
@@ -131,7 +155,7 @@ const SettingsScreen: React.FC = () => {
           subtitle: 'Automatically play videos in feed',
           type: 'toggle',
           icon: 'play',
-          value: settings.autoPlay,
+          value: localSettings.autoPlay,
           onToggle: (value: boolean) => updateSetting('autoPlay', value),
         },
         {
@@ -140,7 +164,7 @@ const SettingsScreen: React.FC = () => {
           subtitle: 'Allow video streaming on cellular',
           type: 'toggle',
           icon: 'smartphone',
-          value: settings.cellularData,
+          value: localSettings.cellularData,
           onToggle: (value: boolean) => updateSetting('cellularData', value),
         },
       ] as SettingItem[],
@@ -170,7 +194,7 @@ const SettingsScreen: React.FC = () => {
           subtitle: 'Help improve the app',
           type: 'toggle',
           icon: 'bar-chart',
-          value: settings.analytics,
+          value: localSettings.analytics,
           onToggle: (value: boolean) => updateSetting('analytics', value),
         },
       ] as SettingItem[],
@@ -203,6 +227,24 @@ const SettingsScreen: React.FC = () => {
         },
       ] as SettingItem[],
     },  ];
+
+  // Show loading state while fetching settings
+  if (userSettingsQuery.isLoading) {
+    return (
+      <ScreenTransition animationType="fade">
+        <SafeAreaView style={[styles.container, {backgroundColor: colors.background}]}>
+          <Header title="Settings"/>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, {color: colors.text.secondary}]}>
+              Loading settings...
+            </Text>
+          </View>
+        </SafeAreaView>
+      </ScreenTransition>
+    );
+  }
+
   return (
     <ScreenTransition animationType="fade">
       <SafeAreaView style={[styles.container, {backgroundColor: colors.background}]}> 
@@ -311,6 +353,7 @@ const SettingsScreen: React.FC = () => {
                               trackColor={{false: isDarkMode ? '#374151' : '#E5E7EB', true: sectionColor + '40'}}
                               thumbColor={item.value ? sectionColor : (isDarkMode ? '#9CA3AF' : '#FFFFFF')}
                               ios_backgroundColor={isDarkMode ? '#374151' : '#E5E7EB'}
+                              disabled={updateSettingsMutation.isPending}
                             />
                           )}
                           {item.type === 'navigation' && (
@@ -371,6 +414,15 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    marginTop: 8,
   },
   sectionTitle: {
     fontSize: 13,

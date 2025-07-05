@@ -39,11 +39,14 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 
+// Hooks
+import { useChannelData, usePremiumStatus } from '../../hooks/useQueries';
+
 // Constants
 import { API_BASE_URL, API_ENDPOINTS } from '../../constants/api';
 import ApiService from '../../services/ApiService';
 import UserPremiumPlans from '../wallet/UserPremiumPlans';
-import WalletService from '../../services/WalletService';
+
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
 
 // Define navigation param list
@@ -92,7 +95,7 @@ interface User {
   maternal_status?: string;
   longitude?: string;
   latitude?: string;
-  pincode?: string;
+  pincode?: string | null;
   interests?: any[];
   isSaveUserDetails?: number;
   is_first_time?: number;
@@ -146,7 +149,6 @@ const ProfileScreen: React.FC = () => {
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
   const [userChannelId, setUserChannelId] = useState<string | null>(null);
   const [isPremium, setIsPremium] = useState<boolean>(false);
-  const [premiumLoading, setPremiumLoading] = useState(true);
   const [premiumData, setPremiumData] = useState<any>(null);
 
   // Additional state for image uploads
@@ -154,6 +156,19 @@ const ProfileScreen: React.FC = () => {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [bannerImage, setBannerImage] = useState<string | null>(user?.banner_image || null);
   const [profileImage, setProfileImage] = useState<string | null>(user?.profile_image || null);
+
+  // TanStack Query hooks for channel and premium data
+  const {
+    data: channelResponse,
+    isLoading: channelLoading,
+    error: channelError,
+  } = useChannelData(currentUser?.id || 0);
+
+  const {
+    data: premiumResponse,
+    isLoading: premiumLoading,
+    error: premiumError,
+  } = usePremiumStatus(currentUser?.id || 0);
 
   // Default profile image
   const DEFAULT_PROFILE_IMAGE = 'https://via.placeholder.com/150';
@@ -436,40 +451,7 @@ const ProfileScreen: React.FC = () => {
           console.log('No channel found for user');
         }
 
-        // Fetch premium status using WalletService and check-premium API
-        try {
-          setPremiumLoading(true);
-          console.log('ProfileScreen: Fetching premium status for user:', currentUser.id);
-          
-          const premiumResponse = await ApiService.checkPremium(currentUser.id);
-          console.log('ProfileScreen: Premium check response:', premiumResponse);
-          
-          if (premiumResponse && (premiumResponse.status === true || premiumResponse.status === 1)) {
-            // User has premium
-            setIsPremium(true);
-            setPremiumData(premiumResponse);
-          } else {
-            // User doesn't have premium or API returned error
-            setIsPremium(false);
-            setPremiumData(null);
-          }
-        } catch (error: any) {
-          console.log('ProfileScreen: Error checking premium status:', error);
-          
-          // Check if the error message indicates no premium
-          const errorMessage = error?.message || error?.response?.data?.message || '';
-          if (errorMessage.toLowerCase().includes('no premium')) {
-            console.log('ProfileScreen: User has no premium subscription');
-            setIsPremium(false);
-            setPremiumData(null);
-          } else {
-            console.error('ProfileScreen: Unexpected error checking premium status:', error);
-            setIsPremium(false);
-            setPremiumData(null);
-          }
-        } finally {
-          setPremiumLoading(false);
-        }
+        // Premium status is now handled by TanStack Query hooks
       }
 
       let fetchedFollowers: any[] = [];
@@ -537,7 +519,6 @@ const ProfileScreen: React.FC = () => {
     } catch (error) {
       console.error('Error fetching user data:', error);
       if (isOwnProfile) {
-        setPremiumLoading(false);
         setIsPremium(false);
       }
     } finally {

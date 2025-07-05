@@ -296,8 +296,22 @@ const MainNavigator = () => {
 
   useEffect(() => {
     const handleNavigateToMeeting = (params: any) => {
-      console.log('[MainNavigator] Received forceNavigateToMeeting event, navigating to Meeting screen.');
-      if (params && params.meetingId && params.token) {
+      try {
+        console.log('[MainNavigator] Received forceNavigateToMeeting event, navigating to Meeting screen.');
+        
+        // ✅ CRITICAL FIX: Validate parameters before navigation
+        if (!params || !params.meetingId || !params.token) {
+          console.error('[MainNavigator] Invalid parameters received for forceNavigateToMeeting event:', params);
+          return;
+        }
+
+        // ✅ CRITICAL FIX: Add navigation readiness check
+        if (!navigationRef.isReady()) {
+          console.warn('[MainNavigator] Navigation not ready, retrying in 100ms');
+          setTimeout(() => handleNavigateToMeeting(params), 100);
+          return;
+        }
+
         // Use navigateToMeeting function for proper nested navigation
         navigateToMeeting({
           meetingId: params.meetingId,
@@ -308,8 +322,9 @@ const MainNavigator = () => {
           recipientName: params.callData?.recipientName,
           callData: params.callData,
         });
-      } else {
-        console.error('[MainNavigator] Invalid parameters received for forceNavigateToMeeting event:', params);
+      } catch (error) {
+        console.error('[MainNavigator] Error handling forceNavigateToMeeting event:', error);
+        // ✅ CRITICAL FIX: Don't let navigation errors crash the app
       }
     };
 

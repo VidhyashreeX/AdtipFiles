@@ -784,9 +784,25 @@ export default class ApiService {
   static async checkPremium(
     userId: string | number,
   ): Promise<PremiumCheckResponse> {
-    return this.get<PremiumCheckResponse>(
-      `${ApiEndpoints.HOME_ENDPOINTS.CHECK_PREMIUM}/${userId}`,
-    );
+    try {
+      const response = await this.get<PremiumCheckResponse>(
+        `${ApiEndpoints.HOME_ENDPOINTS.CHECK_PREMIUM}/${userId}`,
+      );
+      return response;
+    } catch (error: any) {
+      // Handle the case where the API returns "No active premium plan" as an error
+      if (error?.message?.toLowerCase().includes('no active premium plan')) {
+        // This is a valid response indicating no premium, return a structured response
+        return {
+          is_premium_expired: true,
+          user_id: '',
+          plan_id: 0,
+          end_time: '',
+        };
+      }
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   /**

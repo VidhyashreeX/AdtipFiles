@@ -1,6 +1,7 @@
 import { AppOpenAd, AdEventType, TestIds } from 'react-native-google-mobile-ads';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, AppState, AppStateStatus } from 'react-native';
+import UnifiedCallService from '../services/calling/UnifiedCallService';
 
 // Test Ad Unit ID (for development/testing)
 const TEST_APP_OPEN_AD_UNIT_ID = TestIds.APP_OPEN; // Official Google test ID for app open ads
@@ -89,12 +90,33 @@ export function useAppOpenAd() {
         nextAppState === 'active' && 
         !isAdCurrentlyShowing
       ) {
-        console.log('App came to foreground, showing app open ad immediately');
-        hasShownOnThisSession = false; // Reset session flag for new foreground session
-        // Show immediately on foreground - user must "continue to app"
+        // ✅ FIX: Check if a call is in progress before showing an ad
+        const callService = UnifiedCallService.getInstance();
+        const callState = callService.getCallState();
+
+        if (callState.isInCall) {
+          console.log('[AppOpenAdManager] Suppressing ad because a call is active.');
+          return;
+        }
+        
+        // ✅ CRITICAL FIX: Add delay for notification click handling
+        // Give notification navigation a chance to occur first
+        const delayTime = 500; // Increased from 100ms to 500ms
+        
+        console.log(`[AppOpenAdManager] App came to foreground, delaying ad check for ${delayTime}ms`);
         setTimeout(() => {
-          showAdIfAppropriate();
-        }, 100); // Very short delay to ensure app is ready
+          // Double-check call state again after delay
+          try {
+            const updatedCallState = UnifiedCallService.getInstance().getCallState();
+            if (updatedCallState.isInCall) {
+              console.log('[AppOpenAdManager] Suppressing delayed ad because a call is now active.');
+              return;
+            }
+            showAdIfAppropriate();
+          } catch (error) {
+            console.error('[AppOpenAdManager] Error in delayed call state check:', error);
+          }
+        }, delayTime);
       }
       
       // When app goes to background, reset session flag
@@ -207,4 +229,4 @@ export function useAppOpenAd() {
     forceLoadAd, // Force reload an ad
     isAdCurrentlyShowing: adVisible // Current showing state
   };
-} 
+}

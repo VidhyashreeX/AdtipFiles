@@ -10,6 +10,11 @@ import { useTheme } from '../../contexts/ThemeContext';
 import LinearGradient from 'react-native-linear-gradient';
 import ChatBackgroundPattern from '../../components/chat/ChatBackgroundPattern';
 import moment from 'moment';
+import { 
+  useChatMessages, 
+  useSendChatMessage, 
+  useMarkMessagesAsRead 
+} from '../../hooks/useQueries';
 
 // WebSocket URL (update to your backend ws endpoint)
 const WS_URL = 'wss://api.adtip.in/chat';
@@ -26,14 +31,30 @@ const ChatScreen: React.FC = () => {
   const navigation = useNavigation();
   const { colors, isDarkMode } = useTheme();
   const otherUser = route.params.user;
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [inputHeight, setInputHeight] = useState(40);
   const [isUserInChat, setIsUserInChat] = useState(true);
-  const [isLoading, setIsLoading] = useState(true);
+  
+  // TanStack Query hooks
+  const { 
+    data: messagesData, 
+    isLoading: isLoadingMessages,
+    refetch: refetchMessages 
+  } = useChatMessages(Number(self?.id), Number(otherUser.id));
+
+  const sendMessageMutation = useSendChatMessage();
+  const markAsReadMutation = useMarkMessagesAsRead();
+
+  // Transform messages data
+  const messages: ChatMessage[] = messagesData?.pages?.flatMap(page => 
+    page?.messages?.map((msg: any) => ({
+      ...msg,
+      id: msg.id || `loaded-${Date.now()}-${Math.random()}`
+    })) || []
+  ) || [];
   
   const ws = useRef<WebSocket & { pingInterval?: NodeJS.Timeout } | null>(null);
   const flatListRef = useRef<FlatList>(null);
@@ -115,32 +136,17 @@ const ChatScreen: React.FC = () => {
             // Incoming message from another user
             if (data.data && data.data.sender === otherUser.id && data.data.receiver === self.id) {
               LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-              setMessages(prev => {
-                // Ensure message has valid ID
-                if (!data.data.id) {
-                  console.warn('Received message without ID:', data.data);
-                  data.data.id = Date.now(); // Fallback ID
-                }
-                
-                // Avoid duplicates
-                const exists = prev.some(msg => msg.id === data.data.id);
-                if (exists) return prev;
-                const newMessages = [...prev, data.data];
-                // Auto-scroll after adding new message
-                setTimeout(() => scrollToBottom(true), 100);
-                return newMessages;
-              });
+              // Refetch messages to get the latest data
+              refetchMessages();
+              // Auto-scroll after adding new message
+              setTimeout(() => scrollToBottom(true), 100);
             }
           } else if (data.type === 'message_sent') {
             // Confirmation that our message was saved successfully
             if (data.data && data.tempId) {
-              setMessages(prev => prev.map(m => 
-                m.id === data.tempId ? { 
-                  ...data.data,
-                  id: data.data.id || Date.now() // Ensure ID exists
-                } : m
-              ));
-              console.log('Message confirmed via WebSocket, no API call needed');
+              // Refetch messages to get the updated data
+              refetchMessages();
+              console.log('Message confirmed via WebSocket, refetching messages');
             }
           } else if (data.type === 'typing' && data.userId === otherUser.id && isUserInChat) {
             console.log('Received typing indicator from user:', data.userId);
@@ -153,9 +159,8 @@ const ChatScreen: React.FC = () => {
               setIsOtherTyping(false);
             }, 3000);
           } else if (data.type === 'read') {
-            setMessages(prev => prev.map(m => 
-              m.id === data.messageId ? { ...m, is_seen: true } : m
-            ));
+            // Refetch messages to get updated read status
+            refetchMessages();
           } else if (data.type === 'error') {
             console.error('WebSocket error received:', data.message);
           } else if (data.type === 'pong') {
@@ -268,32 +273,19 @@ const ChatScreen: React.FC = () => {
     if (!self) return;
 
     try {
-      const response = await ApiService.sendChatMessage({
-        message: msg,
+      await sendMessageMutation.mutateAsync({
         userId: self.id,
-        receiverId: otherUser.id
+        receiverId: otherUser.id,
+        message: msg
       });
-
-      if (response.status === 200) {
-        // Update the temporary message with real ID and data
-        setMessages(prev => prev.map(m => 
-          m.id === tempId ? { 
-            ...m, 
-            id: response.data.messageId || response.data.id,
-            createddate: response.data.createddate || m.createddate
-          } : m
-        ));
-      } else {
-        // Remove the failed message from UI
-        setMessages(prev => prev.filter(m => m.id !== tempId));
-        throw new Error(response.message || 'Failed to send message');
-      }
+      
+      // The mutation will handle optimistic updates and cache invalidation
+      console.log('Message sent successfully via API');
     } catch (error) {
       console.error('API send message failed:', error);
-      // Remove the failed message from UI
-      setMessages(prev => prev.filter(m => m.id !== tempId));
+      // The mutation will handle error states
     }
-  }, [self, otherUser.id]);
+  }, [self, otherUser.id, sendMessageMutation]);
 
   // Send message via WebSocket with API fallback
   const handleSend = useCallback(async () => {
@@ -310,8 +302,7 @@ const ChatScreen: React.FC = () => {
       is_seen: false,
     };
 
-    // Optimistically add to UI immediately
-    setMessages(prev => [...prev, msgPayload]);
+    // The mutation will handle optimistic updates automatically
     
     const messageText = input.trim();
     setInput('');
@@ -383,66 +374,18 @@ const ChatScreen: React.FC = () => {
     }
   }, []);
 
-  // Load messages only once when entering chat
+  // Auto-scroll to bottom when messages are loaded
   useEffect(() => {
-    let isMounted = true;
-    
-    const loadMessages = async () => {
-      if (!self?.id) return;
+    if (messages.length > 0 && !isLoadingMessages) {
+      setTimeout(() => {
+        console.log('Initial scroll to bottom after loading messages');
+        scrollToBottom(false);
+      }, 500);
       
-      try {
-        setIsLoading(true);
-        // Fetch existing messages only once
-        const res = await ApiService.fetchChatMessages(self.id, otherUser.id);
-        console.log('Chat API response:', res);
-        
-        if (isMounted) {
-          let messagesArray = [];
-          
-          if (Array.isArray(res?.data?.data)) {
-            messagesArray = res.data.data;
-          } else if (Array.isArray(res?.data)) {
-            messagesArray = res.data;
-          } else if (Array.isArray(res)) {
-            messagesArray = res;
-          }
-          
-          // Ensure all messages have valid IDs
-          const validatedMessages = messagesArray.map((msg: any, index: number) => ({
-            ...msg,
-            id: msg.id || `loaded-${index}-${Date.now()}`
-          }));
-          
-          setMessages(validatedMessages);
-          
-          // Auto-scroll to bottom after loading messages
-          setTimeout(() => {
-            console.log('Initial scroll to bottom after loading messages');
-            scrollToBottom(false);
-          }, 500);
-          
-          // One additional scroll attempt to ensure it works
-          setTimeout(() => scrollToBottom(false), 1000);
-        }
-      } catch (error) {
-        console.error('Failed to fetch messages:', error);
-        if (isMounted) {
-          setMessages([]);
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    // Only load messages once when component mounts
-    loadMessages();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [self?.id, otherUser.id]); // Removed scrollToBottom dependency
+      // One additional scroll attempt to ensure it works
+      setTimeout(() => scrollToBottom(false), 1000);
+    }
+  }, [messages.length, isLoadingMessages, scrollToBottom]);
 
   // Setup WebSocket connection immediately when component mounts
   useEffect(() => {
@@ -488,8 +431,10 @@ const ChatScreen: React.FC = () => {
       
       // Mark messages as read when entering chat
       if (self?.id) {
-        ApiService.markMessagesAsRead(self.id, otherUser.id)
-          .catch(error => console.error('Failed to mark messages as read:', error));
+        markAsReadMutation.mutate({
+          userId: self.id,
+          senderId: otherUser.id
+        });
       }
       
       // Scroll to bottom when focusing on chat (like WhatsApp)
@@ -567,7 +512,7 @@ const ChatScreen: React.FC = () => {
     <MessageItem item={item} index={index} isDarkMode={isDarkMode} self={self} />
   ), [isDarkMode, self]);
 
-  if (!self) {
+  if (!self || isLoadingMessages) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: isDarkMode ? '#181A20' : '#f3f6fa' }]}>
         <ActivityIndicator size="large" />
@@ -599,7 +544,7 @@ const ChatScreen: React.FC = () => {
           </View>
         </View>
         
-        {isLoading ? (
+        {isLoadingMessages ? (
           <View style={[styles.loadingContainer, { justifyContent: 'center', alignItems: 'center' }]}>
             <ActivityIndicator size="large" color={isDarkMode ? '#fff' : '#333'} />
             <Text style={[styles.loadingText, { color: isDarkMode ? '#bbb' : '#666' }]}>Loading messages...</Text>

@@ -18,24 +18,17 @@ import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Feather';
 import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import RazorpayCheckout from 'react-native-razorpay';
-
-// Components
+import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { useWalletBalance, usePremiumStatus, useWithdrawalRequests } from '../../hooks/useQueries';
+import ApiService from '../../services/ApiService';
 import Header from '../../components/common/Header';
 import ScreenTransition from '../../components/common/ScreenTransition';
-
-// Skeleton Components
 import BalanceCardSkeleton from '../../components/skeletons/BalanceCardSkeleton';
 import PlanCardSkeleton from '../../components/skeletons/PlanCardSkeleton';
 import TransactionListSkeleton from '../../components/skeletons/TransactionListSkeleton';
-
-// Context and services
-import {useTheme} from '../../contexts/ThemeContext';
-import {useAuth} from '../../contexts/AuthContext';
-import ApiService from '../../services/ApiService';
-import WalletService from '../../services/WalletService';
-import {ENDPOINTS} from '../../constants/api';
-import UserPremiumPlans from './UserPremiumPlans';
 import { useWallet } from '../../contexts/WalletContext';
+import UserPremiumPlans from './UserPremiumPlans';
 
 const WITHDRAWAL_THRESHOLD = {
   REGULAR: 100,
@@ -88,134 +81,102 @@ const WalletScreen = () => {
   const currentBalance = typeof balance === 'string' ? parseFloat(balance) : (typeof balance === 'number' ? balance : 0);
   const canWithdraw = currentBalance >= minimumWithdrawal;
 
-  // Single coordinated fetch function
-  const fetchAllWalletData = useCallback(async (isRefresh = false) => {
-    if (!user || !user.id) {
-      console.log('WalletScreen: No user, skipping data fetch');
-      setIsInitialLoading(false);
-      setIsRefreshing(false);
-      return;
-    }
+  // TanStack Query hooks for data fetching
+  const {
+    data: balanceData,
+    isLoading: balanceLoading,
+    error: balanceErrorQuery,
+    refetch: refetchBalance,
+  } = useWalletBalance(user?.id || 0);
 
-    // Abort any ongoing requests
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    abortControllerRef.current = new AbortController();
-    const signal = abortControllerRef.current.signal;
+  const {
+    data: premiumData,
+    isLoading: premiumLoading,
+    error: premiumErrorQuery,
+  } = usePremiumStatus(user?.id || 0);
 
-    if (isRefresh) {
-      setIsRefreshing(true);
+  const {
+    data: withdrawalData,
+    isLoading: withdrawalLoading,
+    error: withdrawalErrorQuery,
+    refetch: refetchWithdrawals,
+  } = useWithdrawalRequests(user?.id || 0);
+
+
+
+  // Update local state when TanStack Query data changes
+  useEffect(() => {
+    if (balanceData?.availableBalance) {
+      setBalance(balanceData.availableBalance);
+      setDataFetched(prev => ({ ...prev, balance: true }));
+    }
+  }, [balanceData]);
+
+  useEffect(() => {
+    if (premiumData) {
+      // Check if premium is not expired - handle the API response format properly
+      const isPremiumActive = !premiumData.is_premium_expired;
+      setIsPremium(isPremiumActive);
+      setDataFetched(prev => ({ ...prev, premium: true }));
     } else {
-      setIsInitialLoading(true);
+      // If no premium data, user is not premium
+      setIsPremium(false);
+      setDataFetched(prev => ({ ...prev, premium: true }));
     }
+  }, [premiumData]);
 
-    console.log(`WalletScreen: ${isRefresh ? 'Refreshing' : 'Initial loading'} wallet data`);
+  useEffect(() => {
+    if (withdrawalData?.data) {
+      setWithdrawRequests(withdrawalData.data);
+      setDataFetched(prev => ({ ...prev, withdrawals: true }));
+    }
+  }, [withdrawalData]);
 
-    try {
-      // Reset error states
-      setBalanceError(null);
+  // Handle errors from TanStack Query
+  useEffect(() => {
+    if (balanceErrorQuery) {
+      setBalanceError('Failed to load balance');
+    }
+  }, [balanceErrorQuery]);
+
+  useEffect(() => {
+    if (premiumErrorQuery) {
+      // Only set error for actual network errors, not for "No active premium plan" responses
+      const errorMessage = premiumErrorQuery?.message || '';
+      if (errorMessage.toLowerCase().includes('no active premium plan')) {
+        // This is a valid response indicating no premium, not an error
+        setPremiumError(null);
+      } else {
+        setPremiumError('Failed to load premium status');
+      }
+    } else {
+      // Clear error when there's no error
       setPremiumError(null);
-      setTransactionsError(null);
-      setWithdrawalsError(null);
-
-      // Create array of promises for parallel execution
-      const promises: Promise<any>[] = [];
-      const promiseMap: string[] = [];
-
-      // Only fetch data that hasn't been fetched yet (unless it's a refresh)
-      if (!dataFetched.balance || isRefresh) {
-        promises.push(WalletService.getWalletBalance(user.id));
-        promiseMap.push('balance');
-      }
-
-      if (!dataFetched.premium || isRefresh) {
-        promises.push(WalletService.checkPremiumStatus(user.id));
-        promiseMap.push('premium');
-      }
-
-      if (!dataFetched.transactions || isRefresh) {
-        promises.push(WalletService.getTransactionHistory(user.id));
-        promiseMap.push('transactions');
-      }
-
-      if ((!dataFetched.withdrawals || isRefresh) && activeTab === 'withdrawals') {
-        promises.push(
-          ApiService.get(`/api/withdrawal-requests/${user.id}`, undefined, { signal })
-        );
-        promiseMap.push('withdrawals');
-      }
-
-      // Execute all promises with allSettled to handle individual failures
-      const results = await Promise.allSettled(promises);
-
-      // Process results individually
-      results.forEach((result, index) => {
-        const dataType = promiseMap[index];
-        
-        if (signal.aborted) {
-          console.log('WalletScreen: Request aborted during processing');
-          return;
-        }
-
-        if (result.status === 'fulfilled') {
-          switch (dataType) {
-            case 'balance':
-              setBalance(result.value);
-              setDataFetched(prev => ({ ...prev, balance: true }));
-              console.log('WalletScreen: Balance fetched successfully');
-              break;
-            
-            case 'premium':
-              setIsPremium(result.value.isPremium);
-              setDataFetched(prev => ({ ...prev, premium: true }));
-              console.log('WalletScreen: Premium status fetched successfully');
-              break;
-            
-            case 'transactions':
-              setTransactions(result.value);
-              setDataFetched(prev => ({ ...prev, transactions: true }));
-              console.log('WalletScreen: Transactions fetched successfully');
-              break;
-            
-            case 'withdrawals':
-              setWithdrawRequests(result.value?.data || []);
-              setDataFetched(prev => ({ ...prev, withdrawals: true }));
-              console.log('WalletScreen: Withdrawals fetched successfully');
-              break;
-          }
-        } else {
-          // Handle individual API failures
-          console.error(`WalletScreen: ${dataType} fetch failed:`, result.reason);
-          
-          switch (dataType) {
-            case 'balance':
-              setBalanceError('Failed to load balance');
-              break;
-            case 'premium':
-              setPremiumError('Failed to load premium status');
-              break;
-            case 'transactions':
-              setTransactionsError('Failed to load transactions');
-              break;
-            case 'withdrawals':
-              setWithdrawalsError('Failed to load withdrawals');
-              break;
-          }
-        }
-      });
-
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('WalletScreen: Unexpected error during data fetch:', error);
-      }
-    } finally {
-      if (!signal.aborted) {
-        setIsInitialLoading(false);
-        setIsRefreshing(false);
-      }
     }
-  }, [user, activeTab, dataFetched]);
+  }, [premiumErrorQuery]);
+
+  // Also clear premium error when premium data is successfully loaded
+  useEffect(() => {
+    if (premiumData) {
+      // Clear any premium error when we have successful data
+      setPremiumError(null);
+    }
+  }, [premiumData]);
+
+  useEffect(() => {
+    if (withdrawalErrorQuery) {
+      setWithdrawalsError('Failed to load withdrawals');
+    }
+  }, [withdrawalErrorQuery]);
+
+  // Update loading states
+  useEffect(() => {
+    setIsInitialLoading(balanceLoading || premiumLoading);
+  }, [balanceLoading, premiumLoading]);
+
+  useEffect(() => {
+    setIsRefreshing(withdrawalLoading);
+  }, [withdrawalLoading]);
 
   // Fetch withdrawals when tab changes to withdrawals (only if not already fetched)
   const fetchWithdrawalsOnTabChange = useCallback(async () => {
@@ -251,51 +212,24 @@ const WalletScreen = () => {
   useFocusEffect(
     useCallback(() => {
       if (refreshBalance) refreshBalance();
-      let isMounted = true;
       console.log('WalletScreen focused');
-
-      // Only fetch if we haven't fetched any data yet
-      const hasAnyData = Object.values(dataFetched).some(fetched => fetched);
-      
-      if (!hasAnyData) {
-        console.log('WalletScreen: No data fetched yet, initiating fetch');
-        fetchAllWalletData(false).catch(error => {
-          if (isMounted) {
-            console.error('WalletScreen: Error during focus fetch:', error);
-          }
-        });
-      } else {
-        console.log('WalletScreen: Data already fetched, skipping fetch');
-        setIsInitialLoading(false);
-      }
 
       return () => {
         console.log('WalletScreen unfocused');
-        isMounted = false;
         if (abortControllerRef.current) {
           abortControllerRef.current.abort();
           abortControllerRef.current = null;
         }
       };
-    }, [fetchAllWalletData, dataFetched, refreshBalance])
+    }, [refreshBalance])
   );
 
   // Manual refresh handler
   const handleRefresh = useCallback(async () => {
     if (refreshBalance) await refreshBalance();
+    if (refetchWithdrawals) await refetchWithdrawals();
     console.log('WalletScreen: Manual refresh triggered');
-    if (!user || !user.id) return;
-
-    // Reset data fetched status for refresh
-    setDataFetched({
-      balance: false,
-      premium: false,
-      transactions: false,
-      withdrawals: false,
-    });
-
-    await fetchAllWalletData(true);
-  }, [user, fetchAllWalletData, refreshBalance]);
+  }, [refreshBalance, refetchWithdrawals]);
 
   const handleAddMoney = () => {
     navigation.navigate('AddFundsScreen');
@@ -315,8 +249,8 @@ const WalletScreen = () => {
       minimumWithdrawal,
       onSuccess: () => {
         // Refresh both balance and withdrawals after successful withdrawal
-        setDataFetched(prev => ({ ...prev, balance: false, withdrawals: false }));
-        fetchAllWalletData(true);
+        if (refreshBalance) refreshBalance();
+        if (refetchWithdrawals) refetchWithdrawals();
       }
     });
   };
@@ -389,7 +323,7 @@ const WalletScreen = () => {
     }
 
     return (
-      <UserPremiumPlans />
+      <UserPremiumPlans isPremiumProp={isPremium} />
     );
   };
 

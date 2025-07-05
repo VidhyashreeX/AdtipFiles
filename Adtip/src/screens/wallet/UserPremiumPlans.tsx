@@ -8,6 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import WalletService from '../../services/WalletService';
 import ApiService from '../../services/ApiService';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
+import { usePremiumStatus } from '../../hooks/useQueries';
 
 const { width } = Dimensions.get('window');
 
@@ -37,6 +38,13 @@ const UserPremiumPlans: React.FC<{ isPremiumProp?: boolean }> = ({ isPremiumProp
   const [subscription, setSubscription] = useState<any>(null);
   const [isCancelling, setIsCancelling] = useState(false);
 
+  // Use TanStack Query for premium status when no prop is provided
+  const {
+    data: premiumResponse,
+    isLoading: premiumQueryLoading,
+    error: premiumQueryError,
+  } = usePremiumStatus(user?.id || 0);
+
   // Fetch premium status if not provided as prop
   useEffect(() => {
     if (isPremiumProp !== undefined) {
@@ -45,47 +53,26 @@ const UserPremiumPlans: React.FC<{ isPremiumProp?: boolean }> = ({ isPremiumProp
       return;
     }
 
-    const fetchPremiumStatus = async () => {
-      if (!user?.id) {
-        setPremiumLoading(false);
-        return;
-      }
-
-      try {
-        setPremiumLoading(true);
-        console.log('UserPremiumPlans: Fetching premium status for user:', user.id);
-        
-        const premiumResponse = await ApiService.checkPremium(user.id);
-        console.log('UserPremiumPlans: Premium check response:', premiumResponse);
-        
-        // Handle check-premium API response format
-        if (premiumResponse && !premiumResponse.is_premium_expired) {
-          setIsPremium(true);
-          setPremiumPlan(premiumResponse); // Store the direct premium response
-        } else {
-          setIsPremium(false);
-          setPremiumPlan(null);
-        }
-      } catch (error: any) {
-        console.log('UserPremiumPlans: Error checking premium status:', error);
-        
-        const errorMessage = error?.message || error?.response?.data?.message || '';
-        if (errorMessage.toLowerCase().includes('no premium')) {
-          console.log('UserPremiumPlans: User has no premium subscription');
-          setIsPremium(false);
-          setPremiumPlan(null);
-        } else {
-          console.error('UserPremiumPlans: Unexpected error checking premium status:', error);
-          setIsPremium(false);
-          setPremiumPlan(null);
-        }
-      } finally {
-        setPremiumLoading(false);
-      }
-    };
-
-    fetchPremiumStatus();
-  }, [user?.id, isPremiumProp]);
+    // Use TanStack Query data
+    if (premiumResponse) {
+      // Check if premium is not expired - handle the API response format properly
+      const isPremiumActive = !premiumResponse.is_premium_expired;
+      setIsPremium(isPremiumActive);
+      setPremiumPlan(isPremiumActive ? premiumResponse : null);
+      setPremiumLoading(false);
+    } else if (premiumQueryError) {
+      // Handle error case - treat as no premium
+      console.log('UserPremiumPlans: Premium query error, treating as no premium:', premiumQueryError);
+      setIsPremium(false);
+      setPremiumPlan(null);
+      setPremiumLoading(false);
+    } else if (!premiumQueryLoading) {
+      // No data and not loading - treat as no premium
+      setIsPremium(false);
+      setPremiumPlan(null);
+      setPremiumLoading(false);
+    }
+  }, [isPremiumProp, premiumResponse, premiumQueryLoading, premiumQueryError]);
 
   useEffect(() => {
     fetchData();
@@ -131,7 +118,7 @@ const UserPremiumPlans: React.FC<{ isPremiumProp?: boolean }> = ({ isPremiumProp
         { text: "Yes, Cancel", style: "destructive", onPress: async () => {
           setIsCancelling(true);
           try {
-            const response = await ApiService.cancelSubscription();
+            const response = await ApiService.cancelSubscription(user?.id || 0);
             if (response.status) {
               Alert.alert("Success", "Your subscription has been scheduled for cancellation.");
               fetchData(); // Refresh data
@@ -229,7 +216,7 @@ const UserPremiumPlans: React.FC<{ isPremiumProp?: boolean }> = ({ isPremiumProp
       )}
       <TouchableOpacity
         style={[styles.upgradeBtn, { backgroundColor: colors.primary, marginTop: 24 }]}
-        onPress={() => navigation.navigate('SubscriptionScreen')}
+        onPress={() => navigation.navigate('SubscriptionScreen' as never)}
       >
         <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Upgrade Premium</Text>
       </TouchableOpacity>
