@@ -52,6 +52,7 @@ import BlocklistService from '../BlocklistService';
 import CallMediaManager from './CallMediaManager';
 import CallBillingService from './CallBillingService';
 import WalletService from '../WalletService';
+import CallKeepIntegrationService from './CallKeepIntegrationService';
 
 // ===== TYPES =====
 
@@ -154,6 +155,10 @@ class UnifiedCallService {
   // ===== BILLING MANAGEMENT =====
   private billingService: CallBillingService;
   
+  // ===== CALLLEEP INTEGRATION =====
+  private callKeepService: CallKeepIntegrationService;
+  private callKeepEnabled = false;
+  
   // ===== APP STATE =====
   private appState: AppStateStatus = 'active';
   private audioPermissionGranted = false;
@@ -177,6 +182,7 @@ class UnifiedCallService {
   private constructor() {
     this.mediaManager = CallMediaManager.getInstance();
     this.billingService = CallBillingService.getInstance();
+    this.callKeepService = CallKeepIntegrationService.getInstance();
     this.setupAppStateListener();
     this.setupBillingEventListeners();
   }
@@ -248,6 +254,9 @@ class UnifiedCallService {
       // Initialize VideoSDK
       await this.initializeVideoSDK();
 
+      // Initialize CallKeep (self-managed mode)
+      await this.initializeCallKeep();
+
       // Check permissions (don't request yet)
       await this.checkPermissions();
 
@@ -292,6 +301,33 @@ class UnifiedCallService {
       
       await videoSDKService.initialize({ apiKey: videoSDKApiKey });
       console.log('[UnifiedCallService] VideoSDK initialized successfully');
+    }
+  }
+
+  /**
+   * Initialize CallKeep integration
+   */
+  private async initializeCallKeep(): Promise<void> {
+    try {
+      console.log('[UnifiedCallService] Initializing CallKeep integration...');
+      
+      const isAvailable = await this.callKeepService.isAvailable();
+      if (!isAvailable) {
+        console.warn('[UnifiedCallService] CallKeep not available, continuing without native UI');
+        return;
+      }
+
+      const success = await this.callKeepService.initialize();
+      if (success) {
+        this.callKeepEnabled = true;
+        console.log('[UnifiedCallService] ✅ CallKeep integration initialized');
+      } else {
+        console.warn('[UnifiedCallService] CallKeep initialization failed, continuing with notifications only');
+      }
+
+    } catch (error) {
+      console.error('[UnifiedCallService] Error initializing CallKeep:', error);
+      // Continue without CallKeep - notifications will still work
     }
   }
 
@@ -1178,11 +1214,27 @@ class UnifiedCallService {
         callStatus: 'ringing'
       });
 
-      // Show incoming call notification
-      await this.showIncomingCallNotification(incomingCallData);
-
-      // Start vibration
-      Vibration.vibrate(this.INCOMING_CALL_VIBRATION, true);
+      // Try CallKeep first, fallback to notifications
+      if (this.callKeepEnabled) {
+        try {
+          await this.callKeepService.displayIncomingCall(
+            incomingCallData.callId,
+            incomingCallData.callerName,
+            incomingCallData.callType === 'video',
+            incomingCallData.callerId
+          );
+          console.log('[UnifiedCallService] ✅ Incoming call displayed via CallKeep');
+        } catch (callKeepError) {
+          console.warn('[UnifiedCallService] CallKeep failed, falling back to notifications:', callKeepError);
+          await this.showIncomingCallNotification(incomingCallData);
+          Vibration.vibrate(this.INCOMING_CALL_VIBRATION, true);
+        }
+      } else {
+        // Show incoming call notification
+        await this.showIncomingCallNotification(incomingCallData);
+        // Start vibration
+        Vibration.vibrate(this.INCOMING_CALL_VIBRATION, true);
+      }
 
       // Emit event for UI components
       appEventEmitter.emit('incomingCall', incomingCallData);
@@ -1353,8 +1405,18 @@ class UnifiedCallService {
       }
       // Stop vibration
       Vibration.cancel();
-      // Hide incoming call notification
-      await this.hideIncomingCallNotification();
+      
+      // Hide incoming call notification or end CallKeep call
+      if (this.callKeepEnabled) {
+        try {
+          await this.callKeepService.setCallActive(targetCall.callId);
+        } catch (error) {
+          console.warn('[UnifiedCallService] CallKeep setCallActive failed:', error);
+        }
+      } else {
+        await this.hideIncomingCallNotification();
+      }
+      
       // Update call status
       targetCall.status = 'connecting';
       this.updateCallState({
@@ -1515,10 +1577,22 @@ class UnifiedCallService {
         return;
       }
 
-      console.log('[UnifiedCallService] Hiding notifications...');
-      await this.hideIncomingCallNotification();
-      await this.hideOngoingCallNotification();
-      console.log('[UnifiedCallService] Notifications hidden.');
+      console.log('[UnifiedCallService] Hiding notifications and ending CallKeep call...');
+      
+      // End CallKeep call if enabled
+      if (this.callKeepEnabled) {
+        try {
+          await this.callKeepService.endCall(targetCall.callId);
+          console.log('[UnifiedCallService] CallKeep call ended');
+        } catch (error) {
+          console.warn('[UnifiedCallService] CallKeep endCall failed:', error);
+        }
+      } else {
+        await this.hideIncomingCallNotification();
+        await this.hideOngoingCallNotification();
+      }
+      
+      console.log('[UnifiedCallService] Notifications and CallKeep handled.');
 
       console.log('[UnifiedCallService] Sending call status update...');
       await this.sendCallStatusUpdate(targetCall, 'ended');
