@@ -114,7 +114,13 @@ const WalletScreen = () => {
 
   useEffect(() => {
     if (premiumData) {
-      setIsPremium(premiumData.user_id ? true : false);
+      // Check if premium is not expired - handle the API response format properly
+      const isPremiumActive = !premiumData.is_premium_expired;
+      setIsPremium(isPremiumActive);
+      setDataFetched(prev => ({ ...prev, premium: true }));
+    } else {
+      // If no premium data, user is not premium
+      setIsPremium(false);
       setDataFetched(prev => ({ ...prev, premium: true }));
     }
   }, [premiumData]);
@@ -135,9 +141,27 @@ const WalletScreen = () => {
 
   useEffect(() => {
     if (premiumErrorQuery) {
-      setPremiumError('Failed to load premium status');
+      // Only set error for actual network errors, not for "No active premium plan" responses
+      const errorMessage = premiumErrorQuery?.message || '';
+      if (errorMessage.toLowerCase().includes('no active premium plan')) {
+        // This is a valid response indicating no premium, not an error
+        setPremiumError(null);
+      } else {
+        setPremiumError('Failed to load premium status');
+      }
+    } else {
+      // Clear error when there's no error
+      setPremiumError(null);
     }
   }, [premiumErrorQuery]);
+
+  // Also clear premium error when premium data is successfully loaded
+  useEffect(() => {
+    if (premiumData) {
+      // Clear any premium error when we have successful data
+      setPremiumError(null);
+    }
+  }, [premiumData]);
 
   useEffect(() => {
     if (withdrawalErrorQuery) {
@@ -299,7 +323,7 @@ const WalletScreen = () => {
     }
 
     return (
-      <UserPremiumPlans />
+      <UserPremiumPlans isPremiumProp={isPremium} />
     );
   };
 
