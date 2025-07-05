@@ -922,6 +922,22 @@ export default class ApiService {
   }
 
   /**
+   * Search videos using searchfuntube API
+   */
+  static async searchVideos(searchQuery: string, page: number = 1): Promise<any> {
+    try {
+      const response = await this.post('/api/searchfuntube', {
+        searchname: searchQuery,
+        page: page
+      });
+      return response;
+    } catch (error) {
+      console.error('ApiService.searchVideos error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get channel analytics
    */
   static async getChannelAnalytics(channelId: string | number): Promise<any> {

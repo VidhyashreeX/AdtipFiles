@@ -27,7 +27,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataContext } from '../../providers/DataProvider';
-import { useVideos, usePrefetchData } from '../../hooks/useQueries';
+import { useVideos, useSearchVideos, usePrefetchData } from '../../hooks/useQueries';
 import { useNetInfo } from '@react-native-community/netinfo';
 import Header from '../../components/common/Header';
 import VideoCardSkeleton from '../../components/skeletons/VideoCardSkeleton';
@@ -123,6 +123,7 @@ const TipTubeScreen = () => {
   // UI state management (decoupled from navigation)
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isTipTubeSearchActive, setIsTipTubeSearchActive] = useState(false);
   const [previewingVideoId, setPreviewingVideoId] = useState<number | null>(null);
   const [selectedVideoId, setSelectedVideoId] = useState<number | null>(null);
   const [userChannelId, setUserChannelId] = useState<string | null>(null);
@@ -146,6 +147,8 @@ const TipTubeScreen = () => {
 
   // Enhanced data layer using React Query v5
   const categoryId = categoryToIdMap[selectedCategory] || 0;
+  
+  // Use search hook when there's a search query, otherwise use regular videos hook
   const {
     data: videosData,
     isLoading: videosLoading,
@@ -154,7 +157,9 @@ const TipTubeScreen = () => {
     refetch: refreshVideos,
     fetchNextPage: loadMoreVideos,
     hasNextPage: hasMoreVideos,
-  } = useVideos(categoryId, user?.id, searchQuery, showChannelVideos);
+  } = searchQuery && searchQuery.trim() 
+    ? useSearchVideos(searchQuery.trim(), user?.id)
+    : useVideos(categoryId, user?.id, undefined, showChannelVideos);
 
   // Prefetch data for better performance
   const { prefetchProfile } = usePrefetchData();
@@ -333,16 +338,38 @@ const TipTubeScreen = () => {
   const handleCategoryChange = useCallback((categoryName: string) => {
     console.log('[TipTubeScreen] Category changed to:', categoryName);
     setSelectedCategory(categoryName);
+    // Clear search when changing categories
+    setSearchQuery('');
     // Clear cache for better UX on category change
     clearCache(`videos-${categoryToIdMap[selectedCategory]}`);
   }, [selectedCategory, clearCache]);
 
-  const handleSearch = useCallback((query: string) => {
-    console.log('[TipTubeScreen] Search query:', query);
+
+
+  const handleTipTubeSearch = useCallback((query: string) => {
+    console.log('[TipTubeScreen] TipTube search submitted:', query);
     setSearchQuery(query);
+    setIsTipTubeSearchActive(false);
     // Clear cache to force fresh search results
-    clearCache(`videos-${categoryId}`);
+    if (query.trim()) {
+      console.log('[TipTubeScreen] Using search API for query:', query.trim());
+      clearCache(`searchVideos-${query.trim()}`);
+    } else {
+      console.log('[TipTubeScreen] Using regular videos API');
+      clearCache(`videos-${categoryId}`);
+    }
   }, [categoryId, clearCache]);
+
+  const handleTipTubeSearchChange = useCallback((query: string) => {
+    console.log('[TipTubeScreen] TipTube search query changed:', query);
+    setSearchQuery(query || '');
+  }, []);
+
+  const handleTipTubeSearchSubmit = useCallback(() => {
+    if (searchQuery && searchQuery.trim()) {
+      handleTipTubeSearch(searchQuery.trim());
+    }
+  }, [searchQuery, handleTipTubeSearch]);
 
   const handleMyChannel = useCallback(() => {
     if (userChannelId && user?.id) {
@@ -438,24 +465,47 @@ const TipTubeScreen = () => {
   const renderEmptyState = useCallback(() => {
     if (initialLoading) return null;
 
+    const hasSearchQuery = searchQuery && searchQuery.trim();
+
     return (
       <View style={styles.emptyContainer}>
+        <Icon 
+          name={hasSearchQuery ? "search" : "video"} 
+          size={48} 
+          color={colors.text.tertiary} 
+        />
         <Text style={styles.emptyText}>
           {videosError && !isOnline 
             ? 'You\'re offline. Videos will load when you\'re back online.'
             : videosError 
             ? 'Failed to load videos. Please try again.'
-            : searchQuery
-            ? `No videos found for "${searchQuery}"`
+            : hasSearchQuery
+            ? `No videos found for "${searchQuery.trim()}"`
             : 'No videos available'}
         </Text>
+        {hasSearchQuery && (
+          <Text style={[styles.emptyText, {color: colors.text.tertiary, fontSize: 14, marginTop: 8}]}>
+            Try searching with different keywords
+          </Text>
+        )}
       </View>
     );
-  }, [initialLoading, videosError, isOnline, searchQuery, styles]);
+  }, [initialLoading, videosError, isOnline, searchQuery, styles, colors.text.tertiary]);
 
   // Render category header
   const renderCategoryHeader = useCallback(() => (
     <View style={styles.categoryContainer}>
+      {searchQuery && searchQuery.trim() && (
+        <View style={styles.searchIndicator}>
+          <Icon name="search" size={16} color={colors.primary} />
+          <Text style={[styles.searchIndicatorText, {color: colors.primary}]}>
+            Search results for "{searchQuery.trim()}"
+          </Text>
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Icon name="x" size={16} color={colors.text.secondary} />
+          </TouchableOpacity>
+        </View>
+      )}
       <FlatList
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -475,14 +525,14 @@ const TipTubeScreen = () => {
                 styles.categoryButtonText,
                 selectedCategory === item.name && styles.selectedCategoryButtonText
               ]}>
-                {item.icon} {item.name}
+                {item.icon || ''} {item.name || ''}
               </Text>
             </TouchableOpacity>
           </Animated.View>
         )}
       />
     </View>
-  ), [selectedCategory, styles, handleCategoryChange]);
+  ), [selectedCategory, styles, handleCategoryChange, searchQuery, colors.primary, colors.text.secondary]);
 
   // Render video item - YouTube style
   const renderVideoItem = useCallback(({ item, index }: { item: Video; index: number }) => (
@@ -606,10 +656,33 @@ const TipTubeScreen = () => {
         <Header 
           title="" 
           showTipShortsIcon={true}
-          showSearch={true}
+          showSearch={false}
           showWallet={false}
-          onSearchQueryChange={handleSearch}
-          onSearchSubmit={handleSearch}
+          centerComponent={
+            isTipTubeSearchActive ? (
+              <View style={styles.tipTubeSearchContainer}>
+                <TextInput
+                  style={[styles.tipTubeSearchInput, { color: colors.text.primary, borderColor: colors.border }]}
+                  placeholder="Search TipTube videos..."
+                  placeholderTextColor={colors.text.secondary}
+                  value={searchQuery || ''}
+                  onChangeText={handleTipTubeSearchChange}
+                  onSubmitEditing={handleTipTubeSearchSubmit}
+                  autoFocus={true}
+                  returnKeyType="search"
+                />
+                <TouchableOpacity 
+                  onPress={() => {
+                    setSearchQuery('');
+                    setIsTipTubeSearchActive(false);
+                  }}
+                  style={styles.tipTubeSearchClearButton}
+                >
+                  <Icon name="x" size={20} color={colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
+            ) : undefined
+          }
           rightComponent={
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               {/* TipShorts Navigation Icon */}
@@ -638,9 +711,9 @@ const TipTubeScreen = () => {
               >
                 <Icon name="tv" size={20} color={colors.text.secondary} />
               </TouchableOpacity>
-              {/* Search Icon */}
+              {/* TipTube Search Icon */}
               <TouchableOpacity 
-                onPress={() => {/* This will be handled by Header's internal search logic */}} 
+                onPress={() => setIsTipTubeSearchActive(true)} 
                 style={styles.headerIconButton}
                 activeOpacity={0.7}
               >
@@ -728,6 +801,40 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  searchIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: HORIZONTAL_PADDING,
+    paddingVertical: 8,
+    backgroundColor: colors.primary + '10',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  searchIndicatorText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
+    flex: 1,
+  },
+  tipTubeSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingHorizontal: 12,
+  },
+  tipTubeSearchInput: {
+    flex: 1,
+    height: 36,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    backgroundColor: colors.cardSecondary,
+  },
+  tipTubeSearchClearButton: {
+    padding: 8,
+    marginLeft: 8,
   },
   categoryScrollContent: {
     paddingHorizontal: HORIZONTAL_PADDING,

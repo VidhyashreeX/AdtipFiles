@@ -13,14 +13,21 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
-import ScreenTransition from '../../components/common/ScreenTransition'; // ADD THIS IMPORT
+import ScreenTransition from '../../components/common/ScreenTransition';
 
-interface ReferralStats {
-  totalReferrals: number;
-  totalEarnings: number;
-  pendingEarnings: number;
-  thisMonthReferrals: number;
-  thisMonthEarnings: number;
+interface ReferralData {
+  referral_code: string;
+  total_referrals: number;
+  total_referrals_earnings: number;
+  total_referral_withdrawals_amount: number;
+  available_referral_balance: number;
+  each_referral: number;
+  total_premiums: number;
+  total_premium_earnings: number;
+  total_coupon_withdrawals_amount: number;
+  available_coupon_balance: number;
+  coupon_code: string;
+  each_coupon: number;
 }
 
 interface ReferralActivity {
@@ -34,12 +41,19 @@ interface ReferralActivity {
 
 const ReferralScreen: React.FC = () => {
   const {colors} = useTheme();
-  const [stats, setStats] = useState<ReferralStats>({
-    totalReferrals: 0,
-    totalEarnings: 0,
-    pendingEarnings: 0,
-    thisMonthReferrals: 0,
-    thisMonthEarnings: 0,
+  const [referralData, setReferralData] = useState<ReferralData>({
+    referral_code: '',
+    total_referrals: 0,
+    total_referrals_earnings: 0,
+    total_referral_withdrawals_amount: 0,
+    available_referral_balance: 0,
+    each_referral: 0,
+    total_premiums: 0,
+    total_premium_earnings: 0,
+    total_coupon_withdrawals_amount: 0,
+    available_coupon_balance: 0,
+    coupon_code: '',
+    each_coupon: 0,
   });
   const [activities, setActivities] = useState<ReferralActivity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -49,14 +63,25 @@ const ReferralScreen: React.FC = () => {
   }, []);
 
   const loadReferralData = () => {
-    // Simulate API call
+    // TODO: Replace with actual API call
+    // const response = await fetch('/api/referral/details/:userid');
+    // const data = await response.json();
+    
+    // Simulate API call with the new data structure
     setTimeout(() => {
-      const mockStats: ReferralStats = {
-        totalReferrals: 12,
-        totalEarnings: 45.5,
-        pendingEarnings: 8.0,
-        thisMonthReferrals: 3,
-        thisMonthEarnings: 12.5,
+      const mockData: ReferralData = {
+        referral_code: "ADTIP508167A",
+        total_referrals: 0,
+        total_referrals_earnings: 0,
+        total_referral_withdrawals_amount: 0,
+        available_referral_balance: 0,
+        each_referral: 3,
+        total_premiums: 0,
+        total_premium_earnings: 0,
+        total_coupon_withdrawals_amount: 0,
+        available_coupon_balance: 0,
+        coupon_code: "SAVE50816897W50",
+        each_coupon: 30,
       };
 
       const mockActivities: ReferralActivity[] = [
@@ -76,25 +101,9 @@ const ReferralScreen: React.FC = () => {
           timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24),
           status: 'pending',
         },
-        {
-          id: '3',
-          userName: 'Mike Johnson',
-          action: 'monthly_active',
-          earnings: 3.0,
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2),
-          status: 'completed',
-        },
-        {
-          id: '4',
-          userName: 'Emma Wilson',
-          action: 'joined',
-          earnings: 2.0,
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3),
-          status: 'completed',
-        },
       ];
 
-      setStats(mockStats);
+      setReferralData(mockData);
       setActivities(mockActivities);
       setIsLoading(false);
     }, 1000);
@@ -102,8 +111,8 @@ const ReferralScreen: React.FC = () => {
 
   const handleShare = async () => {
     try {
-      const shareUrl = 'https://adtip.app/invite/ADTIP123';
-      const message = `Join me on Adtip and earn money watching videos and creating content! Use my referral code: ADTIP123\n\n${shareUrl}`;
+      const shareUrl = `https://adtip.app/invite/${referralData.referral_code}`;
+      const message = `Join me on Adtip and earn money watching videos and creating content! Use my referral code: ${referralData.referral_code}\n\n${shareUrl}`;
 
       await Share.share({
         message,
@@ -116,14 +125,47 @@ const ReferralScreen: React.FC = () => {
   };
 
   const copyReferralCode = () => {
-    Clipboard.setString('ADTIP123');
+    Clipboard.setString(referralData.referral_code);
     Alert.alert('Copied!', 'Referral code copied to clipboard');
   };
 
   const copyReferralLink = () => {
-    const shareUrl = 'https://adtip.app/invite/ADTIP123';
+    const shareUrl = `https://adtip.app/invite/${referralData.referral_code}`;
     Clipboard.setString(shareUrl);
     Alert.alert('Copied!', 'Referral link copied to clipboard');
+  };
+
+  const copyCouponCode = () => {
+    Clipboard.setString(referralData.coupon_code);
+    Alert.alert('Copied!', 'Coupon code copied to clipboard');
+  };
+
+  const handleReferralWithdraw = () => {
+    // TODO: Implement referral withdrawal API
+    Alert.alert(
+      'Withdraw Referral Earnings',
+      `Withdraw ₹${referralData.available_referral_balance} from your referral earnings?`,
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {text: 'Withdraw', onPress: () => {
+          Alert.alert('Success', 'Withdrawal request submitted successfully!');
+        }},
+      ]
+    );
+  };
+
+  const handleCouponWithdraw = () => {
+    // TODO: Implement coupon withdrawal API
+    Alert.alert(
+      'Withdraw Coupon Earnings',
+      `Withdraw ₹${referralData.available_coupon_balance} from your coupon earnings?`,
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {text: 'Withdraw', onPress: () => {
+          Alert.alert('Success', 'Withdrawal request submitted successfully!');
+        }},
+      ]
+    );
   };
 
   const getActionIcon = (action: string) => {
@@ -188,7 +230,7 @@ const ReferralScreen: React.FC = () => {
 
   const renderActivity = ({item}: {item: ReferralActivity}) => (
     <View
-      style={[styles.activityItem, {borderBottomColor: colors.border.light}]}>
+      style={[styles.activityItem, {borderBottomColor: colors.borderLight}]}>
       <View
         style={[
           styles.activityIconContainer,
@@ -216,7 +258,7 @@ const ReferralScreen: React.FC = () => {
 
       <View style={styles.activityEarnings}>
         <Text style={[styles.earningsAmount, {color: colors.primary}]}>
-          +${item.earnings.toFixed(2)}
+          +₹{item.earnings.toFixed(2)}
         </Text>
         <View
           style={[
@@ -250,52 +292,105 @@ const ReferralScreen: React.FC = () => {
           keyExtractor={item => item.id}
           ListHeaderComponent={
             <View>
-              {/* Stats */}
+              {/* Referral Stats */}
               <View style={styles.statsContainer}>
+                <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
+                  Referral Earnings
+                </Text>
                 <View style={styles.statsRow}>
                   {renderStatCard(
                     'Total Referrals',
-                    stats.totalReferrals.toString(),
+                    referralData.total_referrals.toString(),
                   )}
                   {renderStatCard(
                     'Total Earnings',
-                    `$${stats.totalEarnings.toFixed(2)}`,
+                    `₹${referralData.total_referrals_earnings.toFixed(2)}`,
                   )}
                 </View>
                 <View style={styles.statsRow}>
                   {renderStatCard(
-                    'This Month',
-                    stats.thisMonthReferrals.toString(),
-                    'referrals',
+                    'Available Balance',
+                    `₹${referralData.available_referral_balance.toFixed(2)}`,
                   )}
                   {renderStatCard(
-                    'Month Earnings',
-                    `$${stats.thisMonthEarnings.toFixed(2)}`,
+                    'Per Referral',
+                    `₹${referralData.each_referral}`,
                   )}
                 </View>
               </View>
 
-              {/* Pending Earnings */}
-              {stats.pendingEarnings > 0 && (
+              {/* Referral Withdraw Section */}
+              {referralData.available_referral_balance > 0 && (
                 <View
                   style={[
-                    styles.pendingContainer,
+                    styles.withdrawContainer,
                     {backgroundColor: colors.surface},
                   ]}>
-                  <View style={styles.pendingContent}>
-                    <Icon name="clock" size={20} color="#FFEAA7" />
+                  <View style={styles.withdrawContent}>
+                    <Icon name="credit-card" size={20} color="#4CAF50" />
                     <Text
-                      style={[styles.pendingText, {color: colors.text.primary}]}>
-                      ${stats.pendingEarnings.toFixed(2)} pending
+                      style={[styles.withdrawText, {color: colors.text.primary}]}>
+                      ₹{referralData.available_referral_balance.toFixed(2)} available to withdraw
                     </Text>
                   </View>
-                  <Text
-                    style={[
-                      styles.pendingSubtext,
-                      {color: colors.text.secondary},
-                    ]}>
-                    Will be processed within 24-48 hours
-                  </Text>
+                  <TouchableOpacity
+                    style={[styles.withdrawButton, {backgroundColor: colors.primary}]}
+                    onPress={handleReferralWithdraw}>
+                    <Text style={[styles.withdrawButtonText, {color: colors.white}]}>
+                      Withdraw
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Coupon Stats */}
+              <View style={styles.statsContainer}>
+                <Text style={[styles.sectionTitle, {color: colors.text.primary}]}>
+                  Coupon Earnings
+                </Text>
+                <View style={styles.statsRow}>
+                  {renderStatCard(
+                    'Total Premiums',
+                    referralData.total_premiums.toString(),
+                  )}
+                  {renderStatCard(
+                    'Total Earnings',
+                    `₹${referralData.total_premium_earnings.toFixed(2)}`,
+                  )}
+                </View>
+                <View style={styles.statsRow}>
+                  {renderStatCard(
+                    'Available Balance',
+                    `₹${referralData.available_coupon_balance.toFixed(2)}`,
+                  )}
+                  {renderStatCard(
+                    'Per Coupon',
+                    `₹${referralData.each_coupon}`,
+                  )}
+                </View>
+              </View>
+
+              {/* Coupon Withdraw Section */}
+              {referralData.available_coupon_balance > 0 && (
+                <View
+                  style={[
+                    styles.withdrawContainer,
+                    {backgroundColor: colors.surface},
+                  ]}>
+                  <View style={styles.withdrawContent}>
+                    <Icon name="credit-card" size={20} color="#4CAF50" />
+                    <Text
+                      style={[styles.withdrawText, {color: colors.text.primary}]}>
+                      ₹{referralData.available_coupon_balance.toFixed(2)} available to withdraw
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.withdrawButton, {backgroundColor: colors.primary}]}
+                    onPress={handleCouponWithdraw}>
+                    <Text style={[styles.withdrawButtonText, {color: colors.white}]}>
+                      Withdraw
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               )}
 
@@ -318,8 +413,7 @@ const ReferralScreen: React.FC = () => {
                     styles.referralDescription,
                     {color: colors.text.secondary},
                   ]}>
-                  Share your referral code and earn $2 for each friend who joins,
-                  plus 10% of their earnings!
+                  Share your referral code and earn ₹{referralData.each_referral} for each friend who joins!
                 </Text>
 
                 <View
@@ -333,7 +427,7 @@ const ReferralScreen: React.FC = () => {
                   </Text>
                   <View style={styles.codeRow}>
                     <Text style={[styles.codeText, {color: colors.primary}]}>
-                      ADTIP123
+                      {referralData.referral_code}
                     </Text>
                     <TouchableOpacity
                       onPress={copyReferralCode}
@@ -366,6 +460,62 @@ const ReferralScreen: React.FC = () => {
                     </Text>
                   </TouchableOpacity>
                 </View>
+              </View>
+
+              {/* Coupon Code Section */}
+              <View
+                style={[
+                  styles.referralSection,
+                  {backgroundColor: colors.surface},
+                ]}>
+                <View style={styles.referralHeader}>
+                  <Icon name="tag" size={24} color={colors.primary} />
+                  <Text
+                    style={[styles.referralTitle, {color: colors.text.primary}]}>
+                    Your Coupon Code
+                  </Text>
+                </View>
+
+                <Text
+                  style={[
+                    styles.referralDescription,
+                    {color: colors.text.secondary},
+                  ]}>
+                  Share your coupon code and earn ₹{referralData.each_coupon} when friends use it!
+                </Text>
+
+                <View
+                  style={[
+                    styles.codeContainer,
+                    {backgroundColor: colors.background},
+                  ]}>
+                  <Text
+                    style={[styles.codeLabel, {color: colors.text.secondary}]}>
+                    Your Coupon Code
+                  </Text>
+                  <View style={styles.codeRow}>
+                    <Text style={[styles.codeText, {color: colors.primary}]}>
+                      {referralData.coupon_code}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={copyCouponCode}
+                      style={styles.copyButton}>
+                      <Icon name="copy" size={16} color={colors.primary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.shareButton,
+                    {backgroundColor: colors.primary},
+                  ]}
+                  onPress={handleShare}>
+                  <Icon name="share-2" size={18} color={colors.white} />
+                  <Text style={[styles.shareButtonText, {color: colors.white}]}>
+                    Share Coupon
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               {/* Activity Header */}
@@ -405,6 +555,12 @@ const styles = StyleSheet.create({
   statsContainer: {
     padding: 16,
   },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
   statsRow: {
     flexDirection: 'row',
     marginBottom: 12,
@@ -431,24 +587,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
   },
-  pendingContainer: {
+  withdrawContainer: {
     marginHorizontal: 16,
     marginBottom: 16,
     padding: 16,
     borderRadius: 12,
-  },
-  pendingContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    justifyContent: 'space-between',
   },
-  pendingText: {
+  withdrawContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  withdrawText: {
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
   },
-  pendingSubtext: {
+  withdrawButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginLeft: 12,
+  },
+  withdrawButtonText: {
     fontSize: 14,
+    fontWeight: '600',
   },
   referralSection: {
     marginHorizontal: 16,

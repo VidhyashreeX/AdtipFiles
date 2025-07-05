@@ -919,6 +919,61 @@ export const useVideos = (categoryId: number = 0, userId?: number, searchQuery?:
   });
 };
 
+// Search videos hook for TipTube
+export const useSearchVideos = (searchQuery: string, userId?: number) => {
+  return useInfiniteQuery({
+    queryKey: ['searchVideos', searchQuery, userId],
+    queryFn: async ({ pageParam }) => {
+      const page = pageParam as number;
+      
+      if (!searchQuery.trim()) {
+        console.log('[useSearchVideos] Empty search query, returning empty results');
+        return {
+          status: 200,
+          data: [],
+          hasMore: false,
+          pagination: {
+            current_page: page,
+            total_page: page,
+          }
+        };
+      }
+
+      console.log('[useSearchVideos] Searching for:', searchQuery.trim(), 'page:', page);
+      const response = await ApiService.searchVideos(searchQuery.trim(), page);
+      console.log('[useSearchVideos] Search response:', {
+        status: response.status,
+        dataLength: response?.data?.length || 0,
+        firstVideo: response?.data?.[0]?.name
+      });
+      
+      // Transform response to match expected format
+      const videosArray = response?.data || [];
+      
+      const transformedResponse = {
+        status: response.status === 200 || true,
+        data: videosArray,
+        hasMore: videosArray.length > 0,
+        pagination: {
+          current_page: page,
+          total_page: videosArray.length > 0 ? page + 1 : page,
+        }
+      };
+
+      return transformedResponse;
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const hasMore = lastPage?.data?.length > 0;
+      return hasMore ? allPages.length + 1 : undefined;
+    },
+    enabled: !!searchQuery.trim() && searchQuery.trim().length > 0,
+    staleTime: 2 * 60 * 1000, // 2 minutes for search results
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+};
+
 // Export cache manager and query client
 export { queryClient };
 
