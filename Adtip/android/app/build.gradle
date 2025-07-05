@@ -113,8 +113,8 @@ dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
     
-    // Commented out PubScale integration - June 2, 2025
-    // implementation 'com.pubscale.sdkone:offerwall:1.0.10' // Using the version we know exists
+    // PubScale Offerwall SDK
+    implementation 'com.pubscale.sdkone:offerwall:1.0.11'
 
     // Firebase BoM - Recommended
     implementation platform('com.google.firebase:firebase-bom:33.15.0') // Or the latest version

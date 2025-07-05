@@ -47,7 +47,7 @@ const getPubscaleOfferwall = () => {
           // Call success immediately since we're using a fallback
           setTimeout(onSuccess, 100);
         },
-        launch: (onClose: () => void) => {
+        launch: (onShow: () => void, onClose: () => void, onReward: () => void, onFailure: (error: string) => void) => {
           console.log(
             '[PubScaleService] Using fallback implementation for launch',
           );
@@ -103,10 +103,10 @@ class PubScaleService {
       console.log('PubScale SDK already initialized with this user ID');
 
       // Track initialization status
-      AnalyticsService.trackOfferwallEvent('sdk_initialized', {
-        status: 'already_initialized',
-        userId,
-      });
+      // AnalyticsService.trackOfferwallEvent('sdk_initialized', {
+      //   status: 'already_initialized',
+      //   userId,
+      // });
 
       return Promise.resolve();
     }
@@ -114,9 +114,9 @@ class PubScaleService {
     this.userId = userId;
 
     // Track initialization attempt
-    AnalyticsService.trackOfferwallEvent('sdk_initialization_start', {
-      userId,
-    });
+    // AnalyticsService.trackOfferwallEvent('sdk_initialization_start', {
+    //   userId,
+    // });
 
     // Clean up any existing subscription
     if (this.rewardSubscription) {
@@ -128,12 +128,12 @@ class PubScaleService {
         console.log('Reward received:', reward);
 
         // Track reward received
-        AnalyticsService.trackOfferwallEvent('reward_received', {
-          userId: this.userId || 'anonymous_user',
-          amount: reward.amount,
-          currency: reward.currency,
-          timestamp: Date.now(),
-        });
+        // AnalyticsService.trackOfferwallEvent('reward_received', {
+        //   userId: this.userId || 'anonymous_user',
+        //   amount: reward.amount,
+        //   currency: reward.currency,
+        //   timestamp: Date.now(),
+        // });
 
         if (this.rewardListener) {
           this.rewardListener(reward);
@@ -145,39 +145,24 @@ class PubScaleService {
       if (Platform.OS === 'android') {
         try {
           // Initialize Android SDK
+          const parameters = {
+            user_id: userId,
+            sandbox: false, // Set to true for testing
+            fullscreen: true,
+          };
+
           getPubscaleOfferwall().init(
             PUBSCALE_APP_ID,
+            parameters,
             () => {
               // Success callback
               this.isInitialized = true;
 
-              // Set the user ID after initialization
-              if (userId) {
-                try {
-                  getPubscaleOfferwall().setUserId(userId);
-
-                  // Track user ID set success
-                  AnalyticsService.trackOfferwallEvent('user_id_set', {
-                    userId,
-                    success: true,
-                  });
-                } catch (err) {
-                  console.error('Error setting user ID:', err);
-                  // Track user ID set error
-                  AnalyticsService.trackOfferwallEvent('user_id_set', {
-                    userId,
-                    success: false,
-                    error: err instanceof Error ? err.message : 'Unknown error',
-                  });
-                  // Don't reject, just log the error
-                }
-              }
-
               // Track successful initialization
-              AnalyticsService.trackOfferwallEvent('sdk_initialized', {
-                status: 'success',
-                userId,
-              });
+              // AnalyticsService.trackOfferwallEvent('sdk_initialized', {
+              //   status: 'success',
+              //   userId,
+              // });
 
               resolve();
             },
@@ -187,13 +172,13 @@ class PubScaleService {
                 console.error('Failed to initialize PubScale SDK:', error);
 
                 // Track initialization error
-                AnalyticsService.trackOfferwallEvent(
-                  'sdk_initialization_error',
-                  {
-                    userId,
-                    error,
-                  },
-                );
+                // AnalyticsService.trackOfferwallEvent(
+                //   'sdk_initialization_error',
+                //   {
+                //     userId,
+                //     error,
+                //   },
+                // );
 
                 reject(new Error(error));
               } else {
@@ -201,10 +186,10 @@ class PubScaleService {
                 this.isInitialized = true;
 
                 // Track successful initialization
-                AnalyticsService.trackOfferwallEvent('sdk_initialized', {
-                  status: 'success_from_error_callback',
-                  userId,
-                });
+                // AnalyticsService.trackOfferwallEvent('sdk_initialized', {
+                //   status: 'success_from_error_callback',
+                //   userId,
+                // });
 
                 resolve();
               }
@@ -213,11 +198,11 @@ class PubScaleService {
         } catch (err) {
           console.error('Exception initializing PubScale:', err);
 
-          // Track initialization exception
-          AnalyticsService.trackOfferwallEvent('sdk_initialization_exception', {
-            userId,
-            error: err instanceof Error ? err.message : 'Unknown error',
-          });
+                  // Track initialization exception
+        // AnalyticsService.trackOfferwallEvent('sdk_initialization_exception', {
+        //   userId,
+        //   error: err instanceof Error ? err.message : 'Unknown error',
+        // });
 
           reject(err);
         }
@@ -233,12 +218,12 @@ class PubScaleService {
   /**
    * Show the PubScale offerwall
    * @returns Promise that resolves when the offerwall is closed
-   */ showOfferwall(): Promise<void> {
+   */   showOfferwall(): Promise<void> {
     // Track offerwall show attempt
-    AnalyticsService.trackOfferwallEvent('show_attempt', {
-      userId: this.userId || 'anonymous_user',
-      isInitialized: this.isInitialized,
-    });
+    // AnalyticsService.trackOfferwallEvent('show_attempt', {
+    //   userId: this.userId || 'anonymous_user',
+    //   isInitialized: this.isInitialized,
+    // });
 
     if (!this.isInitialized) {
       return this.initialize(this.userId || 'anonymous_user')
@@ -247,10 +232,10 @@ class PubScaleService {
           console.error('Failed to initialize before showing offerwall:', err);
 
           // Track initialization error during show attempt
-          AnalyticsService.trackOfferwallEvent('show_init_error', {
-            userId: this.userId || 'anonymous_user',
-            error: err instanceof Error ? err.message : 'Unknown error',
-          });
+          // AnalyticsService.trackOfferwallEvent('show_init_error', {
+          //   userId: this.userId || 'anonymous_user',
+          //   error: err instanceof Error ? err.message : 'Unknown error',
+          // });
 
           throw err;
         });
@@ -270,9 +255,9 @@ class PubScaleService {
             .then(isConnected => {
               if (!isConnected) {
                 // Track network error
-                AnalyticsService.trackOfferwallEvent('network_error', {
-                  userId: this.userId || 'anonymous_user',
-                });
+                // AnalyticsService.trackOfferwallEvent('network_error', {
+                //   userId: this.userId || 'anonymous_user',
+                // });
 
                 reject(
                   new Error(
@@ -282,46 +267,30 @@ class PubScaleService {
                 return;
               }
               // Track offerwall launch
-              AnalyticsService.trackOfferwallEvent('launch', {
-                userId: this.userId || 'anonymous_user',
-                timestamp: Date.now(),
-              });
+              // AnalyticsService.trackOfferwallEvent('launch', {
+              //   userId: this.userId || 'anonymous_user',
+              //   timestamp: Date.now(),
+              // });
 
               // Launch the offerwall
               getPubscaleOfferwall().launch(
                 () => {
-                  // On close callback - this happens immediately in our implementation
-                  // since the PubScale SDK doesn't provide a close callback
+                  // onShow (can be empty or log)
+                },
+                () => {
+                  // onClose (can be empty or log)
                   console.log('Offerwall closed or launched successfully');
-
-                  // Track offerwall close
-                  AnalyticsService.trackOfferwallEvent('close', {
-                    userId: this.userId || 'anonymous_user',
-                    timestamp: Date.now(),
-                  });
-
                   resolve();
+                },
+                () => {
+                  // onReward (not used here)
                 },
                 (error: string) => {
                   // Error callback
                   if (error) {
                     console.error('Failed to show PubScale offerwall:', error);
-
-                    // Track launch error
-                    AnalyticsService.trackOfferwallEvent('launch_error', {
-                      userId: this.userId || 'anonymous_user',
-                      error,
-                    });
-
                     reject(new Error(error));
                   } else {
-                    // If there's no error message, consider it a success
-
-                    // Track successful launch
-                    AnalyticsService.trackOfferwallEvent('launch_success', {
-                      userId: this.userId || 'anonymous_user',
-                    });
-
                     resolve();
                   }
                 },
@@ -333,7 +302,9 @@ class PubScaleService {
 
               // Try to launch anyway
               getPubscaleOfferwall().launch(
-                () => resolve(),
+                () => {}, // onShow
+                () => { resolve(); }, // onClose
+                () => {}, // onReward
                 (error: string) => {
                   if (error) {
                     reject(new Error(error));
@@ -346,19 +317,19 @@ class PubScaleService {
         } catch (err) {
           console.error('Exception showing PubScale offerwall:', err);
           // Track exception
-          AnalyticsService.trackOfferwallEvent('launch_exception', {
-            userId: this.userId || 'anonymous_user',
-            error: err instanceof Error ? err.message : 'Unknown error',
-          });
+          // AnalyticsService.trackOfferwallEvent('launch_exception', {
+          //   userId: this.userId || 'anonymous_user',
+          //   error: err instanceof Error ? err.message : 'Unknown error',
+          // });
 
           reject(err);
         }
       } else {
         // Track unsupported platform attempt
-        AnalyticsService.trackOfferwallEvent('unsupported_platform', {
-          userId: this.userId || 'anonymous_user',
-          platform: Platform.OS,
-        });
+        // AnalyticsService.trackOfferwallEvent('unsupported_platform', {
+        //   userId: this.userId || 'anonymous_user',
+        //   platform: Platform.OS,
+        // });
 
         reject(new Error(`PubScale offerwall not supported on ${Platform.OS}`));
       }

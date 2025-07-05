@@ -16,6 +16,9 @@ import com.facebook.soloader.SoLoader
 import live.videosdk.rnwebrtc.WebRTCModulePackage
 import live.videosdk.rnincallmanager.InCallManagerPackage
 
+// PubScale Offerwall Import
+import com.adtip.app.adtip_app.PubscaleOfferwallPackage
+
 class MainApplication : Application(), ReactApplication {
 
   override val reactNativeHost: ReactNativeHost =
