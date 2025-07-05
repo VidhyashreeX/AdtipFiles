@@ -34,12 +34,12 @@ const STATIC_BANNERS = [
     title: 'Refer & Earn',
     description: 'Get ₹3 for every successful referral and earn ₹30 for each premium upgrade',
     icon: <Users size={48} color="#fff" />,
-    gradient: ['#fc00ff', '#00dbde' ],
+    gradient: ['#c33764', '#1d2671' ],  // 
   },
   {
     id: 4,
     title: 'Upload',
-    description: 'Upload video to get 100 for 10,000 views.',
+    description: 'Upload video to get ₹100 for 10,000 views.',
     icon: <UploadCloud size={48} color="#fff" />,
     gradient: ['#6a3093', '#a044ff'],    //#6a3093
   },
