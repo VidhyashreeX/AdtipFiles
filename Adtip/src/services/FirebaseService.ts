@@ -117,6 +117,16 @@ class FirebaseService {
   private _setBackgroundMessageHandler(msg: FirebaseMessagingTypes.Module): void {
     msg.setBackgroundMessageHandler(async (remoteMessage) => {
       console.log('[FCM] Background message received:', remoteMessage);
+      
+      // ✅ FIX: Let UnifiedCallService handle all call-related FCM messages
+      // This prevents conflicts and ensures consistent handling
+      try {
+        await UnifiedCallService.getInstance().handleFCMCallNotification(remoteMessage);
+      } catch (error) {
+        console.error('[FCM] Error handling FCM message in background:', error);
+      }
+      
+      // Keep existing logic for legacy support
       const type = remoteMessage?.data?.type;
 
       if (type === 'INCOMING_CALL' || remoteMessage?.data?.isIncomingCall === 'true') {
@@ -232,10 +242,19 @@ class FirebaseService {
       // Handle foreground messages with enhanced handling
       const unsubscribeForegroundMessages = msg.onMessage(async (remoteMessage) => {
         console.log('[FCM] Foreground message received:', remoteMessage);
-        const type = remoteMessage.data?.type;
         
+        // ✅ FIX: Let UnifiedCallService handle all call-related FCM messages
+        // This prevents conflicts and ensures consistent handling
+        try {
+          await UnifiedCallService.getInstance().handleFCMCallNotification(remoteMessage);
+        } catch (error) {
+          console.error('[FCM] Error handling FCM message in FirebaseService:', error);
+        }
+        
+        // Keep the existing logic for non-call messages (legacy support)
+        const type = remoteMessage.data?.type;
         if (type === 'INCOMING_CALL' || remoteMessage?.data?.isIncomingCall === 'true') {
-          console.log('[FCM] Incoming call received in foreground');
+          console.log('[FCM] Incoming call received in foreground (legacy format)');
           // Call UnifiedCallService.handleIncomingCall
           if (remoteMessage.data?.callData) {
             try {

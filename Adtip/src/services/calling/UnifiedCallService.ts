@@ -928,19 +928,41 @@ class UnifiedCallService {
   /**
    * Handle FCM call notification
    */
-  private async handleFCMCallNotification(remoteMessage: FirebaseMessagingTypes.RemoteMessage): Promise<void> {
+  public async handleFCMCallNotification(remoteMessage: FirebaseMessagingTypes.RemoteMessage): Promise<void> {
     try {
       const { data } = remoteMessage;
-      if (!data || !data.type) return;
+      if (!data) return;
 
-      console.log('[UnifiedCallService] Processing FCM call notification:', data.type);
+      console.log('[UnifiedCallService] Processing FCM call notification:', data);
 
-      if (data.type === 'CALL_INITIATION' || data.type === 'call') {
-        await this.handleIncomingFCMCall(data);
-      } else if (data.type === 'CALL_ACCEPTED') {
-        await this.handleCallAcceptedFCM(data);
-      } else if (data.type === 'CALL_ENDED') {
-        await this.handleCallEndedFCM(data);
+      // ✅ FIX: Parse the info field first to get the actual type
+      let callType = data.type;
+      let parsedInfo = null;
+
+      if (typeof data.info === 'string') {
+        try {
+          parsedInfo = JSON.parse(data.info);
+          callType = parsedInfo.type || data.type;
+          console.log('[UnifiedCallService] Parsed info field, call type:', callType);
+        } catch (error) {
+          console.warn('[UnifiedCallService] Failed to parse FCM info field:', error);
+        }
+      }
+
+      if (!callType) {
+        console.log('[UnifiedCallService] No call type found in FCM message');
+        return;
+      }
+
+      console.log('[UnifiedCallService] Processing FCM call notification:', callType);
+
+      if (callType === 'CALL_INITIATED' || callType === 'CALL_INITIATION' || callType === 'call') {
+        // ✅ FIX: Pass the parsed info data to handleIncomingFCMCall
+        await this.handleIncomingFCMCall(parsedInfo || data);
+      } else if (callType === 'CALL_ACCEPTED') {
+        await this.handleCallAcceptedFCM(parsedInfo || data);
+      } else if (callType === 'CALL_ENDED') {
+        await this.handleCallEndedFCM(parsedInfo || data);
       }
     } catch (error) {
       console.error('[UnifiedCallService] Error handling FCM call notification:', error);
@@ -952,9 +974,16 @@ class UnifiedCallService {
    */
   private async handleIncomingFCMCall(data: any): Promise<void> {
     try {
+      console.log('[UnifiedCallService] handleIncomingFCMCall called with data:', data);
+      
       // Parse call data
       const callData = this.parseFCMCallData(data);
-      if (!callData) return;
+      if (!callData) {
+        console.error('[UnifiedCallService] Failed to parse call data');
+        return;
+      }
+
+      console.log('[UnifiedCallService] Parsed call data:', callData);
 
       // Check if this is actually an incoming call for current user
       const currentUserId = await this.getCurrentUserId();
@@ -1913,12 +1942,15 @@ class UnifiedCallService {
    */
   private parseFCMCallData(data: any): CallNotificationData | null {
     try {
+      console.log('[UnifiedCallService] Parsing FCM call data:', data);
+      
       // Handle nested JSON structures
       let callData = data;
       
       if (typeof data.info === 'string') {
         try {
           callData = JSON.parse(data.info);
+          console.log('[UnifiedCallService] Successfully parsed info field:', callData);
         } catch (error) {
           console.warn('[UnifiedCallService] Failed to parse FCM info field:', error);
         }
@@ -1931,8 +1963,11 @@ class UnifiedCallService {
         ? callData.videoSDKInfo as any 
         : {};
 
+      // ✅ FIX: Use uuid as callId if available, otherwise generate one
+      const callId = String(callData.uuid || callData.callId || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+
       const parsedData: CallNotificationData = {
-        callId: String(callData.callId || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`),
+        callId,
         callerName: String(callerInfo.name || callData.callerName || 'Unknown Caller'),
         callType: (String(callData.callType || 'voice') === 'video' ? 'video' : 'voice') as 'voice' | 'video',
         callerId: String(callerInfo.userId || callData.callerId || 'unknown'),
@@ -1941,6 +1976,8 @@ class UnifiedCallService {
         callerAvatar: (callerInfo.avatarUrl || callData.callerAvatar) ? String(callerInfo.avatarUrl || callData.callerAvatar) : undefined,
         callerFcmToken: String(callerInfo.token || ''),
       };
+
+      console.log('[UnifiedCallService] Parsed call data:', parsedData);
 
       // Validate required fields
       if (!parsedData.callId || !parsedData.callerName || !parsedData.meetingId || !parsedData.token) {
