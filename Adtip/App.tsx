@@ -54,6 +54,7 @@ import FirebaseService from './src/services/FirebaseService';
 import VideoSDKService from './src/services/videosdk/VideoSDKService';
 import UnifiedCallService from './src/services/calling/UnifiedCallService';  // Unified call service (replacing all legacy services)
 import PubScaleService from './src/services/PubScaleService';
+import CallKeepIntegrationService from './src/services/calling/CallKeepIntegrationService';
 
 import IncomingCallService from './src/services/IncomingCallService';
 
@@ -241,6 +242,19 @@ const AppNavigator = () => {
           
           if (success) {
             console.log('[App] Background: Unified Call Service initialized successfully');
+            
+            // Check CallKeep availability
+            try {
+              const callKeepService = CallKeepIntegrationService.getInstance();
+              const isAvailable = await callKeepService.isAvailable();
+              if (isAvailable) {
+                console.log('[App] Background: CallKeep is available and will be initialized by UnifiedCallService');
+              } else {
+                console.log('[App] Background: CallKeep not available, using notifications only');
+              }
+            } catch (error) {
+              console.warn('[App] Background: CallKeep availability check failed:', error);
+            }
           } else {
             console.warn('[App] Background: Unified Call Service initialization failed');
           }
