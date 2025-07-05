@@ -32,6 +32,7 @@ import {useTabNavigator} from '../../contexts/TabNavigatorContext';
 import {useDataContext} from '../../providers/DataProvider';
 import ApiService from '../../services/ApiService';
 import {API_BASE_URL} from '../../constants/api';
+import {HOME_ENDPOINTS} from '../../constants/apiEndpoints';
 import { usePosts, useLikeMutation, useFollowMutation, usePrefetchData } from '../../hooks/useQueries';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
@@ -43,6 +44,7 @@ import PostItem from '../../components/home/PostItem';
 import StoryItem from '../../components/home/StoryItem';
 import CategoryItem from '../../components/home/CategoryItem';
 import EarnCard from '../../components/home/EarnCard';
+import BannerCarousel from '../../components/home/BannerCarousel';
 
 import ScreenTransition from '../../components/common/ScreenTransition';
 import UserProfileScreen from '../profile/UserProfileScreen';
@@ -169,20 +171,9 @@ interface EarnCardsRowProps {
 const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onPlayAndEarn, onInstallToEarn, isLoading }) => {
   const {colors} = useTheme();
   const styles = createHomeScreenStyles(colors);
-  const flatListRef = useRef<FlatList>(null);
-  const currentIndexRef = useRef(0);
   
-  // Define earn cards data for carousel
+  // Define earn cards data
   const earnCardsData = [
-    // Watch & Earn is commented out but not removed
-    // {
-    //   id: '1',
-    //   title: 'Watch & Earn',
-    //   description: 'Watch videos and earn rewards',
-    //   iconName: 'play-circle',
-    //   onPress: onWatchAndEarn,
-    //   gradientColors: ['#CC0000', '#EE2400', '#FF4D00' ],
-    // },
     {
       id: '2',
       title: 'Play & Earn',
@@ -201,12 +192,11 @@ const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onPlayAndEa
     },
   ];
 
-  // Since we only have one item now, we don't need infinite scroll
-  // Just show the single Play & Earn card
-  const renderEarnCard = ({ item, index }: { item: typeof earnCardsData[0], index: number }) => {
+  const renderEarnCard = (item: typeof earnCardsData[0]) => {
     return (
       <TouchableOpacity
-        style={styles.earnCardCarouselItem}
+        key={item.id}
+        style={styles.earnCardVerticalItem}
         onPress={item.onPress}
         activeOpacity={0.9}
       >
@@ -250,31 +240,8 @@ const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onPlayAndEa
 
   return (
     <View style={styles.earnCardsCarouselSection}>
-      <FlatList
-        ref={flatListRef}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={earnCardsData}
-        renderItem={renderEarnCard}
-        keyExtractor={(item, index) => `${item.id}-${index}`}
-        snapToInterval={screenWidth}
-        decelerationRate="fast"
-        snapToAlignment="start"
-        pagingEnabled={false}
-        removeClippedSubviews={false}
-        getItemLayout={(data, index) => ({
-          length: screenWidth,
-          offset: screenWidth * index,
-          index,
-        })}
-        contentContainerStyle={{
-          paddingHorizontal: 0,
-        }}
-        ItemSeparatorComponent={() => <View style={{ width: 0 }} />}
-      />
+      {earnCardsData.map(renderEarnCard)}
     </View>
-    
-
   );
 };
 
@@ -318,6 +285,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const [premiumLoading, setPremiumLoading] = useState<boolean>(true);
   const [premiumData, setPremiumData] = useState<any>(null);
 
+  // Banner state
+  const [banners, setBanners] = useState<any[]>([]);
+  const [bannersLoading, setBannersLoading] = useState<boolean>(true);
+
   // Enhanced data layer using React Query v5 hooks
   const {
     data: postsData,
@@ -351,6 +322,25 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     };
     checkPremiumStatus();
   }, [user?.id]);
+
+  // Fetch banners on mount
+  useEffect(() => {
+    const fetchBanners = async () => {
+      try {
+        setBannersLoading(true);
+        const response = await ApiService.get(HOME_ENDPOINTS.GET_HOME_BANNERS_INDIA);
+        if (response.status && response.data) {
+          setBanners(response.data);
+        }
+      } catch (error) {
+        console.error('Error fetching banners:', error);
+        setBanners([]);
+      } finally {
+        setBannersLoading(false);
+      }
+    };
+    fetchBanners();
+  }, []);
 
   // Fetch data whenever the screen comes into focus by invalidating and forcing refetch
   useFocusEffect(
@@ -611,6 +601,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     }
   }, [user?.id]);
 
+  const handleBannerPress = useCallback((banner: any) => {
+    console.log('Banner pressed:', banner);
+    // You can add navigation logic here based on banner type or data
+    // For now, just log the banner info
+  }, []);
+
   const handlePostLike = useCallback((postId: number) => {
     // Find current like state and optimistically update
     const post = displayPosts.find(p => p.id === postId);
@@ -750,6 +746,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           <ScrollView style={styles.content} contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}>
             <StoriesRow stories={[]} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} isLoading={true} />
             <CategoriesRow categories={[]} selectedCategory={null} onCategoryPress={handleCategoryPress} isLoading={true} />
+            <BannerCarousel banners={[]} isLoading={true} />
             <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} onInstallToEarn={handleInstallToEarn} isLoading={true} />
             <View style={styles.skeletonContainer}>
               {Array(6).fill(0).map((_, index) => <PostItemSkeleton key={`skeleton-${index}`} />)}
@@ -807,6 +804,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
               {renderPremiumBanner()}
               <StoriesRow stories={displayStories} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} />
               <CategoriesRow categories={displayCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} />
+              <BannerCarousel 
+                banners={banners} 
+                isLoading={bannersLoading} 
+                onBannerPress={handleBannerPress} 
+              />
               <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} onInstallToEarn={handleInstallToEarn} />
             </>
           )}
@@ -932,6 +934,10 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
     width: screenWidth,
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  earnCardVerticalItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
   },
   earnCardGradient: {
     borderRadius: 12,

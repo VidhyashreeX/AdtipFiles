@@ -54,6 +54,8 @@ import RectangleAdComponent from '../../googleads/RectangleAdComponent';
 import { RootStackParamList, MainNavigatorParamList } from '../../types/navigation';
 import { useMissedCallsCount } from '../../hooks/useMissedCalls';
 import UserProfileScreen from '../profile/UserProfileScreen';
+import SingleBannerCard from '../../components/home/SingleBannerCard';
+import { Headphones } from 'lucide-react-native';
 
 // Define navigation stack param list
 type NavigationProp = NativeStackNavigationProp<MainNavigatorParamList, 'TipCall'>;
@@ -1114,15 +1116,19 @@ export default function TipCallScreen() {
         />
 
         {/* Render premium banner if applicable */}
-        {renderPremiumBanner()}
+        {/*{renderPremiumBanner()}*/}
 
         {/* Enhanced Filters Section */}
         <View style={[styles.filtersSection, { backgroundColor: colors.background }]}>
+          <SingleBannerCard
+            title="Talk to Earn"
+            description={"Earn on Every Call: ₹2/min (Premium)\n₹0.60/min (Free)"}
+            icon={<Headphones size={48} color="#fff" />}
+            gradient={['#093028', '#237a57']}   
+          />
           {/* Language Filter */}
           <View style={styles.filterGroup}>
-            <Text style={[styles.filterGroupTitle, { color: colors.text.primary }]}>
-              Languages
-            </Text>
+            <Text style={[styles.filterGroupTitle, { color: colors.text.primary }]}>Languages</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}

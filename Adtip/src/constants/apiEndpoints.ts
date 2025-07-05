@@ -18,6 +18,7 @@ export const HOME_ENDPOINTS = {
   GET_AD_PASSBOOK: '/api/getadpassbook',
   GET_CHANNEL_BY_USER_ID: '/api/getchannelbyuserid',
   SAVE_USER_POST_LIKE: '/api/save-user-post-like',
+  GET_HOME_BANNERS_INDIA: '/api/get-home-banners-india',
 };
 
 // TipTube endpoints
