@@ -286,13 +286,29 @@ class CallMediaManager {
   }
   
   /**
-   * BULLETPROOF: Complete media cleanup
-   * This is called when a call ends from ANY source (UI, notification, etc.)
+   * BULLETPROOF: Complete media cleanup with VideoSDK coordination
    */
   public async cleanup(reason: string = 'call_ended'): Promise<void> {
     console.log('[CallMediaManager] Starting comprehensive media cleanup, reason:', reason);
     
     try {
+      // ✅ CRITICAL FIX: Ensure VideoSDK meeting is properly left first
+      if (this.currentMeeting && typeof this.currentMeeting.leave === 'function') {
+        console.log('[CallMediaManager] Ensuring VideoSDK meeting is left before cleanup');
+        try {
+          await Promise.race([
+            this.currentMeeting.leave(),
+            new Promise(resolve => setTimeout(resolve, 2000)) // 2s timeout
+          ]);
+          console.log('[CallMediaManager] VideoSDK meeting left successfully');
+        } catch (error) {
+          console.warn('[CallMediaManager] Error leaving VideoSDK meeting:', error);
+        }
+      }
+
+      // ✅ CRITICAL FIX: Wait a moment for VideoSDK to fully disconnect
+      await new Promise(resolve => setTimeout(resolve, 300));
+
       // 1. Disable all media first
       await this.disableAllMedia();
       
@@ -358,32 +374,37 @@ class CallMediaManager {
   }
 
   /**
-   * Disable all media sources
+   * Disable all media sources with proper VideoSDK coordination
    */
   private async disableAllMedia(): Promise<void> {
     console.log('[CallMediaManager] Disabling all media sources');
     
-    // Disable mic if enabled
+    // ✅ CRITICAL FIX: Disable mic if enabled
     if (this.mediaState.micEnabled && this.currentMeeting) {
       try {
         if (typeof this.currentMeeting.toggleMic === 'function') {
           this.currentMeeting.toggleMic(); // This will disable it
+          console.log('[CallMediaManager] Microphone disabled via VideoSDK');
         }
       } catch (error) {
         console.warn('[CallMediaManager] Error disabling mic:', error);
       }
     }
     
-    // Disable camera if enabled
+    // ✅ CRITICAL FIX: Disable camera if enabled
     if (this.mediaState.cameraEnabled && this.currentMeeting) {
       try {
         if (typeof this.currentMeeting.toggleWebcam === 'function') {
           this.currentMeeting.toggleWebcam(); // This will disable it
+          console.log('[CallMediaManager] Camera disabled via VideoSDK');
         }
       } catch (error) {
         console.warn('[CallMediaManager] Error disabling camera:', error);
       }
     }
+
+    // ✅ CRITICAL FIX: Wait for media to be fully disabled
+    await new Promise(resolve => setTimeout(resolve, 200));
   }
 
   /**

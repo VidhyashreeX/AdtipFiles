@@ -1543,10 +1543,11 @@ class UnifiedCallService {
   }
 
   /**
-   * End ongoing call
+   * End ongoing call - BULLETPROOF IMPLEMENTATION
    */
   public async endCall(callId?: string): Promise<void> {
     console.log('[UnifiedCallService] endCall called with callId:', callId, 'isEndingCallInProgress:', this.isEndingCallInProgress);
+    
     if (this.isEndingCallInProgress) {
       console.warn('[UnifiedCallService] endCall is already in progress. Ignoring subsequent call.');
       return;
@@ -1571,11 +1572,16 @@ class UnifiedCallService {
           callStatus: 'ended',
           lastCallEndReason: 'cancelled'
         });
-        console.log('[UnifiedCallService] updateCallState called for null targetCall');
         appEventEmitter.emit('callStateChanged', { status: 'ended', callId: callId || 'unknown' });
-        console.log('[UnifiedCallService] callStateChanged event emitted for null targetCall');
         return;
       }
+
+      // ✅ CRITICAL FIX: Emit leaveCurrentCall event FIRST to ensure VideoSDK leaves properly
+      console.log('[UnifiedCallService] Emitting leaveCurrentCall event to ensure VideoSDK cleanup');
+      appEventEmitter.emit('leaveCurrentCall', { callId: targetCall.callId });
+
+      // ✅ CRITICAL FIX: Wait for VideoSDK to leave before proceeding
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       console.log('[UnifiedCallService] Hiding notifications and ending CallKeep call...');
       
@@ -1606,10 +1612,12 @@ class UnifiedCallService {
       this.billingService.stopCallBilling();
       console.log('[UnifiedCallService] Call billing stopped.');
 
+      // ✅ CRITICAL FIX: Clean up media BEFORE updating call state
       console.log('[UnifiedCallService] Cleaning up media...');
-      this.cleanupMedia();
+      await this.cleanupMedia();
       console.log('[UnifiedCallService] Media cleaned up.');
 
+      // ✅ CRITICAL FIX: Update call state LAST to prevent premature navigation
       console.log('[UnifiedCallService] Updating call state to ended...');
       this.updateCallState({
         isInCall: false,
@@ -1618,6 +1626,8 @@ class UnifiedCallService {
         lastCallEndReason: 'ended'
       });
       console.log('[UnifiedCallService] Call state updated to ended.');
+      
+      // ✅ CRITICAL FIX: Emit callStateChanged event AFTER all cleanup is complete
       appEventEmitter.emit('callStateChanged', { status: 'ended', callId: targetCall.callId });
       console.log('[UnifiedCallService] callStateChanged event emitted for ended call.');
 
@@ -1629,14 +1639,10 @@ class UnifiedCallService {
         callStatus: 'ended',
         lastCallEndReason: 'error'
       });
-      console.log('[UnifiedCallService] updateCallState called in catch block');
       appEventEmitter.emit('callStateChanged', { status: 'ended', callId: callId || 'unknown' });
-      console.log('[UnifiedCallService] callStateChanged event emitted in catch block');
     } finally {
       this.isEndingCallInProgress = false;
       console.log('[UnifiedCallService] endCall finally: isEndingCallInProgress reset to false');
-      // Ensure full cleanup after call ends
-      await this.cleanup();
     }
   }
 
@@ -1795,7 +1801,7 @@ class UnifiedCallService {
   /**
    * Clean up media resources
    */
-  private cleanupMedia(): void {
+  private async cleanupMedia(): Promise<void> {
     if (this.isCleaningUp) {
       console.log('[UnifiedCallService] Cleanup already in progress, skipping.');
       return;
@@ -1816,8 +1822,8 @@ class UnifiedCallService {
         isVideoCall: false
       };
 
-      // Clean up media manager
-      this.mediaManager.cleanup();
+      // ✅ CRITICAL FIX: Await media manager cleanup
+      await this.mediaManager.cleanup();
 
       // Emit media state change
       appEventEmitter.emit('mediaStateChanged', this.mediaState);
