@@ -26,14 +26,33 @@ export function navigateToMeeting(params: {
   recipientName?: string;
   callData?: any;
 }) {
-  if (navigationRef.isReady()) {
-    // Navigate to Main navigator, then to Meeting screen
-    (navigationRef as any).navigate('Main', { 
-      screen: 'Meeting', 
-      params: params 
-    });
-  } else {
-    console.warn('[NavigationService] Navigation not ready, skipping navigation to Meeting');
+  try {
+    // ✅ CRITICAL FIX: Validate parameters
+    if (!params.meetingId || !params.token || !params.displayName) {
+      console.error('[NavigationService] Invalid parameters for navigateToMeeting:', params);
+      return;
+    }
+
+    if (navigationRef.isReady()) {
+      console.log('[NavigationService] Navigating to Meeting screen with params:', {
+        meetingId: params.meetingId,
+        callType: params.callType,
+        displayName: params.displayName
+      });
+      
+      // Navigate to Main navigator, then to Meeting screen
+      (navigationRef as any).navigate('Main', { 
+        screen: 'Meeting', 
+        params: params 
+      });
+    } else {
+      console.warn('[NavigationService] Navigation not ready, skipping navigation to Meeting');
+      // ✅ CRITICAL FIX: Retry navigation after a short delay
+      setTimeout(() => navigateToMeeting(params), 200);
+    }
+  } catch (error) {
+    console.error('[NavigationService] Error in navigateToMeeting:', error);
+    // ✅ CRITICAL FIX: Don't let navigation errors crash the app
   }
 }
 

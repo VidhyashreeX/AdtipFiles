@@ -896,12 +896,29 @@ class UnifiedCallService {
       const { notification, pressAction } = detail;
       const callId = notification?.data?.callId;
 
+      console.log('[UnifiedCallService] Notification event received:', {
+        type,
+        pressAction: pressAction?.id,
+        callId,
+        hasActiveCall: !!this.callState.activeCall
+      });
+
       if ((type === EventType.ACTION_PRESS || type === EventType.PRESS) && pressAction) {
         switch (pressAction.id) {
           case 'accept_call':
+            // ✅ CRITICAL FIX: Add validation before accepting call
+            if (!this.callState.activeCall) {
+              console.warn('[UnifiedCallService] No active call to accept');
+              return;
+            }
             await this.acceptCall(callId);
             break;
           case 'decline_call':
+            // ✅ CRITICAL FIX: Add validation before declining call
+            if (!this.callState.activeCall) {
+              console.warn('[UnifiedCallService] No active call to decline');
+              return;
+            }
             await this.declineCall(callId);
             break;
           case 'end_call':
@@ -918,10 +935,14 @@ class UnifiedCallService {
           case 'speaker_toggle':
             await this.toggleSpeaker();
             break;
+          default:
+            console.warn('[UnifiedCallService] Unknown notification action:', pressAction.id);
         }
       }
     } catch (error) {
       console.error('[UnifiedCallService] Error handling notification event:', error);
+      // ✅ CRITICAL FIX: Don't let notification errors crash the app
+      // Just log the error and continue
     }
   }
 
@@ -1347,8 +1368,20 @@ class UnifiedCallService {
       // Initialize media
       this.initializeMediaForCall(targetCall.callId, targetCall.callType === 'video');
 
-      // Navigate to meeting screen
-      this.requestNavigationToMeetingScreen(targetCall);
+      // ✅ CRITICAL FIX: Add delay and validation before navigation
+      setTimeout(() => {
+        try {
+          // Validate call is still active before navigating
+          if (this.callState.activeCall && this.callState.activeCall.callId === targetCall.callId) {
+            this.requestNavigationToMeetingScreen(targetCall);
+          } else {
+            console.warn('[UnifiedCallService] Call no longer active, skipping navigation');
+          }
+        } catch (navigationError) {
+          console.error('[UnifiedCallService] Navigation error in acceptCall:', navigationError);
+          // Don't crash the app, just log the error
+        }
+      }, 100); // Small delay to ensure state is updated
 
       // Show ongoing call notification if app goes to background
       if (this.appState === 'background') {
@@ -1359,6 +1392,12 @@ class UnifiedCallService {
 
     } catch (error) {
       console.error('[UnifiedCallService] Failed to accept call:', error);
+      // ✅ CRITICAL FIX: Clean up on error
+      this.updateCallState({
+        isInCall: false,
+        activeCall: null,
+        callStatus: 'ended'
+      });
     }
   }
 
@@ -1826,9 +1865,18 @@ class UnifiedCallService {
     try {
       console.log('[UnifiedCallService] Requesting navigation to meeting screen:', callData.callId);
 
-      // CRITICAL FIX: Use event-based navigation instead of direct navigation
+      // ✅ CRITICAL FIX: Validate parameters before emitting event
+      if (!callData.meetingId || !callData.token) {
+        console.error('[UnifiedCallService] Invalid call data for navigation:', {
+          meetingId: callData.meetingId,
+          hasToken: !!callData.token
+        });
+        return;
+      }
+
+      // ✅ CRITICAL FIX: Use event-based navigation instead of direct navigation
       // This prevents race conditions with MeetingScreen's own navigation logic
-      appEventEmitter.emit('forceNavigateToMeeting', {
+      const navigationParams = {
         activeCall: callData,
         meetingId: callData.meetingId,
         token: callData.token,
@@ -1836,12 +1884,16 @@ class UnifiedCallService {
         displayName: callData.isInitiator ? callData.callerName : callData.recipientName,
         isInitiator: callData.isInitiator,
         callData: callData
-      });
+      };
+
+      console.log('[UnifiedCallService] Emitting forceNavigateToMeeting with params:', navigationParams);
+      appEventEmitter.emit('forceNavigateToMeeting', navigationParams);
 
       console.log('[UnifiedCallService] Navigation request emitted successfully');
 
     } catch (error) {
       console.error('[UnifiedCallService] Failed to request navigation to meeting screen:', error);
+      // ✅ CRITICAL FIX: Don't let navigation errors crash the app
     }
   }
 
