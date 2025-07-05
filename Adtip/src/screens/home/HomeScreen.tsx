@@ -32,7 +32,7 @@ import {useTabNavigator} from '../../contexts/TabNavigatorContext';
 import {useDataContext} from '../../providers/DataProvider';
 import ApiService from '../../services/ApiService';
 import {API_BASE_URL} from '../../constants/api';
-import { usePosts, useLikeMutation, useFollowMutation, usePrefetchData } from '../../hooks/useQueries';
+import { usePosts, useLikeMutation, useFollowMutation, usePrefetchData, usePremiumStatus } from '../../hooks/useQueries';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
 
@@ -302,7 +302,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
   // Add premium state
   const [isPremium, setIsPremium] = useState<boolean>(false);
-  const [premiumLoading, setPremiumLoading] = useState<boolean>(true);
   const [premiumData, setPremiumData] = useState<any>(null);
 
   // Enhanced data layer using React Query v5 hooks
@@ -319,25 +318,25 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     user?.id
   );
 
-  // Check premium status on mount/user change
+  // Use TanStack Query for premium status
+  const { 
+    data: premiumResponse, 
+    isLoading: premiumLoading, 
+    error: premiumError 
+  } = usePremiumStatus(user?.id || 0);
+
+  // Update premium state based on query result
   useEffect(() => {
-    const checkPremiumStatus = async () => {
-      if (!user?.id) return;
-      try {
-        setPremiumLoading(true);
-        const premiumResponse: any = await ApiService.checkPremium(user.id);
-        const isPremiumActive = !!(premiumResponse && (premiumResponse.status === true || premiumResponse.status === 1));
-        setIsPremium(isPremiumActive);
-        setPremiumData(isPremiumActive ? premiumResponse : null);
-      } catch (error) {
-        setIsPremium(false);
-        setPremiumData(null);
-      } finally {
-        setPremiumLoading(false);
-      }
-    };
-    checkPremiumStatus();
-  }, [user?.id]);
+    if (premiumResponse) {
+      // Check if premium is not expired
+      const isPremiumActive = !premiumResponse.is_premium_expired;
+      setIsPremium(isPremiumActive);
+      setPremiumData(isPremiumActive ? premiumResponse : null);
+    } else {
+      setIsPremium(false);
+      setPremiumData(null);
+    }
+  }, [premiumResponse]);
 
   // Fetch data whenever the screen comes into focus by invalidating and forcing refetch
   useFocusEffect(
