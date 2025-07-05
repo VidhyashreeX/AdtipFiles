@@ -140,3 +140,48 @@ export function navigateToMeetingWithRetry(params: {
   
   attemptNavigation();
 }
+
+// Add this new function specifically for notification-triggered navigation
+export function navigateToMeetingFromNotification(params: {
+  meetingId: string;
+  token: string;
+  displayName: string;
+  callType: 'voice' | 'video';
+  isInitiator?: boolean;
+  recipientName?: string;
+  callData?: any;
+}) {
+  // Use a more persistent retry mechanism for notification clicks
+  let retries = 0;
+  const maxRetries = 10;
+  const retryDelay = 300;
+  
+  const attemptNavigation = () => {
+    console.log(`[NavigationService] Attempting notification navigation (try ${retries+1}/${maxRetries})`);
+    
+    if (navigationRef.isReady()) {
+      try {
+        console.log('[NavigationService] Navigation ready, proceeding to Meeting screen');
+        (navigationRef as any).navigate('Main', { 
+          screen: 'Meeting', 
+          params: params 
+        });
+      } catch (error) {
+        console.error('[NavigationService] Error navigating from notification:', error);
+        if (retries < maxRetries) {
+          retries++;
+          setTimeout(attemptNavigation, retryDelay);
+        }
+      }
+    } else if (retries < maxRetries) {
+      console.log('[NavigationService] Navigation not ready yet, retrying...');
+      retries++;
+      setTimeout(attemptNavigation, retryDelay);
+    } else {
+      console.error('[NavigationService] Failed to navigate after max retries');
+    }
+  };
+  
+  // Start the first attempt
+  attemptNavigation();
+}
