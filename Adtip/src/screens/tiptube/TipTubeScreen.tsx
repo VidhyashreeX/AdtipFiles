@@ -22,6 +22,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
 import { CirclePlay } from 'lucide-react-native';
 import RazorpayCheckout from 'react-native-razorpay';
+import debounce from 'lodash.debounce';
 
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
@@ -700,10 +701,59 @@ const TipTubeScreen = () => {
     }
   };
 
-  // Handler for back arrow in search bar
+  // Add state for live search query (separate from committed searchQuery)
+  const [liveSearchQuery, setLiveSearchQuery] = useState("");
+
+  // Debounced setter for live search
+  const debouncedSetLiveSearchQuery = useMemo(() => debounce((q: string) => setLiveSearchQuery(q), 300), []);
+
+  // Live search hook (only when search bar is expanded)
+  const {
+    data: liveSearchData,
+    isLoading: liveSearchLoading,
+    error: liveSearchError,
+  } = useSearchVideos(liveSearchQuery.trim(), user?.id);
+
+  // Transform live search results
+  const liveSearchVideos = useMemo(() => {
+    const allVideos = liveSearchData?.pages?.flatMap(page => page?.data || []) || [];
+    return allVideos.map((apiVideo: any) => ({
+      id: apiVideo.id || 0,
+      title: apiVideo.name || apiVideo.title || "Untitled Video",
+      thumbnail: apiVideo.video_Thumbnail || getFallbackThumbnailUrl(apiVideo.id),
+      videoUrl: apiVideo.video_link || apiVideo.videoUrl || '',
+      duration: parseInt(apiVideo.play_duration || apiVideo.duration || "0", 10),
+      views: apiVideo.total_views || 0,
+      posted: apiVideo.createddate ? calculateRelativeTime(apiVideo.createddate) : "Recently",
+      avatar: apiVideo.channel_profile || getFallbackAvatarUrl(apiVideo.createdby || apiVideo.id),
+      creatorName: apiVideo.channelName || apiVideo.channel_name || "Unknown Creator",
+      isVerified: false,
+      channelId: apiVideo.video_channel || apiVideo.channelId || apiVideo.createdby || 0,
+      price: apiVideo.promotional_price ? parseFloat(apiVideo.promotional_price) : 0,
+      isPaidPromotional: apiVideo.is_paid_promotional || 0,
+      contentCreatorPlanId: apiVideo.content_creator_plan_id || 0
+    }));
+  }, [liveSearchData]);
+
+  // Handler for search bar text change (live update)
+  const handleTipTubeLiveSearchChange = useCallback((text: string) => {
+    debouncedSetLiveSearchQuery(text);
+    setSearchQuery(text); // keep searchQuery in sync for submit
+  }, [debouncedSetLiveSearchQuery]);
+
+  // Handler for tapping a video in live search
+  const handleLiveSearchVideoPress = useCallback(async (video: Video) => {
+    setIsTipTubeSearchActive(false);
+    setSearchQuery("");
+    setLiveSearchQuery("");
+    await handleVideoPress(video);
+  }, [handleVideoPress]);
+
+  // Handler for back arrow in search bar (reset live search)
   const handleSearchBack = useCallback(() => {
     setIsTipTubeSearchActive(false);
-    setSearchQuery('');
+    setSearchQuery("");
+    setLiveSearchQuery("");
   }, []);
 
   if (isTipTubeSearchActive) {
@@ -711,12 +761,37 @@ const TipTubeScreen = () => {
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <TipTubeSearchBar
           value={searchQuery}
-          onChangeText={handleTipTubeSearchChange}
+          onChangeText={handleTipTubeLiveSearchChange}
           onSubmitEditing={handleTipTubeSearchSubmit}
           onBack={handleSearchBack}
           colors={colors}
         />
-        {/* Optionally, you can show search results or a loading indicator here */}
+        <FlatList
+          data={liveSearchQuery.trim() ? liveSearchVideos : []}
+          keyExtractor={(item) => `live-search-video-${item.id}`}
+          renderItem={({ item }) => (
+            <TouchableOpacity onPress={() => handleLiveSearchVideoPress(item)} style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+              <Image source={{ uri: item.thumbnail }} style={{ width: 64, height: 36, borderRadius: 4, marginRight: 12, backgroundColor: colors.border }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.text.primary, fontWeight: '500', fontSize: 15 }} numberOfLines={2}>{item.title}</Text>
+                <Text style={{ color: colors.text.secondary, fontSize: 13 }}>{item.creatorName}</Text>
+              </View>
+              <Text style={{ color: colors.text.tertiary, fontSize: 12, marginLeft: 8 }}>{item.views} views</Text>
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={liveSearchQuery.trim() && !liveSearchLoading ? (
+            <View style={{ alignItems: 'center', marginTop: 40 }}>
+              <Icon name="search" size={32} color={colors.text.tertiary} />
+              <Text style={{ color: colors.text.secondary, marginTop: 8 }}>No results found</Text>
+            </View>
+          ) : null}
+          ListFooterComponent={liveSearchLoading ? (
+            <View style={{ alignItems: 'center', padding: 20 }}>
+              <ActivityIndicator size="small" color={colors.primary} />
+            </View>
+          ) : null}
+          keyboardShouldPersistTaps="handled"
+        />
       </View>
     );
   }
