@@ -1372,7 +1372,7 @@ export default class ApiService {
         Authorization: `Bearer ${authToken}`,
       };
       
-      console.log('� [ApiService] Request headers:', { 
+      console.log('🚀 [ApiService] Request headers:', { 
         'Content-Type': headers['Content-Type'],
         'Accept': headers.Accept,
         'Authorization': 'Bearer [REDACTED]'
