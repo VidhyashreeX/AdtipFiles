@@ -1,1 +1,0 @@
-# adtip-app-reactnative
