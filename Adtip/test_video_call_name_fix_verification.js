@@ -6,7 +6,7 @@ console.log('🧪 Testing Video Call CallType and Name Display Fixes...\n');
 // Mock FCM payload that would be sent from initiator to recipient
 const mockVideoCallFCMMessage = {
   data: {
-    info: '{"callerInfo":{"name":"John Smith","userId":"user123","token":"fcm_token_caller"},"videoSDKInfo":{"meetingId":"video-call-789","token":"video_sdk_token"},"type":"CALL_INITIATED","callType":"video","uuid":"video-call-uuid-789"}'
+    info: '{"callerInfo":{"name":"John Smith","userId":"user123","token":"fcm_token_caller"},"videoSDKInfo":{"meetingId":"video-call-789","token":"video_sdk_token","callType":"video"},"type":"CALL_INITIATED","uuid":"video-call-uuid-789"}'
   },
   from: "123456789012",
   messageId: "0:1751695096463948%e9e87daaf9fd7ecd",
@@ -18,7 +18,7 @@ const mockVideoCallFCMMessage = {
 
 const mockVoiceCallFCMMessage = {
   data: {
-    info: '{"callerInfo":{"name":"Jane Doe","userId":"user456","token":"fcm_token_caller2"},"videoSDKInfo":{"meetingId":"voice-call-456","token":"voice_sdk_token"},"type":"CALL_INITIATED","callType":"voice","uuid":"voice-call-uuid-456"}'
+    info: '{"callerInfo":{"name":"Jane Doe","userId":"user456","token":"fcm_token_caller2"},"videoSDKInfo":{"meetingId":"voice-call-456","token":"voice_sdk_token","callType":"voice"},"type":"CALL_INITIATED","uuid":"voice-call-uuid-456"}'
   },
   from: "333436486029",
   messageId: "0:1751695096463948%e9e87daaf9fd7ecd",
@@ -77,17 +77,13 @@ function parseFCMCallData(data) {
 
     const callId = String(callData.uuid || callData.callId || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
 
-    // ✅ FIXED: Properly extract callType from multiple possible sources
-    let callType = 'voice';
-    
-    if (callData.callType) {
-      callType = String(callData.callType).toLowerCase();
-      console.log('✅ [TEST] Found callType in callData:', callType);
-    } else if (data.callType) {
-      callType = String(data.callType).toLowerCase();
-      console.log('✅ [TEST] Found callType in data:', callType);
+    // Properly extract callType ONLY from videoSDKInfo.callType
+    let callType = 'voice'; // Default to voice
+    if (videoSDKInfo.callType) {
+      callType = String(videoSDKInfo.callType).toLowerCase();
+      console.log('✅ [TEST] Found callType in videoSDKInfo:', callType);
     }
-
+    // Normalize callType to ensure it's either 'video' or 'voice'
     const normalizedCallType = (callType === 'video' || callType === 'VIDEO') ? 'video' : 'voice';
 
     const parsedData = {

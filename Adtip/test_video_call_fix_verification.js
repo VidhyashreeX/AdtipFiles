@@ -6,7 +6,7 @@
 // Simulate the actual FCM message structure from the logs for a VIDEO CALL
 const mockVideoCallFCMMessage = {
   data: {
-    info: '{"callerInfo":{"name":"John Doe","userId":"user123","token":"fcm_token_here"},"videoSDKInfo":{"meetingId":"vid-call-123","token":"video_sdk_token_here"},"type":"CALL_INITIATED","callType":"video","uuid":"video-call-uuid-123","isVideoCall":"true"}'
+    info: '{"callerInfo":{"name":"John Doe","userId":"user123","token":"fcm_token_here"},"videoSDKInfo":{"meetingId":"vid-call-123","token":"video_sdk_token_here","callType":"video"},"type":"CALL_INITIATED","uuid":"video-call-uuid-123","isVideoCall":"true"}'
   },
   from: "333436486029",
   messageId: "0:1751695096463948%e9e87daaf9fd7ecd",
@@ -19,7 +19,7 @@ const mockVideoCallFCMMessage = {
 // Simulate the VOICE CALL scenario for comparison
 const mockVoiceCallFCMMessage = {
   data: {
-    info: '{"callerInfo":{"name":"Jane Smith","userId":"user456","token":"fcm_token_here2"},"videoSDKInfo":{"meetingId":"voice-call-456","token":"video_sdk_token_here2"},"type":"CALL_INITIATED","callType":"voice","uuid":"voice-call-uuid-456"}'
+    info: '{"callerInfo":{"name":"Jane Smith","userId":"user456","token":"fcm_token_here2"},"videoSDKInfo":{"meetingId":"voice-call-456","token":"video_sdk_token_here2","callType":"voice"},"type":"CALL_INITIATED","uuid":"voice-call-uuid-456"}'
   },
   from: "333436486029",
   messageId: "0:1751695096463948%e9e87daaf9fd7ecd",
@@ -56,30 +56,11 @@ function parseFCMCallData(data) {
     // ✅ FIX: Use uuid as callId if available, otherwise generate one
     const callId = String(callData.uuid || callData.callId || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
 
-    // ✅ CRITICAL FIX: Properly extract callType from multiple possible sources
+    // ✅ CRITICAL FIX: Properly extract callType ONLY from videoSDKInfo.callType
     let callType = 'voice'; // Default to voice
-    
-    // Priority 1: Direct callType field in parsed data
-    if (callData.callType) {
-      callType = String(callData.callType).toLowerCase();
+    if (videoSDKInfo.callType) {
+      callType = String(videoSDKInfo.callType).toLowerCase();
     }
-    // Priority 2: CallType in original data
-    else if (data.callType) {
-      callType = String(data.callType).toLowerCase();
-    }
-    // Priority 3: Check if it's explicitly a video call based on context
-    else if (data.isVideoCall === 'true' || data.isVideoCall === true) {
-      callType = 'video';
-    }
-    // Priority 4: Check caller info for video indicators
-    else if (callerInfo.isVideoCall === 'true' || callerInfo.isVideoCall === true) {
-      callType = 'video';
-    }
-    // Priority 5: Check if meetingId suggests video (some services use this pattern)
-    else if (videoSDKInfo.meetingId && (data.type === 'VIDEO_CALL' || data.type === 'video_call')) {
-      callType = 'video';
-    }
-
     // Normalize callType to ensure it's either 'video' or 'voice'
     const normalizedCallType = (callType === 'video' || callType === 'VIDEO') ? 'video' : 'voice';
 

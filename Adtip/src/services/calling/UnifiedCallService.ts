@@ -2208,8 +2208,8 @@ class UnifiedCallService {
         videoSDKInfo: {
           meetingId: callData.meetingId,
           token: callData.token, // This is the VideoSDK participant token
+          callType: callData.callType, // ✅ CRITICAL FIX: Include callType in videoSDKInfo as 3rd value
         },
-        callType: callData.callType, // ✅ CRITICAL FIX: Include callType in the payload
       });
 
       console.log('[UnifiedCallService] "initiate-call" notification sent successfully to recipient:', callData.recipientId);
@@ -2293,39 +2293,45 @@ class UnifiedCallService {
       const callId = String(callData.uuid || callData.callId || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
 
       // ✅ CRITICAL FIX: Properly extract callType from multiple possible sources
-      // Look for callType in: callData.callType, data.callType, or derive from call context
+      // Priority 1: Look for callType in videoSDKInfo (NEW: as 3rd value in videoSDKInfo)
       let callType = 'voice'; // Default to voice
       
       console.log('[UnifiedCallService] 🔍 CALL TYPE EXTRACTION PROCESS:');
+      console.log('[UnifiedCallService] 📋 videoSDKInfo.callType:', videoSDKInfo.callType);
       console.log('[UnifiedCallService] 📋 callData.callType:', callData.callType);
       console.log('[UnifiedCallService] 📋 data.callType:', data.callType);
       console.log('[UnifiedCallService] 📋 data.isVideoCall:', data.isVideoCall);
       console.log('[UnifiedCallService] 📋 callerInfo.isVideoCall:', callerInfo.isVideoCall);
       
-      // Priority 1: Direct callType field in parsed data
-      if (callData.callType) {
-        callType = String(callData.callType).toLowerCase();
-        console.log('[UnifiedCallService] ✅ Priority 1: Found callType in callData:', callType);
+      // Priority 1: NEW - Extract callType from videoSDKInfo (as 3rd value)
+      if (videoSDKInfo.callType) {
+        callType = String(videoSDKInfo.callType).toLowerCase();
+        console.log('[UnifiedCallService] ✅ Priority 1: Found callType in videoSDKInfo:', callType);
       }
-      // Priority 2: CallType in original data
+      // Priority 2: Direct callType field in parsed data
+      else if (callData.callType) {
+        callType = String(callData.callType).toLowerCase();
+        console.log('[UnifiedCallService] ✅ Priority 2: Found callType in callData:', callType);
+      }
+      // Priority 3: CallType in original data
       else if (data.callType) {
         callType = String(data.callType).toLowerCase();
-        console.log('[UnifiedCallService] ✅ Priority 2: Found callType in data:', callType);
+        console.log('[UnifiedCallService] ✅ Priority 3: Found callType in data:', callType);
       }
-      // Priority 3: Check if it's explicitly a video call based on context
+      // Priority 4: Check if it's explicitly a video call based on context
       else if (data.isVideoCall === 'true' || data.isVideoCall === true) {
         callType = 'video';
-        console.log('[UnifiedCallService] ✅ Priority 3: Found isVideoCall in data:', callType);
+        console.log('[UnifiedCallService] ✅ Priority 4: Found isVideoCall in data:', callType);
       }
-      // Priority 4: Check caller info for video indicators
+      // Priority 5: Check caller info for video indicators
       else if (callerInfo.isVideoCall === 'true' || callerInfo.isVideoCall === true) {
         callType = 'video';
-        console.log('[UnifiedCallService] ✅ Priority 4: Found isVideoCall in callerInfo:', callType);
+        console.log('[UnifiedCallService] ✅ Priority 5: Found isVideoCall in callerInfo:', callType);
       }
-      // Priority 5: Check if meetingId suggests video (some services use this pattern)
+      // Priority 6: Check if meetingId suggests video (some services use this pattern)
       else if (videoSDKInfo.meetingId && (data.type === 'VIDEO_CALL' || data.type === 'video_call')) {
         callType = 'video';
-        console.log('[UnifiedCallService] ✅ Priority 5: Detected video call by type and meetingId:', callType);
+        console.log('[UnifiedCallService] ✅ Priority 6: Detected video call by type and meetingId:', callType);
       } else {
         console.log('[UnifiedCallService] ⚠️ No specific callType found, defaulting to voice');
       }

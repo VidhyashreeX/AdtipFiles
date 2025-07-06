@@ -146,8 +146,8 @@ class FirebaseService {
     if (remoteMessage.data?.callData) {
         try {
           const callData = JSON.parse(remoteMessage.data.callData as string);
-          // Extract callType from videoSDKInfo.callType, fallback to callInfo.callType
-          const callType = callData.videoSDKInfo?.callType || callData.callInfo?.callType;
+          // Extract callType ONLY from videoSDKInfo.callType (as 3rd value in videoSDKInfo)
+          const callType = callData.videoSDKInfo?.callType;
           appEventEmitter.emit('incomingCallFromFCM', {
             callId: callData.callInfo.callId,
             meetingId: callData.videoSDKInfo.meetingId,
