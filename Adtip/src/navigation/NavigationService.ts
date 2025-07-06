@@ -185,3 +185,37 @@ export function navigateToMeetingFromNotification(params: {
   // Start the first attempt
   attemptNavigation();
 }
+
+// ✅ CRITICAL FIX: Force navigation back to TipCall screen after call ends
+export function navigateToTipCall() {
+  try {
+    console.log('[NavigationService] Forcing navigation back to TipCall screen');
+    
+    if (navigationRef.isReady()) {
+      // Reset to TipCall screen - this ensures we're back to the main call screen
+      (navigationRef as any).reset({
+        index: 0,
+        routes: [
+          { 
+            name: 'Main', 
+            params: { 
+              screen: 'TipCall' 
+            } 
+          }
+        ],
+      });
+      console.log('[NavigationService] Successfully navigated back to TipCall');
+    } else {
+      console.warn('[NavigationService] Navigation not ready, retrying in 200ms');
+      setTimeout(navigateToTipCall, 200);
+    }
+  } catch (error) {
+    console.error('[NavigationService] Error navigating to TipCall:', error);
+    // Fallback: try to navigate to Main screen
+    try {
+      (navigationRef as any).navigate('Main', { screen: 'TipCall' });
+    } catch (fallbackError) {
+      console.error('[NavigationService] Fallback navigation also failed:', fallbackError);
+    }
+  }
+}

@@ -145,6 +145,7 @@ export interface InitiateCallRequest {
     meetingId: string;
     token: string;
   };
+  callType?: 'voice' | 'video'; // Add callType to the interface
 }
 
 export interface InitiateCallResponse {
@@ -1305,9 +1306,11 @@ export default class ApiService {
     calleeInfo: { platform: string; token: string };
     callerInfo: { name: string; token: string };
     videoSDKInfo: { meetingId: string; token: string };
+    callType?: 'voice' | 'video'; // Add callType parameter
   }): Promise<any> {
     try {
       console.log('🚀 [ApiService] Making direct call to FCM Server for initiate-call:', FCM_SERVER_URL);
+      console.log('🚀 [ApiService] Payload with callType:', JSON.stringify(payload, null, 2));
       
       // Get auth token for authenticated requests
       const authToken = await AsyncStorage.getItem('accessToken') || await AsyncStorage.getItem('@auth_token');

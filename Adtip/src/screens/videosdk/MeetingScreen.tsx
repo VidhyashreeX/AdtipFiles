@@ -216,11 +216,26 @@ interface MeetingViewProps {
  * The internal meeting view component - BULLETPROOF IMPLEMENTATION
  */
 const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLocalParticipantId, recipientName }: MeetingViewProps) => {
+  console.log('[MeetingView] 🎬 MEETING VIEW INITIALIZED:');
+  console.log('[MeetingView] 📋 Props received:', {
+    meetingId,
+    callType,
+    token: token ? `${token.substring(0, 20)}...` : 'NO TOKEN',
+    localParticipantId: initialLocalParticipantId,
+    recipientName
+  });
+  
   const { activeCall: currentActiveCall } = useCall(); // Rename to avoid confusion
   const unifiedCallService = UnifiedCallService.getInstance(); // Get instance directly
   const callMediaManager = CallMediaManager.getInstance(); // Get instance directly 
   const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
   const route = useRoute<any>(); // Type as any to resolve route.params.meetingId error
+
+  console.log('[MeetingView] 📋 Current active call from context:', {
+    hasActiveCall: !!currentActiveCall,
+    activeCallType: currentActiveCall?.callType,
+    activeCallId: currentActiveCall?.callId
+  });
 
   // --- LINT FIX: Removed redundant meeting state ---
   // We use meetingHooks from useMeeting instead of a separate meeting state
@@ -237,6 +252,13 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   if (!latchedCallDataRef.current) {
     // Try UnifiedCallService first as it's the source of truth
     const unifiedCall = unifiedCallService.getCurrentCall();
+    console.log('[MeetingView] 📋 UnifiedCallService current call:', {
+      hasUnifiedCall: !!unifiedCall,
+      unifiedCallType: unifiedCall?.callType,
+      unifiedCallId: unifiedCall?.callId,
+      unifiedMeetingId: unifiedCall?.meetingId
+    });
+    
     if (unifiedCall && unifiedCall.meetingId === meetingId) {
       latchedCallDataRef.current = {
         meetingId: unifiedCall.meetingId,
@@ -244,11 +266,19 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
         token: unifiedCall.token,
         recipientName: unifiedCall.isInitiator ? unifiedCall.recipientName : unifiedCall.callerName
       };
+      console.log('[MeetingView] ✅ Using UnifiedCallService data for latched call:', latchedCallDataRef.current);
     } else {
       // Fallback to props (from route params)
       latchedCallDataRef.current = { meetingId, callType, token, recipientName };
+      console.log('[MeetingView] ⚠️ Using props/route data for latched call:', latchedCallDataRef.current);
     }
   }
+
+  console.log('[MeetingView] 🎯 FINAL LATCHED CALL DATA:', {
+    latchedCallType: latchedCallDataRef.current?.callType,
+    latchedMeetingId: latchedCallDataRef.current?.meetingId,
+    latchedRecipientName: latchedCallDataRef.current?.recipientName
+  });
 
   const [localParticipantId, setLocalParticipantId] = useState(initialLocalParticipantId);
   const [showControls, setShowControls] = useState(true);
@@ -608,7 +638,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
                 console.error('[MeetingView] Fallback navigation also failed:', fallbackError);
               }
             }
-          }, 800); // Increased delay to ensure proper cleanup
+          }, 1500); // Increased delay to 1.5 seconds to ensure proper cleanup and prevent race conditions
         }
       }
     };
@@ -1045,8 +1075,8 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   useEffect(() => {
     let safetyTimer: NodeJS.Timeout | null = null;
     
-    // If call state is 'ended' for more than 3 seconds, force navigation back
-    if (callState === 'ended') {
+    // If call state is 'ended' for more than 2 seconds, force navigation back
+    if (callState === 'ended' && !isEndingCall) {
       safetyTimer = setTimeout(() => {
         if (!navigation || !isComponentMountedRef.current) return;
         
@@ -1055,6 +1085,9 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
           if (currentRoute === 'Meeting') {
             console.log('[MeetingView] Safety timer triggered - forcing navigation back to TipCall');
             
+            // Set ending call flag to prevent multiple navigation attempts
+            setIsEndingCall(true);
+            
             navigation.reset({
               index: 0,
               routes: [{ name: 'TipCall' as keyof MainNavigatorParamList }],
@@ -1062,8 +1095,16 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
           }
         } catch (error) {
           console.error('[MeetingView] Safety timer navigation error:', error);
+          // Fallback - try to go back
+          try {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            }
+          } catch (fallbackError) {
+            console.error('[MeetingView] Safety timer fallback also failed:', fallbackError);
+          }
         }
-      }, 3000); // 3 seconds safety timeout
+      }, 2000); // Reduced to 2 seconds for faster recovery
     }
     
     return () => {
@@ -1392,6 +1433,21 @@ const MeetingScreen = () => {
   const { activeCall } = useCall();
   const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
 
+  console.log('[MeetingScreen] 🎬 MEETING SCREEN COMPONENT MOUNTED:');
+  console.log('[MeetingScreen] 📋 Route params:', {
+    meetingId: route.params?.meetingId,
+    callType: route.params?.callType,
+    displayName: route.params?.displayName,
+    isInitiator: route.params?.isInitiator,
+    recipientName: route.params?.recipientName,
+    hasToken: !!route.params?.token
+  });
+  console.log('[MeetingScreen] 📋 Active call from context:', {
+    hasActiveCall: !!activeCall,
+    activeCallType: activeCall?.callType,
+    activeCallId: activeCall?.callId
+  });
+
   // CRITICAL FIX: Sticky call context - latch the call on mount and never clear it during the session
   const latchedCallRef = useRef<ActiveCall | null>(null);
   const hasInitializedRef = useRef(false);
@@ -1399,6 +1455,8 @@ const MeetingScreen = () => {
   // Only initialize the latched call once when the component first mounts
   if (!hasInitializedRef.current) {
     hasInitializedRef.current = true;
+    
+    console.log('[MeetingScreen] 🔄 Initializing latched call data...');
     
     // Priority 1: Route params (most immediate source of truth on navigation)
     if (route.params?.meetingId && route.params?.token) {
@@ -1415,12 +1473,19 @@ const MeetingScreen = () => {
         status: 'connecting',
         timestamp: Date.now()
       } as ActiveCall;
-      console.log('[MeetingScreen] Latched call from route params:', latchedCallRef.current);
+      console.log('[MeetingScreen] ✅ Latched call from route params:', {
+        callType: latchedCallRef.current.callType,
+        meetingId: latchedCallRef.current.meetingId,
+        isInitiator: latchedCallRef.current.isInitiator
+      });
     } 
     // Priority 2: Current activeCall from context
     else if (activeCall) {
       latchedCallRef.current = activeCall;
-      console.log('[MeetingScreen] Latched call from context:', latchedCallRef.current);
+      console.log('[MeetingScreen] ✅ Latched call from context:', {
+        callType: latchedCallRef.current.callType,
+        callId: latchedCallRef.current.callId
+      });
     }
     // Priority 3: UnifiedCallService as last resort
     else {
@@ -1486,6 +1551,8 @@ const MeetingScreen = () => {
       (activeCall && ['ended', 'missed', 'declined'].includes(activeCall.status))
     ) {
       console.log('[MeetingScreen] Detected call end or activeCall is null. Navigating away from Meeting screen.');
+      
+      // ✅ CRITICAL FIX: Add delay to prevent race conditions with navigation
       setTimeout(() => {
         if (!navigation) return;
         try {
@@ -1509,7 +1576,7 @@ const MeetingScreen = () => {
             console.error('[MeetingScreen] Final navigation fallback failed:', finalError);
           }
         }
-      }, 200);
+      }, 1500); // Increased delay to prevent race conditions
     }
   }, [activeCall, latchedCall, navigation]);
 
