@@ -16,7 +16,7 @@ import Header from '../../components/common/Header';
 import {useNavigation} from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import ScreenTransition from '../../components/common/ScreenTransition';
-import {useUserSettings, useUpdateUserSettings} from '../../hooks/useQueries';
+// import {useUserSettings, useUpdateUserSettings} from '../../hooks/useQueries';
 
 interface SettingItem {
   id: string;
@@ -36,8 +36,8 @@ const SettingsScreen: React.FC = () => {
   const userId = user?.id || 0;
 
   // TanStack Query hooks
-  const userSettingsQuery = useUserSettings(userId);
-  const updateSettingsMutation = useUpdateUserSettings();
+  // const userSettingsQuery = useUserSettings(userId);
+  // const updateSettingsMutation = useUpdateUserSettings();
 
   const [localSettings, setLocalSettings] = useState({
     pushNotifications: true,
@@ -49,25 +49,25 @@ const SettingsScreen: React.FC = () => {
   });
 
   // Update local settings when API data loads
-  React.useEffect(() => {
-    if (userSettingsQuery.data) {
-      setLocalSettings(prev => ({
-        ...prev,
-        ...userSettingsQuery.data,
-        darkMode: isDarkMode, // Keep theme setting local
-      }));
-    }
-  }, [userSettingsQuery.data, isDarkMode]);
+  // React.useEffect(() => {
+  //   if (userSettingsQuery.data) {
+  //     setLocalSettings(prev => ({
+  //       ...prev,
+  //       ...userSettingsQuery.data,
+  //       darkMode: isDarkMode, // Keep theme setting local
+  //     }));
+  //   }
+  // }, [userSettingsQuery.data, isDarkMode]);
 
   const updateSetting = useCallback((key: string, value: boolean) => {
     setLocalSettings(prev => ({...prev, [key]: value}));
     
     // Update settings via API
-    updateSettingsMutation.mutate({
-      user_id: userId,
-      [key]: value
-    });
-  }, [updateSettingsMutation, userId]);
+    // updateSettingsMutation.mutate({
+    //   user_id: userId,
+    //   [key]: value
+    // });
+  }, []);
 
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -111,27 +111,15 @@ const SettingsScreen: React.FC = () => {
 
   const settingSections = [
     {
-      title: 'Notifications',
+      title: 'Permissions',
       items: [
         {
-          id: 'push',
-          title: 'Push Notifications',
-          subtitle: 'Receive notifications on your device',
-          type: 'toggle',
-          icon: 'bell',
-          value: localSettings.pushNotifications,
-          onToggle: (value: boolean) =>
-            updateSetting('pushNotifications', value),
-        },
-        {
-          id: 'email',
-          title: 'Email Notifications',
-          subtitle: 'Receive notifications via email',
-          type: 'toggle',
-          icon: 'mail',
-          value: localSettings.emailNotifications,
-          onToggle: (value: boolean) =>
-            updateSetting('emailNotifications', value),
+          id: 'permissions',
+          title: 'Permissions',
+          subtitle: 'Manage app permissions (Notifications, Camera, Audio, etc.)',
+          type: 'navigation',
+          icon: 'settings',
+          onPress: () => navigation.navigate('PermissionsScreen' as never),
         },
       ] as SettingItem[],
     },
@@ -229,21 +217,19 @@ const SettingsScreen: React.FC = () => {
     },  ];
 
   // Show loading state while fetching settings
-  if (userSettingsQuery.isLoading) {
-    return (
-      <ScreenTransition animationType="fade">
-        <SafeAreaView style={[styles.container, {backgroundColor: colors.background}]}>
-          <Header title="Settings"/>
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[styles.loadingText, {color: colors.text.secondary}]}>
-              Loading settings...
-            </Text>
-          </View>
-        </SafeAreaView>
-      </ScreenTransition>
-    );
-  }
+  // if (userSettingsQuery.isLoading) {
+  //   return (
+  //     <ScreenTransition animationType="fade">
+  //       <SafeAreaView style={[styles.container, {backgroundColor: colors.background}]}> 
+  //         <Header title="Settings"/>
+  //         <View style={styles.loadingContainer}>
+  //           <ActivityIndicator size="large" color={colors.primary} />
+  //           <Text style={[styles.loadingText, {color: colors.text.secondary}]}>Loading settings...</Text>
+  //         </View>
+  //       </SafeAreaView>
+  //     </ScreenTransition>
+  //   );
+  // }
 
   return (
     <ScreenTransition animationType="fade">
@@ -353,7 +339,7 @@ const SettingsScreen: React.FC = () => {
                               trackColor={{false: isDarkMode ? '#374151' : '#E5E7EB', true: sectionColor + '40'}}
                               thumbColor={item.value ? sectionColor : (isDarkMode ? '#9CA3AF' : '#FFFFFF')}
                               ios_backgroundColor={isDarkMode ? '#374151' : '#E5E7EB'}
-                              disabled={updateSettingsMutation.isPending}
+                              disabled={false}
                             />
                           )}
                           {item.type === 'navigation' && (
