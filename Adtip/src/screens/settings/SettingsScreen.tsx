@@ -157,7 +157,7 @@ const SettingsScreen: React.FC = () => {
         },
       ] as SettingItem[],
     },
-    {
+    /*{
       title: 'Privacy & Security',
       items: [
         {
@@ -186,7 +186,7 @@ const SettingsScreen: React.FC = () => {
           onToggle: (value: boolean) => updateSetting('analytics', value),
         },
       ] as SettingItem[],
-    },
+    },*/
     {
       title: 'Support',
       items: [        {
