@@ -211,7 +211,7 @@ const SettingsScreen: React.FC = () => {
           subtitle: 'App version and legal information',
           type: 'navigation',
           icon: 'info',
-          onPress: () => console.log('Navigate to About'),
+          onPress: () => navigation.navigate('PrivacyPolicy' as never),
         },
       ] as SettingItem[],
     },  ];
@@ -234,7 +234,10 @@ const SettingsScreen: React.FC = () => {
   return (
     <ScreenTransition animationType="fade">
       <SafeAreaView style={[styles.container, {backgroundColor: colors.background}]}> 
-        <Header title="Settings"/>
+        <Header title="Settings"
+        showSearch={false}
+        showWallet={false}
+        />
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{paddingTop: 16}}>
           {settingSections.map((section, sectionIdx) => {
             // Define section colors
@@ -359,7 +362,7 @@ const SettingsScreen: React.FC = () => {
             style={{
               marginHorizontal: 16, 
               marginTop: 8, 
-              marginBottom: 32, 
+              marginBottom: 0, 
               backgroundColor: authLoading ? '#F87171' : '#EF4444', // Dim if loading 
               borderRadius: 12, 
               alignItems: 'center', 
