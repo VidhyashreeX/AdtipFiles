@@ -46,6 +46,7 @@ import CategoryItem from '../../components/home/CategoryItem';
 import EarnCard from '../../components/home/EarnCard';
 import BannerCarousel from '../../components/home/BannerCarousel';
 
+
 import ScreenTransition from '../../components/common/ScreenTransition';
 import UserProfileScreen from '../profile/UserProfileScreen';
 
@@ -614,6 +615,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     setShowUserProfileModal(true);
   }, []);
 
+  const handleSearchIconPress = useCallback(() => {
+    (navigation as any).navigate('Search');
+  }, [navigation]);
+
+
+
   const handleRefresh = useCallback(() => {
     refreshPosts();
   }, [refreshPosts]);
@@ -722,7 +729,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     return (
       <ScreenTransition>
         <View style={[styles.container, {backgroundColor: colors.background}]}>
-          <Header title="" />
+          <Header 
+            title="" 
+            onSearchSubmit={handleSearchIconPress}
+          />
           <ScrollView style={styles.content} contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}>
             <StoriesRow stories={[]} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} isLoading={true} />
             <CategoriesRow categories={[]} selectedCategory={null} onCategoryPress={handleCategoryPress} isLoading={true} />
@@ -742,7 +752,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     return (
       <ScreenTransition>
         <View style={[styles.container, {backgroundColor: colors.background}]}>
-          <Header title="" />
+          <Header 
+            title="" 
+            onSearchSubmit={handleSearchIconPress}
+          />
           <View style={styles.errorContainer}>
             <WifiOff size={48} color={colors.danger || '#FF0000'} />
             <Text style={[styles.errorTitle, {color: colors.text.primary}]}>Something went wrong</Text>
@@ -761,7 +774,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   return (
           <ScreenTransition>
         <View style={[styles.container, {backgroundColor: colors.background}]}>
-          <Header title="" />
+          <Header 
+            title="" 
+            onSearchSubmit={handleSearchIconPress}
+          />
           <FlatList
           data={displayPosts}
           renderItem={renderPostItem}
@@ -835,6 +851,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             />
           )}
         </Modal>
+
+
       </View>
     </ScreenTransition>
   );

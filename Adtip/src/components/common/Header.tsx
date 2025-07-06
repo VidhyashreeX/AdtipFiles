@@ -114,9 +114,20 @@ const Header: React.FC<HeaderProps> = ({
 
   // Memoize search handlers
   const handleSearchIconPress = useCallback(() => {
-    setIsSearchActive(true);
-    setTimeout(() => searchInputRef.current?.focus(), 50);
-  }, []);
+    if (onSearchSubmit) {
+      // If onSearchSubmit is provided, use it (for navigation)
+      onSearchSubmit('');
+    } else {
+      // Default behavior: activate search input
+      setIsSearchActive(true);
+      setTimeout(() => searchInputRef.current?.focus(), 50);
+    }
+  }, [onSearchSubmit]);
+
+  // Determine if we should show the built-in search input
+  const shouldShowBuiltInSearch = useMemo(() => {
+    return isSearchActive && showSearch && !onSearchSubmit;
+  }, [isSearchActive, showSearch, onSearchSubmit]);
 
   const handleCloseSearch = useCallback(() => {
     Keyboard.dismiss();
@@ -269,7 +280,7 @@ const Header: React.FC<HeaderProps> = ({
       <View style={[styles.centerSectionContainer, { marginHorizontal: sizes.iconSpacing / 2 }]}>
         {isCallActiveInBackground ? (
           <LiveCallTimer />
-        ) : isSearchActive && showSearch ? (
+        ) : shouldShowBuiltInSearch ? (
           <>
             <TextInput
               ref={searchInputRef}
@@ -320,7 +331,7 @@ const Header: React.FC<HeaderProps> = ({
               </TouchableOpacity>
             )}
             {showSearch && (
-              isSearchActive ? (
+              shouldShowBuiltInSearch ? (
                 <TouchableOpacity onPress={handleCloseSearch} style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}>
                   <Icon name="x" size={sizes.iconSize} color={colors.text.primary} />
                 </TouchableOpacity>

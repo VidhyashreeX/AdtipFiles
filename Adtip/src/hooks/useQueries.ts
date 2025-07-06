@@ -1559,3 +1559,17 @@ export const useApplyReferralCode = () => {
     },
   });
 };
+
+// Search Users Hook
+export const useSearchUsers = (searchQuery: string, page: number = 1, limit: number = 20) => {
+  return useQuery({
+    queryKey: ['search', 'users', searchQuery, page, limit],
+    queryFn: () => ApiService.searchUsersByName(searchQuery, page, limit),
+    enabled: !!searchQuery && searchQuery.trim().length >= 2, // Only search if query is 2+ characters
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: (failureCount, error: any) => {
+      if (error?.response?.status === 401) return false;
+      return failureCount < 2;
+    },
+  });
+};

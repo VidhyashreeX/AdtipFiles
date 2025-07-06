@@ -2097,4 +2097,43 @@ static async createSubscriptionTest(plan_id: string, user_id: number): Promise<a
       throw this.handleError(error);
     }
   }
+
+  /**
+   * Search users by name with pagination
+   */
+  static async searchUsersByName(
+    search_by_name: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{
+    status: boolean;
+    message: string;
+    data: {
+      users: Array<{
+        id: number;
+        name: string;
+        profile_image: string | null;
+      }>;
+      pagination: {
+        current_page: number;
+        total_pages: number;
+        total_users: number;
+        limit: number;
+        has_next: boolean;
+        has_prev: boolean;
+      };
+    };
+  }> {
+    try {
+      const response = await this.post('/api/search-users', {
+        search_by_name,
+        page,
+        limit,
+      });
+      return response;
+    } catch (error) {
+      console.error('Error searching users:', error);
+      throw this.handleError(error);
+    }
+  }
 }

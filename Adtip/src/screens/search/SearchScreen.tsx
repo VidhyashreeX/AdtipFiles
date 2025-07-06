@@ -1,4 +1,4 @@
-import React, {useState, useCallback} from 'react';
+import React, {useState, useCallback, useEffect} from 'react';
 import {
   View,
   Text,
@@ -8,152 +8,150 @@ import {
   FlatList,
   SafeAreaView,
   ActivityIndicator,
+  Image,
+  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
-import {useUserSearch, useContentSearch, useSaveSearchHistory} from '../../hooks/useQueries';
+import {useSearchUsers} from '../../hooks/useQueries';
 import {useAuth} from '../../contexts/AuthContext';
+import {useNavigation} from '@react-navigation/native';
+import {getUserProfileColor, getInitials} from '../../utils/colorUtils';
+import {API_BASE_URL} from '../../constants/api';
+import UserProfileScreen from '../profile/UserProfileScreen';
 
-interface SearchResult {
-  id: string;
-  title: string;
-  type: 'user' | 'content' | 'channel';
-  subtitle?: string;
-  data?: any;
+interface User {
+  id: number;
+  name: string;
+  profile_image: string | null;
 }
 
 const SearchScreen: React.FC = () => {
   const {colors} = useTheme();
   const {user} = useAuth();
+  const navigation = useNavigation();
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchType, setSearchType] = useState<'user' | 'content'>('user');
   const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [showUserProfileModal, setShowUserProfileModal] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
 
   // TanStack Query hooks
-  const userSearchQuery = useUserSearch(debouncedQuery, {}, user?.id || 0);
-  const contentSearchQuery = useContentSearch(debouncedQuery, {}, user?.id || 0);
-  const saveSearchHistoryMutation = useSaveSearchHistory();
+  const userSearchQuery = useSearchUsers(debouncedQuery, page, 20);
 
   // Debounce search query
-  const debounceSearch = useCallback((query: string) => {
+  useEffect(() => {
     const timeoutId = setTimeout(() => {
-      setDebouncedQuery(query);
-    }, 500);
+      setDebouncedQuery(searchQuery);
+      setPage(1); // Reset to first page when search query changes
+      setHasMore(true); // Reset hasMore when search query changes
+      setAllUsers([]); // Clear all users when search query changes
+    }, 300);
+
     return () => clearTimeout(timeoutId);
-  }, []);
+  }, [searchQuery]);
+
+  // Update hasMore and accumulate users based on search results
+  useEffect(() => {
+    if (userSearchQuery.data?.data?.users) {
+      const users = userSearchQuery.data.data.users;
+      const pagination = userSearchQuery.data.data.pagination;
+      
+      console.log('[SearchScreen] Search results:', {
+        usersCount: users.length,
+        pagination,
+        page
+      });
+      
+      // Use the pagination data from API response
+      setHasMore(pagination?.has_next || false);
+      
+      // Accumulate users for pagination
+      if (page === 1) {
+        setAllUsers(users);
+      } else {
+        setAllUsers(prev => [...prev, ...users]);
+      }
+    }
+  }, [userSearchQuery.data, page]);
 
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
-    if (query.trim().length > 0) {
-      debounceSearch(query);
-      // Save search history
-      saveSearchHistoryMutation.mutate({
-        userId: user?.id || 0,
-        query: query.trim(),
-        type: searchType
-      });
-    }
-  }, [debounceSearch, saveSearchHistoryMutation, user?.id, searchType]);
+  }, []);
 
   const clearSearch = useCallback(() => {
     setSearchQuery('');
     setDebouncedQuery('');
+    setPage(1);
+    setAllUsers([]);
   }, []);
 
-  // Get current search results based on type
-  const getCurrentResults = () => {
-    if (searchType === 'user') {
-      return userSearchQuery.data?.pages?.flatMap(page => 
-        page?.data?.map((user: any) => ({
-          id: user.id?.toString() || '',
-          title: user.name || user.username || 'Unknown User',
-          type: 'user' as const,
-          subtitle: `@${user.username || 'user'}`,
-          data: user
-        })) || []
-      ) || [];
-    } else {
-      return contentSearchQuery.data?.pages?.flatMap(page => 
-        page?.data?.map((content: any) => ({
-          id: content.id?.toString() || '',
-          title: content.title || content.name || 'Untitled Content',
-          type: 'content' as const,
-          subtitle: content.description || 'Content',
-          data: content
-        })) || []
-      ) || [];
+  const loadMoreUsers = useCallback(() => {
+    if (hasMore && !userSearchQuery.isFetching) {
+      setPage(prev => prev + 1);
     }
+  }, [hasMore, userSearchQuery.isFetching]);
+
+  const handleUserPress = useCallback((userId: number) => {
+    console.log('[SearchScreen] Opening UserProfileModal with userId:', userId);
+    setSelectedUserId(userId);
+    setShowUserProfileModal(true);
+  }, []);
+
+  const getFullImageUrl = (url?: string | null) => {
+    if (!url || url === 'null' || url === 'undefined') return null;
+    if (url.startsWith('http')) return url;
+    return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
-  const isSearching = userSearchQuery.isFetching || contentSearchQuery.isFetching;
-  const searchResults = getCurrentResults();
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'user':
-        return 'user';
-      case 'content':
-        return 'video';
-      case 'channel':
-        return 'tv';
-      default:
-        return 'search';
-    }
-  };
-
-  const renderSearchResult = ({item}: {item: SearchResult}) => (
-    <TouchableOpacity
-      style={[styles.resultItem, {borderBottomColor: colors.border}]}>
-      <Icon
-        name={getTypeIcon(item.type)}
-        size={20}
-        color={colors.text.secondary}
-        style={styles.resultIcon}
-      />
-      <View style={styles.resultContent}>
-        <Text style={[styles.resultTitle, {color: colors.text.primary}]}>
-          {item.title}
-        </Text>
-        {item.subtitle && (
-          <Text style={[styles.resultSubtitle, {color: colors.text.secondary}]}>
-            {item.subtitle}
+  const renderUserItem = ({item}: {item: User}) => {
+    return (
+      <TouchableOpacity
+        style={[styles.userItem, {borderBottomColor: colors.border}]}
+        onPress={() => handleUserPress(item.id)}>
+        <View style={styles.userProfileContainer}>
+          {item.profile_image ? (
+            <Image
+              source={{ uri: getFullImageUrl(item.profile_image) || undefined }}
+              style={styles.userProfileImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.userProfilePlaceholder, { backgroundColor: getUserProfileColor(item.id) }]}>
+              <Text style={styles.userProfileInitials}>{getInitials(item.name)}</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.userContent}>
+          <Text style={[styles.userName, {color: colors.text.primary}]}>
+            {item.name || 'Unknown User'}
           </Text>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
+          <Text style={[styles.userSubtitle, {color: colors.text.secondary}]}>
+            User
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
-  const renderSearchTypeToggle = () => (
-    <View style={styles.searchTypeContainer}>
-      <TouchableOpacity
-        style={[
-          styles.typeButton,
-          searchType === 'user' && {backgroundColor: colors.primary}
-        ]}
-        onPress={() => setSearchType('user')}>
-        <Text style={[
-          styles.typeButtonText,
-          {color: searchType === 'user' ? colors.white : colors.text.primary}
-        ]}>
-          Users
+  const renderFooter = () => {
+    if (!hasMore) return null;
+    
+    return (
+      <View style={styles.loadingMoreContainer}>
+        <ActivityIndicator size="small" color={colors.primary} />
+        <Text style={[styles.loadingMoreText, {color: colors.text.secondary}]}>
+          Loading more users...
         </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[
-          styles.typeButton,
-          searchType === 'content' && {backgroundColor: colors.primary}
-        ]}
-        onPress={() => setSearchType('content')}>
-        <Text style={[
-          styles.typeButtonText,
-          {color: searchType === 'content' ? colors.white : colors.text.primary}
-        ]}>
-          Content
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
+      </View>
+    );
+  };
+
+  const isSearching = userSearchQuery.isFetching;
+  const users = allUsers;
 
   return (
     <SafeAreaView
@@ -174,7 +172,7 @@ const SearchScreen: React.FC = () => {
           />
           <TextInput
             style={[styles.searchInput, {color: colors.text.primary}]}
-            placeholder="Search users, content, channels..."
+            placeholder="Search users..."
             placeholderTextColor={colors.text.secondary}
             value={searchQuery}
             onChangeText={handleSearch}
@@ -189,57 +187,56 @@ const SearchScreen: React.FC = () => {
           )}
         </View>
 
-        {searchQuery.length > 0 && renderSearchTypeToggle()}
-
-        {isSearching ? (
+        {isSearching && page === 1 ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={[styles.loadingText, {color: colors.text.secondary}]}>
               Searching...
             </Text>
           </View>
-        ) : searchResults.length > 0 ? (
+        ) : users.length > 0 ? (
           <FlatList
-            data={searchResults}
-            renderItem={renderSearchResult}
-            keyExtractor={item => item.id}
-            style={styles.resultsList}
+            data={users}
+            renderItem={renderUserItem}
+            keyExtractor={(item) => `user-${item.id}`}
+            style={styles.usersList}
             showsVerticalScrollIndicator={false}
-            onEndReached={() => {
-              if (searchType === 'user') {
-                userSearchQuery.fetchNextPage();
-              } else {
-                contentSearchQuery.fetchNextPage();
-              }
-            }}
-            onEndReachedThreshold={0.1}
-            ListFooterComponent={() => 
-              (userSearchQuery.isFetchingNextPage || contentSearchQuery.isFetchingNextPage) ? (
-                <View style={styles.loadingMoreContainer}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                  <Text style={[styles.loadingMoreText, {color: colors.text.secondary}]}>
-                    Loading more...
-                  </Text>
-                </View>
-              ) : null
-            }
+            onEndReached={loadMoreUsers}
+            onEndReachedThreshold={0.3}
+            ListFooterComponent={renderFooter}
           />
         ) : searchQuery.length > 0 ? (
           <View style={styles.noResultsContainer}>
             <Icon name="search" size={48} color={colors.text.tertiary} />
             <Text
               style={[styles.noResultsText, {color: colors.text.secondary}]}>
-              No results found for "{searchQuery}"
+              No users found for "{searchQuery}"
             </Text>
           </View>
         ) : (
           <View style={styles.emptyContainer}>
             <Icon name="search" size={48} color={colors.text.tertiary} />
             <Text style={[styles.emptyText, {color: colors.text.secondary}]}>
-              Search for users, content, and channels
+              Search for users
             </Text>
           </View>
         )}
+
+        {/* User Profile Modal */}
+        <Modal
+          visible={showUserProfileModal}
+          animationType="slide"
+          onRequestClose={() => {
+            setShowUserProfileModal(false);
+            setSelectedUserId(null);
+          }}
+        >
+          {selectedUserId && (
+            <UserProfileScreen
+              userId={selectedUserId}
+            />
+          )}
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -272,45 +269,44 @@ const styles = StyleSheet.create({
   clearButton: {
     padding: 4,
   },
-  searchTypeContainer: {
-    flexDirection: 'row',
-    marginBottom: 16,
-    borderRadius: 8,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  typeButton: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-  },
-  typeButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  resultsList: {
+  usersList: {
     flex: 1,
   },
-  resultItem: {
+  userItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
   },
-  resultIcon: {
+  userProfileContainer: {
     marginRight: 12,
   },
-  resultContent: {
+  userProfileImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  userProfilePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userProfileInitials: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  userContent: {
     flex: 1,
   },
-  resultTitle: {
+  userName: {
     fontSize: 16,
     fontWeight: '500',
     marginBottom: 2,
   },
-  resultSubtitle: {
+  userSubtitle: {
     fontSize: 14,
   },
   loadingContainer: {
