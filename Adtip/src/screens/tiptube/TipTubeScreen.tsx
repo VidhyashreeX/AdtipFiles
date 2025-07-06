@@ -108,6 +108,56 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   return newArray;
 };
 
+const TipTubeSearchBar = ({
+  value,
+  onChangeText,
+  onSubmitEditing,
+  onBack,
+  colors,
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+  onSubmitEditing: () => void;
+  onBack: () => void;
+  colors: any;
+}) => (
+  <View
+    style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.background,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      width: '100%',
+      zIndex: 10,
+    }}
+  >
+    <TouchableOpacity onPress={onBack} style={{ padding: 8, marginRight: 4 }}>
+      <Icon name="arrow-left" size={24} color={colors.text.primary} />
+    </TouchableOpacity>
+    <TextInput
+      style={{
+        flex: 1,
+        height: 40,
+        backgroundColor: colors.cardSecondary,
+        borderRadius: 20,
+        paddingHorizontal: 16,
+        color: colors.text.primary,
+        fontSize: 16,
+      }}
+      placeholder="Search YouTube"
+      placeholderTextColor={colors.text.secondary}
+      value={value}
+      onChangeText={onChangeText}
+      onSubmitEditing={onSubmitEditing}
+      autoFocus
+      returnKeyType="search"
+    />
+  </View>
+);
+
 // Main TipTube Screen - Enhanced with React Query v5 data layer
 const TipTubeScreen = () => {
   const queryClient = useQueryClient();
@@ -650,6 +700,27 @@ const TipTubeScreen = () => {
     }
   };
 
+  // Handler for back arrow in search bar
+  const handleSearchBack = useCallback(() => {
+    setIsTipTubeSearchActive(false);
+    setSearchQuery('');
+  }, []);
+
+  if (isTipTubeSearchActive) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <TipTubeSearchBar
+          value={searchQuery}
+          onChangeText={handleTipTubeSearchChange}
+          onSubmitEditing={handleTipTubeSearchSubmit}
+          onBack={handleSearchBack}
+          colors={colors}
+        />
+        {/* Optionally, you can show search results or a loading indicator here */}
+      </View>
+    );
+  }
+
   return (
     <ScreenTransition animationType="slide" skipAnimation={false}>
       <View style={styles.container}>
@@ -658,31 +729,7 @@ const TipTubeScreen = () => {
           showTipShortsIcon={true}
           showSearch={false}
           showWallet={false}
-          centerComponent={
-            isTipTubeSearchActive ? (
-              <View style={styles.tipTubeSearchContainer}>
-                <TextInput
-                  style={[styles.tipTubeSearchInput, { color: colors.text.primary, borderColor: colors.border }]}
-                  placeholder="Search TipTube videos..."
-                  placeholderTextColor={colors.text.secondary}
-                  value={searchQuery || ''}
-                  onChangeText={handleTipTubeSearchChange}
-                  onSubmitEditing={handleTipTubeSearchSubmit}
-                  autoFocus={true}
-                  returnKeyType="search"
-                />
-                <TouchableOpacity 
-                  onPress={() => {
-                    setSearchQuery('');
-                    setIsTipTubeSearchActive(false);
-                  }}
-                  style={styles.tipTubeSearchClearButton}
-                >
-                  <Icon name="x" size={20} color={colors.text.secondary} />
-                </TouchableOpacity>
-              </View>
-            ) : undefined
-          }
+          centerComponent={undefined}
           rightComponent={
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               {/* TipShorts Navigation Icon */}
