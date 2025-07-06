@@ -86,6 +86,9 @@ import PremiumUserScreen from '../screens/premium/PremiumUserScreen';
 // Import ContentCreatorPremiumScreen
 import ContentCreatorPremiumScreen from '../screens/premium/ContentCreatorPremiumScreen';
 
+// Import PermissionsScreen
+import PermissionsScreen from '../screens/settings/PermissionsScreen';
+
 // Create stack navigator with proper typing
 const Stack = createNativeStackNavigator<MainNavigatorParamList>();
 
@@ -553,6 +556,7 @@ const MainNavigator = () => {
         component={PrivacyPolicyScreen}
         options={{ headerShown: false }}
       />
+      <Stack.Screen name="PermissionsScreen" component={PermissionsScreen} />
     </Stack.Navigator>
   );
 };

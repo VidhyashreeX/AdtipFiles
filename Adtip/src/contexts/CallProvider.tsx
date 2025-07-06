@@ -61,14 +61,26 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           clearActiveCallTimeout.current = setTimeout(() => {
             setActiveCall(null);
             clearActiveCallTimeout.current = null;
-          }, 300); // 300ms delay
+          }, 800); // Increased delay to 800ms for better stability
         }
       }
       // Format 2: Status update only { status: string; callId: string }
       else if (typeof data === 'object' && 'status' in data && 'callId' in data) {
-        console.log('[CallProvider] Received status-only event, ignoring to prevent clearing active call');
-        // Don't clear activeCall for status-only events - these are just status updates
-        // The full state change events will handle clearing when appropriate
+        if (data.status === 'ended' || data.status === 'missed' || data.status === 'declined') {
+          console.log('[CallProvider] Received call ended status, clearing active call with delay');
+          // Clear activeCall for ended status events with proper delay
+          if (clearActiveCallTimeout.current) {
+            clearTimeout(clearActiveCallTimeout.current);
+          }
+          clearActiveCallTimeout.current = setTimeout(() => {
+            setActiveCall(null);
+            clearActiveCallTimeout.current = null;
+          }, 1200); // Increased delay for ended calls to allow navigation to complete
+        } else if (activeCall && data.callId === activeCall.callId) {
+          // Update status of the existing active call for non-ended status
+          console.log('[CallProvider] Updating call status to:', data.status);
+          setActiveCall(prev => prev ? { ...prev, status: data.status } : null);
+        }
       }
       // Format 3: Direct activeCall object (legacy format)
       else if (data && typeof data === 'object' && 'callId' in data && 'meetingId' in data) {
@@ -99,6 +111,12 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     return () => {
       appEventEmitter.off('callStateChanged', handleCallStateChange);
+      
+      // Clean up any pending timeouts to prevent memory leaks
+      if (clearActiveCallTimeout.current) {
+        clearTimeout(clearActiveCallTimeout.current);
+        clearActiveCallTimeout.current = null;
+      }
     };
   }, [unifiedCallService]);
 

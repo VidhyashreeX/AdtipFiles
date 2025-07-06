@@ -146,9 +146,8 @@ class FirebaseService {
     if (remoteMessage.data?.callData) {
         try {
           const callData = JSON.parse(remoteMessage.data.callData as string);
-          
-          // Emit event instead of directly calling CallService
-          // UnifiedCallService will handle the notification display
+          // Extract callType ONLY from videoSDKInfo.callType (as 3rd value in videoSDKInfo)
+          const callType = callData.videoSDKInfo?.callType;
           appEventEmitter.emit('incomingCallFromFCM', {
             callId: callData.callInfo.callId,
             meetingId: callData.videoSDKInfo.meetingId,
@@ -156,7 +155,7 @@ class FirebaseService {
             callerId: callData.callerInfo.userId,
             callerName: callData.callerInfo.name,
             callerFcmToken: callData.callerInfo.token,
-            callType: callData.callInfo.callType,
+            callType,
             isIncomingCall: true,
           });
         } catch (e) {

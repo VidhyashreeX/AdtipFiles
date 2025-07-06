@@ -17,7 +17,7 @@ interface IncomingCallProps {
   onReject: () => void;
 }
 
-const VIBRATION_PATTERN = [1000, 2000, 3000];
+const VIBRATION_PATTERN = [0, 500, 200, 500, 200, 500]; // Softer, more pleasant pattern matching UnifiedCallService
 
 const IncomingCallScreen: React.FC<IncomingCallProps> = ({
   callerName,

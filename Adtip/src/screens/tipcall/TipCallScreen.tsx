@@ -56,6 +56,7 @@ import { useMissedCallsCount } from '../../hooks/useMissedCalls';
 import UserProfileScreen from '../profile/UserProfileScreen';
 import SingleBannerCard from '../../components/home/SingleBannerCard';
 import { Headphones } from 'lucide-react-native';
+import debounce from 'lodash.debounce';
 
 // Define navigation stack param list
 type NavigationProp = NativeStackNavigationProp<MainNavigatorParamList, 'TipCall'>;
@@ -286,6 +287,54 @@ const getContactsWithAds = (contacts: Contact[]) => {
   });
   return result;
 };
+
+// Search bar for TipCallScreen, styled like TipTubeSearchBar
+const TipCallSearchBar = ({
+  value,
+  onChangeText,
+  onBack,
+  colors,
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+  onBack: () => void;
+  colors: any;
+}) => (
+  <View
+    style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.background,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      width: '100%',
+      zIndex: 10,
+    }}
+  >
+    <TouchableOpacity onPress={onBack} style={{ padding: 8, marginRight: 4 }}>
+      <Icon name="arrow-left" size={24} color={colors.text.primary} />
+    </TouchableOpacity>
+    <TextInput
+      style={{
+        flex: 1,
+        height: 40,
+        backgroundColor: colors.cardSecondary,
+        borderRadius: 20,
+        paddingHorizontal: 16,
+        color: colors.text.primary,
+        fontSize: 16,
+      }}
+      placeholder="Search users..."
+      placeholderTextColor={colors.text.secondary}
+      value={value}
+      onChangeText={onChangeText}
+      autoFocus
+      returnKeyType="search"
+    />
+  </View>
+);
 
 // Update the main component to use Header search properly
 export default function TipCallScreen() {
@@ -1030,6 +1079,92 @@ export default function TipCallScreen() {
     return renderContactItem({ item });
   };
 
+  // Add state for live search query (separate from committed searchQuery)
+  const [liveSearchQuery, setLiveSearchQuery] = useState('');
+
+  // Debounced setter for live search
+  const debouncedSetLiveSearchQuery = useMemo(() => debounce((q: string) => setLiveSearchQuery(q), 300), []);
+
+  // Live search hook (only when search bar is expanded)
+  const {
+    data: liveSearchData,
+    isLoading: liveSearchLoading,
+    error: liveSearchError,
+  } = useUsers({ languageFilter, categoryFilter, searchQuery: liveSearchQuery }, user?.id);
+
+  // Transform live search results
+  const liveSearchContacts = useMemo(() => {
+    const allUsers = liveSearchData?.pages?.flatMap(page => page?.data || []) || [];
+    return allUsers.filter(contact => contact.id !== user?.id);
+  }, [liveSearchData, user?.id]);
+
+  // Handler for search bar text change (live update)
+  const handleTipCallLiveSearchChange = useCallback((text: string) => {
+    debouncedSetLiveSearchQuery(text);
+    setSearchQuery(text); // keep searchQuery in sync for submit
+  }, [debouncedSetLiveSearchQuery]);
+
+  // Handler for tapping a user in live search
+  const handleLiveSearchUserPress = useCallback((contact: Contact) => {
+    setIsTipCallSearchActive(false);
+    setSearchQuery('');
+    setLiveSearchQuery('');
+    setSelectedUserId(contact.id);
+    setShowUserProfileModal(true);
+  }, []);
+
+  // Handler for back arrow in search bar (reset live search)
+  const handleSearchBack = useCallback(() => {
+    setIsTipCallSearchActive(false);
+    setSearchQuery('');
+    setLiveSearchQuery('');
+  }, []);
+
+  if (isTipCallSearchActive) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <TipCallSearchBar
+          value={searchQuery}
+          onChangeText={handleTipCallLiveSearchChange}
+          onBack={handleSearchBack}
+          colors={colors}
+        />
+        <FlatList
+          data={liveSearchQuery.trim() ? liveSearchContacts : []}
+          keyExtractor={(item) => `live-search-user-${item.id}`}
+          renderItem={({ item }) => (
+            <TouchableOpacity onPress={() => handleLiveSearchUserPress(item)} style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+              <View style={[styles.avatar, { backgroundColor: colors.primary, marginRight: 12 }]}> 
+                {item.name ? (
+                  <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+                ) : (
+                  <Icon name="user" size={20} color="#FFFFFF" />
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.text.primary, fontWeight: '500', fontSize: 15 }} numberOfLines={1}>{item.name || 'Unknown User'}</Text>
+                <Text style={{ color: colors.text.secondary, fontSize: 13 }}>ID: {item.id}</Text>
+                <Text style={{ color: colors.text.tertiary, fontSize: 12 }}>{item.emailId}</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={liveSearchQuery.trim() && !liveSearchLoading ? (
+            <View style={{ alignItems: 'center', marginTop: 40 }}>
+              <Icon name="search" size={32} color={colors.text.tertiary} />
+              <Text style={{ color: colors.text.secondary, marginTop: 8 }}>No results found</Text>
+            </View>
+          ) : null}
+          ListFooterComponent={liveSearchLoading ? (
+            <View style={{ alignItems: 'center', padding: 20 }}>
+              <ActivityIndicator size="small" color={colors.primary} />
+            </View>
+          ) : null}
+          keyboardShouldPersistTaps="handled"
+        />
+      </View>
+    );
+  }
+
   return (
     <ScreenTransition animationType="fade">
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -1048,7 +1183,7 @@ export default function TipCallScreen() {
                   placeholder="Search users..."
                   placeholderTextColor={colors.text.secondary}
                   value={searchQuery || ''}
-                  onChangeText={handleTipCallSearchChange}
+                  onChangeText={handleTipCallLiveSearchChange}
                   onSubmitEditing={handleTipCallSearchSubmit}
                   autoFocus={true}
                   returnKeyType="search"

@@ -55,3 +55,9 @@ export interface CallNotificationData {
   isFromNotification: boolean;
   meetingId?: string;
 }
+
+export interface VideoSDKInfo {
+  meetingId: string;
+  token: string;
+  callType: CallType;
+}

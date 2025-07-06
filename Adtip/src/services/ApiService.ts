@@ -144,6 +144,7 @@ export interface InitiateCallRequest {
   videoSDKInfo: {
     meetingId: string;
     token: string;
+    callType: 'voice' | 'video';
   };
 }
 
@@ -1301,13 +1302,10 @@ export default class ApiService {
   }  /**
    * Initiate Call (Cloud Function) - Direct FCM Server call
    */
-  static async initiateCall(payload: {
-    calleeInfo: { platform: string; token: string };
-    callerInfo: { name: string; token: string };
-    videoSDKInfo: { meetingId: string; token: string };
-  }): Promise<any> {
+  static async initiateCall(payload: InitiateCallRequest): Promise<any> {
     try {
       console.log('🚀 [ApiService] Making direct call to FCM Server for initiate-call:', FCM_SERVER_URL);
+      console.log('🚀 [ApiService] Payload with callType:', JSON.stringify(payload, null, 2));
       
       // Get auth token for authenticated requests
       const authToken = await AsyncStorage.getItem('accessToken') || await AsyncStorage.getItem('@auth_token');
@@ -1374,7 +1372,7 @@ export default class ApiService {
         Authorization: `Bearer ${authToken}`,
       };
       
-      console.log('� [ApiService] Request headers:', { 
+      console.log('🚀 [ApiService] Request headers:', { 
         'Content-Type': headers['Content-Type'],
         'Accept': headers.Accept,
         'Authorization': 'Bearer [REDACTED]'

@@ -9,6 +9,10 @@
  * - FCM integration
  * - Background/foreground synchronization
  * - Permission handling
+ * - Balance management (OUTGOING calls only - incoming calls bypass balance checks)
+ * 
+ * IMPORTANT: Balance checks are applied ONLY to outgoing calls.
+ * Incoming calls can be received regardless of recipient's balance.
  * 
  * Replaces: WhatsAppCallManager, CallManager, CallService, CallSyncService, 
  * CallNotificationHandler, WhatsAppCallNotificationService
@@ -171,8 +175,8 @@ class UnifiedCallService {
   private isSyncing = false;
   
   // ===== VIBRATION PATTERNS =====
-  private readonly INCOMING_CALL_VIBRATION = [2, 1000, 1000, 2000];
-  private readonly CALL_END_VIBRATION = [2, 200];
+  private readonly INCOMING_CALL_VIBRATION = [0, 500, 200, 500, 200, 500]; // Softer, more pleasant pattern
+  private readonly CALL_END_VIBRATION = [0, 200]; // Short, gentle end vibration
   
   // ===== CLEANUP =====
   private isCleaningUp: boolean = false;
@@ -942,10 +946,54 @@ class UnifiedCallService {
       if ((type === EventType.ACTION_PRESS || type === EventType.PRESS) && pressAction) {
         switch (pressAction.id) {
           case 'accept_call':
+            console.log('[UnifiedCallService] Accept call action triggered:', {
+              callId,
+              hasActiveCall: !!this.callState.activeCall,
+              activeCallId: this.callState.activeCall?.callId,
+              activeCallType: this.callState.activeCall?.callType
+            });
+            
             if (!this.callState.activeCall) {
-              console.warn('[UnifiedCallService] No active call to accept');
-              return;
+              console.warn('[UnifiedCallService] No active call to accept - this should not happen');
+              // ✅ CRITICAL FIX: Try to recover by checking if we have call data in notification
+              if (callId && notification?.data) {
+                console.log('[UnifiedCallService] Attempting to recover call data from notification');
+                try {
+                  const recoveredCallData = this.parseFCMCallData(notification.data);
+                  if (recoveredCallData) {
+                    console.log('[UnifiedCallService] Successfully recovered call data:', recoveredCallData);
+                    const currentUserId = await this.getCurrentUserId();
+                    const recoveredIncomingCallData: CallData = {
+                      callId: recoveredCallData.callId,
+                      meetingId: recoveredCallData.meetingId,
+                      token: recoveredCallData.token,
+                      callerName: recoveredCallData.callerName,
+                      recipientName: 'Me',
+                      callType: recoveredCallData.callType,
+                      callerId: recoveredCallData.callerId,
+                      recipientId: currentUserId,
+                      callerAvatar: recoveredCallData.callerAvatar,
+                      isInitiator: false,
+                      status: 'ringing',
+                      startTime: Date.now()
+                    };
+                    // Set the recovered call as active
+                    this.updateCallState({
+                      isInCall: true,
+                      activeCall: recoveredIncomingCallData,
+                      callStatus: 'ringing'
+                    });
+                    console.log('[UnifiedCallService] Recovered call set as active');
+                  }
+                } catch (error) {
+                  console.error('[UnifiedCallService] Failed to recover call data:', error);
+                  return;
+                }
+              } else {
+                return;
+              }
             }
+            
             // Stop vibration immediately
             Vibration.cancel();
             // Hide notification immediately to improve UX
@@ -954,8 +1002,18 @@ class UnifiedCallService {
             await this.acceptCall(callId);
             break;
           case 'decline_call':
+            console.log('[UnifiedCallService] Decline call action triggered:', {
+              callId,
+              hasActiveCall: !!this.callState.activeCall
+            });
+            
+            // ✅ CRITICAL FIX: Always stop vibration on decline
+            Vibration.cancel();
+            
             if (!this.callState.activeCall) {
               console.warn('[UnifiedCallService] No active call to decline');
+              // Still hide notification even if no active call
+              await this.hideIncomingCallNotification();
               return;
             }
             await this.declineCall(callId);
@@ -995,9 +1053,10 @@ class UnifiedCallService {
       const { data } = remoteMessage;
       if (!data) return;
 
-      console.log('[UnifiedCallService] Processing FCM call notification:', data);
+      console.log('[UnifiedCallService] 🔍 RAW FCM CALL NOTIFICATION RECEIVED:');
+      console.log('[UnifiedCallService] 📨 Raw data object:', JSON.stringify(data, null, 2));
 
-      // ✅ FIX: Parse the info field first to get the actual type
+      // ✅ FIX: Parse the info field first to get the actual type and preserve call data
       let callType = data.type;
       let parsedInfo = null;
 
@@ -1005,29 +1064,47 @@ class UnifiedCallService {
         try {
           parsedInfo = JSON.parse(data.info);
           callType = parsedInfo.type || data.type;
-          console.log('[UnifiedCallService] Parsed info field, call type:', callType);
+          console.log('[UnifiedCallService] 📋 Parsed info field successfully:');
+          console.log('[UnifiedCallService] 📋 Parsed data:', JSON.stringify(parsedInfo, null, 2));
+          console.log('[UnifiedCallService] 📋 Extracted call type:', callType);
+          
+          // ✅ CRITICAL FIX: Preserve original data structure for proper parsing
+          // Merge original data with parsed info to ensure all fields are available
+          parsedInfo = {
+            ...data,
+            ...parsedInfo
+          };
+          
+          console.log('[UnifiedCallService] 📋 Merged data structure:');
+          console.log('[UnifiedCallService] 📋 Merged:', JSON.stringify(parsedInfo, null, 2));
+          
         } catch (error) {
-          console.warn('[UnifiedCallService] Failed to parse FCM info field:', error);
+          console.warn('[UnifiedCallService] ❌ Failed to parse FCM info field:', error);
         }
+      } else {
+        console.log('[UnifiedCallService] 📋 No info field to parse, using data directly');
       }
 
       if (!callType) {
-        console.log('[UnifiedCallService] No call type found in FCM message');
+        console.log('[UnifiedCallService] ❌ No call type found in FCM message');
         return;
       }
 
-      console.log('[UnifiedCallService] Processing FCM call notification:', callType);
+      console.log('[UnifiedCallService] 🔄 Processing FCM call notification type:', callType);
 
       if (callType === 'CALL_INITIATED' || callType === 'CALL_INITIATION' || callType === 'call') {
-        // ✅ FIX: Pass the parsed info data to handleIncomingFCMCall
+        console.log('[UnifiedCallService] ✅ CALL_INITIATED detected - processing incoming call');
+        // ✅ FIX: Pass the merged data to handleIncomingFCMCall
         await this.handleIncomingFCMCall(parsedInfo || data);
       } else if (callType === 'CALL_ACCEPTED') {
         await this.handleCallAcceptedFCM(parsedInfo || data);
       } else if (callType === 'CALL_ENDED') {
         await this.handleCallEndedFCM(parsedInfo || data);
+      } else {
+        console.log('[UnifiedCallService] ❓ Unknown call type:', callType);
       }
     } catch (error) {
-      console.error('[UnifiedCallService] Error handling FCM call notification:', error);
+      console.error('[UnifiedCallService] ❌ Error handling FCM call notification:', error);
     }
   }
 
@@ -1036,38 +1113,53 @@ class UnifiedCallService {
    */
   private async handleIncomingFCMCall(data: any): Promise<void> {
     try {
-      console.log('[UnifiedCallService] handleIncomingFCMCall called with data:', data);
+      console.log('[UnifiedCallService] 🔄 HANDLING INCOMING FCM CALL:');
+      console.log('[UnifiedCallService] 📨 Input data:', JSON.stringify(data, null, 2));
       
       // Parse call data
       const callData = this.parseFCMCallData(data);
       if (!callData) {
-        console.error('[UnifiedCallService] Failed to parse call data');
+        console.error('[UnifiedCallService] ❌ Failed to parse call data');
         return;
       }
 
-      console.log('[UnifiedCallService] Parsed call data:', callData);
+      console.log('[UnifiedCallService] ✅ SUCCESSFULLY PARSED CALL DATA:');
+      console.log('[UnifiedCallService] 📋 Call ID:', callData.callId);
+      console.log('[UnifiedCallService] 📋 Call Type:', callData.callType);
+      console.log('[UnifiedCallService] 📋 Caller Name:', callData.callerName);
+      console.log('[UnifiedCallService] 📋 Meeting ID:', callData.meetingId);
 
       // Check if this is actually an incoming call for current user
       const currentUserId = await this.getCurrentUserId();
+      const currentUserName = await this.getCurrentUserName();
       const isInitiator = String(data.isInitiator) === 'true';
       const isIncomingCall = !isInitiator || data.isIncomingCall === 'true';
 
+      console.log('[UnifiedCallService] 📋 Call validation:', {
+        currentUserId,
+        currentUserName,
+        isInitiator,
+        isIncomingCall,
+        dataIsInitiator: data.isInitiator,
+        dataIsIncomingCall: data.isIncomingCall
+      });
+
       if (!isIncomingCall) {
-        console.log('[UnifiedCallService] Skipping - not an incoming call for current user');
+        console.log('[UnifiedCallService] ❌ Skipping - not an incoming call for current user');
         return;
       }
 
       // Check if caller is blocked - suppress call completely if blocked
       const blocklistService = BlocklistService.getInstance();
       if (blocklistService.shouldBlockIncomingCall(callData.callerId)) {
-        console.log('[UnifiedCallService] FCM incoming call blocked from user:', callData.callerId);
+        console.log('[UnifiedCallService] 🚫 FCM incoming call blocked from user:', callData.callerId);
         // Silently decline the call without any UI or notifications
         await this.sendCallStatusUpdate({
           callId: callData.callId,
           meetingId: callData.meetingId,
           token: callData.token,
           callerName: callData.callerName,
-          recipientName: 'Me',
+          recipientName: currentUserName, // ✅ FIX: Use actual current user name
           callType: callData.callType,
           callerId: callData.callerId,
           recipientId: currentUserId,
@@ -1077,7 +1169,7 @@ class UnifiedCallService {
         return; // Exit early - no further processing
       }
 
-      console.log('[UnifiedCallService] Processing incoming call:', callData.callId);
+      console.log('[UnifiedCallService] ✅ Processing incoming call:', callData.callId);
 
       // Create call data
       const incomingCallData: CallData = {
@@ -1085,8 +1177,8 @@ class UnifiedCallService {
         meetingId: callData.meetingId,
         token: callData.token,
         callerName: callData.callerName,
-        recipientName: 'Me',
-        callType: callData.callType,
+        recipientName: currentUserName, // ✅ FIX: Use actual current user name instead of 'Me'
+        callType: callData.callType, // This should now be correctly 'video' or 'voice'
         callerId: callData.callerId,
         recipientId: currentUserId,
         callerAvatar: callData.callerAvatar,
@@ -1095,6 +1187,15 @@ class UnifiedCallService {
         startTime: Date.now()
       };
 
+      console.log('[UnifiedCallService] 🎯 FINAL INCOMING CALL DATA CREATED:');
+      console.log('[UnifiedCallService] 📋 Call ID:', incomingCallData.callId);
+      console.log('[UnifiedCallService] 📋 Call Type:', incomingCallData.callType);
+      console.log('[UnifiedCallService] 📋 Status:', incomingCallData.status);
+      console.log('[UnifiedCallService] 📋 Is Initiator:', incomingCallData.isInitiator);
+
+      // ✅ CRITICAL FIX: Ensure activeCall is properly set and add comprehensive debugging
+      console.log('[UnifiedCallService] 🔄 Setting activeCall before notification...');
+
       // Update call state
       this.updateCallState({
         isInCall: true,
@@ -1102,16 +1203,27 @@ class UnifiedCallService {
         callStatus: 'ringing'
       });
 
+      // ✅ CRITICAL FIX: Verify activeCall is set
+      console.log('[UnifiedCallService] ✅ ActiveCall after update:', {
+        hasActiveCall: !!this.callState.activeCall,
+        activeCallId: this.callState.activeCall?.callId,
+        activeCallType: this.callState.activeCall?.callType
+      });
+
+      console.log('[UnifiedCallService] 📱 About to show notification with call type:', incomingCallData.callType);
+
       // Show incoming call notification
       await this.showIncomingCallNotification(incomingCallData);
+
+      console.log('[UnifiedCallService] ✅ Notification shown, starting vibration...');
 
       // Start vibration
       Vibration.vibrate(this.INCOMING_CALL_VIBRATION, true);
 
-      console.log('[UnifiedCallService] Incoming call processed:', incomingCallData.callId);
+      console.log('[UnifiedCallService] ✅ Incoming call processed successfully:', incomingCallData.callId);
 
     } catch (error) {
-      console.error('[UnifiedCallService] Error handling incoming FCM call:', error);
+      console.error('[UnifiedCallService] ❌ Error handling incoming FCM call:', error);
     }
   }
 
@@ -1160,7 +1272,7 @@ class UnifiedCallService {
           meetingId: callNotificationData.meetingId,
           token: callNotificationData.token,
           callerName: callNotificationData.callerName,
-          recipientName: 'Me',
+          recipientName: await this.getCurrentUserName(), // ✅ FIX: Use actual current user name
           callType: callNotificationData.callType,
           callerId: callNotificationData.callerId,
           recipientId: await this.getCurrentUserId(),
@@ -1282,7 +1394,8 @@ class UnifiedCallService {
         callerId
       });
 
-      // Pre-check wallet balance to ensure call viability
+      // ✅ CRITICAL: Pre-check wallet balance for OUTGOING calls only
+      // This ensures the caller has sufficient funds before initiating the call
       try {
         const currentUserId = callerId;
         const currentBalance = parseFloat(await WalletService.getWalletBalance(parseInt(currentUserId)));
@@ -1300,13 +1413,13 @@ class UnifiedCallService {
           throw new Error(`Insufficient balance for ${callType} call. Minimum 30 seconds required.`);
         }
         
-        console.log('[UnifiedCallService] Balance check passed:', {
+        console.log('[UnifiedCallService] Outgoing call balance check passed:', {
           balance: currentBalance,
           maxDuration: billingInfo.maxDurationSeconds,
           isPremium: premiumStatus.isPremium
         });
       } catch (error) {
-        console.error('[UnifiedCallService] Balance check failed:', error);
+        console.error('[UnifiedCallService] Outgoing call balance check failed:', error);
         throw error;
       }
 
@@ -1354,7 +1467,12 @@ class UnifiedCallService {
 
       // CRITICAL FIX: Force immediate event emission to ensure CallProvider syncs
       // This prevents race conditions where MeetingScreen mounts before activeCall is set
-      appEventEmitter.emit('callStateChanged', this.callState);
+      setTimeout(() => {
+        appEventEmitter.emit('callStateChanged', this.callState);
+        
+        // Navigate to meeting screen - this should happen after state is fully updated
+        this.requestNavigationToMeetingScreen(callData);
+      }, 100); // Small delay to ensure proper propagation
 
       // Initialize media
       this.initializeMediaForCall(callData.callId, callType === 'video');
@@ -1364,9 +1482,6 @@ class UnifiedCallService {
 
       // Show outgoing call notification
       await this.showOutgoingCallNotification(callData);
-
-      // Navigate to meeting screen - this should happen after state is fully updated
-      this.requestNavigationToMeetingScreen(callData);
 
       console.log('[UnifiedCallService] Outgoing call started:', callData.callId);
       return callData;
@@ -1417,18 +1532,40 @@ class UnifiedCallService {
         await this.hideIncomingCallNotification();
       }
       
-      // Update call status
+      // ✅ CRITICAL FIX: Update call status BEFORE navigation to prevent race conditions
       targetCall.status = 'connecting';
       this.updateCallState({
+        isInCall: true,
         activeCall: targetCall,
         callStatus: 'connecting'
       });
-      // Send acceptance notification to caller
+      
+      // ✅ CRITICAL FIX: Emit state change immediately to ensure UI is synchronized
+      appEventEmitter.emit('callStateChanged', {
+        isInCall: true,
+        activeCall: targetCall
+      });
+      
+      // ✅ CRITICAL FIX: Send acceptance notification to caller
       await this.sendCallStatusUpdate(targetCall, 'accepted');
-      // Initialize media
+      
+      // ✅ CRITICAL FIX: Initialize media BEFORE navigation
       this.initializeMediaForCall(targetCall.callId, targetCall.callType === 'video');
-      // Navigation: use robust logic
-      this.requestNavigationToMeetingScreen(targetCall);
+      
+      // ✅ CRITICAL FIX: Use enhanced navigation with proper timing
+      console.log('[UnifiedCallService] Navigating to meeting screen after call acceptance');
+      
+      // Force immediate state sync to ensure UI is updated before navigation
+      setTimeout(() => {
+        appEventEmitter.emit('callStateChanged', {
+          isInCall: true,
+          activeCall: targetCall
+        });
+        
+        // Then trigger navigation
+        this.requestNavigationToMeetingScreen(targetCall);
+      }, 100); // Small delay to ensure state is propagated
+      
       // Show ongoing call notification if app goes to background
       if (this.appState === 'background') {
         await this.showOngoingCallNotification();
@@ -1473,19 +1610,24 @@ class UnifiedCallService {
         recipientName: callData.isInitiator ? callData.recipientName : callData.callerName
       };
       
-      // For notification-triggered navigation, use the enhanced navigation method
-      // that has better retry logic and handling
-      if (this.appState !== 'active') {
-        console.log('[UnifiedCallService] App not active, using enhanced notification navigation');
-        
-        // Import the NavigationService here to avoid circular dependencies
-        const NavigationService = require('../../navigation/NavigationService');
-        NavigationService.navigateToMeetingFromNotification(navigationParams);
-      } else {
-        // For normal in-app navigation, use the standard event emission
-        console.log('[UnifiedCallService] Emitting forceNavigateToMeeting event');
-        appEventEmitter.emit('forceNavigateToMeeting', navigationParams);
-      }
+      // ✅ CRITICAL FIX: Add delay to ensure proper state synchronization
+      const navigationDelay = this.appState !== 'active' ? 800 : 400;
+      
+      setTimeout(() => {
+        // For notification-triggered navigation, use the enhanced navigation method
+        // that has better retry logic and handling
+        if (this.appState !== 'active') {
+          console.log('[UnifiedCallService] App not active, using enhanced notification navigation');
+          
+          // Import the NavigationService here to avoid circular dependencies
+          const NavigationService = require('../../navigation/NavigationService');
+          NavigationService.navigateToMeetingFromNotification(navigationParams);
+        } else {
+          // For normal in-app navigation, use the standard event emission
+          console.log('[UnifiedCallService] Emitting forceNavigateToMeeting event');
+          appEventEmitter.emit('forceNavigateToMeeting', navigationParams);
+        }
+      }, navigationDelay);
       
     } catch (error) {
       console.error('[UnifiedCallService] Failed to request navigation to meeting screen:', error);
@@ -1580,8 +1722,12 @@ class UnifiedCallService {
       console.log('[UnifiedCallService] Emitting leaveCurrentCall event to ensure VideoSDK cleanup');
       appEventEmitter.emit('leaveCurrentCall', { callId: targetCall.callId });
 
-      // ✅ CRITICAL FIX: Wait for VideoSDK to leave before proceeding
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // ✅ CRITICAL FIX: Stop any ongoing vibration immediately
+      console.log('[UnifiedCallService] Stopping any ongoing vibration...');
+      Vibration.cancel();
+
+      // ✅ CRITICAL FIX: Wait for VideoSDK to leave before proceeding - increased delay
+      await new Promise(resolve => setTimeout(resolve, 800));
 
       console.log('[UnifiedCallService] Hiding notifications and ending CallKeep call...');
       
@@ -1608,6 +1754,11 @@ class UnifiedCallService {
       await this.showCallEndedNotification(targetCall);
       console.log('[UnifiedCallService] Call ended notification shown.');
 
+      // ✅ CRITICAL FIX: Add gentle end vibration
+      console.log('[UnifiedCallService] Triggering end call vibration...');
+      Vibration.vibrate(this.CALL_END_VIBRATION);
+      console.log('[UnifiedCallService] End call vibration triggered.');
+
       console.log('[UnifiedCallService] Stopping call billing...');
       this.billingService.stopCallBilling();
       console.log('[UnifiedCallService] Call billing stopped.');
@@ -1628,18 +1779,64 @@ class UnifiedCallService {
       console.log('[UnifiedCallService] Call state updated to ended.');
       
       // ✅ CRITICAL FIX: Emit callStateChanged event AFTER all cleanup is complete
-      appEventEmitter.emit('callStateChanged', { status: 'ended', callId: targetCall.callId });
-      console.log('[UnifiedCallService] callStateChanged event emitted for ended call.');
+      setTimeout(() => {
+        appEventEmitter.emit('callStateChanged', { status: 'ended', callId: targetCall?.callId || 'unknown' });
+        console.log('[UnifiedCallService] callStateChanged event emitted for ended call.');
+      }, 200); // Add delay to ensure state is stable
+
+      // ✅ CRITICAL FIX: Force navigation back to TipCall screen for both caller and callee
+      setTimeout(() => {
+        try {
+          // Import NavigationService dynamically to avoid circular dependencies
+          const NavigationService = require('../../navigation/NavigationService');
+          
+          // Check if navigation is ready before attempting
+          if (NavigationService.isNavigationReady()) {
+            NavigationService.navigateToTipCall();
+            console.log('[UnifiedCallService] Forced navigation back to TipCall after call end');
+          } else {
+            // Retry after navigation becomes ready
+            console.log('[UnifiedCallService] Navigation not ready, retrying in 500ms');
+            setTimeout(() => {
+              try {
+                NavigationService.navigateToTipCall();
+                console.log('[UnifiedCallService] Delayed navigation to TipCall successful');
+              } catch (retryError) {
+                console.error('[UnifiedCallService] Delayed navigation also failed:', retryError);
+              }
+            }, 500);
+          }
+        } catch (error) {
+          console.error('[UnifiedCallService] Error forcing navigation to TipCall:', error);
+        }
+      }, 1500); // Increased delay to 1.5 seconds to ensure all cleanup is complete
 
     } catch (error) {
       console.error('[UnifiedCallService] Error in endCall:', error);
+      
+      // Ensure we always clean up state even if there are errors
       this.updateCallState({
         isInCall: false,
         activeCall: null,
         callStatus: 'ended',
         lastCallEndReason: 'error'
       });
-      appEventEmitter.emit('callStateChanged', { status: 'ended', callId: callId || 'unknown' });
+      
+      // Still emit the state change event to ensure UI is updated
+      setTimeout(() => {
+        appEventEmitter.emit('callStateChanged', { status: 'ended', callId: callId || 'unknown' });
+      }, 100);
+      
+      // Try to force navigation even if there was an error
+      setTimeout(() => {
+        try {
+          const NavigationService = require('../../navigation/NavigationService');
+          NavigationService.navigateToTipCall();
+          console.log('[UnifiedCallService] Emergency navigation to TipCall after error');
+        } catch (navError) {
+          console.error('[UnifiedCallService] Emergency navigation also failed:', navError);
+        }
+      }, 1000);
     } finally {
       this.isEndingCallInProgress = false;
       console.log('[UnifiedCallService] endCall finally: isEndingCallInProgress reset to false');
@@ -2011,6 +2208,7 @@ class UnifiedCallService {
         videoSDKInfo: {
           meetingId: callData.meetingId,
           token: callData.token, // This is the VideoSDK participant token
+          callType: callData.callType, // ✅ CRITICAL FIX: Include callType in videoSDKInfo as 3rd value
         },
       });
 
@@ -2064,7 +2262,8 @@ class UnifiedCallService {
    */
   private parseFCMCallData(data: any): CallNotificationData | null {
     try {
-      console.log('[UnifiedCallService] Parsing FCM call data:', data);
+      console.log('[UnifiedCallService] 🔍 PARSING FCM CALL DATA:');
+      console.log('[UnifiedCallService] 📨 Raw input data:', JSON.stringify(data, null, 2));
       
       // Handle nested JSON structures
       let callData = data;
@@ -2072,10 +2271,12 @@ class UnifiedCallService {
       if (typeof data.info === 'string') {
         try {
           callData = JSON.parse(data.info);
-          console.log('[UnifiedCallService] Successfully parsed info field:', callData);
+          console.log('[UnifiedCallService] ✅ Successfully parsed info field:', JSON.stringify(callData, null, 2));
         } catch (error) {
-          console.warn('[UnifiedCallService] Failed to parse FCM info field:', error);
+          console.warn('[UnifiedCallService] ❌ Failed to parse FCM info field:', error);
         }
+      } else {
+        console.log('[UnifiedCallService] 📋 No info field to parse, using data directly');
       }
 
       const callerInfo = (typeof callData.callerInfo === 'object' && callData.callerInfo !== null) 
@@ -2085,13 +2286,67 @@ class UnifiedCallService {
         ? callData.videoSDKInfo as any 
         : {};
 
+      console.log('[UnifiedCallService] 📋 Extracted callerInfo:', JSON.stringify(callerInfo, null, 2));
+      console.log('[UnifiedCallService] 📋 Extracted videoSDKInfo:', JSON.stringify(videoSDKInfo, null, 2));
+
       // ✅ FIX: Use uuid as callId if available, otherwise generate one
       const callId = String(callData.uuid || callData.callId || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+
+      // ✅ CRITICAL FIX: Properly extract callType from multiple possible sources
+      // Priority 1: Look for callType in videoSDKInfo (NEW: as 3rd value in videoSDKInfo)
+      let callType = 'voice'; // Default to voice
+      
+      console.log('[UnifiedCallService] 🔍 CALL TYPE EXTRACTION PROCESS:');
+      console.log('[UnifiedCallService] 📋 videoSDKInfo.callType:', videoSDKInfo.callType);
+      console.log('[UnifiedCallService] 📋 callData.callType:', callData.callType);
+      console.log('[UnifiedCallService] 📋 data.callType:', data.callType);
+      console.log('[UnifiedCallService] 📋 data.isVideoCall:', data.isVideoCall);
+      console.log('[UnifiedCallService] 📋 callerInfo.isVideoCall:', callerInfo.isVideoCall);
+      
+      // Priority 1: NEW - Extract callType from videoSDKInfo (as 3rd value)
+      if (videoSDKInfo.callType) {
+        callType = String(videoSDKInfo.callType).toLowerCase();
+        console.log('[UnifiedCallService] ✅ Priority 1: Found callType in videoSDKInfo:', callType);
+      }
+      // Priority 2: Direct callType field in parsed data
+      else if (callData.callType) {
+        callType = String(callData.callType).toLowerCase();
+        console.log('[UnifiedCallService] ✅ Priority 2: Found callType in callData:', callType);
+      }
+      // Priority 3: CallType in original data
+      else if (data.callType) {
+        callType = String(data.callType).toLowerCase();
+        console.log('[UnifiedCallService] ✅ Priority 3: Found callType in data:', callType);
+      }
+      // Priority 4: Check if it's explicitly a video call based on context
+      else if (data.isVideoCall === 'true' || data.isVideoCall === true) {
+        callType = 'video';
+        console.log('[UnifiedCallService] ✅ Priority 4: Found isVideoCall in data:', callType);
+      }
+      // Priority 5: Check caller info for video indicators
+      else if (callerInfo.isVideoCall === 'true' || callerInfo.isVideoCall === true) {
+        callType = 'video';
+        console.log('[UnifiedCallService] ✅ Priority 5: Found isVideoCall in callerInfo:', callType);
+      }
+      // Priority 6: Check if meetingId suggests video (some services use this pattern)
+      else if (videoSDKInfo.meetingId && (data.type === 'VIDEO_CALL' || data.type === 'video_call')) {
+        callType = 'video';
+        console.log('[UnifiedCallService] ✅ Priority 6: Detected video call by type and meetingId:', callType);
+      } else {
+        console.log('[UnifiedCallService] ⚠️ No specific callType found, defaulting to voice');
+      }
+
+      // Normalize callType to ensure it's either 'video' or 'voice'
+      const normalizedCallType = (callType === 'video' || callType === 'VIDEO') ? 'video' : 'voice';
+
+      console.log('[UnifiedCallService] 🎯 FINAL CALL TYPE RESULT:');
+      console.log('[UnifiedCallService] 📋 Raw extracted callType:', callType);
+      console.log('[UnifiedCallService] 📋 Normalized callType:', normalizedCallType);
 
       const parsedData: CallNotificationData = {
         callId,
         callerName: String(callerInfo.name || callData.callerName || 'Unknown Caller'),
-        callType: (String(callData.callType || 'voice') === 'video' ? 'video' : 'voice') as 'voice' | 'video',
+        callType: normalizedCallType as 'voice' | 'video',
         callerId: String(callerInfo.userId || callData.callerId || 'unknown'),
         meetingId: String(videoSDKInfo.meetingId || callData.meetingId || ''),
         token: String(videoSDKInfo.token || callData.rtcToken || callData.token || ''),
@@ -2099,18 +2354,19 @@ class UnifiedCallService {
         callerFcmToken: String(callerInfo.token || ''),
       };
 
-      console.log('[UnifiedCallService] Parsed call data:', parsedData);
+      console.log('[UnifiedCallService] 🎯 FINAL PARSED CALL DATA:');
+      console.log('[UnifiedCallService] 📋 Parsed result:', JSON.stringify(parsedData, null, 2));
 
       // Validate required fields
       if (!parsedData.callId || !parsedData.callerName || !parsedData.meetingId || !parsedData.token) {
-        console.error('[UnifiedCallService] Invalid call data - missing required fields:', parsedData);
+        console.error('[UnifiedCallService] ❌ Invalid call data - missing required fields:', parsedData);
         return null;
       }
 
       return parsedData;
 
     } catch (error) {
-      console.error('[UnifiedCallService] Failed to parse FCM call data:', error);
+      console.error('[UnifiedCallService] ❌ Failed to parse FCM call data:', error);
       return null;
     }
   }
@@ -2155,12 +2411,54 @@ class UnifiedCallService {
    */
   private async getCurrentUserId(): Promise<string> {
     try {
-      // This should get the current user's ID from your auth system
-      // For now, we'll use a placeholder
-      return 'current_user_id'; // Replace with actual implementation
+      // Get current user ID from AsyncStorage
+      const userId = await AsyncStorage.getItem('userId');
+      if (userId) {
+        return userId;
+      }
+      
+      // Fallback: try to get from user object
+      const userJson = await AsyncStorage.getItem('user');
+      if (userJson) {
+        const user = JSON.parse(userJson);
+        if (user && user.id) {
+          return user.id.toString();
+        }
+      }
+      
+      console.warn('[UnifiedCallService] No user ID found in storage');
+      return 'unknown_user';
     } catch (error) {
       console.error('[UnifiedCallService] Failed to get current user ID:', error);
       return 'unknown_user';
+    }
+  }
+
+  /**
+   * Get current user name
+   */
+  private async getCurrentUserName(): Promise<string> {
+    try {
+      // Get current user name from AsyncStorage
+      const userName = await AsyncStorage.getItem('userName');
+      if (userName) {
+        return userName;
+      }
+      
+      // Fallback: try to get from user object
+      const userJson = await AsyncStorage.getItem('user');
+      if (userJson) {
+        const user = JSON.parse(userJson);
+        if (user && user.name) {
+          return user.name;
+        }
+      }
+      
+      console.warn('[UnifiedCallService] No user name found in storage');
+      return 'User';
+    } catch (error) {
+      console.error('[UnifiedCallService] Failed to get current user name:', error);
+      return 'User';
     }
   }
 
@@ -2208,25 +2506,68 @@ class UnifiedCallService {
         return;
       }
 
-      // Get current wallet balance and premium status
-      const currentBalance = parseFloat(await WalletService.getWalletBalance(parseInt(currentUserId)));
-      const premiumStatus = await WalletService.checkPremiumStatus(parseInt(currentUserId));
+      // ✅ CRITICAL FIX: Differentiate between incoming and outgoing calls
+      // For incoming calls, the current user is the recipient, not the caller
+      const isIncomingCall = this.callState.activeCall.recipientId === currentUserId;
+      const isOutgoingCall = this.callState.activeCall.callerId === currentUserId;
 
       console.log('[UnifiedCallService] Starting call billing:', {
         callId: this.callState.activeCall.callId,
         callType: this.callState.activeCall.callType,
-        currentBalance,
-        isPremium: premiumStatus.isPremium
+        isIncomingCall,
+        isOutgoingCall,
+        currentUserId,
+        callerId: this.callState.activeCall.callerId,
+        recipientId: this.callState.activeCall.recipientId
       });
 
-      // Start billing service
-      await this.billingService.startCallBilling(
-        this.callState.activeCall.callId,
-        currentUserId,
-        this.callState.activeCall.callType,
-        currentBalance,
-        premiumStatus.isPremium
-      );
+      // ✅ CRITICAL FIX: Only apply balance checks for outgoing calls
+      if (isOutgoingCall) {
+        // For outgoing calls, apply normal balance checks
+        const currentBalance = parseFloat(await WalletService.getWalletBalance(parseInt(currentUserId)));
+        const premiumStatus = await WalletService.checkPremiumStatus(parseInt(currentUserId));
+
+        console.log('[UnifiedCallService] Outgoing call - applying balance checks:', {
+          currentBalance,
+          isPremium: premiumStatus.isPremium
+        });
+
+        // Start billing service with balance enforcement
+        await this.billingService.startCallBilling(
+          this.callState.activeCall.callId,
+          currentUserId,
+          this.callState.activeCall.callType,
+          currentBalance,
+          premiumStatus.isPremium
+        );
+      } else if (isIncomingCall) {
+        // ✅ CRITICAL FIX: For incoming calls, bypass balance checks
+        // The caller's balance is what matters, not the recipient's
+        console.log('[UnifiedCallService] Incoming call - bypassing balance checks for recipient');
+        
+        // Start billing service with a high balance to bypass restrictions
+        // This allows the recipient to receive calls regardless of their balance
+        await this.billingService.startCallBilling(
+          this.callState.activeCall.callId,
+          currentUserId,
+          this.callState.activeCall.callType,
+          999999.99, // Very high balance to bypass restrictions
+          true // Treat as premium to avoid any limitations
+        );
+      } else {
+        console.warn('[UnifiedCallService] Could not determine call direction, defaulting to outgoing behavior');
+        // Default to outgoing behavior if we can't determine the direction
+        const currentBalance = parseFloat(await WalletService.getWalletBalance(parseInt(currentUserId)));
+        const premiumStatus = await WalletService.checkPremiumStatus(parseInt(currentUserId));
+
+        await this.billingService.startCallBilling(
+          this.callState.activeCall.callId,
+          currentUserId,
+          this.callState.activeCall.callType,
+          currentBalance,
+          premiumStatus.isPremium
+        );
+      }
 
     } catch (error) {
       console.error('[UnifiedCallService] Error starting call billing:', error);
