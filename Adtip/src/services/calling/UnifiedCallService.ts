@@ -57,6 +57,7 @@ import CallMediaManager from './CallMediaManager';
 import CallBillingService from './CallBillingService';
 import WalletService from '../WalletService';
 import CallKeepIntegrationService from './CallKeepIntegrationService';
+import PermissionManagerService from '../PermissionManagerService';
 
 // ===== TYPES =====
 
@@ -175,12 +176,15 @@ class UnifiedCallService {
   private isSyncing = false;
   
   // ===== VIBRATION PATTERNS =====
-  private readonly INCOMING_CALL_VIBRATION = [0, 500, 200, 500, 200, 500]; // Softer, more pleasant pattern
-  private readonly CALL_END_VIBRATION = [0, 200]; // Short, gentle end vibration
+  private readonly INCOMING_CALL_VIBRATION = [2, 500, 200, 500, 200, 500]; // Softer, more pleasant pattern
+  private readonly CALL_END_VIBRATION = [2, 200]; // Short, gentle end vibration
   
   // ===== CLEANUP =====
   private isCleaningUp: boolean = false;
   private isEndingCallInProgress: boolean = false; // Add this flag
+  private eventListenerCleanupFunctions: (() => void)[] = []; // Track all event listeners for cleanup
+  private fcmListenerCleanupFunctions: (() => void)[] = []; // Track FCM listeners separately
+  private notifeeListenerCleanupFunctions: (() => void)[] = []; // Track Notifee listeners separately
   
   // ===== SINGLETON =====
   private constructor() {
@@ -342,15 +346,20 @@ class UnifiedCallService {
    */
   private async checkPermissions(): Promise<void> {
     try {
-      if (Platform.OS === 'android') {
-        this.audioPermissionGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
-        this.videoPermissionGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA);
-        
-        console.log('[UnifiedCallService] Current permissions:', {
-          audio: this.audioPermissionGranted,
-          video: this.videoPermissionGranted
-        });
-      }
+      const permissionManager = PermissionManagerService.getInstance();
+      
+      // Check permissions using centralized service
+      const permissions = await permissionManager.checkAllPermissions();
+      
+      this.audioPermissionGranted = permissions.microphone;
+      this.videoPermissionGranted = permissions.camera;
+      
+      console.log('[UnifiedCallService] Current permissions:', {
+        audio: this.audioPermissionGranted,
+        video: this.videoPermissionGranted,
+        notifications: permissions.notifications,
+        phone: permissions.phone
+      });
     } catch (error) {
       console.error('[UnifiedCallService] Error checking permissions:', error);
     }
@@ -361,67 +370,40 @@ class UnifiedCallService {
    */
   public async requestPermissionsIfNeeded(callType: 'voice' | 'video'): Promise<boolean> {
     try {
-      if (Platform.OS !== 'android') {
-        return true; // iOS permissions handled differently
-      }
-
       console.log('[UnifiedCallService] Requesting permissions for:', callType);
 
-      // Request foreground service permission for Android 14+
-      if (Platform.Version >= 34) {
-        try {
-          const foregroundServicePermission = await PermissionsAndroid.request('android.permission.FOREGROUND_SERVICE_PHONE_CALL' as any);
-          console.log('[UnifiedCallService] Foreground service permission result:', foregroundServicePermission);
-        } catch (error) {
-          console.warn('[UnifiedCallService] Foreground service permission request failed (non-critical):', error);
-        }
-      }
-
-      // Request mic and camera permissions
-      const permissionsToRequest: (typeof PermissionsAndroid.PERMISSIONS[keyof typeof PermissionsAndroid.PERMISSIONS])[] = [];
+      const permissionManager = PermissionManagerService.getInstance();
       
-      // Re-check current permission status
-      const currentAudioPermission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
-      const currentVideoPermission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA);
+      // Request permissions using centralized service
+      const includeCamera = callType === 'video';
+      const result = await permissionManager.requestCallPermissions(includeCamera);
       
-      if (!currentAudioPermission) {
-        permissionsToRequest.push(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
-      }
-      if (callType === 'video' && !currentVideoPermission) {
-        permissionsToRequest.push(PermissionsAndroid.PERMISSIONS.CAMERA);
-      }
-
-      if (permissionsToRequest.length > 0) {
-        const statuses = await PermissionsAndroid.requestMultiple(permissionsToRequest);
-        this.audioPermissionGranted = statuses[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED || currentAudioPermission;
-        this.videoPermissionGranted = statuses[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED || currentVideoPermission;
-      } else {
-        this.audioPermissionGranted = currentAudioPermission;
-        this.videoPermissionGranted = currentVideoPermission;
-      }
-
-      // Final validation
-      if (!this.audioPermissionGranted) {
-        console.error('[UnifiedCallService] Audio permission not granted');
+      // Update local state
+      this.audioPermissionGranted = result.microphone;
+      this.videoPermissionGranted = result.camera;
+      
+      // Check if required permissions are granted
+      if (!result.microphone) {
+        console.error('[UnifiedCallService] Microphone permission not granted');
         Alert.alert(
-          'Permission Required', 
-          'Microphone permission is required to make calls. Please grant permission in Settings.',
+          'Microphone Permission Required', 
+          'Microphone access is required to make calls. Please grant permission in Settings.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Settings', onPress: () => console.log('Open settings - TODO: implement') }
+            { text: 'Settings', onPress: () => Linking.openSettings() }
           ]
         );
         return false;
       }
       
-      if (callType === 'video' && !this.videoPermissionGranted) {
-        console.error('[UnifiedCallService] Video permission not granted for video call');
+      if (callType === 'video' && !result.camera) {
+        console.error('[UnifiedCallService] Camera permission not granted for video call');
         Alert.alert(
-          'Permission Required', 
-          'Camera permission is required for video calls. Please grant permission in Settings.',
+          'Camera Permission Required', 
+          'Camera access is required for video calls. Please grant permission in Settings.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Settings', onPress: () => console.log('Open settings - TODO: implement') }
+            { text: 'Settings', onPress: () => Linking.openSettings() }
           ]
         );
         return false;
@@ -753,17 +735,47 @@ class UnifiedCallService {
    */
   private async hideIncomingCallNotification(): Promise<void> {
     try {
+      // Cancel incoming call notification
       if (this.incomingCallNotificationId) {
         await notifee.cancelNotification(this.incomingCallNotificationId);
         this.incomingCallNotificationId = null;
+        console.log('[UnifiedCallService] Incoming call notification cancelled');
       }
       
-      // Also cancel any fallback notifications
+      // Also cancel any fallback notifications for all possible call IDs
       if (this.callState.activeCall) {
-        await notifee.cancelNotification(`fallback_incoming_${this.callState.activeCall.callId}`);
+        const callId = this.callState.activeCall.callId;
+        await Promise.allSettled([
+          notifee.cancelNotification(`fallback_incoming_${callId}`),
+          notifee.cancelNotification(`incoming_call_${callId}`),
+          notifee.cancelNotification(`call_notification_${callId}`)
+        ]);
+        console.log('[UnifiedCallService] All fallback notifications cancelled for call:', callId);
       }
       
-      console.log('[UnifiedCallService] Incoming call notification hidden');
+      // Cancel all notifications from the incoming calls channel to ensure complete cleanup
+      try {
+        // Get all active notifications and cancel incoming call ones
+        const activeNotifications = await notifee.getDisplayedNotifications();
+        const incomingCallNotifications = activeNotifications.filter(
+          notification => notification.id?.includes('incoming_call') || 
+                         notification.id?.includes('fallback_incoming')
+        );
+        
+        for (const notification of incomingCallNotifications) {
+          if (notification.id) {
+            await notifee.cancelNotification(notification.id);
+          }
+        }
+        
+        if (incomingCallNotifications.length > 0) {
+          console.log(`[UnifiedCallService] Cancelled ${incomingCallNotifications.length} incoming call notifications`);
+        }
+      } catch (error) {
+        console.warn('[UnifiedCallService] Could not cancel by pattern:', error);
+      }
+      
+      console.log('[UnifiedCallService] Incoming call notification cleanup complete');
     } catch (error) {
       console.error('[UnifiedCallService] Failed to hide incoming call notification:', error);
     }
@@ -774,17 +786,47 @@ class UnifiedCallService {
    */
   private async hideOngoingCallNotification(): Promise<void> {
     try {
+      // Cancel ongoing call notification
       if (this.ongoingCallNotificationId) {
         await notifee.cancelNotification(this.ongoingCallNotificationId);
         this.ongoingCallNotificationId = null;
+        console.log('[UnifiedCallService] Ongoing call notification cancelled');
       }
       
-      // Also cancel any outgoing notifications
+      // Also cancel any outgoing notifications for all possible call IDs
       if (this.callState.activeCall) {
-        await notifee.cancelNotification(`outgoing_call_${this.callState.activeCall.callId}`);
+        const callId = this.callState.activeCall.callId;
+        await Promise.allSettled([
+          notifee.cancelNotification(`outgoing_call_${callId}`),
+          notifee.cancelNotification(`ongoing_call_${callId}`),
+          notifee.cancelNotification(`call_ongoing_${callId}`)
+        ]);
+        console.log('[UnifiedCallService] All ongoing notifications cancelled for call:', callId);
       }
       
-      console.log('[UnifiedCallService] Ongoing call notification hidden');
+      // Cancel all ongoing call notifications to ensure complete cleanup
+      try {
+        const activeNotifications = await notifee.getDisplayedNotifications();
+        const ongoingCallNotifications = activeNotifications.filter(
+          notification => notification.id?.includes('ongoing_call') || 
+                         notification.id?.includes('outgoing_call') ||
+                         notification.id?.includes('call_ongoing')
+        );
+        
+        for (const notification of ongoingCallNotifications) {
+          if (notification.id) {
+            await notifee.cancelNotification(notification.id);
+          }
+        }
+        
+        if (ongoingCallNotifications.length > 0) {
+          console.log(`[UnifiedCallService] Cancelled ${ongoingCallNotifications.length} ongoing call notifications`);
+        }
+      } catch (error) {
+        console.warn('[UnifiedCallService] Could not cancel ongoing notifications by pattern:', error);
+      }
+      
+      console.log('[UnifiedCallService] Ongoing call notification cleanup complete');
     } catch (error) {
       console.error('[UnifiedCallService] Failed to hide ongoing call notification:', error);
     }
@@ -796,7 +838,11 @@ class UnifiedCallService {
    * Setup all event listeners
    */
   private setupEventListeners(): void {
-    // Notifee events
+    // ===== CLEANUP ANY EXISTING LISTENERS FIRST =====
+    this.detachAllEventListeners();
+
+    // Notifee events - Note: Notifee listeners don't return unsubscribe functions in current version
+    // We'll track them differently and clean up notifications instead
     notifee.onForegroundEvent(async (event) => {
       await this.handleNotificationEvent(event.type, event.detail);
     });
@@ -814,13 +860,62 @@ class UnifiedCallService {
     // App state events
     this.setupAppStateListener();
 
-    console.log('[UnifiedCallService] All event listeners setup complete');
+    console.log('[UnifiedCallService] All event listeners setup complete with cleanup tracking');
+  }
+
+  /**
+   * Detach all event listeners to prevent memory leaks and duplicate handling
+   */
+  private detachAllEventListeners(): void {
+    console.log('[UnifiedCallService] Detaching all event listeners...');
+
+    // Clean up FCM listeners
+    this.fcmListenerCleanupFunctions.forEach(cleanup => {
+      try {
+        cleanup();
+      } catch (error) {
+        console.warn('[UnifiedCallService] Error cleaning up FCM listener:', error);
+      }
+    });
+    this.fcmListenerCleanupFunctions = [];
+
+    // Clean up Notifee listeners
+    this.notifeeListenerCleanupFunctions.forEach(cleanup => {
+      try {
+        cleanup();
+      } catch (error) {
+        console.warn('[UnifiedCallService] Error cleaning up Notifee listener:', error);
+      }
+    });
+    this.notifeeListenerCleanupFunctions = [];
+
+    // Clean up other event listeners
+    this.eventListenerCleanupFunctions.forEach(cleanup => {
+      try {
+        cleanup();
+      } catch (error) {
+        console.warn('[UnifiedCallService] Error cleaning up event listener:', error);
+      }
+    });
+    this.eventListenerCleanupFunctions = [];
+
+    console.log('[UnifiedCallService] All event listeners detached');
   }
 
   /**
    * Setup FCM handlers
    */
   private setupFCMHandlers(): void {
+    // ===== CLEANUP ANY EXISTING FCM LISTENERS FIRST =====
+    this.fcmListenerCleanupFunctions.forEach(cleanup => {
+      try {
+        cleanup();
+      } catch (error) {
+        console.warn('[UnifiedCallService] Error cleaning up FCM listener:', error);
+      }
+    });
+    this.fcmListenerCleanupFunctions = [];
+
     // Background/killed app notifications
     messaging().setBackgroundMessageHandler(async (remoteMessage) => {
       console.log('[UnifiedCallService] Background FCM message:', remoteMessage);
@@ -832,7 +927,7 @@ class UnifiedCallService {
     });
 
     // Foreground notifications
-    messaging().onMessage(async (remoteMessage) => {
+    const unsubscribeForegroundMessages = messaging().onMessage(async (remoteMessage) => {
       console.log('[UnifiedCallService] Foreground FCM message:', remoteMessage);
       try {
         await this.handleFCMCallNotification(remoteMessage);
@@ -842,7 +937,7 @@ class UnifiedCallService {
     });
 
     // Notification opened app
-    messaging().onNotificationOpenedApp((remoteMessage) => {
+    const unsubscribeNotificationOpenedApp = messaging().onNotificationOpenedApp((remoteMessage) => {
       console.log('[UnifiedCallService] FCM notification opened app:', remoteMessage);
       try {
         this.handleFCMNotificationOpen(remoteMessage);
@@ -850,6 +945,12 @@ class UnifiedCallService {
         console.error('[UnifiedCallService] Error handling FCM notification open:', error);
       }
     });
+
+    // Store cleanup functions
+    this.fcmListenerCleanupFunctions.push(
+      unsubscribeForegroundMessages,
+      unsubscribeNotificationOpenedApp
+    );
 
     // Initial notification (app was killed)
     messaging().getInitialNotification().then((remoteMessage) => {
@@ -862,6 +963,8 @@ class UnifiedCallService {
         }
       }
     });
+
+    console.log('[UnifiedCallService] FCM handlers setup complete with cleanup tracking');
   }
 
   /**
@@ -2599,16 +2702,19 @@ class UnifiedCallService {
       console.log('[UnifiedCallService] Cleanup already in progress, skipping.');
       return;
     }
-    if (this.callState.callStatus !== 'ending' && this.callState.callStatus !== 'ended') {
-      console.log('[UnifiedCallService] Cleanup only allowed after call is ending or ended.');
-      return;
-    }
+    
+    console.log('[UnifiedCallService] Starting comprehensive service cleanup...');
     this.isCleaningUp = true;
+    
     try {
-      console.log('[UnifiedCallService] Cleaning up service');
-
-      // Stop background sync
+      // Stop background sync first
       this.stopBackgroundSync();
+
+      // Detach all event listeners to prevent memory leaks
+      this.detachAllEventListeners();
+
+      // Stop vibration
+      Vibration.cancel();
 
       // Stop billing
       this.billingService.stopCallBilling();
@@ -2620,11 +2726,35 @@ class UnifiedCallService {
       }
 
       // Clean up media
-      this.cleanupMedia();
+      await this.cleanupMedia();
 
-      // Clear notifications
+      // Clear ALL notifications comprehensively
       await this.hideIncomingCallNotification();
       await this.hideOngoingCallNotification();
+      
+      // Cancel any remaining call-related notifications
+      try {
+        const activeNotifications = await notifee.getDisplayedNotifications();
+        const callNotifications = activeNotifications.filter(
+          notification => notification.id?.includes('call') || 
+                         notification.id?.includes('meeting') ||
+                         notification.id?.includes('incoming') ||
+                         notification.id?.includes('outgoing') ||
+                         notification.id?.includes('ongoing')
+        );
+        
+        for (const notification of callNotifications) {
+          if (notification.id) {
+            await notifee.cancelNotification(notification.id);
+          }
+        }
+        
+        if (callNotifications.length > 0) {
+          console.log(`[UnifiedCallService] Cancelled ${callNotifications.length} remaining call notifications`);
+        }
+      } catch (error) {
+        console.warn('[UnifiedCallService] Could not cancel remaining notifications:', error);
+      }
 
       // Clear state
       this.updateCallState({
@@ -2633,11 +2763,18 @@ class UnifiedCallService {
         callStatus: 'ended'
       });
 
-      console.log('[UnifiedCallService] Service cleanup completed');
+      // Reset flags
+      this.isEndingCallInProgress = false;
+      this.audioPermissionGranted = false;
+      this.videoPermissionGranted = false;
+      this.callKeepEnabled = false;
+
+      console.log('[UnifiedCallService] Service cleanup completed successfully');
     } catch (error) {
       console.error('[UnifiedCallService] Failed to cleanup service:', error);
+    } finally {
+      this.isCleaningUp = false;
     }
-    this.isCleaningUp = false;
   }
 
   private isValidTransition(from: CallStatus, to: CallStatus): boolean {

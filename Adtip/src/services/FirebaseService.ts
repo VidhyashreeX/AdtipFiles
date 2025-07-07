@@ -31,6 +31,7 @@ class FirebaseService {
   private static instance: FirebaseService;
   private messagingReady: boolean = false;
   private initializationPromise: Promise<boolean> | null = null;
+  private listenerCleanupFunctions: (() => void)[] = []; // Track listeners for cleanup
 
   private constructor() {}
 
@@ -116,53 +117,22 @@ class FirebaseService {
    */
   private _setBackgroundMessageHandler(msg: FirebaseMessagingTypes.Module): void {
     msg.setBackgroundMessageHandler(async (remoteMessage) => {
-      console.log('[FCM] Background message received:', remoteMessage);
+      console.log('[FCM] Background message received - delegating to UnifiedCallService:', remoteMessage);
       
-      // ✅ FIX: Let UnifiedCallService handle all call-related FCM messages
-      // This prevents conflicts and ensures consistent handling
+      // ✅ SINGLE POINT OF HANDLING: Only UnifiedCallService handles call-related FCM
       try {
         await UnifiedCallService.getInstance().handleFCMCallNotification(remoteMessage);
       } catch (error) {
-        console.error('[FCM] Error handling FCM message in background:', error);
+        console.error('[FCM] Error in UnifiedCallService handling background FCM message:', error);
       }
       
-      // Keep existing logic for legacy support
-      const type = remoteMessage?.data?.type;
-
-      if (type === 'INCOMING_CALL' || remoteMessage?.data?.isIncomingCall === 'true') {
-        console.log('[FCM] Incoming call received in background');
-        this._handleBackgroundCall(remoteMessage);
-      }
-      // Note: Handling accepted/declined in background is complex due to state loss.
-      // This would require persisting call state.
+      // Note: Removed legacy handling to prevent duplicate processing
+      // All call handling is now centralized in UnifiedCallService
     });
   }
 
-  /**
-   * Handle background call notifications
-   */
-  private _handleBackgroundCall(remoteMessage: FirebaseMessagingTypes.RemoteMessage): void {
-    console.log('[FCM] Processing background call:', remoteMessage.data);
-    if (remoteMessage.data?.callData) {
-        try {
-          const callData = JSON.parse(remoteMessage.data.callData as string);
-          // Extract callType ONLY from videoSDKInfo.callType (as 3rd value in videoSDKInfo)
-          const callType = callData.videoSDKInfo?.callType;
-          appEventEmitter.emit('incomingCallFromFCM', {
-            callId: callData.callInfo.callId,
-            meetingId: callData.videoSDKInfo.meetingId,
-            token: callData.videoSDKInfo.token,
-            callerId: callData.callerInfo.userId,
-            callerName: callData.callerInfo.name,
-            callerFcmToken: callData.callerInfo.token,
-            callType,
-            isIncomingCall: true,
-          });
-        } catch (e) {
-          console.warn('[FCM] Failed to parse callData in background:', e);
-        }
-    }
-  }
+  // ✅ REMOVED: Legacy _handleBackgroundCall method 
+  // All call handling is now centralized in UnifiedCallService via handleFCMCallNotification
 
   /**
    * Setup notification permissions with v22.2.1 enhanced permission handling
@@ -219,6 +189,9 @@ class FirebaseService {
       return () => {};
     }
 
+    // ===== CLEANUP EXISTING LISTENERS FIRST =====
+    this.cleanupListeners();
+
     try {
       const msg = messaging();
 
@@ -238,64 +211,49 @@ class FirebaseService {
         console.log('[FCM] App opened from background by notification:', remoteMessage);
       });
 
-      // Handle foreground messages with enhanced handling
+      // Handle foreground messages - DELEGATE TO UnifiedCallService ONLY
       const unsubscribeForegroundMessages = msg.onMessage(async (remoteMessage) => {
-        console.log('[FCM] Foreground message received:', remoteMessage);
+        console.log('[FCM] Foreground message received - delegating to UnifiedCallService:', remoteMessage);
         
-        // ✅ FIX: Let UnifiedCallService handle all call-related FCM messages
-        // This prevents conflicts and ensures consistent handling
+        // ✅ SINGLE POINT OF HANDLING: Only UnifiedCallService handles call-related FCM
         try {
           await UnifiedCallService.getInstance().handleFCMCallNotification(remoteMessage);
         } catch (error) {
-          console.error('[FCM] Error handling FCM message in FirebaseService:', error);
+          console.error('[FCM] Error in UnifiedCallService handling FCM message:', error);
         }
         
-        // Keep the existing logic for non-call messages (legacy support)
-        const type = remoteMessage.data?.type;
-        if (type === 'INCOMING_CALL' || remoteMessage?.data?.isIncomingCall === 'true') {
-          console.log('[FCM] Incoming call received in foreground (legacy format)');
-          // Call UnifiedCallService.handleIncomingCall
-          if (remoteMessage.data?.callData) {
-            try {
-              const callData = JSON.parse(remoteMessage.data.callData as string);
-              await UnifiedCallService.getInstance().handleIncomingCall(callData);
-            } catch (e) {
-              console.warn('[FCM] Failed to parse callData in foreground:', e);
-            }
-          }
-        } else if (type === 'CALL_ACCEPTED') {
-          console.log('[FCM] Call accepted event received.');
-          if (remoteMessage.data?.callId) {
-            await UnifiedCallService.getInstance().acceptCall(remoteMessage.data.callId as string);
-          }
-        } else if (type === 'CALL_DECLINED') {
-          console.log('[FCM] Call declined event received.');
-          if (remoteMessage.data?.callId) {
-            await UnifiedCallService.getInstance().declineCall(remoteMessage.data.callId as string);
-          }
-        } else if (remoteMessage?.notification) {
-          // TODO: Implement generic notification handler
-        }
+        // Note: Removed legacy handling to prevent duplicate processing
+        // All call handling is now centralized in UnifiedCallService
       });
 
       // Listen for token refresh (improved in v22.2.1)
       const unsubscribeTokenRefresh = msg.onTokenRefresh(async (token) => {
         console.log('[FCM] Token refreshed:', token);
         
-        // Auto-update token on server
-        const userId = await AsyncStorage.getItem('userId');
-        if (userId) {
-          await ApiService.updateFcmToken({ userId, fcmToken: token });
+        // Auto-update token on server with proper error handling
+        try {
+          const userId = await AsyncStorage.getItem('userId');
+          if (userId) {
+            await ApiService.updateFcmToken({ userId, fcmToken: token });
+            console.log('[FCM] Token updated on server successfully');
+          }
+        } catch (error) {
+          console.error('[FCM] Failed to update token on server:', error);
         }
       });
 
       console.log('[FCM] Notification listeners attached successfully');
 
+      // Store cleanup functions
+      this.listenerCleanupFunctions = [
+        unsubscribeOnNotificationOpenedApp,
+        unsubscribeForegroundMessages,
+        unsubscribeTokenRefresh
+      ];
+
       // Return cleanup function
       return () => {
-        unsubscribeOnNotificationOpenedApp();
-        unsubscribeForegroundMessages();
-        unsubscribeTokenRefresh();
+        this.cleanupListeners();
         console.log('[FCM] Notification listeners detached');
       };
 
@@ -303,6 +261,21 @@ class FirebaseService {
       console.warn('[FCM] Failed to set up notification listeners:', error);
       return () => {};
     }
+  }
+
+  /**
+   * Cleanup all FCM listeners to prevent memory leaks and duplicate handling
+   */
+  private cleanupListeners(): void {
+    this.listenerCleanupFunctions.forEach(cleanup => {
+      try {
+        cleanup();
+      } catch (error) {
+        console.warn('[FCM] Error cleaning up listener:', error);
+      }
+    });
+    this.listenerCleanupFunctions = [];
+    console.log('[FCM] All listeners cleaned up');
   }
 
   /**
@@ -467,9 +440,56 @@ class FirebaseService {
    * Reset service (for logout or cleanup)
    */
   public reset(): void {
+    console.log('[FCM] Starting Firebase service reset...');
+    
+    // Clean up listeners first
+    this.cleanupListeners();
+    
+    // Reset state
     this.messagingReady = false;
     this.initializationPromise = null;
-    console.log('[FCM] Firebase service reset');
+    
+    console.log('[FCM] Firebase service reset complete');
+  }
+
+  /**
+   * Delete FCM token on logout to prevent notifications to wrong user
+   */
+  public async deleteTokenOnLogout(): Promise<void> {
+    if (!this.messagingReady) {
+      console.log('[FCM] Messaging not ready, cannot delete token on logout');
+      return;
+    }
+
+    try {
+      console.log('[FCM] Deleting FCM token on logout...');
+      
+      // First try to remove token from server
+      const userId = await AsyncStorage.getItem('userId');
+      if (userId) {
+        try {
+          // Send empty token to server to indicate user logged out
+          await ApiService.updateFcmToken({ 
+            userId, 
+            fcmToken: '', 
+            platform: 'logout' as any 
+          });
+          console.log('[FCM] FCM token removed from server');
+        } catch (serverError) {
+          console.warn('[FCM] Failed to remove token from server:', serverError);
+        }
+      }
+      
+      // Then delete local token
+      await this.deleteToken();
+      
+      // Clean up listeners
+      this.cleanupListeners();
+      
+      console.log('[FCM] FCM token deletion on logout completed');
+    } catch (error) {
+      console.error('[FCM] Error during logout token deletion:', error);
+    }
   }
 
   /**

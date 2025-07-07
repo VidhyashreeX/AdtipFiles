@@ -6,6 +6,7 @@ import * as ApiEndpoints from '../constants/apiEndpoints';
 import { FCM_SERVER_URL } from '../constants/api';
 import { Platform } from 'react-native';
 import messaging, { AuthorizationStatus } from '@react-native-firebase/messaging';
+import FirebaseService from './FirebaseService';
 import {
   ApiResponse,
   OtpLoginRequest,
@@ -588,9 +589,10 @@ export default class ApiService {
     // Clear local tokens
     await AsyncStorage.multiRemove(['accessToken', '@auth_token', 'userId', 'fcmToken']);
     
-    // Delete FCM token
+    // Delete FCM token using centralized service
     try {
-      await messaging().deleteToken();
+      const firebaseService = FirebaseService.getInstance();
+      await firebaseService.deleteTokenOnLogout();
     } catch (error) {
       console.warn('[ApiService] Error deleting FCM token during logout:', error);
     }

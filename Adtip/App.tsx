@@ -29,7 +29,6 @@ import { getApps } from '@react-native-firebase/app';
 import messaging from '@react-native-firebase/messaging';
 import mobileAds from 'react-native-google-mobile-ads';
 import { useAppOpenAd } from './src/googleads/AppOpenAdManager';
-import notifee from '@notifee/react-native';
 
 // Contexts
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -53,6 +52,7 @@ import { navigationRef, navigateWithRetry, getCurrentRoute, isNavigationReady } 
 import FirebaseService from './src/services/FirebaseService';
 import VideoSDKService from './src/services/videosdk/VideoSDKService';
 import UnifiedCallService from './src/services/calling/UnifiedCallService';  // Unified call service (replacing all legacy services)
+import PermissionManagerService from './src/services/PermissionManagerService';
 import PubScaleService from './src/services/PubScaleService';
 import CallKeepIntegrationService from './src/services/calling/CallKeepIntegrationService';
 
@@ -230,10 +230,11 @@ const AppNavigator = () => {
     setTimeout(() => {
       (async () => {
         try {
-          // Request Notifee permissions here
-          console.log('[App] Background: Requesting Notifee permissions...');
-          await notifee.requestPermission();
-          console.log('[App] Background: Notifee permissions granted.');
+          // Request notification permissions using centralized service
+          console.log('[App] Background: Requesting notification permissions...');
+          const permissionManager = PermissionManagerService.getInstance();
+          const notificationResult = await permissionManager.requestNotificationPermissions();
+          console.log('[App] Background: Notification permissions result:', notificationResult);
 
           console.log('[App] Background: Initializing Unified Call Service...');
           const unifiedCallService = UnifiedCallService.getInstance();

@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
-  PermissionsAndroid,
   Platform,
   Alert,
   StatusBar,
@@ -28,6 +27,7 @@ import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import { useDataContext } from '../../providers/DataProvider';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { useUsers, usePrefetchData } from '../../hooks/useQueries';
+import PermissionManagerService from '../../services/PermissionManagerService';
 import Header from '../../components/common/Header';
 import ScreenTransition from '../../components/common/ScreenTransition';
 import {
@@ -388,29 +388,34 @@ export default function TipCallScreen() {
   // Request permissions on component mount
   useEffect(() => {
     const requestPermissions = async () => {
-      if (Platform.OS === 'android') {
-        try {
-          const grants = await PermissionsAndroid.requestMultiple([
-            PermissionsAndroid.PERMISSIONS.CAMERA,
-            PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-            PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-          ]);
-          console.log('[TipCallScreen] Permissions granted:', grants);
-          if (
-            grants[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED &&
-            grants[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED
-          ) {
-            console.log('[TipCallScreen] Camera and mic permissions granted');
-          } else {
-            console.warn('[TipCallScreen] Some essential permissions were not granted');
-            Alert.alert(
-              "Permissions Required",
-              "Camera and microphone access are required to make calls. Please grant them from app settings."
-            );
-          }
-        } catch (err) {
-          console.warn('[TipCallScreen] Permissions request error:', err);
+      try {
+        console.log('[TipCallScreen] Requesting call permissions...');
+        const permissionManager = PermissionManagerService.getInstance();
+        
+        // Request all call permissions (camera, microphone, phone)
+        const result = await permissionManager.requestCallPermissions(true);
+        
+        console.log('[TipCallScreen] Permission result:', result);
+        
+        if (result.camera && result.microphone) {
+          console.log('[TipCallScreen] ✅ All essential permissions granted');
+        } else {
+          console.warn('[TipCallScreen] ❌ Some essential permissions were not granted:', result);
+          Alert.alert(
+            "Permissions Required",
+            "Camera and microphone access are required to make calls. Please grant them from app settings.",
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => {
+                // Open app settings
+                const { Linking } = require('react-native');
+                Linking.openSettings();
+              }}
+            ]
+          );
         }
+      } catch (err) {
+        console.warn('[TipCallScreen] Permissions request error:', err);
       }
     };
     requestPermissions();
