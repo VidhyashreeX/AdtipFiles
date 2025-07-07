@@ -91,6 +91,46 @@ import PermissionsScreen from '../screens/settings/PermissionsScreen';
 // Create stack navigator with proper typing
 const Stack = createNativeStackNavigator<MainNavigatorParamList>();
 
+// ✅ SOLUTION: Define HOC-wrapped components OUTSIDE the MainNavigator component
+const EnhancedCreatePostScreen = withWalletBalance(CreatePostScreen);
+const EnhancedSelectCategoryScreen = withWalletBalance(SelectCategoryScreen);
+const EnhancedTipTubeUploadScreen = withWalletBalance(TipTubeUploadScreen);
+const EnhancedTipShortsUploadScreen = withWalletBalance(TipShortsUploadScreen);
+const EnhancedPromotePostScreen = withWalletBalance(PromotePostScreen);
+const EnhancedVideoPreviewScreen = withWalletBalance(VideoPreviewScreen);
+const EnhancedVideoScreen = withWalletBalance(VideoScreen);
+const EnhancedShortsScreen = withWalletBalance(ShortsScreen);
+const EnhancedTipShortsScreen = withWalletBalance(TipShortsEnhanced);
+const EnhancedChannelScreen = withWalletBalance(ChannelScreen);
+const EnhancedCreateChannelScreen = withWalletBalance(CreateChannelScreen);
+const EnhancedPackagesScreen = withWalletBalance(PackagesScreen);
+const EnhancedChoosePackagesScreen = withWalletBalance(ChoosePackagesScreen);
+const EnhancedCheckoutScreen = withWalletBalance(CheckoutScreen);
+const EnhancedAnalyticsScreen = withWalletBalance(AnalyticsScreen);
+const EnhancedProfileScreen = withWalletBalance(ProfileScreen);
+const EnhancedEditProfileScreen = withWalletBalance(EditProfile);
+const EnhancedTrackOrderScreen = withWalletBalance(TrackOrderScreen);
+const EnhancedSearchScreen = withWalletBalance(SearchScreen);
+const EnhancedNotificationScreen = withWalletBalance(NotificationScreen);
+const EnhancedSettingsScreen = withWalletBalance(SettingsScreen);
+const EnhancedEarningsScreen = withWalletBalance(EarningsScreen);
+const EnhancedReferralScreen = withWalletBalance(ReferralScreen);
+const EnhancedPlayToEarnScreen = withWalletBalance(ChooseGameScreen);
+const EnhancedLudoGameScreen = withWalletBalance(LudoGameScreen);
+const EnhancedWatchToEarnScreen = withWalletBalance(WatchToEarnScreen);
+const EnhancedAdPassbookScreen = withWalletBalance(AdPassbookScreen);
+const EnhancedSupportScreen = withWalletBalance(SupportScreen);
+const EnhancedCreateCampaignScreen = withWalletBalance(CreateCampaignScreen);
+const EnhancedCommentsScreen = withWalletBalance(CommentsScreen);
+const EnhancedFollowersList = withWalletBalance(FollowersList);
+const EnhancedFollowingsList = withWalletBalance(FollowingsList);
+const EnhancedExploreScreen = withWalletBalance(ExploreScreen);
+const EnhancedPremiumUserScreen = withWalletBalance(PremiumUserScreen);
+const EnhancedVideoPlayerModalScreen = withWalletBalance(VideoPlayerModalScreen);
+const EnhancedTipCallScreen = withWalletBalance(TipCallScreen);
+const EnhancedMissedCallsScreen = withWalletBalance(MissedCallsScreen);
+const EnhancedMeetingScreen = withWalletBalance(MeetingScreen);
+
 // Custom transition configuration with Reanimated easing
 const customTransitionConfig = {
   headerShown: false,
@@ -296,50 +336,7 @@ const MainNavigator = () => {
   // Note: Navigation to Meeting screen now happens via Zustand state changes
   // in UnifiedCallService when a call is accepted or started
   
-  // Wrap all individual screens with the wallet balance HOC
-  const EnhancedCreatePostScreen = withWalletBalance(CreatePostScreen);
-  const EnhancedSelectCategoryScreen = withWalletBalance(SelectCategoryScreen);
-  const EnhancedTipTubeUploadScreen = withWalletBalance(TipTubeUploadScreen);
-  const EnhancedTipShortsUploadScreen = withWalletBalance(TipShortsUploadScreen);
-  const EnhancedPromotePostScreen = withWalletBalance(PromotePostScreen);
-  const EnhancedVideoPreviewScreen = withWalletBalance(VideoPreviewScreen);
-  const EnhancedVideoScreen = withWalletBalance(VideoScreen);
-  const EnhancedShortsScreen = withWalletBalance(ShortsScreen);
-  // Replace TipShorts with TipShortsEnhanced
-  const EnhancedTipShortsScreen = withWalletBalance(TipShortsEnhanced);
-  const EnhancedChannelScreen = withWalletBalance(ChannelScreen);
-  const EnhancedCreateChannelScreen = withWalletBalance(CreateChannelScreen);
-  const EnhancedPackagesScreen = withWalletBalance(PackagesScreen);
-  const EnhancedChoosePackagesScreen = withWalletBalance(ChoosePackagesScreen);
-  const EnhancedCheckoutScreen = withWalletBalance(CheckoutScreen);
-  const EnhancedAnalyticsScreen = withWalletBalance(AnalyticsScreen);
-  const EnhancedProfileScreen = withWalletBalance(ProfileScreen);
-  const EnhancedEditProfileScreen = withWalletBalance(EditProfile);
-  const EnhancedTrackOrderScreen = withWalletBalance(TrackOrderScreen);
-  const EnhancedSearchScreen = withWalletBalance(SearchScreen);
-  const EnhancedNotificationScreen = withWalletBalance(NotificationScreen);
-  const EnhancedSettingsScreen = withWalletBalance(SettingsScreen);
-  const EnhancedEarningsScreen = withWalletBalance(EarningsScreen);
-  const EnhancedReferralScreen = withWalletBalance(ReferralScreen);
-  const EnhancedPlayToEarnScreen = withWalletBalance(ChooseGameScreen);
-  const EnhancedLudoGameScreen = withWalletBalance(LudoGameScreen);
-  const EnhancedWatchToEarnScreen = withWalletBalance(WatchToEarnScreen);
-  const EnhancedAdPassbookScreen = withWalletBalance(AdPassbookScreen);
-  const EnhancedSupportScreen = withWalletBalance(SupportScreen);
-  const EnhancedCreateCampaignScreen = withWalletBalance(CreateCampaignScreen);
-  const EnhancedCommentsScreen = withWalletBalance(CommentsScreen);
-  const EnhancedFollowersList = withWalletBalance(FollowersList);
-  const EnhancedFollowingsList = withWalletBalance(FollowingsList);
-  const EnhancedExploreScreen = withWalletBalance(ExploreScreen);
-  const EnhancedPremiumUserScreen = withWalletBalance(PremiumUserScreen);
-  
-  // CREATE THE ENHANCED VIDEO PLAYER MODAL SCREEN
-  const EnhancedVideoPlayerModalScreen = withWalletBalance(VideoPlayerModalScreen);
-    // Add TipCall screens with wallet balance HOC
-  const EnhancedTipCallScreen = withWalletBalance(TipCallScreen);
-  const EnhancedMissedCallsScreen = withWalletBalance(MissedCallsScreen);
-  // Enhanced MeetingScreen with wallet balance HOC
-  const EnhancedMeetingScreen = withWalletBalance(MeetingScreen);
+  // The HOC-wrapped components are now defined outside, so this function is much cleaner.
 
   return (
     <Stack.Navigator
