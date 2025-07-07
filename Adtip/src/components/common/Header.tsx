@@ -8,7 +8,7 @@ import {useTheme} from '../../contexts/ThemeContext';
 import {useWallet} from '../../contexts/WalletContext';
 import {useSidebar} from '../../contexts/SidebarContext';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {useCallState, useCallStore} from '../../stores/callStore';
+import { useCallStore } from '../../stores/callStore';
 
 export interface HeaderProps {
   title: string;
@@ -88,7 +88,7 @@ const Header: React.FC<HeaderProps> = ({
   const {width: screenWidth} = useWindowDimensions();
   const insets = useSafeAreaInsets(); 
   const searchInputRef = useRef<TextInput>(null);
-  const { activeCall } = useCallState();
+  const activeCall = useCallStore(state => state.activeCall);
 
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [searchQueryLocal, setSearchQueryLocal] = useState('');
