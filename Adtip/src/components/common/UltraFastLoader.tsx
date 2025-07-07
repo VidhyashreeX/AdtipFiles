@@ -14,7 +14,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { useCallState } from '../../stores/callStore';
+import { useCallStore } from '../../stores/callStore';
 import { safeAreaStyles, statusBarConfig } from '../../utils/SafeAreaUtils';
 import { navigationRef } from '../../navigation/NavigationService';
 import Sidebar from '../sidebar/Sidebar';
@@ -62,7 +62,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
 }) => {
   const { colors, isDarkMode } = useTheme();
   const { isAuthenticated, isInitialized, user } = useAuth();
-  const { activeCall } = useCallState();
+  const activeCall = useCallStore(state => state.activeCall);
   const [isVisible, setIsVisible] = useState(true);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [isNavReady, setIsNavReady] = useState(false);
