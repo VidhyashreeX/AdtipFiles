@@ -186,7 +186,7 @@ export const useCallStore = create<CallStore>()(
         
         // ===== COMPUTED PROPERTIES =====
         get isInCall() {
-          const status = get().callStatus;
+          const status = get().callStatus || 'idle';
           return status !== 'idle' && status !== 'ended' && status !== 'cleanup_pending';
         },
         
