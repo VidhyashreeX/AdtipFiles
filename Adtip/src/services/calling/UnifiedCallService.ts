@@ -259,6 +259,10 @@ class UnifiedCallService {
 
       console.log('[UnifiedCallService] Initializing unified call service...');
 
+      // ✅ CRITICAL FIX: Reset all flags to ensure clean state for initialization
+      this.isEndingCallInProgress = false;
+      this.isCleaningUp = false;
+
       // Initialize VideoSDK
       await this.initializeVideoSDK();
 
@@ -1481,6 +1485,27 @@ class UnifiedCallService {
     callerId: string
   ): Promise<CallData | null> {
     try {
+      // ✅ CRITICAL FIX: Prevent starting a call during cleanup or ending process
+      if (this.isCleaningUp || this.isEndingCallInProgress) {
+        console.warn('[UnifiedCallService] Cannot start call during cleanup or ending process');
+        Alert.alert('Please wait', 'Previous call is still ending. Please try again in a moment.');
+        return null;
+      }
+
+      // ✅ CRITICAL FIX: Wait for any ongoing cleanup to complete before starting new call
+      let waitCount = 0;
+      while ((this.isCleaningUp || this.isEndingCallInProgress) && waitCount < 10) {
+        console.log(`[UnifiedCallService] Waiting for cleanup to complete... (${waitCount + 1}/10)`);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        waitCount++;
+      }
+
+      if (this.isCleaningUp || this.isEndingCallInProgress) {
+        console.error('[UnifiedCallService] Cleanup did not complete in time, aborting call');
+        Alert.alert('Error', 'Unable to start call. Please restart the app and try again.');
+        return null;
+      }
+
       // ✅ CRITICAL: Ensure service is fully initialized before proceeding
       const isReady = await this.ensureInitialized();
       if (!isReady) {
@@ -1943,6 +1968,21 @@ class UnifiedCallService {
     } finally {
       this.isEndingCallInProgress = false;
       console.log('[UnifiedCallService] endCall finally: isEndingCallInProgress reset to false');
+      
+      // ✅ CRITICAL FIX: Force full state reset to prevent issues with subsequent calls
+      setTimeout(() => {
+        // Additional failsafe cleanup for VideoSDK integration
+        this.mediaManager.forceCleanupIfNeeded();
+        
+        // Reset call state again to ensure clean slate for next call
+        this.updateCallState({
+          isInCall: false,
+          activeCall: null,
+          callStatus: 'idle'
+        });
+        
+        console.log('[UnifiedCallService] Completed failsafe state reset for next call');
+      }, 2000);
     }
   }
 
@@ -1954,6 +1994,13 @@ class UnifiedCallService {
   private initializeMediaForCall(callId: string, isVideoCall: boolean): void {
     try {
       console.log('[UnifiedCallService] Initializing media for call:', callId, 'isVideoCall:', isVideoCall);
+      
+      // ✅ CRITICAL FIX: Reset flags before initializing to prevent issues with second calls
+      this.isEndingCallInProgress = false;
+      this.isCleaningUp = false;
+      
+      // ✅ CRITICAL FIX: Force cleanup if needed before initializing new call
+      this.mediaManager.forceCleanupIfNeeded();
 
       // Initialize media manager
       this.mediaManager.initialize(callId, isVideoCall);
@@ -2106,10 +2153,8 @@ class UnifiedCallService {
       console.log('[UnifiedCallService] Cleanup already in progress, skipping.');
       return;
     }
-    if (this.callState.callStatus !== 'ending' && this.callState.callStatus !== 'ended') {
-      console.log('[UnifiedCallService] Cleanup only allowed after call is ending or ended.');
-      return;
-    }
+    // ✅ CRITICAL FIX: Remove the status check to ensure cleanup can always be performed
+    // This fixes the issue with second calls not being able to initialize properly
     this.isCleaningUp = true;
     try {
       console.log('[UnifiedCallService] Cleaning up media resources');
@@ -2125,15 +2170,35 @@ class UnifiedCallService {
       // ✅ CRITICAL FIX: Await media manager cleanup
       await this.mediaManager.cleanup();
 
+      // ✅ CRITICAL FIX: Reset isEndingCallInProgress flag to ensure subsequent calls work
+      this.isEndingCallInProgress = false;
+
       // Emit media state change
       appEventEmitter.emit('mediaStateChanged', this.mediaState);
+      
+      // ✅ CRITICAL FIX: Send a special cleanup completed event to VideoSDK integration
+      appEventEmitter.emit('callMediaCleanupComplete', {
+        timestamp: Date.now()
+      });
 
       console.log('[UnifiedCallService] Media cleanup completed');
 
     } catch (error) {
       console.error('[UnifiedCallService] Failed to cleanup media:', error);
+      // ✅ CRITICAL FIX: Reset flags even when there's an error
+      this.isEndingCallInProgress = false;
+      
+      // Force cleanup even if there was an error
+      this.mediaManager.forceCleanupIfNeeded();
+      
+      // Still emit the cleanup event to ensure UI is updated
+      appEventEmitter.emit('callMediaCleanupComplete', {
+        timestamp: Date.now(),
+        error: (error as any)?.message || 'Unknown error'
+      });
+    } finally {
+      this.isCleaningUp = false;
     }
-    this.isCleaningUp = false;
   }
 
   // ===== STATE MANAGEMENT =====

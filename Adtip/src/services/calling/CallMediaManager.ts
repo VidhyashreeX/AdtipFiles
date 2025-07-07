@@ -372,6 +372,21 @@ class CallMediaManager {
     // Notify cleanup completed
     appEventEmitter.emit('mediaCleanupCompleted', { reason: 'force_cleanup' });
   }
+  
+  /**
+   * Public method to force cleanup if needed
+   * This is called as a failsafe to ensure proper cleanup between calls
+   */
+  public forceCleanupIfNeeded(): void {
+    // Only perform force cleanup if we have lingering state that might affect next calls
+    if (this.initialized || this.callId || this.currentMeeting || 
+        this.activeTracks.size > 0 || this.mediaState.cameraEnabled) {
+      console.log('[CallMediaManager] Detected lingering state, performing failsafe cleanup');
+      this.forceCleanup();
+      return;
+    }
+    console.log('[CallMediaManager] No lingering state detected, skipping failsafe cleanup');
+  }
 
   /**
    * Disable all media sources with proper VideoSDK coordination

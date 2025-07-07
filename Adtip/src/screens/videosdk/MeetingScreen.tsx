@@ -402,6 +402,33 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   const { webcamStream, micStream } = useParticipant(localParticipant?.id || '');
   const { webcamOn, micOn } = useParticipant(localParticipant?.id);
 
+  // ✅ CRITICAL FIX: Add listener for cleanup completion to ensure proper coordination
+  useEffect(() => {
+    const handleCleanupComplete = (event: { timestamp: number; error?: string }) => {
+      console.log('[MeetingView] Received callMediaCleanupComplete event from UnifiedCallService:', event);
+      
+      // If there was an error during cleanup, log it but don't fail the component
+      if (event.error) {
+        console.warn('[MeetingView] Media cleanup completed with error:', event.error);
+      } else {
+        console.log('[MeetingView] Media cleanup completed successfully');
+      }
+      
+      // Ensure component state is properly reset for next call
+      if (isComponentMountedRef.current) {
+        setIsJoining(false);
+        setIsInitializingService(false);
+        setIsEndingCall(false);
+      }
+    };
+
+    appEventEmitter.on('callMediaCleanupComplete', handleCleanupComplete);
+
+    return () => {
+      appEventEmitter.off('callMediaCleanupComplete', handleCleanupComplete);
+    };
+  }, []);
+
   // NEW: Add a listener for the 'leaveCurrentCall' event from the service.
   useEffect(() => {
     const handleLeaveRequest = (event: { callId: string }) => {
