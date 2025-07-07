@@ -79,35 +79,6 @@ interface Interest {
   isPrimary: boolean;
 }
 
-// Constants for filters
-const LANGUAGES: Language[] = [
-  {id: 0, name: 'All'},
-  {id: 1, name: 'English'},
-  {id: 2, name: 'Hindi'},
-  {id: 3, name: 'Bengali'},
-  {id: 4, name: 'Telugu'},
-  {id: 5, name: 'Marathi'},
-  {id: 6, name: 'Tamil'},
-  {id: 7, name: 'Gujarati'},
-  {id: 8, name: 'Kannada'},
-];
-
-const CATEGORIES: Category[] = [
-  {id: 0, name: 'All'},
-  {id: 2, name: 'Look for jobs'},
-  {id: 101, name: 'Prepare for govt job'},
-  {id: 3, name: 'Prepare for UPSC'},
-  {id: 11, name: 'Prepare for jobs'},
-  {id: 5, name: 'To learn English'},
-  {id: 6, name: 'To learn Hindi'},
-  {id: 7, name: 'To learn software'},
-  {id: 8, name: 'To learn AI'},
-  {id: 13, name: 'To learn something new'},
-  {id: 20, name: 'Sports'},
-  {id: 29, name: 'Spirituality and Religion'},
-  {id: 48, name: 'Astrology'},
-];
-
 // Enhanced Filter Chip Component
 const FilterChip: React.FC<{
   label: string;
@@ -417,8 +388,10 @@ export default function TipCallScreen() {
   }, []);
 
   // UI state management (decoupled from navigation)
-  const [languageFilter, setLanguageFilter] = useState<number>(0);
-  const [categoryFilter, setCategoryFilter] = useState<number>(0);
+  const [languages, setLanguages] = useState<Language[]>([{ id: 0, name: 'All' }]);
+  const [interests, setInterests] = useState<Category[]>([{ id: 0, name: 'All' }]);
+  const [selectedLanguage, setSelectedLanguage] = useState<number>(0);
+  const [selectedInterest, setSelectedInterest] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isTipCallSearchActive, setIsTipCallSearchActive] = useState<boolean>(false);
   const [isDndEnabled, setIsDndEnabled] = useState<boolean>(false);
@@ -428,19 +401,56 @@ export default function TipCallScreen() {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const isFirstRun = useRef(true);
 
+  // Fetch languages and interests from API
+  useEffect(() => {
+    console.log('[TipCall] Fetching languages and interests...');
+    
+    // Fetch languages
+    ApiService.getLanguages()
+      .then(res => {
+        console.log('[TipCall] getLanguages response:', res);
+        if (res?.data) {
+          const apiLanguages = res.data.map((l: any) => ({ 
+            id: l.id, 
+            name: l.name.charAt(0).toUpperCase() + l.name.slice(1) 
+          }));
+          setLanguages([{ id: 0, name: 'All' }, ...apiLanguages]);
+        }
+      })
+      .catch(error => {
+        console.error('[TipCall] Error fetching languages:', error);
+      });
+
+    // Fetch interests
+    ApiService.getInterests()
+      .then(res => {
+        console.log('[TipCall] getInterests response:', res);
+        if (res?.data) {
+          const apiInterests = res.data.map((i: any) => ({ 
+            id: i.id, 
+            name: i.name 
+          }));
+          setInterests([{ id: 0, name: 'All' }, ...apiInterests]);
+        }
+      })
+      .catch(error => {
+        console.error('[TipCall] Error fetching interests:', error);
+      });
+  }, []);
+
   const initialCallData = route.params?.initialCallNotificationData;
   const [incomingCallNotification, setIncomingCallNotification] = useState<any>(null);
 
   // Enhanced data layer using React Query v5
-  const filters = { languageFilter, categoryFilter, searchQuery };
+  const filters = { languageFilter: selectedLanguage, categoryFilter: selectedInterest, searchQuery };
   const {
     data: usersData,
     isLoading: usersLoading,
-    isFetchingNextPage: usersLoadingMore,
+    isFetchingNextPage: loadingMore,
     error: usersError,
     refetch: refreshUsers,
     fetchNextPage: loadMoreUsers,
-    hasNextPage: hasMoreUsers,
+    hasNextPage: hasMore,
   } = useUsers(filters, user?.id);
 
   // Fetch data on initial mount
@@ -495,8 +505,6 @@ export default function TipCallScreen() {
 
   // Derived state for UI
   const initialLoading = usersLoading && contacts.length === 0;
-  const loadingMore = usersLoadingMore;
-  const hasMore = hasMoreUsers;
 
   // Fetch unread message counts for contacts with chat history
   const fetchUnreadCounts = useCallback(async () => {
@@ -608,25 +616,11 @@ export default function TipCallScreen() {
   }, [refreshUsers]);
 
   const handleLoadMore = useCallback(() => {
-    if (!loadingMore && hasMore) {
+    if (hasMore) {
       console.log('[TipCall] Loading more users');
       loadMoreUsers();
     }
-  }, [loadingMore, hasMore, loadMoreUsers]);
-
-  const handleLanguageFilter = useCallback((languageId: number) => {
-    console.log('[TipCall] Language filter changed to:', languageId);
-    setLanguageFilter(languageId);
-    // Invalidate React Query cache instead of using clearCache
-    queryClient.invalidateQueries({ queryKey: ['users'] });
-  }, [queryClient]);
-
-  const handleCategoryFilter = useCallback((categoryId: number) => {
-    console.log('[TipCall] Category filter changed to:', categoryId);
-    setCategoryFilter(categoryId);
-    // Invalidate React Query cache instead of using clearCache
-    queryClient.invalidateQueries({ queryKey: ['users'] });
-  }, [queryClient]);
+  }, [hasMore, loadMoreUsers]);
 
   // TipCall search handlers
   const handleTipCallSearch = useCallback((query: string) => {
@@ -1066,8 +1060,8 @@ export default function TipCallScreen() {
     contactsLength: contacts.length,
     filteredContactsLength: filteredContacts.length,
     searchQuery,
-    languageFilter,
-    categoryFilter
+    languageFilter: selectedLanguage,
+    categoryFilter: selectedInterest
   });
 
   const contactsWithAds = getContactsWithAds(filteredContacts);
@@ -1090,7 +1084,7 @@ export default function TipCallScreen() {
     data: liveSearchData,
     isLoading: liveSearchLoading,
     error: liveSearchError,
-  } = useUsers({ languageFilter, categoryFilter, searchQuery: liveSearchQuery }, user?.id);
+  } = useUsers({ languageFilter: selectedLanguage, categoryFilter: selectedInterest, searchQuery: liveSearchQuery }, user?.id);
 
   // Transform live search results
   const liveSearchContacts = useMemo(() => {
@@ -1278,12 +1272,12 @@ export default function TipCallScreen() {
               contentContainerStyle={styles.filterScrollContainer}
               style={styles.filterScrollView}
             >
-              {LANGUAGES.map((lang) => (
+              {languages.map((lang) => (
                 <FilterChip
                   key={lang.id}
                   label={lang.name}
-                  isSelected={languageFilter === lang.id}
-                  onPress={() => handleLanguageFilter(lang.id)}
+                  isSelected={selectedLanguage === lang.id}
+                  onPress={() => setSelectedLanguage(lang.id)}
                   colors={colors}
                   isDarkMode={isDarkMode}
                 />
@@ -1302,12 +1296,12 @@ export default function TipCallScreen() {
               contentContainerStyle={styles.filterScrollContainer}
               style={styles.filterScrollView}
             >
-              {CATEGORIES.map((category) => (
+              {interests.map((category) => (
                 <FilterChip
                   key={category.id}
                   label={category.name}
-                  isSelected={categoryFilter === category.id}
-                  onPress={() => handleCategoryFilter(category.id)}
+                  isSelected={selectedInterest === category.id}
+                  onPress={() => setSelectedInterest(category.id)}
                   colors={colors}
                   isDarkMode={isDarkMode}
                 />
@@ -1354,7 +1348,7 @@ export default function TipCallScreen() {
                 onEndReached={handleLoadMore}
                 onEndReachedThreshold={0.5}
                 ListFooterComponent={
-                  loadingMore ? (
+                  loadingMore && hasMore ? (
                     <View style={{ padding: 20, alignItems: 'center' }}>
                       <ActivityIndicator size="small" color={colors.primary} />
                     </View>

@@ -385,7 +385,7 @@ const EditProfile: React.FC = () => {
         <View style={styles.inputGroup}>
           <Text style={[styles.label, { color: colors.text.secondary }]}>Marital Status</Text>
           <View style={styles.maritalStatusContainer}>
-            {['Single', 'Married', 'Divorced', 'Widowed'].map((status) => (
+            {['Single', 'Married'].map((status) => (
               <TouchableOpacity
                 key={status}
                 style={[

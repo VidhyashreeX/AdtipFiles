@@ -2247,4 +2247,12 @@ static async createSubscriptionTest(plan_id: string, user_id: number): Promise<a
       throw this.handleError(error);
     }
   }
+
+  static async getLanguages(): Promise<any> {
+    return this.get('/api/getlanguages');
+  }
+
+  static async getInterests(): Promise<any> {
+    return this.get('/api/getinterests');
+  }
 }
