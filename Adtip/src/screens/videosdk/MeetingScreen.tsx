@@ -49,7 +49,7 @@ import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MeetingProvider } from '@videosdk.live/react-native-sdk';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useCallStore, useCallState, useMediaState, useCallActions, CallStatus as ZustandCallStatus } from '../../stores/callStore';
+import { useCallStore, CallStatus as ZustandCallStatus } from '../../stores/callStore';
 import UnifiedCallService from '../../services/calling/UnifiedCallService';
 import CallMediaManager from '../../services/calling/CallMediaManager';
 import { 
@@ -224,7 +224,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     recipientName
   });
   
-  const { activeCall: currentActiveCall } = useCallState(); // Get activeCall from Zustand store
+  const currentActiveCall = useCallStore(state => state.activeCall); // Get activeCall from Zustand store
   const unifiedCallService = UnifiedCallService.getInstance(); // Get instance directly
   const callMediaManager = CallMediaManager.getInstance(); // Get instance directly 
   const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
@@ -291,13 +291,13 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   const connectedRecentlyRef = useRef(false); // Grace period after connecting
   
   // BULLETPROOF: Call state from Zustand store - single source of truth
-  const { callStatus } = useCallState(); // Get call state from Zustand store
+  const callStatus = useCallStore(state => state.callStatus); // Get call state from Zustand store
   
   // BULLETPROOF: Media state from Zustand store - single source of truth
-  const mediaState = useMediaState(); // Get media state from Zustand store
+  const mediaState = useCallStore(state => state.mediaState); // Get media state from Zustand store
   
   // BULLETPROOF: Call actions from Zustand store - centralized actions
-  const callActions = useCallActions(); // Get call actions from Zustand store
+  const callActions = useCallStore(state => state.actions); // Get call actions from Zustand store
   
   // Destructure media state for easy access
   const { micEnabled, cameraEnabled, speakerEnabled } = mediaState;
@@ -916,7 +916,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   }, []);
 
   // Media state management - USE ZUSTAND STORE
-  const zustandMediaState = useMediaState(); // Get media state from Zustand store
+  const zustandMediaState = useCallStore(state => state.mediaState); // Get media state from Zustand store
   
   // This effect will handle media state initialization in a clean way
   useEffect(() => {
@@ -1423,7 +1423,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
  */
 const MeetingScreen = () => {
   const route = useRoute<MeetingScreenRouteProp>();
-  const { activeCall } = useCallState(); // ✅ FIXED: Use Zustand instead of legacy useCall
+  const activeCall = useCallStore(state => state.activeCall); // ✅ FIXED: Use specific selector
   const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
 
   console.log('[MeetingScreen] 🎬 MEETING SCREEN COMPONENT MOUNTED:');

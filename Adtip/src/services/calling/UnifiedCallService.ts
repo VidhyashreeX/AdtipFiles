@@ -114,7 +114,7 @@ class UnifiedCallService {
       // 4. Mark service as initialized and update store
       this.isInitialized = true;
       const store = useCallStore.getState();
-      store.setServiceInitialized(true);
+      store.actions.setServiceInitialized(true);
 
       console.log('[UnifiedCallService] ✅ Initialization complete');
       return true;
@@ -125,8 +125,8 @@ class UnifiedCallService {
       
       // Update store with error
       const store = useCallStore.getState();
-      store.setServiceInitialized(false);
-      store.setError(`Service initialization failed: ${error instanceof Error ? error.message : String(error)}`);
+      store.actions.setServiceInitialized(false);
+      store.actions.setError(`Service initialization failed: ${error instanceof Error ? error.message : String(error)}`);
       
       return false;
     } finally {
@@ -210,7 +210,7 @@ class UnifiedCallService {
 
       // Update Zustand store (no internal state)
       const store = useCallStore.getState();
-      store.startOutgoingCall(callData);
+      store.actions.startOutgoingCall(callData);
 
       // Initialize media manager
       this.callMediaManager.initialize(callId, callType === 'video');
@@ -242,8 +242,8 @@ class UnifiedCallService {
       
       // Update store with error
       const store = useCallStore.getState();
-      store.setError(`Failed to start call: ${error instanceof Error ? error.message : String(error)}`);
-      store.setCallStatus('ended');
+      store.actions.setError(`Failed to start call: ${error instanceof Error ? error.message : String(error)}`);
+      store.actions.setCallStatus('ended');
       
       return null;
     }
@@ -293,7 +293,7 @@ class UnifiedCallService {
 
       // Update Zustand store
       const store = useCallStore.getState();
-      store.setIncomingCall(incomingCallData);
+      store.actions.setIncomingCall(incomingCallData);
 
       // Initialize media manager
       this.callMediaManager.initialize(incomingCallData.callId, callData.callType === 'video');
@@ -314,7 +314,7 @@ class UnifiedCallService {
       
       // Update store with error
       const store = useCallStore.getState();
-      store.setError(`Failed to handle incoming call: ${error instanceof Error ? error.message : String(error)}`);
+      store.actions.setError(`Failed to handle incoming call: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -338,7 +338,7 @@ class UnifiedCallService {
       Vibration.cancel();
 
       // Update store status
-      store.acceptCall();
+      store.actions.acceptCall();
 
       // Hide incoming call notification
       await this.hideIncomingCallNotification();
@@ -363,7 +363,7 @@ class UnifiedCallService {
       
       // Update store with error
       const store = useCallStore.getState();
-      store.setError(`Failed to accept call: ${error instanceof Error ? error.message : String(error)}`);
+      store.actions.setError(`Failed to accept call: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -387,7 +387,7 @@ class UnifiedCallService {
       Vibration.cancel();
 
       // Update store status
-      store.declineCall(reason);
+      store.actions.declineCall(reason);
 
       // Hide incoming call notification
       await this.hideIncomingCallNotification();
@@ -405,7 +405,7 @@ class UnifiedCallService {
       
       // Update store with error
       const store = useCallStore.getState();
-      store.setError(`Failed to decline call: ${error instanceof Error ? error.message : String(error)}`);
+      store.actions.setError(`Failed to decline call: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -429,7 +429,7 @@ class UnifiedCallService {
       Vibration.cancel();
 
       // Update store status
-      store.endCall(reason);
+      store.actions.endCall(reason);
 
       // Hide all call notifications
       await this.hideAllCallNotifications();
@@ -457,7 +457,7 @@ class UnifiedCallService {
       
       // Update store with error
       const store = useCallStore.getState();
-      store.setError(`Failed to end call: ${error instanceof Error ? error.message : String(error)}`);
+      store.actions.setError(`Failed to end call: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -491,7 +491,7 @@ class UnifiedCallService {
       } else if (callType === 'CALL_ACCEPTED') {
         console.log('[UnifiedCallService] Call accepted by recipient');
         const store = useCallStore.getState();
-        store.setCallStatus('connecting');
+        store.actions.setCallStatus('connecting');
       } else if (callType === 'CALL_ENDED') {
         console.log('[UnifiedCallService] Call ended by remote party');
         await this.endCall('ended_by_remote');
@@ -782,7 +782,7 @@ class UnifiedCallService {
 
       // Store notification ID
       const store = useCallStore.getState();
-      store.setIncomingCallNotificationId(notificationId);
+      store.actions.setIncomingCallNotificationId(notificationId);
 
       console.log('[UnifiedCallService] ✅ Incoming call notification displayed');
 
@@ -832,7 +832,7 @@ class UnifiedCallService {
 
       // Store notification ID
       const store = useCallStore.getState();
-      store.setOngoingCallNotificationId(notificationId);
+      store.actions.setOngoingCallNotificationId(notificationId);
 
       console.log('[UnifiedCallService] ✅ Outgoing call notification displayed');
 
@@ -851,7 +851,7 @@ class UnifiedCallService {
       
       if (notificationId) {
         await notifee.cancelNotification(notificationId);
-        store.setIncomingCallNotificationId(null);
+        store.actions.setIncomingCallNotificationId(null);
         console.log('[UnifiedCallService] Incoming call notification hidden');
       }
     } catch (error) {
@@ -869,13 +869,13 @@ class UnifiedCallService {
       // Hide incoming call notification
       if (store.incomingCallNotificationId) {
         await notifee.cancelNotification(store.incomingCallNotificationId);
-        store.setIncomingCallNotificationId(null);
+        store.actions.setIncomingCallNotificationId(null);
       }
       
       // Hide ongoing call notification
       if (store.ongoingCallNotificationId) {
         await notifee.cancelNotification(store.ongoingCallNotificationId);
-        store.setOngoingCallNotificationId(null);
+        store.actions.setOngoingCallNotificationId(null);
       }
       
       console.log('[UnifiedCallService] All call notifications hidden');
@@ -926,8 +926,8 @@ class UnifiedCallService {
     
     // Reset store
     const store = useCallStore.getState();
-    store.cleanup();
-    store.setServiceInitialized(false);
+    store.actions.cleanup();
+    store.actions.setServiceInitialized(false);
     
     console.log('[UnifiedCallService] Service reset complete');
   }

@@ -104,48 +104,49 @@ interface CallStore {
   canStartCall: boolean;
   
   // ===== ACTIONS =====
-  
-  // Service Management
-  setServiceInitialized: (initialized: boolean) => void;
-  
-  // Call Management
-  startOutgoingCall: (callData: Omit<CallData, 'status' | 'timestamp'>) => void;
-  setIncomingCall: (callData: CallData) => void;
-  acceptCall: () => void;
-  endCall: (reason?: string) => void;
-  declineCall: (reason?: string) => void;
-  
-  // Status Management
-  setCallStatus: (status: CallStatus) => void;
-  updateCallData: (updates: Partial<CallData>) => void;
-  clearActiveCall: () => void;
-  
-  // Media Management
-  setMediaState: (mediaState: Partial<MediaState>) => void;
-  toggleMic: () => void;
-  toggleCamera: () => void;
-  toggleSpeaker: () => void;
-  
-  // UI Management
-  setNavigatingToMeeting: (navigating: boolean) => void;
-  setShowParticipants: (show: boolean) => void;
-  setCallDuration: (duration: number) => void;
-  
-  // Notification Management
-  setIncomingCallNotificationId: (id: string | null) => void;
-  setOngoingCallNotificationId: (id: string | null) => void;
-  
-  // Error Management
-  setError: (error: string | null) => void;
-  clearError: () => void;
-  
-  // Metrics
-  updateCallMetrics: (metrics: Partial<CallMetrics>) => void;
-  addCallToHistory: (call: CallMetrics['callHistory'][0]) => void;
-  
-  // Reset & Cleanup
-  resetCallState: () => void;
-  cleanup: () => void;
+  actions: {
+    // Service Management
+    setServiceInitialized: (initialized: boolean) => void;
+    
+    // Call Management
+    startOutgoingCall: (callData: Omit<CallData, 'status' | 'timestamp'>) => void;
+    setIncomingCall: (callData: CallData) => void;
+    acceptCall: () => void;
+    endCall: (reason?: string) => Promise<void>;
+    declineCall: (reason?: string) => void;
+    
+    // Status Management
+    setCallStatus: (status: CallStatus) => void;
+    updateCallData: (updates: Partial<CallData>) => void;
+    clearActiveCall: () => void;
+    
+    // Media Management
+    setMediaState: (mediaState: Partial<MediaState>) => void;
+    toggleMic: () => void;
+    toggleCamera: () => void;
+    toggleSpeaker: () => Promise<void>;
+    
+    // UI Management
+    setNavigatingToMeeting: (navigating: boolean) => void;
+    setShowParticipants: (show: boolean) => void;
+    setCallDuration: (duration: number) => void;
+    
+    // Notification Management
+    setIncomingCallNotificationId: (id: string | null) => void;
+    setOngoingCallNotificationId: (id: string | null) => void;
+    
+    // Error Management
+    setError: (error: string | null) => void;
+    clearError: () => void;
+    
+    // Metrics
+    updateCallMetrics: (metrics: Partial<CallMetrics>) => void;
+    addCallToHistory: (call: CallMetrics['callHistory'][0]) => void;
+    
+    // Reset & Cleanup
+    resetCallState: () => void;
+    cleanup: () => void;
+  }
 }
 
 // ===== INITIAL STATE =====
@@ -205,347 +206,348 @@ export const useCallStore = create<CallStore>()(
         },
         
         // ===== ACTIONS =====
-        
-        // Service Management
-        setServiceInitialized: (initialized: boolean) => {
-          set({ isCallServiceInitialized: initialized }, false, 'setServiceInitialized');
-        },
-        
-        // Call Management
-        startOutgoingCall: (callData: Omit<CallData, 'status' | 'timestamp'>) => {
-          const timestamp = Date.now();
-          const fullCallData: CallData = {
-            ...callData,
-            status: 'dialing',
-            timestamp,
-            startTime: timestamp,
-          };
+        actions: {
+          // Service Management
+          setServiceInitialized: (initialized: boolean) => {
+            set({ isCallServiceInitialized: initialized }, false, 'setServiceInitialized');
+          },
           
-          set(
-            {
-              activeCall: fullCallData,
-              callStatus: 'dialing',
-              mediaState: {
-                ...get().mediaState,
-                isVideoCall: callData.callType === 'video',
-                cameraEnabled: callData.callType === 'video',
+          // Call Management
+          startOutgoingCall: (callData: Omit<CallData, 'status' | 'timestamp'>) => {
+            const timestamp = Date.now();
+            const fullCallData: CallData = {
+              ...callData,
+              status: 'dialing',
+              timestamp,
+              startTime: timestamp,
+            };
+            
+            set(
+              {
+                activeCall: fullCallData,
+                callStatus: 'dialing',
+                mediaState: {
+                  ...get().mediaState,
+                  isVideoCall: callData.callType === 'video',
+                  cameraEnabled: callData.callType === 'video',
+                },
+                lastError: null,
+                callDuration: 0,
               },
-              lastError: null,
-              callDuration: 0,
-            },
-            false,
-            'startOutgoingCall'
-          );
-        },
-        
-        setIncomingCall: (callData: CallData) => {
-          set(
-            {
-              activeCall: {
-                ...callData,
-                status: 'ringing',
-                timestamp: Date.now(),
-              },
-              callStatus: 'ringing',
-              mediaState: {
-                ...get().mediaState,
-                isVideoCall: callData.callType === 'video',
-                cameraEnabled: callData.callType === 'video',
-              },
-              lastError: null,
-              callDuration: 0,
-            },
-            false,
-            'setIncomingCall'
-          );
-        },
-        
-        acceptCall: () => {
-          const currentCall = get().activeCall;
-          if (!currentCall) return;
+              false,
+              'startOutgoingCall'
+            );
+          },
           
-          set(
-            {
-              callStatus: 'connecting',
-              activeCall: {
-                ...currentCall,
-                status: 'connecting',
+          setIncomingCall: (callData: CallData) => {
+            set(
+              {
+                activeCall: {
+                  ...callData,
+                  status: 'ringing',
+                  timestamp: Date.now(),
+                },
+                callStatus: 'ringing',
+                mediaState: {
+                  ...get().mediaState,
+                  isVideoCall: callData.callType === 'video',
+                  cameraEnabled: callData.callType === 'video',
+                },
+                lastError: null,
+                callDuration: 0,
               },
-            },
-            false,
-            'acceptCall'
-          );
-        },
-        
-        endCall: (reason?: string) => {
-          const currentCall = get().activeCall;
-          const endTime = Date.now();
+              false,
+              'setIncomingCall'
+            );
+          },
           
-          // Update metrics if there was an active call
-          if (currentCall && currentCall.startTime) {
-            const duration = endTime - currentCall.startTime;
-            get().addCallToHistory({
-              callId: currentCall.callId,
-              startTime: currentCall.startTime,
-              endTime: endTime,
-              duration: duration,
-              type: currentCall.callType,
-              status: 'completed',
-            });
-          }
+          acceptCall: () => {
+            const currentCall = get().activeCall;
+            if (!currentCall) return;
+            
+            set(
+              {
+                callStatus: 'connecting',
+                activeCall: {
+                  ...currentCall,
+                  status: 'connecting',
+                },
+              },
+              false,
+              'acceptCall'
+            );
+          },
           
-          set(
-            {
-              callStatus: 'ending',
-              lastCallEndReason: reason || 'ended_by_user',
-              activeCall: currentCall ? {
-                ...currentCall,
-                status: 'ended',
+          endCall: async (reason?: string) => {
+            const currentCall = get().activeCall;
+            const endTime = Date.now();
+            
+            // Update metrics if there was an active call
+            if (currentCall && currentCall.startTime) {
+              const duration = endTime - currentCall.startTime;
+              get().actions.addCallToHistory({
+                callId: currentCall.callId,
+                startTime: currentCall.startTime,
                 endTime: endTime,
-                duration: currentCall.startTime ? endTime - currentCall.startTime : 0,
-              } : null,
-            },
-            false,
-            'endCall'
-          );
+                duration: duration,
+                type: currentCall.callType,
+                status: 'completed',
+              });
+            }
+            
+            set(
+              {
+                callStatus: 'ending',
+                lastCallEndReason: reason || 'ended_by_user',
+                activeCall: currentCall ? {
+                  ...currentCall,
+                  status: 'ended',
+                  endTime: endTime,
+                  duration: currentCall.startTime ? endTime - currentCall.startTime : 0,
+                } : null,
+              },
+              false,
+              'endCall'
+            );
+            
+            // Auto-cleanup after a delay
+            setTimeout(() => {
+              get().actions.cleanup();
+            }, 1000);
+          },
           
-          // Auto-cleanup after a delay
-          setTimeout(() => {
-            get().cleanup();
-          }, 1000);
-        },
-        
-        declineCall: (reason?: string) => {
-          const currentCall = get().activeCall;
+          declineCall: (reason?: string) => {
+            const currentCall = get().activeCall;
+            
+            if (currentCall) {
+              get().actions.addCallToHistory({
+                callId: currentCall.callId,
+                startTime: currentCall.startTime || Date.now(),
+                endTime: Date.now(),
+                duration: 0,
+                type: currentCall.callType,
+                status: 'declined',
+              });
+            }
+            
+            set(
+              {
+                callStatus: 'ended',
+                lastCallEndReason: reason || 'declined_by_user',
+                activeCall: null,
+              },
+              false,
+              'declineCall'
+            );
+            
+            // Auto-cleanup after a delay
+            setTimeout(() => {
+              get().actions.cleanup();
+            }, 500);
+          },
           
-          if (currentCall) {
-            get().addCallToHistory({
-              callId: currentCall.callId,
-              startTime: currentCall.startTime || Date.now(),
-              endTime: Date.now(),
-              duration: 0,
-              type: currentCall.callType,
-              status: 'declined',
-            });
-          }
+          // Status Management
+          setCallStatus: (status: CallStatus) => {
+            const currentCall = get().activeCall;
+            
+            set(
+              {
+                callStatus: status,
+                activeCall: currentCall ? {
+                  ...currentCall,
+                  status,
+                } : null,
+              },
+              false,
+              'setCallStatus'
+            );
+          },
           
-          set(
-            {
-              callStatus: 'ended',
-              lastCallEndReason: reason || 'declined_by_user',
-              activeCall: null,
-            },
-            false,
-            'declineCall'
-          );
+          updateCallData: (updates: Partial<CallData>) => {
+            const currentCall = get().activeCall;
+            if (!currentCall) return;
+            
+            set(
+              {
+                activeCall: {
+                  ...currentCall,
+                  ...updates,
+                },
+              },
+              false,
+              'updateCallData'
+            );
+          },
           
-          // Auto-cleanup after a delay
-          setTimeout(() => {
-            get().cleanup();
-          }, 500);
-        },
-        
-        // Status Management
-        setCallStatus: (status: CallStatus) => {
-          const currentCall = get().activeCall;
+          clearActiveCall: () => {
+            set(
+              {
+                activeCall: null,
+                callStatus: 'idle',
+                callDuration: 0,
+                isNavigatingToMeeting: false,
+                showParticipants: false,
+              },
+              false,
+              'clearActiveCall'
+            );
+          },
           
-          set(
-            {
-              callStatus: status,
-              activeCall: currentCall ? {
-                ...currentCall,
-                status,
-              } : null,
-            },
-            false,
-            'setCallStatus'
-          );
-        },
-        
-        updateCallData: (updates: Partial<CallData>) => {
-          const currentCall = get().activeCall;
-          if (!currentCall) return;
+          // Media Management
+          setMediaState: (mediaState: Partial<MediaState>) => {
+            set(
+              {
+                mediaState: {
+                  ...get().mediaState,
+                  ...mediaState,
+                },
+              },
+              false,
+              'setMediaState'
+            );
+          },
           
-          set(
-            {
-              activeCall: {
-                ...currentCall,
-                ...updates,
+          toggleMic: () => {
+            const currentState = get().mediaState;
+            set(
+              {
+                mediaState: {
+                  ...currentState,
+                  micEnabled: !currentState.micEnabled,
+                },
               },
-            },
-            false,
-            'updateCallData'
-          );
-        },
-        
-        clearActiveCall: () => {
-          set(
-            {
-              activeCall: null,
-              callStatus: 'idle',
-              callDuration: 0,
-              isNavigatingToMeeting: false,
-              showParticipants: false,
-            },
-            false,
-            'clearActiveCall'
-          );
-        },
-        
-        // Media Management
-        setMediaState: (mediaState: Partial<MediaState>) => {
-          set(
-            {
-              mediaState: {
-                ...get().mediaState,
-                ...mediaState,
-              },
-            },
-            false,
-            'setMediaState'
-          );
-        },
-        
-        toggleMic: () => {
-          const currentState = get().mediaState;
-          set(
-            {
-              mediaState: {
-                ...currentState,
-                micEnabled: !currentState.micEnabled,
-              },
-            },
-            false,
-            'toggleMic'
-          );
-        },
-        
-        toggleCamera: () => {
-          const currentState = get().mediaState;
-          set(
-            {
-              mediaState: {
-                ...currentState,
-                cameraEnabled: !currentState.cameraEnabled,
-              },
-            },
-            false,
-            'toggleCamera'
-          );
-        },
-        
-        toggleSpeaker: () => {
-          const currentState = get().mediaState;
-          set(
-            {
-              mediaState: {
-                ...currentState,
-                speakerEnabled: !currentState.speakerEnabled,
-              },
-            },
-            false,
-            'toggleSpeaker'
-          );
-        },
-        
-        // UI Management
-        setNavigatingToMeeting: (navigating: boolean) => {
-          set({ isNavigatingToMeeting: navigating }, false, 'setNavigatingToMeeting');
-        },
-        
-        setShowParticipants: (show: boolean) => {
-          set({ showParticipants: show }, false, 'setShowParticipants');
-        },
-        
-        setCallDuration: (duration: number) => {
-          set({ callDuration: duration }, false, 'setCallDuration');
-        },
-        
-        // Notification Management
-        setIncomingCallNotificationId: (id: string | null) => {
-          set({ incomingCallNotificationId: id }, false, 'setIncomingCallNotificationId');
-        },
-        
-        setOngoingCallNotificationId: (id: string | null) => {
-          set({ ongoingCallNotificationId: id }, false, 'setOngoingCallNotificationId');
-        },
-        
-        // Error Management
-        setError: (error: string | null) => {
-          set({ lastError: error }, false, 'setError');
-        },
-        
-        clearError: () => {
-          set({ lastError: null }, false, 'clearError');
-        },
-        
-        // Metrics
-        updateCallMetrics: (metrics: Partial<CallMetrics>) => {
-          set(
-            {
-              callMetrics: {
-                ...get().callMetrics,
-                ...metrics,
-              },
-            },
-            false,
-            'updateCallMetrics'
-          );
-        },
-        
-        addCallToHistory: (call: CallMetrics['callHistory'][0]) => {
-          const currentMetrics = get().callMetrics;
-          const newHistory = [call, ...currentMetrics.callHistory].slice(0, 100); // Keep last 100 calls
+              false,
+              'toggleMic'
+            );
+          },
           
-          set(
-            {
-              callMetrics: {
-                ...currentMetrics,
-                totalCalls: currentMetrics.totalCalls + 1,
-                totalDuration: currentMetrics.totalDuration + call.duration,
-                callHistory: newHistory,
+          toggleCamera: () => {
+            const currentState = get().mediaState;
+            set(
+              {
+                mediaState: {
+                  ...currentState,
+                  cameraEnabled: !currentState.cameraEnabled,
+                },
               },
-            },
-            false,
-            'addCallToHistory'
-          );
-        },
-        
-        // Reset & Cleanup
-        resetCallState: () => {
-          set(
-            {
-              ...initialState,
-              isCallServiceInitialized: get().isCallServiceInitialized, // Preserve initialization state
-              callMetrics: get().callMetrics, // Preserve metrics
-            },
-            false,
-            'resetCallState'
-          );
-        },
-        
-        cleanup: () => {
-          set(
-            {
-              callStatus: 'idle',
-              activeCall: null,
-              callDuration: 0,
-              isNavigatingToMeeting: false,
-              showParticipants: false,
-              incomingCallNotificationId: null,
-              ongoingCallNotificationId: null,
-              lastError: null,
-              mediaState: {
-                micEnabled: true,
-                cameraEnabled: false,
-                speakerEnabled: true,
-                isVideoCall: false,
+              false,
+              'toggleCamera'
+            );
+          },
+          
+          toggleSpeaker: async () => {
+            const currentState = get().mediaState;
+            set(
+              {
+                mediaState: {
+                  ...currentState,
+                  speakerEnabled: !currentState.speakerEnabled,
+                },
               },
-            },
-            false,
-            'cleanup'
-          );
-        },
+              false,
+              'toggleSpeaker'
+            );
+          },
+          
+          // UI Management
+          setNavigatingToMeeting: (navigating: boolean) => {
+            set({ isNavigatingToMeeting: navigating }, false, 'setNavigatingToMeeting');
+          },
+          
+          setShowParticipants: (show: boolean) => {
+            set({ showParticipants: show }, false, 'setShowParticipants');
+          },
+          
+          setCallDuration: (duration: number) => {
+            set({ callDuration: duration }, false, 'setCallDuration');
+          },
+          
+          // Notification Management
+          setIncomingCallNotificationId: (id: string | null) => {
+            set({ incomingCallNotificationId: id }, false, 'setIncomingCallNotificationId');
+          },
+          
+          setOngoingCallNotificationId: (id: string | null) => {
+            set({ ongoingCallNotificationId: id }, false, 'setOngoingCallNotificationId');
+          },
+          
+          // Error Management
+          setError: (error: string | null) => {
+            set({ lastError: error }, false, 'setError');
+          },
+          
+          clearError: () => {
+            set({ lastError: null }, false, 'clearError');
+          },
+          
+          // Metrics
+          updateCallMetrics: (metrics: Partial<CallMetrics>) => {
+            set(
+              {
+                callMetrics: {
+                  ...get().callMetrics,
+                  ...metrics,
+                },
+              },
+              false,
+              'updateCallMetrics'
+            );
+          },
+          
+          addCallToHistory: (call: CallMetrics['callHistory'][0]) => {
+            const currentMetrics = get().callMetrics;
+            const newHistory = [call, ...currentMetrics.callHistory].slice(0, 100); // Keep last 100 calls
+            
+            set(
+              {
+                callMetrics: {
+                  ...currentMetrics,
+                  totalCalls: currentMetrics.totalCalls + 1,
+                  totalDuration: currentMetrics.totalDuration + call.duration,
+                  callHistory: newHistory,
+                },
+              },
+              false,
+              'addCallToHistory'
+            );
+          },
+          
+          // Reset & Cleanup
+          resetCallState: () => {
+            set(
+              {
+                ...initialState,
+                isCallServiceInitialized: get().isCallServiceInitialized, // Preserve initialization state
+                callMetrics: get().callMetrics, // Preserve metrics
+              },
+              false,
+              'resetCallState'
+            );
+          },
+          
+          cleanup: () => {
+            set(
+              {
+                callStatus: 'idle',
+                activeCall: null,
+                callDuration: 0,
+                isNavigatingToMeeting: false,
+                showParticipants: false,
+                incomingCallNotificationId: null,
+                ongoingCallNotificationId: null,
+                lastError: null,
+                mediaState: {
+                  micEnabled: true,
+                  cameraEnabled: false,
+                  speakerEnabled: true,
+                  isVideoCall: false,
+                },
+              },
+              false,
+              'cleanup'
+            );
+          },
+        }
       }),
       {
         name: 'call-store',
@@ -595,24 +597,7 @@ export const useMediaState = () => {
 };
 
 export const useCallActions = () => {
-  return useCallStore((state) => ({
-    startOutgoingCall: state.startOutgoingCall,
-    setIncomingCall: state.setIncomingCall,
-    acceptCall: state.acceptCall,
-    endCall: state.endCall,
-    declineCall: state.declineCall,
-    setCallStatus: state.setCallStatus,
-    updateCallData: state.updateCallData,
-    clearActiveCall: state.clearActiveCall,
-    setMediaState: state.setMediaState,
-    toggleMic: state.toggleMic,
-    toggleCamera: state.toggleCamera,
-    toggleSpeaker: state.toggleSpeaker,
-    setError: state.setError,
-    clearError: state.clearError,
-    resetCallState: state.resetCallState,
-    cleanup: state.cleanup,
-  }));
+  return useCallStore((state) => state.actions);
 };
 
 export const useCallMetrics = () => {
