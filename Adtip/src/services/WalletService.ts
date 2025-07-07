@@ -115,31 +115,54 @@ class WalletService {
     planId: number | null;
     endTime: string | null;
   }> {
+    console.log('📡 [WalletService] Checking premium status for user:', userId);
+    
     try {
-      const premiumData = await ApiService.checkPremium(userId);
-      return {
-        isPremium: premiumData && !premiumData.is_premium_expired,
-        planId: premiumData?.plan_id || null,
-        endTime: premiumData?.end_time || null,
-      };
-    } catch (error: any) {
-      if (error instanceof Error && error.message === 'No active premium plan') {
-        // This is an expected scenario (user does not have a premium plan).
-        // Return the standard non-premium status without logging an error.
+      // Use the new subscription status API
+      console.log('🌐 [WalletService] Calling ApiService.getSubscriptionStatus...');
+      const response = await ApiService.getSubscriptionStatus(Number(userId));
+      console.log('📥 [WalletService] Subscription status API response:', {
+        status: response.status,
+        hasData: !!response.data,
+        data: response.data,
+        message: response.message
+      });
+      
+      if (response.status && response.data) {
+        // User has an active subscription
+        const isPremium = response.data.is_active === true;
+        console.log('✅ [WalletService] User has active subscription:', {
+          isPremium,
+          planId: response.data.razorpay_plan_id,
+          endTime: response.data.current_end_at,
+          planName: response.data.plan_name
+        });
+        
         return {
-          isPremium: false,
-          planId: null,
-          endTime: null,
+          isPremium,
+          planId: response.data.razorpay_plan_id || null,
+          endTime: response.data.current_end_at || null,
         };
       } else {
-        // For any other unexpected errors, log them.
-        console.error('Error checking premium status:', error);
+        // No subscription found
+        console.log('❌ [WalletService] No subscription found for user');
         return {
           isPremium: false,
           planId: null,
           endTime: null,
         };
       }
+    } catch (error: any) {
+      console.error('❌ [WalletService] Error checking premium status:', {
+        error: error.message,
+        stack: error.stack,
+        response: error.response?.data
+      });
+      return {
+        isPremium: false,
+        planId: null,
+        endTime: null,
+      };
     }
   }
 }

@@ -32,26 +32,49 @@ const PremiumUserScreen = () => {
   const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
+    console.log('🏠 [PremiumUserScreen] Component mounted for user:', user?.id);
     fetchSubscriptionStatus();
-  }, []);
+  }, [user?.id]);
 
   const fetchSubscriptionStatus = async () => {
+    console.log('🚀 [PremiumUserScreen] Fetching subscription status for user:', user?.id);
+    
     if (!user?.id) {
-      console.error('User ID not available');
+      console.error('❌ [PremiumUserScreen] User ID not available');
       return;
     }
 
     try {
       setLoading(true);
+      console.log('📡 [PremiumUserScreen] Making API call to getSubscriptionStatus...');
+      
       const response = await ApiService.getSubscriptionStatus(user.id);
+      console.log('📥 [PremiumUserScreen] API Response:', {
+        status: response.status,
+        hasData: !!response.data,
+        data: response.data,
+        message: response.message
+      });
+      
       if (response.status && response.data) {
+        console.log('✅ [PremiumUserScreen] Setting subscription data:', {
+          planName: response.data.plan_name,
+          amount: response.data.amount,
+          status: response.data.status,
+          isActive: response.data.is_active
+        });
         setSubscriptionData(response.data);
       } else {
         // No subscription found - this is normal for new users
+        console.log('ℹ️ [PremiumUserScreen] No subscription found - setting data to null');
         setSubscriptionData(null);
       }
     } catch (error: any) {
-      console.error('Error fetching subscription status:', error);
+      console.error('❌ [PremiumUserScreen] Error fetching subscription status:', {
+        error: error.message,
+        stack: error.stack,
+        response: error.response?.data
+      });
       Alert.alert(
         'Error',
         'Unable to load subscription details. Please try again later.',
@@ -60,10 +83,13 @@ const PremiumUserScreen = () => {
       setSubscriptionData(null);
     } finally {
       setLoading(false);
+      console.log('🏁 [PremiumUserScreen] Fetch subscription status completed');
     }
   };
 
   const handleCancelSubscription = async () => {
+    console.log('🔄 [PremiumUserScreen] Cancel subscription dialog opened');
+    
     Alert.alert(
       'Cancel Subscription',
       'Are you sure you want to cancel your premium subscription? You will lose access to premium features at the end of your current billing cycle.',
@@ -73,24 +99,43 @@ const PremiumUserScreen = () => {
           text: 'Cancel Subscription',
           style: 'destructive',
           onPress: async () => {
+            console.log('🚀 [PremiumUserScreen] User confirmed subscription cancellation');
+            
             try {
               if (!user?.id) {
+                console.error('❌ [PremiumUserScreen] User ID not available for cancellation');
                 Alert.alert('Error', 'User ID not available');
                 return;
               }
               
+              console.log('📡 [PremiumUserScreen] Making API call to cancelSubscription...');
               setCancelling(true);
+              
               const response = await ApiService.cancelSubscription(user.id);
+              console.log('📥 [PremiumUserScreen] Cancel subscription API response:', {
+                status: response.status,
+                message: response.message,
+                data: response.data
+              });
+              
               if (response.status) {
+                console.log('✅ [PremiumUserScreen] Subscription cancelled successfully');
                 Alert.alert('Success', response.message);
                 fetchSubscriptionStatus(); // Refresh data
               } else {
+                console.log('❌ [PremiumUserScreen] Failed to cancel subscription:', response.message);
                 Alert.alert('Error', response.message || 'Failed to cancel subscription');
               }
-            } catch (error) {
+            } catch (error: any) {
+              console.error('❌ [PremiumUserScreen] Error cancelling subscription:', {
+                error: error.message,
+                stack: error.stack,
+                response: error.response?.data
+              });
               Alert.alert('Error', 'An error occurred while cancelling subscription');
             } finally {
               setCancelling(false);
+              console.log('🏁 [PremiumUserScreen] Cancel subscription process completed');
             }
           }
         }
@@ -99,6 +144,7 @@ const PremiumUserScreen = () => {
   };
 
   const handleUpgradeSubscription = () => {
+    console.log('🚀 [PremiumUserScreen] User clicked upgrade subscription, navigating to SubscriptionScreen');
     navigation.navigate('SubscriptionScreen');
   };
 

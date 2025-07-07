@@ -109,8 +109,16 @@ const Header: React.FC<HeaderProps> = ({
   const sizes = useMemo(() => getResponsiveSizes(screenWidth), [screenWidth]);
   
   // Memoize navigation functions
-  const navigateToWallet = useCallback(() => navigation.navigate('Wallet' as never), [navigation]);
-  const navigateToPremium = useCallback(() => navigation.navigate('SubscriptionScreen' as never), [navigation]);
+  const navigateToWallet = useCallback(() => {
+    console.log('🚀 [Header] User clicked wallet icon, navigating to Wallet');
+    navigation.navigate('Wallet' as never);
+  }, [navigation]);
+  
+  const navigateToPremium = useCallback(() => {
+    console.log('🚀 [Header] User clicked premium toggle, navigating to PremiumUser');
+    console.log('📊 [Header] Current premium status:', { isPremium, balance });
+    navigation.navigate('PremiumUser' as never);
+  }, [navigation, isPremium, balance]);
 
   // Memoize search handlers
   const handleSearchIconPress = useCallback(() => {

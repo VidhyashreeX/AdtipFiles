@@ -40,17 +40,40 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({children}) => {
   const {user} = useAuth();
 
   const refreshBalance = useCallback(async () => {
+    console.log('🔄 [WalletContext] Refreshing wallet balance and premium status for user:', user?.id);
+    
     try {
       if (!user || !user.id) {
+        console.log('❌ [WalletContext] No user or user ID available');
         return;
       }
+      
+      console.log('📡 [WalletContext] Fetching wallet balance...');
       const walletBalance = await WalletService.getWalletBalance(user.id);
+      console.log('💰 [WalletContext] Wallet balance received:', walletBalance);
+      
+      console.log('📡 [WalletContext] Fetching premium status...');
       const premiumStatus = await WalletService.checkPremiumStatus(user.id);
+      console.log('👑 [WalletContext] Premium status received:', premiumStatus);
+      
       // Only update if changed
-      setBalance(prev => (prev !== walletBalance ? walletBalance : prev));
-      setIsPremium(prev => (prev !== premiumStatus.isPremium ? premiumStatus.isPremium : prev));
+      setBalance(prev => {
+        const changed = prev !== walletBalance;
+        if (changed) {
+          console.log('🔄 [WalletContext] Updating balance from', prev, 'to', walletBalance);
+        }
+        return changed ? walletBalance : prev;
+      });
+      
+      setIsPremium(prev => {
+        const changed = prev !== premiumStatus.isPremium;
+        if (changed) {
+          console.log('🔄 [WalletContext] Updating premium status from', prev, 'to', premiumStatus.isPremium);
+        }
+        return changed ? premiumStatus.isPremium : prev;
+      });
     } catch (error) {
-      console.error('Error fetching wallet balance in Context:', error);
+      console.error('❌ [WalletContext] Error fetching wallet balance in Context:', error);
     }
   }, [user]);
 

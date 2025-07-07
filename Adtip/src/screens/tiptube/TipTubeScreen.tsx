@@ -28,6 +28,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataContext } from '../../providers/DataProvider';
+import { useContentCreatorPremium } from '../../contexts/ContentCreatorPremiumContext';
 import { useVideos, useSearchVideos, usePrefetchData } from '../../hooks/useQueries';
 import { useNetInfo } from '@react-native-community/netinfo';
 import Header from '../../components/common/Header';
@@ -184,13 +185,13 @@ const TipTubeScreen = () => {
   const [showChannelVideos, setShowChannelVideos] = useState(false);
   const [showPlanModal, setShowPlanModal] = useState(false);
 
-  // Content Creator Plan State
-  const [creatorPlans, setCreatorPlans] = useState<any[]>([]);
-  const [selectedCreatorPlan, setSelectedCreatorPlan] = useState<any>(null);
-  const [creatorPlanStatus, setCreatorPlanStatus] = useState<any>(null);
-  const [showCreatorPremium, setShowCreatorPremium] = useState(false);
-  const [creatorPlanLoading, setCreatorPlanLoading] = useState(false);
-  const [showCreatorPlanModal, setShowCreatorPlanModal] = useState(false);
+  // Content Creator Premium State - Using shared context
+  const { 
+    isContentCreatorPremium, 
+    contentCreatorPremiumData, 
+    refreshContentCreatorPremiumStatus,
+    isLoading: contentCreatorPremiumLoading 
+  } = useContentCreatorPremium();
 
   // Refs
   const flatListRef = useRef<FlatList>(null);
@@ -626,79 +627,14 @@ const TipTubeScreen = () => {
     }
   }, [selectedVideoId, openPlayer, videos]);
 
-  // Fetch plans and user plan status
-  useEffect(() => {
-    const fetchPlans = async () => {
-      setCreatorPlanLoading(true);
-      try {
-        const res = await ApiService.get('/content-creator-plans');
-        if (res.status) setCreatorPlans(res.data);
-      } catch (e) {}
-      setCreatorPlanLoading(false);
-    };
-    const fetchStatus = async () => {
-      try {
-        const res = await ApiService.get(`/content-creator/plan-status/${user?.id}`);
-        if (res.status) setCreatorPlanStatus(res.plan);
-        else setCreatorPlanStatus(null);
-      } catch (e) {}
-    };
-    fetchPlans();
-    fetchStatus();
-  }, [user?.id]);
-
-  const handleCreatorPayment = async () => {
-    if (!selectedCreatorPlan) return Alert.alert('Select a plan');
-    setCreatorPlanLoading(true);
-    try {
-      // Fetch Razorpay key from backend
-      const keyRes = await ApiService.getRazorpayDetails();
-      const razorpayKey = keyRes.api_key;
-      const res = await ApiService.post('/content-creator/subscribe', { plan_id: selectedCreatorPlan.id });
-      if (res.status && res.order) {
-        const order = res.order;
-        const options = {
-          description: selectedCreatorPlan.description,
-          image: '',
-          currency: order.currency,
-          key: razorpayKey,
-          amount: order.amount,
-          name: 'Content Creator Plan',
-          order_id: order.id,
-          prefill: {
-            email: user?.emailId || '',
-            contact: '',
-            name: user?.name || '',
-          },
-          theme: { color: '#00C853' },
-        };
-        RazorpayCheckout.open(options)
-          .then(async (paymentData: any) => {
-            await ApiService.post('/content-creator/payment-callback', paymentData);
-            const statusRes = await ApiService.get(`/content-creator/plan-status/${user?.id}`);
-            if (statusRes.status) setCreatorPlanStatus(statusRes.plan);
-            setShowCreatorPlanModal(false);
-            Alert.alert('Success', 'Plan activated!');
-          })
-          .catch((err: any) => {
-            Alert.alert('Payment Failed', err?.description || 'Try again');
-          });
-      } else {
-        Alert.alert('Error', res.message || 'Could not create order');
-      }
-    } catch (e) {
-      Alert.alert('Error', 'Payment failed');
-    }
-    setCreatorPlanLoading(false);
-  };
-
-  // Remove modal and plan UI from TipTubeScreen
-  // When toggling to premium, navigate to ContentCreatorSubscriptionScreen
-  const handleTogglePremium = (value: boolean) => {
-    setShowCreatorPremium(value);
-    if (value) {
-      navigation.navigate('ContentCreatorSubscriptionScreen');
-    }
+  // Content Creator Premium Toggle Handler
+  const handleTogglePremium = () => {
+    console.log('🚀 [TipTubeScreen] User clicked content creator premium toggle');
+    console.log('📊 [TipTubeScreen] Current content creator premium status:', { 
+      isContentCreatorPremium, 
+      hasData: !!contentCreatorPremiumData 
+    });
+    navigation.navigate('ContentCreatorPremium');
   };
 
   // Add state for live search query (separate from committed searchQuery)
@@ -816,7 +752,7 @@ const TipTubeScreen = () => {
                 <CirclePlay size={20} color={colors.text.secondary} />
               </TouchableOpacity>
               {/* Content Creator Plan Toggle */}
-              <ContentCreatorPlanToggle onPress={() => handleTogglePremium(true)} />
+              <ContentCreatorPlanToggle onPress={handleTogglePremium} />
               {/* Analytics Icon */}
               <TouchableOpacity
                 onPress={handleAnalytics}

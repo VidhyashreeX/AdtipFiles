@@ -19,6 +19,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation, NavigationProp, useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useContentCreatorPremium } from '../../contexts/ContentCreatorPremiumContext';
 import { launchImageLibrary } from 'react-native-image-picker';
 import ApiService from '../../services/ApiService';
 import { 
@@ -42,6 +43,7 @@ type RootStackParamList = {
   Analytics: { channelId: string };
   VideoPreview: { postId: string };
   EditChannel: { channelId: string };
+  ContentCreatorPremium: undefined;
 };
 
 type NavigationPropType = NavigationProp<RootStackParamList>;
@@ -78,9 +80,38 @@ const MyChannelScreen: React.FC = () => {
   const [isVideoCallEnabled, setIsVideoCallEnabled] = useState(false);
   const [isChatEnabled, setIsChatEnabled] = useState(false);
 
+  // Content Creator Premium State - Using shared context
+  const { 
+    isContentCreatorPremium, 
+    contentCreatorPremiumData, 
+    refreshContentCreatorPremiumStatus,
+    isLoading: contentCreatorPremiumLoading 
+  } = useContentCreatorPremium();
+
+  // Log when component mounts
+  useEffect(() => {
+    console.log('🏠 [MyChannelScreen] Component mounted for user:', user?.id);
+  }, [user?.id]);
+
+  // Log when content creator premium status changes
+  useEffect(() => {
+    console.log('🔄 [MyChannelScreen] Content creator premium status changed:', {
+      isContentCreatorPremium,
+      hasData: !!contentCreatorPremiumData,
+      data: contentCreatorPremiumData ? {
+        planName: contentCreatorPremiumData.plan_name,
+        amount: contentCreatorPremiumData.amount,
+        status: contentCreatorPremiumData.status
+      } : null
+    });
+  }, [isContentCreatorPremium, contentCreatorPremiumData]);
+
   // Fetch channel data using ApiService
   const fetchChannelData = useCallback(async () => {
+    console.log('🚀 [MyChannelScreen] Fetching channel data for user:', user?.id);
+    
     if (!user?.id) {
+      console.error('❌ [MyChannelScreen] User not authenticated');
       setError('User not authenticated');
       setIsLoading(false);
       return;
@@ -88,7 +119,13 @@ const MyChannelScreen: React.FC = () => {
 
     try {
       setError('');
+      console.log('📡 [MyChannelScreen] Making API call to getChannelByUserId...');
       const response = await ApiService.getChannelByUserId(Number(user.id));
+      console.log('📥 [MyChannelScreen] Channel data API response:', {
+        status: response.status,
+        hasData: !!response.data,
+        dataLength: response.data?.length
+      });
       
       if (response.status === 200 && response.data && response.data.length > 0) {
         const channelData = response.data[0];
@@ -219,9 +256,15 @@ const MyChannelScreen: React.FC = () => {
 
   // Toggle call settings
   const toggleCallSetting = async (settingType: 'call' | 'videoCall' | 'chat', value: boolean) => {
-    if (!channel) return;
+    console.log('🔄 [MyChannelScreen] Toggling call setting:', { settingType, value, channelId: channel?.channelId });
+    
+    if (!channel) {
+      console.error('❌ [MyChannelScreen] No channel available for toggle');
+      return;
+    }
 
     try {
+      console.log('📡 [MyChannelScreen] Making API call to updateChannel...');
       const updateData: UpdateChannelRequest = {
         id: Number(channel.channelId),
         channelName: channel.channelName,
@@ -230,7 +273,13 @@ const MyChannelScreen: React.FC = () => {
       };
 
       const response = await ApiService.updateChannel(updateData);
+      console.log('📥 [MyChannelScreen] Update channel API response:', {
+        status: response.status,
+        data: response.data
+      });
+      
       if (response.status === 200) {
+        console.log('✅ [MyChannelScreen] Channel settings updated successfully');
         setChannel(prev => prev ? { ...prev, isCallEnabled: value } : null);
         
         // Update local state
@@ -245,9 +294,15 @@ const MyChannelScreen: React.FC = () => {
             setIsChatEnabled(value);
             break;
         }
+      } else {
+        console.log('❌ [MyChannelScreen] Failed to update channel settings');
       }
-    } catch (err) {
-      console.error('Error updating call settings:', err);
+    } catch (err: any) {
+      console.error('❌ [MyChannelScreen] Error updating call settings:', {
+        error: err.message,
+        stack: err.stack,
+        response: err.response?.data
+      });
       Alert.alert('Error', 'Failed to update settings');
     }
   };
@@ -404,6 +459,48 @@ const MyChannelScreen: React.FC = () => {
           />
         </View>
       </View>
+
+      {/* Content Creator Premium Section */}
+      <View style={styles.callSettings}>
+        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Content Creator Premium</Text>
+        
+        <View style={styles.settingItem}>
+          <View>
+            <Text style={[styles.settingLabel, { color: colors.text.primary }]}>
+              {isContentCreatorPremium ? 'Premium Active' : 'Upgrade to Premium'}
+            </Text>
+            <Text style={[styles.settingDescription, { color: colors.text.secondary }]}>
+              {isContentCreatorPremium 
+                ? `Current plan: ${contentCreatorPremiumData?.plan_name || 'Premium Plan'}`
+                : 'Get access to premium content creation features'
+              }
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.premiumToggle,
+              { 
+                backgroundColor: isContentCreatorPremium ? '#10B981' : '#EF4444',
+                opacity: contentCreatorPremiumLoading ? 0.6 : 1
+              }
+            ]}
+            onPress={() => {
+              console.log('🚀 [MyChannelScreen] User clicked content creator premium toggle');
+              console.log('📊 [MyChannelScreen] Current content creator premium status:', { 
+                isContentCreatorPremium, 
+                hasData: !!contentCreatorPremiumData 
+              });
+              navigation.navigate('ContentCreatorPremium');
+            }}
+            disabled={contentCreatorPremiumLoading}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.premiumToggleText}>
+              {contentCreatorPremiumLoading ? '...' : (isContentCreatorPremium ? 'Active' : 'Inactive')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
   );
 
@@ -532,9 +629,35 @@ const MyChannelScreen: React.FC = () => {
             <Icon name="arrow-left" size={24} color={colors.text.primary} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text.primary }]}>My Channel</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('ChannelSettings')}>
-            <Settings size={24} color={colors.text.primary} />
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            {/* Content Creator Premium Toggle */}
+            <TouchableOpacity
+              style={[
+                styles.headerPremiumToggle,
+                { 
+                  backgroundColor: isContentCreatorPremium ? '#10B981' : '#EF4444',
+                  opacity: contentCreatorPremiumLoading ? 0.6 : 1
+                }
+              ]}
+              onPress={() => {
+                console.log('🚀 [MyChannelScreen] User clicked content creator premium toggle from header');
+                console.log('📊 [MyChannelScreen] Current content creator premium status:', { 
+                  isContentCreatorPremium, 
+                  hasData: !!contentCreatorPremiumData 
+                });
+                navigation.navigate('ContentCreatorPremium');
+              }}
+              disabled={contentCreatorPremiumLoading}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.headerPremiumToggleText}>
+                {contentCreatorPremiumLoading ? '...' : (isContentCreatorPremium ? 'Premium' : 'Basic')}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('ChannelSettings')}>
+              <Settings size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Cover Image */}
@@ -643,6 +766,23 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerPremiumToggle: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  headerPremiumToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   coverImage: {
     width: '100%',
@@ -863,6 +1003,18 @@ const styles = StyleSheet.create({
   settingDescription: {
     fontSize: 14,
     marginTop: 4,
+  },
+  premiumToggle: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  premiumToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
 

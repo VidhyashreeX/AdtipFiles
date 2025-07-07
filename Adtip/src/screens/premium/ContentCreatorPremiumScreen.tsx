@@ -29,33 +29,72 @@ const ContentCreatorPremiumScreen = () => {
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
 
+  // Log when subscription data changes
   useEffect(() => {
+    console.log('🔄 [ContentCreatorPremiumScreen] Subscription data changed:', {
+      hasData: !!subscriptionData,
+      data: subscriptionData ? {
+        planName: subscriptionData.plan_name,
+        amount: subscriptionData.amount,
+        status: subscriptionData.status,
+        isActive: subscriptionData.is_active
+      } : null
+    });
+  }, [subscriptionData]);
+
+  useEffect(() => {
+    console.log('🏠 [ContentCreatorPremiumScreen] Component mounted for user:', user?.id);
     fetchSubscriptionStatus();
-  }, []);
+  }, [user?.id]);
 
   const fetchSubscriptionStatus = async () => {
+    console.log('🚀 [ContentCreatorPremiumScreen] Fetching content creator premium status for user:', user?.id);
+    
     if (!user?.id) {
-      console.error('User ID not available');
+      console.error('❌ [ContentCreatorPremiumScreen] User ID not available');
       return;
     }
     try {
       setLoading(true);
+      console.log('📡 [ContentCreatorPremiumScreen] Making API call to getContentPremiumStatus...');
+      
       const response = await ApiService.getContentPremiumStatus(user.id);
+      console.log('📥 [ContentCreatorPremiumScreen] API Response:', {
+        status: response.status,
+        hasData: !!response.data,
+        data: response.data,
+        message: response.message
+      });
+      
       if (response.status && response.data) {
+        console.log('✅ [ContentCreatorPremiumScreen] Setting subscription data:', {
+          planName: response.data.plan_name,
+          amount: response.data.amount,
+          status: response.data.status,
+          isActive: response.data.is_active
+        });
         setSubscriptionData(response.data);
       } else {
+        console.log('ℹ️ [ContentCreatorPremiumScreen] No subscription found - setting data to null');
         setSubscriptionData(null);
       }
     } catch (error: any) {
-      console.error('Error fetching content creator premium status:', error);
+      console.error('❌ [ContentCreatorPremiumScreen] Error fetching content creator premium status:', {
+        error: error.message,
+        stack: error.stack,
+        response: error.response?.data
+      });
       Alert.alert('Error', 'Unable to load subscription details. Please try again later.', [{ text: 'OK' }]);
       setSubscriptionData(null);
     } finally {
       setLoading(false);
+      console.log('🏁 [ContentCreatorPremiumScreen] Fetch subscription status completed');
     }
   };
 
   const handleCancelSubscription = async () => {
+    console.log('🔄 [ContentCreatorPremiumScreen] Cancel subscription dialog opened');
+    
     Alert.alert(
       'Cancel Subscription',
       'Are you sure you want to cancel your content creator premium subscription? You will lose access to premium features at the end of your current billing cycle.',
@@ -65,23 +104,43 @@ const ContentCreatorPremiumScreen = () => {
           text: 'Cancel Subscription',
           style: 'destructive',
           onPress: async () => {
+            console.log('🚀 [ContentCreatorPremiumScreen] User confirmed content creator subscription cancellation');
+            
             try {
               if (!user?.id) {
+                console.error('❌ [ContentCreatorPremiumScreen] User ID not available for cancellation');
                 Alert.alert('Error', 'User ID not available');
                 return;
               }
+              
+              console.log('📡 [ContentCreatorPremiumScreen] Making API call to cancelContentPremiumSubscription...');
               setCancelling(true);
+              
               const response = await ApiService.cancelContentPremiumSubscription(user.id);
+              console.log('📥 [ContentCreatorPremiumScreen] Cancel subscription API response:', {
+                status: response.status,
+                message: response.message,
+                data: response.data
+              });
+              
               if (response.status) {
+                console.log('✅ [ContentCreatorPremiumScreen] Content creator subscription cancelled successfully');
                 Alert.alert('Success', response.message);
                 fetchSubscriptionStatus();
               } else {
+                console.log('❌ [ContentCreatorPremiumScreen] Failed to cancel content creator subscription:', response.message);
                 Alert.alert('Error', response.message || 'Failed to cancel subscription');
               }
-            } catch (error) {
+            } catch (error: any) {
+              console.error('❌ [ContentCreatorPremiumScreen] Error cancelling content creator subscription:', {
+                error: error.message,
+                stack: error.stack,
+                response: error.response?.data
+              });
               Alert.alert('Error', 'An error occurred while cancelling subscription');
             } finally {
               setCancelling(false);
+              console.log('🏁 [ContentCreatorPremiumScreen] Cancel subscription process completed');
             }
           }
         }
@@ -90,6 +149,7 @@ const ContentCreatorPremiumScreen = () => {
   };
 
   const handleUpgradeSubscription = () => {
+    console.log('🚀 [ContentCreatorPremiumScreen] User clicked upgrade content creator subscription, navigating to ContentCreatorSubscriptionScreen');
     navigation.navigate('ContentCreatorSubscriptionScreen');
   };
 

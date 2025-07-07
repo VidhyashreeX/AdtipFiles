@@ -40,6 +40,7 @@ import { SidebarProvider } from './src/contexts/SidebarContext';
 import { VideoSDKProvider } from './src/contexts/VideoSDKContext';
 import { useTabNavigator, TabNavigatorProvider } from './src/contexts/TabNavigatorContext';
 import { CallProvider, useCall, ActiveCall } from './src/contexts/CallProvider';
+import { ContentCreatorPremiumProvider } from './src/contexts/ContentCreatorPremiumContext';
 import { DataProvider } from './src/providers/DataProvider';
 import { EnhancedQueryProvider } from './src/providers/QueryProvider';
 
@@ -417,20 +418,22 @@ function App(): React.JSX.Element {
           <AuthProvider>
             <WalletProvider>
               <CallProvider>
-                <EnhancedQueryProvider>
-                  <DataProvider>
-                    <ShortsProvider>
-                      <TabNavigatorProvider>
-                        <SidebarProvider>
-                          <GestureHandlerRootView style={{ flex: 1 }}>
-                            <AppNavigator />
-                            {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
-                          </GestureHandlerRootView>
-                        </SidebarProvider>
-                      </TabNavigatorProvider>
-                    </ShortsProvider>
-                  </DataProvider>
-                </EnhancedQueryProvider>
+                <ContentCreatorPremiumProvider>
+                  <EnhancedQueryProvider>
+                    <DataProvider>
+                      <ShortsProvider>
+                        <TabNavigatorProvider>
+                          <SidebarProvider>
+                            <GestureHandlerRootView style={{ flex: 1 }}>
+                              <AppNavigator />
+                              {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
+                            </GestureHandlerRootView>
+                          </SidebarProvider>
+                        </TabNavigatorProvider>
+                      </ShortsProvider>
+                    </DataProvider>
+                  </EnhancedQueryProvider>
+                </ContentCreatorPremiumProvider>
               </CallProvider>
             </WalletProvider>
           </AuthProvider>

@@ -33,7 +33,7 @@ import {useDataContext} from '../../providers/DataProvider';
 import ApiService from '../../services/ApiService';
 import {API_BASE_URL} from '../../constants/api';
 import {HOME_ENDPOINTS} from '../../constants/apiEndpoints';
-import { usePosts, useLikeMutation, useFollowMutation, usePrefetchData, usePremiumStatus } from '../../hooks/useQueries';
+import { usePosts, useLikeMutation, useFollowMutation, usePrefetchData, useSubscriptionStatus } from '../../hooks/useQueries';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
 import PubScaleService from '../../services/PubScaleService';
@@ -285,6 +285,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const [isPremium, setIsPremium] = useState<boolean>(false);
   const [premiumData, setPremiumData] = useState<any>(null);
 
+  // Log when HomeScreen mounts
+  useEffect(() => {
+    console.log('🏠 [HomeScreen] Component mounted with user:', user?.id);
+  }, [user?.id]);
+
   // Banner state
   const [banners, setBanners] = useState<any[]>([]);
   const [bannersLoading, setBannersLoading] = useState<boolean>(true);
@@ -303,25 +308,58 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     user?.id
   );
 
-  // Use TanStack Query for premium status
+  // Use TanStack Query for subscription status
   const { 
-    data: premiumResponse, 
-    isLoading: premiumLoading, 
-    error: premiumError 
-  } = usePremiumStatus(user?.id || 0);
+    data: subscriptionResponse, 
+    isLoading: subscriptionLoading, 
+    error: subscriptionError 
+  } = useSubscriptionStatus(user?.id || 0);
+
+  // Log subscription API calls and responses
+  useEffect(() => {
+    console.log('🔍 [HomeScreen] Subscription API Response:', {
+      userId: user?.id,
+      response: subscriptionResponse,
+      isLoading: subscriptionLoading,
+      error: subscriptionError
+    });
+  }, [subscriptionResponse, subscriptionLoading, subscriptionError, user?.id]);
 
   // Update premium state based on query result
   useEffect(() => {
-    if (premiumResponse) {
-      // Check if premium is not expired
-      const isPremiumActive = !premiumResponse.is_premium_expired;
+    console.log('🔄 [HomeScreen] Processing subscription response:', subscriptionResponse);
+    
+    if (subscriptionResponse && subscriptionResponse.status && subscriptionResponse.data) {
+      // User has an active subscription
+      const isPremiumActive = subscriptionResponse.data.is_active === true;
+      console.log('✅ [HomeScreen] User has active premium:', {
+        isPremiumActive,
+        planName: subscriptionResponse.data.plan_name,
+        amount: subscriptionResponse.data.amount,
+        billingCycle: subscriptionResponse.data.billing_cycle
+      });
       setIsPremium(isPremiumActive);
-      setPremiumData(isPremiumActive ? premiumResponse : null);
+      setPremiumData(isPremiumActive ? subscriptionResponse.data : null);
     } else {
+      // No subscription found or inactive
+      console.log('❌ [HomeScreen] No active subscription found');
       setIsPremium(false);
       setPremiumData(null);
     }
-  }, [premiumResponse]);
+  }, [subscriptionResponse]);
+
+  // Log when premium state changes
+  useEffect(() => {
+    console.log('🔄 [HomeScreen] Premium state changed:', {
+      isPremium,
+      hasPremiumData: !!premiumData,
+      premiumData: premiumData ? {
+        planName: premiumData.plan_name,
+        amount: premiumData.amount,
+        status: premiumData.status
+      } : null
+    });
+  }, [isPremium, premiumData]);
 
   // Fetch data whenever the screen comes into focus by invalidating and forcing refetch
   useFocusEffect(
@@ -462,7 +500,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   
   // Premium banner render function
   const renderPremiumBanner = useCallback(() => {
-    if (premiumLoading) return null;
+    if (subscriptionLoading) return null;
     if (!isPremium) {
       return (
         <View style={[styles.premiumContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}> 
@@ -497,7 +535,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
         </View>
       );
     }
-  }, [premiumLoading, isPremium, premiumData, isDarkMode, colors, navigation]);
+  }, [subscriptionLoading, isPremium, premiumData, isDarkMode, colors, navigation]);
 
   // Use categories from API or fallback to static ones
   const displayCategories = categories || staticCategories;

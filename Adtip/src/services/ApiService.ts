@@ -296,6 +296,69 @@ apiClient.interceptors.response.use(
  */
 export default class ApiService {
   /**
+   * Check network connectivity to the API server
+   */
+  static async checkNetworkConnectivity(): Promise<{
+    isConnected: boolean;
+    error?: string;
+    details?: any;
+  }> {
+    try {
+      console.log('[ApiService] Checking network connectivity to:', API_BASE_URL);
+      
+      // Test basic connectivity
+      const response = await fetch(`${API_BASE_URL}/api/ping`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      console.log('[ApiService] Network connectivity test response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      });
+      
+      return {
+        isConnected: response.ok,
+        details: {
+          status: response.status,
+          statusText: response.statusText,
+          url: `${API_BASE_URL}/api/ping`
+        }
+      };
+    } catch (error: any) {
+      console.error('[ApiService] Network connectivity check failed:', error);
+      
+      const errorMessage = error.message || 'Unknown network error';
+      const isLocalServer = API_BASE_URL.includes('192.168.0.104') || 
+                           API_BASE_URL.includes('localhost') || 
+                           API_BASE_URL.includes('127.0.0.1');
+      
+      let detailedError = errorMessage;
+      if (isLocalServer) {
+        detailedError = `Local server connectivity failed: ${errorMessage}\n` +
+                       `Server URL: ${API_BASE_URL}\n` +
+                       `Please ensure:\n` +
+                       `1. Backend server is running\n` +
+                       `2. Device and server are on same network\n` +
+                       `3. Firewall allows connections to port 7082`;
+      }
+      
+      return {
+        isConnected: false,
+        error: detailedError,
+        details: {
+          originalError: error.message,
+          url: `${API_BASE_URL}/api/ping`,
+          isLocalServer
+        }
+      };
+    }
+  }
+
+  /**
    * Get current FCM token - Firebase v22.2.1 compatible
    */
   static async getCurrentFCMToken(): Promise<string | null> {
@@ -504,10 +567,22 @@ export default class ApiService {
         return new Error(serverMessage || error.message);
       } else if (error.request) {
         console.log('Request was made but no response received (handleError):', error.request);
-        const isEmulator = error.config?.baseURL?.includes('10.0.2.2');
-        if (isEmulator) {
-          return new Error('Network error while connecting to local server. Ensure your server is running and accessible.');
+        
+        // Enhanced network error detection
+        const baseURL = error.config?.baseURL || '';
+        const isLocalServer = baseURL.includes('192.168.0.104') || baseURL.includes('localhost') || baseURL.includes('127.0.0.1');
+        const isEmulator = baseURL.includes('10.0.2.2') || baseURL.includes('10.0.3.2');
+        
+        if (isLocalServer || isEmulator) {
+          return new Error(
+            'Network error while connecting to local server. Please check:\n' +
+            '1. Backend server is running on ' + baseURL + '\n' +
+            '2. Device and server are on same network\n' +
+            '3. Firewall allows connections to port 7082\n' +
+            '4. Try using your computer\'s IP address instead of localhost'
+          );
         }
+        
         return new Error('Network error. Check your connection and try again.');
       } else {
         return new Error(`Error setting up request (handleError): ${error.message}`);
@@ -1691,7 +1766,10 @@ export default class ApiService {
   }
 
   static async cancelSubscription(user_id: number): Promise<any> {
-    return this.post('/api/subscriptions/cancel', { user_id });
+    console.log('🌐 [ApiService] Making POST request to /api/subscriptions/cancel with user_id:', user_id);
+    const response = await this.post('/api/subscriptions/cancel', { user_id });
+    console.log('📥 [ApiService] cancelSubscription response:', response);
+    return response;
   }
 
   static async cancelSubscriptionTest(user_id: number): Promise<any> {
@@ -1699,7 +1777,10 @@ export default class ApiService {
   }
 
   static async getSubscriptionStatus(userId: number): Promise<any> {
-    return this.get(`/api/subscriptions/status/${userId}`);
+    console.log('🌐 [ApiService] Making GET request to /api/subscriptions/status/' + userId);
+    const response = await this.get(`/api/subscriptions/status/${userId}`);
+    console.log('📥 [ApiService] getSubscriptionStatus response:', response);
+    return response;
   }
 
   // Content Creator Subscription apis
@@ -2066,11 +2147,17 @@ static async createSubscriptionTest(plan_id: string, user_id: number): Promise<a
   }
 
   static async cancelContentPremiumSubscription(user_id: number): Promise<any> {
-    return this.post('/api/content-premium/cancel', { user_id });
+    console.log('🌐 [ApiService] Making POST request to /api/content-premium/cancel with user_id:', user_id);
+    const response = await this.post('/api/content-premium/cancel', { user_id });
+    console.log('📥 [ApiService] cancelContentPremiumSubscription response:', response);
+    return response;
   }
 
   static async getContentPremiumStatus(userId: number): Promise<any> {
-    return this.get(`/api/content-premium/status/${userId}`);
+    console.log('🌐 [ApiService] Making GET request to /api/content-premium/status/' + userId);
+    const response = await this.get(`/api/content-premium/status/${userId}`);
+    console.log('📥 [ApiService] getContentPremiumStatus response:', response);
+    return response;
   }
 
   static async getContentPremiumRazorpayDetails(): Promise<any> {
