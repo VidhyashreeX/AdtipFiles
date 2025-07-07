@@ -1,7 +1,23 @@
 // src/tasks/CallEventTask.ts
+import './../stores/callStore';
 import { AppRegistry } from 'react-native';
 import { getCallState } from '../stores/callStore';
 import UnifiedCallService from '../services/calling/UnifiedCallService';
+
+/**
+ * Wait for Zustand call store to be ready (retry loop)
+ */
+const waitForCallStore = async (retries = 20, delayMs = 100) => {
+  for (let i = 0; i < retries; i++) {
+    // Dynamically import to avoid circular deps in some headless contexts
+    const { getCallState } = require('../stores/callStore');
+    const store = getCallState();
+    if (store) return store;
+    await new Promise(res => setTimeout(res, delayMs));
+  }
+  console.error('[CallEventTask] Zustand call store not initialized after retries!');
+  return undefined;
+};
 
 /**
  * Headless JS task for handling call events when app is in background
@@ -13,39 +29,37 @@ const CallEventTask = async (taskData: any) => {
   
   const { event, callId, callState } = taskData;
   
-  // Get the current call state from Zustand store
-  const currentCallStore = getCallState();
+  // Wait for the Zustand store to be ready
+  const currentCallStore = await waitForCallStore();
+  if (!currentCallStore) {
+    console.error('[CallEventTask] Aborting: Zustand store not ready.');
+    return;
+  }
   
   // Handle specific events by updating Zustand store
   switch (event) {
     case 'onCallStateChanged':
       console.log(`[CallEventTask] Call ${callId} state changed to: ${callState}`);
-      // Update call status in Zustand store
       currentCallStore.setCallStatus(callState);
       break;
     case 'onCallAnswered':
       console.log(`[CallEventTask] Call ${callId} was answered`);
-      // Update call status to connected
       currentCallStore.setCallStatus('connected');
       break;
     case 'onCallDeclined':
       console.log(`[CallEventTask] Call ${callId} was declined`);
-      // End the call
       currentCallStore.endCall('declined');
       break;
     case 'onCallEnded':
       console.log(`[CallEventTask] Call ${callId} was ended`);
-      // End the call
       currentCallStore.endCall('ended');
       break;
     case 'onMuteToggled':
       console.log(`[CallEventTask] Call ${callId} mute toggled`);
-      // Toggle mic in store
       currentCallStore.toggleMic();
       break;
     case 'onSpeakerToggled':
       console.log(`[CallEventTask] Call ${callId} speaker toggled`);
-      // Toggle speaker in store
       currentCallStore.toggleSpeaker();
       break;
     default:

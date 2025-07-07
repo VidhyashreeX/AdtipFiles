@@ -186,16 +186,22 @@ export const useCallStore = create<CallStore>()(
         
         // ===== COMPUTED PROPERTIES =====
         get isInCall() {
-          const status = get().callStatus || 'idle';
+          const state = get();
+          if (!state) return false; // Return a default value if state is not ready
+          const status = state.callStatus || 'idle';
           return status !== 'idle' && status !== 'ended' && status !== 'cleanup_pending';
         },
         
         get isVideoCall() {
-          return get().activeCall?.callType === 'video' || get().mediaState.isVideoCall;
+          const state = get();
+          if (!state) return false;
+          return state.activeCall?.callType === 'video' || state.mediaState.isVideoCall;
         },
         
         get canStartCall() {
-          return get().callStatus === 'idle' && get().isCallServiceInitialized;
+          const state = get();
+          if (!state) return false;
+          return state.callStatus === 'idle' && state.isCallServiceInitialized;
         },
         
         // ===== ACTIONS =====
@@ -281,8 +287,8 @@ export const useCallStore = create<CallStore>()(
             get().addCallToHistory({
               callId: currentCall.callId,
               startTime: currentCall.startTime,
-              endTime,
-              duration,
+              endTime: endTime,
+              duration: duration,
               type: currentCall.callType,
               status: 'completed',
             });
@@ -295,7 +301,7 @@ export const useCallStore = create<CallStore>()(
               activeCall: currentCall ? {
                 ...currentCall,
                 status: 'ended',
-                endTime,
+                endTime: endTime,
                 duration: currentCall.startTime ? endTime - currentCall.startTime : 0,
               } : null,
             },

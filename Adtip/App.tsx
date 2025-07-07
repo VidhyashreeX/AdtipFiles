@@ -1,5 +1,5 @@
 // App.tsx
-
+import './src/stores/callStore';
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   SafeAreaView,
