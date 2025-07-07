@@ -124,6 +124,7 @@ export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthNavigatorParamList>; 
   Main: NavigatorScreenParams<MainNavigatorParamList>;
   UserDetails: undefined;
+  InitialLoading: undefined;
   // REMOVE Meeting from the RootStack
   CameraRecording: {
     maxDuration?: number;

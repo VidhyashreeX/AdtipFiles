@@ -14,7 +14,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { useCall } from '../../contexts/CallProvider';
+import { useCallState } from '../../stores/callStore';
 import { safeAreaStyles, statusBarConfig } from '../../utils/SafeAreaUtils';
 import { navigationRef } from '../../navigation/NavigationService';
 import Sidebar from '../sidebar/Sidebar';
@@ -62,7 +62,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
 }) => {
   const { colors, isDarkMode } = useTheme();
   const { isAuthenticated, isInitialized, user } = useAuth();
-  const { activeCall } = useCall();
+  const { activeCall } = useCallState();
   const [isVisible, setIsVisible] = useState(true);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [isNavReady, setIsNavReady] = useState(false);
@@ -160,10 +160,10 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
     
     // CRITICAL FIX: Check if call is in an ending state to prevent navigation back to MeetingScreen
     const isCallEnding = activeCall.status === 'ended';
-    const isCallMissed = activeCall.status === 'missed';
-    const isCallDeclined = activeCall.status === 'declined';
+    const isCallCleanup = activeCall.status === 'cleanup_pending';
+    const isCallIdle = activeCall.status === 'idle';
     
-    if (isCallEnding || isCallMissed || isCallDeclined) {
+    if (isCallEnding || isCallCleanup || isCallIdle) {
       console.log('[UltraFastLoader] Call is ending/ended, skipping navigation to avoid redirect back to MeetingScreen. Status:', activeCall.status);
       return;
     }
@@ -172,7 +172,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
     const shouldNavigate = activeCall.status === 'connected' || 
                            activeCall.status === 'connecting' ||
                            (activeCall.status === 'ringing' && !activeCall.isInitiator) ||
-                           (activeCall.status === 'calling' && activeCall.isInitiator);
+                           (activeCall.status === 'dialing' && activeCall.isInitiator);
 
     if (shouldNavigate) {
       console.log('[UltraFastLoader] Active call detected, navigating to Meeting screen. Status:', activeCall.status);

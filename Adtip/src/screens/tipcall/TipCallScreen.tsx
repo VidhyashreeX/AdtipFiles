@@ -809,8 +809,8 @@ export default function TipCallScreen() {
     async function initiateCall() {
       // Prevent multiple rapid call attempts
       const unifiedCallService = UnifiedCallService.getInstance();
-      const currentCallState = unifiedCallService.getCallState();
-      if (currentCallState.isInCall) {
+      const currentCallStatus = unifiedCallService.getCallStatus();
+      if (currentCallStatus !== 'idle' && currentCallStatus !== 'ended') {
         Alert.alert("Call In Progress", "You are already in a call.");
         return;
       }

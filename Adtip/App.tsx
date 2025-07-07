@@ -38,7 +38,7 @@ import { ShortsProvider } from './src/contexts/ShortsContext';
 import { SidebarProvider } from './src/contexts/SidebarContext';
 import { VideoSDKProvider } from './src/contexts/VideoSDKContext';
 import { useTabNavigator, TabNavigatorProvider } from './src/contexts/TabNavigatorContext';
-import { CallProvider, useCall, ActiveCall } from './src/contexts/CallProvider';
+// CallProvider removed - using Zustand for call state management
 import { DataProvider } from './src/providers/DataProvider';
 import { EnhancedQueryProvider } from './src/providers/QueryProvider';
 
@@ -63,7 +63,6 @@ import { COLORS } from './src/constants/colors';
 
 // Import required screens
 import UserDetailsScreen from './src/screens/auth/UserDetailsScreen';
-import { appEventEmitter } from './src/events/AppEventEmitter';
 import ChatScreen from './src/screens/chat/ChatScreen';
 
 // Ultra Fast Loader for instant app initialization
@@ -108,10 +107,13 @@ const linking = {
   },
 };
 
+// Import Zustand stores and hooks
+import { useCallStore, CallData } from './src/stores/callStore';
+
 // AppNavigator with Services - Ultra Fast with Authentication-aware UltraFastLoader
 const AppNavigator = () => {
   const { isAuthenticated, isInitialized, user } = useAuth();
-  const { activeCall, startCall } = useCall();
+  const { callStatus, activeCall, startOutgoingCall } = useCallStore();
   const [firebaseReady, setFirebaseReady] = useState(false);
   const [videoSDKReady, setVideoSDKReady] = useState(false);
   const [unifiedCallServiceReady, setUnifiedCallServiceReady] = useState(false);
@@ -292,19 +294,6 @@ const AppNavigator = () => {
     }
   }, [isInitialized, isAuthenticated]);
 
-  // Essential event listeners and navigation setup
-  useEffect(() => {
-    const handleStartCall = (callData: ActiveCall) => {
-      startCall(callData);
-    };
-
-    appEventEmitter.on('CallStarted', handleStartCall);
-
-    return () => {
-      appEventEmitter.off('CallStarted', handleStartCall);
-    };
-  }, [startCall]);
-
   // Setup incoming call handling with Unified Call Service
   useEffect(() => {
     const handleIncomingCallBroadcast = async (data: any) => {
@@ -325,7 +314,7 @@ const AppNavigator = () => {
           };
           
           // Handle incoming call with Unified Call Service
-          await unifiedCallService.handleIncomingCall(callNotificationData);
+          await unifiedCallService.handleIncomingFCMCall(callNotificationData);
           
           console.log('[App] ✅ Unified Call Service incoming call handled');
         } catch (error) {
@@ -342,6 +331,62 @@ const AppNavigator = () => {
       unsubscribe();
     };
   }, [unifiedCallServiceReady]);
+
+  // Global navigation listener for call status changes
+  useEffect(() => {
+    const unsubscribe = useCallStore.subscribe((state) => {
+      const currentStatus = state.callStatus;
+      const activeCall = state.activeCall;
+      
+      // Auto-navigate to Meeting screen when call starts
+      if ((currentStatus === 'dialing' || currentStatus === 'connecting' || currentStatus === 'connected') && activeCall) {
+        console.log('[App] Auto-navigating to Meeting screen due to call status:', currentStatus);
+        
+        // Only navigate if we're not already on the Meeting screen
+        const currentRoute = getCurrentRoute();
+        if (currentRoute?.name !== 'Meeting') {
+          try {
+            navigateWithRetry('Main', {
+              screen: 'Meeting',
+              params: {
+                meetingId: activeCall.meetingId,
+                token: activeCall.token,
+                displayName: activeCall.isInitiator ? activeCall.callerName : activeCall.recipientName,
+                callType: activeCall.callType,
+                isInitiator: activeCall.isInitiator,
+                recipientName: activeCall.isInitiator ? activeCall.recipientName : activeCall.callerName,
+                callData: activeCall
+              }
+            });
+          } catch (error) {
+            console.error('[App] Error navigating to Meeting screen:', error);
+          }
+        }
+      }
+      
+      // Auto-navigate back to TipCall when call ends
+      if (currentStatus === 'ended' || currentStatus === 'idle') {
+        console.log('[App] Auto-navigating back to TipCall due to call status:', currentStatus);
+        // Only navigate back if we're currently on the Meeting screen
+        const currentRoute = getCurrentRoute();
+        if (currentRoute?.name === 'Meeting') {
+          try {
+            // Use a delay to ensure proper cleanup
+            setTimeout(() => {
+              navigateWithRetry('Main', { 
+                screen: 'TipCall', 
+                params: {} 
+              });
+            }, 500);
+          } catch (error) {
+            console.error('[App] Error navigating back to TipCall:', error);
+          }
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     // Listen for native call actions (answer/decline)
@@ -417,22 +462,20 @@ function App(): React.JSX.Element {
         <ThemeProvider>
           <AuthProvider>
             <WalletProvider>
-              <CallProvider>
-                <EnhancedQueryProvider>
-                  <DataProvider>
-                    <ShortsProvider>
-                      <TabNavigatorProvider>
-                        <SidebarProvider>
-                          <GestureHandlerRootView style={{ flex: 1 }}>
-                            <AppNavigator />
-                            {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
-                          </GestureHandlerRootView>
-                        </SidebarProvider>
-                      </TabNavigatorProvider>
-                    </ShortsProvider>
-                  </DataProvider>
-                </EnhancedQueryProvider>
-              </CallProvider>
+              <EnhancedQueryProvider>
+                <DataProvider>
+                  <ShortsProvider>
+                    <TabNavigatorProvider>
+                      <SidebarProvider>
+                        <GestureHandlerRootView style={{ flex: 1 }}>
+                          <AppNavigator />
+                          {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
+                        </GestureHandlerRootView>
+                      </SidebarProvider>
+                    </TabNavigatorProvider>
+                  </ShortsProvider>
+                </DataProvider>
+              </EnhancedQueryProvider>
             </WalletProvider>
           </AuthProvider>
         </ThemeProvider>

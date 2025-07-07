@@ -3,7 +3,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Easing } from 'react-native-reanimated';
 import { withFastLoading } from '../components/hoc/withFastLoading';
 import { MainNavigatorParamList } from '../types/navigation';
-import { appEventEmitter } from '../events/AppEventEmitter';
 // Import the navigation ref for global navigation
 import { navigationRef, navigateToMeeting } from './NavigationService';
 
@@ -294,50 +293,9 @@ const callTransitionConfig = {
  * Main application stack navigator (when user is authenticated)
  */
 const MainNavigator = () => {
-  // Remove the useNavigation hook - this was causing the issue
-  // const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
-
-  useEffect(() => {
-    const handleNavigateToMeeting = (params: any) => {
-      try {
-        console.log('[MainNavigator] Received forceNavigateToMeeting event, navigating to Meeting screen.');
-        
-        // ✅ CRITICAL FIX: Validate parameters before navigation
-        if (!params || !params.meetingId || !params.token) {
-          console.error('[MainNavigator] Invalid parameters received for forceNavigateToMeeting event:', params);
-          return;
-        }
-
-        // ✅ CRITICAL FIX: Add navigation readiness check
-        if (!navigationRef.isReady()) {
-          console.warn('[MainNavigator] Navigation not ready, retrying in 100ms');
-          setTimeout(() => handleNavigateToMeeting(params), 100);
-          return;
-        }
-
-        // Use navigateToMeeting function for proper nested navigation
-        navigateToMeeting({
-          meetingId: params.meetingId,
-          token: params.token,
-          displayName: params.displayName,
-          callType: params.callType,
-          isInitiator: params.isInitiator,
-          recipientName: params.callData?.recipientName,
-          callData: params.callData,
-        });
-      } catch (error) {
-        console.error('[MainNavigator] Error handling forceNavigateToMeeting event:', error);
-        // ✅ CRITICAL FIX: Don't let navigation errors crash the app
-      }
-    };
-
-    appEventEmitter.on('forceNavigateToMeeting', handleNavigateToMeeting);
-
-    return () => {
-      appEventEmitter.off('forceNavigateToMeeting', handleNavigateToMeeting);
-    };
-  }, []); // Remove navigation dependency since we're using navigationRef
-
+  // Note: Navigation to Meeting screen now happens via Zustand state changes
+  // in UnifiedCallService when a call is accepted or started
+  
   // Wrap all individual screens with the wallet balance HOC
   const EnhancedCreatePostScreen = withWalletBalance(CreatePostScreen);
   const EnhancedSelectCategoryScreen = withWalletBalance(SelectCategoryScreen);

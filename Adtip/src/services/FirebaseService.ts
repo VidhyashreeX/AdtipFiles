@@ -6,15 +6,14 @@ import messaging, {
 import { getApps, getApp } from '@react-native-firebase/app';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { navigationRef } from '../navigation/NavigationService';
-import { appEventEmitter } from '../events/AppEventEmitter';
 import ApiService from './ApiService';
 import UnifiedCallService from './calling/UnifiedCallService';
 
 /**
- * CIRCULAR DEPENDENCY FIX:
+ * UPDATED FOR ZUSTAND MIGRATION:
  * Removed direct import of FirebaseCallService to break circular dependency.
  * FirebaseService no longer directly depends on FirebaseCallService.
- * All call-related communication now happens through events via appEventEmitter.
+ * All call-related communication now happens through Zustand store via UnifiedCallService.
  */
 
 export interface CallNotificationData {

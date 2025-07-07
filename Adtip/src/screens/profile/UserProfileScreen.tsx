@@ -78,8 +78,8 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
 
     // Prevent multiple rapid call attempts
     const unifiedCallService = UnifiedCallService.getInstance();
-    const currentCallState = unifiedCallService.getCallState();
-    if (currentCallState.isInCall) {
+    const currentCallStatus = unifiedCallService.getCallStatus();
+    if (currentCallStatus !== 'idle' && currentCallStatus !== 'ended') {
       Alert.alert("Call In Progress", "You are already in a call.");
       return;
     }
@@ -479,7 +479,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
               <Icon name="x" size={28} color={colors.text.primary} />
             </TouchableOpacity>
             <Text style={[styles.modalTitle, { color: colors.text.primary }]}>Followers</Text>
-            <UserListModal users={followersList} currentUserId={currentUser?.id} onUserPress={handleUserPressInModal} />
+            <UserListModal users={followersList} currentUserId={currentUser?.id || 0} onUserPress={handleUserPressInModal} />
           </View>
         </View>
       </Modal>
@@ -491,7 +491,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
               <Icon name="x" size={28} color={colors.text.primary} />
             </TouchableOpacity>
             <Text style={[styles.modalTitle, { color: colors.text.primary }]}>Following</Text>
-            <UserListModal users={followingList} currentUserId={currentUser?.id} onUserPress={handleUserPressInModal} />
+            <UserListModal users={followingList} currentUserId={currentUser?.id || 0} onUserPress={handleUserPressInModal} />
           </View>
         </View>
       </Modal>

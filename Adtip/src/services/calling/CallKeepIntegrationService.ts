@@ -7,7 +7,6 @@
 
 import CallKeep from 'react-native-callkeep';
 import { Platform } from 'react-native';
-import { appEventEmitter } from '../../events/AppEventEmitter';
 import UnifiedCallService from './UnifiedCallService';
 
 export interface CallKeepConfig {

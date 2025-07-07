@@ -92,9 +92,9 @@ export function useAppOpenAd() {
       ) {
         // ✅ FIX: Check if a call is in progress before showing an ad
         const callService = UnifiedCallService.getInstance();
-        const callState = callService.getCallState();
+        const callStatus = callService.getCallStatus();
 
-        if (callState.isInCall) {
+        if (callStatus !== 'idle' && callStatus !== 'ended') {
           console.log('[AppOpenAdManager] Suppressing ad because a call is active.');
           return;
         }
@@ -107,8 +107,8 @@ export function useAppOpenAd() {
         setTimeout(() => {
           // Double-check call state again after delay
           try {
-            const updatedCallState = UnifiedCallService.getInstance().getCallState();
-            if (updatedCallState.isInCall) {
+            const updatedCallStatus = UnifiedCallService.getInstance().getCallStatus();
+            if (updatedCallStatus !== 'idle' && updatedCallStatus !== 'ended') {
               console.log('[AppOpenAdManager] Suppressing delayed ad because a call is now active.');
               return;
             }

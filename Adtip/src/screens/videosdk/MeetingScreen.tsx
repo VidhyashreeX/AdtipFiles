@@ -48,16 +48,15 @@ import { useMeeting, useParticipant } from '@videosdk.live/react-native-sdk';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MeetingProvider } from '@videosdk.live/react-native-sdk';
-import { useCall, ActiveCall } from '../../contexts/CallProvider';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useCallStore, useCallState, useMediaState, useCallActions, CallStatus as ZustandCallStatus } from '../../stores/callStore';
 import UnifiedCallService from '../../services/calling/UnifiedCallService';
-import CallMediaManager, { MediaState } from '../../services/calling/CallMediaManager';
+import CallMediaManager from '../../services/calling/CallMediaManager';
 import { 
   Mic, MicOff, Camera, CameraOff, Phone, 
   Video, VideoOff, Speaker, Users
 } from 'lucide-react-native';
 import { MainNavigatorParamList } from '../../types/navigation';
-import { appEventEmitter } from '../../events/AppEventEmitter';
 import { VideoSDKParticipantView, ParticipantView } from '../../components/videosdk';
 import CallErrorBoundary from '../../components/common/CallErrorBoundary';
 
@@ -225,13 +224,13 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     recipientName
   });
   
-  const { activeCall: currentActiveCall } = useCall(); // Rename to avoid confusion
+  const { activeCall: currentActiveCall } = useCallState(); // Get activeCall from Zustand store
   const unifiedCallService = UnifiedCallService.getInstance(); // Get instance directly
   const callMediaManager = CallMediaManager.getInstance(); // Get instance directly 
   const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
   const route = useRoute<any>(); // Type as any to resolve route.params.meetingId error
 
-  console.log('[MeetingView] 📋 Current active call from context:', {
+  console.log('[MeetingView] 📋 Current active call from Zustand store:', {
     hasActiveCall: !!currentActiveCall,
     activeCallType: currentActiveCall?.callType,
     activeCallId: currentActiveCall?.callId
@@ -287,15 +286,18 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   const [isJoining, setIsJoining] = useState(false);
   const [isInitializingService, setIsInitializingService] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
-  const [callState, setCallState] = useState<'connecting' | 'connected' | 'reconnecting' | 'ended'>('connecting');
   const [networkQuality, setNetworkQuality] = useState<'excellent' | 'good' | 'fair' | 'poor'>('excellent');
   const [isRecovering, setIsRecovering] = useState(false);
   const connectedRecentlyRef = useRef(false); // Grace period after connecting
   
-  // BULLETPROOF: Media state from centralized manager. This is the single source of truth.
-  const [mediaState, setMediaState] = useState<MediaState>(
-    callMediaManager.getMediaState()
-  );
+  // BULLETPROOF: Call state from Zustand store - single source of truth
+  const { callStatus } = useCallState(); // Get call state from Zustand store
+  
+  // BULLETPROOF: Media state from Zustand store - single source of truth
+  const mediaState = useMediaState(); // Get media state from Zustand store
+  
+  // BULLETPROOF: Call actions from Zustand store - centralized actions
+  const callActions = useCallActions(); // Get call actions from Zustand store
   
   // Destructure media state for easy access
   const { micEnabled, cameraEnabled, speakerEnabled } = mediaState;
@@ -328,7 +330,8 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
       console.log('[MeetingView] Meeting joined successfully');
       setHasJoined(true);
       setIsJoining(false);
-      setCallState('connected');
+      // ✅ Use Zustand store action for consistent state management
+      callActions.setCallStatus('connected');
       setShowControls(true);
       
       // CRITICAL FIX: Start grace period to ignore null activeCall for a short time
@@ -344,7 +347,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
       startCallDurationTimer();
       
       // Update call state in unified way
-      updateCallState('connected');
+      updateCallStatus('connected');
       
       // Ensure call notification is showing
       ensureOngoingCallNotification();
@@ -355,13 +358,14 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     onMeetingLeft: () => {
       console.log('[MeetingView] Meeting left');
       setHasJoined(false);
-      setCallState('ended');
+      // ✅ Use Zustand store action for consistent state management
+      callActions.setCallStatus('ended');
       
       // Clean up properly
       stopCallDurationTimer();
       
       // Update call state in unified way
-      updateCallState('ended');
+      updateCallStatus('ended');
       
       // Note: Navigation is handled by handleEndCall, not here
     },
@@ -379,11 +383,12 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     },
     onError: (error: any) => {
       console.error('[MeetingView] ❌ Meeting error:', error);
-      setCallState('ended');
+      // ✅ Use Zustand store action for consistent state management
+      callActions.setCallStatus('ended');
       // If the error is fatal (e.g., websocket error, join failure), end the call
       if (isFatalError(error)) {
         console.log('[MeetingView] Fatal VideoSDK error detected, ending call.');
-        UnifiedCallService.getInstance().endCall();
+        callActions.endCall();
       }
     },
   });
@@ -402,49 +407,37 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   const { webcamStream, micStream } = useParticipant(localParticipant?.id || '');
   const { webcamOn, micOn } = useParticipant(localParticipant?.id);
 
-  // ✅ CRITICAL FIX: Add listener for cleanup completion to ensure proper coordination
+  // ✅ CRITICAL FIX: Monitor cleanup state changes from Zustand store instead of appEventEmitter
   useEffect(() => {
-    const handleCleanupComplete = (event: { timestamp: number; error?: string }) => {
-      console.log('[MeetingView] Received callMediaCleanupComplete event from UnifiedCallService:', event);
-      
-      // If there was an error during cleanup, log it but don't fail the component
-      if (event.error) {
-        console.warn('[MeetingView] Media cleanup completed with error:', event.error);
-      } else {
-        console.log('[MeetingView] Media cleanup completed successfully');
+    const unsubscribe = useCallStore.subscribe((state) => {
+      // Monitor for cleanup completion via call status changes
+      if (state.callStatus === 'ended' && state.activeCall === null) {
+        console.log('[MeetingView] Media cleanup completed successfully (via Zustand)');
+        
+        // Ensure component state is properly reset for next call
+        if (isComponentMountedRef.current) {
+          setIsJoining(false);
+          setIsInitializingService(false);
+          setIsEndingCall(false);
+        }
       }
-      
-      // Ensure component state is properly reset for next call
-      if (isComponentMountedRef.current) {
-        setIsJoining(false);
-        setIsInitializingService(false);
-        setIsEndingCall(false);
-      }
-    };
+    });
 
-    appEventEmitter.on('callMediaCleanupComplete', handleCleanupComplete);
-
-    return () => {
-      appEventEmitter.off('callMediaCleanupComplete', handleCleanupComplete);
-    };
+    return unsubscribe;
   }, []);
 
-  // NEW: Add a listener for the 'leaveCurrentCall' event from the service.
+  // ✅ CRITICAL FIX: Monitor call status for leave requests via Zustand instead of appEventEmitter
   useEffect(() => {
-    const handleLeaveRequest = (event: { callId: string }) => {
-      console.log('[MeetingView] Received leaveCurrentCall event from service.');
-      if (leave && !isLeavingRef.current) {
-        console.log('[MeetingView] Executing leave() from event listener.');
+    const unsubscribe = useCallStore.subscribe((state) => {
+      // When call status changes to 'ending', we should leave the VideoSDK meeting
+      if (state.callStatus === 'ending' && leave && !isLeavingRef.current) {
+        console.log('[MeetingView] Call status changed to ending - leaving VideoSDK meeting');
         isLeavingRef.current = true;
         leave();
       }
-    };
+    });
 
-    appEventEmitter.on('leaveCurrentCall', handleLeaveRequest);
-
-    return () => {
-      appEventEmitter.off('leaveCurrentCall', handleLeaveRequest);
-    };
+    return unsubscribe;
   }, [leave]); // FIX: Add `leave` as a dependency
 
 
@@ -621,16 +614,15 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     }
   }, [currentActiveCall, isEndingCall, navigation, leave]);
   */
-  // ✅ CRITICAL FIX: Enhanced call state change listener with proper coordination
+  // ✅ CRITICAL FIX: Monitor call status changes directly from Zustand store
   useEffect(() => {
-    const handleCallStateChange = (event: { status: string; callId: string }) => {
-      // Only act if the event is for the current call
+    const unsubscribe = useCallStore.subscribe((state, prevState) => {
       const currentCallId = latchedCallDataRef.current?.meetingId;
       if (!currentCallId) return;
 
-      if (event.status === 'ended' && isComponentMountedRef.current) {
-        console.log('[MeetingView] Call ended event received from UnifiedCallService. Navigating away.');
-        setCallState('ended');
+      // Check if call status changed to 'ended'
+      if (state.callStatus === 'ended' && prevState?.callStatus !== 'ended' && isComponentMountedRef.current) {
+        console.log('[MeetingView] Call ended detected from Zustand store. Navigating away.');
         
         // ✅ CRITICAL FIX: Prevent multiple navigation attempts
         if (!isEndingCall) {
@@ -643,7 +635,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
             try {
               const currentRoute = navigation.getState()?.routes?.[navigation.getState()?.index || 0]?.name;
               if (currentRoute === 'Meeting') {
-                console.log('[MeetingView] Navigating away due to callStateChanged event.');
+                console.log('[MeetingView] Navigating away due to call status change in Zustand.');
                 if (navigation.canGoBack()) {
                   navigation.goBack();
                 } else {
@@ -668,14 +660,9 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
           }, 1500); // Increased delay to 1.5 seconds to ensure proper cleanup and prevent race conditions
         }
       }
-    };
+    });
 
-    // Listen for call state changes from UnifiedCallService
-    appEventEmitter.on('callStateChanged', handleCallStateChange);
-    
-    return () => {
-      appEventEmitter.off('callStateChanged', handleCallStateChange);
-    };
+    return unsubscribe;
   }, [navigation]); // Removed isEndingCall dependency to prevent blocking
 
   // New helper functions for call management
@@ -716,18 +703,18 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     }
 
     setIsEndingCall(true); // Set state immediately to prevent re-entry
-    console.log('[MeetingView] setIsEndingCall(true) called, calling UnifiedCallService.endCall()');
+    console.log('[MeetingView] setIsEndingCall(true) called, calling callActions.endCall()');
 
     try {
-      // ✅ CRITICAL FIX: Call UnifiedCallService.endCall() and let it handle everything
-      await UnifiedCallService.getInstance().endCall();
-      console.log('[MeetingView] UnifiedCallService.endCall() resolved');
-      // Navigation is now handled by the `callStateChanged` event listener with proper timing
+      // ✅ CRITICAL FIX: Use Zustand store action instead of direct service call
+      await callActions.endCall();
+      console.log('[MeetingView] callActions.endCall() resolved');
+      // Navigation is now handled by the `callStatusChanged` event listener with proper timing
     } catch (error) {
-      console.error('[MeetingView] Error during handleEndCall -> unifiedCallService.endCall():', error);
+      console.error('[MeetingView] Error during handleEndCall -> callActions.endCall():', error);
       setIsEndingCall(false); 
     }
-  }, [isEndingCall]);
+  }, [isEndingCall, callActions]);
 
   // Helper to determine if error is fatal
   const isFatalError = useCallback((error: any) => {
@@ -748,19 +735,14 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     return error?.code && networkErrorCodes.includes(error.code);
   }, []);
 
-  const updateCallState = useCallback((status: 'connecting' | 'connected' | 'reconnecting' | 'ended') => {
+  const updateCallStatus = useCallback((status: 'connecting' | 'connected' | 'ended') => {
     try {
-      const unifiedCallService = UnifiedCallService.getInstance();
-      const currentCall = unifiedCallService.getCurrentCall();
-      if (currentCall) {
-        // Map reconnecting to connecting for the call manager
-        const mappedStatus = status === 'reconnecting' ? 'connecting' : status;
-        unifiedCallService.updateCallStatus(mappedStatus);
-      }
+      // ✅ Use Zustand store action for consistent state management
+      callActions.setCallStatus(status);
     } catch (error) {
       console.error('[MeetingView] Error updating call state:', error);
     }
-  }, []);
+  }, [callActions]);
 
   const handleErrorRecovery = useCallback((error: any, isFatal: boolean) => {
     const errorKey = error?.code || error?.message || 'unknown';
@@ -778,9 +760,10 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
       errorRecoveryRef.current[errorKey] = currentAttempts + 1;
       console.log(`[MeetingView] Handling recoverable error (attempt ${currentAttempts + 1}/3):`, error?.message);
       
-      // If it's a network error, show reconnecting UI
+      // If it's a network error, show connecting UI
       if (isNetworkError(error)) {
-        setCallState('reconnecting');
+        // ✅ Use Zustand store action for consistent state management
+        callActions.setCallStatus('connecting');
         setIsRecovering(true);
         
         // Auto-clear recovery state after 10 seconds
@@ -799,7 +782,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     if (participants.size <= 1) {
       // Set a timer that will prompt to end call if still alone
       const aloneTimer = setTimeout(() => {
-        if (participants.size <= 1 && callState === 'connected' && isComponentMountedRef.current) {
+        if (participants.size <= 1 && callStatus === 'connected' && isComponentMountedRef.current) {
           Alert.alert(
             'Still in call',
             'You appear to be alone in this call. Would you like to end it?',
@@ -813,7 +796,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
       
       return () => clearTimeout(aloneTimer);
     }
-  }, [participants, callState, handleEndCall]);
+  }, [participants, callStatus, handleEndCall]);
 
   const ensureOngoingCallNotification = useCallback(() => {
     try {
@@ -837,7 +820,8 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
       
       if (timeSinceLastHeartbeat > 10000) {
         setNetworkQuality('poor');
-        setCallState('reconnecting');
+        // ✅ Use Zustand store action for consistent state management
+        callActions.setCallStatus('connecting');
       } else if (timeSinceLastHeartbeat > 5000) {
         setNetworkQuality('fair');
       } else if (timeSinceLastHeartbeat > 2000) {
@@ -880,25 +864,23 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   }, [ensureOngoingCallNotification]);
   
 
-  // Toggle mic - USE CENTRALIZED MEDIA MANAGER
+  // Toggle mic - USE ZUSTAND STORE ACTIONS
   const handleToggleMic = useCallback(async () => {
-    // The UI action is simple: just tell the manager what to do.
-    await callMediaManager.toggleMic();
-  }, [callMediaManager]);
+    // ✅ Use Zustand store action for consistent state management
+    callActions.toggleMic();
+  }, [callActions]);
 
-  // Toggle camera - SIMPLIFIED & RELIABLE IMPLEMENTATION
+  // Toggle camera - USE ZUSTAND STORE ACTIONS
   const handleToggleCamera = useCallback(async () => {
-    // The UI action is simple: just tell the manager what to do.
-    // The manager is responsible for interacting with the SDK.
-    // The UI will update automatically when the SDK state changes,
-    // which is detected by the `syncStateFromSDK` useEffect hook.
-    await callMediaManager.toggleWebcam();
-  }, [callMediaManager]);
+    // ✅ Use Zustand store action for consistent state management
+    callActions.toggleCamera();
+  }, [callActions]);
 
-  // Toggle speaker - USE CENTRALIZED MEDIA MANAGER
+  // Toggle speaker - USE ZUSTAND STORE ACTIONS
   const handleToggleSpeaker = useCallback(async () => {
-    await callMediaManager.toggleSpeaker();
-  }, [callMediaManager]);
+    // ✅ Use Zustand store action for consistent state management
+    await callActions.toggleSpeaker();
+  }, [callActions]);
 
   // Toggle controls visibility
   const toggleControlsVisibility = useCallback(() => {
@@ -933,27 +915,15 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     // Implement more options functionality
   }, []);
 
-  // Simplified media state management - rely on centralized CallMediaManager
-  const handleMediaStateChange = useCallback((newState: MediaState) => {
-    if (isComponentMountedRef.current) {
-      setMediaState(newState);
-    }
-  }, []);
-
+  // Media state management - USE ZUSTAND STORE
+  const zustandMediaState = useMediaState(); // Get media state from Zustand store
+  
   // This effect will handle media state initialization in a clean way
   useEffect(() => {
-    // Set up subscription to media state changes
-    const unsubscribe = callMediaManager.subscribe(handleMediaStateChange);
-    
-    // Set initial state
-    const initialState = callMediaManager.getMediaState();
-    handleMediaStateChange(initialState);
-    
-    // Clean up subscription
-    return () => {
-      unsubscribe();
-    };
-  }, [callMediaManager, handleMediaStateChange]);
+    // Media state is now managed by Zustand store
+    // No need for manual subscriptions as the UI will re-render automatically
+    console.log('[MeetingView] Media state updated from Zustand:', zustandMediaState);
+  }, [zustandMediaState]);
 
   // Enhanced App State Handling - BULLETPROOF IMPLEMENTATION
   useEffect(() => {
@@ -982,12 +952,12 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
           } else {
             console.log('[MeetingView] Call state mismatch, attempting recovery');
             // Handle potential state mismatch - maybe rejoin?
-            if (join && !isJoining && !hasJoined && callState !== 'ended' && !isEndingCall) {
+            if (join && !isJoining && !hasJoined && callStatus !== 'ended' && !isEndingCall) {
               setIsJoining(true);
               join();
             }
           }
-        } else if (callState !== 'ended' && !isEndingCall) {
+        } else if (callStatus !== 'ended' && !isEndingCall) {
           // NOTE: Removed aggressive call ending logic that was causing race conditions
           // Let UnifiedCallService handle call state management
           console.log('[MeetingView] Call state sync - letting UnifiedCallService handle it');
@@ -1006,7 +976,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     return () => {
       subscription.remove();
     };
-  }, [hasJoined, isJoining, callState, join, handleEndCall, ensureOngoingCallNotification, isEndingCall]);
+  }, [hasJoined, isJoining, callStatus, join, handleEndCall, ensureOngoingCallNotification, isEndingCall]);
 
   // Handle hardware back button on Android - BULLETPROOF
   useEffect(() => {
@@ -1030,7 +1000,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   useEffect(() => {
     let reconnectionTimer: NodeJS.Timeout | null = null;
     
-    if (callState === 'reconnecting' && join && !isJoining) {
+    if (callStatus === 'connecting' && join && !isJoining) {
       reconnectionTimer = setTimeout(async () => {
         reconnectionAttemptRef.current += 1;
         
@@ -1054,7 +1024,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
           );
         }
       }, 2000); // Wait 2 seconds between reconnection attempts
-    } else if (callState === 'connected') {
+    } else if (callStatus === 'connected') {
       // Reset reconnection attempts when successfully connected
       reconnectionAttemptRef.current = 0;
     }
@@ -1062,7 +1032,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     return () => {
       if (reconnectionTimer) clearTimeout(reconnectionTimer);
     };
-  }, [callState, join, isJoining, handleEndCall]);
+  }, [callStatus, join, isJoining, handleEndCall]);
 
   // Initialize monitoring services - BULLETPROOF
   useEffect(() => {
@@ -1103,7 +1073,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
     let safetyTimer: NodeJS.Timeout | null = null;
     
     // If call state is 'ended' for more than 2 seconds, force navigation back
-    if (callState === 'ended' && !isEndingCall) {
+    if (callStatus === 'ended' && !isEndingCall) {
       safetyTimer = setTimeout(() => {
         if (!navigation || !isComponentMountedRef.current) return;
         
@@ -1139,17 +1109,15 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
         clearTimeout(safetyTimer);
       }
     };
-  }, [callState, navigation]);
+  }, [callStatus, navigation]);
 
   // Enhanced UI for status display with network quality
   const getCallStatusText = () => {
     if (isInitializingService) {
       return 'Initializing call service...';
-    } else if (callState === 'connecting') {
-      return 'Connecting...';
-    } else if (callState === 'reconnecting') {
-      return `Reconnecting... (${reconnectionAttemptRef.current}/${maxReconnectionAttempts})`;
-    } else if (callState === 'connected') {
+    } else if (callStatus === 'connecting') {
+      return `Connecting... (${reconnectionAttemptRef.current}/${maxReconnectionAttempts})`;
+    } else if (callStatus === 'connected') {
       const qualityText = networkQuality !== 'excellent' ? ` (${networkQuality} connection)` : '';
       return `Connected${qualityText} - ${formatCallDuration(callDuration)}`;
     } else {
@@ -1160,7 +1128,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   const getCallStatusColor = () => {
     if (isInitializingService) {
       return '#FF9800'; // Orange for initialization
-    } else if (callState === 'connected') {
+    } else if (callStatus === 'connected') {
       switch (networkQuality) {
         case 'excellent': return '#00D4AA';
         case 'good': return '#4CAF50';
@@ -1168,7 +1136,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
         case 'poor': return '#F44336';
         default: return '#00D4AA';
       }
-    } else if (callState === 'reconnecting') {
+    } else if (callStatus === 'connecting') {
       return '#FF9800';
     } else {
       return '#666';
@@ -1179,7 +1147,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
   const cleanupRef = useRef(false);
   useEffect(() => {
     if (cleanupRef.current) return;
-    if (callState !== 'ended') return;
+    if (callStatus !== 'ended') return;
     cleanupRef.current = true;
     
     console.log('[MeetingView] Component unmounting, performing comprehensive cleanup');
@@ -1217,15 +1185,15 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
       notificationSyncRef.current = null;
     }
     
-    // ✅ CRITICAL FIX: Notify UnifiedCallService of component unmount
+    // ✅ CRITICAL FIX: Ensure full cleanup on unmount using Zustand store
     try {
       const unifiedCallService = UnifiedCallService.getInstance();
       const currentCall = unifiedCallService.getCurrentCall();
       if (currentCall && currentCall.status !== 'ended') {
-        appEventEmitter.emit('meetingScreenUnmounting', { callId: currentCall.callId });
+        console.log('[MeetingView] Component unmounting with active call - triggering cleanup via Zustand');
       }
-      // Failsafe: ensure full cleanup on unmount
-      unifiedCallService.cleanup();
+      // Ensure full cleanup on unmount using Zustand store
+      callActions.cleanup();
     } catch (error) {
       console.error('[MeetingView] Error during final cleanup:', error);
     }
@@ -1276,8 +1244,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
         <View style={styles.callInfoBar}>        <View style={styles.callInfoContent}>
           <Text style={styles.callDuration}>
             {isInitializingService ? 'Initializing...' :
-             callState === 'connecting' ? 'Connecting...' : 
-             callState === 'reconnecting' ? 'Reconnecting...' : 
+             callStatus === 'connecting' ? 'Connecting...' :
              formatCallDuration(callDuration)}
           </Text>
           <Text style={styles.callEndToEndText}>End-to-end encrypted call</Text>
@@ -1312,7 +1279,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
                   </Text>
                   <Text style={styles.callStatusText}>
                     {isInitializingService ? 'Initializing call service...' :
-                     callState === 'connecting' ? 'Connecting...' : 'Waiting for participant...'}
+                     callStatus === 'connecting' ? 'Connecting...' : 'Waiting for participant...'}
                   </Text>
                 </View>
               </View>
@@ -1343,9 +1310,9 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
                     marginBottom: 8
                   }}>
                     {isInitializingService ? 'Initializing...' :
-                     callState === 'connecting' ? 'Connecting...' : 'Activating camera...'}
+                     callStatus === 'connecting' ? 'Connecting...' : 'Activating camera...'}
                   </Text>
-                  {(callState === 'connecting' || isInitializingService) && (
+                  {(callStatus === 'connecting' || isInitializingService) && (
                     <ActivityIndicator size="small" color="#00D4AA" />
                   )}
                 </View>
@@ -1369,7 +1336,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
               onEndCall={handleEndCall}
               onSwitchCamera={handleSwitchCamera}
               onShowParticipants={handleShowParticipants}
-              isConnecting={isJoining || callState === 'connecting' || isInitializingService}
+              isConnecting={isJoining || callStatus === 'connecting' || isInitializingService}
             />
           </Animated.View>
         )}
@@ -1387,8 +1354,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
         <View style={styles.callInfoContent}>
           <Text style={styles.callDuration}>
             {isInitializingService ? 'Initializing...' :
-             callState === 'connecting' ? 'Connecting...' : 
-             callState === 'reconnecting' ? 'Reconnecting...' : 
+             callStatus === 'connecting' ? 'Connecting...' :
              formatCallDuration(callDuration)}
           </Text>
           <Text style={styles.callEndToEndText}>End-to-end encrypted call</Text>
@@ -1444,7 +1410,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
             onEndCall={handleEndCall}
             onSwitchCamera={handleSwitchCamera}
             onShowParticipants={handleShowParticipants}
-            isConnecting={isJoining || callState === 'connecting' || isInitializingService}
+            isConnecting={isJoining || callStatus === 'connecting' || isInitializingService}
           />
         </Animated.View>
       )}
@@ -1457,7 +1423,7 @@ const MeetingView = ({ meetingId, callType, token, localParticipantId: initialLo
  */
 const MeetingScreen = () => {
   const route = useRoute<MeetingScreenRouteProp>();
-  const { activeCall } = useCall();
+  const { activeCall } = useCallState(); // ✅ FIXED: Use Zustand instead of legacy useCall
   const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
 
   console.log('[MeetingScreen] 🎬 MEETING SCREEN COMPONENT MOUNTED:');
@@ -1469,14 +1435,14 @@ const MeetingScreen = () => {
     recipientName: route.params?.recipientName,
     hasToken: !!route.params?.token
   });
-  console.log('[MeetingScreen] 📋 Active call from context:', {
+  console.log('[MeetingScreen] 📋 Active call from Zustand store:', {
     hasActiveCall: !!activeCall,
     activeCallType: activeCall?.callType,
     activeCallId: activeCall?.callId
   });
 
   // CRITICAL FIX: Sticky call context - latch the call on mount and never clear it during the session
-  const latchedCallRef = useRef<ActiveCall | null>(null);
+  const latchedCallRef = useRef<any>(null);
   const hasInitializedRef = useRef(false);
 
   // Only initialize the latched call once when the component first mounts
@@ -1499,7 +1465,7 @@ const MeetingScreen = () => {
         isInitiator: route.params.isInitiator ?? true,
         status: 'connecting',
         timestamp: Date.now()
-      } as ActiveCall;
+      } as any; // CallData from Zustand store
       console.log('[MeetingScreen] ✅ Latched call from route params:', {
         callType: latchedCallRef.current.callType,
         meetingId: latchedCallRef.current.meetingId,
@@ -1531,7 +1497,7 @@ const MeetingScreen = () => {
           isInitiator: currentCall.isInitiator,
           status: 'connecting',
           timestamp: Date.now()
-        } as ActiveCall;
+        } as any; // CallData from Zustand store
         console.log('[MeetingScreen] Latched call from UnifiedCallService:', latchedCallRef.current);
       }
     }

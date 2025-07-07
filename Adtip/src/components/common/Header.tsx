@@ -8,7 +8,7 @@ import {useTheme} from '../../contexts/ThemeContext';
 import {useWallet} from '../../contexts/WalletContext';
 import {useSidebar} from '../../contexts/SidebarContext';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {useCall} from '../../contexts/CallProvider';
+import {useCallState, useCallStore} from '../../stores/callStore';
 
 export interface HeaderProps {
   title: string;
@@ -49,7 +49,7 @@ const formatDuration = (totalSeconds: number): string => {
 
 const LiveCallTimer: React.FC = () => {
   const navigation = useNavigation();
-  const { callDuration } = useCall();
+  const callDuration = useCallStore((state) => state.callDuration);
   const { colors } = useTheme();
 
   const handlePress = () => {
@@ -88,7 +88,7 @@ const Header: React.FC<HeaderProps> = ({
   const {width: screenWidth} = useWindowDimensions();
   const insets = useSafeAreaInsets(); 
   const searchInputRef = useRef<TextInput>(null);
-  const { activeCall } = useCall();
+  const { activeCall } = useCallState();
 
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [searchQueryLocal, setSearchQueryLocal] = useState('');
