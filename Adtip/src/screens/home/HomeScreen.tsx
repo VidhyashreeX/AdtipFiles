@@ -37,6 +37,7 @@ import { usePosts, useLikeMutation, useFollowMutation, usePrefetchData, useSubsc
 import { useNetInfo } from '@react-native-community/netinfo';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
 import PubScaleService from '../../services/PubScaleService';
+import VersionCheckService from '../../services/VersionCheckService';
 
 // Components
 import Header from '../../components/common/Header';
@@ -45,6 +46,7 @@ import StoryItem from '../../components/home/StoryItem';
 import CategoryItem from '../../components/home/CategoryItem';
 import EarnCard from '../../components/home/EarnCard';
 import BannerCarousel from '../../components/home/BannerCarousel';
+import PremiumPopup from '../../components/common/PremiumPopup';
 
 
 import ScreenTransition from '../../components/common/ScreenTransition';
@@ -285,6 +287,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const [isPremium, setIsPremium] = useState<boolean>(false);
   const [premiumData, setPremiumData] = useState<any>(null);
 
+  // Version check and premium popup state
+  const [showPremiumPopup, setShowPremiumPopup] = useState<boolean>(false);
+  const [hasCheckedVersion, setHasCheckedVersion] = useState<boolean>(false);
+
   // Log when HomeScreen mounts
   useEffect(() => {
     console.log('🏠 [HomeScreen] Component mounted with user:', user?.id);
@@ -360,6 +366,50 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
       } : null
     });
   }, [isPremium, premiumData]);
+
+  // Version check on app start
+  useEffect(() => {
+    const checkVersionAndPremium = async () => {
+      if (hasCheckedVersion) return;
+      
+      console.log('🔍 [HomeScreen] Starting version check and premium validation...');
+      
+      try {
+        // Check for app updates first
+        const versionCheckService = VersionCheckService.getInstance();
+        const updateInfo = await versionCheckService.checkForUpdates();
+        
+        if (updateInfo && updateInfo.data) {
+          console.log('⚠️ [HomeScreen] Update required, showing update dialog');
+          versionCheckService.showUpdateDialog(updateInfo.data);
+          return; // Don't show premium popup if update is required
+        }
+
+        // Check premium status and show popup if needed
+        if (subscriptionResponse && !subscriptionResponse.status && !subscriptionLoading) {
+          console.log('💎 [HomeScreen] No premium subscription found, showing premium popup');
+          setShowPremiumPopup(true);
+        }
+      } catch (error) {
+        console.error('❌ [HomeScreen] Error in version check or premium validation:', error);
+      } finally {
+        setHasCheckedVersion(true);
+      }
+    };
+
+    // Only run when user is authenticated and subscription data is loaded
+    if (user?.id && !subscriptionLoading && subscriptionResponse !== undefined) {
+      checkVersionAndPremium();
+    }
+  }, [user?.id, subscriptionResponse, subscriptionLoading, hasCheckedVersion]);
+
+  // Show premium popup when subscription is not active
+  useEffect(() => {
+    if (subscriptionResponse && !subscriptionResponse.status && !subscriptionLoading && !hasCheckedVersion) {
+      console.log('💎 [HomeScreen] Showing premium popup for non-premium user');
+      setShowPremiumPopup(true);
+    }
+  }, [subscriptionResponse, subscriptionLoading, hasCheckedVersion]);
 
   // Fetch data whenever the screen comes into focus by invalidating and forcing refetch
   useFocusEffect(
@@ -774,7 +824,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           <ScrollView style={styles.content} contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}>
             <StoriesRow stories={[]} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} isLoading={true} />
             <CategoriesRow categories={[]} selectedCategory={null} onCategoryPress={handleCategoryPress} isLoading={true} />
-            <BannerCarousel banners={[]} isLoading={true} />
+                          <BannerCarousel />
             <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} onInstallToEarn={handleInstallToEarn} isLoading={true} />
             <View style={styles.skeletonContainer}>
               {Array(6).fill(0).map((_, index) => <PostItemSkeleton key={`skeleton-${index}`} />)}
@@ -838,11 +888,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
               {renderPremiumBanner()}
               <StoriesRow stories={displayStories} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} />
               <CategoriesRow categories={displayCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} />
-              <BannerCarousel 
-                banners={banners} 
-                isLoading={bannersLoading} 
-                onBannerPress={handleBannerPress} 
-              />
+              <BannerCarousel />
               <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} onInstallToEarn={handleInstallToEarn} />
             </>
           )}
@@ -890,6 +936,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           )}
         </Modal>
 
+        {/* Premium Popup */}
+        <PremiumPopup
+          visible={showPremiumPopup}
+          onClose={() => setShowPremiumPopup(false)}
+          onUpgrade={() => {
+            console.log('🚀 [HomeScreen] Premium upgrade initiated from popup');
+            setShowPremiumPopup(false);
+          }}
+        />
 
       </View>
     </ScreenTransition>

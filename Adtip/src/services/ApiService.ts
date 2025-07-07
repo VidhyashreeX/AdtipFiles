@@ -2217,7 +2217,33 @@ static async createSubscriptionTest(plan_id: string, user_id: number): Promise<a
       });
       return response;
     } catch (error) {
-      console.error('Error searching users:', error);
+      console.error('❌ [ApiService] Error searching users:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  static async checkAppVersion(data: {
+    current_version: string;
+    current_build: string;
+    platform: string;
+  }): Promise<{
+    status: boolean;
+    message: string;
+    data?: {
+      latest_version: string;
+      minimum_version: string;
+      force_update: boolean;
+      update_message?: string;
+      store_url?: string;
+    };
+  }> {
+    try {
+      console.log('📡 [ApiService] Checking app version:', data);
+      const response = await this.post('/api/check-app-version', data);
+      console.log('📥 [ApiService] App version check response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ [ApiService] Error checking app version:', error);
       throw this.handleError(error);
     }
   }
