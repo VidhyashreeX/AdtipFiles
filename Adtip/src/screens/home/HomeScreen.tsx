@@ -33,7 +33,7 @@ import {useDataContext} from '../../providers/DataProvider';
 import ApiService from '../../services/ApiService';
 import {API_BASE_URL} from '../../constants/api';
 import {HOME_ENDPOINTS} from '../../constants/apiEndpoints';
-import { usePosts, useLikeMutation, useFollowMutation, usePrefetchData, useSubscriptionStatus } from '../../hooks/useQueries';
+import { usePosts, useLikeMutation, useFollowMutation, usePrefetchData, useSubscriptionStatus, useCategories } from '../../hooks/useQueries';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
 import PubScaleService from '../../services/PubScaleService';
@@ -73,6 +73,7 @@ const { width: screenWidth } = Dimensions.get('window');
 // Interfaces
 interface Story { id: string; username: string; imageUrl: string | null; }
 interface Category { id: string; name: string; }
+interface ApiCategory { category_id: number; category_name: string; }
 interface Post {
   id: number; user_id: number; title: string; content: string;
   media_url: string | null; media_type: string; user_name: string;
@@ -270,10 +271,29 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
   // UI state management (never blocks navigation)
   const [selectedCategoryState, setSelectedCategoryState] = useState<string>('0');
-  const [staticCategories] = useState<Category[]>([
-    {id: '0', name: 'All'}, {id: '1', name: 'Recent'}, {id: '2', name: 'Popular'}, {id: '3', name: 'Following'},
-    {id: '4', name: 'Technology'}, {id: '5', name: 'Fashion'}, {id: '6', name: 'Business'}, {id: '7', name: 'Sports'},
-  ]);
+  
+  // Fetch categories from API
+  const {
+    data: categoriesData,
+    isLoading: categoriesLoading,
+    error: categoriesError,
+  } = useCategories();
+
+  // Transform API categories to match the expected format
+  const categories = useMemo(() => {
+    if (!categoriesData?.data) return [];
+    
+    // Add "All" category as first item
+    const allCategory: Category = { id: '0', name: 'All' };
+    
+    // Transform API categories
+    const apiCategories: Category[] = categoriesData.data.map((cat: ApiCategory) => ({
+      id: cat.category_id.toString(),
+      name: cat.category_name
+    }));
+    
+    return [allCategory, ...apiCategories];
+  }, [categoriesData]);
   const [walletAmount] = useState(hocWalletBalance || '0.00');
   const [visiblePostIds, setVisiblePostIds] = useState<number[]>([]);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
@@ -463,7 +483,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const isOnline = netInfo.isConnected;
 
   // Static data for now - can be enhanced later with API calls
-  const categories = staticCategories;
   const stories: Story[] = [];
 
   // Enhanced debug function for video issues
@@ -587,8 +606,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     }
   }, [subscriptionLoading, isPremium, premiumData, isDarkMode, colors, navigation]);
 
-  // Use categories from API or fallback to static ones
-  const displayCategories = categories || staticCategories;
+  // Use categories from API
+  const displayCategories = categories;
   const displayStories = stories || [];
   const displayPosts = posts || [];
 
@@ -753,7 +772,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
         <PostItem
           key={`post-${item.id}-${index}`}
           id={item.id}
-          username={item.user_name}
+          username={item.user_name ? String(item.user_name) : "Unknown"}
           profileImage={item.user_profile_image}
           postImage={item.media_url}
           caption={item.content}
@@ -887,7 +906,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             <>
               {renderPremiumBanner()}
               <StoriesRow stories={displayStories} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} />
-              <CategoriesRow categories={displayCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} />
+              <CategoriesRow categories={displayCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} isLoading={categoriesLoading} />
               <BannerCarousel />
               <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} onInstallToEarn={handleInstallToEarn} />
             </>
