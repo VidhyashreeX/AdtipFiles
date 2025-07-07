@@ -1,6 +1,6 @@
 // src/providers/DataProvider.tsx
 import React, { createContext, useContext, ReactNode } from 'react';
-import { CacheManager } from '../hooks/useQueries';
+import { CacheManager } from '../hooks/useDataLayer';
 
 interface DataContextType {
   clearCache: (pattern?: string) => void;

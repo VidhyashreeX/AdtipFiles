@@ -485,53 +485,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   // Static data for now - can be enhanced later with API calls
   const stories: Story[] = [];
 
-  // Enhanced debug function for video issues
-  const debugVideoIssues = useCallback(async () => {
-    if (posts.length === 0) {
-      Alert.alert('Debug Info', 'No posts loaded yet. Please wait for posts to load first.');
-      return;
-    }
 
-    const videoPosts = posts.filter(post => post.media_type === 'video');
-    
-    if (videoPosts.length === 0) {
-      Alert.alert('Debug Info', 'No video posts found in current feed.');
-      return;
-    }
-
-    Alert.alert(
-      'Video Debug',
-      `Found ${videoPosts.length} video posts. Generate debug report?`,
-      [
-        { text: 'Cancel' },
-        { 
-          text: 'Generate Report', 
-          onPress: async () => {
-            try {
-              const report = await generateVideoDebugReport(posts);
-              console.log('[HomeScreen] Video Debug Report Generated');
-              Alert.alert(
-                'Debug Report Generated',
-                'Check the console logs for detailed video URL analysis. The report shows which videos are working and which are failing.',
-                [
-                  { text: 'OK' },
-                  { text: 'Copy Sample URL', onPress: () => {
-                    const firstVideoUrl = videoPosts[0]?.media_url;
-                    if (firstVideoUrl) {
-                      console.log('Sample Video URL:', firstVideoUrl);
-                      console.log('Base API URL:', API_BASE_URL);
-                    }
-                  }}
-                ]
-              );
-            } catch (error) {
-              Alert.alert('Error', 'Failed to generate debug report: ' + error);
-            }
-          }
-        }
-      ]
-    );
-  }, [posts]);
 
   // Optimistic mutations for instant UI feedback (now using the new hooks)
   const handleLikePost = useCallback((postId: number, isLiked: boolean) => {
@@ -798,20 +752,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           onFollow={handleUserFollow}
         />
         
-        {/* Add debug button for the first video post (development only) */}
-        {__DEV__ && index === 0 && item.media_type === 'video' && (
-          <View style={styles.debugSection}>
-            <TouchableOpacity 
-              onPress={debugVideoIssues}
-              style={styles.debugButton}
-            >
-              <Text style={styles.debugButtonText}>🐛 Debug Video Issues</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+
       </>
     );
-  }, [visiblePostIds, getTimeAgo, handlePostLike, handleCommentPress, handleUserProfilePress, handleUserFollow, debugVideoIssues, styles, isGloballyMuted, handleToggleGlobalMute]);
+  }, [visiblePostIds, getTimeAgo, handlePostLike, handleCommentPress, handleUserProfilePress, handleUserFollow, styles, isGloballyMuted, handleToggleGlobalMute]);
 
   // Render empty state
   const renderEmptyState = useCallback(() => {
@@ -982,26 +926,7 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
-  // Debug styles (development only)
-  debugSection: {
-    padding: 16,
-    backgroundColor: 'rgba(255, 255, 0, 0.1)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 0, 0.3)',
-  },
-  debugButton: {
-    backgroundColor: 'rgba(255, 255, 0, 0.2)',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 0, 0.5)',
-  },
-  debugButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333333',
-  },
+
   // Stories section
   storiesSection: {
     paddingVertical: 12,
