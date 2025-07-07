@@ -209,21 +209,17 @@ export default function MissedCallsScreen() {
   const handleVideoCall = useCallback(async (contact: Contact) => {
     try {
       const unifiedCallService = UnifiedCallService.getInstance();
-      const callData = await unifiedCallService.initiateCall(
-        contact,
+      const callData = await unifiedCallService.startOutgoingCall(
+        contact.id.toString(),
+        contact.name || 'Unknown',
         'video',
-        user
+        user?.name || 'User',
+        user?.id.toString() || '0'
       );
       
-      if (callData?.success) {
-        navigation.navigate('VideoCallScreen', {
-          meetingId: callData.meetingId,
-          token: callData.token,
-          participantName: user?.name || 'Unknown',
-          isHost: true,
-          callType: 'video',
-          receiverInfo: contact,
-        });
+      if (callData) {
+        console.log('[MissedCallsScreen] Video call initiated successfully:', callData.callId);
+        // Navigation will be handled automatically by UnifiedCallService
       }
     } catch (error) {
       console.error('[MissedCallsScreen] Video call error:', error);
@@ -234,21 +230,17 @@ export default function MissedCallsScreen() {
   const handleVoiceCall = useCallback(async (contact: Contact) => {
     try {
       const unifiedCallService = UnifiedCallService.getInstance();
-      const callData = await unifiedCallService.initiateCall(
-        contact,
+      const callData = await unifiedCallService.startOutgoingCall(
+        contact.id.toString(),
+        contact.name || 'Unknown',
         'voice',
-        user
+        user?.name || 'User',
+        user?.id.toString() || '0'
       );
       
-      if (callData?.success) {
-        navigation.navigate('VoiceCallScreen', {
-          meetingId: callData.meetingId,
-          token: callData.token,
-          participantName: user?.name || 'Unknown',
-          isHost: true,
-          callType: 'voice',
-          receiverInfo: contact,
-        });
+      if (callData) {
+        console.log('[MissedCallsScreen] Voice call initiated successfully:', callData.callId);
+        // Navigation will be handled automatically by UnifiedCallService
       }
     } catch (error) {
       console.error('[MissedCallsScreen] Voice call error:', error);

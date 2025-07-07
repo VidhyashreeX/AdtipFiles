@@ -76,9 +76,9 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
       return;
     }
 
-    // Prevent multiple rapid call attempts
-    const unifiedCallService = UnifiedCallService.getInstance();
-    const currentCallStatus = unifiedCallService.getCallStatus();
+    // Prevent multiple rapid call attempts using Zustand store
+    const { useCallStore } = require('../../stores/callStore');
+    const currentCallStatus = useCallStore.getState().callStatus;
     if (currentCallStatus !== 'idle' && currentCallStatus !== 'ended') {
       Alert.alert("Call In Progress", "You are already in a call.");
       return;

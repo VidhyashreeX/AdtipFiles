@@ -90,9 +90,9 @@ export function useAppOpenAd() {
         nextAppState === 'active' && 
         !isAdCurrentlyShowing
       ) {
-        // ✅ FIX: Check if a call is in progress before showing an ad
-        const callService = UnifiedCallService.getInstance();
-        const callStatus = callService.getCallStatus();
+        // ✅ FIX: Check if a call is in progress before showing an ad using Zustand store
+        const { useCallStore } = require('../stores/callStore');
+        const callStatus = useCallStore.getState().callStatus;
 
         if (callStatus !== 'idle' && callStatus !== 'ended') {
           console.log('[AppOpenAdManager] Suppressing ad because a call is active.');
@@ -105,9 +105,9 @@ export function useAppOpenAd() {
         
         console.log(`[AppOpenAdManager] App came to foreground, delaying ad check for ${delayTime}ms`);
         setTimeout(() => {
-          // Double-check call state again after delay
+          // Double-check call state again after delay using Zustand store
           try {
-            const updatedCallStatus = UnifiedCallService.getInstance().getCallStatus();
+            const updatedCallStatus = useCallStore.getState().callStatus;
             if (updatedCallStatus !== 'idle' && updatedCallStatus !== 'ended') {
               console.log('[AppOpenAdManager] Suppressing delayed ad because a call is now active.');
               return;

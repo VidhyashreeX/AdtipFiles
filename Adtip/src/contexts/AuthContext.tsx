@@ -238,9 +238,9 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       
       // Clean up all services before clearing storage
       try {
-        console.log('[AuthContext] Cleaning up UnifiedCallService...');
+        console.log('[AuthContext] Resetting UnifiedCallService...');
         const unifiedCallService = UnifiedCallService.getInstance();
-        await unifiedCallService.cleanup();
+        unifiedCallService.reset();
         
         console.log('[AuthContext] Resetting FirebaseService...');
         const firebaseService = FirebaseService.getInstance();
@@ -271,7 +271,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       // Still try to clean up services
       try {
         const unifiedCallService = UnifiedCallService.getInstance();
-        await unifiedCallService.cleanup();
+        unifiedCallService.reset();
         const firebaseService = FirebaseService.getInstance();
         firebaseService.reset();
       } catch (serviceError) {

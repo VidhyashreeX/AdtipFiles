@@ -46,6 +46,7 @@ import { Ban, BanknoteArrowUp } from 'lucide-react-native';
 import messaging from '@react-native-firebase/messaging';
 import uuid from 'react-native-uuid';
 import UnifiedCallService from '../../services/calling/UnifiedCallService'; // Unified call service
+import CallBillingService from '../../services/calling/CallBillingService'; // Call billing service
 import BlocklistService from '../../services/BlocklistService';
 import WalletService from '../../services/WalletService';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
@@ -380,9 +381,9 @@ export default function TipCallScreen() {
   }, []);
 
   useEffect(() => {
-    // Reset call state using UnifiedCallService
-    const unifiedCallService = UnifiedCallService.getInstance();
-    unifiedCallService.cleanup();
+    // Reset call state using Zustand store
+    const { useCallStore } = require('../../stores/callStore');
+    useCallStore.getState().cleanup();
   }, []);
 
   // Request permissions on component mount
@@ -746,8 +747,8 @@ export default function TipCallScreen() {
 
     // Calculate and show maximum call duration based on balance
     try {
-      const callService = UnifiedCallService.getInstance();
-      const callRates = callService.getCallRates();
+      const callBillingService = CallBillingService.getInstance();
+      const callRates = callBillingService.getCallRates();
       const { isPremium } = await WalletService.checkPremiumStatus(user.id);
       
       let ratePerMinute: number;
@@ -807,9 +808,9 @@ export default function TipCallScreen() {
     }
 
     async function initiateCall() {
-      // Prevent multiple rapid call attempts
-      const unifiedCallService = UnifiedCallService.getInstance();
-      const currentCallStatus = unifiedCallService.getCallStatus();
+      // Prevent multiple rapid call attempts using Zustand store
+      const { useCallStore } = require('../../stores/callStore');
+      const currentCallStatus = useCallStore.getState().callStatus;
       if (currentCallStatus !== 'idle' && currentCallStatus !== 'ended') {
         Alert.alert("Call In Progress", "You are already in a call.");
         return;
