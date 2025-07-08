@@ -25,6 +25,9 @@ class MediaService {
 
   async joinMeeting(meetingId: string, token: string, name: string, type: CallType) {
     try {
+      // Ensure complete state isolation from previous calls
+      await this.ensureCleanState()
+
       // Reset VideoSDK service to ensure clean state for new meeting
       this.videoSDK.reset()
       await this.initialize()
@@ -48,6 +51,50 @@ class MediaService {
     } catch (error) {
       console.error('[MediaService] joinMeeting error:', error)
       return false
+    }
+  }
+
+  /**
+   * Ensure clean state before starting new meeting
+   */
+  private async ensureCleanState() {
+    console.log('[MediaService] Ensuring clean state for new meeting')
+
+    // Clear any existing meeting reference with proper cleanup
+    if (this.meeting) {
+      console.log('[MediaService] Cleaning up existing meeting reference')
+      try {
+        // Stop any active media streams
+        if (this.meeting.localParticipant?.webcamStream?.track) {
+          this.meeting.localParticipant.webcamStream.track.stop()
+        }
+        if (this.meeting.localParticipant?.micStream?.track) {
+          this.meeting.localParticipant.micStream.track.stop()
+        }
+        
+        // Clear participant data to prevent state bleeding
+        if (this.meeting.participants) {
+          this.meeting.participants.clear?.()
+        }
+      } catch (error) {
+        console.warn('[MediaService] Error during meeting cleanup:', error)
+      }
+      
+      this.meeting = null
+    }
+
+    // Clear meeting config
+    this.currentMeetingConfig = null
+
+    // Reset VideoSDK service to ensure clean participant state
+    this.videoSDK.reset()
+
+    // Add delay to ensure cleanup is complete before next meeting
+    await new Promise(resolve => setTimeout(resolve, 200))
+
+    // Force garbage collection if available
+    if (global.gc) {
+      global.gc()
     }
   }
 
@@ -144,8 +191,29 @@ class MediaService {
   }
 
   setMeetingRef(m: any) {
+    // Prevent setting the same meeting reference multiple times
+    if (this.meeting === m) {
+      return
+    }
+
+    // If we're setting a new meeting, ensure the previous one is properly cleaned up
+    if (this.meeting && m && this.meeting !== m) {
+      console.log('[MediaService] Replacing existing meeting reference - cleaning up previous')
+      try {
+        // Stop any active media streams from previous meeting
+        if (this.meeting.localParticipant?.webcamStream?.track) {
+          this.meeting.localParticipant.webcamStream.track.stop()
+        }
+        if (this.meeting.localParticipant?.micStream?.track) {
+          this.meeting.localParticipant.micStream.track.stop()
+        }
+      } catch (error) {
+        console.warn('[MediaService] Error cleaning up previous meeting:', error)
+      }
+    }
+
     this.meeting = m
-    console.log('[MediaService] Meeting reference set:', !!m)
+    console.log('[MediaService] Meeting reference set:', !!m, m ? `(meetingId: ${m.meetingId})` : '')
   }
 
   getMeetingConfig() {

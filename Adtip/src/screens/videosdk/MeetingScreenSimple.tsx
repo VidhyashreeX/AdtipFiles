@@ -39,6 +39,13 @@ const ParticipantVideo = ({ participantId, isLocal = false }: { participantId: s
     micOn,
   } = useParticipant(participantId)
 
+  // Ensure consistent local/remote detection
+  const meeting = useMeeting()
+  const actualIsLocal = meeting.localParticipant?.id === participantId
+
+  // Use the actual local state, not the passed prop, to prevent confusion
+  const finalIsLocal = actualIsLocal
+
   // Debug logging like your working component
   useEffect(() => {
     console.log(`[ParticipantVideo] Participant ${participantId}:`, {
@@ -47,9 +54,11 @@ const ParticipantVideo = ({ participantId, isLocal = false }: { participantId: s
       hasStream: !!webcamStream,
       streamId: webcamStream?.id,
       hasTrack: !!webcamStream?.track,
-      isLocal
+      isLocal: finalIsLocal,
+      passedIsLocal: isLocal,
+      actualIsLocal
     })
-  }, [participantId, displayName, webcamOn, webcamStream, isLocal])
+  }, [participantId, displayName, webcamOn, webcamStream, isLocal, finalIsLocal, actualIsLocal])
 
   // Show placeholder when no video (like your working component)
   if (!webcamOn || !webcamStream) {
@@ -75,12 +84,12 @@ const ParticipantVideo = ({ participantId, isLocal = false }: { participantId: s
         streamURL={new MediaStream([webcamStream.track]).toURL()}
         objectFit="cover"
         style={styles.video}
-        mirror={isLocal}
+        mirror={finalIsLocal}
         zOrder={0}
       />
       <View style={styles.nameTag}>
         <Text style={styles.nameTagText}>
-          {displayName || 'Unknown'} {isLocal && '(You)'}
+          {displayName || 'Unknown'} {finalIsLocal && '(You)'}
         </Text>
       </View>
       
@@ -185,34 +194,112 @@ const MeetingContent = () => {
   const session = useCallStore(state => state.session)
   const status = useCallStore(state => state.status)
   const actions = useCallStore(state => state.actions)
+
+  // Track if this component has set the meeting reference
+  const hasSetMeetingRef = useRef(false)
+  const isMountedRef = useRef(true)
   
+  // Enhanced validation - only proceed if session is valid and call is active
+  const sessionIsValid = session?.sessionId && session?.meetingId && session?.token
+  const callIsActive = status === 'in_call' || status === 'connecting' || status === 'outgoing'
+  const globalComponentKey = sessionIsValid ? `meeting-${session.sessionId}` : null
+  
+  // Check if this MeetingContent belongs to the active component instance AND is tracked by VideoSDK
+  const videoSDK = VideoSDKService.getInstance()
+  const isActiveInstance = globalComponentKey && 
+    global.meetingComponentInstances?.[globalComponentKey] &&
+    global.meetingComponentInstances[globalComponentKey] !== 'deactivated' &&
+    (sessionIsValid ? videoSDK.isSessionActive(session.sessionId) : false)
+  
+  // Add participant state validation ref to prevent bleeding
+  const lastSessionId = useRef<string | null>(null)
+  const participantStateReset = useRef(false)
+
+  // Validate and reset participant state for new sessions
+  useEffect(() => {
+    if (session?.sessionId && session.sessionId !== lastSessionId.current) {
+      console.log('[MeetingScreen] New session detected, validating participant state:', {
+        newSessionId: session.sessionId,
+        lastSessionId: lastSessionId.current,
+        localParticipantId,
+        participantCount: participants.size
+      })
+      
+      lastSessionId.current = session.sessionId
+      participantStateReset.current = false
+      
+      // Force participant state validation after a brief delay
+      setTimeout(() => {
+        const currentParticipants = [...participants.values()]
+        console.log('[MeetingScreen] Post-session-change participant validation:', {
+          sessionId: session.sessionId,
+          localId: localParticipant?.id,
+          totalParticipants: currentParticipants.length,
+          participantDetails: currentParticipants.map(p => ({
+            id: p.id,
+            displayName: p.displayName,
+            isLocal: p.id === localParticipant?.id
+          }))
+        })
+        participantStateReset.current = true
+      }, 500)
+    }
+  }, [session?.sessionId, localParticipant?.id, participants])
+
   // Save meeting reference for media service with proper cleanup
   useEffect(() => {
-    if (meeting && !mediaService.isMeetingActive()) {
-      console.log('[MeetingScreen] Setting meeting reference');
+    if (!isMountedRef.current) return
+    
+    // Only set reference once per session and ensure it's the current session's meeting
+    if (meeting && sessionIsValid && isActiveInstance && !hasSetMeetingRef.current) {
+      console.log('[MeetingContent] Setting meeting reference for session:', session.sessionId);
       mediaService.setMeetingRef(meeting);
+      hasSetMeetingRef.current = true;
     }
 
     return () => {
-      console.log('[MeetingScreen] Clearing meeting reference');
-      mediaService.setMeetingRef(null);
+      // Only clear if this component set the reference
+      if (hasSetMeetingRef.current) {
+        console.log('[MeetingContent] Clearing meeting reference for session:', session?.sessionId);
+        mediaService.setMeetingRef(null);
+        hasSetMeetingRef.current = false;
+      }
     }
-  }, [meeting, mediaService])
+  }, [meeting, mediaService, sessionIsValid, isActiveInstance, session?.sessionId])
+  
+  // Main component lifecycle
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   // ==== Robust join with retry logic ====
   const joinedRef = useRef(false)
   const joinAttemptsRef = useRef(0)
   const initialLoadRef = useRef(true) // Track if this is the first load
 
-  // Reset join state when session changes (new call)
+  // Reset join state when session changes (new call) - ensure complete state isolation
   useEffect(() => {
     if (session?.sessionId) {
       console.log('[MeetingScreen] New session detected, resetting join state:', session.sessionId)
+
+      // Complete state reset for new session
       joinedRef.current = false
       joinAttemptsRef.current = 0
       initialLoadRef.current = true
+      hasSetMeetingRef.current = false
+
+      // Clear any existing meeting reference to prevent participant state bleeding
+      if (mediaService.isMeetingActive()) {
+        console.log('[MeetingScreen] Clearing previous meeting reference for new session')
+        mediaService.setMeetingRef(null)
+      }
+
+      // Force participant state reset to prevent mixing local/remote participants
+      console.log('[MeetingScreen] Forcing participant state reset for session:', session.sessionId)
     }
-  }, [session?.sessionId])
+  }, [session?.sessionId, mediaService])
 
   useEffect(() => {
     const MAX_ATTEMPTS = 3
@@ -220,12 +307,30 @@ const MeetingContent = () => {
     const INITIAL_DELAY_MS = 1500 // Add delay for first join after app load
 
     const joinWithRetry = async () => {
+      // Enhanced validation before attempting to join
+      if (!sessionIsValid || !callIsActive || !isActiveInstance) {
+        console.log('[MeetingContent] Cannot join - validation failed:', {
+          sessionIsValid,
+          callIsActive,
+          isActiveInstance,
+          globalKey: globalComponentKey,
+          registeredComponent: global.meetingComponentInstances?.[globalComponentKey || '']
+        })
+        return
+      }
+      
       if (joinedRef.current || joinAttemptsRef.current >= MAX_ATTEMPTS) return
 
       joinAttemptsRef.current += 1
-      console.log(`[MeetingScreen] Attempt ${joinAttemptsRef.current}/${MAX_ATTEMPTS} to join meeting…`)
+      console.log(`[MeetingContent] Attempt ${joinAttemptsRef.current}/${MAX_ATTEMPTS} to join meeting for session:`, session?.sessionId)
 
       try {
+        // Ensure we have a valid meeting and session before joining
+        if (!meeting || !session?.sessionId) {
+          console.warn('[MeetingContent] Cannot join - missing meeting or session')
+          return
+        }
+
         // Make sure VideoSDK is ready before each attempt
         const videoSDK = VideoSDKService.getInstance()
         if (!videoSDK.getInitializationStatus()) {
@@ -237,17 +342,29 @@ const MeetingContent = () => {
         // If this is the first join after app load, add extra delay
         // to ensure WebSocket is fully connected
         if (initialLoadRef.current) {
-          console.log('[MeetingScreen] First join after app load - adding extra delay for WebSocket stability')
+          console.log('[MeetingContent] First join after app load - adding extra delay for WebSocket stability')
           await new Promise(resolve => setTimeout(resolve, INITIAL_DELAY_MS))
           initialLoadRef.current = false
         }
 
+        console.log('[MeetingContent] Joining meeting with ID:', session.meetingId)
         await meeting.join()
         joinedRef.current = true
-        console.log('[MeetingScreen] Successfully joined meeting')
-        actions.setStatus('in_call')
+        console.log('[MeetingContent] Successfully joined meeting')
+        
+        // For outgoing calls, transition from 'outgoing' -> 'connecting' -> 'in_call'
+        // For incoming calls, transition from 'connecting' -> 'in_call'
+        if (status === 'outgoing') {
+          actions.setStatus('connecting')
+          // Brief delay before moving to in_call
+          setTimeout(() => {
+            actions.setStatus('in_call')
+          }, 1000)
+        } else {
+          actions.setStatus('in_call')
+        }
       } catch (err: any) {
-        console.warn(`[MeetingScreen] Join attempt ${joinAttemptsRef.current} failed`, err?.message || err)
+        console.warn(`[MeetingContent] Join attempt ${joinAttemptsRef.current} failed`, err?.message || err)
 
         // Check for WebSocket specific errors
         const errorMessage = err?.message || String(err)
@@ -262,38 +379,42 @@ const MeetingContent = () => {
 
         // Retry if we still have attempts left
         if (joinAttemptsRef.current < MAX_ATTEMPTS) {
-          console.log(`[MeetingScreen] Retrying in ${retryDelay}ms${isWebSocketError ? ' (WebSocket error)' : ''}`)
+          console.log(`[MeetingContent] Retrying in ${retryDelay}ms${isWebSocketError ? ' (WebSocket error)' : ''}`)
           setTimeout(joinWithRetry, retryDelay)
         } else {
-          console.error('[MeetingScreen] All join attempts failed – ending call')
+          console.error('[MeetingContent] All join attempts failed – ending call')
           actions.setStatus('ended')
         }
       }
     }
 
-    // Trigger the first join attempt
-    joinWithRetry()
+    // Only attempt to join if we have a valid session and haven't joined yet
+    if (sessionIsValid && callIsActive && isActiveInstance && !joinedRef.current && meeting) {
+      joinWithRetry()
+    }
 
     // Comprehensive cleanup on unmount
     return () => {
-      console.log('[MeetingScreen] Component unmounting, performing comprehensive cleanup');
+      if (!isMountedRef.current) return
+      
+      console.log('[MeetingContent] Component unmounting, performing comprehensive cleanup for session:', session?.sessionId);
 
       // Step 1: Leave meeting with timeout protection
       if (joinedRef.current && meeting.leave) {
         try {
-          console.log('[MeetingScreen] Leaving meeting on cleanup');
+          console.log('[MeetingContent] Leaving meeting on cleanup');
           Promise.race([
             meeting.leave(),
             new Promise((_, reject) =>
               setTimeout(() => reject(new Error('Cleanup leave timeout')), 2000)
             )
           ]).then(() => {
-            console.log('[MeetingScreen] Successfully left meeting on cleanup');
+            console.log('[MeetingContent] Successfully left meeting on cleanup');
           }).catch((error) => {
-            console.warn('[MeetingScreen] Error or timeout leaving meeting on cleanup:', error);
+            console.warn('[MeetingContent] Error or timeout leaving meeting on cleanup:', error);
           });
         } catch (error) {
-          console.warn('[MeetingScreen] Error leaving meeting on cleanup:', error);
+          console.warn('[MeetingContent] Error leaving meeting on cleanup:', error);
         }
       }
 
@@ -303,12 +424,15 @@ const MeetingContent = () => {
       initialLoadRef.current = true;
 
       // Step 3: Clear meeting reference from media service
-      mediaService.setMeetingRef(null);
+      if (hasSetMeetingRef.current) {
+        mediaService.setMeetingRef(null);
+        hasSetMeetingRef.current = false;
+      }
 
-      console.log('[MeetingScreen] Component cleanup complete');
+      console.log('[MeetingContent] Component cleanup complete');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [sessionIsValid, callIsActive, isActiveInstance, meeting])
   
   // Handle back button or hardware back
   useEffect(() => {
@@ -331,9 +455,47 @@ const MeetingContent = () => {
   }, [controller])
   
   // Get remote participants (excluding local) and ensure they are valid
-  const remoteParticipants = [...participants.values()].filter(
-    p => p && p.id && p.displayName && p.id !== localParticipantId
-  )
+  // Use a more robust check to ensure we don't mix up local and remote participants
+  const allParticipants = [...participants.values()].filter(p => p && p.id && p.displayName)
+  
+  // Extra validation to prevent local participant from being treated as remote
+  const validRemoteParticipants = allParticipants.filter(p => {
+    const isNotLocal = p.id !== localParticipantId
+    
+    // Additional validation: check if this participant ID was ever our local ID
+    // This prevents session bleeding where previous local ID appears as remote
+    if (lastSessionId.current && session?.sessionId !== lastSessionId.current) {
+      console.log('[MeetingScreen] Cross-session participant validation:', {
+        participantId: p.id,
+        currentLocalId: localParticipantId,
+        sessionId: session?.sessionId,
+        lastSessionId: lastSessionId.current
+      })
+    }
+    
+    return isNotLocal
+  })
+
+  // Comprehensive debug logging to track participant state issues
+  console.log('[MeetingScreen] Participant debug:', {
+    sessionId: session?.sessionId,
+    localParticipantId,
+    totalParticipants: allParticipants.length,
+    validRemoteParticipants: validRemoteParticipants.length,
+    participantIds: allParticipants.map(p => ({ 
+      id: p.id, 
+      displayName: p.displayName,
+      isLocal: p.id === localParticipantId,
+      webcamOn: p.webcamOn,
+      micOn: p.micOn
+    })),
+    meetingId: session?.meetingId,
+    hasSetMeetingRef: hasSetMeetingRef.current,
+    participantStateReset: participantStateReset.current
+  })
+  
+  // Use the validated remote participants
+  const remoteParticipants = validRemoteParticipants
   
   const isVideo = session?.type === 'video'
   
@@ -347,7 +509,10 @@ const MeetingContent = () => {
           {session?.peerName || 'Connecting...'}
         </Text>
         <Text style={styles.headerSubtitle}>
-          {session?.type} call
+          {status === 'outgoing' ? 'Calling...' : 
+           status === 'connecting' ? 'Connecting...' :
+           status === 'in_call' ? `${session?.type} call` :
+           'Call'}
         </Text>
       </View>
       
@@ -361,7 +526,11 @@ const MeetingContent = () => {
             ) : (
               <View style={styles.videoPlaceholder}>
                 <ActivityIndicator size="large" color="#fff" />
-                <Text style={styles.placeholderText}>Connecting...</Text>
+                <Text style={styles.placeholderText}>
+                  {status === 'outgoing' ? 'Calling...' :
+                   status === 'connecting' ? 'Connecting...' :
+                   'Waiting for participant...'}
+                </Text>
               </View>
             )}
           </View>
@@ -383,7 +552,12 @@ const MeetingContent = () => {
               </Text>
             </View>
           </View>
-          <Text style={styles.callStatus}>Connected</Text>
+          <Text style={styles.callStatus}>
+            {status === 'outgoing' ? 'Calling...' :
+             status === 'connecting' ? 'Connecting...' :
+             status === 'in_call' ? 'Connected' :
+             'Connecting...'}
+          </Text>
         </View>
       )}
       
@@ -395,16 +569,114 @@ const MeetingContent = () => {
 
 type MeetingScreenRouteProp = RouteProp<MainNavigatorParamList, 'Meeting'>
 
+// Global type declarations at the top of the file
+declare global {
+  var meetingComponentInstances: Record<string, string> | undefined
+}
+
+// Initialize global tracking object if not exists
+if (!global.meetingComponentInstances) {
+  global.meetingComponentInstances = {}
+}
+
 const MeetingScreenSimple = () => {
   const route = useRoute<MeetingScreenRouteProp>()
   const session = useCallStore(state => state.session)
   const status = useCallStore(state => state.status)
   const navigation = useNavigation()
   
-  // Note: Navigation after call end is handled by CallController and App.tsx
-  // Removed automatic navigation from here to prevent conflicts
+  // Enhanced component instance tracking with stricter validation
+  const componentId = useRef(Math.random().toString(36).substr(2, 9))
+  const isComponentActive = useRef(false) // Start as inactive until validated
+  const hasInitialized = useRef(false)
+  const isMountedRef = useRef(true)
   
-  if (!session) {
+  // More comprehensive session validation
+  const sessionIsValid = session?.sessionId && session?.meetingId && session?.token
+  const callIsActive = status === 'in_call' || status === 'connecting' || status === 'outgoing'
+  
+  // Global component tracking key
+  const globalComponentKey = sessionIsValid ? `meeting-${session.sessionId}` : null
+  
+  // STRICT component instance management - prevent multiple renders entirely
+  useEffect(() => {
+    if (!isMountedRef.current) return
+    
+    console.log('[MeetingScreenSimple] Component mounted with ID:', componentId.current, 'Session:', session?.sessionId, 'Status:', status)
+    
+    // Comprehensive validation before allowing component to become active
+    if (!sessionIsValid) {
+      console.log('[MeetingScreenSimple] Session invalid, not activating component:', { 
+        sessionId: session?.sessionId,
+        meetingId: session?.meetingId,
+        hasToken: !!session?.token
+      })
+      return
+    }
+    
+    if (!callIsActive) {
+      console.log('[MeetingScreenSimple] Call not active, not activating component. Status:', status)
+      return
+    }
+    
+    if (!globalComponentKey) {
+      console.log('[MeetingScreenSimple] No valid global component key, not activating')
+      return
+    }
+    
+    // Initialize global tracking if needed
+    if (!global.meetingComponentInstances) {
+      global.meetingComponentInstances = {}
+    }
+    
+    // Check if another component is already handling this session
+    const existingComponentId = global.meetingComponentInstances[globalComponentKey]
+    if (existingComponentId && existingComponentId !== componentId.current) {
+      console.warn('[MeetingScreenSimple] Another component instance already exists for session:', session.sessionId, 'Existing ID:', existingComponentId, 'Current ID:', componentId.current, 'NOT ACTIVATING')
+      isComponentActive.current = false
+      return
+    }
+    
+    // Register this component as the active instance
+    global.meetingComponentInstances[globalComponentKey] = componentId.current
+    isComponentActive.current = true
+    hasInitialized.current = true
+    
+    console.log('[MeetingScreenSimple] Component activated and registered for session:', session.sessionId, 'Component ID:', componentId.current)
+    
+    return () => {
+      if (!isMountedRef.current) return
+      
+      console.log('[MeetingScreenSimple] Component cleanup for session:', session?.sessionId, 'Component ID:', componentId.current)
+      
+      // Only cleanup if this component was the active one
+      if (globalComponentKey && global.meetingComponentInstances?.[globalComponentKey] === componentId.current) {
+        delete global.meetingComponentInstances[globalComponentKey]
+        console.log('[MeetingScreenSimple] Cleaned up global component registration')
+      }
+      
+      isComponentActive.current = false
+      hasInitialized.current = false
+    }
+  }, [sessionIsValid, callIsActive, globalComponentKey, session?.sessionId, status])
+  
+  // Main cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false
+      isComponentActive.current = false
+      hasInitialized.current = false
+    }
+  }, [])
+  
+  // STRICT early returns - prevent ANY rendering if conditions not met
+  if (!isMountedRef.current) {
+    console.log('[MeetingScreenSimple] Component unmounted, returning null')
+    return null
+  }
+  
+  if (!sessionIsValid) {
+    console.log('[MeetingScreenSimple] Session not valid, showing loading')
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#fff" />
@@ -413,8 +685,27 @@ const MeetingScreenSimple = () => {
     )
   }
   
+  if (!callIsActive) {
+    console.log('[MeetingScreenSimple] Call not active, showing loading. Status:', status)
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#fff" />
+        <Text style={styles.loadingText}>Connecting...</Text>
+      </View>
+    )
+  }
+  
+  if (!isComponentActive.current || !hasInitialized.current) {
+    console.log('[MeetingScreenSimple] Component not active or not initialized, returning null')
+    return null
+  }
+  
+  // Only create MeetingProvider if this is the active component instance AND we have a valid session
+  console.log('[MeetingScreenSimple] Rendering active component for session:', session.sessionId, 'componentId:', componentId.current)
+  
   return (
     <MeetingProvider
+      key={`meeting-${session.sessionId}-${componentId.current}`} // Force new provider for each session
       token={session.token}
       config={{
         meetingId: session.meetingId,

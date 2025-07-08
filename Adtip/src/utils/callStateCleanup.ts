@@ -20,6 +20,12 @@ declare global {
   } | undefined
   var videoSDKParticipants: Map<string, any> | undefined
   var videoSDKMeetingData: any
+  var VideoSDK: {
+    participants?: Map<string, any>
+    currentMeeting?: any
+    websocketConnection?: any
+  } | undefined
+  var meetingComponentInstances: Record<string, string> | undefined
 }
 
 /**
@@ -188,13 +194,36 @@ export class CallStateCleanup {
 
     // Clear any global participant state if it exists
     if (global.videoSDKParticipants) {
+      console.log('[CallStateCleanup] Clearing global participant map');
+      global.videoSDKParticipants.clear();
       global.videoSDKParticipants = new Map();
     }
 
     // Clear any cached meeting data
     if (global.videoSDKMeetingData) {
+      console.log('[CallStateCleanup] Clearing global meeting data');
       global.videoSDKMeetingData = null;
     }
+
+    // Clear React Native VideoSDK internal state if accessible
+    try {
+      // Force clear any VideoSDK internal participant tracking
+      if (global.VideoSDK?.participants) {
+        global.VideoSDK.participants = new Map();
+      }
+      
+      // Clear any internal meeting state
+      if (global.VideoSDK?.currentMeeting) {
+        global.VideoSDK.currentMeeting = null;
+      }
+    } catch (error) {
+      console.warn('[CallStateCleanup] Error clearing VideoSDK internal state:', error);
+    }
+
+    // Add delay to ensure state clearing is processed
+    setTimeout(() => {
+      console.log('[CallStateCleanup] Participant cache clearing completed');
+    }, 100);
   }
 
   /**

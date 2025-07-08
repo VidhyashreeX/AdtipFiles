@@ -29,6 +29,10 @@ export function goBack() {
   }
 }
 
+// Navigation guard to prevent multiple meeting navigations
+let isNavigatingToMeeting = false;
+let currentMeetingId: string | null = null;
+
 // Special function to navigate to Meeting screen within MainNavigator
 export function navigateToMeeting(params: {
   meetingId: string;
@@ -47,6 +51,20 @@ export function navigateToMeeting(params: {
       return;
     }
 
+    // ✅ CRITICAL FIX: Prevent multiple navigation calls to the same meeting
+    if (isNavigatingToMeeting && currentMeetingId === params.meetingId) {
+      console.log('[NavigationService] Already navigating to meeting:', params.meetingId);
+      return;
+    }
+
+    // ✅ CRITICAL FIX: Prevent navigation to different meeting while one is active
+    if (isNavigatingToMeeting && currentMeetingId && currentMeetingId !== params.meetingId) {
+      console.log('[NavigationService] Different meeting already active, clearing previous state');
+      // Reset navigation state for new meeting
+      isNavigatingToMeeting = false;
+      currentMeetingId = null;
+    }
+
     if (navigationRef.isReady()) {
       console.log('[NavigationService] Navigating to Meeting screen with params:', {
         meetingId: params.meetingId,
@@ -54,12 +72,22 @@ export function navigateToMeeting(params: {
         displayName: params.displayName,
         localParticipantId: params.localParticipantId || 'not_provided' // Log participant ID
       });
-      
+
+      // Set navigation guard
+      isNavigatingToMeeting = true;
+      currentMeetingId = params.meetingId;
+
       // Navigate to Main navigator, then to Meeting screen
-      (navigationRef as any).navigate('Main', { 
-        screen: 'Meeting', 
-        params: params 
+      (navigationRef as any).navigate('Main', {
+        screen: 'Meeting',
+        params: params
       });
+
+      // Clear navigation guard after a delay to allow for navigation completion
+      setTimeout(() => {
+        isNavigatingToMeeting = false;
+      }, 1000);
+
     } else {
       console.warn('[NavigationService] Navigation not ready, skipping navigation to Meeting');
       // ✅ CRITICAL FIX: Retry navigation after a short delay
@@ -67,8 +95,18 @@ export function navigateToMeeting(params: {
     }
   } catch (error) {
     console.error('[NavigationService] Error in navigateToMeeting:', error);
+    // Reset navigation guard on error
+    isNavigatingToMeeting = false;
+    currentMeetingId = null;
     // ✅ CRITICAL FIX: Don't let navigation errors crash the app
   }
+}
+
+// Function to reset navigation state (called when call ends)
+export function resetMeetingNavigationState() {
+  console.log('[NavigationService] Resetting meeting navigation state');
+  isNavigatingToMeeting = false;
+  currentMeetingId = null;
 }
 
 /**
@@ -216,17 +254,20 @@ export function navigateToMeetingFromNotification(params: {
 export function navigateToTipCall() {
   try {
     console.log('[NavigationService] Forcing navigation back to TipCallSimple screen');
-    
+
+    // Reset meeting navigation state
+    resetMeetingNavigationState();
+
     if (navigationRef.isReady()) {
       // Reset to TipCall screen - this ensures we're back to the main call screen
       (navigationRef as any).reset({
         index: 0,
         routes: [
-          { 
-            name: 'Main', 
-            params: { 
-              screen: 'TipCallSimple' 
-            } 
+          {
+            name: 'Main',
+            params: {
+              screen: 'TipCallSimple'
+            }
           }
         ],
       });

@@ -17,6 +17,7 @@ import VideoSDKService from '../videosdk/VideoSDKService'
 import * as NavigationService from '../../navigation/NavigationService'
 import ApiService from '../ApiService'
 import CallStateCleanup from '../../utils/callStateCleanup'
+import { startPersistentCall, updatePersistentCallStatus, endPersistentCall } from '../../components/videosdk/PersistentMeetingManager'
 
 /**
  * CallController - Main orchestration layer for call flows
@@ -122,31 +123,21 @@ class CallController {
       }
     )
     
-    // When status changes, handle navigation
+    // When status changes, update persistent meeting manager
     subscribe(
       state => state.status,
       (status, prevStatus) => {
         switch (status) {
           case 'connecting':
           case 'in_call': {
-            // Navigate to call screen
-            const session = getState().session
-            if (session) {
-              // Use meeting with simple parameters
-              NavigationService.navigateToMeeting({
-                meetingId: session.meetingId,
-                token: session.token,
-                callType: session.type,
-                displayName: "User", // Can be retrieved from AsyncStorage
-                recipientName: session.peerName,
-                isInitiator: session.direction === 'outgoing'
-              })
-            }
+            // Update persistent meeting status
+            updatePersistentCallStatus(status)
             break
           }
           
           case 'ended': {
-            // Navigation is handled by App.tsx to prevent conflicts
+            // End persistent call
+            endPersistentCall()
             break
           }
         }
@@ -313,14 +304,28 @@ class CallController {
     console.log(`[CallController] Starting ${callType} call to ${recipientName}`)
     
     try {
+      // Ensure comprehensive cleanup before starting new call
+      await this.cleanup()
+      
       // Ensure VideoSDK is initialized 
       await this.videoSDK.initialize()
+      
+      // Clear any existing meeting state to prevent conflicts
+      await this.videoSDK.clearExistingMeetingState()
+      
+      // Generate session ID for this call
+      const sessionId = `call-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      
+      // Check if we can set this as the active meeting session
+      if (!this.videoSDK.setActiveMeetingSession(sessionId)) {
+        throw new Error('Another meeting session is already active')
+      }
       
       // Generate token for VideoSDK
       const token = await this.videoSDK.generateParticipantToken()
       if (!token) throw new Error('Failed to generate VideoSDK token')
       
-      // Create meeting ID
+      // Create meeting ID with state isolation
       const meetingId = await this.videoSDK.createMeeting(token)
       if (!meetingId) throw new Error('Failed to create meeting')
       
@@ -349,10 +354,7 @@ class CallController {
         },
       })
       
-      // Create unique session ID
-      const sessionId = uuid.v4().toString()
-      
-      // Update store with outgoing call
+      // Update store with outgoing call (use the same sessionId from VideoSDK tracking)
       const store = useCallStore.getState()
       store.actions.setSession({
         sessionId,
@@ -372,14 +374,17 @@ class CallController {
       // Show outgoing call notification
       this.notification.showOngoingCall(sessionId, recipientName, callType)
       
-      // Navigate to meeting screen
-      NavigationService.navigateToMeeting({
+      // For outgoing calls, immediately transition to connecting so the meeting screen can render
+      store.actions.setStatus('connecting')
+      
+      // Start persistent call instead of navigating
+      startPersistentCall({
+        sessionId,
         meetingId,
         token,
+        peerName: recipientName,
         callType,
-        displayName: userName,
-        recipientName,
-        isInitiator: true
+        direction: 'outgoing'
       })
       
       return true
@@ -510,6 +515,11 @@ class CallController {
 
       // Update status
       store.actions.setStatus('ended')
+      
+      // Clear active meeting session in VideoSDK service
+      if (session.sessionId) {
+        this.videoSDK.clearActiveMeetingSession(session.sessionId)
+      }
 
       // Send end signal
       try {
@@ -550,9 +560,36 @@ class CallController {
       // Reset call state
       store.actions.reset()
 
+      // Reset navigation state to prevent conflicts with next call
+      const NavigationService = await import('../../navigation/NavigationService')
+      NavigationService.resetMeetingNavigationState()
+
+      // Force comprehensive cleanup to ensure state isolation
+      try {
+        const cleanupService = CallStateCleanup.getInstance()
+        await cleanupService.performComprehensiveCleanup()
+      } catch (cleanupError) {
+        console.error('[CallController] Cleanup error during endCall:', cleanupError)
+      }
+
       return true
     } catch (error) {
       console.error('[CallController] endCall error', error)
+
+      // Force cleanup even on error to prevent state bleeding
+      try {
+        const store = useCallStore.getState()
+        store.actions.reset()
+
+        const NavigationService = await import('../../navigation/NavigationService')
+        NavigationService.resetMeetingNavigationState()
+
+        const cleanupService = CallStateCleanup.getInstance()
+        cleanupService.emergencyCleanup()
+      } catch (emergencyError) {
+        console.error('[CallController] Emergency cleanup error:', emergencyError)
+      }
+
       return false
     }
   }

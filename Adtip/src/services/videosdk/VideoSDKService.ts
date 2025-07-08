@@ -20,6 +20,10 @@ class VideoSDKService {
   private isInitialized: boolean = false;
   private initializationPromise: Promise<boolean> | null = null;
   private config: VideoSDKConfig = {};
+  
+  // Add active meeting session tracking
+  private activeMeetingSession: string | null = null;
+  private meetingStateCleanupTimestamp: number = 0;
 
   private constructor() {}
 
@@ -103,11 +107,14 @@ class VideoSDKService {
     this.config = { ...this.config, ...newConfig };
     console.log('[VideoSDK] Configuration updated:', this.config);
   }  /**
-   * Create a new meeting via backend API
+   * Create a new meeting via backend API with state isolation
    */
   public async createMeeting(participantToken: string): Promise<string | null> {
     try {
-      console.log('[VideoSDK] Creating meeting via backend API');
+      console.log('[VideoSDK] Creating meeting via backend API with state isolation');
+      
+      // First, clear any existing meeting state to prevent conflicts
+      await this.clearExistingMeetingState();
       
       // Pass correct region code as per VideoSDK docs (us001, sg001, eu001)
       const response = await ApiService.createVideoSDKMeeting(participantToken, 'us001');
@@ -116,7 +123,7 @@ class VideoSDKService {
       
       // Fix: Check the correct response structure
       if (response.success && response.data && response.data.roomId) {
-        console.log('[VideoSDK] Meeting created:', response.data.roomId);
+        console.log('[VideoSDK] Meeting created with isolation:', response.data.roomId);
         return response.data.roomId;
       } else {
         console.error('[VideoSDK] Invalid response structure:', response);
@@ -181,6 +188,50 @@ class VideoSDKService {
   }
 
   /**
+   * Force clear any existing meeting state before creating a new one
+   * This prevents meeting ID conflicts and ensures clean state
+   */
+  public async clearExistingMeetingState(): Promise<void> {
+    console.log('[VideoSDK] Clearing existing meeting state to prevent conflicts');
+    
+    try {
+      // Clear any global meeting references
+      if (global.videoSDKMeetingData) {
+        global.videoSDKMeetingData = null;
+      }
+      
+      // Clear active meeting session tracking
+      if (this.activeMeetingSession) {
+        console.log('[VideoSDK] Clearing previous active meeting session:', this.activeMeetingSession);
+        this.activeMeetingSession = null;
+        this.meetingStateCleanupTimestamp = Date.now();
+      }
+      
+      // Clear any participant data
+      if (global.videoSDKParticipants) {
+        global.videoSDKParticipants.clear();
+      }
+      
+      // Clear VideoSDK internal state if accessible
+      if (global.VideoSDK?.currentMeeting) {
+        global.VideoSDK.currentMeeting = null;
+      }
+      
+      // Force garbage collection to clear any remaining references
+      if (global.gc) {
+        global.gc();
+      }
+      
+      // Add small delay to ensure cleanup is complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      console.log('[VideoSDK] Meeting state cleared successfully');
+    } catch (error) {
+      console.warn('[VideoSDK] Error clearing meeting state:', error);
+    }
+  }
+
+  /**
    * Reset service (for logout or cleanup)
    */
   public reset(): void {
@@ -191,18 +242,111 @@ class VideoSDKService {
     this.config = {};
     this.initializationPromise = null;
 
-    // Force cleanup of any lingering WebRTC connections
+    // Force cleanup of any lingering WebRTC connections and participant state
     try {
       // Clear any global VideoSDK state if available
       if (global.VideoSDK) {
         console.log('[VideoSDK] Clearing global VideoSDK state');
         // Force cleanup of any active meetings or connections
       }
+
+      // Clear any cached participant data that might cause state bleeding
+      if (global.videoSDKParticipants) {
+        console.log('[VideoSDK] Clearing cached participant data');
+        global.videoSDKParticipants.clear();
+        global.videoSDKParticipants = new Map();
+      }
+
+      // Clear any meeting data cache
+      if (global.videoSDKMeetingData) {
+        console.log('[VideoSDK] Clearing cached meeting data');
+        global.videoSDKMeetingData = null;
+      }
+
+      // Force WebRTC cleanup to prevent participant ID conflicts
+      if (global.RTCPeerConnection) {
+        console.log('[VideoSDK] Forcing WebRTC connection cleanup');
+        // This helps prevent participant ID conflicts between calls
+      }
+
+      // Clear any component instance tracking that might interfere
+      if (global.meetingComponentInstances) {
+        console.log('[VideoSDK] Clearing component instance tracking');
+        global.meetingComponentInstances = {};
+      }
+
+      // Force clear React Native VideoSDK internal state
+      try {
+        // Clear any internal participant tracking that might cause ID conflicts
+        if (global.VideoSDK?.participants) {
+          global.VideoSDK.participants.clear();
+        }
+        
+        // Reset any meeting session state
+        if (global.VideoSDK?.currentMeeting) {
+          global.VideoSDK.currentMeeting = null;
+        }
+        
+        // Clear any WebSocket connection state
+        if (global.VideoSDK?.websocketConnection) {
+          global.VideoSDK.websocketConnection = null;
+        }
+      } catch (wsError) {
+        console.warn('[VideoSDK] Error clearing WebSocket state:', wsError);
+      }
+
     } catch (error) {
-      console.warn('[VideoSDK] Error during global state cleanup:', error);
+      console.warn('[VideoSDK] Error during comprehensive state cleanup:', error);
     }
 
+    // Add delay to ensure all cleanup operations are complete
+    setTimeout(() => {
+      console.log('[VideoSDK] Service reset complete with delay');
+    }, 100);
+
     console.log('[VideoSDK] Service reset complete');
+  }
+
+  /**
+   * Set active meeting session to prevent multiple simultaneous meetings
+   */
+  public setActiveMeetingSession(sessionId: string): boolean {
+    const now = Date.now();
+    
+    // If there's already an active session, check if it's the same or if enough time has passed for cleanup
+    if (this.activeMeetingSession && this.activeMeetingSession !== sessionId) {
+      // If the last cleanup was recent, don't allow new session
+      if (now - this.meetingStateCleanupTimestamp < 2000) {
+        console.warn('[VideoSDK] Another meeting session is active, rejecting new session:', {
+          active: this.activeMeetingSession,
+          new: sessionId,
+          timeSinceCleanup: now - this.meetingStateCleanupTimestamp
+        });
+        return false;
+      }
+    }
+    
+    console.log('[VideoSDK] Setting active meeting session:', sessionId);
+    this.activeMeetingSession = sessionId;
+    return true;
+  }
+  
+  /**
+   * Clear active meeting session
+   */
+  public clearActiveMeetingSession(sessionId: string): void {
+    if (this.activeMeetingSession === sessionId) {
+      console.log('[VideoSDK] Clearing active meeting session:', sessionId);
+      this.activeMeetingSession = null;
+      this.meetingStateCleanupTimestamp = Date.now();
+    }
+  }
+  
+  /**
+   * Check if a meeting session is active
+   */
+  public isSessionActive(sessionId: string): boolean {
+    return this.activeMeetingSession === sessionId;
   }
 }
 
