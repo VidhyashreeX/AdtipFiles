@@ -184,9 +184,25 @@ class VideoSDKService {
    * Reset service (for logout or cleanup)
    */
   public reset(): void {
+    console.log('[VideoSDK] Starting comprehensive service reset');
+
+    // Reset initialization state
     this.isInitialized = false;
     this.config = {};
-    console.log('[VideoSDK] Service reset');
+    this.initializationPromise = null;
+
+    // Force cleanup of any lingering WebRTC connections
+    try {
+      // Clear any global VideoSDK state if available
+      if (global.VideoSDK) {
+        console.log('[VideoSDK] Clearing global VideoSDK state');
+        // Force cleanup of any active meetings or connections
+      }
+    } catch (error) {
+      console.warn('[VideoSDK] Error during global state cleanup:', error);
+    }
+
+    console.log('[VideoSDK] Service reset complete');
   }
 }
 

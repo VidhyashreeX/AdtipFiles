@@ -186,11 +186,16 @@ const MeetingContent = () => {
   const status = useCallStore(state => state.status)
   const actions = useCallStore(state => state.actions)
   
-  // Save meeting reference for media service
+  // Save meeting reference for media service with proper cleanup
   useEffect(() => {
-    mediaService.setMeetingRef(meeting)
+    if (meeting && !mediaService.isMeetingActive()) {
+      console.log('[MeetingScreen] Setting meeting reference');
+      mediaService.setMeetingRef(meeting);
+    }
+
     return () => {
-      mediaService.setMeetingRef(null)
+      console.log('[MeetingScreen] Clearing meeting reference');
+      mediaService.setMeetingRef(null);
     }
   }, [meeting, mediaService])
 
@@ -269,20 +274,38 @@ const MeetingContent = () => {
     // Trigger the first join attempt
     joinWithRetry()
 
-    // Cleanup on unmount
+    // Comprehensive cleanup on unmount
     return () => {
-      console.log('[MeetingScreen] Component unmounting, cleaning up meeting')
+      console.log('[MeetingScreen] Component unmounting, performing comprehensive cleanup');
+
+      // Step 1: Leave meeting with timeout protection
       if (joinedRef.current && meeting.leave) {
         try {
-          meeting.leave()
-          console.log('[MeetingScreen] Successfully left meeting on cleanup')
+          console.log('[MeetingScreen] Leaving meeting on cleanup');
+          Promise.race([
+            meeting.leave(),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Cleanup leave timeout')), 2000)
+            )
+          ]).then(() => {
+            console.log('[MeetingScreen] Successfully left meeting on cleanup');
+          }).catch((error) => {
+            console.warn('[MeetingScreen] Error or timeout leaving meeting on cleanup:', error);
+          });
         } catch (error) {
-          console.warn('[MeetingScreen] Error leaving meeting on cleanup:', error)
+          console.warn('[MeetingScreen] Error leaving meeting on cleanup:', error);
         }
       }
-      // Reset join state for next meeting
-      joinedRef.current = false
-      joinAttemptsRef.current = 0
+
+      // Step 2: Clear all refs and state
+      joinedRef.current = false;
+      joinAttemptsRef.current = 0;
+      initialLoadRef.current = true;
+
+      // Step 3: Clear meeting reference from media service
+      mediaService.setMeetingRef(null);
+
+      console.log('[MeetingScreen] Component cleanup complete');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

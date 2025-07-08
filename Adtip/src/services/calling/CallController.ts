@@ -16,6 +16,7 @@ import NotificationService from './NotificationService'
 import VideoSDKService from '../videosdk/VideoSDKService'
 import * as NavigationService from '../../navigation/NavigationService'
 import ApiService from '../ApiService'
+import CallStateCleanup from '../../utils/callStateCleanup'
 
 /**
  * CallController - Main orchestration layer for call flows
@@ -228,16 +229,24 @@ class CallController {
   }
   
   /**
-   * Clean up call resources
+   * Clean up call resources with comprehensive state reset
    */
   private async cleanup() {
-    await this.media.leaveMeeting()
-    const store = useCallStore.getState()
-    
-    // Reset after a moment to allow for any animations
-    setTimeout(() => {
-      store.actions.reset()
-    }, 500)
+    console.log('[CallController] Starting comprehensive cleanup');
+
+    try {
+      // Use the comprehensive cleanup utility
+      const cleanupService = CallStateCleanup.getInstance();
+      await cleanupService.performComprehensiveCleanup();
+
+      console.log('[CallController] Comprehensive cleanup complete');
+    } catch (error) {
+      console.error('[CallController] Error during comprehensive cleanup:', error);
+
+      // Fallback to emergency cleanup
+      const cleanupService = CallStateCleanup.getInstance();
+      cleanupService.emergencyCleanup();
+    }
   }
   
   /**

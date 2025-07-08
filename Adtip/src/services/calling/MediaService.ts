@@ -53,24 +53,65 @@ class MediaService {
 
   async leaveMeeting() {
     try {
+      console.log('[MediaService] Starting comprehensive meeting cleanup');
+
+      // Step 1: Leave the meeting with timeout protection
       if (this.meeting?.leave) {
-        console.log('[MediaService] Leaving meeting')
-        await this.meeting.leave()
+        console.log('[MediaService] Leaving meeting with timeout protection');
+        try {
+          await Promise.race([
+            this.meeting.leave(),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Leave timeout')), 3000)
+            )
+          ]);
+          console.log('[MediaService] Successfully left meeting');
+        } catch (leaveError) {
+          console.warn('[MediaService] Leave meeting timeout or error:', leaveError);
+          // Continue with cleanup even if leave fails
+        }
       }
 
-      // Clear meeting config and references
-      this.currentMeetingConfig = null
-      this.meeting = null
+      // Step 2: Force cleanup of meeting reference
+      if (this.meeting) {
+        console.log('[MediaService] Force clearing meeting reference');
+        try {
+          // Attempt to stop all media streams
+          if (this.meeting.localParticipant?.webcamStream?.track) {
+            this.meeting.localParticipant.webcamStream.track.stop();
+          }
+          if (this.meeting.localParticipant?.micStream?.track) {
+            this.meeting.localParticipant.micStream.track.stop();
+          }
+        } catch (streamError) {
+          console.warn('[MediaService] Error stopping media streams:', streamError);
+        }
 
-      // Reset VideoSDK service to ensure clean state for next meeting
-      this.videoSDK.reset()
+        this.meeting = null;
+      }
 
-      console.log('[MediaService] Meeting cleanup completed')
+      // Step 3: Clear meeting config
+      this.currentMeetingConfig = null;
+
+      // Step 4: Reset VideoSDK service to ensure clean state for next meeting
+      this.videoSDK.reset();
+
+      // Step 5: Force garbage collection hint
+      if (global.gc) {
+        global.gc();
+      }
+
+      console.log('[MediaService] Comprehensive meeting cleanup completed');
 
       // Note: Navigation is handled by CallController and App.tsx to prevent conflicts
 
     } catch (error) {
-      console.error('[MediaService] leaveMeeting error:', error)
+      console.error('[MediaService] leaveMeeting error:', error);
+
+      // Force cleanup even on error
+      this.meeting = null;
+      this.currentMeetingConfig = null;
+      this.videoSDK.reset();
     }
   }
 

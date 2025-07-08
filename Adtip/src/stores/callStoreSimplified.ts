@@ -53,7 +53,15 @@ export const useCallStore = create<CallStore>()(
       session: null,
       media: initialMedia,
       actions: {
-        reset: () => set({ status: 'idle', session: null, media: initialMedia }),
+        reset: () => {
+          console.log('[CallStore] Performing comprehensive reset');
+          set({
+            status: 'idle',
+            session: null,
+            media: { ...initialMedia } // Create new object to break references
+          });
+          console.log('[CallStore] Reset complete');
+        },
         setStatus: (s: CallStatus) => set({ status: s }),
         setSession: (session: CallSession | null) => set({ session }),
         updateMedia: (updates: Partial<MediaState>) => set((state: CallStore) => ({ media: { ...state.media, ...updates } })),
