@@ -30,6 +30,7 @@ import { useUsers, usePrefetchData } from '../../hooks/useQueries';
 import PermissionManagerService from '../../services/PermissionManagerService';
 import Header from '../../components/common/Header';
 import ScreenTransition from '../../components/common/ScreenTransition';
+import PremiumPopup from '../../components/common/PremiumPopup';
 import {
   useMeeting,
   useParticipant,
@@ -325,6 +326,9 @@ export default function TipCallScreen() {
   const [isPremium, setIsPremium] = useState<boolean>(false);
   const [premiumLoading, setPremiumLoading] = useState<boolean>(true);
   const [premiumData, setPremiumData] = useState<any>(null);
+  
+  // Premium popup state
+  const [showPremiumPopup, setShowPremiumPopup] = useState<boolean>(false);
 
   // Get missed calls count for badge
   const { count: missedCallsCount } = useMissedCallsCount(user?.id?.toString());
@@ -611,6 +615,13 @@ export default function TipCallScreen() {
 
   // Handle chat navigation and mark messages as read
   const handleChatNavigation = useCallback(async (contact: Contact) => {
+    // Check premium status first
+    if (!isPremium) {
+      console.log('[TipCall] Non-premium user trying to chat, showing upgrade popup');
+      setShowPremiumPopup(true);
+      return;
+    }
+
     // Mark messages as read when opening chat
     if (user?.id && unreadCounts[contact.id] > 0) {
       try {
@@ -626,7 +637,7 @@ export default function TipCallScreen() {
     }
     
     navigation.navigate('Chat', { user: contact });
-  }, [navigation, user?.id, unreadCounts]);
+  }, [navigation, user?.id, unreadCounts, isPremium]);
 
   // Handle user profile modal
   const handleUserProfilePress = useCallback((userId: number) => {
@@ -783,6 +794,13 @@ export default function TipCallScreen() {
   const handleStartCall = useCallback(async (recipient: Contact, callType: 'voice' | 'video') => {
     if (!user || !recipient.name) {
       Alert.alert("Error", "User or recipient information is missing.");
+      return;
+    }
+
+    // Check premium status first
+    if (!isPremium) {
+      console.log('[TipCall] Non-premium user trying to make call, showing upgrade popup');
+      setShowPremiumPopup(true);
       return;
     }
 
@@ -1457,6 +1475,16 @@ export default function TipCallScreen() {
           />
         )}
       </Modal>
+
+      {/* Premium Popup */}
+      <PremiumPopup
+        visible={showPremiumPopup}
+        onClose={() => setShowPremiumPopup(false)}
+        onUpgrade={() => {
+          console.log('🚀 [TipCallScreen] Premium upgrade initiated from popup');
+          setShowPremiumPopup(false);
+        }}
+      />
     </View>
   );
 }

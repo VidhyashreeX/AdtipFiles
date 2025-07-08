@@ -33,7 +33,7 @@ const PremiumPopup: React.FC<PremiumPopupProps> = ({
     console.log('🚀 [PremiumPopup] User clicked upgrade button');
     onUpgrade();
     onClose();
-    navigation.navigate('SubscriptionScreen' as never);
+    navigation.navigate('PremiumUser' as never);
   };
 
   const handleCancel = () => {

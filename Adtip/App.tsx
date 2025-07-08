@@ -422,7 +422,7 @@ function App(): React.JSX.Element {
         <ThemeProvider>
           <AuthProvider>
             <WalletProvider>
-                <ContentCreatorPremiumProvider>
+              <ContentCreatorPremiumProvider>
                 <EnhancedQueryProvider>
                   <DataProvider>
                     <ShortsProvider>
@@ -430,6 +430,7 @@ function App(): React.JSX.Element {
                         <SidebarProvider>
                           <GestureHandlerRootView style={{ flex: 1 }}>
                             <AppNavigator />
+                            <PersistentMeetingManager />
                             {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
                           </GestureHandlerRootView>
                         </SidebarProvider>
@@ -437,22 +438,7 @@ function App(): React.JSX.Element {
                     </ShortsProvider>
                   </DataProvider>
                 </EnhancedQueryProvider>
-                </ContentCreatorPremiumProvider>
-              <EnhancedQueryProvider>
-                <DataProvider>
-                  <ShortsProvider>
-                    <TabNavigatorProvider>
-                      <SidebarProvider>
-                        <GestureHandlerRootView style={{ flex: 1 }}>
-                          <AppNavigator />
-                          <PersistentMeetingManager />
-                          {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
-                        </GestureHandlerRootView>
-                      </SidebarProvider>
-                    </TabNavigatorProvider>
-                  </ShortsProvider>
-                </DataProvider>
-              </EnhancedQueryProvider>
+              </ContentCreatorPremiumProvider>
             </WalletProvider>
           </AuthProvider>
         </ThemeProvider>
