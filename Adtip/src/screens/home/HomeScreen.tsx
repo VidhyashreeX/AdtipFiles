@@ -640,11 +640,24 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     }
   }, [isPremium, user?.id]);
 
-  const handleBannerPress = useCallback((banner: any) => {
-    console.log('Banner pressed:', banner);
-    // You can add navigation logic here based on banner type or data
-    // For now, just log the banner info
-  }, []);
+  const handleBannerPress = useCallback((bannerId: number) => {
+    switch (bannerId) {
+      case 1:
+        navigation.navigate('TipCall' as never);
+        break;
+      case 2:
+        navigation.navigate('TipTube' as never);
+        break;
+      case 3:
+        navigation.navigate('Referral' as never);
+        break;
+      case 4:
+        navigation.navigate('ContentCreatorPremium' as never);
+        break;
+      default:
+        break;
+    }
+  }, [navigation]);
 
   const handlePostLike = useCallback((postId: number) => {
     // Find current like state and optimistically update
@@ -848,7 +861,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
               {renderPremiumBanner()}
               <StoriesRow stories={displayStories} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} />
               <CategoriesRow categories={displayCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} isLoading={categoriesLoading} />
-              <BannerCarousel />
+              <BannerCarousel onBannerPress={handleBannerPress} />
               <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} onInstallToEarn={handleInstallToEarn} />
               <InstallToEarnPopup
                 visible={showInstallToEarnPopup}

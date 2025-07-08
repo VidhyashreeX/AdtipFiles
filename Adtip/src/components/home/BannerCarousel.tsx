@@ -45,7 +45,11 @@ const STATIC_BANNERS = [
   },
 ];
 
-const BannerCarousel: React.FC = () => {
+interface BannerCarouselProps {
+  onBannerPress?: (bannerId: number) => void;
+}
+
+const BannerCarousel: React.FC<BannerCarouselProps> = ({ onBannerPress }) => {
   const { colors } = useTheme();
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<any>(null);
@@ -93,20 +97,22 @@ const BannerCarousel: React.FC = () => {
           scrollEventThrottle={16}
           keyExtractor={(item) => item.id.toString()}
           renderItem={({ item }) => (
-            <LinearGradient
-              colors={item.gradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.bannerCard}
-            >
-              <View style={styles.bannerContent}>
-                <View style={styles.textContainer}>
-                  <Text style={styles.bannerTitle}>{item.title}</Text>
-                  <Text style={styles.bannerDescription}>{item.description}</Text>
+            <TouchableOpacity activeOpacity={0.85} onPress={() => onBannerPress && onBannerPress(item.id)}>
+              <LinearGradient
+                colors={item.gradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.bannerCard}
+              >
+                <View style={styles.bannerContent}>
+                  <View style={styles.textContainer}>
+                    <Text style={styles.bannerTitle}>{item.title}</Text>
+                    <Text style={styles.bannerDescription}>{item.description}</Text>
+                  </View>
+                  <View style={styles.iconContainer}>{item.icon}</View>
                 </View>
-                <View style={styles.iconContainer}>{item.icon}</View>
-              </View>
-            </LinearGradient>
+              </LinearGradient>
+            </TouchableOpacity>
           )}
         />
       </View>
