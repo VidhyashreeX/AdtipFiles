@@ -31,6 +31,7 @@ import PermissionManagerService from '../../services/PermissionManagerService';
 import Header from '../../components/common/Header';
 import ScreenTransition from '../../components/common/ScreenTransition';
 import PremiumPopup from '../../components/common/PremiumPopup';
+import CallManagerService from '../../services/CallManagerService';
 import {
   useMeeting,
   useParticipant,
@@ -329,6 +330,9 @@ export default function TipCallScreen() {
   
   // Premium popup state
   const [showPremiumPopup, setShowPremiumPopup] = useState<boolean>(false);
+  
+  // Call manager service
+  const [callManager, setCallManager] = useState<CallManagerService | null>(null);
 
   // Get missed calls count for badge
   const { count: missedCallsCount } = useMissedCallsCount(user?.id?.toString());
@@ -344,17 +348,25 @@ export default function TipCallScreen() {
     isInitialized: blocklistInitialized 
   } = useBlocklist();
 
-  // Initialize BlocklistService on mount
+  // Initialize services on mount
   useEffect(() => {
-    const initializeBlocklist = async () => {
+    const initializeServices = async () => {
       try {
+        // Initialize blocklist service
         const blocklistService = BlocklistService.getInstance();
         await blocklistService.initialize();
+        
+        // Initialize call manager service
+        const callManagerService = CallManagerService.getInstance();
+        const initialized = await callManagerService.initialize();
+        if (initialized) {
+          setCallManager(callManagerService);
+        }
       } catch (error) {
-        console.error('[TipCallScreen] Failed to initialize blocklist:', error);
+        console.error('[TipCallScreen] Failed to initialize services:', error);
       }
     };
-    initializeBlocklist();
+    initializeServices();
   }, []);
 
   // Initialize and reset call-related services
@@ -384,10 +396,7 @@ export default function TipCallScreen() {
           console.log('[TipCallScreen] Call service not initialized, initializing now...');
           
           // Configure VideoSDK with basic options
-          const success = await unifiedCallService.initialize({
-            enableCallKeep: true,
-            enableNotifications: true,
-          });
+          const success = await unifiedCallService.initialize();
           
           if (!success) {
             console.error('[TipCallScreen] Failed to initialize call service');
@@ -432,6 +441,16 @@ export default function TipCallScreen() {
     const { useCallStore } = require('../../stores/callStore');
     useCallStore.getState().actions.cleanup();
   }, []);
+
+  // Cleanup call manager on unmount
+  useEffect(() => {
+    return () => {
+      if (callManager) {
+        console.log('[TipCallScreen] Cleaning up call manager on unmount');
+        callManager.cleanup();
+      }
+    };
+  }, [callManager]);
 
   // Request permissions on component mount
   useEffect(() => {
@@ -799,10 +818,30 @@ export default function TipCallScreen() {
 
     // Check premium status first
     if (!isPremium) {
-      console.log('[TipCall] Non-premium user trying to make call, showing upgrade popup');
+      console.log('🚫 [TipCall] Non-premium user trying to make call, showing upgrade popup');
       setShowPremiumPopup(true);
       return;
     }
+
+    console.log('✅ [TipCall] Premium user verified, proceeding with call');
+
+    // Check if call manager is initialized
+    if (!callManager) {
+      console.log('❌ [TipCall] Call manager not initialized');
+      Alert.alert("Error", "Call service is not ready. Please try again.");
+      return;
+    }
+
+    console.log('✅ [TipCall] Call manager initialized and ready');
+
+    // Check if there's already an active call
+    if (callManager.hasActiveCall()) {
+      console.log('⚠️ [TipCall] User already has an active call');
+      Alert.alert("Call In Progress", "You are already in a call. Please end the current call first.");
+      return;
+    }
+
+    console.log('✅ [TipCall] No active calls, proceeding with new call');
 
     // Check wallet balance before starting call
     const currentBalance = parseFloat(balance || '0');
@@ -829,157 +868,122 @@ export default function TipCallScreen() {
       return;
     }
 
-    // Calculate and show maximum call duration based on balance
-    try {
-      const callBillingService = CallBillingService.getInstance();
-      const callRates = callBillingService.getCallRates();
-      const { isPremium } = await WalletService.checkPremiumStatus(user.id);
-      
-      let ratePerMinute: number;
-      if (callType === 'voice') {
-        ratePerMinute = isPremium ? callRates.voicePremium : callRates.voiceNonPremium;
-      } else {
-        ratePerMinute = isPremium ? callRates.videoPremium : callRates.videoNonPremium;
-      }
-      
-      const maxMinutes = Math.floor(currentBalance / ratePerMinute);
-      const maxDurationText = maxMinutes >= 60 
-        ? `${Math.floor(maxMinutes / 60)}h ${maxMinutes % 60}m`
-        : `${maxMinutes}m`;
-      
-      console.log('[TipCall] Call duration calculation:', {
-        balance: currentBalance,
-        isPremium,
-        ratePerMinute,
-        maxMinutes,
-        callType
-      });
+    console.log('📞 [TipCall] Showing call confirmation dialog for:', {
+      recipient: recipient.name,
+      callType,
+      userBalance: balance
+    });
 
-      // Show confirmation with call duration info
-      Alert.alert(
-        `Start ${callType === 'voice' ? 'Voice' : 'Video'} Call`,
-        `Call to ${recipient.name}\n\nRate: ₹${ratePerMinute}/min ${isPremium ? '(Premium)' : ''}\nMax duration: ${maxDurationText}\nBalance: ₹${currentBalance.toFixed(2)}`,
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Start Call',
-            style: 'default',
-            onPress: () => initiateCall(),
-          },
-        ]
-      );
-    } catch (error) {
-      console.error('[TipCall] Error calculating call duration:', error);
-      // If calculation fails, still allow the call but without duration info
-      Alert.alert(
-        `Start ${callType === 'voice' ? 'Voice' : 'Video'} Call`,
-        `Call to ${recipient.name}?`,
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Start Call',
-            style: 'default',
-            onPress: () => initiateCall(),
-          },
-        ]
-      );
-    }
+    // Show confirmation dialog
+    Alert.alert(
+      `Start ${callType === 'voice' ? 'Voice' : 'Video'} Call`,
+      `Call to ${recipient.name}?\n\nThis call will be automatically ended after 10 minutes for safety.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Start Call',
+          style: 'default',
+          onPress: () => initiateCall(),
+        },
+      ]
+    );
 
     async function initiateCall() {
-      // Prevent multiple rapid call attempts using Zustand store
-      const { useCallStore } = require('../../stores/callStore');
-      const currentCallStatus = useCallStore.getState().callStatus;
-      if (currentCallStatus !== 'idle' && currentCallStatus !== 'ended') {
-        Alert.alert("Call In Progress", "You are already in a call.");
-        return;
-      }
-
       try {
-        console.log('[TipCall] Starting WhatsApp-like call to:', recipient.name, 'Type:', callType);
-        
-        // ✅ Check if recipient is available before starting call
-        try {
-          console.log('[TipCall] Verifying recipient availability...');
-          const recipientFCMData = await ApiService.getFCMToken(recipient.id.toString());
-          if (!recipientFCMData?.token) {
-            Alert.alert(
-              "Recipient Unavailable", 
-              `${recipient.name} is not available to receive calls right now.`
-            );
-            return;
-          }
-          console.log('[TipCall] Recipient is available for calls');
-        } catch (error) {
-          console.error('[TipCall] Error checking recipient availability:', error);
-          Alert.alert("Error", "Unable to verify recipient availability. Please try again.");
-          return;
-        }
-        
-        // Initialize Unified Call Service if not already done
-        const callService = UnifiedCallService.getInstance();
-        const initialized = await callService.initialize();
-        
-        if (!initialized) {
-          Alert.alert("Call Error", "Unable to initialize calling system. Please try again.");
-          return;
-        }
-        
-        // Start the call with Unified Call Service
-        const callData = await callService.startOutgoingCall(
-          recipient.id.toString(),
-          recipient.name || 'Unknown',
+        console.log('🚀 [TipCall] Starting call with API + VideoSDK integration...', { 
+          recipient: recipient.name, 
           callType,
-          user?.name || 'User',
-          user?.id.toString() || '0'
+          callerId: user!.id,
+          receiverId: recipient.id
+        });
+        
+        // STEP 1: Call our API for wallet debit and business logic
+        console.log('📡 [TipCall] Step 1: Making API call for wallet debit and business logic...');
+        
+        const apiResponse = callType === 'voice' 
+          ? await callManager!.startVoiceCall(user!.id, recipient.id)
+          : await callManager!.startVideoCall(user!.id, recipient.id);
+        
+        console.log('📥 [TipCall] API response received:', JSON.stringify(apiResponse, null, 2));
+        
+        if (!apiResponse.status) {
+          throw new Error(apiResponse.message || 'Failed to start call via API');
+        }
+        
+        console.log('✅ [TipCall] API call successful - wallet debited and business logic processed');
+        
+        // STEP 2: Start VideoSDK for actual call media
+        console.log('📡 [TipCall] Step 2: Starting VideoSDK for actual call media...');
+        
+        // Import and use CallController for VideoSDK
+        const CallController = require('../../services/calling/CallController').default;
+        const callController = CallController.getInstance();
+        
+        // Start VideoSDK call with the meeting ID from our API
+        const videoSDKSuccess = await callController.startCall(
+          recipient.id.toString(),
+          recipient.name,
+          callType
         );
         
-        if (callData) {
-          console.log('[TipCall] WhatsApp-like call initiated successfully:', callData.callId);
-          // Navigation will be handled automatically by WhatsApp Call Manager
-        } else {
-          console.error('[TipCall] WhatsApp Call Manager failed to start the call.');
-          Alert.alert('Call Failed', 'Unable to start the call. Please check your connection and try again.');
-        }
-      } catch (error: any) {
-        console.error('[TipCall] Error in handleStartCall:', error);
-        
-        // ✅ Handle specific FCM token errors
-        if (error.message?.includes('no FCM token')) {
-          if (error.message.includes('Recipient')) {
-            Alert.alert(
-              "Recipient Unavailable", 
-              `${recipient.name} is not available to receive calls right now.`
-            );
-          } else if (error.message.includes('Caller')) {
-            Alert.alert(
-              "Call Error", 
-              "Unable to initiate call. Please check your internet connection and try again."
-            );
-          } else {
-            Alert.alert(
-              "Call Error", 
-              "Unable to initiate call. Please try again later."
-            );
-          }
-        } else if (error.message?.includes('Network connection error')) {
+        if (!videoSDKSuccess) {
+          console.error('❌ [TipCall] VideoSDK call failed, but API was successful');
+          // TODO: Handle partial failure - API succeeded but VideoSDK failed
           Alert.alert(
-            "Network Error", 
-            "Please check your internet connection and try again."
+            'Call Partially Started',
+            'Call was initiated but media connection failed. Please try again.',
+            [{ text: 'OK' }]
           );
-        } else if (error.message?.includes('Call failed')) {
-          Alert.alert("Call Failed", error.message.replace('Call failed: ', ''));
-        } else {
-          Alert.alert('Call Error', 'An unexpected error occurred while starting the call. Please try again.');
+          return;
         }
+        
+        console.log('✅ [TipCall] VideoSDK call started successfully');
+        
+        // STEP 3: Show success message with combined info
+        console.log('✅ [TipCall] Complete call flow successful:', {
+          callId: apiResponse.callId,
+          meetingId: apiResponse.meetingId,
+          maxDuration: apiResponse.maxCallLimitTime,
+          callType,
+          startTime: apiResponse.startTime,
+          chargePerMinute: apiResponse.caller_charge_per_minute,
+          userBalance: apiResponse.caller_balance
+        });
+        
+        // Show success message
+        Alert.alert(
+          'Call Started Successfully',
+          `${callType === 'voice' ? 'Voice' : 'Video'} call to ${recipient.name} has started.\n\n` +
+          `💰 Wallet debited: ₹${apiResponse.caller_charge_per_minute}/min\n` +
+          `⏱️ Auto-end: ${apiResponse.maxCallLimitTime || 10} minutes\n` +
+          `💳 Balance: ₹${apiResponse.caller_balance}`,
+          [{ text: 'OK' }]
+        );
+        
+      } catch (error: any) {
+        console.error('❌ [TipCall] Error in complete call flow:', error);
+        
+        let errorMessage = 'An unexpected error occurred while starting the call.';
+        
+        if (error.message?.includes('No internet connection')) {
+          errorMessage = 'No internet connection available. Please check your network and try again.';
+        } else if (error.message?.includes('Failed to start')) {
+          errorMessage = error.message;
+        } else if (error.message?.includes('network')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        } else if (error.message?.includes('insufficient balance')) {
+          errorMessage = 'Insufficient wallet balance. Please add funds to continue.';
+        } else if (error.message?.includes('premium required')) {
+          errorMessage = 'Premium subscription required for this call type.';
+        }
+        
+        Alert.alert('Call Error', errorMessage);
       }
     }
-  }, [user, balance, navigation]);
+  }, [user, balance, navigation, callManager, isPremium]);
 
   // Prefetch profile data only for the current user (not for all contacts)
   // Commented out to avoid unnecessary API calls in TipCallScreen
@@ -1368,12 +1372,12 @@ export default function TipCallScreen() {
             contentContainerStyle={styles.filterScrollContainer}
             style={styles.filterScrollView}
           >
-            {LANGUAGES.map((lang) => (
+            {languages.map((lang) => (
               <FilterChip
                 key={lang.id}
                 label={lang.name}
-                isSelected={languageFilter === lang.id}
-                onPress={() => handleLanguageFilter(lang.id)}
+                isSelected={selectedLanguage === lang.id}
+                onPress={() => setSelectedLanguage(lang.id)}
                 colors={colors}
                 isDarkMode={isDarkMode}
               />
@@ -1392,12 +1396,12 @@ export default function TipCallScreen() {
             contentContainerStyle={styles.filterScrollContainer}
             style={styles.filterScrollView}
           >
-            {CATEGORIES.map((category) => (
+            {interests.map((category) => (
               <FilterChip
                 key={category.id}
                 label={category.name}
-                isSelected={categoryFilter === category.id}
-                onPress={() => handleCategoryFilter(category.id)}
+                isSelected={selectedInterest === category.id}
+                onPress={() => setSelectedInterest(category.id)}
                 colors={colors}
                 isDarkMode={isDarkMode}
               />

@@ -489,6 +489,22 @@ class CallController {
       } catch (statusError) {
         console.error('[CallController] Failed to send call status update:', statusError)
       }
+
+      // 🔥 CRITICAL: End call in CallManagerService to stop billing and safety timers
+      try {
+        const CallManagerService = await import('../CallManagerService')
+        const callManager = CallManagerService.default.getInstance()
+        
+        if (callManager.hasActiveCall()) {
+          console.log('📞 [CallController] Ending missed call in CallManagerService to stop billing...')
+          await callManager.endCall()
+          console.log('✅ [CallController] CallManagerService missed call ended successfully')
+        } else {
+          console.log('ℹ️ [CallController] No active call in CallManagerService to end for missed call')
+        }
+      } catch (callManagerError) {
+        console.error('[CallController] Failed to end missed call in CallManagerService:', callManagerError)
+      }
       
       // Update status
       store.actions.setStatus('ended')
@@ -548,6 +564,22 @@ class CallController {
         await notifee.stopForegroundService()
       } catch (notificationError) {
         console.error('[CallController] Failed to cleanup notifications:', notificationError)
+      }
+
+      // 🔥 CRITICAL: End call in CallManagerService to stop billing and safety timers
+      try {
+        const CallManagerService = await import('../CallManagerService')
+        const callManager = CallManagerService.default.getInstance()
+        
+        if (callManager.hasActiveCall()) {
+          console.log('📞 [CallController] Ending call in CallManagerService to stop billing...')
+          await callManager.endCall()
+          console.log('✅ [CallController] CallManagerService call ended successfully')
+        } else {
+          console.log('ℹ️ [CallController] No active call in CallManagerService to end')
+        }
+      } catch (callManagerError) {
+        console.error('[CallController] Failed to end call in CallManagerService:', callManagerError)
       }
 
       // Notify server of ended call

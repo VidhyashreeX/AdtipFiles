@@ -62,7 +62,7 @@ import MissedCallsScreen from '../screens/tipcall/MissedCallsScreen';
 // Import MeetingScreen
 import MeetingScreenSimple from '../screens/videosdk/MeetingScreenSimple';
 import TestCallScreen from '../screens/TestCallScreen';
-import TipCallScreenSimple from '../screens/tipcall/TipCallScreenSimple';
+
 // Import BlockedUsersScreen
 import BlockedUsersScreen from '../screens/blocklist/BlockedUsersScreen';
 
@@ -371,7 +371,7 @@ const MainNavigator = () => {
       />
       <Stack.Screen
         name="TipCallSimple"
-        component={TipCallScreenSimple}
+        component={TipCallScreen}
         options={{ headerShown: false }}
       />
       {/* MissedCalls screen with standard transition */}
