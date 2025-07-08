@@ -16,6 +16,13 @@ export type User = ExtendedUser;
 
 type OtpResponse = ApiOtpResponse;
 
+// Add premium/content premium/wallet state to context
+interface PremiumState {
+  isPremium: boolean;
+  premiumPlanId: number;
+  contentCreatorPlanId: number;
+  walletBalance: string;
+}
 
 // Define context type
 type AuthContextType = {
@@ -35,6 +42,8 @@ type AuthContextType = {
   hasChannel: boolean;
   createChannel: (name: string, description: string) => Promise<void>;
   completeOnboarding: () => void;
+  premiumState: PremiumState;
+  setPremiumState: React.Dispatch<React.SetStateAction<PremiumState>>;
 };
 
 // Create context
@@ -55,6 +64,13 @@ const AuthContext = createContext<AuthContextType>({
   hasChannel: false,
   createChannel: async () => {},
   completeOnboarding: () => {},
+  premiumState: {
+    isPremium: false,
+    premiumPlanId: 0,
+    contentCreatorPlanId: 0,
+    walletBalance: '0.00',
+  },
+  setPremiumState: () => {},
 });
 
 // Auth provider component
@@ -67,6 +83,12 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
   const [error, setError] = useState<string | null>(null);
   const [hasChannel, setHasChannel] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false); // <-- Add state
+  const [premiumState, setPremiumState] = useState<PremiumState>({
+    isPremium: false,
+    premiumPlanId: 0,
+    contentCreatorPlanId: 0,
+    walletBalance: '0.00',
+  });
 
   const completeOnboarding = () => {
     setIsAuthenticated(true);
@@ -101,6 +123,18 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     };
 
     loadUser();
+  }, []);
+
+  // Load premium state from AsyncStorage on mount
+  useEffect(() => {
+    const loadPremiumState = async () => {
+      const isPremium = (await AsyncStorage.getItem('is_premium')) === '1';
+      const premiumPlanId = parseInt(await AsyncStorage.getItem('premium_plan_id') || '0', 10);
+      const contentCreatorPlanId = parseInt(await AsyncStorage.getItem('content_creator_plan_id') || '0', 10);
+      const walletBalance = await AsyncStorage.getItem('wallet_balance') || '0.00';
+      setPremiumState({ isPremium, premiumPlanId, contentCreatorPlanId, walletBalance });
+    };
+    loadPremiumState();
   }, []);
 
   // Check if user has a channel
@@ -201,6 +235,17 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         
         console.log('AuthContext - User authenticated, isSaveUserDetails:', userData.isSaveUserDetails);
         
+        await AsyncStorage.setItem('is_premium', userData.is_premium ? '1' : '0');
+        await AsyncStorage.setItem('premium_plan_id', String(userData.premium_plan_id ?? 0));
+        await AsyncStorage.setItem('content_creator_plan_id', String(userData.content_creator_plan_id ?? 0));
+        // walletBalance is updated after wallet API call
+        setPremiumState(prev => ({
+          ...prev,
+          isPremium: !!userData.is_premium,
+          premiumPlanId: userData.premium_plan_id ?? 0,
+          contentCreatorPlanId: userData.content_creator_plan_id ?? 0,
+        }));
+
         return response;
       } else {
         throw new Error('Invalid response format');
@@ -238,6 +283,12 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       setUser(null);
       setIsAuthenticated(false);
       setHasChannel(false);
+      setPremiumState({
+        isPremium: false,
+        premiumPlanId: 0,
+        contentCreatorPlanId: 0,
+        walletBalance: '0.00',
+      });
       console.log('[AuthContext] Local auth state reset.');
 
       if (navigationRef.isReady()) {
@@ -254,6 +305,12 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       setUser(null);
       setIsAuthenticated(false);
       setHasChannel(false);
+      setPremiumState({
+        isPremium: false,
+        premiumPlanId: 0,
+        contentCreatorPlanId: 0,
+        walletBalance: '0.00',
+      });
       if (navigationRef.isReady()) {
         navigationRef.reset({
           index: 0,
@@ -303,6 +360,15 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       const updatedUser = data.data[0];
       await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
+      await AsyncStorage.setItem('is_premium', updatedUser.is_premium ? '1' : '0');
+      await AsyncStorage.setItem('premium_plan_id', String(updatedUser.premium_plan_id ?? 0));
+      await AsyncStorage.setItem('content_creator_plan_id', String(updatedUser.content_creator_plan_id ?? 0));
+      setPremiumState(prev => ({
+        ...prev,
+        isPremium: updatedUser.is_premium ?? false,
+        premiumPlanId: updatedUser.premium_plan_id ?? 0,
+        contentCreatorPlanId: updatedUser.content_creator_plan_id ?? 0,
+      }));
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to update user details';
@@ -330,6 +396,15 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       setUser(response);
       await AsyncStorage.setItem('user', JSON.stringify(response));
       await AsyncStorage.setItem('userName', response.name || '');
+      await AsyncStorage.setItem('is_premium', response.is_premium ? '1' : '0');
+      await AsyncStorage.setItem('premium_plan_id', String(response.premium_plan_id ?? 0));
+      await AsyncStorage.setItem('content_creator_plan_id', String(response.content_creator_plan_id ?? 0));
+      setPremiumState(prev => ({
+        ...prev,
+        isPremium: response.is_premium ?? false,
+        premiumPlanId: response.premium_plan_id ?? 0,
+        contentCreatorPlanId: response.content_creator_plan_id ?? 0,
+      }));
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to refresh user data';
@@ -380,6 +455,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     hasChannel,
     createChannel,
     completeOnboarding,
+    premiumState,
+    setPremiumState,
   }), [
     isAuthenticated,
     user,
@@ -387,6 +464,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     error,
     isInitialized,
     hasChannel,
+    premiumState,
     // Note: Functions are stable and don't need to be in deps since they don't change
   ]);
 

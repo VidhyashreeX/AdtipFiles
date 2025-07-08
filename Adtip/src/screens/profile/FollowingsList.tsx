@@ -24,12 +24,17 @@ interface Following {
   profile_image?: string | null;
 }
 
+interface FollowingsListProps {
+  onUserPress?: (userId: number) => void;
+}
+
 // Component
-const FollowingsList: React.FC = () => {
+const FollowingsList: React.FC<FollowingsListProps> = (props) => {
   const { colors, isDarkMode } = useTheme();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute();
-  const { followings: initialFollowings, userId } = route.params as { followings: Following[]; userId?: number };
+  const { followings: initialFollowings, userId, onUserPress: routeOnUserPress } = (route.params || {}) as { followings?: Following[]; userId?: number; onUserPress?: (userId: number) => void };
+  const onUserPress = props.onUserPress || routeOnUserPress;
 
   // State for fetched followings and loading
   const [followings, setFollowings] = useState<Following[]>(initialFollowings || []);
@@ -101,7 +106,7 @@ const FollowingsList: React.FC = () => {
 
   // Render item for FlatList
   const renderFollowingItem = ({ item }: { item: Following }) => (
-    <TouchableOpacity style={styles.itemContainer} onPress={() => (navigation as any).navigate('Profile', { userId: Number(item.id) })}>
+    <TouchableOpacity style={styles.itemContainer} onPress={() => onUserPress ? onUserPress(Number(item.id)) : (navigation as any).navigate('Profile', { userId: Number(item.id) })}>
       {item.profile_image ? (
         <Image
           source={{ uri: getFullImageUrl(item.profile_image) }}

@@ -20,6 +20,7 @@ import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import RazorpayCheckout from 'react-native-razorpay';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWalletBalance, usePremiumStatus, useWithdrawalRequests } from '../../hooks/useQueries';
 import ApiService from '../../services/ApiService';
 import Header from '../../components/common/Header';
@@ -39,7 +40,7 @@ const RAZORPAY_KEY_ID = 'your_razorpay_key_id';
 const WalletScreen = () => {
   const navigation = useNavigation<any>();
   const {colors, isDarkMode} = useTheme();
-  const {user} = useAuth();
+  const {user, premiumState, setPremiumState} = useAuth();
   const { refreshBalance } = useWallet();
   
   // Single loading state for all data
@@ -109,6 +110,9 @@ const WalletScreen = () => {
     if (balanceData?.availableBalance) {
       setBalance(balanceData.availableBalance);
       setDataFetched(prev => ({ ...prev, balance: true }));
+      // Professional: update AsyncStorage and premiumState
+      AsyncStorage.setItem('wallet_balance', String(balanceData.availableBalance));
+      setPremiumState(prev => ({ ...prev, walletBalance: String(balanceData.availableBalance) }));
     }
   }, [balanceData]);
 

@@ -33,6 +33,7 @@ import ScreenTransition from '../../components/common/ScreenTransition';
 import CommentScreen from '../home/CommentScreen';
 import RectangleAdComponent from '../../googleads/RectangleAdComponent';
 import BannerAdComponent from '../../googleads/BannerAdComponent';
+import UserProfileScreen from './UserProfileScreen';
 
 // Context
 import { useTheme } from '../../contexts/ThemeContext';
@@ -112,10 +113,12 @@ interface Post {
 
 const ProfileScreen: React.FC = () => {
   const route = useRoute();
-  const { userId } = (route.params as ProfileParams) || {};
+  const { user: currentUser, logout, updateUserDetails } = useAuth();
+  const { userId: routeUserId } = (route.params as ProfileParams) || {};
+  const userId = routeUserId || currentUser?.id;
+  console.log('[ProfileScreen] Using userId for API calls:', userId);
   const { colors, isDarkMode } = useTheme();
   const navigation = useNavigation<NavigationProp>();
-  const { user: currentUser, logout, updateUserDetails } = useAuth();
 
   // Add a try/catch block to handle missing context
   let contentPaddingBottom = 0;
@@ -156,6 +159,10 @@ const ProfileScreen: React.FC = () => {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [bannerImage, setBannerImage] = useState<string | null>(user?.banner_image || null);
   const [profileImage, setProfileImage] = useState<string | null>(user?.profile_image || null);
+
+  // Add state for modal and selected user
+  const [showUserProfileModal, setShowUserProfileModal] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
 
   // TanStack Query hooks for channel and premium data
   const {
@@ -458,6 +465,7 @@ const ProfileScreen: React.FC = () => {
       let fetchedFollowings: any[] = [];
 
       // Fetch followers
+      console.log('[ProfileScreen] Fetching followers for user:', userId);
       const followersResponse = await fetch(`${API_BASE_URL}/api/follow/followers/${userId}`, {
         method: 'GET',
         headers: {
@@ -466,23 +474,20 @@ const ProfileScreen: React.FC = () => {
           Authorization: `Bearer ${token}`,
         },
       });
-
-      if (followersResponse.ok) {
-        const followersResult = await followersResponse.json();
-        if (followersResult.status && followersResult.data) {
-          fetchedFollowers = followersResult.data.map((follower: any) => ({
-            ...follower,
-            profile_image: getFullImageUrl(follower.profile_image),
-          }));
-          setFollowers(fetchedFollowers);
-        } else {
-          setFollowers([]);
-        }
+      const followersResult = await followersResponse.json();
+      console.log('[ProfileScreen] Followers API result:', followersResult);
+      if (followersResult.status && Array.isArray(followersResult.data)) {
+        fetchedFollowers = followersResult.data.map((follower: any) => ({
+          ...follower,
+          profile_image: getFullImageUrl(follower.profile_image),
+        }));
+        setFollowers(fetchedFollowers);
       } else {
         setFollowers([]);
       }
 
       // Fetch followings
+      console.log('[ProfileScreen] Fetching followings for user:', userId);
       const followingsResponse = await fetch(`${API_BASE_URL}/api/follow/followings/${userId}`, {
         method: 'GET',
         headers: {
@@ -491,18 +496,14 @@ const ProfileScreen: React.FC = () => {
           Authorization: `Bearer ${token}`,
         },
       });
-
-      if (followingsResponse.ok) {
-        const followingsResult = await followingsResponse.json();
-        if (followingsResult.status && followingsResult.data) {
-          fetchedFollowings = followingsResult.data.map((following: any) => ({
-            ...following,
-            profile_image: getFullImageUrl(following.profile_image),
-          }));
-          setFollowings(fetchedFollowings);
-        } else {
-          setFollowings([]);
-        }
+      const followingsResult = await followingsResponse.json();
+      console.log('[ProfileScreen] Followings API result:', followingsResult);
+      if (followingsResult.status && Array.isArray(followingsResult.data)) {
+        fetchedFollowings = followingsResult.data.map((following: any) => ({
+          ...following,
+          profile_image: getFullImageUrl(following.profile_image),
+        }));
+        setFollowings(fetchedFollowings);
       } else {
         setFollowings([]);
       }
@@ -626,11 +627,17 @@ const ProfileScreen: React.FC = () => {
   };
 
   const handleFollowersPress = () => {
-    navigation.navigate('FollowersList', { userId: user?.id ? Number(user.id) : undefined });
+    navigation.navigate('FollowersList', {
+      userId: user?.id ? Number(user.id) : undefined,
+      onUserPress: handleOpenUserProfileModal,
+    });
   };
 
   const handleFollowingsPress = () => {
-    navigation.navigate('FollowingsList', { userId: user?.id ? Number(user.id) : undefined });
+    navigation.navigate('FollowingsList', {
+      userId: user?.id ? Number(user.id) : undefined,
+      onUserPress: handleOpenUserProfileModal,
+    });
   };
 
   const handlePostsPress = () => {
@@ -663,6 +670,18 @@ const ProfileScreen: React.FC = () => {
   const handleFollow = async (followUserId: number) => {
     console.log('Follow user', followUserId);
     return Promise.resolve();
+  };
+
+  // Handler to open user profile modal
+  const handleOpenUserProfileModal = (userId: number) => {
+    setSelectedUserId(userId);
+    setShowUserProfileModal(true);
+  };
+
+  // Handler to close modal
+  const handleCloseUserProfileModal = () => {
+    setShowUserProfileModal(false);
+    setSelectedUserId(null);
   };
 
   // Menu items
@@ -1167,15 +1186,12 @@ const ProfileScreen: React.FC = () => {
             </TouchableOpacity>
             <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
             <TouchableOpacity style={styles.statItem} onPress={handleFollowersPress}>
-              <Text style={[styles.statValue, { color: colors.text.primary }]}>
-                {(stats.followers || 0).toLocaleString()
-                }
-              </Text>
+              <Text style={[styles.statValue, { color: colors.text.primary }]}>{followers.length}</Text>
               <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Followers</Text>
             </TouchableOpacity>
             <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
             <TouchableOpacity style={styles.statItem} onPress={handleFollowingsPress}>
-              <Text style={[styles.statValue, { color: colors.text.primary }]}>{stats.following}</Text>
+              <Text style={[styles.statValue, { color: colors.text.primary }]}>{followings.length}</Text>
               <Text style={[styles.statLabel, { color: colors.text.tertiary }]}>Following</Text>
             </TouchableOpacity>
           </View>
@@ -1364,6 +1380,20 @@ const ProfileScreen: React.FC = () => {
             onClose={closeComments}
           />
         )}
+
+        {/* User Profile Modal */}
+        <Modal
+          visible={showUserProfileModal}
+          animationType="slide"
+          onRequestClose={handleCloseUserProfileModal}
+        >
+          {selectedUserId && (
+            <UserProfileScreen userId={selectedUserId} />
+          )}
+          <TouchableOpacity onPress={handleCloseUserProfileModal} style={{position: 'absolute', top: 40, right: 20, zIndex: 10}}>
+            <Icon name="x" size={32} color="#000" />
+          </TouchableOpacity>
+        </Modal>
       </View>
     </ScreenTransition>
   );

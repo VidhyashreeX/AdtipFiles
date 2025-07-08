@@ -47,6 +47,7 @@ import CategoryItem from '../../components/home/CategoryItem';
 import EarnCard from '../../components/home/EarnCard';
 import BannerCarousel from '../../components/home/BannerCarousel';
 import PremiumPopup from '../../components/common/PremiumPopup';
+import InstallToEarnPopup from '../../components/common/InstallToEarnPopup';
 
 
 import ScreenTransition from '../../components/common/ScreenTransition';
@@ -310,6 +311,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   // Version check and premium popup state
   const [showPremiumPopup, setShowPremiumPopup] = useState<boolean>(false);
   const [hasCheckedVersion, setHasCheckedVersion] = useState<boolean>(false);
+
+  // Install to earn popup state
+  const [showInstallToEarnPopup, setShowInstallToEarnPopup] = useState(false);
 
   // Log when HomeScreen mounts
   useEffect(() => {
@@ -619,29 +623,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   }, [navigation]);
 
   const handleInstallToEarn = useCallback(async () => {
-    console.log('Install to earn pressed');
+    if (!isPremium) {
+      setShowInstallToEarnPopup(true);
+      return;
+    }
     try {
-      // Initialize with user ID if available
       const userId = user?.id ? String(user.id) : 'anonymous-user';
-      
-      // Show loading indicator
       setOfferwallLoading(true);
-      
-      // Show the offerwall directly
       await PubScaleService.showOfferwall();
-      
       console.log('Offerwall launched successfully');
     } catch (error) {
       console.error('Failed to show offerwall:', error);
-      Alert.alert(
-        'Error',
-        'Failed to load offerwall. Please try again later.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Error', 'Failed to load offerwall. Please try again later.', [{ text: 'OK' }]);
     } finally {
       setOfferwallLoading(false);
     }
-  }, [user?.id]);
+  }, [isPremium, user?.id]);
 
   const handleBannerPress = useCallback((banner: any) => {
     console.log('Banner pressed:', banner);
@@ -853,6 +850,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
               <CategoriesRow categories={displayCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} isLoading={categoriesLoading} />
               <BannerCarousel />
               <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} onInstallToEarn={handleInstallToEarn} />
+              <InstallToEarnPopup
+                visible={showInstallToEarnPopup}
+                onClose={() => setShowInstallToEarnPopup(false)}
+                onUpgrade={() => {
+                  setShowInstallToEarnPopup(false);
+                  navigation.navigate('PremiumUserScreen' as never);
+                }}
+              />
             </>
           )}
           ListEmptyComponent={renderEmptyState}
