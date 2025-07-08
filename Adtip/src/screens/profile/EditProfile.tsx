@@ -9,11 +9,13 @@ import {
   Alert,
   ActivityIndicator,
   SafeAreaView,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 // Import contexts
 import { useAuth } from '../../contexts/AuthContext';
@@ -37,6 +39,22 @@ type RootStackParamList = {
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
+// Define types for API data
+interface Profession {
+  id: number;
+  name: string;
+}
+
+interface Interest {
+  id: number;
+  name: string;
+}
+
+interface Language {
+  id: number;
+  name: string;
+}
+
 const EditProfile: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const { user, updateUserDetails } = useAuth();
@@ -44,82 +62,168 @@ const EditProfile: React.FC = () => {
   
   // Loading state
   const [loading, setLoading] = useState(false);
+  const [fetchingData, setFetchingData] = useState(true);
   
   // Form state - initialized with user data
-  const [firstName, setFirstName] = useState<string>(user?.firstName || user?.name?.split(' ')[0] || '');
-  const [lastName, setLastName] = useState<string>(user?.lastName || user?.name?.split(' ').slice(1).join(' ') || '');
+  const [name, setName] = useState<string>(user?.name || '');
   const [email, setEmail] = useState<string>(user?.emailId || '');
-  const [about, setAbout] = useState<string>(user?.bio || '');
-  const [address, setAddress] = useState<string>(user?.address || '');
-  const [age, setAge] = useState<string>('');
+  const [bio, setBio] = useState<string>(user?.bio || '');
+  const [dob, setDob] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [gender, setGender] = useState<string>(user?.gender || '');
   const [profession, setProfession] = useState<string>(user?.profession || '');
-  const [maritalStatus, setMaritalStatus] = useState<string>(user?.maternal_status || '');
-  const [interests, setInterests] = useState<string[]>(
-    user?.interests?.map((interest: any) => interest.name || interest) || []
-  );
+  const [maternalStatus, setMaternalStatus] = useState<string>(user?.maternal_status || '');
+  const [selectedInterests, setSelectedInterests] = useState<number[]>([]);
+  const [selectedLanguages, setSelectedLanguages] = useState<number[]>([]);
 
-  // Calculate age from date of birth
+  // Track original values for change detection
+  const [originalValues, setOriginalValues] = useState({
+    name: user?.name || '',
+    email: user?.emailId || '',
+    bio: user?.bio || '',
+    dob: user?.dob ? new Date(user.dob) : null,
+    gender: user?.gender || '',
+    profession: user?.profession || '',
+    maternalStatus: user?.maternal_status || '',
+    interests: user?.interests?.map((interest: any) => typeof interest === 'object' ? interest.id : interest) || [],
+    languages: user?.languages?.map((language: any) => typeof language === 'object' ? language.id : language) || []
+  });
+
+  // API data
+  const [professions, setProfessions] = useState<Profession[]>([]);
+  const [interests, setInterests] = useState<Interest[]>([]);
+  const [languages, setLanguages] = useState<Language[]>([]);
+
+  // Modal states
+  const [showProfessionModal, setShowProfessionModal] = useState(false);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
+
+  // Initialize DOB from user data
   useEffect(() => {
     if (user?.dob) {
-      const birthDate = new Date(user.dob);
-      const today = new Date();
-      const calculatedAge = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-      
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        setAge((calculatedAge - 1).toString());
-      } else {
-        setAge(calculatedAge.toString());
-      }
+      setDob(new Date(user.dob));
     }
   }, [user?.dob]);
 
-  const allInterests: string[] = [
-    "Prepare for gov job", "Look for jobs", "Prepare for neet", "Prepare for upsc",
-    "To learn English", "To learn Hindi", "To learn software", "To learn AI",
-    "To prepare for CA", "Doctor", "Prepare for jobs", "To learn stock market",
-    "To learn something new", "To learn save environment", "To learn marketing",
-    "Fashion design", "Writer", "Law", "Marketing", "Sports", "Science and Technology",
-    "History and Archaeology", "Health and Fitness", "Medicine and Healthcare",
-    "Cooking and Culinary Arts", "Literature and Books", "Philosophy and Ethics",
-    "Movies and Entertainment", "Spirituality and Religion", "Psychology and Behavior",
-    "Business and Startups", "Music and Arts", "Travel and Adventure",
-  ];
+  // Initialize original values when user data changes
+  useEffect(() => {
+    setOriginalValues({
+      name: user?.name || '',
+      email: user?.emailId || '',
+      bio: user?.bio || '',
+      dob: user?.dob ? new Date(user.dob) : null,
+      gender: user?.gender || '',
+      profession: user?.profession || '',
+      maternalStatus: user?.maternal_status || '',
+      interests: user?.interests?.map((interest: any) => typeof interest === 'object' ? interest.id : interest) || [],
+      languages: user?.languages?.map((language: any) => typeof language === 'object' ? language.id : language) || []
+    });
+  }, [user]);
 
-  // Toggle interest selection
-  const toggleInterest = (interest: string): void => {
-    if (interests.includes(interest)) {
-      setInterests(interests.filter(item => item !== interest));
-    } else {
-      setInterests([...interests, interest]);
+  // Fetch API data on component mount
+  useEffect(() => {
+    fetchApiData();
+  }, []);
+
+  // Initialize selected interests and languages from user data
+  useEffect(() => {
+    if (user?.interests && interests.length > 0) {
+      const userInterestIds = user.interests.map((interest: any) => 
+        typeof interest === 'object' ? interest.id : interest
+      );
+      setSelectedInterests(userInterestIds);
+    }
+    
+    if (user?.languages && languages.length > 0) {
+      const userLanguageIds = user.languages.map((language: any) => 
+        typeof language === 'object' ? language.id : language
+      );
+      setSelectedLanguages(userLanguageIds);
+    }
+  }, [user?.interests, user?.languages, interests, languages]);
+
+  // Helper function to check if a field has changed
+  const hasFieldChanged = (fieldName: string, currentValue: any): boolean => {
+    const originalValue = originalValues[fieldName as keyof typeof originalValues];
+    
+    if (fieldName === 'dob') {
+      const originalDob = originalValue as Date | null;
+      if (!originalDob && !currentValue) return false;
+      if (!originalDob || !currentValue) return true;
+      return formatDate(originalDob) !== formatDate(currentValue);
+    }
+    
+    if (fieldName === 'interests' || fieldName === 'languages') {
+      const originalArray = originalValue as number[];
+      if (!originalArray && !currentValue) return false;
+      if (!originalArray || !currentValue) return true;
+      if (originalArray.length !== currentValue.length) return true;
+      return !originalArray.every((id: number) => currentValue.includes(id));
+    }
+    
+    return originalValue !== currentValue;
+  };
+
+  const fetchApiData = async () => {
+    try {
+      setFetchingData(true);
+      
+      // Fetch professions
+      const professionsResponse = await ApiService.getTargetProfessions();
+      if (professionsResponse.status === 200) {
+        setProfessions(professionsResponse.data);
+      }
+
+      // Fetch interests
+      const interestsResponse = await ApiService.getInterests();
+      if (interestsResponse.status === 200) {
+        setInterests(interestsResponse.data);
+      }
+
+      // Fetch languages
+      const languagesResponse = await ApiService.getLanguages();
+      if (languagesResponse.status === 200) {
+        setLanguages(languagesResponse.data);
+      }
+    } catch (error) {
+      console.error('Error fetching API data:', error);
+      Alert.alert('Error', 'Failed to load data. Please try again.');
+    } finally {
+      setFetchingData(false);
     }
   };
 
-  // Save profile data to local storage
-  const saveProfileToLocalStorage = async (profileData: any): Promise<void> => {
-    try {
-      const userId = String(user?.id);
-      if (!userId) return;
-      
-      // Save each profile field separately
-      await AsyncStorage.setItem(`profile_firstName_${userId}`, profileData.firstname || '');
-      await AsyncStorage.setItem(`profile_lastName_${userId}`, profileData.lastname || '');
-      await AsyncStorage.setItem(`profile_name_${userId}`, profileData.name || '');
-      await AsyncStorage.setItem(`profile_email_${userId}`, profileData.emailId || '');
-      await AsyncStorage.setItem(`profile_address_${userId}`, profileData.address || '');
-      await AsyncStorage.setItem(`profile_bio_${userId}`, about || ''); // Save bio which is not in updateData
-      await AsyncStorage.setItem(`profile_gender_${userId}`, profileData.gender || '');
-      await AsyncStorage.setItem(`profile_profession_${userId}`, profileData.profession || '');
-      await AsyncStorage.setItem(`profile_maritalStatus_${userId}`, profileData.maternal_status || '');
-      await AsyncStorage.setItem(`profile_age_${userId}`, age || '');
-      
-      // Save interests as JSON string
-      await AsyncStorage.setItem(`profile_interests_${userId}`, JSON.stringify(interests));
-      
-      console.log('Profile data saved to local storage');
-    } catch (error) {
-      console.error('Error saving profile data to local storage:', error);
+  // Format date to dd-mm-yyyy
+  const formatDate = (date: Date): string => {
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
+
+  // Handle date picker
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      setDob(selectedDate);
+    }
+  };
+
+  // Toggle interest selection
+  const toggleInterest = (interestId: number): void => {
+    if (selectedInterests.includes(interestId)) {
+      setSelectedInterests(selectedInterests.filter(id => id !== interestId));
+    } else {
+      setSelectedInterests([...selectedInterests, interestId]);
+    }
+  };
+
+  // Toggle language selection
+  const toggleLanguage = (languageId: number): void => {
+    if (selectedLanguages.includes(languageId)) {
+      setSelectedLanguages(selectedLanguages.filter(id => id !== languageId));
+    } else {
+      setSelectedLanguages([...selectedLanguages, languageId]);
     }
   };
 
@@ -129,44 +233,77 @@ const EditProfile: React.FC = () => {
       return;
     }
 
-    // Validate age if it's provided
-    if (age && (parseInt(age) < 0 || parseInt(age) > 120)) {
-      Alert.alert('Error', 'Age must be between 0 and 120');
+    // Validate profession selection
+    if (profession === 'Select your profession' || profession === '') {
+      Alert.alert('Error', 'Please select your profession');
       return;
     }
     
     setLoading(true);
     
     try {
-      // Prepare update data in the exact format required by the API
-      const updateData = {
+      // Prepare update data with only changed fields
+      const updateData: any = {
         id: user.id,
-        name: `${firstName} ${lastName}`.trim(), // Concatenate first and last name
-        firstname: firstName,
-        lastname: lastName,
-        gender: gender,
-        dob: user.dob || "1990-01-01", // Keep existing DOB or default
-        profile_image: user.profile_image || "",
-        profession: profession,
-        maternal_status: maritalStatus,
-        address: address,
-        emailId: email,
-        longitude: user.longitude || "",
-        latitude: user.latitude || "",
-        pincode: user.pincode || "",
-        languages: 1, // Default language ID, can be made configurable
-        interests: 3, // Default interest ID, can be made configurable  
-        referal_code: "" // Always send empty string to avoid self-referral error
       };
 
-      // Call the update API with proper type casting
-      await updateUserDetails(updateData as any);
+      // Only include fields that have actually changed
+      if (hasFieldChanged('name', name.trim())) {
+        updateData.name = name.trim();
+      }
       
-      // Save profile data to local storage
-      await saveProfileToLocalStorage(updateData);
+      if (hasFieldChanged('email', email.trim())) {
+        updateData.emailId = email.trim();
+      }
       
-      Alert.alert('Success', 'Profile updated successfully');
-      navigation.goBack();
+      if (hasFieldChanged('bio', bio.trim())) {
+        updateData.bio = bio.trim();
+      }
+      
+      if (hasFieldChanged('dob', dob)) {
+        updateData.dob = dob ? formatDate(dob) : '';
+      }
+      
+      if (hasFieldChanged('gender', gender)) {
+        updateData.gender = gender;
+      }
+      
+      if (hasFieldChanged('profession', profession)) {
+        updateData.profession = profession;
+      }
+      
+      if (hasFieldChanged('maternalStatus', maternalStatus)) {
+        updateData.maternalStatus = maternalStatus;
+      }
+      
+      if (hasFieldChanged('interests', selectedInterests)) {
+        updateData.interests = selectedInterests;
+      }
+      
+      if (hasFieldChanged('languages', selectedLanguages)) {
+        updateData.languages = selectedLanguages;
+      }
+
+      // Check if any fields were actually changed
+      if (Object.keys(updateData).length === 1) { // Only has 'id'
+        Alert.alert('Info', 'No changes detected. Please make changes before saving.');
+        setLoading(false);
+        return;
+      }
+
+      console.log('Sending update data (only changed fields):', updateData);
+
+      // Call the update API
+      const response = await ApiService.updateUser(updateData);
+      
+      if (response.status === true) {
+        // Update local user context
+        await updateUserDetails(updateData);
+        Alert.alert('Success', 'Profile updated successfully');
+        navigation.goBack();
+      } else {
+        Alert.alert('Error', response.message || 'Failed to update profile');
+      }
     } catch (error) {
       console.error('Error updating profile:', error);
       Alert.alert('Error', 'Failed to update profile. Please try again.');
@@ -174,6 +311,19 @@ const EditProfile: React.FC = () => {
       setLoading(false);
     }
   };
+
+  if (fetchingData) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text.primary }]}>
+            Loading profile data...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -194,9 +344,9 @@ const EditProfile: React.FC = () => {
 
       {/* Form */}
       <ScrollView contentContainerStyle={styles.scrollView}>
-        {/* First Name */}
+        {/* Name */}
         <View style={styles.inputGroup}>
-          <Text style={[styles.label, { color: colors.text.secondary }]}>First Name</Text>
+          <Text style={[styles.label, { color: colors.text.secondary }]}>Name</Text>
           <TextInput
             style={[
               styles.input,
@@ -206,29 +356,9 @@ const EditProfile: React.FC = () => {
                 color: colors.text.primary,
               }
             ]}
-            value={firstName}
-            onChangeText={setFirstName}
-            placeholder="Enter your first name"
-            placeholderTextColor={colors.text.light}
-            editable={!loading}
-          />
-        </View>
-
-        {/* Last Name */}
-        <View style={styles.inputGroup}>
-          <Text style={[styles.label, { color: colors.text.secondary }]}>Last Name</Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                color: colors.text.primary,
-              }
-            ]}
-            value={lastName}
-            onChangeText={setLastName}
-            placeholder="Enter your last name"
+            value={name}
+            onChangeText={setName}
+            placeholder="Enter your full name"
             placeholderTextColor={colors.text.light}
             editable={!loading}
           />
@@ -255,30 +385,7 @@ const EditProfile: React.FC = () => {
           />
         </View>
 
-        {/* Address */}
-        <View style={styles.inputGroup}>
-          <Text style={[styles.label, { color: colors.text.secondary }]}>Address</Text>
-          <TextInput
-            style={[
-              styles.input,
-              styles.textArea,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                color: colors.text.primary,
-              }
-            ]}
-            value={address}
-            onChangeText={setAddress}
-            placeholder="Enter your address"
-            placeholderTextColor={colors.text.light}
-            multiline
-            numberOfLines={2}
-            editable={!loading}
-          />
-        </View>
-
-        {/* About */}
+        {/* About/Bio */}
         <View style={styles.inputGroup}>
           <Text style={[styles.label, { color: colors.text.secondary }]}>About</Text>
           <TextInput
@@ -291,8 +398,8 @@ const EditProfile: React.FC = () => {
                 color: colors.text.primary,
               }
             ]}
-            value={about}
-            onChangeText={setAbout}
+            value={bio}
+            onChangeText={setBio}
             placeholder="Tell us about yourself"
             placeholderTextColor={colors.text.light}
             multiline
@@ -301,32 +408,26 @@ const EditProfile: React.FC = () => {
           />
         </View>
 
-        {/* Age */}
+        {/* Date of Birth */}
         <View style={styles.inputGroup}>
-          <Text style={[styles.label, { color: colors.text.secondary }]}>Age</Text>
-          <TextInput
+          <Text style={[styles.label, { color: colors.text.secondary }]}>Date of Birth</Text>
+          <TouchableOpacity
             style={[
               styles.input,
+              styles.dateInput,
               {
                 backgroundColor: colors.surface,
                 borderColor: colors.border,
-                color: colors.text.primary,
               }
             ]}
-            value={age}
-            onChangeText={(text) => {
-              // Allow only numbers and validate range 0-120
-              const numericValue = text.replace(/[^0-9]/g, '');
-              if (numericValue === '' || (parseInt(numericValue, 10) >= 0 && parseInt(numericValue, 10) <= 120)) {
-                setAge(numericValue);
-              }
-            }}
-            placeholder="Enter your age (0-120)"
-            placeholderTextColor={colors.text.light}
-            keyboardType="numeric"
-            editable={!loading}
-            maxLength={3} // Limit input to 3 digits
-          />
+            onPress={() => setShowDatePicker(true)}
+            disabled={loading}
+          >
+            <Text style={[styles.dateText, { color: dob ? colors.text.primary : colors.text.light }]}>
+              {dob ? formatDate(dob) : 'Select your date of birth'}
+            </Text>
+            <Icon name="calendar" size={20} color={colors.text.secondary} />
+          </TouchableOpacity>
         </View>
 
         {/* Gender */}
@@ -364,21 +465,23 @@ const EditProfile: React.FC = () => {
         {/* Profession */}
         <View style={styles.inputGroup}>
           <Text style={[styles.label, { color: colors.text.secondary }]}>Profession</Text>
-          <TextInput
+          <TouchableOpacity
             style={[
               styles.input,
+              styles.dropdownInput,
               {
                 backgroundColor: colors.surface,
                 borderColor: colors.border,
-                color: colors.text.primary,
               }
             ]}
-            value={profession}
-            onChangeText={setProfession}
-            placeholder="Enter your profession"
-            placeholderTextColor={colors.text.light}
-            editable={!loading}
-          />
+            onPress={() => setShowProfessionModal(true)}
+            disabled={loading}
+          >
+            <Text style={[styles.dropdownText, { color: profession ? colors.text.primary : colors.text.light }]}>
+              {profession || 'Select your profession'}
+            </Text>
+            <Icon name="chevron-down" size={20} color={colors.text.secondary} />
+          </TouchableOpacity>
         </View>
 
         {/* Marital Status */}
@@ -391,18 +494,18 @@ const EditProfile: React.FC = () => {
                 style={[
                   styles.maritalStatusButton,
                   {
-                    backgroundColor: maritalStatus === status ? colors.primary : colors.surface,
-                    borderColor: maritalStatus === status ? colors.primary : colors.border,
+                    backgroundColor: maternalStatus === status ? colors.primary : colors.surface,
+                    borderColor: maternalStatus === status ? colors.primary : colors.border,
                   }
                 ]}
-                onPress={() => !loading && setMaritalStatus(status)}
+                onPress={() => !loading && setMaternalStatus(status)}
                 disabled={loading}
               >
                 <Text
                   style={[
                     styles.maritalStatusText,
                     {
-                      color: maritalStatus === status ? '#ffffff' : colors.text.primary,
+                      color: maternalStatus === status ? '#ffffff' : colors.text.primary,
                     }
                   ]}
                 >
@@ -420,34 +523,178 @@ const EditProfile: React.FC = () => {
             Select topics you're interested in
           </Text>
           <View style={styles.interestsContainer}>
-            {allInterests.map((interest) => (
+            {interests.map((interest) => (
               <TouchableOpacity
-                key={interest}
+                key={interest.id}
                 style={[
                   styles.interestButton,
                   {
-                    backgroundColor: interests.includes(interest) ? colors.primary : colors.surface,
-                    borderColor: interests.includes(interest) ? colors.primary : colors.border,
+                    backgroundColor: selectedInterests.includes(interest.id) ? colors.primary : colors.surface,
+                    borderColor: selectedInterests.includes(interest.id) ? colors.primary : colors.border,
                   }
                 ]}
-                onPress={() => !loading && toggleInterest(interest)}
+                onPress={() => !loading && toggleInterest(interest.id)}
                 disabled={loading}
               >
                 <Text
                   style={[
                     styles.interestText,
                     {
-                      color: interests.includes(interest) ? '#ffffff' : colors.text.primary,
+                      color: selectedInterests.includes(interest.id) ? '#ffffff' : colors.text.primary,
                     }
                   ]}
                 >
-                  {interest}
+                  {interest.name}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
+
+        {/* Mother Tongue */}
+        <View style={styles.inputGroup}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Mother Tongue</Text>
+          <Text style={[styles.sectionSubtitle, { color: colors.text.secondary }]}>
+            Select your native languages
+          </Text>
+          <TouchableOpacity
+            style={[
+              styles.input,
+              styles.dropdownInput,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              }
+            ]}
+            onPress={() => setShowLanguageModal(true)}
+            disabled={loading}
+          >
+            <Text style={[styles.dropdownText, { color: selectedLanguages.length > 0 ? colors.text.primary : colors.text.light }]}>
+              {selectedLanguages.length > 0 
+                ? `${selectedLanguages.length} language(s) selected`
+                : 'Select your mother tongue'
+              }
+            </Text>
+            <Icon name="chevron-down" size={20} color={colors.text.secondary} />
+          </TouchableOpacity>
+        </View>
       </ScrollView>
+
+      {/* Date Picker Modal */}
+      {showDatePicker && (
+        <DateTimePicker
+          value={dob || new Date()}
+          mode="date"
+          display="default"
+          onChange={handleDateChange}
+          maximumDate={new Date()}
+          minimumDate={new Date(1900, 0, 1)}
+        />
+      )}
+
+      {/* Profession Selection Modal */}
+      <Modal
+        visible={showProfessionModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowProfessionModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.modalTitle, { color: colors.text.primary }]}>Select Profession</Text>
+              <TouchableOpacity onPress={() => setShowProfessionModal(false)}>
+                <Icon name="x" size={24} color={colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={professions}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.modalItem,
+                    {
+                      backgroundColor: profession === item.name ? colors.primary : 'transparent',
+                    }
+                  ]}
+                  onPress={() => {
+                    setProfession(item.name);
+                    setShowProfessionModal(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.modalItemText,
+                      {
+                        color: profession === item.name ? '#ffffff' : colors.text.primary,
+                      }
+                    ]}
+                  >
+                    {item.name}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Language Selection Modal */}
+      <Modal
+        visible={showLanguageModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowLanguageModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.modalTitle, { color: colors.text.primary }]}>Select Mother Tongue</Text>
+              <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
+                <Icon name="x" size={24} color={colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={languages}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.modalItem,
+                    {
+                      backgroundColor: selectedLanguages.includes(item.id) ? colors.primary : 'transparent',
+                    }
+                  ]}
+                  onPress={() => toggleLanguage(item.id)}
+                >
+                  <Text
+                    style={[
+                      styles.modalItemText,
+                      {
+                        color: selectedLanguages.includes(item.id) ? '#ffffff' : colors.text.primary,
+                      }
+                    ]}
+                  >
+                    {item.name}
+                  </Text>
+                  {selectedLanguages.includes(item.id) && (
+                    <Icon name="check" size={20} color="#ffffff" />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+            <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: colors.primary }]}
+                onPress={() => setShowLanguageModal(false)}
+              >
+                <Text style={styles.modalButtonText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -491,6 +738,22 @@ const styles = StyleSheet.create({
   textArea: {
     height: 100,
     textAlignVertical: 'top',
+  },
+  dateInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateText: {
+    fontSize: 16,
+  },
+  dropdownInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dropdownText: {
+    fontSize: 16,
   },
   genderContainer: {
     flexDirection: 'row',
@@ -549,6 +812,61 @@ const styles = StyleSheet.create({
   interestText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    maxHeight: '70%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  modalItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#e0e0e0',
+  },
+  modalItemText: {
+    fontSize: 16,
+  },
+  modalFooter: {
+    padding: 16,
+    borderTopWidth: 1,
+  },
+  modalButton: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

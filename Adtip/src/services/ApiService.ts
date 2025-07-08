@@ -2255,4 +2255,8 @@ static async createSubscriptionTest(plan_id: string, user_id: number): Promise<a
   static async getInterests(): Promise<any> {
     return this.get('/api/getinterests');
   }
+
+  static async getTargetProfessions(): Promise<any> {
+    return this.get('/api/gettargetprofession');
+  }
 }
