@@ -38,7 +38,7 @@ import { ShortsProvider } from './src/contexts/ShortsContext';
 import { SidebarProvider } from './src/contexts/SidebarContext';
 import { VideoSDKProvider } from './src/contexts/VideoSDKContext';
 import { useTabNavigator, TabNavigatorProvider } from './src/contexts/TabNavigatorContext';
-import { CallProvider, useCall, ActiveCall } from './src/contexts/CallProvider';
+//import { CallProvider, useCall, ActiveCall } from './src/contexts/CallProvider';
 import { ContentCreatorPremiumProvider } from './src/contexts/ContentCreatorPremiumContext';
 import { DataProvider } from './src/providers/DataProvider';
 import { EnhancedQueryProvider } from './src/providers/QueryProvider';
@@ -72,10 +72,11 @@ import UltraFastLoader from './src/components/common/UltraFastLoader';
 import { RootStackParamList } from 'src/types/navigation';
 import useFcmCallHandlers from './src/hooks/useFcmCallHandlers';
 
-// Switched to new call store (simplified)
+// Import call store (simplified)
 import { useCallStore } from './src/stores/callStoreSimplified';
 import CallController from './src/services/calling/CallController';
 import CallConfig from './src/config/CallConfig';
+import PersistentMeetingManager from './src/components/videosdk/PersistentMeetingManager';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
@@ -330,54 +331,9 @@ const AppNavigator = () => {
     };
   }, []);
 
-  // Navigation handler for call status changes (new simplified store)
-  const navigatingRef = useRef(false);
-  useEffect(() => {
-    const unsubscribe = useCallStore.subscribe(
-      (s) => ({ status: s.status, session: s.session }),
-      ({ status, session }) => {
-        if ((status === 'outgoing' || status === 'connecting' || status === 'in_call') && session) {
-          if (!navigatingRef.current) {
-            navigatingRef.current = true;
-            try {
-              navigateWithRetry('Main', {
-                screen: 'Meeting',
-                params: {
-                  meetingId: session.meetingId,
-                  token: session.token,
-                  callType: session.type,
-                  displayName: session.direction === 'outgoing' ? (user?.name || 'You') : session.peerName,
-                  recipientName: session.peerName,
-                  isInitiator: session.direction === 'outgoing',
-                },
-              });
-            } catch (error) {
-              console.error('[App] Error navigating to Meeting screen:', error);
-              navigatingRef.current = false;
-            }
-          }
-        } else if (status === 'ended' || status === 'idle') {
-          if (navigatingRef.current) navigatingRef.current = false;
-
-          const currentRoute = getCurrentRoute();
-          if (currentRoute?.name === 'Meeting') {
-            try {
-              // Navigate to the TipCall tab (which contains TipCallSimple) with bottom navigator visible
-              navigateWithRetry('Main', {
-                screen: 'TabHome',
-                params: {
-                  screen: 'TipCall'
-                } as any
-              });
-            } catch (err) {
-              console.error('[App] Error navigating back to TipCall tab:', err);
-            }
-          }
-        }
-      }
-    );
-    return unsubscribe;
-  }, [user?.name]);
+  // Navigation handler for call status changes is no longer needed
+  // The PersistentMeetingManager handles call UI directly
+  // Removed to prevent conflicts with persistent meeting component
 
   useEffect(() => {
     // Listen for native call actions (answer/decline)
@@ -482,6 +438,21 @@ function App(): React.JSX.Element {
                   </DataProvider>
                 </EnhancedQueryProvider>
                 </ContentCreatorPremiumProvider>
+              <EnhancedQueryProvider>
+                <DataProvider>
+                  <ShortsProvider>
+                    <TabNavigatorProvider>
+                      <SidebarProvider>
+                        <GestureHandlerRootView style={{ flex: 1 }}>
+                          <AppNavigator />
+                          <PersistentMeetingManager />
+                          {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
+                        </GestureHandlerRootView>
+                      </SidebarProvider>
+                    </TabNavigatorProvider>
+                  </ShortsProvider>
+                </DataProvider>
+              </EnhancedQueryProvider>
             </WalletProvider>
           </AuthProvider>
         </ThemeProvider>

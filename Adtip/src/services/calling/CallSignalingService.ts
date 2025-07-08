@@ -3,6 +3,7 @@ import ApiService from '../ApiService'
 import { useCallStore } from '../../stores/callStoreSimplified'
 import { CallType } from '../../stores/callStoreSimplified'
 import CallConfig from '../../config/CallConfig'
+import { startPersistentCall } from '../../components/videosdk/PersistentMeetingManager'
 
 // Shape of messages exchanged via FCM
 interface CallSignalPayload {
@@ -61,6 +62,16 @@ class CallSignalingService {
           type: payload.callType,
         })
         actions.setStatus('ringing')
+        
+        // Start persistent call for incoming calls
+        startPersistentCall({
+          sessionId: payload.sessionId,
+          meetingId: payload.meetingId,
+          token: payload.token,
+          peerName: payload.callerName,
+          callType: payload.callType,
+          direction: 'incoming'
+        })
         break
       }
       case 'CALL_ACCEPT': {
