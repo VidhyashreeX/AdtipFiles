@@ -25,6 +25,8 @@ class MediaService {
 
   async joinMeeting(meetingId: string, token: string, name: string, type: CallType) {
     try {
+      // Reset VideoSDK service to ensure clean state for new meeting
+      this.videoSDK.reset()
       await this.initialize()
 
       // Store meeting config for later use
@@ -56,9 +58,14 @@ class MediaService {
         await this.meeting.leave()
       }
 
-      // Clear meeting config
+      // Clear meeting config and references
       this.currentMeetingConfig = null
       this.meeting = null
+
+      // Reset VideoSDK service to ensure clean state for next meeting
+      this.videoSDK.reset()
+
+      console.log('[MediaService] Meeting cleanup completed')
 
       // Note: Navigation is handled by CallController and App.tsx to prevent conflicts
 

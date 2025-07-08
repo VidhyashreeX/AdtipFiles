@@ -102,23 +102,28 @@ const ParticipantVideo = ({ participantId, isLocal = false }: { participantId: s
 const Controls = () => {
   const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>()
   const { status, session } = useCallStore()
-  const { toggleMic, toggleWebcam, leave } = useMeeting()
-  const { mic, cam } = useCallStore(state => state.media)
+  const { toggleMic, toggleWebcam, leave, localParticipant } = useMeeting()
   const actions = useCallStore(state => state.actions)
   const controller = CallController.getInstance()
-  
+
+  // Use actual VideoSDK state instead of call store state
+  const micOn = localParticipant?.micOn ?? false
+  const webcamOn = localParticipant?.webcamOn ?? false
+
   const handleEndCall = async () => {
     await controller.endCall()
   }
-  
+
   const handleToggleMic = () => {
     toggleMic()
-    actions.updateMedia({ mic: !mic })
+    // Update call store to match VideoSDK state
+    actions.updateMedia({ mic: !micOn })
   }
-  
+
   const handleToggleCamera = () => {
     toggleWebcam()
-    actions.updateMedia({ cam: !cam })
+    // Update call store to match VideoSDK state
+    actions.updateMedia({ cam: !webcamOn })
   }
   
   const handleToggleSpeaker = () => {
@@ -128,23 +133,23 @@ const Controls = () => {
   
   return (
     <View style={styles.controlsContainer}>
-      <TouchableOpacity 
-        style={styles.controlButton} 
+      <TouchableOpacity
+        style={styles.controlButton}
         onPress={handleToggleMic}
       >
-        {mic ? (
+        {micOn ? (
           <Mic size={22} color="#fff" />
         ) : (
           <MicOff size={22} color="#fff" />
         )}
       </TouchableOpacity>
-      
+
       {session?.type === 'video' && (
-        <TouchableOpacity 
-          style={styles.controlButton} 
+        <TouchableOpacity
+          style={styles.controlButton}
           onPress={handleToggleCamera}
         >
-          {cam ? (
+          {webcamOn ? (
             <Camera size={22} color="#fff" />
           ) : (
             <CameraOff size={22} color="#fff" />
@@ -188,11 +193,21 @@ const MeetingContent = () => {
       mediaService.setMeetingRef(null)
     }
   }, [meeting, mediaService])
-  
+
   // ==== Robust join with retry logic ====
   const joinedRef = useRef(false)
   const joinAttemptsRef = useRef(0)
   const initialLoadRef = useRef(true) // Track if this is the first load
+
+  // Reset join state when session changes (new call)
+  useEffect(() => {
+    if (session?.sessionId) {
+      console.log('[MeetingScreen] New session detected, resetting join state:', session.sessionId)
+      joinedRef.current = false
+      joinAttemptsRef.current = 0
+      initialLoadRef.current = true
+    }
+  }, [session?.sessionId])
 
   useEffect(() => {
     const MAX_ATTEMPTS = 3
@@ -256,9 +271,18 @@ const MeetingContent = () => {
 
     // Cleanup on unmount
     return () => {
+      console.log('[MeetingScreen] Component unmounting, cleaning up meeting')
       if (joinedRef.current && meeting.leave) {
-        try { meeting.leave() } catch {}
+        try {
+          meeting.leave()
+          console.log('[MeetingScreen] Successfully left meeting on cleanup')
+        } catch (error) {
+          console.warn('[MeetingScreen] Error leaving meeting on cleanup:', error)
+        }
       }
+      // Reset join state for next meeting
+      joinedRef.current = false
+      joinAttemptsRef.current = 0
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
