@@ -6,6 +6,7 @@ import * as ApiEndpoints from '../constants/apiEndpoints';
 import { FCM_SERVER_URL } from '../constants/api';
 import { Platform } from 'react-native';
 import messaging, { AuthorizationStatus } from '@react-native-firebase/messaging';
+import FirebaseService from './FirebaseService';
 import {
   ApiResponse,
   OtpLoginRequest,
@@ -158,12 +159,22 @@ export interface InitiateCallResponse {
 }
 
 export interface UpdateCallStatusRequest {
+  calleeInfo?: {
+    platform: 'ANDROID' | 'IOS';
+    token: string;
+  };
   callerInfo: {
     token: string;
     name: string;
     platform: 'ANDROID' | 'IOS';
   };
+  videoSDKInfo?: {
+    meetingId: string;
+    token: string;
+    callType: 'voice' | 'video';
+  };
   type: 'CALL_ENDED' | 'CALL_MISSED' | 'CALL_ACCEPTED';
+  sessionId?: string; // Optional for update operations
 }
 
 export interface UpdateCallStatusResponse {
@@ -663,9 +674,10 @@ export default class ApiService {
     // Clear local tokens
     await AsyncStorage.multiRemove(['accessToken', '@auth_token', 'userId', 'fcmToken']);
     
-    // Delete FCM token
+    // Delete FCM token using centralized service
     try {
-      await messaging().deleteToken();
+      const firebaseService = FirebaseService.getInstance();
+      await firebaseService.deleteTokenOnLogout();
     } catch (error) {
       console.warn('[ApiService] Error deleting FCM token during logout:', error);
     }
@@ -1408,14 +1420,93 @@ export default class ApiService {
     }
   }
   /**
+   * Send Call Signal - For CallSignalingService integration
+   */
+  static async sendCallSignal(recipientId: string, payload: any): Promise<void> {
+    try {
+      console.log('[ApiService] Sending call signal to recipient:', recipientId, payload);
+
+      // Get recipient FCM token
+      const recipientTokenData = await this.getFCMToken(recipientId);
+      if (!recipientTokenData?.token) {
+        throw new Error(`No FCM token found for recipient: ${recipientId}`);
+      }
+
+      // Get caller's FCM token
+      const currentUserId = await AsyncStorage.getItem('userId');
+      let callerToken = '';
+      if (currentUserId) {
+        try {
+          const callerTokenData = await this.getFCMToken(currentUserId);
+          callerToken = callerTokenData?.token || '';
+        } catch (error) {
+          console.warn('[ApiService] Could not fetch caller FCM token:', error);
+        }
+      }
+
+      // Prepare the call signal payload to match initiate-call structure
+      const signalPayload: UpdateCallStatusRequest = {
+        callerInfo: {
+          platform: 'ANDROID' as const,
+          token: callerToken,
+          name: payload.callerName || 'Unknown Caller',
+        },
+        calleeInfo: {
+          platform: 'ANDROID' as const,
+          token: recipientTokenData.token,
+        },
+        videoSDKInfo: {
+          meetingId: payload.meetingId || 'unknown',
+          token: payload.token || 'signal-operation',
+          callType: payload.callType || 'video',
+        },
+        type: payload.type,
+        sessionId: payload.sessionId,
+      };
+
+      // Use the existing updateCallStatus method for consistency
+      await this.updateCallStatus(signalPayload);
+
+    } catch (error) {
+      console.error('[ApiService] sendCallSignal error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Update Call Status (Cloud Function) - Direct FCM Server call with new format
    */
   static async updateCallStatus(payload: UpdateCallStatusRequest): Promise<UpdateCallStatusResponse> {
     try {
       console.log('🚀 [ApiService] Making direct call to FCM Server for update-call:', FCM_SERVER_URL);
-      
+
+      // Ensure callerInfo.token is populated if empty
+      if (!payload.callerInfo.token) {
+        try {
+          // Get current user's FCM token
+          const currentUserId = await AsyncStorage.getItem('userId');
+          if (currentUserId) {
+            const tokenData = await this.getFCMToken(currentUserId);
+            if (tokenData?.token) {
+              payload.callerInfo.token = tokenData.token;
+            }
+          }
+        } catch (tokenError) {
+          console.warn('[ApiService] Could not fetch caller FCM token:', tokenError);
+        }
+      }
+
+      // Add default videoSDKInfo if not provided (required for validation)
+      if (!payload.videoSDKInfo) {
+        payload.videoSDKInfo = {
+          meetingId: payload.sessionId || 'unknown',
+          token: 'update-operation',
+          callType: 'video' // Default to video
+        };
+      }
+
       // Validate payload structure matches expected format
-      if (!payload.callerInfo || !payload.callerInfo.token || !payload.callerInfo.name || !payload.callerInfo.platform || !payload.type) {
+      if (!payload.callerInfo || !payload.callerInfo.name || !payload.callerInfo.platform || !payload.type) {
         console.error('❌ [ApiService] Invalid payload structure:', JSON.stringify(payload, null, 2));
         throw new Error('Invalid payload: missing required fields in callerInfo or type');
       }

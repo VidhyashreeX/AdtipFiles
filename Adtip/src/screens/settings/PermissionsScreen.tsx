@@ -16,9 +16,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 import ScreenTransition from '../../components/common/ScreenTransition';
-import PermissionsService from '../../services/PermissionsService';
-import notifee from '@notifee/react-native';
-import messaging, { AuthorizationStatus } from '@react-native-firebase/messaging';
+import PermissionManagerService from '../../services/PermissionManagerService';
 
 const PERMISSIONS = [
   {
@@ -56,33 +54,13 @@ const PermissionsScreen: React.FC = () => {
   const checkPermissions = useCallback(async () => {
     setLoading(true);
     try {
-      // Notifications
-      let notificationsGranted = false;
-      if (Platform.OS === 'android') {
-        const settings = await notifee.getNotificationSettings();
-        notificationsGranted = settings.authorizationStatus === 1; // AUTHORIZED
-      } else {
-        const authStatus = await messaging().hasPermission();
-        notificationsGranted =
-          authStatus === AuthorizationStatus.AUTHORIZED ||
-          authStatus === AuthorizationStatus.PROVISIONAL;
-      }
-      // Camera & Microphone
-      let cameraGranted = false;
-      let micGranted = false;
-      if (Platform.OS === 'android') {
-        const { PermissionsAndroid } = require('react-native');
-        cameraGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA);
-        micGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
-      } else {
-        // iOS: Assume granted (or use a library if needed)
-        cameraGranted = true;
-        micGranted = true;
-      }
+      const permissionManager = PermissionManagerService.getInstance();
+      const permissions = await permissionManager.checkAllPermissions();
+      
       setPermissionStatus({
-        notifications: !!notificationsGranted,
-        camera: !!cameraGranted,
-        microphone: !!micGranted,
+        notifications: permissions.notifications,
+        camera: permissions.camera,
+        microphone: permissions.microphone,
       });
     } catch (e) {
       console.error('Error checking permissions:', e);
@@ -98,26 +76,24 @@ const PermissionsScreen: React.FC = () => {
   const requestPermission = async (key: string) => {
     setRequesting((prev) => ({ ...prev, [key]: true }));
     try {
+      const permissionManager = PermissionManagerService.getInstance();
+      
       if (key === 'notifications') {
-        if (Platform.OS === 'android') {
-          await notifee.requestPermission();
-        } else {
-          await messaging().requestPermission();
-        }
-      } else if (key === 'camera' || key === 'microphone') {
-        if (PermissionsService && PermissionsService.checkAndRequestCallPermissions) {
-          await PermissionsService.checkAndRequestCallPermissions();
-        } else if (Platform.OS === 'android') {
-          const { PermissionsAndroid } = require('react-native');
-          const perms = [];
-          if (key === 'camera') perms.push(PermissionsAndroid.PERMISSIONS.CAMERA);
-          if (key === 'microphone') perms.push(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
-          await PermissionsAndroid.requestMultiple(perms);
-        }
+        const result = await permissionManager.requestNotificationPermissions();
+        console.log('Notification permission result:', result);
+      } else if (key === 'camera') {
+        const result = await permissionManager.requestCallPermissions(true); // Include camera
+        console.log('Camera permission result:', result);
+      } else if (key === 'microphone') {
+        const result = await permissionManager.requestCallPermissions(false); // Microphone only
+        console.log('Microphone permission result:', result);
       }
+      
+      // Refresh permission status
       await checkPermissions();
     } catch (e) {
-      Alert.alert('Permission Error', 'Failed to request permission.');
+      console.error('Permission request error:', e);
+      Alert.alert('Permission Error', 'Failed to request permission. Please try again.');
     }
     setRequesting((prev) => ({ ...prev, [key]: false }));
   };

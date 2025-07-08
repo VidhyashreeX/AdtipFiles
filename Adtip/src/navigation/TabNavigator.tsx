@@ -10,6 +10,7 @@ import {useNavigation} from '@react-navigation/native';
 import HomeScreen from '../screens/home/HomeScreen';
 import TipTubeScreen from '../screens/tiptube/TipTubeScreen';
 import TipCallScreen from '../screens/tipcall/TipCallScreen';
+import TipCallScreenSimple from '../screens/tipcall/TipCallScreenSimple';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import CreateContentModal from '../screens/content/CreateContentModal';
 import TipShortsEnhanced from '../screens/tipshorts/TipShortsEnhanced';
@@ -22,6 +23,12 @@ import {withWalletBalance} from '../components/hoc/withWalletBalance';
 // Create tab navigator
 const Tab = createBottomTabNavigator();
 
+// ✅ SOLUTION: Define HOC-wrapped components OUTSIDE the TabNavigator component
+const EnhancedHomeScreen = withWalletBalance(HomeScreen);
+const EnhancedTipTubeScreen = withWalletBalance(TipTubeScreen);
+const EnhancedTipCallScreen = withWalletBalance(TipCallScreenSimple);
+const EnhancedProfileScreen = withWalletBalance(ProfileScreen);
+
 /**
  * Bottom tab navigator component
  */
@@ -31,11 +38,7 @@ const TabNavigator = () => {
   const {balance, isLoading} = useWallet();
   const navigation = useNavigation<any>();
 
-  // Memoize enhanced components to prevent recreation
-  const EnhancedHomeScreen = useMemo(() => withWalletBalance(HomeScreen), []);
-  const EnhancedTipTubeScreen = useMemo(() => withWalletBalance(TipTubeScreen), []);
-  const EnhancedTipCallScreen = useMemo(() => withWalletBalance(TipCallScreen), []);
-  const EnhancedProfileScreen = useMemo(() => withWalletBalance(ProfileScreen), []);
+  // REMOVED: Memoized enhanced components are now defined outside.
 
   // Memoize tab bar height calculation
   const tabBarHeight = useMemo(() => 60 + Math.min(insets.bottom, 20), [insets.bottom]);

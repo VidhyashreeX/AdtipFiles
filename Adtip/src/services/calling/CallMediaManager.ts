@@ -1,13 +1,20 @@
 /**
- * CallMediaManager - Centralized Media Track Management
+ * CallMediaManager - Phase 2 Refactored with Zustand Integration
  * 
- * This service centralizes all media (mic/speaker/camera) management and cleanup
- * to ensure proper resource management regardless of how a call ends.
+ * This service manages all media (mic/speaker/camera) operations without holding state.
+ * All state management is delegated to Zustand store (callStore.ts).
+ * 
+ * Key Features:
+ * - ✅ No internal state - everything in Zustand store
+ * - ✅ Direct Zustand store integration via useCallStore.getState()
+ * - ✅ Simplified methods focused on media control + VideoSDK interaction
+ * - ✅ Proper cleanup and resource management
+ * - ✅ Race condition prevention through atomic operations
  */
 
 import { DeviceEventEmitter, Platform } from 'react-native';
 import { switchAudioDevice } from '@videosdk.live/react-native-sdk';
-import { appEventEmitter } from '../../events/AppEventEmitter';
+import { useCallStore } from '../../stores/callStore';
 
 export interface MediaState {
   micEnabled: boolean;
@@ -25,19 +32,13 @@ export interface MediaTrackInfo {
 
 class CallMediaManager {
   private static instance: CallMediaManager;
-  private mediaState: MediaState = {
-    micEnabled: true,
-    cameraEnabled: false,
-    speakerEnabled: true,
-    isVideoCall: false,
-  };
-  
-  private activeTracks: Map<string, MediaTrackInfo> = new Map();
   private currentMeeting: any = null; // Reference to VideoSDK meeting
-  private callId: string | null = null;
-  private initialized = false;
-  private listeners: Array<(state: MediaState) => void> = [];
   private cleanupTimer: NodeJS.Timeout | null = null;
+  private storeUnsubscribe: (() => void) | null = null;
+  private isCleaningUp = false;
+  private readonly TAG = 'CallMediaManager';
+  private currentCallId: string | null = null; // Track current call ID
+  private currentLocalParticipantId: string | null = null; // Track local participant ID to prevent ID confusion
 
   private constructor() {}
 
@@ -51,19 +52,45 @@ class CallMediaManager {
   /**
    * Initialize media manager for a call
    */
-  public initialize(callId: string, isVideoCall: boolean = false): void {
+  public initialize(callId: string, isVideoCall: boolean = false, localParticipantId: string | null = null): void {
     console.log('[CallMediaManager] Initializing for call:', callId);
     
-    this.callId = callId;
-    this.initialized = true;
+    // ✅ Reset any existing state first to prevent state bleeding between calls
+    this.resetState();
     
-    // Set initial state
-    this.mediaState = {
+    // Store the current call ID
+    this.currentCallId = callId;
+    
+    // Store the local participant ID if provided
+    if (localParticipantId) {
+      this.currentLocalParticipantId = localParticipantId;
+      console.log(`[CallMediaManager] Setting local participant ID: ${localParticipantId}`);
+    }
+    
+    // Set initial state in Zustand store
+    const store = useCallStore.getState();
+    store.actions.setMediaState({
       micEnabled: true,
       cameraEnabled: isVideoCall,
       speakerEnabled: true,
       isVideoCall,
-    };
+    });
+    
+    // Setup media event listeners
+    this.setupMediaEventListeners();
+    
+    console.log('[CallMediaManager] ✅ Initialized successfully');
+  }
+
+  /**
+   * Reset internal state to prevent state bleeding between calls
+   */
+  private resetState(): void {
+    console.log('[CallMediaManager] Resetting internal state');
+    
+    // Clear references and state
+    this.currentCallId = null;
+    this.currentLocalParticipantId = null;
     
     // Clear any existing cleanup timer
     if (this.cleanupTimer) {
@@ -71,90 +98,123 @@ class CallMediaManager {
       this.cleanupTimer = null;
     }
     
-    // Setup media event listeners
-    this.setupMediaEventListeners();
+    // Unsubscribe from store listeners
+    if (this.storeUnsubscribe) {
+      this.storeUnsubscribe();
+      this.storeUnsubscribe = null;
+    }
     
-    // Emit initial state
-    this.notifyListeners();
-    appEventEmitter.emit('mediaStateChanged', this.mediaState);
+    // Reset isCleaningUp flag
+    this.isCleaningUp = false;
   }
-
-  private notifyListeners = () => {
-    this.listeners.forEach(listener => listener(this.mediaState));
-  };
 
   /**
    * Set the VideoSDK meeting reference for direct control
    */
   public setMeeting(meeting: any): void {
+    // Check if meeting has already been set, to avoid duplicate references
+    if (this.currentMeeting === meeting) {
+      console.log('[CallMediaManager] Meeting reference already set, skipping');
+      return;
+    }
+    
     console.log('[CallMediaManager] Setting VideoSDK meeting reference');
     this.currentMeeting = meeting;
-    // IMPORTANT: Conflicting sync logic that caused race conditions has been removed.
-    // State synchronization is now handled unidirectionally from MeetingScreen.
+  }
+
+  /**
+   * Get the current local participant ID
+   */
+  public getLocalParticipantId(): string | null {
+    return this.currentLocalParticipantId;
+  }
+
+  /**
+   * Set the local participant ID - useful for participant ID consistency
+   */
+  public setLocalParticipantId(participantId: string): void {
+    if (this.currentLocalParticipantId !== participantId) {
+      console.log(`[CallMediaManager] Updating local participant ID from ${this.currentLocalParticipantId} to ${participantId}`);
+      this.currentLocalParticipantId = participantId;
+    }
   }
 
   /**
    * Passively updates the manager's state from the SDK without triggering a command back.
    * This is the primary method for keeping the manager in sync with the ground truth from the SDK.
-   * @param sdkState An object containing the current media state from the VideoSDK.
    */
   public syncStateFromSDK(sdkState: { micOn: boolean; webcamOn: boolean }): void {
     const { micOn, webcamOn } = sdkState;
-    const currentState = this.mediaState;
+    const store = useCallStore.getState();
+    const currentState = store.mediaState;
 
-    // Check if the SDK state is different from the manager's state
+    // Check if the SDK state is different from the store state
     const micStateChanged = currentState.micEnabled !== micOn;
     const cameraStateChanged = currentState.cameraEnabled !== webcamOn;
 
     if (micStateChanged || cameraStateChanged) {
       console.log(`[CallMediaManager] Syncing state FROM SDK. Mic: ${micOn}, Cam: ${webcamOn}`);
-      this.mediaState = {
-        ...currentState,
+      store.actions.setMediaState({
         micEnabled: micOn,
         cameraEnabled: webcamOn,
-      };
-      this.notifyListeners();
+      });
     }
   }
 
   /**
-   * Toggles the microphone. This is the single source for this user action.
-   * It updates its own state, then tells the SDK to change.
+   * Toggle microphone
    */
-  public toggleMic = (): void => {
-    if (!this.currentMeeting) return;
-    // The desired new state is the opposite of the current state
-    const newMicState = !this.mediaState.micEnabled;
-    this.mediaState.micEnabled = newMicState;
+  public toggleMic(): void {
+    if (!this.currentMeeting) {
+      console.warn('[CallMediaManager] No meeting reference available');
+      return;
+    }
+    
+    const store = useCallStore.getState();
+    const newMicState = !store.mediaState.micEnabled;
+    
+    // Update store first
+    store.actions.setMediaState({ micEnabled: newMicState });
+    
+    // Then update SDK
     this.currentMeeting.toggleMic();
     console.log(`[CallMediaManager] Toggled mic. New state: ${newMicState}`);
-    this.notifyListeners();
-  };
+  }
 
   /**
-   * Toggles the webcam. This is the single source for this user action.
-   * It updates its own state, then tells the SDK to change.
+   * Toggle camera/webcam
    */
-  public toggleWebcam = (): void => {
-    if (!this.currentMeeting) return;
-    const newWebcamState = !this.mediaState.cameraEnabled;
-    this.mediaState.cameraEnabled = newWebcamState;
+  public toggleWebcam(): void {
+    if (!this.currentMeeting) {
+      console.warn('[CallMediaManager] No meeting reference available');
+      return;
+    }
+    
+    const store = useCallStore.getState();
+    const newWebcamState = !store.mediaState.cameraEnabled;
+    
+    // Update store first
+    store.actions.setMediaState({ cameraEnabled: newWebcamState });
+    
+    // Then update SDK
     this.currentMeeting.toggleWebcam();
     console.log(`[CallMediaManager] Toggled webcam. New state: ${newWebcamState}`);
-    this.notifyListeners();
-  };
+  }
 
   /**
    * Toggle speaker
    */
   public async toggleSpeaker(): Promise<boolean> {
-    if (!this.initialized) {
-      console.warn('[CallMediaManager] Not initialized');
+    const store = useCallStore.getState();
+    
+    // Check if media manager is initialized (no call is active)
+    if (!store.isInCall) {
+      console.warn('[CallMediaManager] No active call');
       return false;
     }
 
     try {
-      const newState = !this.mediaState.speakerEnabled;
+      const newState = !store.mediaState.speakerEnabled;
       
       // Use VideoSDK audio device switching
       try {
@@ -164,38 +224,39 @@ class CallMediaManager {
         // Continue with state update even if switching fails
       }
       
-      // Update state
-      this.mediaState.speakerEnabled = newState;
-      this.notifyListeners();
-      appEventEmitter.emit('mediaStateChanged', this.mediaState);
+      // Update store
+      store.actions.setMediaState({ speakerEnabled: newState });
       
       console.log('[CallMediaManager] Speaker toggled:', newState ? 'ON' : 'OFF');
       return newState;
     } catch (error) {
       console.error('[CallMediaManager] Error toggling speaker:', error);
-      return this.mediaState.speakerEnabled;
+      const store = useCallStore.getState();
+      return store.mediaState.speakerEnabled;
     }
   }
 
   /**
-   * Force set mic state (for external control)
+   * Set microphone state directly
    */
   public setMicEnabled(enabled: boolean): void {
-    if (!this.initialized) {
-      console.warn('[CallMediaManager] Not initialized');
+    const store = useCallStore.getState();
+    
+    if (!store.isInCall) {
+      console.warn('[CallMediaManager] No active call');
       return;
     }
     
     console.log('[CallMediaManager] Setting mic enabled:', enabled);
     
-    if (this.mediaState.micEnabled === enabled) {
+    if (store.mediaState.micEnabled === enabled) {
       console.log('[CallMediaManager] Mic already in desired state');
       return;
     }
     
     try {
-      // Update state first
-      this.mediaState.micEnabled = enabled;
+      // Update store first
+      store.actions.setMediaState({ micEnabled: enabled });
       
       // Use VideoSDK meeting if available
       if (this.currentMeeting && typeof this.currentMeeting.toggleMic === 'function') {
@@ -204,34 +265,32 @@ class CallMediaManager {
       } else {
         console.log('[CallMediaManager] No VideoSDK meeting available, state updated but mic not toggled');
       }
-      
-      // Notify listeners
-      this.notifyListeners();
-      appEventEmitter.emit('mediaStateChanged', this.mediaState);
     } catch (error) {
       console.error('[CallMediaManager] Error setting mic enabled state:', error);
     }
   }
 
   /**
-   * Set camera enabled state directly
+   * Set camera state directly
    */
   public setCameraEnabled(enabled: boolean): void {
-    if (!this.initialized) {
-      console.warn('[CallMediaManager] Not initialized');
+    const store = useCallStore.getState();
+    
+    if (!store.isInCall) {
+      console.warn('[CallMediaManager] No active call');
       return;
     }
     
     console.log('[CallMediaManager] Setting camera enabled:', enabled);
     
-    if (this.mediaState.cameraEnabled === enabled) {
+    if (store.mediaState.cameraEnabled === enabled) {
       console.log('[CallMediaManager] Camera already in desired state');
       return;
     }
     
     try {
-      // Update state first
-      this.mediaState.cameraEnabled = enabled;
+      // Update store first
+      store.actions.setMediaState({ cameraEnabled: enabled });
       
       // Use VideoSDK meeting if available
       if (this.currentMeeting && typeof this.currentMeeting.toggleWebcam === 'function') {
@@ -240,218 +299,183 @@ class CallMediaManager {
       } else {
         console.log('[CallMediaManager] No VideoSDK meeting available, state updated but camera not toggled');
       }
-      
-      // Notify listeners
-      this.notifyListeners();
-      appEventEmitter.emit('mediaStateChanged', this.mediaState);
     } catch (error) {
       console.error('[CallMediaManager] Error setting camera enabled state:', error);
     }
   }
 
   /**
-   * Force set speaker state (for external control)
+   * Set speaker state directly
    */
   public setSpeakerEnabled(enabled: boolean): void {
-    if (this.mediaState.speakerEnabled !== enabled) {
+    const store = useCallStore.getState();
+    if (store.mediaState.speakerEnabled !== enabled) {
       this.toggleSpeaker();
     }
   }
 
   /**
-   * Subscribe to media state changes
-   * Returns an unsubscribe function
-   */
-  public subscribe(listener: (state: MediaState) => void): () => void {
-    this.listeners.push(listener);
-    return () => {
-      this.listeners = this.listeners.filter(l => l !== listener);
-    };
-  }
-  
-  /**
-   * Get the current media state
+   * Get the current media state from store
    */
   public getMediaState(): MediaState {
-    return { ...this.mediaState };
+    const store = useCallStore.getState();
+    return { ...store.mediaState };
   }
   
   /**
-   * Force update media state
+   * Force update media state in store
    */
   public forceUpdateMediaState(partial: Partial<MediaState>): void {
-    this.mediaState = { ...this.mediaState, ...partial };
-    this.notifyListeners();
-    appEventEmitter.emit('mediaStateChanged', this.mediaState);
+    const store = useCallStore.getState();
+    store.actions.setMediaState(partial);
   }
-  
+
   /**
-   * BULLETPROOF: Complete media cleanup with VideoSDK coordination
+   * Complete media cleanup with VideoSDK coordination
    */
   public async cleanup(reason: string = 'call_ended'): Promise<void> {
-    console.log('[CallMediaManager] Starting comprehensive media cleanup, reason:', reason);
+    if (this.isCleaningUp) {
+      console.log(`[${this.TAG}] Cleanup already in progress. Ignoring new request: ${reason}`);
+      return;
+    }
+
+    console.log(`[${this.TAG}] Starting media cleanup, reason:`, reason);
+    this.isCleaningUp = true;
     
+    // Store the meeting reference locally and immediately clear the instance variable
+    // to prevent any new operations during cleanup
+    const meeting = this.currentMeeting;
+    this.currentMeeting = null;
+    
+    let leaveError = null;
+
     try {
-      // ✅ CRITICAL FIX: Ensure VideoSDK meeting is properly left first
-      if (this.currentMeeting && typeof this.currentMeeting.leave === 'function') {
-        console.log('[CallMediaManager] Ensuring VideoSDK meeting is left before cleanup');
-        try {
-          await Promise.race([
-            this.currentMeeting.leave(),
-            new Promise(resolve => setTimeout(resolve, 2000)) // 2s timeout
-          ]);
-          console.log('[CallMediaManager] VideoSDK meeting left successfully');
-        } catch (error) {
-          console.warn('[CallMediaManager] Error leaving VideoSDK meeting:', error);
+      const store = useCallStore.getState();
+      if (store.callStatus !== 'idle' && store.callStatus !== 'ended') {
+        store.actions.setCallStatus('ending');
+      }
+
+      // First, disable all media using the SDK.
+      if (meeting) {
+        await this.disableAllMedia(meeting);
+
+        // Now, leave the VideoSDK meeting with a timeout.
+        if (typeof meeting.leave === 'function') {
+          try {
+            console.log(`[${this.TAG}] Leaving VideoSDK meeting...`);
+            await Promise.race([
+              meeting.leave(),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Leave timeout')), 3000))
+            ]);
+            console.log(`[${this.TAG}] VideoSDK meeting left successfully`);
+          } catch (error) {
+            leaveError = error;
+            console.warn(`[${this.TAG}] Error leaving VideoSDK meeting:`, error);
+          }
+        } else {
+          console.log(`[${this.TAG}] No active meeting to leave.`);
         }
       }
 
-      // ✅ CRITICAL FIX: Wait a moment for VideoSDK to fully disconnect
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-      // 1. Disable all media first
-      await this.disableAllMedia();
-      
-      // 2. Stop and clean up all tracked media streams/tracks
-      await this.cleanupAllTracks();
-      
-      // 3. Reset audio routing to default
-      await this.resetAudioRouting();
-      
-      // 4. Clear VideoSDK meeting reference
+    } catch (error) {
+      console.error(`[${this.TAG}] Critical error during cleanup:`, error);
+    } finally {
+      // Ensure meeting reference is cleared
       this.currentMeeting = null;
       
-      // 5. Reset state
-      this.mediaState = {
-        micEnabled: false,
-        cameraEnabled: false,
-        speakerEnabled: true,
-        isVideoCall: false,
-      };
+      try {
+        await this.resetAudioRouting();
+      } catch (e) {
+        console.warn(`[${this.TAG}] Error resetting audio routing:`, e);
+      }
+
+      try {
+        const store = useCallStore.getState();
+        store.actions.setMediaState({
+          micEnabled: false,
+          cameraEnabled: false,
+          speakerEnabled: true,
+          isVideoCall: false,
+        });
+      } catch (e) {
+        console.warn(`[${this.TAG}] Error resetting Zustand media state:`, e);
+      }
+
+      // Clean up all listeners
+      if (this.storeUnsubscribe) {
+        this.storeUnsubscribe();
+        this.storeUnsubscribe = null;
+      }
       
-      // 6. Clear call ID
-      this.callId = null;
-      this.initialized = false;
+      // ✅ Reset internal state to prevent bleeding into next call
+      this.resetState();
       
-      // 7. Notify listeners of cleanup
-      this.notifyListeners();
-      appEventEmitter.emit('mediaCleanupCompleted', { reason });
-      
-      console.log('[CallMediaManager] ✅ Media cleanup completed successfully');
-      
-    } catch (error) {
-      console.error('[CallMediaManager] ❌ Error during media cleanup:', error);
-      
-      // Force cleanup even if errors occurred
-      this.forceCleanup();
+      console.log(`[${this.TAG}] ✅ Media cleanup finished.`);
     }
   }
-
+  
   /**
-   * Force cleanup in case of errors
+   * Public method to force cleanup if needed
    */
-  private forceCleanup(): void {
-    console.log('[CallMediaManager] Performing force cleanup');
+  public forceCleanupIfNeeded(): void {
+    const store = useCallStore.getState();
     
-    // Clear all tracked media
-    this.activeTracks.clear();
-    
-    // Reset state
-    this.mediaState = {
-      micEnabled: false,
-      cameraEnabled: false,
-      speakerEnabled: true,
-      isVideoCall: false,
-    };
-    
-    // Clear references
-    this.currentMeeting = null;
-    this.callId = null;
-    this.initialized = false;
-    
-    // Notify cleanup completed
-    appEventEmitter.emit('mediaCleanupCompleted', { reason: 'force_cleanup' });
+    // Only perform force cleanup if we have lingering state that might affect next calls
+    if (this.currentMeeting || store.mediaState.cameraEnabled || 
+        store.mediaState.micEnabled || this.currentCallId || this.isCleaningUp) {
+      console.log('[CallMediaManager] Detected lingering state, performing failsafe cleanup');
+      this.cleanup('failsafe_cleanup');
+      return;
+    }
+    console.log('[CallMediaManager] No lingering state detected, skipping failsafe cleanup');
   }
 
   /**
    * Disable all media sources with proper VideoSDK coordination
    */
-  private async disableAllMedia(): Promise<void> {
-    console.log('[CallMediaManager] Disabling all media sources');
-    
-    // ✅ CRITICAL FIX: Disable mic if enabled
-    if (this.mediaState.micEnabled && this.currentMeeting) {
-      try {
-        if (typeof this.currentMeeting.toggleMic === 'function') {
-          this.currentMeeting.toggleMic(); // This will disable it
-          console.log('[CallMediaManager] Microphone disabled via VideoSDK');
-        }
-      } catch (error) {
-        console.warn('[CallMediaManager] Error disabling mic:', error);
-      }
-    }
-    
-    // ✅ CRITICAL FIX: Disable camera if enabled
-    if (this.mediaState.cameraEnabled && this.currentMeeting) {
-      try {
-        if (typeof this.currentMeeting.toggleWebcam === 'function') {
-          this.currentMeeting.toggleWebcam(); // This will disable it
-          console.log('[CallMediaManager] Camera disabled via VideoSDK');
-        }
-      } catch (error) {
-        console.warn('[CallMediaManager] Error disabling camera:', error);
-      }
+  private async disableAllMedia(meeting: any): Promise<void> {
+    console.log(`[${this.TAG}] Disabling all media sources...`);
+    const store = useCallStore.getState();
+    const { micEnabled: wasMicEnabled, cameraEnabled: wasCameraEnabled } = store.mediaState;
+
+    if (wasMicEnabled || wasCameraEnabled) {
+      // Update the store state first
+      store.actions.setMediaState({
+        micEnabled: false,
+        cameraEnabled: false,
+      });
     }
 
-    // ✅ CRITICAL FIX: Wait for media to be fully disabled
-    await new Promise(resolve => setTimeout(resolve, 200));
-  }
-
-  /**
-   * Clean up all tracked media tracks
-   */
-  private async cleanupAllTracks(): Promise<void> {
-    console.log('[CallMediaManager] Cleaning up all tracked media tracks:', this.activeTracks.size);
-    
-    const cleanupPromises: Promise<void>[] = [];
-    
-    for (const [trackId, trackInfo] of this.activeTracks.entries()) {
-      cleanupPromises.push(
-        new Promise((resolve) => {
-          try {
-            if (trackInfo.stream) {
-              // Try different cleanup methods
-              if (typeof trackInfo.stream.stop === 'function') {
-                trackInfo.stream.stop();
-              } else if (typeof trackInfo.stream.release === 'function') {
-                trackInfo.stream.release();
-              } else if (typeof trackInfo.stream.close === 'function') {
-                trackInfo.stream.close();
-              }
-            }
-            
-            console.log(`[CallMediaManager] Cleaned up ${trackInfo.type} track:`, trackId);
-          } catch (error) {
-            console.warn(`[CallMediaManager] Error cleaning up track ${trackId}:`, error);
-          } finally {
-            resolve();
-          }
-        })
-      );
+    if (!meeting) {
+      console.log(`[${this.TAG}] No meeting object provided to disable media via SDK.`);
+      return;
     }
-    
-    // Wait for all cleanup operations with timeout
+
+    // Add a small delay to allow state updates to propagate
+    await new Promise(resolve => setTimeout(resolve, 50));
+
     try {
-      await Promise.race([
-        Promise.all(cleanupPromises),
-        new Promise(resolve => setTimeout(resolve, 3000)) // 3s timeout
-      ]);
+      if (wasMicEnabled && typeof meeting.toggleMic === 'function') {
+        meeting.toggleMic();
+        console.log(`[${this.TAG}] Mic disabled via SDK.`);
+      }
     } catch (error) {
-      console.warn('[CallMediaManager] Timeout or error during track cleanup:', error);
+      console.warn(`[${this.TAG}] Error disabling mic via SDK:`, error);
     }
     
-    // Clear the tracks map
-    this.activeTracks.clear();
+    try {
+      if (wasCameraEnabled && typeof meeting.toggleWebcam === 'function') {
+        meeting.toggleWebcam();
+        console.log(`[${this.TAG}] Camera disabled via SDK.`);
+      }
+    } catch (error) {
+      console.warn(`[${this.TAG}] Error disabling camera via SDK:`, error);
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 200));
+    console.log(`[${this.TAG}] Media sources disabled.`);
   }
 
   /**
@@ -479,52 +503,80 @@ class CallMediaManager {
       this.toggleMic();
     });
     
-    // Listen for call end from any source
-    appEventEmitter.on('callEnded', (data) => {
-      console.log('[CallMediaManager] Call ended event received:', data);
-      
-      // Schedule cleanup with small delay to allow UI to update
-      this.cleanupTimer = setTimeout(() => {
-        this.cleanup(data?.reason || 'call_ended');
-      }, 100);
-    });
+    // Subscribe to call status changes for cleanup when call ends
+    this.storeUnsubscribe = useCallStore.subscribe(
+      (state, prevState) => {
+        // Only trigger cleanup when the call status CHANGES to ended/cleanup_pending
+        // This prevents multiple cleanups when the status hasn't actually changed
+        if ((state.callStatus === 'ended' || state.callStatus === 'cleanup_pending') && 
+            prevState?.callStatus !== state.callStatus) {
+          console.log('[CallMediaManager] Call ended via state change:', state.callStatus);
+          
+          // Cancel any previous cleanup timer to prevent duplicates
+          if (this.cleanupTimer) {
+            clearTimeout(this.cleanupTimer);
+            this.cleanupTimer = null;
+          }
+          
+          // Schedule cleanup with slightly longer delay to ensure proper coordination
+          this.cleanupTimer = setTimeout(() => {
+            this.cleanup(state.callStatus === 'cleanup_pending' ? 'call_ended_by_store' : 'call_ended_by_store');
+          }, 300); // Increased to 300ms to ensure all operations are completed
+        }
+      }
+    );
   }
 
   /**
-   * Check if media manager is initialized
+   * Check if media manager is initialized (based on call state)
    */
   public isInitialized(): boolean {
-    return this.initialized;
+    const store = useCallStore.getState();
+    return store.isInCall;
   }
-
+  
   /**
-   * Get current call ID
+   * Get current call ID from store or internal state
    */
   public getCurrentCallId(): string | null {
-    return this.callId;
-  }
-
-  /**
-   * Get active tracks count
-   */
-  public getActiveTracksCount(): number {
-    return this.activeTracks.size;
-  }
-
-  /**
-   * Get active tracks summary
-   */
-  public getActiveTracksSummary(): { audio: number; video: number } {
-    let audio = 0;
-    let video = 0;
-    
-    for (const track of this.activeTracks.values()) {
-      if (track.type === 'audio') audio++;
-      else if (track.type === 'video') video++;
+    // First check internal state
+    if (this.currentCallId) {
+      return this.currentCallId;
     }
     
-    return { audio, video };
+    // Fall back to store
+    const store = useCallStore.getState();
+    return store.activeCall?.callId || null;
+  }
+
+  /**
+   * Subscribe to media state changes
+   */
+  public subscribe(listener: (state: MediaState) => void): () => void {
+    const store = useCallStore;
+    return store.subscribe(
+      (state) => listener(state.mediaState)
+    );
+  }
+  
+  /**
+   * Get a summary of active media tracks
+   */
+  public getActiveTracksCount(): number {
+    const state = useCallStore.getState().mediaState;
+    let count = 0;
+    if (state.micEnabled) count++;
+    if (state.cameraEnabled) count++;
+    return count;
+  }
+
+  public getActiveTracksSummary(): { audio: number; video: number } {
+    const state = useCallStore.getState().mediaState;
+    return {
+      audio: state.micEnabled ? 1 : 0,
+      video: state.cameraEnabled ? 1 : 0,
+    };
   }
 }
 
-export default CallMediaManager;
+export default CallMediaManager.getInstance();

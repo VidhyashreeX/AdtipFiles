@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
-  PermissionsAndroid,
   Platform,
   Alert,
   StatusBar,
@@ -28,6 +27,7 @@ import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import { useDataContext } from '../../providers/DataProvider';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { useUsers, usePrefetchData } from '../../hooks/useQueries';
+import PermissionManagerService from '../../services/PermissionManagerService';
 import Header from '../../components/common/Header';
 import ScreenTransition from '../../components/common/ScreenTransition';
 import {
@@ -46,6 +46,7 @@ import { Ban, BanknoteArrowUp } from 'lucide-react-native';
 import messaging from '@react-native-firebase/messaging';
 import uuid from 'react-native-uuid';
 import UnifiedCallService from '../../services/calling/UnifiedCallService'; // Unified call service
+import CallBillingService from '../../services/calling/CallBillingService'; // Call billing service
 import BlocklistService from '../../services/BlocklistService';
 import WalletService from '../../services/WalletService';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
@@ -57,6 +58,8 @@ import UserProfileScreen from '../profile/UserProfileScreen';
 import SingleBannerCard from '../../components/home/SingleBannerCard';
 import { Headphones } from 'lucide-react-native';
 import debounce from 'lodash.debounce';
+import CallMediaManager from '../../services/calling/CallMediaManager';
+import useCallStore from '../../stores/callStore';
 
 // Define navigation stack param list
 type NavigationProp = NativeStackNavigationProp<MainNavigatorParamList, 'TipCall'>;
@@ -350,38 +353,113 @@ export default function TipCallScreen() {
     initializeBlocklist();
   }, []);
 
+  // Initialize and reset call-related services
   useEffect(() => {
-    // Reset call state using UnifiedCallService
-    const unifiedCallService = UnifiedCallService.getInstance();
-    unifiedCallService.cleanup();
+    const initializeAndResetCallServices = async () => {
+      try {
+        console.log('[TipCallScreen] Initializing and resetting call services...');
+        
+        // First, ensure any active calls are ended
+        const callStore = useCallStore.getState();
+        if (callStore.isInCall) {
+          console.log('[TipCallScreen] Active call detected, cleaning up first...');
+          await callStore.actions.endCall('navigation_reset');
+          // Add a small delay to ensure cleanup completes
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+        
+        // Force cleanup of any lingering media resources
+        CallMediaManager.forceCleanupIfNeeded();
+        
+        // Reset call state
+        callStore.actions.resetCallState();
+        
+        // Initialize the call service if not already initialized
+        const unifiedCallService = UnifiedCallService.getInstance();
+        if (!unifiedCallService.getIsInitialized()) {
+          console.log('[TipCallScreen] Call service not initialized, initializing now...');
+          
+          // Configure VideoSDK with basic options
+          const success = await unifiedCallService.initialize({
+            enableCallKeep: true,
+            enableNotifications: true,
+          });
+          
+          if (!success) {
+            console.error('[TipCallScreen] Failed to initialize call service');
+            Alert.alert(
+              'Call Service Error', 
+              'Failed to initialize call service. Video and voice calls may not work properly.'
+            );
+            return false;
+          }
+        } else {
+          console.log('[TipCallScreen] Call service already initialized');
+        }
+        
+        // Update the call store to reflect initialization
+        callStore.actions.setServiceInitialized(true);
+        
+        console.log('[TipCallScreen] Call services initialized successfully');
+        return true;
+      } catch (error) {
+        console.error('[TipCallScreen] Error initializing call services:', error);
+        Alert.alert(
+          'Service Error', 
+          'An error occurred while initializing call services. Please try again.'
+        );
+        return false;
+      }
+    };
+    
+    initializeAndResetCallServices();
+    
+    // Also run this when screen comes into focus
+    const unsubscribe = navigation.addListener('focus', () => {
+      console.log('[TipCallScreen] Screen focused, ensuring call services are reset');
+      initializeAndResetCallServices();
+    });
+    
+    return unsubscribe;
+  }, [navigation]);
+
+  useEffect(() => {
+    // Reset call state using Zustand store
+    const { useCallStore } = require('../../stores/callStore');
+    useCallStore.getState().actions.cleanup();
   }, []);
 
   // Request permissions on component mount
   useEffect(() => {
     const requestPermissions = async () => {
-      if (Platform.OS === 'android') {
-        try {
-          const grants = await PermissionsAndroid.requestMultiple([
-            PermissionsAndroid.PERMISSIONS.CAMERA,
-            PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-            PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-          ]);
-          console.log('[TipCallScreen] Permissions granted:', grants);
-          if (
-            grants[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED &&
-            grants[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED
-          ) {
-            console.log('[TipCallScreen] Camera and mic permissions granted');
-          } else {
-            console.warn('[TipCallScreen] Some essential permissions were not granted');
-            Alert.alert(
-              "Permissions Required",
-              "Camera and microphone access are required to make calls. Please grant them from app settings."
-            );
-          }
-        } catch (err) {
-          console.warn('[TipCallScreen] Permissions request error:', err);
+      try {
+        console.log('[TipCallScreen] Requesting call permissions...');
+        const permissionManager = PermissionManagerService.getInstance();
+        
+        // Request all call permissions (camera, microphone, phone)
+        const result = await permissionManager.requestCallPermissions(true);
+        
+        console.log('[TipCallScreen] Permission result:', result);
+        
+        if (result.camera && result.microphone) {
+          console.log('[TipCallScreen] ✅ All essential permissions granted');
+        } else {
+          console.warn('[TipCallScreen] ❌ Some essential permissions were not granted:', result);
+          Alert.alert(
+            "Permissions Required",
+            "Camera and microphone access are required to make calls. Please grant them from app settings.",
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => {
+                // Open app settings
+                const { Linking } = require('react-native');
+                Linking.openSettings();
+              }}
+            ]
+          );
         }
+      } catch (err) {
+        console.warn('[TipCallScreen] Permissions request error:', err);
       }
     };
     requestPermissions();
@@ -735,8 +813,8 @@ export default function TipCallScreen() {
 
     // Calculate and show maximum call duration based on balance
     try {
-      const callService = UnifiedCallService.getInstance();
-      const callRates = callService.getCallRates();
+      const callBillingService = CallBillingService.getInstance();
+      const callRates = callBillingService.getCallRates();
       const { isPremium } = await WalletService.checkPremiumStatus(user.id);
       
       let ratePerMinute: number;
@@ -796,10 +874,10 @@ export default function TipCallScreen() {
     }
 
     async function initiateCall() {
-      // Prevent multiple rapid call attempts
-      const unifiedCallService = UnifiedCallService.getInstance();
-      const currentCallState = unifiedCallService.getCallState();
-      if (currentCallState.isInCall) {
+      // Prevent multiple rapid call attempts using Zustand store
+      const { useCallStore } = require('../../stores/callStore');
+      const currentCallStatus = useCallStore.getState().callStatus;
+      if (currentCallStatus !== 'idle' && currentCallStatus !== 'ended') {
         Alert.alert("Call In Progress", "You are already in a call.");
         return;
       }
@@ -1154,228 +1232,232 @@ export default function TipCallScreen() {
             </View>
           ) : null}
           keyboardShouldPersistTaps="handled"
+          removeClippedSubviews={false}
         />
       </View>
     );
   }
 
   return (
-    <ScreenTransition animationType="fade">
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <StatusBar backgroundColor={colors.background} barStyle={isDarkMode ? "light-content" : "dark-content"} />
-        
-        {/* Updated Header with TipCall search functionality */}
-        <Header 
-          title="" 
-          showWallet={false}
-          showSearch={false}
-          centerComponent={
-            isTipCallSearchActive ? (
-              <View style={styles.tipCallSearchContainer}>
-                <TextInput
-                  style={[styles.tipCallSearchInput, { color: colors.text.primary, borderColor: colors.border }]}
-                  placeholder="Search users..."
-                  placeholderTextColor={colors.text.secondary}
-                  value={searchQuery || ''}
-                  onChangeText={handleTipCallLiveSearchChange}
-                  onSubmitEditing={handleTipCallSearchSubmit}
-                  autoFocus={true}
-                  returnKeyType="search"
-                />
-                <TouchableOpacity 
-                  onPress={() => setIsTipCallSearchActive(false)}
-                  style={styles.tipCallSearchClearButton}
-                >
-                  <Icon name="x" size={16} color={colors.text.secondary} />
-                </TouchableOpacity>
-              </View>
-            ) : undefined
-          }
-          rightComponent={
-            <View style={styles.headerRightContainer}>
-              {/* TipCall Search Icon */}
-              <TouchableOpacity
-                onPress={() => setIsTipCallSearchActive(true)}
-                style={[styles.headerIconButton, { marginRight: 12 }]}
-              >
-                <Icon name="search" size={20} color={colors.text.primary} />
-                {/* Show indicator if search is active */}
-                {searchQuery && searchQuery.trim() && (
-                  <View style={[styles.searchActiveDot, { backgroundColor: colors.primary }]} />
-                )}
-              </TouchableOpacity>
-
-              {/* Ban Icon - Navigate to Blocked Users */}
-              <TouchableOpacity
-                onPress={handleNavigateToBlockedUsers}
-                style={[styles.headerIconButton, { marginRight: 12 }]}
-              >
-                <Ban size={20} color={colors.error} />
-                {blockedUsersCount > 0 && (
-                  <Text style={styles.blockedUsersBadgeText}>
-                    {blockedUsersCount > 99 ? '99+' : blockedUsersCount.toString()}
-                  </Text>
-                )}
-              </TouchableOpacity>
-
-              {/* Missed Calls Icon */}
-              <TouchableOpacity
-                onPress={() => navigation.navigate('MissedCalls')}
-                style={[styles.headerIconButton, { marginRight: 12 }]}
-              >
-                <Icon name="phone-missed" size={20} color={colors.error} />
-                {missedCallsCount > 0 && (
-                  <View style={[styles.missedCallsBadge, { backgroundColor: colors.error }]}>
-                    <Text style={styles.missedCallsBadgeText}>
-                      {missedCallsCount > 99 ? '99+' : missedCallsCount.toString()}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-
-              {/* Banknote Arrow Up Icon - Navigate to AddFundsScreen */}
-              <TouchableOpacity
-                onPress={() => navigation.navigate('AddFundsScreen')}
-                style={[styles.headerIconButton, { marginRight: 8 }]}
-              >
-                <BanknoteArrowUp size={20} color={colors.primary} />
-              </TouchableOpacity>
-
-              {/* DND Toggle Switch */}
-              <DndToggleSwitch
-                isDndEnabled={isDndEnabled}
-                onToggle={handleDndToggle}
-                isLoading={isDndLoading}
-                colors={colors}
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar backgroundColor={colors.background} barStyle={isDarkMode ? "light-content" : "dark-content"} />
+      
+      {/* Updated Header with TipCall search functionality */}
+      <Header 
+        title="" 
+        showWallet={false}
+        showSearch={false}
+        centerComponent={
+          isTipCallSearchActive ? (
+            <View style={styles.tipCallSearchContainer}>
+              <TextInput
+                style={[styles.tipCallSearchInput, { color: colors.text.primary, borderColor: colors.border }]}
+                placeholder="Search users..."
+                placeholderTextColor={colors.text.secondary}
+                value={searchQuery || ''}
+                onChangeText={handleTipCallLiveSearchChange}
+                onSubmitEditing={handleTipCallSearchSubmit}
+                autoFocus={true}
+                returnKeyType="search"
               />
+              <TouchableOpacity 
+                onPress={() => setIsTipCallSearchActive(false)}
+                style={styles.tipCallSearchClearButton}
+              >
+                <Icon name="x" size={16} color={colors.text.secondary} />
+              </TouchableOpacity>
             </View>
-          }
+          ) : undefined
+        }
+        rightComponent={
+          <View style={styles.headerRightContainer}>
+            {/* TipCall Search Icon */}
+            <TouchableOpacity
+              onPress={() => setIsTipCallSearchActive(true)}
+              style={[styles.headerIconButton, { marginRight: 12 }]}
+            >
+              <Icon name="search" size={20} color={colors.text.primary} />
+              {/* Show indicator if search is active */}
+              {searchQuery && searchQuery.trim() && (
+                <View style={[styles.searchActiveDot, { backgroundColor: colors.primary }]} />
+              )}
+            </TouchableOpacity>
+
+            {/* Ban Icon - Navigate to Blocked Users */}
+            <TouchableOpacity
+              onPress={handleNavigateToBlockedUsers}
+              style={[styles.headerIconButton, { marginRight: 12 }]}
+            >
+              <Ban size={20} color={colors.error} />
+              {blockedUsersCount > 0 && (
+                <Text style={styles.blockedUsersBadgeText}>
+                  {blockedUsersCount > 99 ? '99+' : blockedUsersCount.toString()}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Missed Calls Icon */}
+            <TouchableOpacity
+              onPress={() => navigation.navigate('MissedCalls')}
+              style={[styles.headerIconButton, { marginRight: 12 }]}
+            >
+              <Icon name="phone-missed" size={20} color={colors.error} />
+              {missedCallsCount > 0 && (
+                <View style={[styles.missedCallsBadge, { backgroundColor: colors.error }]}>
+                  <Text style={styles.missedCallsBadgeText}>
+                    {missedCallsCount > 99 ? '99+' : missedCallsCount.toString()}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Banknote Arrow Up Icon - Navigate to AddFundsScreen */}
+            <TouchableOpacity
+              onPress={() => navigation.navigate('AddFundsScreen')}
+              style={[styles.headerIconButton, { marginRight: 8 }]}
+            >
+              <BanknoteArrowUp size={20} color={colors.primary} />
+            </TouchableOpacity>
+
+            {/* DND Toggle Switch */}
+            <DndToggleSwitch
+              isDndEnabled={isDndEnabled}
+              onToggle={handleDndToggle}
+              isLoading={isDndLoading}
+              colors={colors}
+            />
+          </View>
+        }
+      />
+
+      {/* Render premium banner if applicable */}
+      {/*{renderPremiumBanner()}*/}
+
+      {/* Enhanced Filters Section */}
+      <View style={[styles.filtersSection, { backgroundColor: colors.background }]}>
+        <SingleBannerCard
+          title="Talk to Earn"
+          description={"Earn on Every Call: ₹2/min (Premium)\n₹0.60/min (Free)"}
+          icon={<Headphones size={48} color="#fff" />}
+          gradient={['#093028', '#237a57']}   
         />
-
-        {/* Render premium banner if applicable */}
-        {/*{renderPremiumBanner()}*/}
-
-        {/* Enhanced Filters Section */}
-        <View style={[styles.filtersSection, { backgroundColor: colors.background }]}>
-          <SingleBannerCard
-            title="Talk to Earn"
-            description={"Earn on Every Call: ₹2/min (Premium)\n₹0.60/min (Free)"}
-            icon={<Headphones size={48} color="#fff" />}
-            gradient={['#093028', '#237a57']}   
-          />
-          {/* Language Filter */}
-          <View style={styles.filterGroup}>
-            <Text style={[styles.filterGroupTitle, { color: colors.text.primary }]}>Languages</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filterScrollContainer}
-              style={styles.filterScrollView}
-            >
-              {languages.map((lang) => (
-                <FilterChip
-                  key={lang.id}
-                  label={lang.name}
-                  isSelected={selectedLanguage === lang.id}
-                  onPress={() => setSelectedLanguage(lang.id)}
-                  colors={colors}
-                  isDarkMode={isDarkMode}
-                />
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Category Filter */}
-          <View style={styles.filterGroup}>
-            <Text style={[styles.filterGroupTitle, { color: colors.text.primary }]}>
-              Interests
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filterScrollContainer}
-              style={styles.filterScrollView}
-            >
-              {interests.map((category) => (
-                <FilterChip
-                  key={category.id}
-                  label={category.name}
-                  isSelected={selectedInterest === category.id}
-                  onPress={() => setSelectedInterest(category.id)}
-                  colors={colors}
-                  isDarkMode={isDarkMode}
-                />
-              ))}
-            </ScrollView>
-          </View>
+        {/* Language Filter */}
+        <View style={styles.filterGroup}>
+          <Text style={[styles.filterGroupTitle, { color: colors.text.primary }]}>Languages</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterScrollContainer}
+            style={styles.filterScrollView}
+          >
+            {LANGUAGES.map((lang) => (
+              <FilterChip
+                key={lang.id}
+                label={lang.name}
+                isSelected={languageFilter === lang.id}
+                onPress={() => handleLanguageFilter(lang.id)}
+                colors={colors}
+                isDarkMode={isDarkMode}
+              />
+            ))}
+          </ScrollView>
         </View>
 
-        {/* Search Indicator */}
-        {searchQuery && searchQuery.trim() && (
-          <View style={styles.searchIndicator}>
-            <Icon name="search" size={16} color={colors.primary} />
-            <Text style={[styles.searchIndicatorText, {color: colors.primary}]}>
-              Search results for "{searchQuery.trim()}"
-            </Text>
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Icon name="x" size={16} color={colors.text.secondary} />
-            </TouchableOpacity>
+        {/* Category Filter */}
+        <View style={styles.filterGroup}>
+          <Text style={[styles.filterGroupTitle, { color: colors.text.primary }]}>
+            Interests
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterScrollContainer}
+            style={styles.filterScrollView}
+          >
+            {CATEGORIES.map((category) => (
+              <FilterChip
+                key={category.id}
+                label={category.name}
+                isSelected={categoryFilter === category.id}
+                onPress={() => handleCategoryFilter(category.id)}
+                colors={colors}
+                isDarkMode={isDarkMode}
+              />
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+
+      {/* Search Indicator */}
+      {searchQuery && searchQuery.trim() && (
+        <View style={styles.searchIndicator}>
+          <Icon name="search" size={16} color={colors.primary} />
+          <Text style={[styles.searchIndicatorText, {color: colors.primary}]}>
+            Search results for "{searchQuery.trim()}"
+          </Text>
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Icon name="x" size={16} color={colors.text.secondary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Content Section */}
+      <View style={styles.contentSection}>
+        {initialLoading ? (
+          <ContactsSkeleton colors={colors} isDarkMode={isDarkMode} />
+        ) : usersError ? (
+          renderErrorState()
+        ) : filteredContacts.length === 0 ? (
+          renderEmptyState()
+        ) : (
+          <View style={{ marginVertical: 12 }}>
+            <FlatList
+              data={contactsWithAds}
+              renderItem={renderItem}
+              keyExtractor={(item, idx) => ('ad' in item ? item.key : String(item.id))}
+              refreshControl={
+                <RefreshControl
+                  refreshing={false} // Managed by React Query
+                  onRefresh={handleRefresh}
+                  colors={[colors.primary]}
+                  tintColor={colors.primary}
+                />
+              }
+              onEndReached={handleLoadMore}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={
+                loadingMore ? (
+                  <View style={{ padding: 20, alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  </View>
+                ) : null
+              }
+              removeClippedSubviews={false}
+            />
           </View>
         )}
-
-        {/* Content Section */}
-        <View style={styles.contentSection}>
-          {initialLoading ? (
-            <ContactsSkeleton colors={colors} isDarkMode={isDarkMode} />
-          ) : usersError ? (
-            renderErrorState()
-          ) : filteredContacts.length === 0 ? (
-            renderEmptyState()
-          ) : (
-            <View style={{ marginVertical: 12 }}>
-              <FlatList
-                data={contactsWithAds}
-                renderItem={renderItem}
-                keyExtractor={(item, idx) => ('ad' in item ? item.key : String(item.id))}
-                refreshControl={
-                  <RefreshControl
-                    refreshing={false} // Managed by React Query
-                    onRefresh={handleRefresh}
-                    colors={[colors.primary]}
-                    tintColor={colors.primary}
-                  />
-                }
-                onEndReached={handleLoadMore}
-                onEndReachedThreshold={0.5}
-                ListFooterComponent={
-                  loadingMore && hasMore ? (
-                    <View style={{ padding: 20, alignItems: 'center' }}>
-                      <ActivityIndicator size="small" color={colors.primary} />
-                    </View>
-                  ) : null
-                }
-              />
-            </View>
-          )}
-        </View>
-
-        {/* User Profile Modal */}
-        <Modal
-          visible={showUserProfileModal}
-          animationType="slide"
-          onRequestClose={() => {
-            setShowUserProfileModal(false);
-            setSelectedUserId(null);
-          }}
-        >
-          {selectedUserId && (
-            <UserProfileScreen
-              userId={selectedUserId}
-            />
-          )}
-        </Modal>
       </View>
-    </ScreenTransition>
+
+      {/* User Profile Modal */}
+      <Modal
+        visible={showUserProfileModal}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowUserProfileModal(false);
+          setSelectedUserId(null);
+        }}
+      >
+        {selectedUserId && (
+          <UserProfileScreen
+            userId={selectedUserId}
+            onClose={() => {
+              setShowUserProfileModal(false);
+              setSelectedUserId(null);
+            }}
+          />
+        )}
+      </Modal>
+    </View>
   );
 }
 

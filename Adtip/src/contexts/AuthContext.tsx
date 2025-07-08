@@ -4,6 +4,8 @@ import {API_BASE_URL, ENDPOINTS} from '../constants/api';
 import ApiService from '../services/ApiService';
 import {navigationRef} from '../navigation/NavigationService';
 import LastSeenService from '../services/LastSeenService'; // Ensure this import is present
+import UnifiedCallService from '../services/calling/UnifiedCallService';
+import FirebaseService from '../services/FirebaseService';
 import { ApiResponse, OtpLoginResponse as ApiOtpResponse, OtpVerifyResponse as ApiUserType, OtpVerifyApiResponse } from '../types/api';
 
 // Define user type (using the one from api.ts for consistency)
@@ -271,10 +273,25 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       
       if (currentUserId) { // Check if there was a user to log out
         console.log(`[AuthContext] Attempting to call API logout for user ID: ${currentUserId}`);
-        await ApiService.post(ENDPOINTS.LOGOUT, {id: currentUserId}); // Ensure ENDPOINTS.LOGOUT is correct
+        
+        // Use the proper ApiService.logout method which handles FCM token cleanup
+        await ApiService.logout(String(currentUserId));
         console.log(`[AuthContext] API logout call successful for user ID: ${currentUserId}`);
       } else {
         console.log('[AuthContext] No user was signed in, proceeding to clear local data.');
+      }
+      
+      // Clean up all services before clearing storage
+      try {
+        console.log('[AuthContext] Resetting UnifiedCallService...');
+        const unifiedCallService = UnifiedCallService.getInstance();
+        unifiedCallService.reset();
+        
+        console.log('[AuthContext] Resetting FirebaseService...');
+        const firebaseService = FirebaseService.getInstance();
+        firebaseService.reset();
+      } catch (serviceError) {
+        console.warn('[AuthContext] Error cleaning up services during logout:', serviceError);
       }
       
       await AsyncStorage.clear();
@@ -301,6 +318,17 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     } catch (err) {
       console.error('[AuthContext] Error during logout:', err);
       // Even if API logout fails, proceed to clear local data and log out locally
+      
+      // Still try to clean up services
+      try {
+        const unifiedCallService = UnifiedCallService.getInstance();
+        unifiedCallService.reset();
+        const firebaseService = FirebaseService.getInstance();
+        firebaseService.reset();
+      } catch (serviceError) {
+        console.warn('[AuthContext] Error cleaning up services during logout fallback:', serviceError);
+      }
+      
       await AsyncStorage.clear();
       setUser(null);
       setIsAuthenticated(false);

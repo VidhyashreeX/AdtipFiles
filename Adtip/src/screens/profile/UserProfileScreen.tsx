@@ -31,6 +31,7 @@ const GRID_IMAGE_SIZE = (SCREEN_WIDTH - GRID_SPACING * 4) / 3;
 
 interface UserProfileScreenProps {
   userId: number;
+  onClose?: () => void;
 }
 
 interface Post {
@@ -61,6 +62,16 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
   const [followingList, setFollowingList] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
+  const { onClose } = props;
+
+  // When closing the main modal, also close all nested modals
+  const handleClose = useCallback(() => {
+    setShowFollowersModal(false);
+    setShowFollowingModal(false);
+    setShowImageViewer(false);
+    if (onClose) onClose();
+  }, [onClose]);
+
   const isOwnProfile = currentUser?.id === userId;
 
   useEffect(() => {
@@ -76,10 +87,10 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
       return;
     }
 
-    // Prevent multiple rapid call attempts
-    const unifiedCallService = UnifiedCallService.getInstance();
-    const currentCallState = unifiedCallService.getCallState();
-    if (currentCallState.isInCall) {
+    // Prevent multiple rapid call attempts using Zustand store
+    const { useCallStore } = require('../../stores/callStore');
+    const currentCallStatus = useCallStore.getState().callStatus;
+    if (currentCallStatus !== 'idle' && currentCallStatus !== 'ended') {
       Alert.alert("Call In Progress", "You are already in a call.");
       return;
     }
@@ -470,6 +481,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
           </TouchableOpacity>
         )}
         ListEmptyComponent={<Text style={{ color: colors.text.secondary, alignSelf: 'center', marginTop: 32 }}>No posts yet.</Text>}
+        removeClippedSubviews={false}
       />
       {/* Followers Modal */}
       <Modal visible={showFollowersModal} transparent animationType="slide" onRequestClose={() => setShowFollowersModal(false)}>
@@ -479,7 +491,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
               <Icon name="x" size={28} color={colors.text.primary} />
             </TouchableOpacity>
             <Text style={[styles.modalTitle, { color: colors.text.primary }]}>Followers</Text>
-            <UserListModal users={followersList} currentUserId={currentUser?.id} onUserPress={handleUserPressInModal} />
+            <UserListModal users={followersList} currentUserId={currentUser?.id || 0} onUserPress={handleUserPressInModal} />
           </View>
         </View>
       </Modal>
@@ -491,7 +503,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
               <Icon name="x" size={28} color={colors.text.primary} />
             </TouchableOpacity>
             <Text style={[styles.modalTitle, { color: colors.text.primary }]}>Following</Text>
-            <UserListModal users={followingList} currentUserId={currentUser?.id} onUserPress={handleUserPressInModal} />
+            <UserListModal users={followingList} currentUserId={currentUser?.id || 0} onUserPress={handleUserPressInModal} />
           </View>
         </View>
       </Modal>
@@ -516,6 +528,10 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
           </TouchableOpacity>
         </Modal>
       )}
+      {/* Main close button for the parent modal, if needed */}
+      <TouchableOpacity style={{ position: 'absolute', top: 40, left: 24, zIndex: 20 }} onPress={handleClose}>
+        <Icon name="x" size={32} color={colors.text.primary} />
+      </TouchableOpacity>
     </View>
   );
 };

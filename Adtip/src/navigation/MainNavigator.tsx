@@ -1,11 +1,12 @@
 import React, { useEffect } from 'react';
+import { Platform, TouchableOpacity } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Easing } from 'react-native-reanimated';
+import Icon from 'react-native-vector-icons/Feather';
 import { withFastLoading } from '../components/hoc/withFastLoading';
 import { MainNavigatorParamList } from '../types/navigation';
-import { appEventEmitter } from '../events/AppEventEmitter';
 // Import the navigation ref for global navigation
-import { navigationRef, navigateToMeeting } from './NavigationService';
+import { navigationRef } from './NavigationService';
 
 // Import navigators
 import TabNavigator from './TabNavigator';
@@ -59,7 +60,9 @@ import CameraRecordingScreen from '../screens/content/CameraRecordingScreen';
 import TipCallScreen from '../screens/tipcall/TipCallScreen';
 import MissedCallsScreen from '../screens/tipcall/MissedCallsScreen';
 // Import MeetingScreen
-import MeetingScreen from '../screens/videosdk/MeetingScreen';
+import MeetingScreenSimple from '../screens/videosdk/MeetingScreenSimple';
+import TestCallScreen from '../screens/TestCallScreen';
+import TipCallScreenSimple from '../screens/tipcall/TipCallScreenSimple';
 // Import BlockedUsersScreen
 import BlockedUsersScreen from '../screens/blocklist/BlockedUsersScreen';
 
@@ -91,6 +94,45 @@ import PermissionsScreen from '../screens/settings/PermissionsScreen';
 
 // Create stack navigator with proper typing
 const Stack = createNativeStackNavigator<MainNavigatorParamList>();
+
+// ✅ SOLUTION: Define HOC-wrapped components OUTSIDE the MainNavigator component
+const EnhancedCreatePostScreen = withWalletBalance(CreatePostScreen);
+const EnhancedSelectCategoryScreen = withWalletBalance(SelectCategoryScreen);
+const EnhancedTipTubeUploadScreen = withWalletBalance(TipTubeUploadScreen);
+const EnhancedTipShortsUploadScreen = withWalletBalance(TipShortsUploadScreen);
+const EnhancedPromotePostScreen = withWalletBalance(PromotePostScreen);
+const EnhancedVideoPreviewScreen = withWalletBalance(VideoPreviewScreen);
+const EnhancedVideoScreen = withWalletBalance(VideoScreen);
+const EnhancedShortsScreen = withWalletBalance(ShortsScreen);
+const EnhancedTipShortsScreen = withWalletBalance(TipShortsEnhanced);
+const EnhancedChannelScreen = withWalletBalance(ChannelScreen);
+const EnhancedCreateChannelScreen = withWalletBalance(CreateChannelScreen);
+const EnhancedPackagesScreen = withWalletBalance(PackagesScreen);
+const EnhancedChoosePackagesScreen = withWalletBalance(ChoosePackagesScreen);
+const EnhancedCheckoutScreen = withWalletBalance(CheckoutScreen);
+const EnhancedAnalyticsScreen = withWalletBalance(AnalyticsScreen);
+const EnhancedProfileScreen = withWalletBalance(ProfileScreen);
+const EnhancedEditProfileScreen = withWalletBalance(EditProfile);
+const EnhancedTrackOrderScreen = withWalletBalance(TrackOrderScreen);
+const EnhancedSearchScreen = withWalletBalance(SearchScreen);
+const EnhancedNotificationScreen = withWalletBalance(NotificationScreen);
+const EnhancedSettingsScreen = withWalletBalance(SettingsScreen);
+const EnhancedEarningsScreen = withWalletBalance(EarningsScreen);
+const EnhancedReferralScreen = withWalletBalance(ReferralScreen);
+const EnhancedPlayToEarnScreen = withWalletBalance(ChooseGameScreen);
+const EnhancedLudoGameScreen = withWalletBalance(LudoGameScreen);
+const EnhancedWatchToEarnScreen = withWalletBalance(WatchToEarnScreen);
+const EnhancedAdPassbookScreen = withWalletBalance(AdPassbookScreen);
+const EnhancedSupportScreen = withWalletBalance(SupportScreen);
+const EnhancedCreateCampaignScreen = withWalletBalance(CreateCampaignScreen);
+const EnhancedCommentsScreen = withWalletBalance(CommentsScreen);
+const EnhancedFollowersList = withWalletBalance(FollowersList);
+const EnhancedFollowingsList = withWalletBalance(FollowingsList);
+const EnhancedExploreScreen = withWalletBalance(ExploreScreen);
+const EnhancedPremiumUserScreen = withWalletBalance(PremiumUserScreen);
+const EnhancedVideoPlayerModalScreen = withWalletBalance(VideoPlayerModalScreen);
+const EnhancedTipCallScreen = withWalletBalance(TipCallScreen);
+const EnhancedMissedCallsScreen = withWalletBalance(MissedCallsScreen);
 
 // Custom transition configuration with Reanimated easing
 const customTransitionConfig = {
@@ -294,94 +336,10 @@ const callTransitionConfig = {
  * Main application stack navigator (when user is authenticated)
  */
 const MainNavigator = () => {
-  // Remove the useNavigation hook - this was causing the issue
-  // const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
-
-  useEffect(() => {
-    const handleNavigateToMeeting = (params: any) => {
-      try {
-        console.log('[MainNavigator] Received forceNavigateToMeeting event, navigating to Meeting screen.');
-        
-        // ✅ CRITICAL FIX: Validate parameters before navigation
-        if (!params || !params.meetingId || !params.token) {
-          console.error('[MainNavigator] Invalid parameters received for forceNavigateToMeeting event:', params);
-          return;
-        }
-
-        // ✅ CRITICAL FIX: Add navigation readiness check
-        if (!navigationRef.isReady()) {
-          console.warn('[MainNavigator] Navigation not ready, retrying in 100ms');
-          setTimeout(() => handleNavigateToMeeting(params), 100);
-          return;
-        }
-
-        // Use navigateToMeeting function for proper nested navigation
-        navigateToMeeting({
-          meetingId: params.meetingId,
-          token: params.token,
-          displayName: params.displayName,
-          callType: params.callType,
-          isInitiator: params.isInitiator,
-          recipientName: params.callData?.recipientName,
-          callData: params.callData,
-        });
-      } catch (error) {
-        console.error('[MainNavigator] Error handling forceNavigateToMeeting event:', error);
-        // ✅ CRITICAL FIX: Don't let navigation errors crash the app
-      }
-    };
-
-    appEventEmitter.on('forceNavigateToMeeting', handleNavigateToMeeting);
-
-    return () => {
-      appEventEmitter.off('forceNavigateToMeeting', handleNavigateToMeeting);
-    };
-  }, []); // Remove navigation dependency since we're using navigationRef
-
-  // Wrap all individual screens with the wallet balance HOC
-  const EnhancedCreatePostScreen = withWalletBalance(CreatePostScreen);
-  const EnhancedSelectCategoryScreen = withWalletBalance(SelectCategoryScreen);
-  const EnhancedTipTubeUploadScreen = withWalletBalance(TipTubeUploadScreen);
-  const EnhancedTipShortsUploadScreen = withWalletBalance(TipShortsUploadScreen);
-  const EnhancedPromotePostScreen = withWalletBalance(PromotePostScreen);
-  const EnhancedVideoPreviewScreen = withWalletBalance(VideoPreviewScreen);
-  const EnhancedVideoScreen = withWalletBalance(VideoScreen);
-  const EnhancedShortsScreen = withWalletBalance(ShortsScreen);
-  // Replace TipShorts with TipShortsEnhanced
-  const EnhancedTipShortsScreen = withWalletBalance(TipShortsEnhanced);
-  const EnhancedChannelScreen = withWalletBalance(ChannelScreen);
-  const EnhancedCreateChannelScreen = withWalletBalance(CreateChannelScreen);
-  const EnhancedPackagesScreen = withWalletBalance(PackagesScreen);
-  const EnhancedChoosePackagesScreen = withWalletBalance(ChoosePackagesScreen);
-  const EnhancedCheckoutScreen = withWalletBalance(CheckoutScreen);
-  const EnhancedAnalyticsScreen = withWalletBalance(AnalyticsScreen);
-  const EnhancedProfileScreen = withWalletBalance(ProfileScreen);
-  const EnhancedEditProfileScreen = withWalletBalance(EditProfile);
-  const EnhancedTrackOrderScreen = withWalletBalance(TrackOrderScreen);
-  const EnhancedSearchScreen = withWalletBalance(SearchScreen);
-  const EnhancedNotificationScreen = withWalletBalance(NotificationScreen);
-  const EnhancedSettingsScreen = withWalletBalance(SettingsScreen);
-  const EnhancedEarningsScreen = withWalletBalance(EarningsScreen);
-  const EnhancedReferralScreen = withWalletBalance(ReferralScreen);
-  const EnhancedPlayToEarnScreen = withWalletBalance(ChooseGameScreen);
-  const EnhancedLudoGameScreen = withWalletBalance(LudoGameScreen);
-  const EnhancedWatchToEarnScreen = withWalletBalance(WatchToEarnScreen);
-  const EnhancedAdPassbookScreen = withWalletBalance(AdPassbookScreen);
-  const EnhancedSupportScreen = withWalletBalance(SupportScreen);
-  const EnhancedCreateCampaignScreen = withWalletBalance(CreateCampaignScreen);
-  const EnhancedCommentsScreen = withWalletBalance(CommentsScreen);
-  const EnhancedFollowersList = withWalletBalance(FollowersList);
-  const EnhancedFollowingsList = withWalletBalance(FollowingsList);
-  const EnhancedExploreScreen = withWalletBalance(ExploreScreen);
-  const EnhancedPremiumUserScreen = withWalletBalance(PremiumUserScreen);
+  // Note: Navigation to Meeting screen now happens via Zustand state changes
+  // in UnifiedCallService when a call is accepted or started
   
-  // CREATE THE ENHANCED VIDEO PLAYER MODAL SCREEN
-  const EnhancedVideoPlayerModalScreen = withWalletBalance(VideoPlayerModalScreen);
-    // Add TipCall screens with wallet balance HOC
-  const EnhancedTipCallScreen = withWalletBalance(TipCallScreen);
-  const EnhancedMissedCallsScreen = withWalletBalance(MissedCallsScreen);
-  // Enhanced MeetingScreen with wallet balance HOC
-  const EnhancedMeetingScreen = withWalletBalance(MeetingScreen);
+  // The HOC-wrapped components are now defined outside, so this function is much cleaner.
 
   return (
     <Stack.Navigator
@@ -411,16 +369,21 @@ const MainNavigator = () => {
         component={EnhancedTipCallScreen}
         options={standardFastTransitionConfig}
       />
+      <Stack.Screen
+        name="TipCallSimple"
+        component={TipCallScreenSimple}
+        options={{ headerShown: false }}
+      />
       {/* MissedCalls screen with standard transition */}
       <Stack.Screen 
         name="MissedCalls" 
         component={EnhancedMissedCallsScreen}
         options={standardFastTransitionConfig}
       />
-      {/* MeetingScreen with optimized transition for calls */}
+      {/* Meeting screen (simple version) */}
       <Stack.Screen 
         name="Meeting" 
-        component={MeetingScreen}
+        component={MeetingScreenSimple}
         options={{
           presentation: 'fullScreenModal',
           animation: 'fade',
@@ -428,7 +391,17 @@ const MainNavigator = () => {
           headerShown: false,
         }}
       />
-      
+
+             {/* Test Call Screen */}
+       <Stack.Screen
+         name="TestCall"
+         component={TestCallScreen}
+         options={{
+           title: 'Test Call',
+           headerShown: true
+         }}
+       />
+
       {/* Add Chat screen */}
       <Stack.Screen 
         name="Chat" 

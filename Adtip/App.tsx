@@ -1,6 +1,6 @@
 // App.tsx
-
-import React, { useEffect, useState, useCallback } from 'react';
+// Removed legacy callStore import to prevent dual store confusion
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   SafeAreaView,
   StatusBar,
@@ -29,7 +29,6 @@ import { getApps } from '@react-native-firebase/app';
 import messaging from '@react-native-firebase/messaging';
 import mobileAds from 'react-native-google-mobile-ads';
 import { useAppOpenAd } from './src/googleads/AppOpenAdManager';
-import notifee from '@notifee/react-native';
 
 // Contexts
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -54,6 +53,7 @@ import { navigationRef, navigateWithRetry, getCurrentRoute, isNavigationReady } 
 import FirebaseService from './src/services/FirebaseService';
 import VideoSDKService from './src/services/videosdk/VideoSDKService';
 import UnifiedCallService from './src/services/calling/UnifiedCallService';  // Unified call service (replacing all legacy services)
+import PermissionManagerService from './src/services/PermissionManagerService';
 import PubScaleService from './src/services/PubScaleService';
 import CallKeepIntegrationService from './src/services/calling/CallKeepIntegrationService';
 
@@ -64,13 +64,18 @@ import { COLORS } from './src/constants/colors';
 
 // Import required screens
 import UserDetailsScreen from './src/screens/auth/UserDetailsScreen';
-import { appEventEmitter } from './src/events/AppEventEmitter';
 import ChatScreen from './src/screens/chat/ChatScreen';
 
 // Ultra Fast Loader for instant app initialization
 import UltraFastLoader from './src/components/common/UltraFastLoader';
 
 import { RootStackParamList } from 'src/types/navigation';
+import useFcmCallHandlers from './src/hooks/useFcmCallHandlers';
+
+// Switched to new call store (simplified)
+import { useCallStore } from './src/stores/callStoreSimplified';
+import CallController from './src/services/calling/CallController';
+import CallConfig from './src/config/CallConfig';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
@@ -112,10 +117,7 @@ const linking = {
 // AppNavigator with Services - Ultra Fast with Authentication-aware UltraFastLoader
 const AppNavigator = () => {
   const { isAuthenticated, isInitialized, user } = useAuth();
-  const { activeCall, startCall } = useCall();
-  const [firebaseReady, setFirebaseReady] = useState(false);
-  const [videoSDKReady, setVideoSDKReady] = useState(false);
-  const [unifiedCallServiceReady, setUnifiedCallServiceReady] = useState(false);
+  const { status: callStatus, session: activeSession } = useCallStore();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -133,17 +135,16 @@ const AppNavigator = () => {
         const route = url.replace(/.*?:\/\//g, '');
         const host = route.split('/')[0];
 
-        if (host === 'call' && activeCall) {
-          // Navigate to Meeting using nested navigation
+        if (host === 'call' && activeSession) {
           (navigationRef as any).navigate('Main', {
             screen: 'Meeting',
             params: {
-              meetingId: activeCall.meetingId,
-              token: activeCall.token,
-              callType: activeCall.callType,
-              displayName: activeCall.callerName,
-              recipientName: activeCall.recipientName,
-              isInitiator: activeCall.isInitiator,
+              meetingId: activeSession.meetingId,
+              token: activeSession.token,
+              callType: activeSession.type,
+              displayName: activeSession.direction === 'outgoing' ? (user?.name || 'You') : activeSession.peerName,
+              recipientName: activeSession.peerName,
+              isInitiator: activeSession.direction === 'outgoing',
             }
           });
         }
@@ -162,13 +163,11 @@ const AppNavigator = () => {
     });    return () => {
       subscription.remove();
     };
-  }, [activeCall]);
+  }, [activeSession]);
 
   // Set all services as ready immediately - they'll initialize in background
   useEffect(() => {
     // Initialize all services as ready immediately for ultra-fast app start
-    setFirebaseReady(true);
-    
     console.log('[App] All services marked as ready for instant app start');
   }, []);
 
@@ -231,10 +230,11 @@ const AppNavigator = () => {
     setTimeout(() => {
       (async () => {
         try {
-          // Request Notifee permissions here
-          console.log('[App] Background: Requesting Notifee permissions...');
-          await notifee.requestPermission();
-          console.log('[App] Background: Notifee permissions granted.');
+          // Request notification permissions using centralized service
+          console.log('[App] Background: Requesting notification permissions...');
+          const permissionManager = PermissionManagerService.getInstance();
+          const notificationResult = await permissionManager.requestNotificationPermissions();
+          console.log('[App] Background: Notification permissions result:', notificationResult);
 
           console.log('[App] Background: Initializing Unified Call Service...');
           const unifiedCallService = UnifiedCallService.getInstance();
@@ -292,25 +292,12 @@ const AppNavigator = () => {
     }
   }, [isInitialized, isAuthenticated]);
 
-  // Essential event listeners and navigation setup
-  useEffect(() => {
-    const handleStartCall = (callData: ActiveCall) => {
-      startCall(callData);
-    };
-
-    appEventEmitter.on('CallStarted', handleStartCall);
-
-    return () => {
-      appEventEmitter.off('CallStarted', handleStartCall);
-    };
-  }, [startCall]);
-
   // Setup incoming call handling with Unified Call Service
   useEffect(() => {
     const handleIncomingCallBroadcast = async (data: any) => {
       console.log('[App] Received incoming call broadcast:', data);
       
-      if (data && data.isIncomingCall && unifiedCallServiceReady) {
+      if (data && data.isIncomingCall) {
         try {
           const unifiedCallService = UnifiedCallService.getInstance();
           
@@ -325,7 +312,7 @@ const AppNavigator = () => {
           };
           
           // Handle incoming call with Unified Call Service
-          await unifiedCallService.handleIncomingCall(callNotificationData);
+          await unifiedCallService.handleIncomingFCMCall(callNotificationData);
           
           console.log('[App] ✅ Unified Call Service incoming call handled');
         } catch (error) {
@@ -341,7 +328,56 @@ const AppNavigator = () => {
     return () => {
       unsubscribe();
     };
-  }, [unifiedCallServiceReady]);
+  }, []);
+
+  // Navigation handler for call status changes (new simplified store)
+  const navigatingRef = useRef(false);
+  useEffect(() => {
+    const unsubscribe = useCallStore.subscribe(
+      (s) => ({ status: s.status, session: s.session }),
+      ({ status, session }) => {
+        if ((status === 'outgoing' || status === 'connecting' || status === 'in_call') && session) {
+          if (!navigatingRef.current) {
+            navigatingRef.current = true;
+            try {
+              navigateWithRetry('Main', {
+                screen: 'Meeting',
+                params: {
+                  meetingId: session.meetingId,
+                  token: session.token,
+                  callType: session.type,
+                  displayName: session.direction === 'outgoing' ? (user?.name || 'You') : session.peerName,
+                  recipientName: session.peerName,
+                  isInitiator: session.direction === 'outgoing',
+                },
+              });
+            } catch (error) {
+              console.error('[App] Error navigating to Meeting screen:', error);
+              navigatingRef.current = false;
+            }
+          }
+        } else if (status === 'ended' || status === 'idle') {
+          if (navigatingRef.current) navigatingRef.current = false;
+
+          const currentRoute = getCurrentRoute();
+          if (currentRoute?.name === 'Meeting') {
+            try {
+              // Navigate to the TipCall tab (which contains TipCallSimple) with bottom navigator visible
+              navigateWithRetry('Main', {
+                screen: 'TabHome',
+                params: {
+                  screen: 'TipCall'
+                } as any
+              });
+            } catch (err) {
+              console.error('[App] Error navigating back to TipCall tab:', err);
+            }
+          }
+        }
+      }
+    );
+    return unsubscribe;
+  }, [user?.name]);
 
   useEffect(() => {
     // Listen for native call actions (answer/decline)
@@ -358,7 +394,7 @@ const AppNavigator = () => {
         // if (callDetails) { UnifiedCallService.getInstance().handleIncomingCall(callDetails); }
         console.log('[App] Native answered call, sessionId:', event.sessionId);
       } else if (event.action === 'DECLINE') {
-        UnifiedCallService.getInstance().endCall('declined');
+        CallController.getInstance().declineCall();
       }
     });
     return () => {
@@ -386,6 +422,19 @@ const AppNavigator = () => {
 function App(): React.JSX.Element {
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
+  const { colors } = useTheme();
+  const callRef = useRef<string | null>(null);
+  const tabRouteRef = useRef<string | null>(null);
+  const [initialRoute, setInitialRoute] = useState<string | undefined>();
+
+  // Initialize call configuration for simplified flow
+  useEffect(() => {
+    CallConfig.enableSimplifiedFlow();
+    console.log('[App] Call configuration initialized for simplified flow');
+  }, []);
+
+  // Add hooks for FCM call handling
+  useFcmCallHandlers();
 
   // Initialize AdMob SDK in background
   useEffect(() => {
@@ -417,24 +466,22 @@ function App(): React.JSX.Element {
         <ThemeProvider>
           <AuthProvider>
             <WalletProvider>
-              <CallProvider>
                 <ContentCreatorPremiumProvider>
-                  <EnhancedQueryProvider>
-                    <DataProvider>
-                      <ShortsProvider>
-                        <TabNavigatorProvider>
-                          <SidebarProvider>
-                            <GestureHandlerRootView style={{ flex: 1 }}>
-                              <AppNavigator />
-                              {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
-                            </GestureHandlerRootView>
-                          </SidebarProvider>
-                        </TabNavigatorProvider>
-                      </ShortsProvider>
-                    </DataProvider>
-                  </EnhancedQueryProvider>
+                <EnhancedQueryProvider>
+                  <DataProvider>
+                    <ShortsProvider>
+                      <TabNavigatorProvider>
+                        <SidebarProvider>
+                          <GestureHandlerRootView style={{ flex: 1 }}>
+                            <AppNavigator />
+                            {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
+                          </GestureHandlerRootView>
+                        </SidebarProvider>
+                      </TabNavigatorProvider>
+                    </ShortsProvider>
+                  </DataProvider>
+                </EnhancedQueryProvider>
                 </ContentCreatorPremiumProvider>
-              </CallProvider>
             </WalletProvider>
           </AuthProvider>
         </ThemeProvider>

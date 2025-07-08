@@ -6,10 +6,12 @@
  * - Tracking call time and billing
  * - Automatically ending calls when balance is exhausted
  * - Providing warnings before call termination
+ * 
+ * Updated to use Zustand store integration instead of appEventEmitter
  */
 
-import { appEventEmitter } from '../../events/AppEventEmitter';
 import WalletService from '../WalletService';
+import { getCallState } from '../../stores/callStore';
 
 export interface CallRates {
   voiceNonPremium: number; // ₹7 per minute
@@ -145,11 +147,14 @@ class CallBillingService {
     // Check if user has sufficient balance for at least 1 minute
     if (this.maxDurationSeconds < 60) {
       console.warn('[CallBillingService] Insufficient balance for minimum call duration');
-      appEventEmitter.emit('callBillingWarning', {
+      console.warn('[CallBillingService] Billing Warning: Insufficient balance for call. Call will end soon.', {
         type: 'insufficient_balance',
-        message: 'Insufficient balance for call. Call will end soon.',
         remainingSeconds: this.maxDurationSeconds,
       });
+      
+      // Update call store with error if needed
+      const callStore = getCallState();
+      callStore.setError('Insufficient balance for call. Call will end soon.');
     }
 
     // Start billing timer (updates every second)
@@ -158,8 +163,8 @@ class CallBillingService {
     // Start warning timer
     this.startWarningTimer();
 
-    // Emit billing started event
-    appEventEmitter.emit('callBillingStarted', {
+    // Log billing started
+    console.log('[CallBillingService] Billing started for call:', {
       callId,
       maxDurationSeconds: this.maxDurationSeconds,
       ratePerMinute: this.ratePerMinute,
@@ -195,8 +200,8 @@ class CallBillingService {
         cost: finalCost,
       });
 
-      // Emit billing ended event
-      appEventEmitter.emit('callBillingEnded', {
+      // Log billing ended
+      console.log('[CallBillingService] Billing ended for call:', {
         callId: this.currentCallId,
         durationSeconds: callDurationSeconds,
         durationMinutes: callDurationMinutes,
@@ -275,11 +280,11 @@ class CallBillingService {
         return;
       }
 
-      // Emit billing update
+      // Log billing update
       const elapsedMinutes = Math.ceil(elapsedSeconds / 60);
       const currentCost = elapsedMinutes * this.ratePerMinute;
 
-      appEventEmitter.emit('callBillingUpdate', {
+      console.log('[CallBillingService] Billing update:', {
         callId: this.currentCallId,
         elapsedSeconds,
         remainingSeconds,
@@ -334,11 +339,15 @@ class CallBillingService {
       message = `Call will end in ${remainingSeconds} seconds due to low balance`;
     }
 
-    appEventEmitter.emit('callBillingWarning', {
+    console.warn('[CallBillingService] Billing warning:', {
       type: 'time_warning',
       message,
       remainingSeconds,
     });
+    
+    // Update call store with warning if needed
+    const callStore = getCallState();
+    callStore.setError(message);
   }
 
   /**
@@ -350,11 +359,11 @@ class CallBillingService {
     // Stop billing first
     this.stopCallBilling();
 
-    // Emit event to end the call
-    appEventEmitter.emit('callEndDueToBalance', {
-      reason: 'insufficient_balance',
-      message: 'Call ended due to insufficient wallet balance',
-    });
+    // End the call through Zustand store
+    console.log('[CallBillingService] Ending call due to insufficient balance');
+    const callStore = getCallState();
+    callStore.endCall('insufficient_balance');
+    callStore.setError('Call ended due to insufficient wallet balance');
   }
 
   /**
