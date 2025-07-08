@@ -34,11 +34,58 @@ import { VideoSDKConfig, MeetingConfig } from '../videosdk/VideoSDKService';
 // Utils
 import * as NavigationService from '../../navigation/NavigationService';
 
+// -------------------------
+// Legacy Adapter – bridges old API to new CallController
+// Keeps all old code for reference but routes runtime calls to CallController
+// -------------------------
+import CallController from './CallController';
+
 export interface CallServiceConfig {
   videoSDKConfig?: VideoSDKConfig;
   enableCallKeep?: boolean;
   enableNotifications?: boolean;
 }
+
+class UnifiedCallServiceAdapter {
+  private static _instance: UnifiedCallServiceAdapter;
+  private controller = CallController.getInstance();
+
+  static getInstance(): UnifiedCallServiceAdapter {
+    if (!UnifiedCallServiceAdapter._instance) {
+      UnifiedCallServiceAdapter._instance = new UnifiedCallServiceAdapter();
+    }
+    return UnifiedCallServiceAdapter._instance;
+  }
+
+  // Stub to retain old initialize signature – always resolves true as the controller auto-init's
+  async initialize(): Promise<boolean> {
+    return true;
+  }
+
+  getIsInitialized(): boolean {
+    return true;
+  }
+
+  async startOutgoingCall(
+    recipientId: string,
+    recipientName: string,
+    callType: 'voice' | 'video',
+    _callerName?: string,
+    _callerId?: string
+  ) {
+    await this.controller.startCall(recipientId, recipientName, callType as any);
+    return null;
+  }
+
+  async acceptCall() { return this.controller.acceptCall(); }
+  async declineCall() { return this.controller.declineCall(); }
+  async endCall() { return this.controller.endCall(); }
+  async handleIncomingFCMCall(data: any) { /* New flow handles via CallController/FCM handlers */ }
+}
+
+// Preserve original class for debugging while exporting adapter as default
+export { UnifiedCallService };
+export default UnifiedCallServiceAdapter;
 
 class UnifiedCallService {
   private static instance: UnifiedCallService;
@@ -993,6 +1040,4 @@ class UnifiedCallService {
     return { ...this.config };
   }
 }
-
-export default UnifiedCallService;
 

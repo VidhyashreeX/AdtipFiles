@@ -71,6 +71,13 @@ import UltraFastLoader from './src/components/common/UltraFastLoader';
 import { RootStackParamList } from 'src/types/navigation';
 import useFcmCallHandlers from './src/hooks/useFcmCallHandlers';
 
+// Switched to new call store (simplified)
+import { useCallStore } from './src/stores/callStoreSimplified';
+import CallController from './src/services/calling/CallController';
+
+// Import Zustand stores and hooks
+import { useCallStore as useCallStoreSimplified } from './src/stores/callStoreSimplified';
+
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 // Theme-aware StatusBar with proper safe area handling
@@ -108,17 +115,10 @@ const linking = {
   },
 };
 
-// Import Zustand stores and hooks
-import { useCallStore, CallData } from './src/stores/callStore';
-
 // AppNavigator with Services - Ultra Fast with Authentication-aware UltraFastLoader
 const AppNavigator = () => {
   const { isAuthenticated, isInitialized, user } = useAuth();
-  const { callStatus, activeCall } = useCallStore();
-  const callActions = useCallStore(state => state.actions);
-  const [firebaseReady, setFirebaseReady] = useState(false);
-  const [videoSDKReady, setVideoSDKReady] = useState(false);
-  const [unifiedCallServiceReady, setUnifiedCallServiceReady] = useState(false);
+  const { status: callStatus, session: activeSession } = useCallStoreSimplified();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -136,17 +136,16 @@ const AppNavigator = () => {
         const route = url.replace(/.*?:\/\//g, '');
         const host = route.split('/')[0];
 
-        if (host === 'call' && activeCall) {
-          // Navigate to Meeting using nested navigation
+        if (host === 'call' && activeSession) {
           (navigationRef as any).navigate('Main', {
             screen: 'Meeting',
             params: {
-              meetingId: activeCall.meetingId,
-              token: activeCall.token,
-              callType: activeCall.callType,
-              displayName: activeCall.callerName,
-              recipientName: activeCall.recipientName,
-              isInitiator: activeCall.isInitiator,
+              meetingId: activeSession.meetingId,
+              token: activeSession.token,
+              callType: activeSession.type,
+              displayName: activeSession.direction === 'outgoing' ? (user?.name || 'You') : activeSession.peerName,
+              recipientName: activeSession.peerName,
+              isInitiator: activeSession.direction === 'outgoing',
             }
           });
         }
@@ -165,13 +164,11 @@ const AppNavigator = () => {
     });    return () => {
       subscription.remove();
     };
-  }, [activeCall]);
+  }, [activeSession]);
 
   // Set all services as ready immediately - they'll initialize in background
   useEffect(() => {
     // Initialize all services as ready immediately for ultra-fast app start
-    setFirebaseReady(true);
-    
     console.log('[App] All services marked as ready for instant app start');
   }, []);
 
@@ -301,7 +298,7 @@ const AppNavigator = () => {
     const handleIncomingCallBroadcast = async (data: any) => {
       console.log('[App] Received incoming call broadcast:', data);
       
-      if (data && data.isIncomingCall && unifiedCallServiceReady) {
+      if (data && data.isIncomingCall) {
         try {
           const unifiedCallService = UnifiedCallService.getInstance();
           
@@ -332,79 +329,52 @@ const AppNavigator = () => {
     return () => {
       unsubscribe();
     };
-  }, [unifiedCallServiceReady]);
+  }, []);
 
-  // Global navigation listener for call status changes (with debouncing to prevent loops)
+  // Navigation handler for call status changes (new simplified store)
+  const navigatingRef = useRef(false);
   useEffect(() => {
-    const unsubscribe = useCallStore.subscribe((state, prevState) => {
-      const currentStatus = state.callStatus;
-      const activeCall   = state.activeCall;
-      const isNavigating = state.isNavigatingToMeeting;
+    const unsubscribe = useCallStoreSimplified.subscribe(
+      (s) => ({ status: s.status, session: s.session }),
+      ({ status, session }) => {
+        if ((status === 'outgoing' || status === 'connecting' || status === 'in_call') && session) {
+          if (!navigatingRef.current) {
+            navigatingRef.current = true;
+            try {
+              navigateWithRetry('Main', {
+                screen: 'Meeting',
+                params: {
+                  meetingId: session.meetingId,
+                  token: session.token,
+                  callType: session.type,
+                  displayName: session.direction === 'outgoing' ? (user?.name || 'You') : session.peerName,
+                  recipientName: session.peerName,
+                  isInitiator: session.direction === 'outgoing',
+                },
+              });
+            } catch (error) {
+              console.error('[App] Error navigating to Meeting screen:', error);
+              navigatingRef.current = false;
+            }
+          }
+        } else if (status === 'ended' || status === 'idle') {
+          if (navigatingRef.current) navigatingRef.current = false;
 
-      // 1. Navigate **once** to Meeting when a call starts
-      if ((currentStatus === 'dialing' || currentStatus === 'connecting' || currentStatus === 'connected') && activeCall) {
-        // Avoid repeated navigations if we already triggered one
-        if (!isNavigating) {
-          console.log('[App] Navigating to Meeting screen (first time) because call status =', currentStatus);
-          callActions.setNavigatingToMeeting(true);
-
-          try {
-            navigateWithRetry('Main', {
-              screen: 'Meeting',
-              params: {
-                meetingId: activeCall.meetingId,
-                token: activeCall.token,
-                displayName: activeCall.isInitiator ? activeCall.callerName : activeCall.recipientName,
-                callType: activeCall.callType,
-                isInitiator: activeCall.isInitiator,
-                recipientName: activeCall.isInitiator ? activeCall.recipientName : activeCall.callerName,
-                callData: activeCall,
-              },
-            });
-          } catch (error) {
-            console.error('[App] Error navigating to Meeting screen:', error);
-            // Roll back flag so we can retry if needed
-            callActions.setNavigatingToMeeting(false);
+          const currentRoute = getCurrentRoute();
+          if (currentRoute?.name === 'Meeting') {
+            try {
+              setTimeout(() => {
+                navigateWithRetry('Main', { screen: 'TipCallSimple', params: undefined as any });
+              }, 800);
+            } catch (err) {
+              console.error('[App] Error navigating back to TipCallSimple:', err);
+            }
           }
         }
       }
-
-      // 2. When the call fully ends, release the navigation guard and return to TipCall
-      if (currentStatus === 'ended' || currentStatus === 'idle') {
-        // Reset guard *before* navigating back so future calls can navigate again
-        if (isNavigating) {
-          callActions.setNavigatingToMeeting(false);
-        }
-
-        const currentRoute = getCurrentRoute();
-        if (currentRoute?.name === 'Meeting') {
-          console.log('[App] Navigating back to TipCall because call status =', currentStatus);
-          try {
-            setTimeout(() => {
-              try {
-                navigateWithRetry('Main', { screen: 'TipCall', params: {} });
-              } catch (navError) {
-                console.error('[App] Inner navigation error:', navError);
-                // Fallback – hard reset stack
-                try {
-                  navigationRef.current?.reset({
-                    index: 0,
-                    routes: [{ name: 'Main', params: { screen: 'TipCall' } }],
-                  });
-                } catch (resetError) {
-                  console.error('[App] Navigation reset failed as well:', resetError);
-                }
-              }
-            }, 1000); // Wait for cleanup to finish
-          } catch (err) {
-            console.error('[App] Error navigating back to TipCall:', err);
-          }
-        }
-      }
-    });
-
+    );
     return unsubscribe;
-  }, [callActions]);
+  }, [user?.name]);
 
   useEffect(() => {
     // Listen for native call actions (answer/decline)
@@ -421,8 +391,7 @@ const AppNavigator = () => {
         // if (callDetails) { UnifiedCallService.getInstance().handleIncomingCall(callDetails); }
         console.log('[App] Native answered call, sessionId:', event.sessionId);
       } else if (event.action === 'DECLINE') {
-        // Use Zustand store actions instead of direct service call
-        callActions.endCall('declined');
+        CallController.getInstance().declineCall();
       }
     });
     return () => {
