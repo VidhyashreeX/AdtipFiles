@@ -103,7 +103,26 @@ const PersistentControls = ({ config }: { config: MeetingConfig | null }) => {
   const webcamOn = localParticipant?.webcamOn ?? false
 
   const handleEndCall = async () => {
-    await controller.endCall()
+    // Stop media streams before ending call
+    try {
+      console.log('[PersistentControls] Stopping media streams before ending call')
+      
+      // Turn off camera and mic before ending call
+      if (webcamOn) {
+        toggleWebcam()
+      }
+      if (micOn) {
+        toggleMic()
+      }
+      
+      // Small delay to ensure media stops before ending call
+      setTimeout(async () => {
+        await controller.endCall()
+      }, 200)
+    } catch (error) {
+      console.warn('[PersistentControls] Error stopping media, ending call anyway:', error)
+      await controller.endCall()
+    }
   }
 
   const handleToggleMic = () => {
@@ -183,6 +202,25 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
   const resetForNewCall = useCallback((newConfig: MeetingConfig) => {
     console.log('[PersistentMeetingContent] Resetting for new call:', newConfig.sessionId)
     
+    // Stop all media streams before reset
+    if (meeting && joinedRef.current) {
+      console.log('[PersistentMeetingContent] Stopping all media streams before reset')
+      try {
+        // Turn off camera and mic completely using correct VideoSDK methods
+        if (meeting.localParticipant?.webcamOn) {
+          meeting.toggleWebcam()
+        }
+        if (meeting.localParticipant?.micOn) {
+          meeting.toggleMic()
+        }
+        
+        // Leave the meeting to fully release resources
+        meeting.leave()
+      } catch (error) {
+        console.warn('[PersistentMeetingContent] Error stopping media during reset:', error)
+      }
+    }
+    
     // Clear previous meeting reference
     if (hasSetMeetingRef.current) {
       mediaService.setMeetingRef(null)
@@ -195,7 +233,7 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
     currentSessionRef.current = newConfig.sessionId
     
     console.log('[PersistentMeetingContent] Reset complete for session:', newConfig.sessionId)
-  }, [mediaService])
+  }, [mediaService, meeting])
 
   // Expose reset function via ref
   React.useImperativeHandle(ref, () => ({
@@ -372,10 +410,24 @@ const PersistentMeetingManager: React.FC = () => {
       resetCall: () => {
         console.log('[PersistentMeetingManager] Resetting call state')
         
-        // Reset meeting content if it has the reset function
+        // Stop all media streams completely before reset
         if (meetingContentRef.current?.resetForNewCall && globalState.currentConfig) {
           meetingContentRef.current.resetForNewCall(globalState.currentConfig)
         }
+        
+        // Additional cleanup: Force stop any remaining media streams
+        setTimeout(() => {
+          try {
+            // In React Native, VideoSDK handles media cleanup internally
+            // Just ensure CallController media service is properly reset
+            const controller = CallController.getInstance()
+            const mediaService = controller.getMediaService()
+            mediaService.setMeetingRef(null)
+            console.log('[PersistentMeetingManager] Additional media cleanup completed')
+          } catch (error) {
+            console.warn('[PersistentMeetingManager] Additional media cleanup error:', error)
+          }
+        }, 100)
         
         globalState.currentConfig = null
         globalState.status = 'idle'
