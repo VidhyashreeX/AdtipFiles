@@ -12,6 +12,8 @@ import {
   Platform,
   Image,
   PermissionsAndroid,
+  Modal,
+  FlatList,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -25,11 +27,29 @@ import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useAuth} from '../../contexts/AuthContext';
 import {useTheme} from '../../contexts/ThemeContext';
 
+// Services
+import ApiService from '../../services/ApiService';
+
 // Types
 import {RootStackParamList} from '../../types/navigation';
 
 type UserDetailsScreenNavigationProp =
   NativeStackNavigationProp<RootStackParamList>;
+
+interface Profession {
+  id: number;
+  name: string;
+}
+
+interface Language {
+  id: number;
+  name: string;
+}
+
+interface Interest {
+  id: number;
+  name: string;
+}
 
 /**
  * User details form screen component (for first-time login)
@@ -54,6 +74,19 @@ const UserDetailsScreen = () => {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
+  // Selection modals state
+  const [professions, setProfessions] = useState<Profession[]>([]);
+  const [languages, setLanguages] = useState<Language[]>([]);
+  const [interests, setInterests] = useState<Interest[]>([]);
+  
+  const [showProfessionModal, setShowProfessionModal] = useState(false);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [showInterestsModal, setShowInterestsModal] = useState(false);
+  
+  const [professionsLoading, setProfessionsLoading] = useState(false);
+  const [languagesLoading, setLanguagesLoading] = useState(false);
+  const [interestsLoading, setInterestsLoading] = useState(false);
+
   // Form state
   const [formData, setFormData] = useState({
     name: user?.name || '',
@@ -64,8 +97,72 @@ const UserDetailsScreen = () => {
     dob: user?.dob || '',
     profile_image: user?.profile_image || null,
     profession: user?.profession || '',
+    professionId: user?.professionId || null,
+    language: user?.language || '',
+    languageId: user?.languageId || null,
+    interests: user?.interests || '',
+    interestsId: user?.interestsId || null,
+    address: user?.address || '',
     maternal_status: user?.maternal_status || 'Single',
   });
+
+  // Fetch data on component mount
+  useEffect(() => {
+    fetchProfessions();
+    fetchLanguages();
+    fetchInterests();
+  }, []);
+
+  // Fetch professions from API
+  const fetchProfessions = async () => {
+    try {
+      setProfessionsLoading(true);
+      const response = await ApiService.getTargetProfessions();
+      if (response.status === 200) {
+        setProfessions(response.data);
+      } else {
+        console.error('Failed to fetch professions:', response.message);
+      }
+    } catch (error) {
+      console.error('Error fetching professions:', error);
+    } finally {
+      setProfessionsLoading(false);
+    }
+  };
+
+  // Fetch languages from API
+  const fetchLanguages = async () => {
+    try {
+      setLanguagesLoading(true);
+      const response = await ApiService.get('/api/getlanguagesnotoken');
+      if (response.status === 200) {
+        setLanguages(response.data);
+      } else {
+        console.error('Failed to fetch languages:', response.message);
+      }
+    } catch (error) {
+      console.error('Error fetching languages:', error);
+    } finally {
+      setLanguagesLoading(false);
+    }
+  };
+
+  // Fetch interests from API
+  const fetchInterests = async () => {
+    try {
+      setInterestsLoading(true);
+      const response = await ApiService.get('/api/getinterestsnotoken');
+      if (response.status === 200) {
+        setInterests(response.data);
+      } else {
+        console.error('Failed to fetch interests:', response.message);
+      }
+    } catch (error) {
+      console.error('Error fetching interests:', error);
+    } finally {
+      setInterestsLoading(false);
+    }
+  };
 
   // Request location permission and get current position
   useEffect(() => {
@@ -128,6 +225,9 @@ const UserDetailsScreen = () => {
     emailId: '',
     dob: '',
     profession: '',
+    language: '',
+    interests: '',
+    address: '',
   });
   // Form field change handler
   const handleChange = (field: string, value: string) => {
@@ -189,11 +289,26 @@ const UserDetailsScreen = () => {
       emailId: '',
       dob: '',
       profession: '',
+      language: '',
+      interests: '',
+      address: '',
     };
 
     // Validate name
     if (!formData.name.trim()) {
       errors.name = 'Name is required';
+      isValid = false;
+    }
+
+    // Validate first name
+    if (!formData.firstName.trim()) {
+      errors.firstName = 'First name is required';
+      isValid = false;
+    }
+
+    // Validate last name
+    if (!formData.lastName.trim()) {
+      errors.lastName = 'Last name is required';
       isValid = false;
     }
 
@@ -215,6 +330,24 @@ const UserDetailsScreen = () => {
     // Validate profession
     if (!formData.profession.trim()) {
       errors.profession = 'Profession is required';
+      isValid = false;
+    }
+
+    // Validate language
+    if (!formData.language.trim()) {
+      errors.language = 'Language is required';
+      isValid = false;
+    }
+
+    // Validate interests
+    if (!formData.interests.trim()) {
+      errors.interests = 'Interests are required';
+      isValid = false;
+    }
+
+    // Validate address
+    if (!formData.address.trim()) {
+      errors.address = 'Address is required';
       isValid = false;
     }
 
@@ -531,23 +664,92 @@ const UserDetailsScreen = () => {
             <Text style={[styles.label, {color: colors.text.secondary}]}>
               Profession
             </Text>
+                         <TouchableOpacity
+               style={[
+                 styles.input,
+                 {
+                   borderColor: formErrors.profession
+                     ? colors.error
+                     : colors.border,
+                 },
+                 styles.inputContainer,
+               ]}
+               onPress={() => setShowProfessionModal(true)}>
+               <Text style={{color: colors.text.primary}}>
+                 {formData.profession || 'Select Profession'}
+               </Text>
+             </TouchableOpacity>
+            {formErrors.profession ? (
+              <Text style={styles.errorText}>{formErrors.profession}</Text>
+            ) : null}
+          </View>
+
+          {/* Language */}
+          <View style={styles.formGroup}>
+            <Text style={[styles.label, {color: colors.text.secondary}]}>
+              Language
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.input,
+                {
+                  borderColor: formErrors.language ? colors.error : colors.border,
+                },
+                styles.inputContainer,
+              ]}
+              onPress={() => setShowLanguageModal(true)}>
+              <Text style={{color: colors.text.primary}}>
+                {formData.language || 'Select Language'}
+              </Text>
+            </TouchableOpacity>
+            {formErrors.language ? (
+              <Text style={styles.errorText}>{formErrors.language}</Text>
+            ) : null}
+          </View>
+
+          {/* Interests */}
+          <View style={styles.formGroup}>
+            <Text style={[styles.label, {color: colors.text.secondary}]}>
+              Interests
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.input,
+                {
+                  borderColor: formErrors.interests ? colors.error : colors.border,
+                },
+                styles.inputContainer,
+              ]}
+              onPress={() => setShowInterestsModal(true)}>
+              <Text style={{color: colors.text.primary}}>
+                {formData.interests || 'Select Interests'}
+              </Text>
+            </TouchableOpacity>
+            {formErrors.interests ? (
+              <Text style={styles.errorText}>{formErrors.interests}</Text>
+            ) : null}
+          </View>
+
+          {/* Address */}
+          <View style={styles.formGroup}>
+            <Text style={[styles.label, {color: colors.text.secondary}]}>
+              Address
+            </Text>
             <TextInput
               style={[
                 styles.input,
                 {
-                  borderColor: formErrors.profession
-                    ? colors.error
-                    : colors.border,
+                  borderColor: formErrors.address ? colors.error : colors.border,
                   color: colors.text.primary,
                 },
               ]}
-              placeholder="Enter your profession"
+              placeholder="Enter your address"
               placeholderTextColor={colors.text.light}
-              value={formData.profession}
-              onChangeText={value => handleChange('profession', value)}
+              value={formData.address}
+              onChangeText={value => handleChange('address', value)}
             />
-            {formErrors.profession ? (
-              <Text style={styles.errorText}>{formErrors.profession}</Text>
+            {formErrors.address ? (
+              <Text style={styles.errorText}>{formErrors.address}</Text>
             ) : null}
           </View>
 
@@ -630,6 +832,43 @@ const UserDetailsScreen = () => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Profession Modal */}
+      <Modal
+        visible={showProfessionModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowProfessionModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Profession</Text>
+            {professionsLoading ? (
+              <ActivityIndicator color="#000" />
+            ) : (
+              <FlatList
+                data={professions}
+                renderItem={({item}) => (
+                  <TouchableOpacity
+                    style={styles.modalOptionButton}
+                    onPress={() => {
+                      setFormData(prev => ({...prev, profession: item.name, professionId: item.id}));
+                      setShowProfessionModal(false);
+                    }}>
+                    <Text style={styles.modalOptionText}>{item.name}</Text>
+                  </TouchableOpacity>
+                )}
+                keyExtractor={item => item.id.toString()}
+                contentContainerStyle={styles.modalOptionsList}
+              />
+            )}
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setShowProfessionModal(false)}>
+              <Text style={styles.modalCloseButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -751,6 +990,49 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    width: '80%',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
+  modalOptionsList: {
+    width: '100%',
+  },
+  modalOptionButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalOptionText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  modalCloseButton: {
+    marginTop: 15,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+  },
+  modalCloseButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
   },
 });
 
