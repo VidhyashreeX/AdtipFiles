@@ -153,6 +153,10 @@ const ProfileScreen: React.FC = () => {
   const [userChannelId, setUserChannelId] = useState<string | null>(null);
   const [isPremium, setIsPremium] = useState<boolean>(false);
   const [premiumData, setPremiumData] = useState<any>(null);
+  
+  // Dynamic user name state
+  const [dynamicUserName, setDynamicUserName] = useState<string | null>(null);
+  const [userNameLoading, setUserNameLoading] = useState(false);
 
   // Additional state for image uploads
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
@@ -179,6 +183,48 @@ const ProfileScreen: React.FC = () => {
 
   // Default profile image
   const DEFAULT_PROFILE_IMAGE = 'https://via.placeholder.com/150';
+
+  // Fetch dynamic user name from API
+  const fetchDynamicUserName = async (userId: string | number) => {
+    try {
+      setUserNameLoading(true);
+      console.log('[ProfileScreen] Fetching dynamic user name for userId:', userId);
+      
+      const response = await ApiService.post('/api/get-user-name', {
+        userid: userId
+      });
+      
+      console.log('[ProfileScreen] Dynamic user name API response:', response);
+      
+      // Based on the new professional backend response structure:
+      // {
+      //   status: true,
+      //   message: "User name retrieved successfully",
+      //   data: {
+      //     userid: 64056,
+      //     name: "Naidu"
+      //   }
+      // }
+      
+      if (response.data && response.data.status && response.data.data && response.data.data.name) {
+        setDynamicUserName(response.data.data.name);
+        console.log('[ProfileScreen] ✅ Dynamic user name set to:', response.data.data.name);
+      } else if (response.data && response.data.data && response.data.data.name) {
+        // Fallback without status check
+        setDynamicUserName(response.data.data.name);
+        console.log('[ProfileScreen] ✅ Dynamic user name set to (fallback):', response.data.data.name);
+      } else {
+        console.log('[ProfileScreen] ❌ No name found in API response, setting to null');
+        console.log('[ProfileScreen] Response data:', response.data);
+        setDynamicUserName(null);
+      }
+    } catch (error) {
+      console.error('[ProfileScreen] Error fetching dynamic user name:', error);
+      setDynamicUserName(null);
+    } finally {
+      setUserNameLoading(false);
+    }
+  };
 
   // Helper function for full image URLs
   const getFullImageUrl = (url?: string | null): string => {
@@ -428,6 +474,11 @@ const ProfileScreen: React.FC = () => {
 
       setUser(userData);
       
+      // Fetch dynamic user name for the current user
+      if (userId) {
+        await fetchDynamicUserName(userId);
+      }
+      
       // Load banner and profile images from local storage if it's own profile
       if (userData?.id && isOwnProfile) {
         const localBannerUri = await loadBannerImageFromLocal(userData.id);
@@ -629,14 +680,12 @@ const ProfileScreen: React.FC = () => {
   const handleFollowersPress = () => {
     navigation.navigate('FollowersList', {
       userId: user?.id ? Number(user.id) : undefined,
-      onUserPress: handleOpenUserProfileModal,
     });
   };
 
   const handleFollowingsPress = () => {
     navigation.navigate('FollowingsList', {
       userId: user?.id ? Number(user.id) : undefined,
-      onUserPress: handleOpenUserProfileModal,
     });
   };
 
@@ -1155,7 +1204,11 @@ const ProfileScreen: React.FC = () => {
           {/* Name, Username, Bio, Location */}
           <View style={styles.userInfoContainer}>
             <Text style={[styles.userName, { color: colors.text.primary }]}>
-              {user?.name || 'John Doe'}
+              {userNameLoading ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                dynamicUserName || user?.name || 'Unknown'
+              )}
             </Text>
             <LastSeen
               lastActiveTime={user?.last_active || null}
@@ -1164,15 +1217,15 @@ const ProfileScreen: React.FC = () => {
             />
             <Text style={[styles.userHandle, { color: colors.text.secondary }]}
               >
-              @{user?.username || 'johndoe'}
+              @{user?.username || ''}
             </Text>
             <Text style={[styles.userBio, { color: colors.text.secondary }]}>
-              {user?.bio || '🎬 Video enthusiast earning daily rewards 💰\nWatch, Learn, Earn with every view! 🚀'}
+              {user?.bio || ''}
             </Text>
             <View style={styles.locationContainer}>
               <Icon name="map-pin" size={14} color={colors.text.tertiary} />
               <Text style={[styles.locationText, { color: colors.text.tertiary }]}>
-                {user?.address || user?.location || 'San Francisco, CA'}
+                {user?.address || user?.location || ''}
               </Text>
             </View>
           </View>

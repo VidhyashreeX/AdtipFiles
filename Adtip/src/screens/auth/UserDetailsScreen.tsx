@@ -22,6 +22,7 @@ import DatePicker from 'react-native-date-picker';
 import Geolocation from 'react-native-geolocation-service';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Hooks and contexts
 import {useAuth} from '../../contexts/AuthContext';
@@ -61,7 +62,10 @@ const UserDetailsScreen = () => {
   // Navigation
   const navigation = useNavigation<UserDetailsScreenNavigationProp>();
   // Auth context
-  const {user, updateUserDetails, loading, completeOnboarding} = useAuth();
+  const {user, updateUserDetails, loading: authLoading, completeOnboarding} = useAuth();
+  
+  // Local loading state for form submission
+  const [loading, setLoading] = useState(false);
 
   // Location state
   const [location, setLocation] = useState({
@@ -97,12 +101,13 @@ const UserDetailsScreen = () => {
     dob: user?.dob || '',
     profile_image: user?.profile_image || null,
     profession: user?.profession || '',
-    professionId: user?.professionId || null,
-    language: user?.language || '',
-    languageId: user?.languageId || null,
-    interests: user?.interests || '',
-    interestsId: user?.interestsId || null,
-    address: user?.address || '',
+    professionId: null as number | null,
+    language: '',
+    languageId: null as number | null,
+    interests: '',
+    interestsId: null as number | null,
+    address: '',
+    pincode: '',
     maternal_status: user?.maternal_status || 'Single',
   });
 
@@ -228,6 +233,7 @@ const UserDetailsScreen = () => {
     language: '',
     interests: '',
     address: '',
+    pincode: '',
   });
   // Form field change handler
   const handleChange = (field: string, value: string) => {
@@ -292,6 +298,7 @@ const UserDetailsScreen = () => {
       language: '',
       interests: '',
       address: '',
+      pincode: '',
     };
 
     // Validate name
@@ -322,7 +329,7 @@ const UserDetailsScreen = () => {
     }
 
     // Validate date of birth
-    if (!formData.dob.trim()) {
+    if (!formData.dob) {
       errors.dob = 'Date of birth is required';
       isValid = false;
     }
@@ -334,13 +341,13 @@ const UserDetailsScreen = () => {
     }
 
     // Validate language
-    if (!formData.language.trim()) {
+    if (!formData.language) {
       errors.language = 'Language is required';
       isValid = false;
     }
 
     // Validate interests
-    if (!formData.interests.trim()) {
+    if (!formData.interests) {
       errors.interests = 'Interests are required';
       isValid = false;
     }
@@ -351,32 +358,94 @@ const UserDetailsScreen = () => {
       isValid = false;
     }
 
+    // Validate pincode
+    if (!formData.pincode.trim()) {
+      errors.pincode = 'Pincode is required';
+      isValid = false;
+    }
+
     setFormErrors(errors);
     return isValid;
   };  // Submit form handler
   const handleSubmit = async () => {
+    // Prevent multiple submissions
+    if (loading || authLoading) {
+      console.log('🚫 [UserDetailsScreen] Form submission blocked - already loading');
+      return;
+    }
+
     // Validate form
     if (!validateForm()) {
+      Alert.alert('Validation Error', 'Please fill in all required fields correctly.');
       return;
     }
 
     try {
-      // Update user details with isSaveUserDetails set to 1
-      await updateUserDetails({
-        ...formData,
-        is_first_time: 0,
-        isSaveUserDetails: 1,
-        latitude: location.latitude,
-        longitude: location.longitude,
-      });
+      setLoading(true);
+      
+      // Prepare the data for API call
+      const userData = {
+        id: user?.id, // This will be the user ID from OTP verification
+        name: formData.name,
+        firstname: formData.firstName,
+        lastname: formData.lastName,
+        gender: formData.gender,
+        dob: formData.dob,
+        profile_image: formData.profile_image || '',
+        profession: formData.profession,
+        maternal_status: formData.maternal_status,
+        address: formData.address,
+        emailId: formData.emailId,
+        longitude: location.longitude || '',
+        latitude: location.latitude || '',
+        pincode: formData.pincode,
+        languages: formData.languageId || 0,
+        interests: formData.interestsId || 0,
+        referal_code: '' // You can add referral code field if needed
+      };
 
-      // Complete onboarding - this will set isAuthenticated to true
-      // and App.tsx will automatically switch to MainNavigator
-      completeOnboarding();
+      console.log('📤 [UserDetailsScreen] Sending user data to API:', userData);
+
+      // Call the API directly
+      const response = await ApiService.post('/api/saveuserdetails', userData);
+      
+      console.log('📥 [UserDetailsScreen] API Response:', response);
+
+      if (response.status === 200) {
+        console.log('✅ [UserDetailsScreen] User details saved successfully');
+        
+        // Update local user data without calling updateUserDetails to avoid referral error
+        if (response.data && response.data[0]) {
+          const updatedUser = response.data[0];
+          // Store the updated user data directly
+          await AsyncStorage.setItem('user', JSON.stringify({
+            ...updatedUser,
+            is_first_time: 0,
+            isSaveUserDetails: 1,
+          }));
+        }
+
+        // Complete onboarding and navigate to home
+        completeOnboarding();
+        
+        // Navigate to home screen immediately
+        navigation.navigate('Main' as never);
+        
+        Alert.alert(
+          'Success', 
+          'Profile completed successfully!',
+          [{ text: 'OK' }]
+        );
+      } else {
+        throw new Error(response.message || 'Failed to save user details');
+      }
 
     } catch (err) {
-      console.error('Update user details error:', err);
-      Alert.alert('Error', 'Failed to update user details. Please try again.');
+      console.error('❌ [UserDetailsScreen] Error saving user details:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save user details. Please try again.';
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -753,6 +822,31 @@ const UserDetailsScreen = () => {
             ) : null}
           </View>
 
+          {/* Pincode */}
+          <View style={styles.formGroup}>
+            <Text style={[styles.label, {color: colors.text.secondary}]}>
+              Pincode
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  borderColor: formErrors.pincode ? colors.error : colors.border,
+                  color: colors.text.primary,
+                },
+              ]}
+              placeholder="Enter your pincode"
+              placeholderTextColor={colors.text.light}
+              value={formData.pincode}
+              onChangeText={value => handleChange('pincode', value)}
+              keyboardType="numeric"
+              maxLength={6}
+            />
+            {formErrors.pincode ? (
+              <Text style={styles.errorText}>{formErrors.pincode}</Text>
+            ) : null}
+          </View>
+
           {/* Maternal Status */}
           <View style={styles.formGroup}>
             <Text style={[styles.label, {color: colors.text.secondary}]}>
@@ -820,11 +914,11 @@ const UserDetailsScreen = () => {
             style={[
               styles.submitButton,
               {backgroundColor: colors.primary},
-              loading && styles.disabledButton,
+              (loading || authLoading) && styles.disabledButton,
             ]}
             onPress={handleSubmit}
-            disabled={loading}>
-            {loading ? (
+            disabled={loading || authLoading}>
+            {(loading || authLoading) ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
               <Text style={styles.submitButtonText}>Complete Profile</Text>
@@ -833,42 +927,116 @@ const UserDetailsScreen = () => {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Profession Modal */}
-      <Modal
-        visible={showProfessionModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowProfessionModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Profession</Text>
-            {professionsLoading ? (
-              <ActivityIndicator color="#000" />
-            ) : (
-              <FlatList
-                data={professions}
-                renderItem={({item}) => (
-                  <TouchableOpacity
-                    style={styles.modalOptionButton}
-                    onPress={() => {
-                      setFormData(prev => ({...prev, profession: item.name, professionId: item.id}));
-                      setShowProfessionModal(false);
-                    }}>
-                    <Text style={styles.modalOptionText}>{item.name}</Text>
-                  </TouchableOpacity>
-                )}
-                keyExtractor={item => item.id.toString()}
-                contentContainerStyle={styles.modalOptionsList}
-              />
-            )}
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => setShowProfessionModal(false)}>
-              <Text style={styles.modalCloseButtonText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+             {/* Profession Modal */}
+       <Modal
+         visible={showProfessionModal}
+         animationType="slide"
+         transparent={true}
+         onRequestClose={() => setShowProfessionModal(false)}>
+         <View style={styles.modalOverlay}>
+           <View style={[styles.modalContent, {backgroundColor: colors.background}]}>
+             <Text style={[styles.modalTitle, {color: colors.text.primary}]}>Select Profession</Text>
+             {professionsLoading ? (
+               <ActivityIndicator color={colors.primary} />
+             ) : (
+               <FlatList
+                 data={professions}
+                 renderItem={({item}) => (
+                   <TouchableOpacity
+                     style={[styles.modalOptionButton, {borderBottomColor: colors.border}]}
+                     onPress={() => {
+                       setFormData(prev => ({...prev, profession: item.name, professionId: item.id}));
+                       setShowProfessionModal(false);
+                     }}>
+                     <Text style={[styles.modalOptionText, {color: colors.text.primary}]}>{item.name}</Text>
+                   </TouchableOpacity>
+                 )}
+                 keyExtractor={item => item.id.toString()}
+                 contentContainerStyle={styles.modalOptionsList}
+               />
+             )}
+             <TouchableOpacity
+               style={[styles.modalCloseButton, {backgroundColor: colors.primary}]}
+               onPress={() => setShowProfessionModal(false)}>
+               <Text style={[styles.modalCloseButtonText, {color: '#ffffff'}]}>Close</Text>
+             </TouchableOpacity>
+           </View>
+         </View>
+       </Modal>
+
+             {/* Language Modal */}
+       <Modal
+         visible={showLanguageModal}
+         animationType="slide"
+         transparent={true}
+         onRequestClose={() => setShowLanguageModal(false)}>
+         <View style={styles.modalOverlay}>
+           <View style={[styles.modalContent, {backgroundColor: colors.background}]}>
+             <Text style={[styles.modalTitle, {color: colors.text.primary}]}>Select Language</Text>
+             {languagesLoading ? (
+               <ActivityIndicator color={colors.primary} />
+             ) : (
+               <FlatList
+                 data={languages}
+                 renderItem={({item}) => (
+                   <TouchableOpacity
+                     style={[styles.modalOptionButton, {borderBottomColor: colors.border}]}
+                     onPress={() => {
+                       setFormData(prev => ({...prev, language: item.name, languageId: item.id}));
+                       setShowLanguageModal(false);
+                     }}>
+                     <Text style={[styles.modalOptionText, {color: colors.text.primary}]}>{item.name}</Text>
+                   </TouchableOpacity>
+                 )}
+                 keyExtractor={item => item.id.toString()}
+                 contentContainerStyle={styles.modalOptionsList}
+               />
+             )}
+             <TouchableOpacity
+               style={[styles.modalCloseButton, {backgroundColor: colors.primary}]}
+               onPress={() => setShowLanguageModal(false)}>
+               <Text style={[styles.modalCloseButtonText, {color: '#ffffff'}]}>Close</Text>
+             </TouchableOpacity>
+           </View>
+         </View>
+       </Modal>
+
+             {/* Interests Modal */}
+       <Modal
+         visible={showInterestsModal}
+         animationType="slide"
+         transparent={true}
+         onRequestClose={() => setShowInterestsModal(false)}>
+         <View style={styles.modalOverlay}>
+           <View style={[styles.modalContent, {backgroundColor: colors.background}]}>
+             <Text style={[styles.modalTitle, {color: colors.text.primary}]}>Select Interests</Text>
+             {interestsLoading ? (
+               <ActivityIndicator color={colors.primary} />
+             ) : (
+               <FlatList
+                 data={interests}
+                 renderItem={({item}) => (
+                   <TouchableOpacity
+                     style={[styles.modalOptionButton, {borderBottomColor: colors.border}]}
+                     onPress={() => {
+                       setFormData(prev => ({...prev, interests: item.name, interestsId: item.id}));
+                       setShowInterestsModal(false);
+                     }}>
+                     <Text style={[styles.modalOptionText, {color: colors.text.primary}]}>{item.name}</Text>
+                   </TouchableOpacity>
+                 )}
+                 keyExtractor={item => item.id.toString()}
+                 contentContainerStyle={styles.modalOptionsList}
+               />
+             )}
+             <TouchableOpacity
+               style={[styles.modalCloseButton, {backgroundColor: colors.primary}]}
+               onPress={() => setShowInterestsModal(false)}>
+               <Text style={[styles.modalCloseButtonText, {color: '#ffffff'}]}>Close</Text>
+             </TouchableOpacity>
+           </View>
+         </View>
+       </Modal>
     </SafeAreaView>
   );
 };
@@ -998,7 +1166,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalContent: {
-    backgroundColor: '#fff',
     borderRadius: 10,
     padding: 20,
     width: '80%',
@@ -1016,7 +1183,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   modalOptionText: {
     fontSize: 16,
@@ -1026,13 +1192,11 @@ const styles = StyleSheet.create({
     marginTop: 15,
     paddingVertical: 10,
     paddingHorizontal: 20,
-    backgroundColor: '#f0f0f0',
     borderRadius: 8,
   },
   modalCloseButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
   },
 });
 
