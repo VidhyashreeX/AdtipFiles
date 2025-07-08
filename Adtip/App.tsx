@@ -1,5 +1,5 @@
 // App.tsx
-import './src/stores/callStore';
+// Removed legacy callStore import to prevent dual store confusion
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   SafeAreaView,
@@ -74,9 +74,7 @@ import useFcmCallHandlers from './src/hooks/useFcmCallHandlers';
 // Switched to new call store (simplified)
 import { useCallStore } from './src/stores/callStoreSimplified';
 import CallController from './src/services/calling/CallController';
-
-// Import Zustand stores and hooks
-import { useCallStore as useCallStoreSimplified } from './src/stores/callStoreSimplified';
+import CallConfig from './src/config/CallConfig';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
@@ -118,7 +116,7 @@ const linking = {
 // AppNavigator with Services - Ultra Fast with Authentication-aware UltraFastLoader
 const AppNavigator = () => {
   const { isAuthenticated, isInitialized, user } = useAuth();
-  const { status: callStatus, session: activeSession } = useCallStoreSimplified();
+  const { status: callStatus, session: activeSession } = useCallStore();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -334,7 +332,7 @@ const AppNavigator = () => {
   // Navigation handler for call status changes (new simplified store)
   const navigatingRef = useRef(false);
   useEffect(() => {
-    const unsubscribe = useCallStoreSimplified.subscribe(
+    const unsubscribe = useCallStore.subscribe(
       (s) => ({ status: s.status, session: s.session }),
       ({ status, session }) => {
         if ((status === 'outgoing' || status === 'connecting' || status === 'in_call') && session) {
@@ -424,7 +422,13 @@ function App(): React.JSX.Element {
   const tabRouteRef = useRef<string | null>(null);
   const [initialRoute, setInitialRoute] = useState<string | undefined>();
 
-  // Add hooks for FCM call handling 
+  // Initialize call configuration for simplified flow
+  useEffect(() => {
+    CallConfig.enableSimplifiedFlow();
+    console.log('[App] Call configuration initialized for simplified flow');
+  }, []);
+
+  // Add hooks for FCM call handling
   useFcmCallHandlers();
 
   // Initialize AdMob SDK in background

@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { navigationRef } from '../navigation/NavigationService';
 import ApiService from './ApiService';
 import UnifiedCallService from './calling/UnifiedCallService';
+import CallConfig from '../config/CallConfig';
 
 /**
  * UPDATED FOR ZUSTAND MIGRATION:
@@ -185,6 +186,12 @@ class FirebaseService {
   public setupNotificationListeners(): () => void {
     if (!this.messagingReady) {
       console.log('[FCM] Messaging not ready, skipping notification listeners setup');
+      return () => {};
+    }
+
+    // Check if Firebase listeners should be enabled
+    if (!CallConfig.shouldEnableService('firebase')) {
+      console.log('[FirebaseService] Notification listeners disabled by configuration');
       return () => {};
     }
 
@@ -462,32 +469,58 @@ class FirebaseService {
 
     try {
       console.log('[FCM] Deleting FCM token on logout...');
-      
+
       // First try to remove token from server
       const userId = await AsyncStorage.getItem('userId');
       if (userId) {
         try {
           // Send empty token to server to indicate user logged out
-          await ApiService.updateFcmToken({ 
-            userId, 
-            fcmToken: '', 
-            platform: 'logout' as any 
+          await ApiService.updateFcmToken({
+            userId,
+            fcmToken: '',
+            platform: 'logout' as any
           });
-          console.log('[FCM] FCM token removed from server');
+          console.log('[FCM] FCM token removed from server successfully');
         } catch (serverError) {
           console.warn('[FCM] Failed to remove token from server:', serverError);
+          // Continue with local cleanup even if server update fails
         }
       }
-      
+
       // Then delete local token
-      await this.deleteToken();
-      
+      try {
+        await this.deleteToken();
+        console.log('[FCM] Local FCM token deleted successfully');
+      } catch (tokenError) {
+        console.error('[FCM] Failed to delete local token:', tokenError);
+      }
+
       // Clean up listeners
-      this.cleanupListeners();
-      
-      console.log('[FCM] FCM token deletion on logout completed');
+      try {
+        this.cleanupListeners();
+        console.log('[FCM] Listeners cleaned up successfully');
+      } catch (cleanupError) {
+        console.error('[FCM] Failed to cleanup listeners:', cleanupError);
+      }
+
+      // Reset service state
+      this.messagingReady = false;
+      this.initializationPromise = null;
+
+      // Clear any stored navigation data
+      try {
+        await AsyncStorage.removeItem('pendingNotificationNavigation');
+        console.log('[FCM] Pending navigation data cleared');
+      } catch (storageError) {
+        console.warn('[FCM] Failed to clear pending navigation data:', storageError);
+      }
+
+      console.log('[FCM] FCM token deletion and cleanup on logout completed');
     } catch (error) {
       console.error('[FCM] Error during logout token deletion:', error);
+      // Even if there's an error, try to reset the service state
+      this.messagingReady = false;
+      this.initializationPromise = null;
     }
   }
 

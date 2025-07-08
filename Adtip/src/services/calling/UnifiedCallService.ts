@@ -24,6 +24,7 @@ import VideoSDKService from '../videosdk/VideoSDKService';
 import CallMediaManager from './CallMediaManager';
 import CallKeepIntegrationService from './CallKeepIntegrationService';
 import ApiService from '../ApiService';
+import CallConfig from '../../config/CallConfig';
 
 // Store
 import useCallStore, { CallData, CallNotificationData, CallStatus } from '../../stores/callStore';
@@ -153,9 +154,11 @@ class UnifiedCallService {
         }
       }
 
-      // 3. Setup FCM message handling
-      if (config.enableNotifications !== false) {
+      // 3. Setup FCM message handling (only if enabled)
+      if (config.enableNotifications !== false && CallConfig.shouldEnableService('unified')) {
         this.setupFCMHandling();
+      } else {
+        console.log('[UnifiedCallService] FCM handling disabled by configuration');
       }
 
       // 4. Mark service as initialized and update store
@@ -547,6 +550,12 @@ class UnifiedCallService {
    * Handle FCM call notification message
    */
   public async handleFCMCallNotification(remoteMessage: FirebaseMessagingTypes.RemoteMessage): Promise<void> {
+    // Check if simplified flow is active - if so, skip to prevent duplicates
+    if (CallConfig.isSimplifiedFlow()) {
+      console.log('[UnifiedCallService] Skipping FCM handling - simplified flow active');
+      return;
+    }
+
     try {
       const { data } = remoteMessage;
       if (!data) return;
@@ -834,6 +843,12 @@ class UnifiedCallService {
    * Show incoming call notification
    */
   private async showIncomingCallNotification(callData: CallData): Promise<void> {
+    // Check if simplified flow is active - if so, skip to prevent duplicates
+    if (CallConfig.isSimplifiedFlow()) {
+      console.log('[UnifiedCallService] Skipping notification - simplified flow active');
+      return;
+    }
+
     try {
       console.log('[UnifiedCallService] Showing incoming call notification');
 
@@ -896,6 +911,12 @@ class UnifiedCallService {
    * Show outgoing call notification
    */
   private async showOutgoingCallNotification(callData: CallData): Promise<void> {
+    // Check if simplified flow is active - if so, skip to prevent duplicates
+    if (CallConfig.isSimplifiedFlow()) {
+      console.log('[UnifiedCallService] Skipping outgoing notification - simplified flow active');
+      return;
+    }
+
     try {
       console.log('[UnifiedCallService] Showing outgoing call notification');
 

@@ -192,10 +192,12 @@ const MeetingContent = () => {
   // ==== Robust join with retry logic ====
   const joinedRef = useRef(false)
   const joinAttemptsRef = useRef(0)
+  const initialLoadRef = useRef(true) // Track if this is the first load
 
   useEffect(() => {
     const MAX_ATTEMPTS = 3
     const RETRY_DELAY_MS = 1000
+    const INITIAL_DELAY_MS = 1500 // Add delay for first join after app load
 
     const joinWithRetry = async () => {
       if (joinedRef.current || joinAttemptsRef.current >= MAX_ATTEMPTS) return
@@ -208,6 +210,16 @@ const MeetingContent = () => {
         const videoSDK = VideoSDKService.getInstance()
         if (!videoSDK.getInitializationStatus()) {
           await videoSDK.initialize()
+          // Add extra delay after initialization
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+
+        // If this is the first join after app load, add extra delay
+        // to ensure WebSocket is fully connected
+        if (initialLoadRef.current) {
+          console.log('[MeetingScreen] First join after app load - adding extra delay for WebSocket stability')
+          await new Promise(resolve => setTimeout(resolve, INITIAL_DELAY_MS))
+          initialLoadRef.current = false
         }
 
         await meeting.join()
@@ -217,9 +229,21 @@ const MeetingContent = () => {
       } catch (err: any) {
         console.warn(`[MeetingScreen] Join attempt ${joinAttemptsRef.current} failed`, err?.message || err)
 
+        // Check for WebSocket specific errors
+        const errorMessage = err?.message || String(err)
+        const isWebSocketError = errorMessage.includes('websocket') || 
+                                errorMessage.includes('WebSocket') ||
+                                errorMessage.includes('connection')
+        
+        // For WebSocket errors, add extra delay before retry
+        const retryDelay = isWebSocketError 
+          ? RETRY_DELAY_MS * 2 // Double delay for WebSocket errors
+          : RETRY_DELAY_MS
+
         // Retry if we still have attempts left
         if (joinAttemptsRef.current < MAX_ATTEMPTS) {
-          setTimeout(joinWithRetry, RETRY_DELAY_MS)
+          console.log(`[MeetingScreen] Retrying in ${retryDelay}ms${isWebSocketError ? ' (WebSocket error)' : ''}`)
+          setTimeout(joinWithRetry, retryDelay)
         } else {
           console.error('[MeetingScreen] All join attempts failed – ending call')
           actions.setStatus('ended')

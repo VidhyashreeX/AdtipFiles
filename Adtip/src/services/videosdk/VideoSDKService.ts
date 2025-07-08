@@ -18,6 +18,7 @@ export interface MeetingConfig {
 class VideoSDKService {
   private static instance: VideoSDKService;
   private isInitialized: boolean = false;
+  private initializationPromise: Promise<boolean> | null = null;
   private config: VideoSDKConfig = {};
 
   private constructor() {}
@@ -30,36 +31,62 @@ class VideoSDKService {
   }
 
   /**
-   * Initialize VideoSDK with configuration
+   * Initialize VideoSDK with proper WebSocket connection handling
    */
-  public async initialize(config: VideoSDKConfig = {}): Promise<boolean> {
-    try {
-      if (this.isInitialized) {
-        console.log('[VideoSDK] Already initialized');
-        return true;
-      }
-
-      this.config = config;
-
-      // Register VideoSDK
-      register();
-      
-      this.isInitialized = true;
-      console.log('[VideoSDK] Service initialized successfully');
-      
-      return true;
-    } catch (error) {
-      console.error('[VideoSDK] Initialization failed:', error);
-      this.isInitialized = false;
-      return false;
+  async initialize(): Promise<boolean> {
+    // If already initializing, return the existing promise
+    if (this.initializationPromise) {
+      return this.initializationPromise;
     }
+    
+    // If already initialized, return immediately
+    if (this.isInitialized) {
+      console.log('[VideoSDK] Already initialized');
+      return true;
+    }
+    
+    // Create a new initialization promise
+    this.initializationPromise = (async () => {
+      try {
+        console.log('[VideoSDK] Initializing...');
+        
+        // Register with VideoSDK
+        await register();
+        
+        // Add a small delay to ensure WebSocket connection is established
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        this.isInitialized = true;
+        console.log('[VideoSDK] Initialization complete');
+        return true;
+      } catch (error) {
+        console.error('[VideoSDK] Initialization failed:', error);
+        this.isInitialized = false;
+        return false;
+      } finally {
+        this.initializationPromise = null;
+      }
+    })();
+    
+    return this.initializationPromise;
   }
 
   /**
-   * Check if VideoSDK is initialized
+   * Get initialization status
    */
-  public getInitializationStatus(): boolean {
+  getInitializationStatus(): boolean {
     return this.isInitialized;
+  }
+
+  /**
+   * Ensure VideoSDK is initialized with WebSocket ready
+   */
+  async ensureInitialized(): Promise<boolean> {
+    if (this.isInitialized) {
+      return true;
+    }
+    
+    return this.initialize();
   }
 
   /**

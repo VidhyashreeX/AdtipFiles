@@ -2,6 +2,7 @@ import messaging, { FirebaseMessagingTypes } from '@react-native-firebase/messag
 import ApiService from '../ApiService'
 import { useCallStore } from '../../stores/callStoreSimplified'
 import { CallType } from '../../stores/callStoreSimplified'
+import CallConfig from '../../config/CallConfig'
 
 // Shape of messages exchanged via FCM
 interface CallSignalPayload {
@@ -25,11 +26,17 @@ class CallSignalingService {
   }
 
   private constructor() {
-    this.registerFCMListener()
+    // Only register FCM listener if enabled in config
+    if (CallConfig.shouldEnableService('signaling')) {
+      this.registerFCMListener()
+    } else {
+      console.log('[CallSignalingService] Disabled by configuration - skipping FCM listener setup')
+    }
   }
 
   // Listen to foreground FCM messages
   private registerFCMListener() {
+    console.log('[CallSignalingService] Registering FCM listener (legacy)')
     messaging().onMessage(this.onMessage)
     // background handler is registered in index.js of RN app
   }
@@ -72,8 +79,8 @@ class CallSignalingService {
   // Send a signal via backend -> FCM push
   private async sendSignal(recipientId: string, payload: Partial<CallSignalPayload>) {
     try {
-      // TODO: implement proper endpoint in ApiService
-      await (ApiService as any).sendCallSignal?.(recipientId, payload)
+      // Use the implemented ApiService.sendCallSignal method
+      await ApiService.sendCallSignal(recipientId, payload)
     } catch (err) {
       console.warn('[CallSignalingService] sendSignal error', err)
     }

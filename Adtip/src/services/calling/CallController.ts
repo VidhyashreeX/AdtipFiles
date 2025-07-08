@@ -2,6 +2,12 @@ import { Vibration } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import uuid from 'react-native-uuid'
 import { FirebaseMessagingTypes } from '@react-native-firebase/messaging'
+import notifee, { EventType } from '@notifee/react-native'
+
+// Global type declaration for foreground service resolver
+declare global {
+  var resolveForegroundService: (() => void) | undefined
+}
 
 import { useCallStore, CallType } from '../../stores/callStoreSimplified'
 import CallSignalingService from './CallSignalingService'
@@ -160,7 +166,55 @@ class CallController {
    * Listen to notification interactions
    */
   private setupNotificationListeners() {
-    // TODO: Set up notifee action listeners
+    // Set up notifee action listeners for answer/decline/end
+    notifee.onForegroundEvent(({ type, detail }) => {
+      if (type === EventType.ACTION_PRESS) {
+        const sessionId = detail.notification?.data?.sessionId as string
+
+        if (!sessionId) {
+          console.warn('[CallController] No sessionId in notification data')
+          return
+        }
+
+        console.log('[CallController] Notification action pressed:', detail.pressAction?.id)
+
+        switch (detail.pressAction?.id) {
+          case 'answer':
+            this.acceptCall()
+            break
+
+          case 'decline':
+          case 'end':
+            this.endCall()
+            break
+
+          default:
+            console.warn('[CallController] Unknown notification action:', detail.pressAction?.id)
+        }
+      }
+    })
+
+    // Also handle background events
+    notifee.onBackgroundEvent(async ({ type, detail }) => {
+      if (type === EventType.ACTION_PRESS) {
+        const sessionId = detail.notification?.data?.sessionId as string
+
+        if (!sessionId) return
+
+        console.log('[CallController] Background notification action:', detail.pressAction?.id)
+
+        switch (detail.pressAction?.id) {
+          case 'answer':
+            await this.acceptCall()
+            break
+
+          case 'decline':
+          case 'end':
+            await this.endCall()
+            break
+        }
+      }
+    })
   }
   
   /**
@@ -346,28 +400,54 @@ class CallController {
   async acceptCall() {
     const store = useCallStore.getState()
     const session = store.session
-    
-    if (!session || store.status !== 'ringing') return false
-    
+
+    if (!session || store.status !== 'ringing') {
+      console.warn('[CallController] Cannot accept call - no session or not ringing')
+      return false
+    }
+
     try {
+      console.log('[CallController] Accepting call:', session.sessionId)
+
       // Stop vibrating
       this.stopVibrate()
-      
+
       // Hide incoming notification
       this.notification.hideNotification(session.sessionId)
-      
+
       // Update status
       store.actions.setStatus('connecting')
-      
-      // Initialize media
+
+      // Initialize media and join meeting
       await this.media.initialize()
-      
+
+      // Join the meeting if we have meeting details
+      if (session.meetingId && session.token) {
+        await this.media.joinMeeting(
+          session.meetingId,
+          session.token,
+          session.peerName || 'User',
+          'video' // Default to video, will be updated by the meeting screen
+        )
+      }
+
       // Send accept signal
-      await this.signaling.sendAccept(session.peerId, session.sessionId)
-      
+      try {
+        await this.signaling.sendAccept(session.peerId, session.sessionId)
+      } catch (signalError) {
+        console.error('[CallController] Failed to send accept signal:', signalError)
+      }
+
       // Notify server of accepted call
-      await this.sendCallStatusUpdate('CALL_ACCEPTED')
-      
+      try {
+        await this.sendCallStatusUpdate('CALL_ACCEPTED')
+      } catch (statusError) {
+        console.error('[CallController] Failed to send call status update:', statusError)
+      }
+
+      // Update status to in_call
+      store.actions.setStatus('in_call')
+
       return true
     } catch (error) {
       console.error('[CallController] acceptCall error', error)
@@ -392,10 +472,18 @@ class CallController {
       this.notification.hideNotification(session.sessionId)
       
       // Send end signal
-      await this.signaling.sendEnd(session.peerId, session.sessionId)
-      
+      try {
+        await this.signaling.sendEnd(session.peerId, session.sessionId)
+      } catch (signalError) {
+        console.error('[CallController] Failed to send decline signal:', signalError)
+      }
+
       // Notify server of missed/declined call
-      await this.sendCallStatusUpdate('CALL_MISSED')
+      try {
+        await this.sendCallStatusUpdate('CALL_MISSED')
+      } catch (statusError) {
+        console.error('[CallController] Failed to send call status update:', statusError)
+      }
       
       // Update status
       store.actions.setStatus('ended')
@@ -413,22 +501,55 @@ class CallController {
   async endCall() {
     const store = useCallStore.getState()
     const session = store.session
-    
+
     if (!session) return false
-    
+
     try {
+      // Stop vibrating
+      this.stopVibrate()
+
       // Update status
       store.actions.setStatus('ended')
-      
+
       // Send end signal
-      await this.signaling.sendEnd(session.peerId, session.sessionId)
-      
+      try {
+        await this.signaling.sendEnd(session.peerId, session.sessionId)
+      } catch (signalError) {
+        console.error('[CallController] Failed to send end signal:', signalError)
+      }
+
       // Leave meeting
-      await this.media.leaveMeeting()
-      
+      try {
+        await this.media.leaveMeeting()
+      } catch (mediaError) {
+        console.error('[CallController] Failed to leave meeting:', mediaError)
+      }
+
+      // Hide notifications and stop foreground service
+      try {
+        this.notification.hideNotification(session.sessionId)
+
+        // Resolve the foreground service promise first
+        if (global.resolveForegroundService) {
+          global.resolveForegroundService()
+        }
+
+        // Then stop the foreground service
+        await notifee.stopForegroundService()
+      } catch (notificationError) {
+        console.error('[CallController] Failed to cleanup notifications:', notificationError)
+      }
+
       // Notify server of ended call
-      await this.sendCallStatusUpdate('CALL_ENDED')
-      
+      try {
+        await this.sendCallStatusUpdate('CALL_ENDED')
+      } catch (statusError) {
+        console.error('[CallController] Failed to send call status update:', statusError)
+      }
+
+      // Reset call state
+      store.actions.reset()
+
       return true
     } catch (error) {
       console.error('[CallController] endCall error', error)

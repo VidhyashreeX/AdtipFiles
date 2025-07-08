@@ -33,7 +33,7 @@ import CallController from '../../services/calling/CallController'
 import CallBillingService from '../../services/calling/CallBillingService'
 
 /**
- * Enhanced ContactCard with beautiful design and additional features
+ * Elegant and minimalistic ContactCard with professional design
  */
 const ContactCard = ({
   contact,
@@ -56,7 +56,8 @@ const ContactCard = ({
   onProfilePress?: () => void
   onBlockUser?: () => void
 }) => {
-  const avatarColor = contact.online_status ? colors.success : colors.primary
+  const isOnline = contact.online_status
+  const avatarColor = isOnline ? colors.success : colors.text.secondary
 
   return (
     <TouchableOpacity
@@ -64,35 +65,35 @@ const ContactCard = ({
         styles.contactCard,
         {
           backgroundColor: isDarkMode ? colors.card : '#FFFFFF',
-          borderColor: isDarkMode ? colors.border : '#F1F3F4',
+          borderColor: isDarkMode ? colors.border : '#F0F0F0',
           shadowColor: isDarkMode ? '#000000' : '#000000',
         },
       ]}
       onPress={onProfilePress}
-      activeOpacity={0.95}
+      activeOpacity={0.96}
     >
-      {/* Card glow effect for online users */}
-      {contact.online_status && (
-        <View style={[styles.cardGlow, { backgroundColor: colors.success + '20' }]} />
+      {/* Subtle top accent for online users */}
+      {isOnline && (
+        <View style={[styles.onlineAccent, { backgroundColor: colors.success }]} />
       )}
-      
+
       <View style={styles.contactCardContent}>
-        {/* Contact Info Section - First */}
-        <View style={styles.contactMainInfo}>
-          {/* Enhanced Avatar Section */}
-          <View style={styles.avatarSection}>
+        {/* Main contact information */}
+        <View style={styles.contactHeader}>
+          {/* Minimalist Avatar */}
+          <View style={styles.avatarContainer}>
             <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
               <Text style={styles.avatarText}>
                 {contact.name ? contact.name.charAt(0).toUpperCase() : 'U'}
               </Text>
-              {contact.online_status && (
-                <View style={[styles.onlineIndicator, { backgroundColor: colors.success }]} />
-              )}
             </View>
+            {isOnline && (
+              <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
+            )}
           </View>
 
-          {/* Enhanced Contact Details */}
-          <View style={styles.contactDetails}>
+          {/* Contact details with clean typography */}
+          <View style={styles.contactInfo}>
             <Text
               style={[styles.contactName, { color: colors.text.primary }]}
               numberOfLines={1}
@@ -100,96 +101,76 @@ const ContactCard = ({
               {contact.name || 'Unknown User'}
             </Text>
             <Text
-              style={[styles.contactId, { color: colors.text.tertiary }]}
-              numberOfLines={1}
-            >
-              ID: {contact.id}
-            </Text>
-            <Text
               style={[styles.contactStatus, { color: colors.text.secondary }]}
               numberOfLines={1}
             >
-              {contact.online_status
-                ? contact.last_seen === 'just now'
-                  ? '🟢 Online'
-                  : `Last seen ${contact.last_seen}`
+              {isOnline
+                ? 'Online now'
                 : contact.dnd
-                ? '🔕 Do Not Disturb'
-                : '⚫ Offline'}
+                ? 'Do not disturb'
+                : 'Offline'}
             </Text>
           </View>
         </View>
 
-        {/* Languages and Interests - Simplified */}
-        {((contact.languages && contact.languages.length > 0) || 
+        {/* Plain tags section */}
+        {((contact.languages && contact.languages.length > 0) ||
           (contact.interests && contact.interests.length > 0)) && (
-          <View style={styles.tagsContainer}>
+          <View style={styles.tagsSection}>
             {contact.languages && contact.languages.length > 0 && (
-              <Text style={[styles.tagText, { color: colors.text.tertiary }]} numberOfLines={1}>
-                🌐 {contact.languages.slice(0, 3).map(lang => lang.name).join(', ')}
-                {contact.languages.length > 3 && ` +${contact.languages.length - 3}`}
+              <Text style={[styles.tagLabel, { color: colors.text.tertiary }]} numberOfLines={1}>
+                {contact.languages.slice(0, 2).map(lang => lang.name).join(', ')}
+                {contact.languages.length > 2 && ` +${contact.languages.length - 2}`}
               </Text>
             )}
             {contact.interests && contact.interests.length > 0 && (
-              <Text style={[styles.tagText, { color: colors.text.tertiary }]} numberOfLines={1}>
-                💡 {contact.interests.slice(0, 3).map(interest => interest.name).join(', ')}
-                {contact.interests.length > 3 && ` +${contact.interests.length - 3}`}
+              <Text style={[styles.tagLabel, { color: colors.text.tertiary }]} numberOfLines={1}>
+                {contact.interests.slice(0, 2).map(interest => interest.name).join(', ')}
+                {contact.interests.length > 2 && ` +${contact.interests.length - 2}`}
               </Text>
             )}
           </View>
         )}
 
-        {/* Action Buttons - Below contact info */}
-        <View style={styles.actionButtons}>
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              styles.videoButton,
-              { backgroundColor: colors.primary },
-            ]}
-            onPress={onVideoCall}
-            activeOpacity={0.8}
-          >
-            <Icon name="video" size={16} color="#FFFFFF" />
-          </TouchableOpacity>
+        {/* Clean outline action buttons */}
+        <View style={styles.actionRow}>
+          {/* Left group - main actions */}
+          <View style={styles.actionGroup}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={onVideoCall}
+              activeOpacity={0.6}
+            >
+              <Icon name="video" size={20} color={colors.text.primary} />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              styles.voiceButton,
-              { backgroundColor: colors.success },
-            ]}
-            onPress={onVoiceCall}
-            activeOpacity={0.8}
-          >
-            <Icon name="phone" size={16} color="#FFFFFF" />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={onVoiceCall}
+              activeOpacity={0.6}
+            >
+              <Icon name="phone" size={20} color={colors.text.primary} />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              styles.chatButton,
-              { backgroundColor: colors.info || '#3B82F6' },
-            ]}
-            onPress={onChat}
-            activeOpacity={0.8}
-          >
-            <Icon name="message-circle" size={16} color="#FFFFFF" />
-            {hasUnreadMessages && (
-              <View style={[styles.unreadDot, { backgroundColor: colors.warning }]} />
-            )}
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={onChat}
+              activeOpacity={0.6}
+            >
+              <Icon name="message-circle" size={20} color={colors.text.primary} />
+              {hasUnreadMessages && (
+                <View style={[styles.notificationDot, { backgroundColor: colors.error }]} />
+              )}
+            </TouchableOpacity>
+          </View>
 
+          {/* Right side - secondary action */}
           <TouchableOpacity
-            style={[
-              styles.actionButton,
-              styles.blockButton,
-              { backgroundColor: colors.error || '#EF4444' },
-            ]}
+            style={styles.actionButton}
             onPress={onBlockUser}
-            activeOpacity={0.8}
+            activeOpacity={0.6}
           >
-            <Ban size={16} color="#FFFFFF" />
+            <Ban size={20} color={colors.text.secondary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -326,7 +307,7 @@ const TipCallSearchBar = ({
 const TipCallScreenSimple = () => {
   const { colors, isDarkMode } = useTheme()
   const { user } = useAuth()
-  const { balance, isLoading: walletLoading, isPremium } = useWallet()
+  const { balance, isPremium } = useWallet()
   const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>()
   const { blockUser, isUserBlocked } = useBlocklist()
 
@@ -355,7 +336,6 @@ const TipCallScreenSimple = () => {
   // Handlers
   const handleLanguageFilter = useCallback((id: number) => setLanguageFilter(id), [])
   const handleCategoryFilter = useCallback((id: number) => setCategoryFilter(id), [])
-  const handleSearchQueryChange = useCallback((text: string) => setSearchQuery(text), [])
 
   // Main contacts data
   const {
@@ -670,24 +650,14 @@ const TipCallScreenSimple = () => {
       />
 
       <Header
-        title="TipCall"
+        title=""
         showWallet={true}
         showSearch={false} // We handle search ourselves
         rightComponent={<HeaderRight />}
       />
 
-      {/* Enhanced Filters Section with modern design */}
+      {/* Minimalist Filters Section */}
       <View style={[styles.filtersSection, { backgroundColor: colors.background }]}>
-        <View style={styles.filterHeader}>
-          <Text style={[styles.filterSectionTitle, { color: colors.text.primary }]}>
-            🌐 Languages
-          </Text>
-          <View style={[styles.filterBadge, { backgroundColor: colors.primary + '20' }]}>
-            <Text style={[styles.filterBadgeText, { color: colors.primary }]}>
-              {languageFilter === 0 ? 'All' : LANGUAGES.find(l => l.id === languageFilter)?.name}
-            </Text>
-          </View>
-        </View>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -705,16 +675,6 @@ const TipCallScreenSimple = () => {
           ))}
         </ScrollView>
 
-        <View style={styles.filterHeader}>
-          <Text style={[styles.filterSectionTitle, { color: colors.text.primary }]}>
-            💡 Interests
-          </Text>
-          <View style={[styles.filterBadge, { backgroundColor: colors.success + '20' }]}>
-            <Text style={[styles.filterBadgeText, { color: colors.success }]}>
-              {categoryFilter === 0 ? 'All' : CATEGORIES.find(c => c.id === categoryFilter)?.name}
-            </Text>
-          </View>
-        </View>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -733,11 +693,11 @@ const TipCallScreenSimple = () => {
         </ScrollView>
       </View>
 
-      {/* Test Call Button - Enhanced */}
-      <TouchableOpacity
+      {/* Test Call Button - Hidden but code preserved */}
+      {/* <TouchableOpacity
         style={[
-          styles.testButton, 
-          { 
+          styles.testButton,
+          {
             backgroundColor: colors.primary,
             shadowColor: colors.primary,
           }
@@ -747,7 +707,7 @@ const TipCallScreenSimple = () => {
       >
         <Icon name="phone" size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
         <Text style={styles.testButtonText}>Open Test Call Screen</Text>
-      </TouchableOpacity>
+      </TouchableOpacity> */}
 
       {/* Enhanced Content Section */}
       <View style={styles.contentSection}>
@@ -908,144 +868,129 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   
-  // Enhanced Contact Card with modern design
+  // Elegant and minimalistic Contact Card
   contactCard: {
     marginHorizontal: 16,
-    marginVertical: 8,
-    borderRadius: 20,
+    marginVertical: 6,
+    borderRadius: 16,
     borderWidth: 1,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
     position: 'relative',
     overflow: 'hidden',
   },
-  cardGlow: {
+  onlineAccent: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 4,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    height: 2,
   },
   contactCardContent: {
     padding: 20,
-    flexDirection: 'column',
   },
-  
-  // Contact main info section (avatar + details)
-  contactMainInfo: {
+
+  // Contact header with avatar and info
+  contactHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
   },
-  
-  // Enhanced Avatar with premium badge
-  avatarSection: {
+
+  // Minimalist avatar design
+  avatarContainer: {
     marginRight: 16,
     position: 'relative',
   },
   avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
   },
   avatarText: {
     color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    fontSize: 18,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
-  onlineIndicator: {
+  statusDot: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     borderWidth: 2,
     borderColor: '#FFFFFF',
   },
-  
-  // Enhanced Contact Details with better typography
-  contactDetails: {
+
+  // Clean contact information
+  contactInfo: {
     flex: 1,
   },
   contactName: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 4,
-    letterSpacing: 0.3,
+    fontSize: 17,
+    fontWeight: '600',
+    marginBottom: 2,
+    letterSpacing: 0.1,
     lineHeight: 22,
   },
-  contactId: {
+  contactStatus: {
     fontSize: 13,
-    marginBottom: 4,
     fontWeight: '500',
     opacity: 0.8,
-  },
-  contactStatus: {
-    fontSize: 14,
-    marginBottom: 0,
-    fontWeight: '500',
-    lineHeight: 18,
-  },
-  
-  // Simplified tags container for languages and interests
-  tagsContainer: {
-    marginBottom: 16,
-  },
-  tagText: {
-    fontSize: 12,
-    fontWeight: '500',
-    opacity: 0.9,
-    letterSpacing: 0.2,
-    marginBottom: 2,
     lineHeight: 16,
   },
-  
-  // Enhanced Action Buttons with modern design - now in a row
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-  },
-  actionButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+
+  // Menu button
+  menuButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
   },
-  videoButton: {
-    transform: [{ scale: 1 }],
+
+  // Plain tags section
+  tagsSection: {
+    marginBottom: 16,
+    gap: 4,
   },
-  voiceButton: {
-    transform: [{ scale: 1 }],
+  tagLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    lineHeight: 16,
+    marginBottom: 2,
   },
-  chatButton: {
+
+  // Clean outline action buttons
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  actionGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  actionButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
     position: 'relative',
-    transform: [{ scale: 1 }],
   },
-  blockButton: {
-    transform: [{ scale: 1 }],
-  },
-  unreadDot: {
+  notificationDot: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 6,
+    right: 6,
     width: 8,
     height: 8,
     borderRadius: 4,
@@ -1081,36 +1026,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Enhanced Filters with modern design
+  // Minimalist Filters
   filtersSection: {
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 8,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.08)',
-  },
-  filterHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    paddingHorizontal: 8,
-  },
-  filterSectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    flex: 1,
-  },
-  filterBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginLeft: 8,
-  },
-  filterBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.3,
   },
   filterScroll: {
     paddingHorizontal: 12,

@@ -1,7 +1,7 @@
 /**
  * @format
  */
-import './src/stores/callStore';
+// Removed legacy callStore import to prevent dual store confusion
 import { AppRegistry } from 'react-native';
 import App from './App';
 import { name as appName } from './app.json';
@@ -31,14 +31,35 @@ if (getApps().length === 0) {
 }
 
 // Register Notifee foreground service ONCE as early as possible (per Notifee docs)
-// This promise stays open for the duration of the call, and is resolved when stopForegroundService is called.
+// This promise is resolved when stopForegroundService is called.
+let foregroundServiceResolver = null;
+
 notifee.registerForegroundService(notification => {
-  console.log('[Index] Foreground service called for call events');
-  return new Promise(() => {
-    // Keep the promise open for the duration of the call
-    // Optionally, listen for call end and resolve the promise
+  console.log('[Index] Foreground service started for call events');
+
+  return new Promise((resolve) => {
+    // Store the resolver so it can be called when the service should stop
+    foregroundServiceResolver = resolve;
+
+    // Set up a timeout as a fallback to prevent hanging promises
+    setTimeout(() => {
+      if (foregroundServiceResolver === resolve) {
+        console.log('[Index] Foreground service timeout - auto-resolving');
+        resolve();
+        foregroundServiceResolver = null;
+      }
+    }, 30 * 60 * 1000); // 30 minutes timeout
   });
-}); 
+});
+
+// Export resolver for CallController to use
+global.resolveForegroundService = () => {
+  if (foregroundServiceResolver) {
+    console.log('[Index] Resolving foreground service');
+    foregroundServiceResolver();
+    foregroundServiceResolver = null;
+  }
+};
 
 // Register the headless JS task for call events
 import './src/tasks/CallEventTask';

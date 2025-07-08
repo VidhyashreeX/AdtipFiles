@@ -16,6 +16,19 @@ export function navigate<RouteName extends keyof RootStackParamList>(
   }
 }
 
+// Go back function
+export function goBack() {
+  if (navigationRef.isReady()) {
+    if (navigationRef.canGoBack()) {
+      navigationRef.goBack();
+    } else {
+      console.warn('[NavigationService] Cannot go back, no previous screen in stack');
+    }
+  } else {
+    console.warn('[NavigationService] Navigation not ready, cannot go back');
+  }
+}
+
 // Special function to navigate to Meeting screen within MainNavigator
 export function navigateToMeeting(params: {
   meetingId: string;
