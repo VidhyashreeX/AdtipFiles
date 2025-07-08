@@ -145,16 +145,7 @@ class CallController {
           }
           
           case 'ended': {
-            // Navigate back ONLY if we are currently on Meeting screen
-            setTimeout(() => {
-              const currentRoute = NavigationService.getCurrentRoute()
-              if (currentRoute?.name === 'Meeting') {
-                NavigationService.navigate('Main', {
-                  screen: 'TipCallSimple',
-                  params: undefined as any
-                })
-              }
-            }, 500)
+            // Navigation is handled by App.tsx to prevent conflicts
             break
           }
         }

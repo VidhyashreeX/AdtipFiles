@@ -361,11 +361,15 @@ const AppNavigator = () => {
           const currentRoute = getCurrentRoute();
           if (currentRoute?.name === 'Meeting') {
             try {
-              setTimeout(() => {
-                navigateWithRetry('Main', { screen: 'TipCallSimple', params: undefined as any });
-              }, 800);
+              // Navigate to the TipCall tab (which contains TipCallSimple) with bottom navigator visible
+              navigateWithRetry('Main', {
+                screen: 'TabHome',
+                params: {
+                  screen: 'TipCall'
+                } as any
+              });
             } catch (err) {
-              console.error('[App] Error navigating back to TipCallSimple:', err);
+              console.error('[App] Error navigating back to TipCall tab:', err);
             }
           }
         }

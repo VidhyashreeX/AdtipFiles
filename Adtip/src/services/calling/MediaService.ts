@@ -60,8 +60,7 @@ class MediaService {
       this.currentMeetingConfig = null
       this.meeting = null
 
-      // Navigate back from meeting screen
-      NavigationService.goBack()
+      // Note: Navigation is handled by CallController and App.tsx to prevent conflicts
 
     } catch (error) {
       console.error('[MediaService] leaveMeeting error:', error)

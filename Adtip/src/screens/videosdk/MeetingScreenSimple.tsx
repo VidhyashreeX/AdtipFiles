@@ -354,18 +354,8 @@ const MeetingScreenSimple = () => {
   const status = useCallStore(state => state.status)
   const navigation = useNavigation()
   
-  // Redirect back to TipCall screen if call ended or session missing
-  useEffect(() => {
-    if ((!session || status === 'ended')) {
-      if (navigation.canGoBack()) {
-        navigation.goBack()
-      } else {
-        // Fallback: navigate to TipCallSimple
-        const NavigationService = require('../../navigation/NavigationService') as typeof import('../../navigation/NavigationService')
-        NavigationService.navigate('Main', { screen: 'TipCallSimple' })
-      }
-    }
-  }, [session, status, navigation])
+  // Note: Navigation after call end is handled by CallController and App.tsx
+  // Removed automatic navigation from here to prevent conflicts
   
   if (!session) {
     return (
