@@ -1,101 +1,205 @@
-import React, { Component, ReactNode } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { AlertTriangle } from 'lucide-react-native';
+import React, { Component, ErrorInfo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import UnifiedCallService from '../../services/calling/UnifiedCallService';
+import CallMediaManager from '../../services/calling/CallMediaManager';
+import { useCallStore } from '../../stores/callStore';
+import { useNavigation } from '@react-navigation/native';
 
 interface Props {
-  children: ReactNode;
-  fallbackComponent?: ReactNode;
+  children: React.ReactNode;
 }
 
 interface State {
   hasError: boolean;
   error: Error | null;
+  errorInfo: string;
+  isRecovering: boolean;
 }
 
 class CallErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { 
+      hasError: false, 
+      error: null, 
+      errorInfo: '',
+      isRecovering: false 
+    };
   }
 
-  static getDerivedStateFromError(error: Error): State {
-    console.error('[CallErrorBoundary] Error caught:', error);
+  static getDerivedStateFromError(error: Error) {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: any) {
-    console.error('[CallErrorBoundary] Component did catch:', error, errorInfo);
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    const errorMessage = error?.message || 'Unknown error';
+    const componentStack = errorInfo?.componentStack || 'No component stack available';
     
-    // Log the error for debugging
-    console.error('[CallErrorBoundary] Stack trace:', error.stack);
-    console.error('[CallErrorBoundary] Component stack:', errorInfo.componentStack);
+    console.error('[CallErrorBoundary] Error caught:', error);
+    console.error('[CallErrorBoundary] Component stack:', componentStack);
     
-    // End any active call to prevent further issues
+    // Check if this is a participant-related error
+    const isParticipantError = errorMessage.includes('participant') || 
+                             errorMessage.includes('displayName') ||
+                             errorMessage.includes('undefined');
+                             
+    // Analyze error details to improve future debugging
+    let errorCategory = 'unknown';
+    
+    if (errorMessage.includes('displayName')) {
+      errorCategory = 'displayName_access';
+    } else if (errorMessage.includes('undefined')) {
+      errorCategory = 'undefined_object';
+    } else if (errorMessage.includes('null')) {
+      errorCategory = 'null_object';
+    } else if (errorMessage.includes('participant')) {
+      errorCategory = 'participant_error';
+    }
+    
+    // Log error with category
+    console.error(`[CallErrorBoundary] Error category: ${errorCategory}`);
+    
+    // Store error details in state
+    this.setState({
+      hasError: true,
+      error,
+      errorInfo: `${errorMessage}\n\n${componentStack}`,
+      isRecovering: isParticipantError // Auto-recover for participant errors
+    });
+    
+    // Attempt to recover automatically for participant-related errors
+    if (isParticipantError) {
+      console.log('[CallErrorBoundary] Participant-related error detected. Attempting auto-recovery...');
+      this.attemptRecovery();
+    }
+  }
+  
+  // Attempt to recover from errors
+  attemptRecovery = () => {
+    if (this.state.isRecovering) {
+      return; // Already attempting recovery
+    }
+    
+    this.setState({ isRecovering: true });
+    
+    // For participant-related errors, try to get call state and clean up
     try {
-      const unifiedCallService = UnifiedCallService.getInstance();
-      unifiedCallService.endCall('Error boundary triggered');
-    } catch (e) {
-      console.error('[CallErrorBoundary] Error ending call:', e);
+      // First try to clean media manager since it's often the source of these issues
+      CallMediaManager.forceCleanupIfNeeded();
+      
+      // For displayName errors specifically, clear the error immediately
+      // since these are usually transient UI rendering issues
+      if (this.state.error?.message?.includes('displayName')) {
+        console.log('[CallErrorBoundary] DisplayName error detected, performing immediate recovery');
+        this.setState({ 
+          hasError: false,
+          isRecovering: false,
+          error: null,
+          errorInfo: ''
+        });
+        return;
+      }
+      
+      // Wait a moment and then reset the error state for other errors
+      setTimeout(() => {
+        if (this.state.hasError) {
+          this.setState({ 
+            hasError: false,
+            isRecovering: false,
+            error: null,
+            errorInfo: ''
+          });
+        }
+      }, 2000);
+    } catch (recoveryError) {
+      console.error('[CallErrorBoundary] Error during recovery attempt:', recoveryError);
+      this.setState({ isRecovering: false });
     }
   }
 
+  // Handle manual recovery attempt
   handleRetry = () => {
-    this.setState({ hasError: false, error: null });
-  };
+    this.attemptRecovery();
+  }
 
+  // End the call and navigate back
   handleEndCall = () => {
     try {
-      const unifiedCallService = UnifiedCallService.getInstance();
-      unifiedCallService.endCall('User ended call from error boundary');
+      // Use UnifiedCallService to properly end the call
+      const callService = UnifiedCallService.getInstance();
+      callService.endCall('error_boundary');
+      
+      // Clear error state
+      this.setState({ 
+        hasError: false,
+        error: null,
+        errorInfo: '',
+        isRecovering: false 
+      });
+      
+      // We don't need to navigate manually, the call status change observer will handle it
     } catch (error) {
       console.error('[CallErrorBoundary] Error ending call:', error);
+      Alert.alert(
+        'Error',
+        'Failed to end the call properly. The app may need to be restarted.',
+        [{ text: 'OK' }]
+      );
     }
-    this.setState({ hasError: false, error: null });
-  };
+  }
 
   render() {
     if (this.state.hasError) {
-      if (this.props.fallbackComponent) {
-        return this.props.fallbackComponent;
-      }
-
+      const errorMessage = this.state.error?.message || 'Unknown error';
+      const isParticipantError = errorMessage.includes('participant') || 
+                               errorMessage.includes('displayName') ||
+                               errorMessage.includes('undefined');
+                               
       return (
         <View style={styles.container}>
-          <View style={styles.content}>
-            <AlertTriangle size={48} color="#EF4444" />
-            <Text style={styles.title}>Call Error</Text>
-            <Text style={styles.message}>
-              Something went wrong with the call. This might be due to network issues or call configuration problems.
-            </Text>
-            
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity
-                style={[styles.button, styles.retryButton]}
-                onPress={this.handleRetry}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.retryButtonText}>Try Again</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.button, styles.endButton]}
-                onPress={this.handleEndCall}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.endButtonText}>End Call</Text>
-              </TouchableOpacity>
-            </View>
-            
-            {__DEV__ && (
-              <View style={styles.debugContainer}>
-                <Text style={styles.debugTitle}>Debug Info:</Text>
-                <Text style={styles.debugText}>
-                  {this.state.error?.message || 'Unknown error'}
-                </Text>
+          <Text style={styles.title}>Call Error Detected</Text>
+          
+          {this.state.isRecovering ? (
+            <>
+              <Text style={styles.message}>
+                Attempting to recover from error...
+              </Text>
+              <View style={styles.spinnerContainer}>
+                {/* Simple text-based spinner */}
+                <Text style={styles.spinner}>⟳</Text>
               </View>
-            )}
-          </View>
+            </>
+          ) : (
+            <>
+              <Text style={styles.message}>
+                {isParticipantError 
+                  ? 'There was a problem with a call participant. This can happen when participants disconnect unexpectedly.' 
+                  : 'Something went wrong with your call.'}
+              </Text>
+              
+              {__DEV__ && (
+                <Text style={styles.devError}>
+                  {errorMessage}
+                </Text>
+              )}
+              
+              <View style={styles.buttonContainer}>
+                <TouchableOpacity 
+                  style={[styles.button, styles.retryButton]} 
+                  onPress={this.handleRetry}
+                >
+                  <Text style={styles.buttonText}>Try to Recover</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.button, styles.endButton]} 
+                  onPress={this.handleEndCall}
+                >
+                  <Text style={styles.buttonText}>End Call</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
         </View>
       );
     }
@@ -107,74 +211,66 @@ class CallErrorBoundary extends Component<Props, State> {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: '#121212',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
-  content: {
-    alignItems: 'center',
-    maxWidth: 300,
-  },
   title: {
+    color: '#FF4343',
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginTop: 16,
-    marginBottom: 8,
-    textAlign: 'center',
+    marginBottom: 20,
   },
   message: {
+    color: '#FFFFFF',
     fontSize: 16,
-    color: '#CCCCCC',
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32,
+    marginBottom: 30,
+    lineHeight: 24,
+  },
+  devError: {
+    color: '#FF9800',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+    padding: 10,
+    backgroundColor: 'rgba(255, 152, 0, 0.1)',
+    borderRadius: 5,
   },
   buttonContainer: {
     flexDirection: 'row',
-    gap: 12,
+    justifyContent: 'space-around',
+    width: '100%',
+    paddingHorizontal: 20,
   },
   button: {
-    paddingHorizontal: 20,
     paddingVertical: 12,
+    paddingHorizontal: 24,
     borderRadius: 8,
-    minWidth: 100,
+    minWidth: 120,
     alignItems: 'center',
   },
   retryButton: {
-    backgroundColor: '#22C55E',
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+    backgroundColor: '#444444',
+    marginRight: 10,
   },
   endButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#FF4343',
+    marginLeft: 10,
   },
-  endButtonText: {
+  buttonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
   },
-  debugContainer: {
-    marginTop: 24,
-    padding: 12,
-    backgroundColor: '#2A2A2A',
-    borderRadius: 8,
-    width: '100%',
+  spinnerContainer: {
+    marginTop: 20,
   },
-  debugTitle: {
+  spinner: {
+    fontSize: 40,
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  debugText: {
-    color: '#CCCCCC',
-    fontSize: 12,
-    fontFamily: 'monospace',
+    // Add animation via a CSS animation
   },
 });
 

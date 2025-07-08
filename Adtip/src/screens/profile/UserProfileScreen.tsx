@@ -31,6 +31,7 @@ const GRID_IMAGE_SIZE = (SCREEN_WIDTH - GRID_SPACING * 4) / 3;
 
 interface UserProfileScreenProps {
   userId: number;
+  onClose?: () => void;
 }
 
 interface Post {
@@ -60,6 +61,16 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
   const [followersList, setFollowersList] = useState<any[]>([]);
   const [followingList, setFollowingList] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  const { onClose } = props;
+
+  // When closing the main modal, also close all nested modals
+  const handleClose = useCallback(() => {
+    setShowFollowersModal(false);
+    setShowFollowingModal(false);
+    setShowImageViewer(false);
+    if (onClose) onClose();
+  }, [onClose]);
 
   const isOwnProfile = currentUser?.id === userId;
 
@@ -470,6 +481,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
           </TouchableOpacity>
         )}
         ListEmptyComponent={<Text style={{ color: colors.text.secondary, alignSelf: 'center', marginTop: 32 }}>No posts yet.</Text>}
+        removeClippedSubviews={false}
       />
       {/* Followers Modal */}
       <Modal visible={showFollowersModal} transparent animationType="slide" onRequestClose={() => setShowFollowersModal(false)}>
@@ -516,6 +528,10 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
           </TouchableOpacity>
         </Modal>
       )}
+      {/* Main close button for the parent modal, if needed */}
+      <TouchableOpacity style={{ position: 'absolute', top: 40, left: 24, zIndex: 20 }} onPress={handleClose}>
+        <Icon name="x" size={32} color={colors.text.primary} />
+      </TouchableOpacity>
     </View>
   );
 };

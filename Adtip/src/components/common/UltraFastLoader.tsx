@@ -22,7 +22,6 @@ import Sidebar from '../sidebar/Sidebar';
 // Import navigation screens
 import MainNavigator from '../../navigation/MainNavigator';
 import AuthNavigator from '../../navigation/AuthNavigator';
-import MeetingScreen from '../../screens/videosdk/MeetingScreen';
 import { RootStackParamList } from '../../types/navigation';
 
 interface UltraFastLoaderProps {
@@ -153,6 +152,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
     initializeServices();
   }, []); // Empty dependency array - only run once on mount
 
+  /*
   // Handle active call navigation
   useEffect(() => {
     console.log('[UltraFastLoader] activeCall changed:', activeCall);
@@ -206,6 +206,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
       }
     }
   }, [activeCall, isNavReady]);
+  */
 
   // --- START: Replace the entire return logic with this ---
   return (

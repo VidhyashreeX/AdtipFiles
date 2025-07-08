@@ -8,6 +8,9 @@ import { name as appName } from './app.json';
 import { getApps, initializeApp } from '@react-native-firebase/app';
 import notifee from '@notifee/react-native';
 import { register } from '@videosdk.live/react-native-sdk';
+import messaging from '@react-native-firebase/messaging';
+// Import CallController for handling background messages
+import CallController from './src/services/calling/CallController';
 
 // Register VideoSDK FIRST - Critical for proper initialization
 register();
@@ -39,5 +42,24 @@ notifee.registerForegroundService(notification => {
 
 // Register the headless JS task for call events
 import './src/tasks/CallEventTask';
+
+// Handle background messages
+messaging().setBackgroundMessageHandler(async remoteMessage => {
+  console.log('[Index] Background message received:', remoteMessage);
+  
+  // Check if this is a call-related message
+  if (
+    remoteMessage.data?.type === 'CALL_INITIATE' ||
+    remoteMessage.data?.type === 'CALL_ACCEPT' ||
+    remoteMessage.data?.type === 'CALL_END'
+  ) {
+    // Initialize controller and handle the message
+    const callController = CallController.getInstance();
+    callController.handleFCMMessage(remoteMessage);
+    
+    // Return a promise that resolves when the background task is complete
+    return Promise.resolve();
+  }
+});
 
 AppRegistry.registerComponent(appName, () => App);

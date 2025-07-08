@@ -82,8 +82,8 @@ class VideoSDKService {
     try {
       console.log('[VideoSDK] Creating meeting via backend API');
       
-      // Fix: Pass region parameter (default 'us')
-      const response = await ApiService.createVideoSDKMeeting(participantToken, 'us');
+      // Pass correct region code as per VideoSDK docs (us001, sg001, eu001)
+      const response = await ApiService.createVideoSDKMeeting(participantToken, 'us001');
       
       console.log('[VideoSDK] Raw API response:', response);
       

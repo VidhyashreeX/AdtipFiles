@@ -48,12 +48,12 @@ class UnifiedCallService {
 
   // Service instances
   private videoSDKService: VideoSDKService;
-  private callMediaManager: CallMediaManager;
+  private callMediaManager: typeof CallMediaManager;
   private callKeepService: CallKeepIntegrationService;
 
   private constructor() {
     this.videoSDKService = VideoSDKService.getInstance();
-    this.callMediaManager = CallMediaManager.getInstance();
+    this.callMediaManager = CallMediaManager;
     this.callKeepService = CallKeepIntegrationService.getInstance();
   }
 
@@ -191,8 +191,13 @@ class UnifiedCallService {
         throw new Error('Failed to create VideoSDK meeting');
       }
 
-      // Create call data
+      // Create call data with unique IDs to prevent confusion
       const callId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Add uniqueness to caller and recipient IDs for VideoSDK to differentiate participants
+      // This prevents the same participant ID from appearing as both local and remote
+      const uniqueCallerId = `${currentUserId}_${Date.now()}_caller`;
+      const uniqueRecipientId = `${recipientId}_${Date.now()}_recipient`;
+      
       const callData: CallData = {
         callId,
         meetingId,
@@ -200,20 +205,30 @@ class UnifiedCallService {
         callerName: currentUserName,
         recipientName,
         callType,
-        callerId: currentUserId,
-        recipientId,
+        callerId: uniqueCallerId, // Use unique caller ID
+        recipientId: uniqueRecipientId, // Use unique recipient ID
         isInitiator: true,
         status: 'dialing',
         startTime: Date.now(),
         timestamp: Date.now()
       };
 
+      console.log('[UnifiedCallService] Generated unique participant IDs:', {
+        originalCallerId: currentUserId,
+        originalRecipientId: recipientId,
+        uniqueCallerId: callData.callerId,
+        uniqueRecipientId: callData.recipientId
+      });
+
+      // ✅ Clean up any lingering state from previous calls
+      this.callMediaManager.forceCleanupIfNeeded();
+
       // Update Zustand store (no internal state)
       const store = useCallStore.getState();
       store.actions.startOutgoingCall(callData);
 
-      // Initialize media manager
-      this.callMediaManager.initialize(callId, callType === 'video');
+      // Initialize media manager with call ID and local participant ID
+      this.callMediaManager.initialize(callId, callType === 'video', callData.callerId);
 
       // Send FCM notification to recipient
       await this.sendCallNotificationToRecipient(callData);
@@ -230,7 +245,8 @@ class UnifiedCallService {
           displayName: currentUserName,
           recipientName,
           isInitiator: true,
-          callData
+          callData,
+          localParticipantId: callData.callerId // Pass local participant ID
         });
       }, 500);
 
@@ -274,7 +290,21 @@ class UnifiedCallService {
       const currentUserId = await this.getCurrentUserId();
       const currentUserName = await this.getCurrentUserName();
 
-      // Create incoming call data
+      // Create unique participant IDs to prevent confusion
+      const uniqueCallerId = `${callData.callerId}_${Date.now()}_caller`;
+      const uniqueRecipientId = `${currentUserId}_${Date.now()}_recipient`;
+
+      console.log('[UnifiedCallService] Generated unique participant IDs for incoming call:', {
+        originalCallerId: callData.callerId,
+        originalRecipientId: currentUserId,
+        uniqueCallerId,
+        uniqueRecipientId
+      });
+      
+      // ✅ Clean up any lingering state from previous calls
+      this.callMediaManager.forceCleanupIfNeeded();
+
+      // Create incoming call data with unique IDs
       const incomingCallData: CallData = {
         callId: callData.callId,
         meetingId: callData.meetingId,
@@ -282,8 +312,8 @@ class UnifiedCallService {
         callerName: callData.callerName,
         recipientName: currentUserName,
         callType: callData.callType,
-        callerId: callData.callerId,
-        recipientId: currentUserId,
+        callerId: uniqueCallerId, // Use unique caller ID
+        recipientId: uniqueRecipientId, // Use unique recipient ID
         callerAvatar: callData.callerAvatar,
         callerFcmToken: callData.callerFcmToken,
         isInitiator: false,
@@ -295,8 +325,8 @@ class UnifiedCallService {
       const store = useCallStore.getState();
       store.actions.setIncomingCall(incomingCallData);
 
-      // Initialize media manager
-      this.callMediaManager.initialize(incomingCallData.callId, callData.callType === 'video');
+      // Initialize media manager with call ID and local participant ID
+      this.callMediaManager.initialize(incomingCallData.callId, callData.callType === 'video', incomingCallData.recipientId);
 
       // Try CallKeep first, fallback to notification
       const callKeepSuccess = await this.tryCallKeepIncomingCall(incomingCallData);
@@ -342,15 +372,20 @@ class UnifiedCallService {
 
       // Hide incoming call notification
       await this.hideIncomingCallNotification();
+      
+      // Get local participant ID from CallMediaManager or use recipientId
+      const localParticipantId = CallMediaManager.getLocalParticipantId() || activeCall.recipientId;
+      console.log('[UnifiedCallService] Using local participant ID for incoming call:', localParticipantId);
 
-      // Navigate to meeting screen
+      // Navigate to meeting screen with local participant ID
       NavigationService.navigateToMeeting({
         meetingId: activeCall.meetingId,
         token: activeCall.token,
         callType: activeCall.callType,
         displayName: activeCall.recipientName,
         recipientName: activeCall.callerName,
-        isInitiator: false
+        isInitiator: false,
+        localParticipantId: localParticipantId
       });
 
       // Send call status update
@@ -491,7 +526,26 @@ class UnifiedCallService {
       } else if (callType === 'CALL_ACCEPTED') {
         console.log('[UnifiedCallService] Call accepted by recipient');
         const store = useCallStore.getState();
-        store.actions.setCallStatus('connecting');
+        const activeCall = store.activeCall;
+
+        // Only update the call status if we actually have an active call in progress
+        if (activeCall) {
+          // If the payload contains a meetingId (recommended) verify it matches our current call
+          const receivedMeetingId = (parsedInfo && parsedInfo.meetingId) || data.meetingId;
+
+          if (!receivedMeetingId || receivedMeetingId === activeCall.meetingId) {
+            // Safe to mark the call as connecting – the CALLEE has accepted our outgoing call
+            store.actions.setCallStatus('connecting');
+          } else {
+            console.warn('[UnifiedCallService] Ignoring CALL_ACCEPTED for a non-matching or inactive call', {
+              receivedMeetingId,
+              activeMeetingId: activeCall.meetingId,
+            });
+          }
+        } else {
+          // No active call – most likely this is a late/delayed message for a call that has already ended.
+          console.warn('[UnifiedCallService] Ignoring CALL_ACCEPTED – no active call present');
+        }
       } else if (callType === 'CALL_ENDED') {
         console.log('[UnifiedCallService] Call ended by remote party');
         await this.endCall('ended_by_remote');

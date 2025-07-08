@@ -1,10 +1,12 @@
 import React, { useEffect } from 'react';
+import { Platform, TouchableOpacity } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Easing } from 'react-native-reanimated';
+import Icon from 'react-native-vector-icons/Feather';
 import { withFastLoading } from '../components/hoc/withFastLoading';
 import { MainNavigatorParamList } from '../types/navigation';
 // Import the navigation ref for global navigation
-import { navigationRef, navigateToMeeting } from './NavigationService';
+import { navigationRef } from './NavigationService';
 
 // Import navigators
 import TabNavigator from './TabNavigator';
@@ -58,7 +60,9 @@ import CameraRecordingScreen from '../screens/content/CameraRecordingScreen';
 import TipCallScreen from '../screens/tipcall/TipCallScreen';
 import MissedCallsScreen from '../screens/tipcall/MissedCallsScreen';
 // Import MeetingScreen
-import MeetingScreen from '../screens/videosdk/MeetingScreen';
+import MeetingScreenSimple from '../screens/videosdk/MeetingScreenSimple';
+import TestCallScreen from '../screens/TestCallScreen';
+import TipCallScreenSimple from '../screens/tipcall/TipCallScreenSimple';
 // Import BlockedUsersScreen
 import BlockedUsersScreen from '../screens/blocklist/BlockedUsersScreen';
 
@@ -129,7 +133,6 @@ const EnhancedPremiumUserScreen = withWalletBalance(PremiumUserScreen);
 const EnhancedVideoPlayerModalScreen = withWalletBalance(VideoPlayerModalScreen);
 const EnhancedTipCallScreen = withWalletBalance(TipCallScreen);
 const EnhancedMissedCallsScreen = withWalletBalance(MissedCallsScreen);
-const EnhancedMeetingScreen = withWalletBalance(MeetingScreen);
 
 // Custom transition configuration with Reanimated easing
 const customTransitionConfig = {
@@ -366,16 +369,21 @@ const MainNavigator = () => {
         component={EnhancedTipCallScreen}
         options={standardFastTransitionConfig}
       />
+      <Stack.Screen
+        name="TipCallSimple"
+        component={TipCallScreenSimple}
+        options={{ headerShown: false }}
+      />
       {/* MissedCalls screen with standard transition */}
       <Stack.Screen 
         name="MissedCalls" 
         component={EnhancedMissedCallsScreen}
         options={standardFastTransitionConfig}
       />
-      {/* MeetingScreen with optimized transition for calls */}
+      {/* Meeting screen (simple version) */}
       <Stack.Screen 
         name="Meeting" 
-        component={MeetingScreen}
+        component={MeetingScreenSimple}
         options={{
           presentation: 'fullScreenModal',
           animation: 'fade',
@@ -383,7 +391,17 @@ const MainNavigator = () => {
           headerShown: false,
         }}
       />
-      
+
+             {/* Test Call Screen */}
+       <Stack.Screen
+         name="TestCall"
+         component={TestCallScreen}
+         options={{
+           title: 'Test Call',
+           headerShown: true
+         }}
+       />
+
       {/* Add Chat screen */}
       <Stack.Screen 
         name="Chat" 

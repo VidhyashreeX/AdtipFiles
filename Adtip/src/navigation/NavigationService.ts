@@ -25,6 +25,7 @@ export function navigateToMeeting(params: {
   isInitiator?: boolean;
   recipientName?: string;
   callData?: any;
+  localParticipantId?: string; // Add localParticipantId parameter
 }) {
   try {
     // ✅ CRITICAL FIX: Validate parameters
@@ -37,7 +38,8 @@ export function navigateToMeeting(params: {
       console.log('[NavigationService] Navigating to Meeting screen with params:', {
         meetingId: params.meetingId,
         callType: params.callType,
-        displayName: params.displayName
+        displayName: params.displayName,
+        localParticipantId: params.localParticipantId || 'not_provided' // Log participant ID
       });
       
       // Navigate to Main navigator, then to Meeting screen
@@ -54,6 +56,15 @@ export function navigateToMeeting(params: {
     console.error('[NavigationService] Error in navigateToMeeting:', error);
     // ✅ CRITICAL FIX: Don't let navigation errors crash the app
   }
+}
+
+/**
+ * Navigate to simplified meeting screen with a session ID
+ */
+export function navigateToMeetingSimple(params: {
+  sessionId: string
+}) {
+  navigate('MeetingSimple', params)
 }
 
 export function resetTo<RouteName extends keyof RootStackParamList>(
@@ -119,6 +130,7 @@ export function navigateToMeetingWithRetry(params: {
   isInitiator?: boolean;
   recipientName?: string;
   callData?: any;
+  localParticipantId?: string; // Add localParticipantId parameter
 }, maxRetries: number = 3, retryDelay: number = 100) {
   let retries = 0;
   
@@ -150,6 +162,7 @@ export function navigateToMeetingFromNotification(params: {
   isInitiator?: boolean;
   recipientName?: string;
   callData?: any;
+  localParticipantId?: string; // Add localParticipantId parameter
 }) {
   // Use a more persistent retry mechanism for notification clicks
   let retries = 0;
@@ -189,7 +202,7 @@ export function navigateToMeetingFromNotification(params: {
 // ✅ CRITICAL FIX: Force navigation back to TipCall screen after call ends
 export function navigateToTipCall() {
   try {
-    console.log('[NavigationService] Forcing navigation back to TipCall screen');
+    console.log('[NavigationService] Forcing navigation back to TipCallSimple screen');
     
     if (navigationRef.isReady()) {
       // Reset to TipCall screen - this ensures we're back to the main call screen
@@ -199,12 +212,12 @@ export function navigateToTipCall() {
           { 
             name: 'Main', 
             params: { 
-              screen: 'TipCall' 
+              screen: 'TipCallSimple' 
             } 
           }
         ],
       });
-      console.log('[NavigationService] Successfully navigated back to TipCall');
+      console.log('[NavigationService] Successfully navigated back to TipCallSimple');
     } else {
       console.warn('[NavigationService] Navigation not ready, retrying in 200ms');
       setTimeout(navigateToTipCall, 200);
@@ -213,7 +226,7 @@ export function navigateToTipCall() {
     console.error('[NavigationService] Error navigating to TipCall:', error);
     // Fallback: try to navigate to Main screen
     try {
-      (navigationRef as any).navigate('Main', { screen: 'TipCall' });
+      (navigationRef as any).navigate('Main', { screen: 'TipCallSimple' });
     } catch (fallbackError) {
       console.error('[NavigationService] Fallback navigation also failed:', fallbackError);
     }

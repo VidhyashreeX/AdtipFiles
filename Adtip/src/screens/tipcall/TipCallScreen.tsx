@@ -58,6 +58,8 @@ import UserProfileScreen from '../profile/UserProfileScreen';
 import SingleBannerCard from '../../components/home/SingleBannerCard';
 import { Headphones } from 'lucide-react-native';
 import debounce from 'lodash.debounce';
+import CallMediaManager from '../../services/calling/CallMediaManager';
+import useCallStore from '../../stores/callStore';
 
 // Define navigation stack param list
 type NavigationProp = NativeStackNavigationProp<MainNavigatorParamList, 'TipCall'>;
@@ -380,10 +382,80 @@ export default function TipCallScreen() {
     initializeBlocklist();
   }, []);
 
+  // Initialize and reset call-related services
+  useEffect(() => {
+    const initializeAndResetCallServices = async () => {
+      try {
+        console.log('[TipCallScreen] Initializing and resetting call services...');
+        
+        // First, ensure any active calls are ended
+        const callStore = useCallStore.getState();
+        if (callStore.isInCall) {
+          console.log('[TipCallScreen] Active call detected, cleaning up first...');
+          await callStore.actions.endCall('navigation_reset');
+          // Add a small delay to ensure cleanup completes
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+        
+        // Force cleanup of any lingering media resources
+        CallMediaManager.forceCleanupIfNeeded();
+        
+        // Reset call state
+        callStore.actions.resetCallState();
+        
+        // Initialize the call service if not already initialized
+        const unifiedCallService = UnifiedCallService.getInstance();
+        if (!unifiedCallService.getIsInitialized()) {
+          console.log('[TipCallScreen] Call service not initialized, initializing now...');
+          
+          // Configure VideoSDK with basic options
+          const success = await unifiedCallService.initialize({
+            enableCallKeep: true,
+            enableNotifications: true,
+          });
+          
+          if (!success) {
+            console.error('[TipCallScreen] Failed to initialize call service');
+            Alert.alert(
+              'Call Service Error', 
+              'Failed to initialize call service. Video and voice calls may not work properly.'
+            );
+            return false;
+          }
+        } else {
+          console.log('[TipCallScreen] Call service already initialized');
+        }
+        
+        // Update the call store to reflect initialization
+        callStore.actions.setServiceInitialized(true);
+        
+        console.log('[TipCallScreen] Call services initialized successfully');
+        return true;
+      } catch (error) {
+        console.error('[TipCallScreen] Error initializing call services:', error);
+        Alert.alert(
+          'Service Error', 
+          'An error occurred while initializing call services. Please try again.'
+        );
+        return false;
+      }
+    };
+    
+    initializeAndResetCallServices();
+    
+    // Also run this when screen comes into focus
+    const unsubscribe = navigation.addListener('focus', () => {
+      console.log('[TipCallScreen] Screen focused, ensuring call services are reset');
+      initializeAndResetCallServices();
+    });
+    
+    return unsubscribe;
+  }, [navigation]);
+
   useEffect(() => {
     // Reset call state using Zustand store
     const { useCallStore } = require('../../stores/callStore');
-    useCallStore.getState().cleanup();
+    useCallStore.getState().actions.cleanup();
   }, []);
 
   // Request permissions on component mount
@@ -1166,6 +1238,7 @@ export default function TipCallScreen() {
             </View>
           ) : null}
           keyboardShouldPersistTaps="handled"
+          removeClippedSubviews={false}
         />
       </View>
     );
@@ -1365,6 +1438,7 @@ export default function TipCallScreen() {
                   </View>
                 ) : null
               }
+              removeClippedSubviews={false}
             />
           </View>
         )}
@@ -1382,6 +1456,10 @@ export default function TipCallScreen() {
         {selectedUserId && (
           <UserProfileScreen
             userId={selectedUserId}
+            onClose={() => {
+              setShowUserProfileModal(false);
+              setSelectedUserId(null);
+            }}
           />
         )}
       </Modal>

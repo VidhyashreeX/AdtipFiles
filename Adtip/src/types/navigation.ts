@@ -37,6 +37,7 @@ export type MainNavigatorParamList = {
   Home: undefined;
   TipTube: undefined;
   TipCall: { initialCallNotificationData?: CallNotificationData }; // TipCall now takes params
+  TipCallSimple: undefined;
   TipShop: undefined;
   Chat: { user: Contact }; // Add this line
   MissedCalls: undefined;
@@ -109,6 +110,10 @@ export type MainNavigatorParamList = {
     recipientName?: string;
     callData?: any;
   };
+  MeetingSimple: {
+    sessionId: string;
+  };
+  TestCall: undefined;
   UserPremiumPlans: undefined;
   SubscriptionScreen: undefined;
   ContentCreatorSubscriptionScreen: undefined;
@@ -121,8 +126,23 @@ export type MainNavigatorParamList = {
 
 // This is the RootStackParamList for the Stack.Navigator in App.tsx
 export type RootStackParamList = {
-  Auth: NavigatorScreenParams<AuthNavigatorParamList>; 
+  Splash: undefined;
+  Auth: NavigatorScreenParams<AuthNavigatorParamList>;
   Main: NavigatorScreenParams<MainNavigatorParamList>;
+  ContentCreatorSubscriptionScreen: undefined;
+  Meeting: {
+    meetingId: string;
+    token: string;
+    displayName: string;
+    callType: 'voice' | 'video';
+    isInitiator?: boolean;
+    recipientName?: string;
+    callData?: any;
+    localParticipantId?: string;
+  };
+  MeetingSimple: {
+    sessionId: string;
+  };
   UserDetails: undefined;
   InitialLoading: undefined;
   // REMOVE Meeting from the RootStack

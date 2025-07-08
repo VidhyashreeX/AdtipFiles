@@ -227,9 +227,10 @@ export const useCallStore = create<CallStore>()(
                 activeCall: fullCallData,
                 callStatus: 'dialing',
                 mediaState: {
-                  ...get().mediaState,
+                  ...initialState.mediaState, // Reset to initial state for new call
                   isVideoCall: callData.callType === 'video',
                   cameraEnabled: callData.callType === 'video',
+                  micEnabled: true, // Default to mic enabled for new calls
                 },
                 lastError: null,
                 callDuration: 0,

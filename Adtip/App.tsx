@@ -1,6 +1,6 @@
 // App.tsx
 import './src/stores/callStore';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   SafeAreaView,
   StatusBar,
@@ -69,6 +69,7 @@ import ChatScreen from './src/screens/chat/ChatScreen';
 import UltraFastLoader from './src/components/common/UltraFastLoader';
 
 import { RootStackParamList } from 'src/types/navigation';
+import useFcmCallHandlers from './src/hooks/useFcmCallHandlers';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
@@ -113,7 +114,8 @@ import { useCallStore, CallData } from './src/stores/callStore';
 // AppNavigator with Services - Ultra Fast with Authentication-aware UltraFastLoader
 const AppNavigator = () => {
   const { isAuthenticated, isInitialized, user } = useAuth();
-  const { callStatus, activeCall, startOutgoingCall } = useCallStore();
+  const { callStatus, activeCall } = useCallStore();
+  const callActions = useCallStore(state => state.actions);
   const [firebaseReady, setFirebaseReady] = useState(false);
   const [videoSDKReady, setVideoSDKReady] = useState(false);
   const [unifiedCallServiceReady, setUnifiedCallServiceReady] = useState(false);
@@ -332,19 +334,20 @@ const AppNavigator = () => {
     };
   }, [unifiedCallServiceReady]);
 
-  // Global navigation listener for call status changes
+  // Global navigation listener for call status changes (with debouncing to prevent loops)
   useEffect(() => {
-    const unsubscribe = useCallStore.subscribe((state) => {
+    const unsubscribe = useCallStore.subscribe((state, prevState) => {
       const currentStatus = state.callStatus;
-      const activeCall = state.activeCall;
-      
-      // Auto-navigate to Meeting screen when call starts
+      const activeCall   = state.activeCall;
+      const isNavigating = state.isNavigatingToMeeting;
+
+      // 1. Navigate **once** to Meeting when a call starts
       if ((currentStatus === 'dialing' || currentStatus === 'connecting' || currentStatus === 'connected') && activeCall) {
-        console.log('[App] Auto-navigating to Meeting screen due to call status:', currentStatus);
-        
-        // Only navigate if we're not already on the Meeting screen
-        const currentRoute = getCurrentRoute();
-        if (currentRoute?.name !== 'Meeting') {
+        // Avoid repeated navigations if we already triggered one
+        if (!isNavigating) {
+          console.log('[App] Navigating to Meeting screen (first time) because call status =', currentStatus);
+          callActions.setNavigatingToMeeting(true);
+
           try {
             navigateWithRetry('Main', {
               screen: 'Meeting',
@@ -355,38 +358,53 @@ const AppNavigator = () => {
                 callType: activeCall.callType,
                 isInitiator: activeCall.isInitiator,
                 recipientName: activeCall.isInitiator ? activeCall.recipientName : activeCall.callerName,
-                callData: activeCall
-              }
+                callData: activeCall,
+              },
             });
           } catch (error) {
             console.error('[App] Error navigating to Meeting screen:', error);
+            // Roll back flag so we can retry if needed
+            callActions.setNavigatingToMeeting(false);
           }
         }
       }
-      
-      // Auto-navigate back to TipCall when call ends
+
+      // 2. When the call fully ends, release the navigation guard and return to TipCall
       if (currentStatus === 'ended' || currentStatus === 'idle') {
-        console.log('[App] Auto-navigating back to TipCall due to call status:', currentStatus);
-        // Only navigate back if we're currently on the Meeting screen
+        // Reset guard *before* navigating back so future calls can navigate again
+        if (isNavigating) {
+          callActions.setNavigatingToMeeting(false);
+        }
+
         const currentRoute = getCurrentRoute();
         if (currentRoute?.name === 'Meeting') {
+          console.log('[App] Navigating back to TipCall because call status =', currentStatus);
           try {
-            // Use a delay to ensure proper cleanup
             setTimeout(() => {
-              navigateWithRetry('Main', { 
-                screen: 'TipCall', 
-                params: {} 
-              });
-            }, 500);
-          } catch (error) {
-            console.error('[App] Error navigating back to TipCall:', error);
+              try {
+                navigateWithRetry('Main', { screen: 'TipCall', params: {} });
+              } catch (navError) {
+                console.error('[App] Inner navigation error:', navError);
+                // Fallback – hard reset stack
+                try {
+                  navigationRef.current?.reset({
+                    index: 0,
+                    routes: [{ name: 'Main', params: { screen: 'TipCall' } }],
+                  });
+                } catch (resetError) {
+                  console.error('[App] Navigation reset failed as well:', resetError);
+                }
+              }
+            }, 1000); // Wait for cleanup to finish
+          } catch (err) {
+            console.error('[App] Error navigating back to TipCall:', err);
           }
         }
       }
     });
 
     return unsubscribe;
-  }, []);
+  }, [callActions]);
 
   useEffect(() => {
     // Listen for native call actions (answer/decline)
@@ -403,7 +421,8 @@ const AppNavigator = () => {
         // if (callDetails) { UnifiedCallService.getInstance().handleIncomingCall(callDetails); }
         console.log('[App] Native answered call, sessionId:', event.sessionId);
       } else if (event.action === 'DECLINE') {
-        UnifiedCallService.getInstance().endCall('declined');
+        // Use Zustand store actions instead of direct service call
+        callActions.endCall('declined');
       }
     });
     return () => {
@@ -431,6 +450,13 @@ const AppNavigator = () => {
 function App(): React.JSX.Element {
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
+  const { colors } = useTheme();
+  const callRef = useRef<string | null>(null);
+  const tabRouteRef = useRef<string | null>(null);
+  const [initialRoute, setInitialRoute] = useState<string | undefined>();
+
+  // Add hooks for FCM call handling 
+  useFcmCallHandlers();
 
   // Initialize AdMob SDK in background
   useEffect(() => {
