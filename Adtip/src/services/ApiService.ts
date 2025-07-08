@@ -2350,4 +2350,40 @@ static async createSubscriptionTest(plan_id: string, user_id: number): Promise<a
   static async getTargetProfessions(): Promise<any> {
     return this.get('/api/gettargetprofession');
   }
+
+  // Voice Call APIs (New subscription-based system)
+  static async initiateVoiceCall(data: {
+    callerId: number;
+    receiverId: number;
+    action: 'start' | 'end' | 'missed';
+    callId?: number;
+  }): Promise<any> {
+    return this.post('/api/voice-call', data);
+  }
+
+  static async getVoiceCallBalance(userId: number): Promise<any> {
+    return this.get(`/api/voice-call/balance/${userId}`);
+  }
+
+  static async getVoiceCallHistory(userId: number, page: number = 1, limit: number = 10): Promise<any> {
+    return this.get(`/api/voice-call/history/${userId}?page=${page}&limit=${limit}`);
+  }
+
+  // Video Call APIs (New subscription-based system)
+  static async initiateVideoCall(data: {
+    callerId: number;
+    receiverId: number;
+    action: 'start' | 'end' | 'missed';
+    callId?: number;
+  }): Promise<any> {
+    return this.post('/api/video-call', data);
+  }
+
+  static async getVideoCallBalance(userId: number): Promise<any> {
+    return this.get(`/api/video-call/balance/${userId}`);
+  }
+
+  static async getVideoCallHistory(userId: number, page: number = 1, limit: number = 10): Promise<any> {
+    return this.get(`/api/video-call/history/${userId}?page=${page}&limit=${limit}`);
+  }
 }

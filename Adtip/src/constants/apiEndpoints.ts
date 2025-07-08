@@ -58,6 +58,16 @@ export const TIP_CALLS_ENDPOINTS = {
   VIDEOSDK_CREATE_MEETING: '/api/create-meeting/videosdk',
   VIDEOSDK_DEACTIVATE_ROOM: '/api/deactivate-room/videosdk',
   VIDEOSDK_VALIDATE_MEETING: '/api/validate-meeting/videosdk',
+  
+  // New Voice Call endpoints (subscription-based)
+  VOICE_CALL: '/api/voice-call',
+  VOICE_CALL_BALANCE: '/api/voice-call/balance', // + '/:userId'
+  VOICE_CALL_HISTORY: '/api/voice-call/history', // + '/:userId'
+  
+  // New Video Call endpoints (subscription-based)
+  VIDEO_CALL: '/api/video-call',
+  VIDEO_CALL_BALANCE: '/api/video-call/balance', // + '/:userId'
+  VIDEO_CALL_HISTORY: '/api/video-call/history', // + '/:userId'
 };
 
 // Firebase Cloud Functions endpoints
