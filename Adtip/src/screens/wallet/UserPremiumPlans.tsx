@@ -8,7 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import WalletService from '../../services/WalletService';
 import ApiService from '../../services/ApiService';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
-import { usePremiumStatus } from '../../hooks/useQueries';
+import { useSubscriptionStatus } from '../../hooks/useQueries';
 
 const { width } = Dimensions.get('window');
 
@@ -32,18 +32,22 @@ const UserPremiumPlans: React.FC<{ isPremiumProp?: boolean }> = ({ isPremiumProp
   const [isPremium, setIsPremium] = useState<boolean>(isPremiumProp ?? false);
   const [premiumLoading, setPremiumLoading] = useState(!isPremiumProp);
   const [premiumPlan, setPremiumPlan] = useState<any>(null);
-  const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [subscription, setSubscription] = useState<any>(null);
-  const [isCancelling, setIsCancelling] = useState(false);
+
+  // Content Creator Premium states
+  const [isContentPremium, setIsContentPremium] = useState<boolean>(false);
+  const [contentPremiumLoading, setContentPremiumLoading] = useState(true);
+  const [contentPremiumPlan, setContentPremiumPlan] = useState<any>(null);
+  const [contentPremiumError, setContentPremiumError] = useState('');
 
   // Use TanStack Query for premium status when no prop is provided
   const {
     data: premiumResponse,
     isLoading: premiumQueryLoading,
     error: premiumQueryError,
-  } = usePremiumStatus(user?.id || 0);
+  } = useSubscriptionStatus(user?.id || 0);
 
   // Fetch premium status if not provided as prop
   useEffect(() => {
@@ -74,10 +78,6 @@ const UserPremiumPlans: React.FC<{ isPremiumProp?: boolean }> = ({ isPremiumProp
     }
   }, [isPremiumProp, premiumResponse, premiumQueryLoading, premiumQueryError]);
 
-  useEffect(() => {
-    fetchData();
-  }, [user]);
-
   const fetchData = async () => {
     if (!user?.id) {
       setError('User not authenticated');
@@ -87,17 +87,9 @@ const UserPremiumPlans: React.FC<{ isPremiumProp?: boolean }> = ({ isPremiumProp
     setLoading(true);
     setError('');
     try {
-      // Fetch both legacy plans and new subscription status
-      const [plansResponse, subResponse] = await Promise.all([
-        ApiService.getUserPremiumPlans(user.id),
-        ApiService.getSubscriptionStatus(user.id).catch(e => e) // Catch error if no subscription
-      ]);
+      // Only fetch new subscription status
+      const subResponse = await ApiService.getSubscriptionStatus(user.id);
 
-      if (plansResponse.status === true || plansResponse.status === 200) {
-        const filtered = (plansResponse.data || []).filter((p: any) => p.status === 'active' || p.status === 'queued');
-        setPlans(filtered.sort((a: any, b: any) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()));
-      }
-      
       if (subResponse?.status === true || subResponse?.status === 200) {
         setSubscription(subResponse.data);
       }
@@ -109,31 +101,39 @@ const UserPremiumPlans: React.FC<{ isPremiumProp?: boolean }> = ({ isPremiumProp
     }
   };
 
-  const handleCancelSubscription = async () => {
-    Alert.alert(
-      "Cancel Subscription",
-      "Are you sure you want to cancel? Your premium benefits will continue until the end of the current billing period.",
-      [
-        { text: "Don't Cancel", style: "cancel" },
-        { text: "Yes, Cancel", style: "destructive", onPress: async () => {
-          setIsCancelling(true);
-          try {
-            const response = await ApiService.cancelSubscription(user?.id || 0);
-            if (response.status) {
-              Alert.alert("Success", "Your subscription has been scheduled for cancellation.");
-              fetchData(); // Refresh data
-            } else {
-              Alert.alert("Error", response.message || "Could not cancel subscription.");
-            }
-          } catch (error: any) {
-            Alert.alert("Error", error.message || "An error occurred during cancellation.");
-          } finally {
-            setIsCancelling(false);
-          }
-        }}
-      ]
-    );
+  const fetchContentPremiumData = async () => {
+    if (!user?.id) {
+      setContentPremiumError('User not authenticated');
+      setContentPremiumLoading(false);
+      return;
+    }
+    setContentPremiumLoading(true);
+    setContentPremiumError('');
+    try {
+      const contentPremiumResponse = await ApiService.getContentPremiumStatus(user.id);
+
+      if (contentPremiumResponse?.status === true || contentPremiumResponse?.status === 200) {
+        const isContentPremiumActive = !contentPremiumResponse.data?.is_premium_expired;
+        setIsContentPremium(isContentPremiumActive);
+        setContentPremiumPlan(isContentPremiumActive ? contentPremiumResponse.data : null);
+      } else {
+        setIsContentPremium(false);
+        setContentPremiumPlan(null);
+      }
+
+    } catch (err: any) {
+      setContentPremiumError(err.message || 'Failed to fetch content premium data');
+      setIsContentPremium(false);
+      setContentPremiumPlan(null);
+    } finally {
+      setContentPremiumLoading(false);
+    }
   };
+
+  useEffect(() => {
+    fetchData();
+    fetchContentPremiumData();
+  }, [user]);
 
   const renderSubscriptionCard = () => (
     <LinearGradient
@@ -149,27 +149,44 @@ const UserPremiumPlans: React.FC<{ isPremiumProp?: boolean }> = ({ isPremiumProp
           {subscription.status === 'active' ? `Renews on: ${formatDate(subscription.current_end_at)}` : `Cancelled`}
         </Text>
       </View>
-      {subscription.status === 'active' && (
-        <TouchableOpacity 
-          style={[styles.cancelButton, {backgroundColor: isDarkMode ? 'rgba(255, 80, 80, 0.1)' : 'rgba(255, 80, 80, 0.15)'}]} 
-          onPress={handleCancelSubscription}
-          disabled={isCancelling}
-        >
-          {isCancelling ? <ActivityIndicator color={colors.error} size="small" /> : <Text style={{ color: colors.error }}>Cancel Subscription</Text>}
-        </TouchableOpacity>
-      )}
+    </LinearGradient>
+  );
+
+  const renderContentPremiumCard = () => (
+    <LinearGradient
+        colors={isDarkMode ? ['#434343', '#2a2a2a'] : ['#F0F0F0', '#E0E0E0']}
+        style={[styles.planBar, { borderColor: contentPremiumPlan.status === 'active' ? PLAN_STATUS_COLORS.active : colors.border }]}
+    >
+      <View style={styles.planBarRow}>
+        <Text style={[styles.planName, { color: isDarkMode ? colors.text.primary : colors.primary }]}>{contentPremiumPlan.plan_name || 'Content Creator Premium'}</Text>
+        <Text style={[styles.status, { color: PLAN_STATUS_COLORS[contentPremiumPlan.status] || colors.primary }]}>{contentPremiumPlan.status.toUpperCase()}</Text>
+      </View>
+      <View style={styles.planBarRow}>
+        <Text style={[styles.expiry, { color: colors.text.secondary }]}>
+          {contentPremiumPlan.status === 'active' ? `Renews on: ${formatDate(contentPremiumPlan.current_end_at)}` : `Cancelled`}
+        </Text>
+      </View>
     </LinearGradient>
   );
 
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? colors.background : '#fff' }] }>
+      <View style={[styles.sectionDivider, { borderBottomColor: isDarkMode ? colors.border : '#E0E0E0' }]} />
       <Text style={[styles.title, { color: isDarkMode ? colors.primary : colors.secondary }]}>My Premium Plans</Text>
+      
+      <TouchableOpacity
+        style={[styles.upgradeBtn, { backgroundColor: colors.primary, marginBottom: 24 }]}
+        onPress={() => navigation.navigate('PremiumUser' as never)}
+      >
+        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Upgrade Premium</Text>
+      </TouchableOpacity>
+      
       {premiumLoading ? (
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 32 }} />
       ) : error ? (
         <Text style={{ color: colors.error, marginTop: 24 }}>{error}</Text>
       ) : isPremium && premiumPlan && premiumPlan.end_time ? (
-        // Show premium active banner when premium is detected from check-premium API
+        // Show premium active banner when premium is detected from subscription status API
         <LinearGradient
           colors={['#4CAF50', '#45A049']}
           style={[styles.planBar, { borderColor: '#4CAF50' }]}
@@ -184,7 +201,7 @@ const UserPremiumPlans: React.FC<{ isPremiumProp?: boolean }> = ({ isPremiumProp
             </Text>
           </View>
         </LinearGradient>
-      ) : plans.length === 0 && !subscription ? (
+      ) : !subscription ? (
         <LinearGradient
           colors={GOLD_GRADIENT}
           style={[styles.noPlanBar, { borderColor: GOLD_GRADIENT[0] }]}
@@ -196,30 +213,54 @@ const UserPremiumPlans: React.FC<{ isPremiumProp?: boolean }> = ({ isPremiumProp
       ) : (
         <ScrollView style={{ width: '100%' }} contentContainerStyle={{ alignItems: 'center', paddingBottom: 24 }}>
           {subscription && renderSubscriptionCard()}
-          {plans.map((plan, idx) => (
-            <LinearGradient
-              key={plan.id}
-              colors={isDarkMode ? ['#232526', '#414345'] : ['#EAFBE3', '#E0F5D9']}
-              style={[styles.planBar, { borderColor: PLAN_STATUS_COLORS[plan.status] || colors.primary }]}
-            >
-              <View style={styles.planBarRow}>
-                <Text style={[styles.planName, { color: isDarkMode ? colors.text.primary : colors.primary }]}>{plan.plan_name}</Text>
-                <Text style={[styles.status, { color: PLAN_STATUS_COLORS[plan.status] || colors.primary }]}>{plan.status.toUpperCase()}</Text>
-              </View>
-              <View style={styles.planBarRow}>
-                <Text style={[styles.expiry, { color: colors.text.secondary }]}>Expiry: {formatDate(plan.end_time)}</Text>
-                <Text style={[styles.price, { color: isDarkMode ? colors.text.tertiary : colors.text.secondary }]}>₹{plan.actual_price}</Text>
-              </View>
-            </LinearGradient>
-          ))}
         </ScrollView>
       )}
+
+      {/* Content Creator Premium Section */}
+      <View style={[styles.sectionDivider, { borderBottomColor: isDarkMode ? colors.border : '#E0E0E0', marginTop: 32 }]} />
+      <Text style={[styles.title, { color: isDarkMode ? colors.primary : colors.secondary }]}>My Content Creator Plans</Text>
+      
       <TouchableOpacity
-        style={[styles.upgradeBtn, { backgroundColor: colors.primary, marginTop: 24 }]}
-        onPress={() => navigation.navigate('SubscriptionScreen' as never)}
+        style={[styles.upgradeBtn, { backgroundColor: colors.primary, marginBottom: 24 }]}
+        onPress={() => navigation.navigate('ContentCreatorPremium' as never)}
       >
-        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Upgrade Premium</Text>
+        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Upgrade Content Creator</Text>
       </TouchableOpacity>
+      
+      {contentPremiumLoading ? (
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 32 }} />
+      ) : contentPremiumError ? (
+        <Text style={{ color: colors.error, marginTop: 24 }}>{contentPremiumError}</Text>
+      ) : isContentPremium && contentPremiumPlan && contentPremiumPlan.end_time ? (
+        // Show content premium active banner when premium is detected
+        <LinearGradient
+          colors={['#4CAF50', '#45A049']}
+          style={[styles.planBar, { borderColor: '#4CAF50' }]}
+        >
+          <View style={styles.planBarRow}>
+            <Text style={[styles.planName, { color: '#FFFFFF' }]}>✨ Content Creator Premium Active</Text>
+            <Text style={[styles.status, { color: '#FFFFFF' }]}>ACTIVE</Text>
+          </View>
+          <View style={styles.planBarRow}>
+            <Text style={[styles.expiry, { color: 'rgba(255, 255, 255, 0.9)' }]}>
+              Expires: {formatPremiumExpiryDate(contentPremiumPlan.end_time)}
+            </Text>
+          </View>
+        </LinearGradient>
+      ) : !contentPremiumPlan ? (
+        <LinearGradient
+          colors={GOLD_GRADIENT}
+          style={[styles.noPlanBar, { borderColor: GOLD_GRADIENT[0] }]}
+        >
+          <Text style={styles.crownIcon}>🎬</Text>
+          <Text style={styles.noPlanText}>No active content creator plans</Text>
+          <Text style={styles.noPlanSubText}>Activate to get content creator features!</Text>
+        </LinearGradient>
+      ) : (
+        <ScrollView style={{ width: '100%' }} contentContainerStyle={{ alignItems: 'center', paddingBottom: 24 }}>
+          {contentPremiumPlan && renderContentPremiumCard()}
+        </ScrollView>
+      )}
     </View>
   );
 };
@@ -304,11 +345,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '600',
   },
-  cancelButton: {
-    marginTop: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
+  sectionDivider: {
+    width: '100%',
+    marginBottom: 16,
+    borderBottomWidth: 1,
+  },
+  transactionsContainer: {
+    width: width * 0.9,
+    borderRadius: 18,
+    padding: 18,
+    marginVertical: 10,
+    borderWidth: 2,
+    elevation: 2,
+  },
+  transactionsText: {
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });
 

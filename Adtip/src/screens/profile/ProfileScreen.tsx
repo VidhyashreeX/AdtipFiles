@@ -41,7 +41,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 
 // Hooks
-import { useChannelData, usePremiumStatus } from '../../hooks/useQueries';
+import { useChannelData, useSubscriptionStatus } from '../../hooks/useQueries';
 
 // Constants
 import { API_BASE_URL, API_ENDPOINTS } from '../../constants/api';
@@ -175,7 +175,7 @@ const ProfileScreen: React.FC = () => {
     data: premiumResponse,
     isLoading: premiumLoading,
     error: premiumError,
-  } = usePremiumStatus(currentUser?.id || 0);
+  } = useSubscriptionStatus(currentUser?.id || 0);
 
   // Default profile image
   const DEFAULT_PROFILE_IMAGE = 'https://via.placeholder.com/150';

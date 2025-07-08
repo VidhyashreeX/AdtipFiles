@@ -98,7 +98,7 @@ export const useWalletBalance = (userId: string | number) => {
 export const usePremiumStatus = (userId: string | number) => {
   return useQuery({
     queryKey: ['premium', 'status', userId],
-    queryFn: () => ApiService.checkPremium(Number(userId)),
+    queryFn: () => ApiService.getSubscriptionStatus(Number(userId)),
     enabled: !!userId,
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: (failureCount, error: any) => {
@@ -115,16 +115,6 @@ export const useAdPassbook = (userId: string | number) => {
     queryFn: () => ApiService.getAdPassbook(Number(userId)),
     enabled: !!userId,
     staleTime: 10 * 60 * 1000, // 10 minutes
-  });
-};
-
-// User Premium Plans Hook
-export const useUserPremiumPlans = (userId: string | number) => {
-  return useQuery({
-    queryKey: ['premium', 'plans', userId],
-    queryFn: () => ApiService.getUserPremiumPlans(Number(userId)),
-    enabled: !!userId,
-    staleTime: 15 * 60 * 1000, // 15 minutes
   });
 };
 

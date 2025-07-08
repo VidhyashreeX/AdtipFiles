@@ -1712,11 +1712,11 @@ export default class ApiService {
   // ===== PREMIUM PLAN APIS =====
 
   /**
-   * Get user premium plans
+   * Get user premium plans - DEPRECATED: Use getSubscriptionStatus instead
    */
-  static async getUserPremiumPlans(userId: number): Promise<any> {
-    return this.get(`/api/user-premium-plans/${userId}`);
-  }
+  // static async getUserPremiumPlans(userId: number): Promise<any> {
+  //   return this.get(`/api/user-premium-plans/${userId}`);
+  // }
 
   /**
    * Get content premium plans

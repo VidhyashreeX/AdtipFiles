@@ -21,7 +21,7 @@ import RazorpayCheckout from 'react-native-razorpay';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useWalletBalance, usePremiumStatus, useWithdrawalRequests } from '../../hooks/useQueries';
+import { useWalletBalance, useSubscriptionStatus, useWithdrawalRequests } from '../../hooks/useQueries';
 import ApiService from '../../services/ApiService';
 import Header from '../../components/common/Header';
 import ScreenTransition from '../../components/common/ScreenTransition';
@@ -94,7 +94,7 @@ const WalletScreen = () => {
     data: premiumData,
     isLoading: premiumLoading,
     error: premiumErrorQuery,
-  } = usePremiumStatus(user?.id || 0);
+  } = useSubscriptionStatus(user?.id || 0);
 
   const {
     data: withdrawalData,
