@@ -872,7 +872,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
                 onClose={() => setShowInstallToEarnPopup(false)}
                 onUpgrade={() => {
                   setShowInstallToEarnPopup(false);
-                  navigation.navigate('PremiumUserScreen' as never);
+                  navigation.navigate('PremiumUser' as never);
                 }}
               />
             </>
