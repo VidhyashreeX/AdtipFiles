@@ -41,6 +41,7 @@ import {
   getFallbackThumbnailUrl 
 } from '../../utils/mediaUtils';
 import BannerAdComponent from '../../googleads/BannerAdComponent';
+import RectangleAdComponent from '../../googleads/RectangleAdComponent';
 import ApiService from '../../services/ApiService';
 import ContentCreatorPlanToggle from '../../components/common/ContentCreatorPlanToggle';
 import VideoCommentsModal from '../../components/tiptube/VideoCommentsModal';
@@ -546,43 +547,50 @@ const TipTubeScreen = () => {
 
   // Render category header
   const renderCategoryHeader = useCallback(() => (
-    <View style={styles.categoryContainer}>
-      {searchQuery && searchQuery.trim() && (
-        <View style={styles.searchIndicator}>
-          <Icon name="search" size={16} color={colors.primary} />
-          <Text style={[styles.searchIndicatorText, {color: colors.primary}]}>
-            Search results for "{searchQuery.trim()}"
-          </Text>
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Icon name="x" size={16} color={colors.text.secondary} />
-          </TouchableOpacity>
-        </View>
-      )}
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={categories}
-        keyExtractor={(item) => item.name}
-        contentContainerStyle={styles.categoryScrollContent}
-        renderItem={({ item, index }) => (
-          <Animated.View entering={FadeIn.delay(index * 30).duration(200)}>
-            <TouchableOpacity
-              onPress={() => handleCategoryChange(item.name)}
-              style={[
-                styles.categoryButton,
-                selectedCategory === item.name && styles.selectedCategoryButton
-              ]}
-            >
-              <Text style={[
-                styles.categoryButtonText,
-                selectedCategory === item.name && styles.selectedCategoryButtonText
-              ]}>
-                {item.icon || ''} {item.name || ''}
-              </Text>
+    <View>
+      {/* Banner ad at the top */}
+      <View style={styles.adContainer}>
+        <BannerAdComponent />
+      </View>
+      
+      <View style={styles.categoryContainer}>
+        {searchQuery && searchQuery.trim() && (
+          <View style={styles.searchIndicator}>
+            <Icon name="search" size={16} color={colors.primary} />
+            <Text style={[styles.searchIndicatorText, {color: colors.primary}]}>
+              Search results for "{searchQuery.trim()}"
+            </Text>
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Icon name="x" size={16} color={colors.text.secondary} />
             </TouchableOpacity>
-          </Animated.View>
+          </View>
         )}
-      />
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={categories}
+          keyExtractor={(item) => item.name}
+          contentContainerStyle={styles.categoryScrollContent}
+          renderItem={({ item, index }) => (
+            <Animated.View entering={FadeIn.delay(index * 30).duration(200)}>
+              <TouchableOpacity
+                onPress={() => handleCategoryChange(item.name)}
+                style={[
+                  styles.categoryButton,
+                  selectedCategory === item.name && styles.selectedCategoryButton
+                ]}
+              >
+                <Text style={[
+                  styles.categoryButtonText,
+                  selectedCategory === item.name && styles.selectedCategoryButtonText
+                ]}>
+                  {item.icon || ''} {item.name || ''}
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+        />
+      </View>
     </View>
   ), [selectedCategory, styles, handleCategoryChange, searchQuery, colors.primary, colors.text.secondary]);
 
@@ -606,10 +614,10 @@ const TipTubeScreen = () => {
           toggleComments(item.id);
         }}
       />
-      {/* Banner ad every 3 videos */}
+      {/* Rectangle ad every 3 videos */}
       {(index + 1) % 3 === 0 && (
-        <View style={styles.adContainer}>
-          <BannerAdComponent />
+        <View style={styles.rectangleAdContainer}>
+          <RectangleAdComponent />
         </View>
       )}
     </>
@@ -845,6 +853,16 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
     flexGrow: 1,
   },
   adContainer: {
+    backgroundColor: colors.background,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginVertical: 8,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderTopColor: colors.border,
+    borderBottomColor: colors.border,
+  },
+  rectangleAdContainer: {
     backgroundColor: colors.background,
     paddingVertical: 12,
     paddingHorizontal: 16,

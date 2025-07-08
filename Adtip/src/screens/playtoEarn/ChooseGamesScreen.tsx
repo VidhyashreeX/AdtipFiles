@@ -14,11 +14,10 @@ const ChooseGameScreen: React.FC<Props> = ({ navigation }) => {
     <View style={[styles.container, { backgroundColor: colors.background }]}> 
       <Text style={[styles.title, { color: typeof colors.primary === 'string' ? colors.primary : '#24d05a' }]}>Choose a Game</Text>
       <TouchableOpacity
-        style={[styles.card, { backgroundColor: colors.primary }]}
-        onPress={() => navigation.navigate('LudoGame')}
-        activeOpacity={0.8}
+        style={[styles.card, { backgroundColor: colors.primary, opacity: 0.5 }]}
+        disabled
       >
-        <Text style={[styles.cardText, { color: '#fff' }]}>🎲 Ludo Game</Text>
+        <Text style={[styles.cardText, { color: '#fff' }]}>🎲 Ludo Game (Coming Soon)</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={[styles.card, { backgroundColor: colors.card, opacity: 0.5 }]}

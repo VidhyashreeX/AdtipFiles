@@ -61,6 +61,7 @@ import PostItemSkeleton from '../../components/skeletons/PostItemSkeleton';
 
 // Google Ads
 import BannerAdComponent from '../../googleads/BannerAdComponent';
+import RectangleAdComponent from '../../googleads/RectangleAdComponent';
 
 // Debug utilities
 import { generateVideoDebugReport } from '../../utils/debugUtils';
@@ -607,9 +608,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   }, []);
 
   const handleAddStoryPress = useCallback(() => {
-    console.log('Add story pressed');
-    // Navigate instantly
-    // navigation.navigate('StoryCreator');
+    Alert.alert('Coming Soon', 'The Add Story feature is coming soon!');
   }, []);
 
   const handleWatchAndEarn = useCallback(() => {
@@ -762,7 +761,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           onFollow={handleUserFollow}
         />
         
-
+        {/* Rectangle ad after every 3rd post (starting from post 2) */}
+        {(index + 1) % 3 === 0 && index > 0 && (
+          <View style={styles.rectangleAdContainer}>
+            <RectangleAdComponent />
+          </View>
+        )}
       </>
     );
   }, [visiblePostIds, getTimeAgo, handlePostLike, handleCommentPress, handleUserProfilePress, handleUserFollow, styles, isGloballyMuted, handleToggleGlobalMute]);
@@ -1046,6 +1050,14 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
 
   // Banner ad
   stickyBannerContainer: {
+    backgroundColor: colors.surface,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  
+  // Rectangle ad
+  rectangleAdContainer: {
     backgroundColor: colors.surface,
     paddingVertical: 8,
     borderBottomWidth: 1,
