@@ -1037,7 +1037,7 @@ const ProfileScreen: React.FC = () => {
             </View>
             <TouchableOpacity
               style={styles.upgradeButton}
-              onPress={() => navigation.navigate('SubscriptionScreen' as never)}
+              onPress={() => navigation.navigate('PremiumUser' as never)}
               activeOpacity={0.8}
             >
               <Text style={styles.upgradeButtonText}>Upgrade</Text>

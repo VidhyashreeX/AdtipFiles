@@ -537,7 +537,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
               <Text style={styles.premiumTitle}>Upgrade to Premium</Text>
               <Text style={styles.premiumSubtitle}>Earn More Now!</Text>
             </View>
-            <TouchableOpacity style={styles.upgradeButton} onPress={() => navigation.navigate('SubscriptionScreen' as never)} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.upgradeButton} onPress={() => navigation.navigate('PremiumUser' as never)} activeOpacity={0.8}>
               <Text style={styles.upgradeButtonText}>Upgrade</Text>
             </TouchableOpacity>
           </LinearGradient>
@@ -555,7 +555,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
                 {premiumData?.end_time ? `Expires: ${formatPremiumExpiryDate(premiumData.end_time)}` : 'Premium Features Unlocked'}
               </Text>
             </View>
-            <TouchableOpacity style={styles.upgradeButton} onPress={() => navigation.navigate('SubscriptionScreen' as never)} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.upgradeButton} onPress={() => navigation.navigate('PremiumUser' as never)} activeOpacity={0.8}>
               <Text style={styles.upgradeButtonText}>Manage</Text>
             </TouchableOpacity>
           </LinearGradient>
