@@ -196,10 +196,16 @@ const ProfileScreen: React.FC = () => {
     isLoading: premiumLoading,
   } = usePremiumStatus(currentUser?.id || 0);
 
-  // Set channel ID when data is available
+  // Set channel ID when data is available - match TipTubeScreen structure
   useEffect(() => {
-    if (channelResponse?.data) {
-      setUserChannelId(String(channelResponse.data.channelId || ''));
+    console.log('[ProfileScreen] Channel response changed:', channelResponse);
+    if (channelResponse?.status === 200 && channelResponse?.data?.length > 0) {
+      const channelId = String(channelResponse.data[0].channelId);
+      console.log('[ProfileScreen] Setting userChannelId to:', channelId);
+      setUserChannelId(channelId);
+    } else {
+      console.log('[ProfileScreen] No valid channel data found');
+      setUserChannelId(null);
     }
   }, [channelResponse]);
 
@@ -404,15 +410,18 @@ const ProfileScreen: React.FC = () => {
       console.log(`[ProfileScreen] Cloudflare upload result:`, uploadResult);
 
       if (uploadResult.success && uploadResult.url) {
+        console.log(`[ProfileScreen] Upload successful, URL: ${uploadResult.url}`);
+        
+        // Store locally for persistence FIRST
+        await AsyncStorage.setItem(`${type}_${currentUser.id}`, uploadResult.url);
+        console.log(`[ProfileScreen] Stored ${type} image in AsyncStorage`);
+
         // Update local state immediately for UI feedback
         if (type === 'avatar') {
           setProfileImage(uploadResult.url);
         } else {
           setBannerImage(uploadResult.url);
         }
-
-        // Store locally for persistence
-        await AsyncStorage.setItem(`${type}_${currentUser.id}`, uploadResult.url);
 
         if (type === 'avatar') {
           // Use ApiService.saveUserDetails for profile image update
@@ -470,20 +479,36 @@ const ProfileScreen: React.FC = () => {
     }
   };
 
-  // Load stored images on mount and initialize from user data
+  // Load stored images on mount and when user changes
   useEffect(() => {
     const loadStoredImages = async () => {
       if (!currentUser) return;
 
       try {
+        console.log(`[ProfileScreen] Loading stored images for user ${currentUser.id}`);
         const [storedAvatar, storedBanner] = await Promise.all([
           AsyncStorage.getItem(`avatar_${currentUser.id}`),
           AsyncStorage.getItem(`banner_${currentUser.id}`),
         ]);
 
+        console.log(`[ProfileScreen] Stored images:`, { storedAvatar, storedBanner });
+
         // Set stored images if available, otherwise use user data
-        setProfileImage(storedAvatar || currentUser.profile_image || null);
-        setBannerImage(storedBanner || currentUser.banner_image || null);
+        if (storedAvatar) {
+          console.log(`[ProfileScreen] Setting stored avatar: ${storedAvatar}`);
+          setProfileImage(storedAvatar);
+        } else if (currentUser.profile_image) {
+          console.log(`[ProfileScreen] Using user profile image: ${currentUser.profile_image}`);
+          setProfileImage(currentUser.profile_image);
+        }
+
+        if (storedBanner) {
+          console.log(`[ProfileScreen] Setting stored banner: ${storedBanner}`);
+          setBannerImage(storedBanner);
+        } else if (currentUser.banner_image) {
+          console.log(`[ProfileScreen] Using user banner image: ${currentUser.banner_image}`);
+          setBannerImage(currentUser.banner_image);
+        }
       } catch (error) {
         console.error('Error loading stored images:', error);
         // Fallback to user data
@@ -493,7 +518,7 @@ const ProfileScreen: React.FC = () => {
     };
 
     loadStoredImages();
-  }, [currentUser]);
+  }, [currentUser?.id]); // Changed dependency to currentUser.id
 
   // Navigation handlers
   const handleEditProfile = () => navigation.navigate('EditProfile');
@@ -502,9 +527,15 @@ const ProfileScreen: React.FC = () => {
   const handleViewFollowers = () => navigation.navigate('FollowersList', { userId: Number(userId) });
   const handleViewFollowing = () => navigation.navigate('FollowingsList', { userId: Number(userId) });
   const handleAnalytics = () => {
+    console.log('[ProfileScreen] handleAnalytics called');
+    console.log('[ProfileScreen] userChannelId:', userChannelId);
+    console.log('[ProfileScreen] channelResponse:', channelResponse);
+    
     if (userChannelId) {
+      console.log('[ProfileScreen] Navigating to Analytics with channelId:', userChannelId);
       navigation.navigate('Analytics', { channelId: userChannelId });
     } else {
+      console.log('[ProfileScreen] No channel ID available, showing alert');
       Alert.alert('No Channel', 'Please create a channel first to view analytics.');
     }
   };
@@ -556,8 +587,8 @@ const ProfileScreen: React.FC = () => {
   const HeaderDropdownMenu = () => {
     const menuItems = [
       { icon: 'settings', title: 'Settings', onPress: () => { handleSettings(); setShowMoreMenu(false); } },
-      { icon: 'tv', title: 'Create Channel', onPress: () => { handleCreateChannel(); setShowMoreMenu(false); }, hidden: !!channelResponse?.data },
-      { icon: 'bar-chart-2', title: 'Analytics', onPress: () => { handleAnalytics(); setShowMoreMenu(false); }, hidden: !channelResponse?.data },
+      { icon: 'tv', title: 'Create Channel', onPress: () => { handleCreateChannel(); setShowMoreMenu(false); }, hidden: !!(channelResponse?.status === 200 && channelResponse?.data?.length > 0) },
+      { icon: 'bar-chart-2', title: 'Analytics', onPress: () => { handleAnalytics(); setShowMoreMenu(false); }, hidden: !(channelResponse?.status === 200 && channelResponse?.data?.length > 0) },
       { icon: 'dollar-sign', title: 'Earnings', onPress: () => { handleEarnings(); setShowMoreMenu(false); } },
       { icon: 'users', title: 'Referrals', onPress: () => { handleReferral(); setShowMoreMenu(false); } },
       { icon: 'package', title: 'Packages', onPress: () => { handlePackages(); setShowMoreMenu(false); } },
@@ -783,7 +814,7 @@ const ProfileScreen: React.FC = () => {
                   <Text style={styles.primaryButtonText}>Edit Profile</Text>
                 </TouchableOpacity>
                 
-                {channelResponse?.data && (
+                {channelResponse?.status === 200 && channelResponse?.data?.length > 0 && (
                   <TouchableOpacity 
                     style={[styles.secondaryButton, { borderColor: colors.border }]}
                     onPress={handleAnalytics}
