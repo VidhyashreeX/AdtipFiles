@@ -24,6 +24,7 @@ import { launchImageLibrary, MediaType } from 'react-native-image-picker';
 
 // Services
 import CloudflareUploadService from '../../services/CloudflareUploadService';
+import ApiService from '../../services/ApiService';
 
 // Components
 import Header from '../../components/common/Header';
@@ -53,7 +54,6 @@ import {
 
 // Constants
 import { API_BASE_URL, API_ENDPOINTS } from '../../constants/api';
-import ApiService from '../../services/ApiService';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
 
 // Define navigation param list
@@ -309,29 +309,58 @@ const ProfileScreen: React.FC = () => {
     setActiveTab(tab);
   };
 
-  // Image upload functions
-  const requestPermissions = async (): Promise<boolean> => {
+  // Image upload functions with proper permission handling
+  const requestStoragePermissions = async (): Promise<boolean> => {
     if (Platform.OS === 'android') {
       try {
-        const permissions = [
-          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-        ];
-        
-        const granted = await PermissionsAndroid.requestMultiple(permissions);
-        return Object.values(granted).every(permission => permission === PermissionsAndroid.RESULTS.GRANTED);
+        const permission = Platform.Version >= 33 
+          ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES
+          : PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE;
+
+        const result = await PermissionsAndroid.request(permission, {
+          title: 'Storage Permission Required',
+          message: 'This app needs access to your storage to select images.',
+          buttonNeutral: 'Ask Me Later',
+          buttonNegative: 'Cancel',
+          buttonPositive: 'OK',
+        });
+
+        if (result === PermissionsAndroid.RESULTS.GRANTED) {
+          return true;
+        } else if (result === PermissionsAndroid.RESULTS.DENIED) {
+          Alert.alert(
+            'Permission Required',
+            'Storage access is required to select images. Please try again.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Try Again', onPress: () => requestStoragePermissions() },
+            ]
+          );
+          return false;
+        } else if (result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+          Alert.alert(
+            'Permission Blocked',
+            'Storage permission has been permanently denied. Please enable it from Settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            ]
+          );
+          return false;
+        }
+        return false;
       } catch (err) {
         console.warn('Permission request error:', err);
+        Alert.alert('Permission Error', 'Failed to request permission. Please try again.');
         return false;
       }
     }
-    return true;
+    return true; // iOS permissions handled by react-native-image-picker
   };
 
   const selectImageFromGallery = async (type: 'avatar' | 'banner') => {
-    const hasPermission = await requestPermissions();
+    const hasPermission = await requestStoragePermissions();
     if (!hasPermission) {
-      Alert.alert('Permission Required', 'Please grant storage permissions to upload images.');
       return;
     }
 
@@ -363,43 +392,75 @@ const ProfileScreen: React.FC = () => {
         setIsUploadingBanner(true);
       }
 
-      // Upload to Cloudflare - using a mock implementation for now
-      let uploadedUrl: string | null = null;
-      try {
-        // Replace this with actual CloudflareUploadService.uploadImage when available
-        uploadedUrl = imageUri; // Temporary - use local URI
-      } catch (uploadError) {
-        console.error('Upload service error:', uploadError);
-        uploadedUrl = imageUri; // Fallback to local URI
-      }
+      // Upload to Cloudflare using proper service
+      console.log(`[ProfileScreen] Starting ${type} upload to Cloudflare...`);
+      const uploadResult = await CloudflareUploadService.uploadFile(
+        imageUri,
+        'images',
+        `${type}_${Date.now()}.jpg`,
+        Number(currentUser.id)
+      );
       
-      if (uploadedUrl) {
-        // Update local state immediately
+      console.log(`[ProfileScreen] Cloudflare upload result:`, uploadResult);
+
+      if (uploadResult.success && uploadResult.url) {
+        // Update local state immediately for UI feedback
         if (type === 'avatar') {
-          setProfileImage(uploadedUrl);
+          setProfileImage(uploadResult.url);
         } else {
-          setBannerImage(uploadedUrl);
+          setBannerImage(uploadResult.url);
         }
 
-        // Store locally
-        await AsyncStorage.setItem(`${type}_${currentUser.id}`, uploadedUrl);
+        // Store locally for persistence
+        await AsyncStorage.setItem(`${type}_${currentUser.id}`, uploadResult.url);
 
-        // Update user context - only update specific profile fields
-        try {
-          const profileUpdate = {
-            [type === 'avatar' ? 'profile_image' : 'banner_image']: uploadedUrl,
+        if (type === 'avatar') {
+          // Use ApiService.saveUserDetails for profile image update
+          const updateData = {
+            id: Number(currentUser.id),
+            name: currentUser.name || `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim(),
+            firstname: currentUser.firstName || '',
+            lastname: currentUser.lastName || '',
+            gender: currentUser.gender || '',
+            dob: currentUser.dob || "1990-01-01",
+            profile_image: uploadResult.url,
+            profession: currentUser.profession || '',
+            maternal_status: currentUser.maternal_status || '',
+            address: currentUser.address || '',
+            emailId: currentUser.emailId || '',
+            longitude: currentUser.longitude || "",
+            latitude: currentUser.latitude || "",
+            pincode: currentUser.pincode || "",
+            languages: 1,
+            interests: 3,
+            referal_code: ""
           };
-          await updateUserDetails(profileUpdate as any);
-        } catch (updateError) {
-          console.warn('User update error:', updateError);
-          // Continue even if context update fails
-        }
 
-        Alert.alert('Success', `${type === 'avatar' ? 'Profile' : 'Banner'} image updated successfully!`);
+          const apiResponse = await ApiService.saveUserDetails(updateData);
+          console.log(`[ProfileScreen] API response for ${type} update:`, apiResponse);
+          
+          if (apiResponse && (apiResponse.status === 200 || apiResponse.status === 1)) {
+            // Update user context if possible
+            try {
+              await updateUserDetails({ profile_image: uploadResult.url } as any);
+            } catch (updateError) {
+              console.warn('User context update error:', updateError);
+            }
+            
+            Alert.alert('Success', `${type === 'avatar' ? 'Profile picture' : 'Banner'} updated successfully!`);
+          } else {
+            Alert.alert('Update Failed', `Failed to update ${type} on server`);
+          }
+        } else {
+          // For banner, just show success since we don't have a specific API endpoint
+          Alert.alert('Success', 'Banner image updated successfully!');
+        }
+      } else {
+        Alert.alert('Upload Failed', uploadResult.error || `Failed to upload ${type} image`);
       }
-    } catch (error) {
-      console.error(`${type} upload error:`, error);
-      Alert.alert('Error', `Failed to upload ${type} image. Please try again.`);
+    } catch (error: any) {
+      console.error(`[ProfileScreen] ${type} upload error:`, error);
+      Alert.alert('Upload Failed', error.message || `Failed to upload ${type} image. Please try again.`);
     } finally {
       if (type === 'avatar') {
         setIsUploadingAvatar(false);
@@ -441,7 +502,11 @@ const ProfileScreen: React.FC = () => {
   const handleViewFollowers = () => navigation.navigate('FollowersList', { userId: Number(userId) });
   const handleViewFollowing = () => navigation.navigate('FollowingsList', { userId: Number(userId) });
   const handleAnalytics = () => {
-    if (userChannelId) navigation.navigate('Analytics', { channelId: userChannelId });
+    if (userChannelId) {
+      navigation.navigate('Analytics', { channelId: userChannelId });
+    } else {
+      Alert.alert('No Channel', 'Please create a channel first to view analytics.');
+    }
   };
   const handleEarnings = () => navigation.navigate('Earnings');
   const handlePackages = () => navigation.navigate('Packages');
@@ -460,8 +525,61 @@ const ProfileScreen: React.FC = () => {
     setCommentsVisible(true);
   };
 
-  // Premium functions
-  const handleBuyPremium = () => navigation.navigate('ChoosePackages');
+  // Premium Banner Component (matching HomeScreen style)
+  const PremiumBanner = () => {
+    if (premiumLoading || isPremium) return null;
+
+    return (
+      <View style={[styles.premiumContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+        <LinearGradient
+          colors={['#FFD700', '#FFB300']}
+          style={styles.premiumBanner}
+        >
+          <Text style={styles.crownIcon}>👑</Text>
+          <View style={styles.premiumTextContainer}>
+            <Text style={styles.premiumTitle}>Premium Plans</Text>
+            <Text style={styles.premiumSubtitle}>Unlock exclusive features!</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.upgradeButton}
+            onPress={() => navigation.navigate('ChoosePackages')}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.upgradeButtonText}>Upgrade</Text>
+          </TouchableOpacity>
+        </LinearGradient>
+      </View>
+    );
+  };
+
+  // Header Dropdown Menu Component (matching TipCallScreenSimple style)
+  const HeaderDropdownMenu = () => {
+    const menuItems = [
+      { icon: 'settings', title: 'Settings', onPress: () => { handleSettings(); setShowMoreMenu(false); } },
+      { icon: 'tv', title: 'Create Channel', onPress: () => { handleCreateChannel(); setShowMoreMenu(false); }, hidden: !!channelResponse?.data },
+      { icon: 'bar-chart-2', title: 'Analytics', onPress: () => { handleAnalytics(); setShowMoreMenu(false); }, hidden: !channelResponse?.data },
+      { icon: 'dollar-sign', title: 'Earnings', onPress: () => { handleEarnings(); setShowMoreMenu(false); } },
+      { icon: 'users', title: 'Referrals', onPress: () => { handleReferral(); setShowMoreMenu(false); } },
+      { icon: 'package', title: 'Packages', onPress: () => { handlePackages(); setShowMoreMenu(false); } },
+    ];
+
+    return (
+      <View style={[styles.headerDropdown, { backgroundColor: colors.surface }]}>
+        {menuItems.filter(item => !item.hidden).map((item, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.headerDropdownItem}
+            onPress={item.onPress}
+          >
+            <Icon name={item.icon} size={16} color={colors.text.primary} />
+            <Text style={[styles.headerDropdownText, { color: colors.text.primary }]}>
+              {item.title}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
   
   const openWhatsApp = () => {
     const phoneNumber = '+917073030000';
@@ -526,13 +644,17 @@ const ProfileScreen: React.FC = () => {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header */}
         <Header 
-          title={isOwnProfile ? "My Profile" : displayUser?.name || "Profile"}
+          title=""
           rightComponent={
             isOwnProfile ? (
-              <View style={styles.headerButtons}>
-                <TouchableOpacity onPress={() => setShowMoreMenu(true)} style={styles.headerButton}>
+              <View style={styles.headerButtonsContainer}>
+                <TouchableOpacity 
+                  onPress={() => setShowMoreMenu(!showMoreMenu)} 
+                  style={styles.headerButton}
+                >
                   <Icon name="more-vertical" size={24} color={colors.text.primary} />
                 </TouchableOpacity>
+                {showMoreMenu && <HeaderDropdownMenu />}
               </View>
             ) : null
           }
@@ -542,6 +664,7 @@ const ProfileScreen: React.FC = () => {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
           contentContainerStyle={{ paddingBottom: contentPaddingBottom }}
+          onTouchStart={() => setShowMoreMenu(false)} // Close dropdown when scrolling
         >
           {/* Banner Section */}
           <View style={styles.bannerContainer}>
@@ -704,59 +827,8 @@ const ProfileScreen: React.FC = () => {
             )}
           </View>
 
-          {/* Premium Section */}
-          {isOwnProfile && (
-            <View style={[styles.premiumSection, { backgroundColor: colors.surface }]}>
-              {premiumLoading ? (
-                <ActivityIndicator size="small" />
-              ) : isPremium ? (
-                <LinearGradient
-                  colors={['#FFD700', '#FFA500']}
-                  style={styles.premiumCard}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  <View style={styles.premiumContent}>
-                    <Icon name="crown" size={24} color="#fff" />
-                    <View style={styles.premiumText}>
-                      <Text style={styles.premiumTitle}>Premium Active</Text>
-                      <Text style={styles.premiumExpiry}>
-                        Expires: {formatPremiumExpiryDate(premiumResponse?.premium_expiry_date)}
-                      </Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity onPress={openWhatsApp} style={styles.helpButton}>
-                    <Icon name="help-circle" size={20} color="#fff" />
-                  </TouchableOpacity>
-                </LinearGradient>
-              ) : (
-                <View style={[styles.premiumOffer, { borderColor: colors.primary }]}>
-                  <View style={styles.premiumOfferContent}>
-                    <Icon name="star" size={24} color={colors.primary} />
-                    <View style={styles.premiumOfferText}>
-                      <Text style={[styles.premiumOfferTitle, { color: colors.text.primary }]}>
-                        Unlock Premium Features
-                      </Text>
-                      <Text style={[styles.premiumOfferSubtitle, { color: colors.text.secondary }]}>
-                        Get unlimited access to all features
-                      </Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity 
-                    style={[styles.buyPremiumButton, { backgroundColor: colors.primary }]}
-                    onPress={handleBuyPremium}
-                  >
-                    <Text style={styles.buyPremiumText}>Upgrade</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* Advertisement */}
-          <View style={styles.adContainer}>
-            <RectangleAdComponent />
-          </View>
+          {/* Premium Banner */}
+          {isOwnProfile && <PremiumBanner />}
 
           {/* Tabs */}
           <View style={[styles.tabContainer, { borderBottomColor: colors.border }]}>
@@ -883,51 +955,6 @@ const ProfileScreen: React.FC = () => {
           </View>
         </ScrollView>
 
-        {/* More Menu Modal */}
-        {showMoreMenu && (
-          <Modal
-            transparent
-            visible={showMoreMenu}
-            animationType="fade"
-            onRequestClose={() => setShowMoreMenu(false)}
-          >
-            <TouchableOpacity
-              style={styles.modalOverlay}
-              activeOpacity={1}
-              onPress={() => setShowMoreMenu(false)}
-            >
-              <View style={[styles.menuModal, { backgroundColor: colors.surface }]}>
-                <TouchableOpacity style={styles.menuItem} onPress={() => { handleSettings(); setShowMoreMenu(false); }}>
-                  <Icon name="settings" size={20} color={colors.text.primary} />
-                  <Text style={[styles.menuItemText, { color: colors.text.primary }]}>Settings</Text>
-                </TouchableOpacity>
-                
-                {!channelResponse?.data ? (
-                  <TouchableOpacity style={styles.menuItem} onPress={() => { handleCreateChannel(); setShowMoreMenu(false); }}>
-                    <Icon name="tv" size={20} color={colors.text.primary} />
-                    <Text style={[styles.menuItemText, { color: colors.text.primary }]}>Create Channel</Text>
-                  </TouchableOpacity>
-                ) : null}
-                
-                <TouchableOpacity style={styles.menuItem} onPress={() => { handleEarnings(); setShowMoreMenu(false); }}>
-                  <Icon name="dollar-sign" size={20} color={colors.text.primary} />
-                  <Text style={[styles.menuItemText, { color: colors.text.primary }]}>Earnings</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity style={styles.menuItem} onPress={() => { handleReferral(); setShowMoreMenu(false); }}>
-                  <Icon name="users" size={20} color={colors.text.primary} />
-                  <Text style={[styles.menuItemText, { color: colors.text.primary }]}>Referrals</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity style={styles.menuItem} onPress={() => { handlePackages(); setShowMoreMenu(false); }}>
-                  <Icon name="package" size={20} color={colors.text.primary} />
-                  <Text style={[styles.menuItemText, { color: colors.text.primary }]}>Packages</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          </Modal>
-        )}
-
         {/* Image Viewer Modal */}
         {showImageViewer && selectedImages.length > 0 && (
           <Modal visible={showImageViewer} transparent onRequestClose={() => setShowImageViewer(false)}>
@@ -971,13 +998,38 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  headerButtons: {
+  headerButtonsContainer: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
   },
   headerButton: {
     padding: 8,
     marginLeft: 8,
+  },
+  headerDropdown: {
+    position: 'absolute',
+    top: 40,
+    right: 0,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 1000,
+    minWidth: 150,
+  },
+  headerDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  headerDropdownText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   bannerContainer: {
     position: 'relative',
@@ -1132,85 +1184,62 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-  premiumSection: {
+  // Premium Banner Styles (matching HomeScreen)
+  premiumContainer: {
     marginHorizontal: 16,
-    marginVertical: 12,
-    borderRadius: 12,
-    padding: 16,
+    marginTop: 8,
+    marginBottom: 0,
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    paddingVertical: 4,
   },
-  premiumCard: {
-    borderRadius: 12,
-    padding: 16,
+  premiumBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginHorizontal: 4,
   },
-  premiumContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+  crownIcon: {
+    fontSize: 24,
+    marginRight: 12,
   },
-  premiumText: {
-    marginLeft: 12,
+  premiumTextContainer: {
     flex: 1,
   },
   premiumTitle: {
-    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    color: '#000000',
     marginBottom: 2,
   },
-  premiumExpiry: {
-    color: '#fff',
-    fontSize: 12,
-    opacity: 0.9,
+  premiumSubtitle: {
+    fontSize: 13,
+    color: '#000000',
+    fontWeight: '500',
   },
-  helpButton: {
-    padding: 8,
-  },
-  premiumOffer: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  premiumOfferContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  premiumOfferText: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  premiumOfferTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 2,
-  },
-  premiumOfferSubtitle: {
-    fontSize: 12,
-  },
-  buyPremiumButton: {
+  upgradeButton: {
+    backgroundColor: 'rgba(184, 134, 11, 0.2)',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#000000',
   },
-  buyPremiumText: {
-    color: '#fff',
+  upgradeButtonText: {
+    color: '#000000',
     fontWeight: '600',
-    fontSize: 12,
-  },
-  adContainer: {
-    alignItems: 'center',
-    marginVertical: 16,
+    fontSize: 13,
   },
   tabContainer: {
     flexDirection: 'row',
     paddingHorizontal: 16,
     borderBottomWidth: 1,
+    marginTop: 0, // Remove gap
   },
   tab: {
     flex: 1,
@@ -1316,33 +1345,6 @@ const styles = StyleSheet.create({
   bottomAdContainer: {
     alignItems: 'center',
     paddingVertical: 16,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  menuModal: {
-    margin: 20,
-    borderRadius: 12,
-    padding: 8,
-    minWidth: 200,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  menuItemText: {
-    fontSize: 16,
   },
   imageViewerClose: {
     position: 'absolute',
