@@ -21,7 +21,6 @@ import { useAuth } from '../../contexts/AuthContext';
 
 // Hooks
 import { 
-  useUserProfile,
   useDynamicUserName,
   useFollowers,
   useFollowings,
@@ -60,6 +59,13 @@ interface Post {
   commentCount: number;
 }
 
+interface Follower {
+  id: string | number;
+  name?: string;
+  profile_image?: string | null;
+  // Add other properties as needed
+}
+
 type NavigationProp = NativeStackNavigationProp<any>;
 
 const ProfileScreen: React.FC = () => {
@@ -79,13 +85,6 @@ const ProfileScreen: React.FC = () => {
 
   // TanStack Query hooks for data fetching
   const {
-    data: userProfileData,
-    isLoading: userProfileLoading,
-    error: userProfileError,
-    refetch: refetchUserProfile,
-  } = useUserProfile(userId || 0);
-
-  const {
     data: dynamicUserNameData,
     isLoading: userNameLoading,
   } = useDynamicUserName(userId || 0);
@@ -94,18 +93,21 @@ const ProfileScreen: React.FC = () => {
     data: followersData,
     isLoading: followersLoading,
     refetch: refetchFollowers,
+    error: followersError,
   } = useFollowers(Number(userId) || 0);
 
   const {
     data: followingsData,
     isLoading: followingsLoading,
     refetch: refetchFollowings,
+    error: followingsError,
   } = useFollowings(Number(userId) || 0);
 
   const {
     data: userPostsData,
     isLoading: userPostsLoading,
     refetch: refetchUserPosts,
+    error: userPostsError,
   } = useUserPosts(Number(userId) || 0, Number(currentUser?.id) || 0);
 
   const {
@@ -122,11 +124,6 @@ const ProfileScreen: React.FC = () => {
   const followUserMutation = useFollowUserMutation();
 
   // Computed values from TanStack Query data
-  const user = useMemo(() => {
-    if (!userProfileData?.data) return null;
-    return userProfileData.data;
-  }, [userProfileData]);
-
   const dynamicUserName = useMemo(() => {
     if (!dynamicUserNameData?.data?.data?.name) return null;
     return dynamicUserNameData.data.data.name;
@@ -154,15 +151,25 @@ const ProfileScreen: React.FC = () => {
   }), [followers, followings, posts]);
 
   const isFollowing = useMemo(() => {
-    return user?.isFollowing || false;
-  }, [user]);
+    if (!currentUser || !followersData?.data) return false;
+    
+    // Adjust this based on your actual data structure
+    const followersArray = Array.isArray(followersData.data) ? followersData.data : [];
+    
+    // Check if the current user is in the followers list
+    return followersArray.some((follower: Follower) => {
+      const followerId = typeof follower.id === 'string' ? parseInt(follower.id, 10) : follower.id;
+      const currentUserId = typeof currentUser.id === 'string' ? parseInt(currentUser.id, 10) : currentUser.id;
+      return followerId === currentUserId;
+    });
+  }, [followersData, currentUser]);
 
   const isPremium = useMemo(() => {
     return premiumResponse && !premiumResponse.is_premium_expired;
   }, [premiumResponse]);
 
   // Loading states
-  const loading = userProfileLoading || followersLoading || followingsLoading || userPostsLoading;
+  const loading = followersLoading || followingsLoading || userPostsLoading;
   const refreshing = followUserMutation.isPending;
 
   // Helper function for full image URLs
@@ -180,20 +187,19 @@ const ProfileScreen: React.FC = () => {
   // Refresh handler using TanStack Query
   const handleRefresh = useCallback(async () => {
     await Promise.all([
-      refetchUserProfile(),
       refetchFollowers(),
       refetchFollowings(),
       refetchUserPosts(),
     ]);
-  }, [refetchUserProfile, refetchFollowers, refetchFollowings, refetchUserPosts]);
+  }, [refetchFollowers, refetchFollowings, refetchUserPosts]);
 
   // Follow/Unfollow handler with optimistic updates
   const handleFollowToggle = useCallback(async () => {
-    if (!user || !currentUser) return;
+    if (!currentUser) return;
 
     try {
       await followUserMutation.mutateAsync({
-        followingId: Number(user.id),
+        followingId: Number(userId),
         followerId: Number(currentUser.id),
         action: isFollowing ? 'unfollow' : 'follow',
       });
@@ -201,14 +207,14 @@ const ProfileScreen: React.FC = () => {
       console.error('Follow/unfollow error:', error);
       Alert.alert('Error', 'Failed to update follow status. Please try again.');
     }
-  }, [user, currentUser, isFollowing, followUserMutation]);
+  }, [currentUser, isFollowing, followUserMutation, userId]);
 
   const handleTabChange = (tab: 'posts' | 'videos' | 'about') => {
     setActiveTab(tab);
   };
 
   // Error state
-  if (userProfileError && !loading) {
+  if ((followersError || followingsError || userPostsError) && !loading) {
     return (
       <ScreenTransition>
         <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -226,7 +232,7 @@ const ProfileScreen: React.FC = () => {
   }
 
   // Loading state
-  if (loading && !user) {
+  if (loading && !currentUser) {
     return (
       <ScreenTransition>
         <ProfilePageSkeleton />
@@ -245,11 +251,11 @@ const ProfileScreen: React.FC = () => {
         {/* Profile Header */}
         <View style={styles.profileHeader}>
           <Image
-            source={{ uri: getFullImageUrl(user?.profile_image) }}
+            source={{ uri: getFullImageUrl(currentUser?.profile_image) }}
             style={styles.profileImage}
           />
           <Text style={[styles.userName, { color: colors.text.primary }]}>
-            {dynamicUserName || user?.name || 'Unknown User'}
+            {dynamicUserName || currentUser?.name || 'Unknown User'}
           </Text>
           {userNameLoading && <ActivityIndicator size="small" />}
         </View>
