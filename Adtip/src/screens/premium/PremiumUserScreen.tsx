@@ -187,7 +187,20 @@ const PremiumUserScreen = () => {
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <Header title="Premium Status" showSearch={false} showWallet={false} />
+        <Header
+          title="Premium Status"
+          showSearch={false}
+          showWallet={false}
+          showPremium={false}
+          leftComponent={
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
@@ -205,7 +218,20 @@ const PremiumUserScreen = () => {
         barStyle={isDarkMode ? 'light-content' : 'dark-content'} 
       />
       
-      <Header title="Premium Status" showSearch={false} showWallet={false} />
+      <Header
+        title="Premium Status"
+        showSearch={false}
+        showWallet={false}
+        showPremium={false}
+        leftComponent={
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Icon name="arrow-left" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        }
+      />
       
       <ScrollView 
         style={styles.scrollView}
@@ -566,6 +592,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 24,
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
   },
 });
 

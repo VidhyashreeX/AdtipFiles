@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
+import {useNavigation} from '@react-navigation/native';
 import Header from '../../components/common/Header';
 import ScreenTransition from '../../components/common/ScreenTransition';
 
@@ -41,6 +42,7 @@ interface ReferralActivity {
 
 const ReferralScreen: React.FC = () => {
   const {colors} = useTheme();
+  const navigation = useNavigation();
   const [referralData, setReferralData] = useState<ReferralData>({
     referral_code: '',
     total_referrals: 0,
@@ -284,7 +286,20 @@ const ReferralScreen: React.FC = () => {
     <ScreenTransition animationType="slide">
       <SafeAreaView
         style={[styles.container, {backgroundColor: colors.background}]}>
-        <Header title="Referrals"/>
+        <Header
+          title="Referrals"
+          showWallet={false}
+          showSearch={false}
+          showPremium={false}
+          leftComponent={
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
+        />
 
         <FlatList
           data={activities}
@@ -765,6 +780,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
   },
 });
 

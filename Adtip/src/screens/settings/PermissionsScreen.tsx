@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useNavigation } from '@react-navigation/native';
 import Header from '../../components/common/Header';
 import ScreenTransition from '../../components/common/ScreenTransition';
 import PermissionManagerService from '../../services/PermissionManagerService';
@@ -38,6 +39,7 @@ const PERMISSIONS = [
 
 const PermissionsScreen: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
+  const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [permissionStatus, setPermissionStatus] = useState({
     notifications: false,
@@ -105,9 +107,19 @@ const PermissionsScreen: React.FC = () => {
   return (
     <ScreenTransition animationType="fade">
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}> 
-        <Header title="Permissions" 
-        showSearch={false}
-        showWallet={false}
+        <Header
+          title="Permissions"
+          showSearch={false}
+          showWallet={false}
+          showPremium={false}
+          leftComponent={
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
         />
         <ScrollView style={styles.content} contentContainerStyle={{ paddingTop: 16 }}>
           {loading ? (
@@ -220,6 +232,10 @@ const styles = StyleSheet.create({
   },
   sectionContent: {
     overflow: 'hidden',
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
   },
 });
 

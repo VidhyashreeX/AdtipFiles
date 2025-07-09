@@ -234,9 +234,19 @@ const SettingsScreen: React.FC = () => {
   return (
     <ScreenTransition animationType="fade">
       <SafeAreaView style={[styles.container, {backgroundColor: colors.background}]}> 
-        <Header title="Settings"
-        showSearch={false}
-        showWallet={false}
+        <Header
+          title="Settings"
+          showSearch={false}
+          showWallet={false}
+          showPremium={false}
+          leftComponent={
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
         />
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{paddingTop: 16}}>
           {settingSections.map((section, sectionIdx) => {
@@ -428,6 +438,10 @@ const styles = StyleSheet.create({
   },
   version: {
     fontSize: 14,
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
   },
 });
 

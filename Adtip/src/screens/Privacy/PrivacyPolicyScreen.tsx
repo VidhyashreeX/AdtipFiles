@@ -5,8 +5,10 @@ import {
   StyleSheet,
   ScrollView,
   SafeAreaView,
+  TouchableOpacity,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/Feather';
 import Header from '../../components/common/Header';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -16,11 +18,19 @@ const PrivacyPolicyScreen = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header 
-        title="Privacy Policy" 
-        showPremium={true}
+      <Header
+        title="Privacy Policy"
+        showPremium={false}
         showWallet={false}
         showSearch={false}
+        leftComponent={
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Icon name="arrow-left" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        }
       />
       <ScrollView 
         style={[styles.scrollView, { backgroundColor: colors.background }]} 
@@ -126,6 +136,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     textAlign: 'justify',
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
   },
 });
 

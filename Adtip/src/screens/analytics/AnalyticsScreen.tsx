@@ -11,7 +11,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
-import { useRoute, RouteProp } from '@react-navigation/native';
+import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
 import ApiService from '../../services/ApiService';
 
 interface AnalyticsData {
@@ -35,6 +35,7 @@ type AnalyticsScreenRouteProp = RouteProp<RootStackParamList, 'Analytics'>;
 
 const AnalyticsScreen: React.FC = () => {
   const {colors} = useTheme();
+  const navigation = useNavigation();
   const route = useRoute<AnalyticsScreenRouteProp>();
   const { channelId } = route.params;
   const [loading, setLoading] = useState(true);
@@ -110,7 +111,20 @@ const AnalyticsScreen: React.FC = () => {
   if (loading) {
     return (
       <View style={[styles.container, {backgroundColor: colors.background}]}>
-        <Header title="Analytics"/>
+        <Header
+          title="Analytics"
+          showWallet={false}
+          showSearch={false}
+          showPremium={false}
+          leftComponent={
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -120,7 +134,20 @@ const AnalyticsScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Analytics"/>
+      <Header
+        title="Analytics"
+        showWallet={false}
+        showSearch={false}
+        showPremium={false}
+        leftComponent={
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Icon name="arrow-left" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Period Selector */}
@@ -372,6 +399,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     marginLeft: 8,
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
   },
 });
 

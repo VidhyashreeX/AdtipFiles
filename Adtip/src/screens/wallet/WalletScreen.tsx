@@ -279,9 +279,20 @@ const WalletScreen = () => {
   return (
     <ScreenTransition animationType="scale">
       <View style={[styles.container, {backgroundColor: colors.background}]}>
-        <Header title="My Wallet"
-        showWallet = {false}
-        showSearch = {false} />
+        <Header
+          title="My Wallet"
+          showWallet={false}
+          showSearch={false}
+          showPremium={false}
+          leftComponent={
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
+        />
         <ScrollView
           contentContainerStyle={styles.contentContainer}
           keyboardShouldPersistTaps="handled"
@@ -641,8 +652,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 6, 
   },
   modalButtonText: {
-    fontSize: 15, 
+    fontSize: 15,
     fontWeight: '600',
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
   },
 });
 
