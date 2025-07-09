@@ -632,8 +632,8 @@ export default function TipCallScreen() {
     }
   }, [user?.id, contacts]);
 
-  // Handle chat navigation and mark messages as read
-  const handleChatNavigation = useCallback(async (contact: Contact) => {
+  // Handle chat navigation - navigate immediately, mark as read in background
+  const handleChatNavigation = useCallback((contact: Contact) => {
     // Check premium status first
     if (!isPremium) {
       console.log('[TipCall] Non-premium user trying to chat, showing upgrade popup');
@@ -641,21 +641,23 @@ export default function TipCallScreen() {
       return;
     }
 
-    // Mark messages as read when opening chat
-    if (user?.id && unreadCounts[contact.id] > 0) {
-      try {
-        await ApiService.markMessagesAsRead(user.id, contact.id);
-        // Update local unread count
-        setUnreadCounts(prev => ({
-          ...prev,
-          [contact.id]: 0
-        }));
-      } catch (error) {
-        console.error('Failed to mark messages as read:', error);
-      }
-    }
-    
+    // Navigate immediately for better UX
     navigation.navigate('Chat', { user: contact });
+
+    // Mark messages as read in background (non-blocking)
+    if (user?.id && unreadCounts[contact.id] > 0) {
+      ApiService.markMessagesAsRead(user.id, contact.id)
+        .then(() => {
+          // Update local unread count
+          setUnreadCounts(prev => ({
+            ...prev,
+            [contact.id]: 0
+          }));
+        })
+        .catch(error => {
+          console.error('Failed to mark messages as read:', error);
+        });
+    }
   }, [navigation, user?.id, unreadCounts, isPremium]);
 
   // Handle user profile modal

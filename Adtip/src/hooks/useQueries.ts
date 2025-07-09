@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ApiService from '../services/ApiService';
-import { ENDPOINTS } from '../constants/api';
+import { ENDPOINTS, API_BASE_URL } from '../constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { queryClient } from '../providers/QueryProvider';
 import { PostListResponse, ExploreContentResponse, ExploreItem as ApiExploreItem } from '../types/api';
@@ -454,39 +454,145 @@ export const useFollowUser = () => {
   });
 };
 
-// Save Video Like Mutation
+// Save Video Like Mutation with optimistic updates
 export const useSaveVideoLike = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: (data: { videoId: number; userId: number; like: number; videoCreatorId: number }) => 
+    mutationFn: (data: { videoId: number; userId: number; like: number; videoCreatorId: number }) =>
       ApiService.saveVideoLike(data.videoId, data.userId, data.like, data.videoCreatorId),
-    onSuccess: (data, variables) => {
-      // Invalidate related queries
+    onMutate: async ({ videoId, like }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['videos'] });
+      await queryClient.cancelQueries({ queryKey: ['shorts'] });
+
+      // Snapshot previous values
+      const previousVideos = queryClient.getQueriesData({ queryKey: ['videos'] });
+      const previousShorts = queryClient.getQueriesData({ queryKey: ['shorts'] });
+
+      // Optimistically update video like count and status
+      const updateVideoData = (old: any) => {
+        if (!old) return old;
+
+        return {
+          ...old,
+          pages: old.pages?.map((page: any) => ({
+            ...page,
+            data: page.data?.map((video: any) => {
+              if (video.id === videoId) {
+                const currentLikeCount = video.likeCount || 0;
+                const isCurrentlyLiked = video.is_liked || false;
+
+                return {
+                  ...video,
+                  likeCount: like === 1
+                    ? (isCurrentlyLiked ? currentLikeCount : currentLikeCount + 1)
+                    : (isCurrentlyLiked ? currentLikeCount - 1 : currentLikeCount),
+                  is_liked: like === 1
+                };
+              }
+              return video;
+            })
+          }))
+        };
+      };
+
+      queryClient.setQueriesData({ queryKey: ['videos'] }, updateVideoData);
+      queryClient.setQueriesData({ queryKey: ['shorts'] }, updateVideoData);
+
+      return { previousVideos, previousShorts };
+    },
+    onError: (err, variables, context) => {
+      // Revert optimistic updates
+      if (context?.previousVideos) {
+        context.previousVideos.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+      if (context?.previousShorts) {
+        context.previousShorts.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+    },
+    onSettled: (data, error, variables) => {
+      // Always refetch to ensure consistency
       queryClient.invalidateQueries({ queryKey: ['videos'] });
       queryClient.invalidateQueries({ queryKey: ['channel', 'videos'] });
       queryClient.invalidateQueries({ queryKey: ['shorts'] });
     },
-    onError: (error) => {
-      console.error('Save video like error:', error);
-    },
   });
 };
 
-// Save Video Comment Mutation
+// Save Video Comment Mutation with optimistic updates
 export const useSaveVideoComment = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: (data: { videoId: number; userId: number; comment: string }) => 
+    mutationFn: (data: { videoId: number; userId: number; comment: string }) =>
       ApiService.saveVideoComment(data.videoId, data.userId, data.comment),
-    onSuccess: (data, variables) => {
-      // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: ['videos'] });
-      queryClient.invalidateQueries({ queryKey: ['channel', 'videos'] });
+    onMutate: async ({ videoId, userId, comment }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['videos'] });
+      await queryClient.cancelQueries({ queryKey: ['comments', 'video', videoId] });
+
+      // Snapshot previous values
+      const previousVideos = queryClient.getQueriesData({ queryKey: ['videos'] });
+      const previousComments = queryClient.getQueryData(['comments', 'video', videoId]);
+
+      // Optimistically update video comment count
+      queryClient.setQueriesData({ queryKey: ['videos'] }, (old: any) => {
+        if (!old) return old;
+
+        return {
+          ...old,
+          pages: old.pages?.map((page: any) => ({
+            ...page,
+            data: page.data?.map((video: any) =>
+              video.id === videoId
+                ? { ...video, commentCount: (video.commentCount || 0) + 1 }
+                : video
+            )
+          }))
+        };
+      });
+
+      // Optimistically add comment to comments list
+      const optimisticComment = {
+        id: Date.now(), // Temporary ID
+        video_id: videoId,
+        user_id: userId,
+        comment: comment,
+        created_at: new Date().toISOString(),
+        user_name: 'You', // Will be updated from server response
+      };
+
+      queryClient.setQueryData(['comments', 'video', videoId], (old: any) => {
+        if (!old) return { data: [optimisticComment] };
+        return {
+          ...old,
+          data: [optimisticComment, ...(old.data || [])]
+        };
+      });
+
+      return { previousVideos, previousComments };
     },
-    onError: (error) => {
-      console.error('Save video comment error:', error);
+    onError: (err, variables, context) => {
+      // Revert optimistic updates
+      if (context?.previousVideos) {
+        context.previousVideos.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+      if (context?.previousComments) {
+        queryClient.setQueryData(['comments', 'video', variables.videoId], context.previousComments);
+      }
+    },
+    onSettled: (data, error, variables) => {
+      // Always refetch to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ['videos'] });
+      queryClient.invalidateQueries({ queryKey: ['comments', 'video', variables.videoId] });
+      queryClient.invalidateQueries({ queryKey: ['channel', 'videos'] });
     },
   });
 };
@@ -544,18 +650,59 @@ export const useUpdateUser = () => {
   });
 };
 
-// Save User Details Mutation
+// Save User Details Mutation with optimistic updates
 export const useSaveUserDetails = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: (data: any) => ApiService.saveUserDetails(data),
-    onSuccess: (data, variables) => {
-      // Invalidate user-related queries
-      queryClient.invalidateQueries({ queryKey: ['profile', variables.user_id] });
+    onMutate: async (newUserData) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['profile', newUserData.user_id] });
+      await queryClient.cancelQueries({ queryKey: ['userProfile', newUserData.user_id] });
+
+      // Snapshot previous values
+      const previousProfile = queryClient.getQueryData(['profile', newUserData.user_id]);
+      const previousUserProfile = queryClient.getQueryData(['userProfile', newUserData.user_id]);
+
+      // Optimistically update profile data
+      queryClient.setQueryData(['profile', newUserData.user_id], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            ...newUserData
+          }
+        };
+      });
+
+      queryClient.setQueryData(['userProfile', newUserData.user_id], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            ...newUserData
+          }
+        };
+      });
+
+      return { previousProfile, previousUserProfile };
     },
-    onError: (error) => {
-      console.error('Save user details error:', error);
+    onError: (err, variables, context) => {
+      // Revert optimistic updates
+      if (context?.previousProfile) {
+        queryClient.setQueryData(['profile', variables.user_id], context.previousProfile);
+      }
+      if (context?.previousUserProfile) {
+        queryClient.setQueryData(['userProfile', variables.user_id], context.previousUserProfile);
+      }
+    },
+    onSettled: (data, error, variables) => {
+      // Always refetch to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ['profile', variables.user_id] });
+      queryClient.invalidateQueries({ queryKey: ['userProfile', variables.user_id] });
     },
   });
 };
@@ -787,6 +934,108 @@ export const useFollowMutation = () => {
       // Invalidate relevant queries
       queryClientInstance.invalidateQueries({ queryKey: ['profile'] });
       queryClientInstance.invalidateQueries({ queryKey: ['posts'] });
+    },
+  });
+};
+
+// User Profile Data Hook (for ProfileScreen)
+export const useUserProfile = (userId: number | string) => {
+  return useQuery({
+    queryKey: ['userProfile', userId],
+    queryFn: async () => {
+      const response = await ApiService.get(`/api/users/${userId}`);
+      return response;
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: (failureCount, error: any) => {
+      if (error?.response?.status === 404) return false;
+      return failureCount < 3;
+    },
+  });
+};
+
+// Dynamic User Name Hook
+export const useDynamicUserName = (userId: number | string) => {
+  return useQuery({
+    queryKey: ['dynamicUserName', userId],
+    queryFn: async () => {
+      const response = await ApiService.post('/api/get-user-name', {
+        userid: userId
+      });
+      return response;
+    },
+    enabled: !!userId,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    retry: (failureCount, error: any) => {
+      if (error?.response?.status === 404) return false;
+      return failureCount < 2;
+    },
+  });
+};
+
+// Enhanced Follow User Mutation with optimistic updates
+export const useFollowUserMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ followingId, followerId, action }: {
+      followingId: number;
+      followerId: number;
+      action: 'follow' | 'unfollow'
+    }) => {
+      const token = await AsyncStorage.getItem('accessToken');
+      const response = await fetch(`${API_BASE_URL}/api/follow-user`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ followingId, followerId, action }),
+      });
+      return response.json();
+    },
+    onMutate: async ({ followingId, action }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['userProfile', followingId] });
+      await queryClient.cancelQueries({ queryKey: ['followers', followingId] });
+
+      // Snapshot previous values
+      const previousProfile = queryClient.getQueryData(['userProfile', followingId]);
+      const previousFollowers = queryClient.getQueryData(['followers', followingId]);
+
+      // Optimistically update profile
+      queryClient.setQueryData(['userProfile', followingId], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            isFollowing: action === 'follow',
+            followersCount: action === 'follow'
+              ? (old.data?.followersCount || 0) + 1
+              : Math.max(0, (old.data?.followersCount || 0) - 1)
+          }
+        };
+      });
+
+      return { previousProfile, previousFollowers };
+    },
+    onError: (err, variables, context) => {
+      // Revert optimistic updates
+      if (context?.previousProfile) {
+        queryClient.setQueryData(['userProfile', variables.followingId], context.previousProfile);
+      }
+      if (context?.previousFollowers) {
+        queryClient.setQueryData(['followers', variables.followingId], context.previousFollowers);
+      }
+    },
+    onSettled: (data, error, variables) => {
+      // Always refetch to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ['userProfile', variables.followingId] });
+      queryClient.invalidateQueries({ queryKey: ['followers', variables.followingId] });
+      queryClient.invalidateQueries({ queryKey: ['followings', variables.followerId] });
     },
   });
 };

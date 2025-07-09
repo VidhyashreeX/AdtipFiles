@@ -436,40 +436,32 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     }
   }, [subscriptionResponse, subscriptionLoading, hasCheckedVersion]);
 
-  // Fetch data whenever the screen comes into focus by invalidating and forcing refetch
-  useFocusEffect(
-    useCallback(() => {
-      console.log('[HomeScreen] Screen focused. Invalidating and refetching posts.');
-      // Invalidate and force refetch
-      queryClient.invalidateQueries({ 
-        queryKey: ['posts', selectedCategoryState ? parseInt(selectedCategoryState, 10) : 0, user?.id],
-        refetchType: 'active' // Force active queries to refetch
-      });
-    }, [queryClient, selectedCategoryState, user?.id])
-  );
-
   const isFirstRun = useRef(true);
 
-  // Fetch data on initial mount and when user changes
-  useEffect(() => {
-    if (user?.id) {
-      console.log('[HomeScreen] Component mounted or user changed. Triggering initial fetch.');
-      refreshPosts();
-    }
-  }, [user?.id]); // Runs once when user ID is available
-
-  // Refetch data on subsequent screen focuses
+  // Consolidated focus effect - only refresh on subsequent focuses, not first load
   useFocusEffect(
     useCallback(() => {
       if (isFirstRun.current) {
         isFirstRun.current = false;
         return;
       }
-      
-      console.log('[HomeScreen] Screen focused. Refetching posts.');
-      refreshPosts();
-    }, [refreshPosts])
+
+      console.log('[HomeScreen] Screen focused. Invalidating queries for fresh data.');
+      // Use invalidateQueries instead of direct refresh for better performance
+      queryClient.invalidateQueries({
+        queryKey: ['posts', selectedCategoryState ? parseInt(selectedCategoryState, 10) : 0, user?.id],
+        refetchType: 'active'
+      });
+    }, [queryClient, selectedCategoryState, user?.id])
   );
+
+  // Initial data fetch on mount
+  useEffect(() => {
+    if (user?.id) {
+      console.log('[HomeScreen] Component mounted or user changed. Initial data will be fetched by TanStack Query.');
+      // TanStack Query will automatically fetch data when the component mounts
+    }
+  }, [user?.id]);
 
   // Transform posts data for compatibility
   const posts = useMemo(() => {

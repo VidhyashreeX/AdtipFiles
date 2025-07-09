@@ -1,5 +1,5 @@
 // src/screens/wallet/WalletScreen.tsx
-import React, {useState, useEffect, useCallback, useRef} from 'react';
+import React, {useState, useEffect, useCallback, useRef, useMemo} from 'react';
 import {
   View,
   Text,
@@ -43,44 +43,13 @@ const WalletScreen = () => {
   const {user, premiumState, setPremiumState} = useAuth();
   const { refreshBalance } = useWallet();
   
-  // Single loading state for all data
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  
-  // Wallet data states
-  const [balance, setBalance] = useState<string>('0.00');
-  const [isPremium, setIsPremium] = useState<boolean>(false);
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [withdrawRequests, setWithdrawRequests] = useState<any[]>([]);
-  
-  // Tab and UI states
+  // UI states only - data comes from TanStack Query
   const [activeTab, setActiveTab] = useState<'earnings' | 'withdrawals'>('earnings');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [isAmountModalVisible, setIsAmountModalVisible] = useState(false);
   const [amountToAdd, setAmountToAdd] = useState('');
-  
-  // Error states
-  const [balanceError, setBalanceError] = useState<string | null>(null);
-  const [premiumError, setPremiumError] = useState<string | null>(null);
-  const [transactionsError, setTransactionsError] = useState<string | null>(null);
-  const [withdrawalsError, setWithdrawalsError] = useState<string | null>(null);
-  
-  // Data fetch status tracking
-  const [dataFetched, setDataFetched] = useState({
-    balance: false,
-    premium: false,
-    transactions: false,
-    withdrawals: false,
-  });
 
   const abortControllerRef = useRef<AbortController | null>(null);
-  
-  const minimumWithdrawal = isPremium 
-    ? WITHDRAWAL_THRESHOLD.PREMIUM 
-    : WITHDRAWAL_THRESHOLD.REGULAR;
-  
-  const currentBalance = typeof balance === 'string' ? parseFloat(balance) : (typeof balance === 'number' ? balance : 0);
-  const canWithdraw = currentBalance >= minimumWithdrawal;
 
   // TanStack Query hooks for data fetching
   const {
@@ -105,118 +74,62 @@ const WalletScreen = () => {
 
 
 
-  // Update local state when TanStack Query data changes
+  // Computed values from TanStack Query data
+  const balance = useMemo(() => {
+    return balanceData?.availableBalance || 0;
+  }, [balanceData]);
+
+  const isPremium = useMemo(() => {
+    return premiumData && !premiumData.is_premium_expired;
+  }, [premiumData]);
+
+  const withdrawRequests = useMemo(() => {
+    return withdrawalData?.data || [];
+  }, [withdrawalData]);
+
+  // Computed withdrawal limits and balance
+  const minimumWithdrawal = useMemo(() => {
+    return isPremium ? WITHDRAWAL_THRESHOLD.PREMIUM : WITHDRAWAL_THRESHOLD.REGULAR;
+  }, [isPremium]);
+
+  const currentBalance = useMemo(() => {
+    return typeof balance === 'string' ? parseFloat(balance) : (typeof balance === 'number' ? balance : 0);
+  }, [balance]);
+
+  const canWithdraw = useMemo(() => {
+    return currentBalance >= minimumWithdrawal;
+  }, [currentBalance, minimumWithdrawal]);
+
+  // Loading states
+  const isInitialLoading = balanceLoading || premiumLoading;
+  const isRefreshing = withdrawalLoading;
+
+  // Update AsyncStorage when balance changes
   useEffect(() => {
     if (balanceData?.availableBalance) {
-      setBalance(balanceData.availableBalance);
-      setDataFetched(prev => ({ ...prev, balance: true }));
-      // Professional: update AsyncStorage and premiumState
       AsyncStorage.setItem('wallet_balance', String(balanceData.availableBalance));
       setPremiumState(prev => ({ ...prev, walletBalance: String(balanceData.availableBalance) }));
     }
   }, [balanceData]);
 
-  useEffect(() => {
-    if (premiumData) {
-      // Check if premium is not expired - handle the API response format properly
-      const isPremiumActive = !premiumData.is_premium_expired;
-      setIsPremium(isPremiumActive);
-      setDataFetched(prev => ({ ...prev, premium: true }));
-    } else {
-      // If no premium data, user is not premium
-      setIsPremium(false);
-      setDataFetched(prev => ({ ...prev, premium: true }));
-    }
-  }, [premiumData]);
-
-  useEffect(() => {
-    if (withdrawalData?.data) {
-      setWithdrawRequests(withdrawalData.data);
-      setDataFetched(prev => ({ ...prev, withdrawals: true }));
-    }
-  }, [withdrawalData]);
-
-  // Handle errors from TanStack Query
-  useEffect(() => {
-    if (balanceErrorQuery) {
-      setBalanceError('Failed to load balance');
-    }
-  }, [balanceErrorQuery]);
-
-  useEffect(() => {
-    if (premiumErrorQuery) {
-      // Only set error for actual network errors, not for "No active premium plan" responses
-      const errorMessage = premiumErrorQuery?.message || '';
-      if (errorMessage.toLowerCase().includes('no active premium plan')) {
-        // This is a valid response indicating no premium, not an error
-        setPremiumError(null);
-      } else {
-        setPremiumError('Failed to load premium status');
-      }
-    } else {
-      // Clear error when there's no error
-      setPremiumError(null);
-    }
-  }, [premiumErrorQuery]);
-
-  // Also clear premium error when premium data is successfully loaded
-  useEffect(() => {
-    if (premiumData) {
-      // Clear any premium error when we have successful data
-      setPremiumError(null);
-    }
-  }, [premiumData]);
-
-  useEffect(() => {
-    if (withdrawalErrorQuery) {
-      setWithdrawalsError('Failed to load withdrawals');
-    }
-  }, [withdrawalErrorQuery]);
-
-  // Update loading states
-  useEffect(() => {
-    setIsInitialLoading(balanceLoading || premiumLoading);
-  }, [balanceLoading, premiumLoading]);
-
-  useEffect(() => {
-    setIsRefreshing(withdrawalLoading);
-  }, [withdrawalLoading]);
-
-  // Fetch withdrawals when tab changes to withdrawals (only if not already fetched)
-  const fetchWithdrawalsOnTabChange = useCallback(async () => {
-    if (!user || !user.id || dataFetched.withdrawals) {
-      return;
-    }
-
-    console.log('WalletScreen: Fetching withdrawals for tab change');
-    
-    try {
-      setWithdrawalsError(null);
-      const response = await ApiService.get(`/api/withdrawal-requests/${user.id}`);
-      setWithdrawRequests(response?.data || []);
-      setDataFetched(prev => ({ ...prev, withdrawals: true }));
-    } catch (error: any) {
-      console.error('WalletScreen: Error fetching withdrawals on tab change:', error);
-      setWithdrawalsError('Failed to load withdrawals');
-    }
-  }, [user, dataFetched.withdrawals]);
-
-  // Effect for tab changes
+  // Effect for tab changes - TanStack Query handles data fetching automatically
   useEffect(() => {
     if (activeTab === 'withdrawals') {
-      fetchWithdrawalsOnTabChange();
+      // TanStack Query will automatically fetch data when the hook is enabled
+      console.log('WalletScreen: Switched to withdrawals tab - TanStack Query will handle data fetching');
     }
-  }, [activeTab, fetchWithdrawalsOnTabChange]);
+  }, [activeTab]);
 
-  // Focus effect - only fetch if no data has been fetched yet
-  useEffect(() => {
-    if (refreshBalance) refreshBalance();
-  }, []);
-
+  // Optimized focus effect - TanStack Query handles data fetching automatically
   useFocusEffect(
     useCallback(() => {
-      if (refreshBalance) refreshBalance();
-      console.log('WalletScreen focused');
+      console.log('WalletScreen focused - TanStack Query will handle data refresh');
+
+      // Only invalidate queries on focus for fresh data, don't force refetch
+      if (refetchBalance) {
+        // Use background refetch to avoid blocking UI
+        refetchBalance();
+      }
 
       return () => {
         console.log('WalletScreen unfocused');
@@ -225,7 +138,7 @@ const WalletScreen = () => {
           abortControllerRef.current = null;
         }
       };
-    }, [refreshBalance])
+    }, [refetchBalance])
   );
 
   // Manual refresh handler
@@ -259,19 +172,17 @@ const WalletScreen = () => {
     });
   };
 
-  const navigateToPremium = () => {
-    navigation.navigate('Packages' as never);
-  };
+
 
   const renderBalanceCard = () => {
     if (isInitialLoading && balance === '0.00') {
       return <BalanceCardSkeleton />;
     }
 
-    if (balanceError) {
+    if (balanceErrorQuery) {
       return (
         <View style={[styles.errorCard, {backgroundColor: colors.card}]}>
-          <Text style={[styles.errorText, {color: colors.error}]}>{balanceError}</Text>
+          <Text style={[styles.errorText, {color: colors.error}]}>Failed to load balance</Text>
           <TouchableOpacity onPress={() => handleRefresh()} style={[styles.retryButton, {borderColor: colors.primary}]}>
             <Text style={[styles.retryButtonText, {color: colors.primary}]}>Retry</Text>
           </TouchableOpacity>
@@ -314,14 +225,14 @@ const WalletScreen = () => {
   };
 
   const renderPlanCard = () => {
-    if (isInitialLoading && !dataFetched.premium) {
+    if (isInitialLoading && !premiumData) {
       return <PlanCardSkeleton />;
     }
 
-    if (premiumError) {
+    if (premiumErrorQuery && !premiumErrorQuery.message?.toLowerCase().includes('no active premium plan')) {
       return (
         <View style={[styles.errorCard, {backgroundColor: colors.card}]}>
-          <Text style={[styles.errorText, {color: colors.error}]}>{premiumError}</Text>
+          <Text style={[styles.errorText, {color: colors.error}]}>Failed to load premium status</Text>
         </View>
       );
     }
@@ -333,55 +244,29 @@ const WalletScreen = () => {
 
   const renderTransactionContent = () => {
     if (activeTab === 'earnings') {
-      if (isInitialLoading && transactions.length === 0) {
+      // For now, show placeholder for earnings since we don't have a specific API
+      return <Text style={[styles.emptyText, {color: colors.text.secondary}]}>No earnings to display</Text>;
+    } else {
+      if (withdrawalLoading && withdrawRequests.length === 0) {
         return <TransactionListSkeleton count={5} />;
       }
-      
-      if (transactionsError) {
+
+      if (withdrawalErrorQuery) {
         return (
           <View style={styles.errorContainer}>
-            <Text style={[styles.errorText, {color: colors.error}]}>{transactionsError}</Text>
+            <Text style={[styles.errorText, {color: colors.error}]}>Failed to load withdrawals</Text>
             <TouchableOpacity onPress={() => handleRefresh()} style={[styles.retryButton, {borderColor: colors.primary}]}>
               <Text style={[styles.retryButtonText, {color: colors.primary}]}>Retry</Text>
             </TouchableOpacity>
           </View>
         );
       }
-      
-      if (transactions.length === 0 && dataFetched.transactions) {
-        return <Text style={[styles.emptyText, {color: colors.text.secondary}]}>No earnings to display</Text>;
-      }
-      
-      return transactions
-        .filter(tx => tx.type === 'credit')
-        .map((transaction, index) => (
-          <View key={`earn-${index}`} style={{padding: 12, borderBottomWidth: 1, borderColor: '#eee'}}>
-            <Text style={{fontWeight: 'bold'}}>+₹{transaction.amount}</Text>
-            <Text>{transaction.description || transaction.type}</Text>
-            <Text style={{fontSize: 12, color: '#888'}}>{transaction.date}</Text>
-          </View>
-        ));
-    } else {
-      if (!dataFetched.withdrawals && withdrawRequests.length === 0) {
-        return <TransactionListSkeleton count={5} />;
-      }
-      
-      if (withdrawalsError) {
-        return (
-          <View style={styles.errorContainer}>
-            <Text style={[styles.errorText, {color: colors.error}]}>{withdrawalsError}</Text>
-            <TouchableOpacity onPress={() => fetchWithdrawalsOnTabChange()} style={[styles.retryButton, {borderColor: colors.primary}]}>
-              <Text style={[styles.retryButtonText, {color: colors.primary}]}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      }
-      
-      if (withdrawRequests.length === 0 && dataFetched.withdrawals) {
+
+      if (withdrawRequests.length === 0 && !withdrawalLoading) {
         return <Text style={[styles.emptyText, {color: colors.text.secondary}]}>No withdrawal requests</Text>;
       }
       
-      return withdrawRequests.map((request, index) => (
+      return withdrawRequests.map((request: any, index: number) => (
         <View key={`withdraw-${index}`} style={{padding: 12, borderBottomWidth: 1, borderColor: '#eee'}}>
           <Text style={{fontWeight: 'bold'}}>-₹{request.amount}</Text>
           <Text>{request.description || 'Withdrawal'}</Text>
