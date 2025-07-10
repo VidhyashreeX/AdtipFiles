@@ -375,17 +375,32 @@ const TipCallScreenSimple = () => {
   const [isDndEnabled, setIsDndEnabled] = useState<boolean>(!!user?.dnd)
   const [isDndLoading, setIsDndLoading] = useState(false)
   const updateUserMutation = useMutation({
-    mutationFn: ApiService.updateUser,
+    mutationFn: (data: any) => ApiService.updateUser(data),
     onSuccess: (_data: any, variables: any) => {
+      console.log('[TipCallScreenSimple] DND update successful:', _data, 'Variables:', variables)
       setIsDndEnabled(!!variables.dnd)
       queryClient.invalidateQueries({ queryKey: ['profile', user?.id] })
     },
-    onError: () => Alert.alert('Error', 'Failed to update DND status'),
+    onError: (error: any) => {
+      console.error('[TipCallScreenSimple] DND update failed:', error)
+      Alert.alert('Error', 'Failed to update DND status')
+    },
   })
 
   const handleDndToggle = useCallback(() => {
+    console.log('[TipCallScreenSimple] DND toggle initiated. Current state:', isDndEnabled, 'User ID:', user?.id)
+
+    if (!user?.id) {
+      console.error('[TipCallScreenSimple] No user ID available for DND toggle')
+      Alert.alert('Error', 'User not found. Please try again.')
+      return
+    }
+
     const newState = !isDndEnabled
     const statusTxt = newState ? 'ON' : 'OFF'
+
+    console.log('[TipCallScreenSimple] Showing DND confirmation dialog for state:', newState)
+
     Alert.alert(
       `Turn DND ${statusTxt}?`,
       newState ? 'You will not receive any incoming call notifications.' : 'You will start receiving incoming call notifications.',
@@ -394,11 +409,19 @@ const TipCallScreenSimple = () => {
         {
           text: `Turn ${statusTxt}`,
           onPress: () => {
+            console.log('[TipCallScreenSimple] User confirmed DND toggle. Making API call...')
             setIsDndLoading(true)
+
+            const updateData = { id: user.id, dnd: newState ? 1 : 0 }
+            console.log('[TipCallScreenSimple] Calling updateUserMutation.mutate with data:', updateData)
+
             updateUserMutation.mutate(
-              { id: user!.id, dnd: newState ? 1 : 0 },
+              updateData,
               {
-                onSettled: () => setIsDndLoading(false),
+                onSettled: () => {
+                  console.log('[TipCallScreenSimple] DND mutation settled')
+                  setIsDndLoading(false)
+                },
               }
             )
           },
