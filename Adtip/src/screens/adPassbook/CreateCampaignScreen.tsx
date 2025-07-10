@@ -29,6 +29,7 @@ import Header from '../../components/common/Header';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import ApiService from '../../services/ApiService';
 import { launchImageLibrary, MediaType } from 'react-native-image-picker';
+import { useLocationSearch } from '../../hooks/useQueries';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import CloudflareUploadService from '../../services/CloudflareUploadService';
 import Video from 'react-native-video';
@@ -52,7 +53,16 @@ interface PlaceSearchResult {
   structured_formatting: {
     main_text: string;
     secondary_text: string;
+    main_text_matched_substrings?: Array<{
+      offset: number;
+      length: number;
+    }>;
   };
+  types: string[];
+  terms: Array<{
+    offset: number;
+    value: string;
+  }>;
 }
 
 // Define category options
@@ -69,9 +79,9 @@ const categories = [
 
 // Define gender options
 const genderOptions = [
-  { id: 'male', label: 'Male' },
-  { id: 'female', label: 'Female' },
-  { id: 'all', label: 'All Genders' },
+  { id: 1, label: 'Male' },
+  { id: 2, label: 'Female' },
+  { id: 0, label: 'All Genders' },
 ];
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -113,20 +123,25 @@ const CreateCampaignScreen: React.FC = () => {
   const [totalPay, setTotalPay] = useState(0); // Will be calculated
   const [platformFee, setPlatformFee] = useState(0); // Will be calculated
   const [postTargetLocations, setPostTargetLocations] = useState<string[]>([]);
-  const [postTargetGenders, setPostTargetGenders] = useState<string[]>(['male', 'female']);
+  const [postTargetGenders, setPostTargetGenders] = useState<number[]>([1, 2]); // Default to all genders
 
   // Location search state
   const [locationSearchQuery, setLocationSearchQuery] = useState('');
-  const [locationSearchResults, setLocationSearchResults] = useState<PlaceSearchResult[]>([]);
-  const [isLocationSearching, setIsLocationSearching] = useState(false);
+  const [debouncedLocationQuery, setDebouncedLocationQuery] = useState('');
   const [showLocationModal, setShowLocationModal] = useState(false);
+
+  // Use TanStack Query for location search with debouncing
+  const {
+    data: locationSearchResults = [],
+    isLoading: isLocationSearching,
+    error: locationSearchError
+  } = useLocationSearch(debouncedLocationQuery);
 
   // UI state
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [categoryDropdownVisible, setCategoryDropdownVisible] = useState(false);
-  const [genderDropdownVisible, setGenderDropdownVisible] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [tempStartDate, setTempStartDate] = useState(new Date());
 
@@ -146,7 +161,7 @@ const CreateCampaignScreen: React.FC = () => {
     onPanResponderGrant: () => {
       setIsDraggingDuration(true);
     },
-    onPanResponderMove: (event, gestureState) => {
+    onPanResponderMove: (_event, gestureState) => {
       const { dx } = gestureState;
       const newDuration = Math.max(1, Math.min(30, Math.round((dx / SLIDER_WIDTH) * 30) + durationDays));
       setDurationDays(newDuration);
@@ -162,7 +177,7 @@ const CreateCampaignScreen: React.FC = () => {
     onPanResponderGrant: () => {
       setIsDraggingMinAge(true);
     },
-    onPanResponderMove: (event, gestureState) => {
+    onPanResponderMove: (_event, gestureState) => {
       const { dx } = gestureState;
       const newMinAge = Math.max(18, Math.min(targetMaxAge - 1, Math.round((dx / SLIDER_WIDTH) * 62) + targetMinAge));
       setTargetMinAge(newMinAge);
@@ -178,7 +193,7 @@ const CreateCampaignScreen: React.FC = () => {
     onPanResponderGrant: () => {
       setIsDraggingMaxAge(true);
     },
-    onPanResponderMove: (event, gestureState) => {
+    onPanResponderMove: (_event, gestureState) => {
       const { dx } = gestureState;
       const newMaxAge = Math.max(targetMinAge + 1, Math.min(80, Math.round((dx / SLIDER_WIDTH) * 62) + targetMaxAge));
       setTargetMaxAge(newMaxAge);
@@ -194,7 +209,7 @@ const CreateCampaignScreen: React.FC = () => {
     onPanResponderGrant: () => {
       setIsDraggingPayPerView(true);
     },
-    onPanResponderMove: (event, gestureState) => {
+    onPanResponderMove: (_event, gestureState) => {
       const { dx } = gestureState;
       const newPayPerView = Math.max(0.5, Math.min(5, ((dx / SLIDER_WIDTH) * 4.5) + payPerView));
       setPayPerView(Math.round(newPayPerView * 10) / 10); // Round to 1 decimal place
@@ -204,49 +219,22 @@ const CreateCampaignScreen: React.FC = () => {
     },
   });
 
-  // Google Places API integration
-  const searchPlaces = async (query: string) => {
-    if (query.length < 3) {
-      setLocationSearchResults([]);
-      return;
-    }
 
-    setIsLocationSearching(true);
-    try {
-      // Replace 'YOUR_GOOGLE_PLACES_API_KEY' with your actual Google Places API key
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&types=(cities)&key=YOUR_GOOGLE_PLACES_API_KEY`
-      );
-      const data = await response.json();
-      
-      if (data.predictions) {
-        setLocationSearchResults(data.predictions);
-      }
-    } catch (error) {
-      console.error('Error searching places:', error);
-      // Fallback to demo data for development
-      const demoResults = [
-        {
-          place_id: 'demo1',
-          description: `${query} - Demo Location 1`,
-          structured_formatting: {
-            main_text: `${query} City`,
-            secondary_text: 'Demo State, Demo Country'
-          }
-        },
-        {
-          place_id: 'demo2', 
-          description: `${query} - Demo Location 2`,
-          structured_formatting: {
-            main_text: `${query} Metro`,
-            secondary_text: 'Demo Region, Demo Country'
-          }
-        }
-      ];
-      setLocationSearchResults(demoResults);
-    } finally {
-      setIsLocationSearching(false);
+
+  // Add location from search results
+  const addLocationFromSearch = (place: PlaceSearchResult) => {
+    const locationName = place.structured_formatting.main_text;
+    if (!postTargetLocations.includes(locationName)) {
+      setPostTargetLocations([...postTargetLocations, locationName]);
     }
+    setLocationSearchQuery('');
+    setDebouncedLocationQuery('');
+    setShowLocationModal(false);
+  };
+
+  // Remove location from selected list
+  const removeLocation = (location: string) => {
+    setPostTargetLocations(postTargetLocations.filter(loc => loc !== location));
   };
 
   // Get user ID on component mount
@@ -287,14 +275,31 @@ const CreateCampaignScreen: React.FC = () => {
     setEndDate(newEndDate.toISOString().split('T')[0]);
   }, [startDate, durationDays]);
 
-  // Search locations when query changes
+  // Debounce location search query (300ms delay)
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      searchPlaces(locationSearchQuery);
+      setDebouncedLocationQuery(locationSearchQuery);
     }, 300);
 
     return () => clearTimeout(timeoutId);
   }, [locationSearchQuery]);
+
+  // Handle location search errors (now with fallback data, errors are less critical)
+  useEffect(() => {
+    if (locationSearchError) {
+      console.warn('Location search API error (using fallback data):', locationSearchError);
+
+      // Only show error for critical issues, since we have fallback data
+      if (locationSearchError.message?.includes('OVER_QUERY_LIMIT')) {
+        // Show a subtle warning for quota issues
+        console.warn('Google Places API quota exceeded, using fallback location data');
+      } else if (locationSearchError.message?.includes('REQUEST_DENIED')) {
+        // Show warning for API key issues
+        console.warn('Google Places API access denied, using fallback location data');
+      }
+      // For other errors (timeout, network), silently use fallback data
+    }
+  }, [locationSearchError]);
 
   // Permission helper (from TipTubeUploadScreen)
   const requestStoragePermission = async (): Promise<boolean> => {
@@ -487,30 +492,19 @@ const CreateCampaignScreen: React.FC = () => {
     setCategoryDropdownVisible(false);
   };
 
-  const toggleLocation = (location: string) => {
-    if (postTargetLocations.includes(location)) {
-      setPostTargetLocations(postTargetLocations.filter(l => l !== location));
-    } else {
-      setPostTargetLocations([...postTargetLocations, location]);
-    }
-  };
 
-  const addLocationFromSearch = (place: PlaceSearchResult) => {
-    const locationName = place.structured_formatting.main_text;
-    if (!postTargetLocations.includes(locationName)) {
-      setPostTargetLocations([...postTargetLocations, locationName]);
-    }
-    setShowLocationModal(false);
-    setLocationSearchQuery('');
-    setLocationSearchResults([]);
-  };
 
-  const toggleGender = (genderId: string) => {
-    if (genderId === 'all') {
-      setPostTargetGenders(['male', 'female']);
+
+
+  const toggleGender = (genderId: number) => {
+    if (genderId === 0) { // All genders
+      setPostTargetGenders([1, 2]);
     } else {
       if (postTargetGenders.includes(genderId)) {
-        setPostTargetGenders(postTargetGenders.filter(g => g !== genderId));
+        // Remove gender if already selected (but don't allow empty selection)
+        if (postTargetGenders.length > 1) {
+          setPostTargetGenders(postTargetGenders.filter(id => id !== genderId));
+        }
       } else {
         setPostTargetGenders([...postTargetGenders, genderId]);
       }
@@ -636,9 +630,7 @@ const CreateCampaignScreen: React.FC = () => {
     }
   };
 
-  const handleSaveAsDraft = () => {
-    Alert.alert('Info', 'Draft functionality will be implemented soon');
-  };
+
 
   const handlePreviewAd = () => {
     Alert.alert(
@@ -1029,12 +1021,12 @@ const CreateCampaignScreen: React.FC = () => {
                 <View style={[
                   styles.checkbox, 
                   { borderColor: isDarkMode ? colors.border : '#D1D5DB' },
-                  (gender.id === 'all' ? postTargetGenders.length === 2 : postTargetGenders.includes(gender.id)) && [
+                  (gender.id === 3 ? postTargetGenders.length === 2 : postTargetGenders.includes(gender.id)) && [
                     styles.checkboxSelected, 
                     { backgroundColor: colors.primary, borderColor: colors.primary }
                   ]
                 ]}>
-                  {(gender.id === 'all' ? postTargetGenders.length === 2 : postTargetGenders.includes(gender.id)) && (
+                  {(gender.id === 3 ? postTargetGenders.length === 2 : postTargetGenders.includes(gender.id)) && (
                     <Icon name="check" size={12} color="#FFFFFF" />
                   )}
                 </View>
@@ -1048,106 +1040,130 @@ const CreateCampaignScreen: React.FC = () => {
             ))}
           </View>
 
-          {/* Target Locations with Google Places */}
-          <Text style={[styles.fieldLabel, { color: colors.text.secondary }]}>Target Locations</Text>
-          
-          <TouchableOpacity
-            style={[styles.addLocationButton, { borderColor: colors.primary, backgroundColor: colors.primary + '10' }]}
-            onPress={() => setShowLocationModal(true)}
-            disabled={isLoading}
-          >
-            <Icon name="map-pin" size={20} color={colors.primary} />
-            <Text style={[styles.addLocationButtonText, { color: colors.primary }]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              Add Location
+          {/* Location targeting section */}
+          <View style={styles.formSection}>
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+              Target Locations
             </Text>
-          </TouchableOpacity>
-
-          {/* Selected Locations */}
-          <View style={styles.locationsGrid}>
-            {postTargetLocations.map((location, index) => (
-              <View key={index} style={[styles.locationChip, styles.locationChipSelected, { backgroundColor: colors.primary + '20', borderColor: colors.primary }]}>
-                <Text style={[styles.locationChipText, { color: colors.primary }]}>
-                  {location}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => toggleLocation(location)}
-                  style={styles.removeLocationButton}
-                >
-                  <Icon name="x" size={14} color={colors.primary} />
-                </TouchableOpacity>
+            <Text style={[styles.sectionDescription, { color: colors.text.secondary }]}>
+              Select locations where your campaign will be shown
+            </Text>
+            
+            <TouchableOpacity 
+              style={[styles.addLocationButton, { borderColor: colors.border }]}
+              onPress={() => setShowLocationModal(true)}
+            >
+              <Icon name="map-pin" size={20} color={colors.primary} />
+              <Text style={[styles.addLocationText, { color: colors.primary }]}>
+                Add Location
+              </Text>
+            </TouchableOpacity>
+            
+            {postTargetLocations.length > 0 && (
+              <View style={styles.selectedLocationsContainer}>
+                {postTargetLocations.map((location, index) => (
+                  <View key={`location-${index}`} style={[styles.locationChip, { backgroundColor: colors.card }]}>
+                    <Text style={[styles.locationChipText, { color: colors.text.primary }]}>
+                      {location}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => removeLocation(location)}
+                      testID="remove-location"
+                    >
+                      <Icon name="x" size={16} color={colors.text.secondary} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
               </View>
-            ))}
+            )}
           </View>
 
-          {/* Location Search Modal */}
+          {/* Location Selection Modal */}
           <Modal
             visible={showLocationModal}
             animationType="slide"
             transparent={true}
             onRequestClose={() => setShowLocationModal(false)}
           >
-            <View style={styles.modalOverlay}>
-              <View style={[styles.locationModal, { backgroundColor: isDarkMode ? colors.card : '#FFFFFF' }]}>
-                <View style={[styles.modalHeader, { borderBottomColor: isDarkMode ? colors.border : '#E5E7EB' }]}>
-                  <Text style={[styles.modalTitle, { color: colors.text.primary }]}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                  >
-                    Search Locations
-                  </Text>
-                  <TouchableOpacity onPress={() => setShowLocationModal(false)}>
-                    <Icon name="x" size={24} color={colors.text.primary} />
-                  </TouchableOpacity>
-                </View>
-                
-                <View style={styles.searchContainer}>
-                  <View style={[styles.searchInputContainer, { borderColor: isDarkMode ? colors.border : '#E5E7EB' }]}
-                    pointerEvents={isLoading ? 'none' : 'auto'}
-                  >
-                    <Icon name="search" size={20} color={colors.text.tertiary} />
-                    <TextInput
-                      style={[styles.searchInput, { color: colors.text.primary }]}
-                      placeholder="Search for cities, states, countries..."
-                      placeholderTextColor={colors.text.tertiary}
-                      value={locationSearchQuery}
-                      onChangeText={setLocationSearchQuery}
-                      autoFocus
-                    />
-                    {isLocationSearching && (
-                      <ActivityIndicator size="small" color={colors.primary} />
-                    )}
-                  </View>
-                </View>
-
-                <FlatList
-                  data={locationSearchResults}
-                  keyExtractor={(item) => item.place_id}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={[styles.searchResultItem, { borderBottomColor: isDarkMode ? colors.border : '#E5E7EB' }]}
-                      onPress={() => addLocationFromSearch(item)}
-                    >
-                      <Icon name="map-pin" size={16} color={colors.text.tertiary} />
-                      <View style={styles.searchResultText}>
-                        <Text style={[styles.searchResultMain, { color: colors.text.primary }]}>
-                          {item.structured_formatting.main_text}
-                        </Text>
-                        <Text style={[styles.searchResultSecondary, { color: colors.text.secondary }]}
-                          numberOfLines={1}
-                          ellipsizeMode="tail"
-                        >
-                          {item.structured_formatting.secondary_text}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  )}
-                  style={styles.searchResultsList}
-                  showsVerticalScrollIndicator={false}
-                />
+            <View style={[styles.modalContainer, { backgroundColor: colors.card }]}>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.text.primary }]}>Select Locations</Text>
+                <TouchableOpacity onPress={() => setShowLocationModal(false)}>
+                  <Icon name="x" size={24} color={colors.text.primary} />
+                </TouchableOpacity>
               </View>
+              
+              <View style={styles.searchContainer}>
+                <View style={[styles.searchInputContainer, { borderColor: isDarkMode ? colors.border : '#E5E7EB' }]}
+                  pointerEvents={isLoading ? 'none' : 'auto'}
+                >
+                  <Icon name="search" size={20} color={colors.text.tertiary} />
+                  <TextInput
+                    style={[styles.searchInput, { color: colors.text.primary }]}
+                    placeholder="Search for cities, states, countries..."
+                    placeholderTextColor={colors.text.tertiary}
+                    value={locationSearchQuery}
+                    onChangeText={setLocationSearchQuery}
+                    autoFocus
+                  />
+                  {isLocationSearching && (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  )}
+                </View>
+              </View>
+
+              <FlatList
+                data={locationSearchResults}
+                keyExtractor={(item) => item.place_id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[styles.searchResultItem, { borderBottomColor: isDarkMode ? colors.border : '#E5E7EB' }]}
+                    onPress={() => addLocationFromSearch(item)}
+                  >
+                    <Icon name="map-pin" size={16} color={colors.text.tertiary} />
+                    <View style={styles.searchResultText}>
+                      <Text style={[styles.searchResultMain, { color: colors.text.primary }]}>
+                        {item.structured_formatting.main_text}
+                      </Text>
+                      <Text style={[styles.searchResultSecondary, { color: colors.text.secondary }]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {item.structured_formatting.secondary_text}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  isLocationSearching ? (
+                    <View style={styles.emptySearchResults}>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                      <Text style={{ color: colors.text.secondary, marginTop: 8 }}>Searching locations...</Text>
+                    </View>
+                  ) : locationSearchQuery.length > 0 && debouncedLocationQuery.length >= 3 ? (
+                    <View style={styles.emptySearchResults}>
+                      <Icon name="map-pin" size={24} color={colors.text.tertiary} />
+                      <Text style={{ color: colors.text.secondary, marginTop: 8 }}>No locations found</Text>
+                      <Text style={{ color: colors.text.tertiary, fontSize: 12, marginTop: 4 }}>
+                        Try searching for a city, state, or country
+                      </Text>
+                      {locationSearchError && (
+                        <Text style={{ color: colors.text.tertiary, fontSize: 11, marginTop: 4, fontStyle: 'italic' }}>
+                          Using offline location data
+                        </Text>
+                      )}
+                    </View>
+                  ) : locationSearchQuery.length < 3 ? (
+                    <View style={styles.emptySearchResults}>
+                      <Icon name="search" size={24} color={colors.text.tertiary} />
+                      <Text style={{ color: colors.text.secondary, marginTop: 8 }}>Type at least 3 characters to search</Text>
+                      <Text style={{ color: colors.text.tertiary, fontSize: 12, marginTop: 4 }}>
+                        Search for cities, states, or countries
+                      </Text>
+                    </View>
+                  ) : null
+                }
+              />
             </View>
           </Modal>
         </View>
@@ -1666,31 +1682,12 @@ const styles = StyleSheet.create({
   },
 
   // Location search styles
-  addLocationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-  },
-  addLocationButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 8,
-  },
-  locationModal: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    width: '90%',
-    maxHeight: '80%',
+  modalContainer: {
+    flex: 1,
+    marginTop: 50,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     overflow: 'hidden',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1703,7 +1700,6 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1F2937',
   },
   searchContainer: {
     padding: 16,
@@ -1712,26 +1708,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    height: 48,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
     marginLeft: 8,
-    color: '#1F2937',
-  },
-  searchResultsList: {
-    maxHeight: 300,
+    fontSize: 16,
   },
   searchResultItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   searchResultText: {
     marginLeft: 12,
@@ -1740,16 +1730,32 @@ const styles = StyleSheet.create({
   searchResultMain: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#1F2937',
   },
   searchResultSecondary: {
     fontSize: 14,
-    color: '#6B7280',
     marginTop: 2,
   },
-  removeLocationButton: {
+  emptySearchResults: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  addLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+  },
+  addLocationText: {
     marginLeft: 8,
-    padding: 2,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  selectedLocationsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 12,
   },
 
   // Date picker styles
@@ -1902,6 +1908,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: '#1F2937',
+  },
+
+  // Form section styles
+  formSection: {
+    marginBottom: 20,
+  },
+  sectionDescription: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 12,
+    lineHeight: 20,
   },
 });
 

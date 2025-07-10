@@ -1812,3 +1812,120 @@ export const useSearchUsers = (searchQuery: string, page: number = 1, limit: num
     },
   });
 };
+
+// Fallback location data for when API is unavailable
+const getFallbackLocationData = (searchQuery: string) => {
+  const commonLocations = [
+    { name: 'Mumbai', country: 'India' },
+    { name: 'Delhi', country: 'India' },
+    { name: 'Bangalore', country: 'India' },
+    { name: 'Chennai', country: 'India' },
+    { name: 'Kolkata', country: 'India' },
+    { name: 'Hyderabad', country: 'India' },
+    { name: 'Pune', country: 'India' },
+    { name: 'Ahmedabad', country: 'India' },
+    { name: 'Jaipur', country: 'India' },
+    { name: 'Lucknow', country: 'India' },
+    { name: 'New York', country: 'USA' },
+    { name: 'Los Angeles', country: 'USA' },
+    { name: 'London', country: 'UK' },
+    { name: 'Paris', country: 'France' },
+    { name: 'Tokyo', country: 'Japan' },
+    { name: 'Sydney', country: 'Australia' },
+    { name: 'Toronto', country: 'Canada' },
+    { name: 'Dubai', country: 'UAE' },
+    { name: 'Singapore', country: 'Singapore' },
+    { name: 'Bangkok', country: 'Thailand' },
+  ];
+
+  const query = searchQuery.toLowerCase();
+  return commonLocations
+    .filter(location =>
+      location.name.toLowerCase().includes(query) ||
+      location.country.toLowerCase().includes(query)
+    )
+    .slice(0, 5) // Limit to 5 results
+    .map((location, index) => ({
+      place_id: `fallback_${location.name.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}_${index}`,
+      description: `${location.name}, ${location.country}`,
+      structured_formatting: {
+        main_text: location.name,
+        secondary_text: location.country,
+      },
+      types: ['locality', 'political'],
+      terms: [
+        { offset: 0, value: location.name },
+        { offset: location.name.length + 2, value: location.country },
+      ],
+    }));
+};
+
+// Google Places Search Hook for Location Autocomplete
+export const useLocationSearch = (searchQuery: string) => {
+  return useQuery({
+    queryKey: ['location', 'search', searchQuery],
+    queryFn: async () => {
+      if (searchQuery.length < 3) {
+        return [];
+      }
+
+      try {
+        // Import Google Maps configuration
+        const { buildPlacesAutocompleteUrl, validatePlacesResponse, GOOGLE_MAPS_CONFIG } = await import('../config/googleMapsConfig');
+
+        const url = buildPlacesAutocompleteUrl(searchQuery);
+
+        // Create AbortController for timeout (React Native compatible)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+        }, GOOGLE_MAPS_CONFIG.REQUEST_TIMEOUT);
+
+        try {
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            signal: controller.signal,
+          });
+
+          // Clear timeout on successful response
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const data = await response.json();
+          const validatedResponse = validatePlacesResponse(data);
+
+          return validatedResponse.predictions || [];
+        } catch (error) {
+          // Clear timeout on error
+          clearTimeout(timeoutId);
+
+          // Handle abort error specifically
+          if (error instanceof Error && error.name === 'AbortError') {
+            throw new Error('Request timeout - please check your internet connection');
+          }
+
+          throw error;
+        }
+      } catch (error) {
+        // If Google Places API fails, return fallback data
+        console.warn('Google Places API failed, using fallback data:', error);
+        return getFallbackLocationData(searchQuery);
+      }
+    },
+    enabled: !!searchQuery && searchQuery.trim().length >= 3, // Only search if query is 3+ characters
+    staleTime: 10 * 60 * 1000, // 10 minutes - location data doesn't change often
+    retry: (failureCount, error: any) => {
+      // Don't retry on API quota errors or timeouts - use fallback instead
+      if (error?.message?.includes('OVER_QUERY_LIMIT')) return false;
+      if (error?.message?.includes('REQUEST_DENIED')) return false;
+      if (error?.message?.includes('Request timeout')) return false;
+      return failureCount < 1; // Only retry once before falling back
+    },
+  });
+};
