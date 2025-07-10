@@ -15,8 +15,8 @@ const PROD_APP_OPEN_AD_UNIT_ID =
     : '/22387492205,23292119919/com.adtip.app.adtip_app.AppOpen0.1750929051';
 
 // Switch between test and production ad unit IDs
- const APP_OPEN_AD_UNIT_ID = __DEV__ ? TEST_APP_OPEN_AD_UNIT_ID : PROD_APP_OPEN_AD_UNIT_ID;
-//const APP_OPEN_AD_UNIT_ID = PROD_APP_OPEN_AD_UNIT_ID;
+// const APP_OPEN_AD_UNIT_ID = __DEV__ ? TEST_APP_OPEN_AD_UNIT_ID : PROD_APP_OPEN_AD_UNIT_ID;
+const APP_OPEN_AD_UNIT_ID = PROD_APP_OPEN_AD_UNIT_ID; // 🔴 TESTING LIVE ADS TEMPORARILY
 
 // Minimum cooldown period between app open ads (in milliseconds)
 const AD_COOLDOWN_PERIOD = 60 * 1000; // 1 minute to balance user experience with ad revenue
@@ -33,9 +33,11 @@ export function useAppOpenAd() {
   const isInitialMount = useRef(true);
 
   useEffect(() => {
-    // Create app open ad instance
+    // Create app open ad instance with optimized request options
     adRef.current = AppOpenAd.createForAdRequest(APP_OPEN_AD_UNIT_ID, {
-      requestNonPersonalizedAdsOnly: true,
+      requestNonPersonalizedAdsOnly: false, // Allow personalized ads for better fill rates
+      keywords: ['entertainment', 'social', 'communication', 'lifestyle'],
+      contentUrl: 'https://adtip.app',
     });
 
     const onLoaded = () => {
@@ -67,11 +69,26 @@ export function useAppOpenAd() {
       console.log('App open ad failed to load:', error);
       setAdLoaded(false);
       isAdCurrentlyShowing = false;
-      
-      // Retry loading after a delay
-      setTimeout(() => {
-        adRef.current?.load();
-      }, 30000); // Retry after 30 seconds
+
+      // Enhanced error handling for different error types
+      if (error.code === 'no-fill') {
+        console.log('🎯 [AppOpenAd] No-fill error - this is normal for new ad units');
+        console.log('📊 [AppOpenAd] Ad inventory will improve over time as the app gains users');
+
+        // Retry with exponential backoff for no-fill errors
+        setTimeout(() => {
+          console.log('🔄 [AppOpenAd] Retrying ad load after no-fill...');
+          adRef.current?.load();
+        }, 60000); // Retry after 1 minute for no-fill
+      } else {
+        console.log('❌ [AppOpenAd] Other ad error:', error.code, error.message);
+
+        // Retry sooner for other types of errors
+        setTimeout(() => {
+          console.log('🔄 [AppOpenAd] Retrying ad load after error...');
+          adRef.current?.load();
+        }, 15000); // Retry after 15 seconds for other errors
+      }
     };
 
     // Set up event listeners

@@ -28,7 +28,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { getApps } from '@react-native-firebase/app';
 import messaging from '@react-native-firebase/messaging';
 import mobileAds from 'react-native-google-mobile-ads';
-import { useAppOpenAd } from './src/googleads/AppOpenAdManager';
+import { useAppOpenAd, AdDebugger } from './src/googleads';
 
 // Contexts
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -432,6 +432,9 @@ function App(): React.JSX.Element {
                             <AppNavigator />
                             <PersistentMeetingManager />
                             {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
+
+                            {/* Ad Debugger - only shows in development */}
+                            <AdDebugger />
                           </GestureHandlerRootView>
                         </SidebarProvider>
                       </TabNavigatorProvider>

@@ -14,8 +14,8 @@ const PROD_BANNER_AD_UNIT_ID =
     : '/22387492205,23292119919/com.adtip.app.adtip_app.Banner0.1750928844';
 
 // Switch between test and production ad unit IDs
-const BANNER_AD_UNIT_ID = __DEV__ ? TEST_BANNER_AD_UNIT_ID : PROD_BANNER_AD_UNIT_ID;
-//const BANNER_AD_UNIT_ID = PROD_BANNER_AD_UNIT_ID;
+// const BANNER_AD_UNIT_ID = __DEV__ ? TEST_BANNER_AD_UNIT_ID : PROD_BANNER_AD_UNIT_ID;
+const BANNER_AD_UNIT_ID = PROD_BANNER_AD_UNIT_ID; // 🔴 TESTING LIVE ADS TEMPORARILY
 
 const BannerAdComponent = () => {
   return (
@@ -23,12 +23,24 @@ const BannerAdComponent = () => {
       <BannerAd
         unitId={BANNER_AD_UNIT_ID}
         size={BannerAdSize.BANNER}
-        requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+        requestOptions={{
+          requestNonPersonalizedAdsOnly: false, // Allow personalized ads for better fill rates
+          keywords: ['entertainment', 'social', 'communication', 'lifestyle'],
+          contentUrl: 'https://adtip.app',
+        }}
         onAdLoaded={() => {
           console.log('Banner ad loaded successfully');
         }}
         onAdFailedToLoad={(error) => {
           console.log('Banner ad failed to load:', error);
+
+          // Enhanced error logging for debugging
+          if (error.code === 'no-fill') {
+            console.log('🎯 [BannerAd] No-fill error - this is normal for new ad units');
+            console.log('📊 [BannerAd] Ad inventory will improve over time');
+          } else {
+            console.log('❌ [BannerAd] Other ad error:', error.code, error.message);
+          }
         }}
         onAdOpened={() => {
           console.log('Banner ad opened');
