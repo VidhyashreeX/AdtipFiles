@@ -141,7 +141,7 @@ const EditProfile: React.FC = () => {
       setSelectedLanguages(userLanguageIds);
     }
   }, [user?.interests, user?.languages, interests, languages]);
-
+      
   // Helper function to check if a field has changed
   const hasFieldChanged = (fieldName: string, currentValue: any): boolean => {
     const originalValue = originalValues[fieldName as keyof typeof originalValues];
@@ -299,8 +299,8 @@ const EditProfile: React.FC = () => {
       if (response.status === true) {
         // Update local user context
         await updateUserDetails(updateData);
-        Alert.alert('Success', 'Profile updated successfully');
-        navigation.goBack();
+      Alert.alert('Success', 'Profile updated successfully');
+      navigation.goBack();
       } else {
         Alert.alert('Error', response.message || 'Failed to update profile');
       }

@@ -525,14 +525,14 @@ const ProfileScreen: React.FC = () => {
           Authorization: `Bearer ${token}`,
         },
       });
-      const followersResult = await followersResponse.json();
+        const followersResult = await followersResponse.json();
       console.log('[ProfileScreen] Followers API result:', followersResult);
       if (followersResult.status && Array.isArray(followersResult.data)) {
-        fetchedFollowers = followersResult.data.map((follower: any) => ({
-          ...follower,
-          profile_image: getFullImageUrl(follower.profile_image),
-        }));
-        setFollowers(fetchedFollowers);
+          fetchedFollowers = followersResult.data.map((follower: any) => ({
+            ...follower,
+            profile_image: getFullImageUrl(follower.profile_image),
+          }));
+          setFollowers(fetchedFollowers);
       } else {
         setFollowers([]);
       }
@@ -547,14 +547,14 @@ const ProfileScreen: React.FC = () => {
           Authorization: `Bearer ${token}`,
         },
       });
-      const followingsResult = await followingsResponse.json();
+        const followingsResult = await followingsResponse.json();
       console.log('[ProfileScreen] Followings API result:', followingsResult);
       if (followingsResult.status && Array.isArray(followingsResult.data)) {
-        fetchedFollowings = followingsResult.data.map((following: any) => ({
-          ...following,
-          profile_image: getFullImageUrl(following.profile_image),
-        }));
-        setFollowings(fetchedFollowings);
+          fetchedFollowings = followingsResult.data.map((following: any) => ({
+            ...following,
+            profile_image: getFullImageUrl(following.profile_image),
+          }));
+          setFollowings(fetchedFollowings);
       } else {
         setFollowings([]);
       }

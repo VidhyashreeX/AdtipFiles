@@ -391,7 +391,7 @@ export default function TipCallScreen() {
         callStore.actions.resetCallState();
         
         // Initialize the call service if not already initialized
-        const unifiedCallService = UnifiedCallService.getInstance();
+    const unifiedCallService = UnifiedCallService.getInstance();
         if (!unifiedCallService.getIsInitialized()) {
           console.log('[TipCallScreen] Call service not initialized, initializing now...');
           
@@ -466,10 +466,10 @@ export default function TipCallScreen() {
         
         if (result.camera && result.microphone) {
           console.log('[TipCallScreen] ✅ All essential permissions granted');
-        } else {
+          } else {
           console.warn('[TipCallScreen] ❌ Some essential permissions were not granted:', result);
-          Alert.alert(
-            "Permissions Required",
+            Alert.alert(
+              "Permissions Required",
             "Camera and microphone access are required to make calls. Please grant them from app settings.",
             [
               { text: 'Cancel', style: 'cancel' },
@@ -479,10 +479,10 @@ export default function TipCallScreen() {
                 Linking.openSettings();
               }}
             ]
-          );
-        }
-      } catch (err) {
-        console.warn('[TipCallScreen] Permissions request error:', err);
+            );
+          }
+        } catch (err) {
+          console.warn('[TipCallScreen] Permissions request error:', err);
       }
     };
     requestPermissions();
@@ -872,24 +872,24 @@ export default function TipCallScreen() {
       recipient: recipient.name,
       callType,
       userBalance: balance
-    });
+      });
 
     // Show confirmation dialog
-    Alert.alert(
-      `Start ${callType === 'voice' ? 'Voice' : 'Video'} Call`,
+      Alert.alert(
+        `Start ${callType === 'voice' ? 'Voice' : 'Video'} Call`,
       `Call to ${recipient.name}?\n\nThis call will be automatically ended after 10 minutes for safety.`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Start Call',
-          style: 'default',
-          onPress: () => initiateCall(),
-        },
-      ]
-    );
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Start Call',
+            style: 'default',
+            onPress: () => initiateCall(),
+          },
+        ]
+      );
 
     async function initiateCall() {
       try {
@@ -932,7 +932,7 @@ export default function TipCallScreen() {
         if (!videoSDKSuccess) {
           console.error('❌ [TipCall] VideoSDK call failed, but API was successful');
           // TODO: Handle partial failure - API succeeded but VideoSDK failed
-          Alert.alert(
+            Alert.alert(
             'Call Partially Started',
             'Call was initiated but media connection failed. Please try again.',
             [{ text: 'OK' }]
@@ -1261,224 +1261,224 @@ export default function TipCallScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar backgroundColor={colors.background} barStyle={isDarkMode ? "light-content" : "dark-content"} />
-      
-      {/* Updated Header with TipCall search functionality */}
-      <Header 
-        title="" 
-        showWallet={false}
-        showSearch={false}
-        centerComponent={
-          isTipCallSearchActive ? (
-            <View style={styles.tipCallSearchContainer}>
-              <TextInput
-                style={[styles.tipCallSearchInput, { color: colors.text.primary, borderColor: colors.border }]}
-                placeholder="Search users..."
-                placeholderTextColor={colors.text.secondary}
-                value={searchQuery || ''}
-                onChangeText={handleTipCallLiveSearchChange}
-                onSubmitEditing={handleTipCallSearchSubmit}
-                autoFocus={true}
-                returnKeyType="search"
-              />
-              <TouchableOpacity 
-                onPress={() => setIsTipCallSearchActive(false)}
-                style={styles.tipCallSearchClearButton}
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar backgroundColor={colors.background} barStyle={isDarkMode ? "light-content" : "dark-content"} />
+        
+        {/* Updated Header with TipCall search functionality */}
+        <Header 
+          title="" 
+          showWallet={false}
+          showSearch={false}
+          centerComponent={
+            isTipCallSearchActive ? (
+              <View style={styles.tipCallSearchContainer}>
+                <TextInput
+                  style={[styles.tipCallSearchInput, { color: colors.text.primary, borderColor: colors.border }]}
+                  placeholder="Search users..."
+                  placeholderTextColor={colors.text.secondary}
+                  value={searchQuery || ''}
+                  onChangeText={handleTipCallLiveSearchChange}
+                  onSubmitEditing={handleTipCallSearchSubmit}
+                  autoFocus={true}
+                  returnKeyType="search"
+                />
+                <TouchableOpacity 
+                  onPress={() => setIsTipCallSearchActive(false)}
+                  style={styles.tipCallSearchClearButton}
+                >
+                  <Icon name="x" size={16} color={colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
+            ) : undefined
+          }
+          rightComponent={
+            <View style={styles.headerRightContainer}>
+              {/* TipCall Search Icon */}
+              <TouchableOpacity
+                onPress={() => setIsTipCallSearchActive(true)}
+                style={[styles.headerIconButton, { marginRight: 12 }]}
               >
-                <Icon name="x" size={16} color={colors.text.secondary} />
+                <Icon name="search" size={20} color={colors.text.primary} />
+                {/* Show indicator if search is active */}
+                {searchQuery && searchQuery.trim() && (
+                  <View style={[styles.searchActiveDot, { backgroundColor: colors.primary }]} />
+                )}
               </TouchableOpacity>
-            </View>
-          ) : undefined
-        }
-        rightComponent={
-          <View style={styles.headerRightContainer}>
-            {/* TipCall Search Icon */}
-            <TouchableOpacity
-              onPress={() => setIsTipCallSearchActive(true)}
-              style={[styles.headerIconButton, { marginRight: 12 }]}
-            >
-              <Icon name="search" size={20} color={colors.text.primary} />
-              {/* Show indicator if search is active */}
-              {searchQuery && searchQuery.trim() && (
-                <View style={[styles.searchActiveDot, { backgroundColor: colors.primary }]} />
-              )}
-            </TouchableOpacity>
 
-            {/* Ban Icon - Navigate to Blocked Users */}
-            <TouchableOpacity
-              onPress={handleNavigateToBlockedUsers}
-              style={[styles.headerIconButton, { marginRight: 12 }]}
-            >
-              <Ban size={20} color={colors.error} />
-              {blockedUsersCount > 0 && (
-                <Text style={styles.blockedUsersBadgeText}>
-                  {blockedUsersCount > 99 ? '99+' : blockedUsersCount.toString()}
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            {/* Missed Calls Icon */}
-            <TouchableOpacity
-              onPress={() => navigation.navigate('MissedCalls')}
-              style={[styles.headerIconButton, { marginRight: 12 }]}
-            >
-              <Icon name="phone-missed" size={20} color={colors.error} />
-              {missedCallsCount > 0 && (
-                <View style={[styles.missedCallsBadge, { backgroundColor: colors.error }]}>
-                  <Text style={styles.missedCallsBadgeText}>
-                    {missedCallsCount > 99 ? '99+' : missedCallsCount.toString()}
+              {/* Ban Icon - Navigate to Blocked Users */}
+              <TouchableOpacity
+                onPress={handleNavigateToBlockedUsers}
+                style={[styles.headerIconButton, { marginRight: 12 }]}
+              >
+                <Ban size={20} color={colors.error} />
+                {blockedUsersCount > 0 && (
+                  <Text style={styles.blockedUsersBadgeText}>
+                    {blockedUsersCount > 99 ? '99+' : blockedUsersCount.toString()}
                   </Text>
-                </View>
-              )}
-            </TouchableOpacity>
+                )}
+              </TouchableOpacity>
 
-            {/* Banknote Arrow Up Icon - Navigate to AddFundsScreen */}
-            <TouchableOpacity
-              onPress={() => navigation.navigate('AddFundsScreen')}
-              style={[styles.headerIconButton, { marginRight: 8 }]}
-            >
-              <BanknoteArrowUp size={20} color={colors.primary} />
-            </TouchableOpacity>
+              {/* Missed Calls Icon */}
+              <TouchableOpacity
+                onPress={() => navigation.navigate('MissedCalls')}
+                style={[styles.headerIconButton, { marginRight: 12 }]}
+              >
+                <Icon name="phone-missed" size={20} color={colors.error} />
+                {missedCallsCount > 0 && (
+                  <View style={[styles.missedCallsBadge, { backgroundColor: colors.error }]}>
+                    <Text style={styles.missedCallsBadgeText}>
+                      {missedCallsCount > 99 ? '99+' : missedCallsCount.toString()}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
 
-            {/* DND Toggle Switch */}
-            <DndToggleSwitch
-              isDndEnabled={isDndEnabled}
-              onToggle={handleDndToggle}
-              isLoading={isDndLoading}
-              colors={colors}
-            />
-          </View>
-        }
-      />
+              {/* Banknote Arrow Up Icon - Navigate to AddFundsScreen */}
+              <TouchableOpacity
+                onPress={() => navigation.navigate('AddFundsScreen')}
+                style={[styles.headerIconButton, { marginRight: 8 }]}
+              >
+                <BanknoteArrowUp size={20} color={colors.primary} />
+              </TouchableOpacity>
 
-      {/* Render premium banner if applicable */}
-      {/*{renderPremiumBanner()}*/}
-
-      {/* Enhanced Filters Section */}
-      <View style={[styles.filtersSection, { backgroundColor: colors.background }]}>
-        <SingleBannerCard
-          title="Talk to Earn"
-          description={"Earn on Every Call: ₹2/min (Premium)\n₹0.60/min (Free)"}
-          icon={<Headphones size={48} color="#fff" />}
-          gradient={['#093028', '#237a57']}   
+              {/* DND Toggle Switch */}
+              <DndToggleSwitch
+                isDndEnabled={isDndEnabled}
+                onToggle={handleDndToggle}
+                isLoading={isDndLoading}
+                colors={colors}
+              />
+            </View>
+          }
         />
-        {/* Language Filter */}
-        <View style={styles.filterGroup}>
-          <Text style={[styles.filterGroupTitle, { color: colors.text.primary }]}>Languages</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterScrollContainer}
-            style={styles.filterScrollView}
-          >
+
+        {/* Render premium banner if applicable */}
+        {/*{renderPremiumBanner()}*/}
+
+        {/* Enhanced Filters Section */}
+        <View style={[styles.filtersSection, { backgroundColor: colors.background }]}>
+          <SingleBannerCard
+            title="Talk to Earn"
+            description={"Earn on Every Call: ₹2/min (Premium)\n₹0.60/min (Free)"}
+            icon={<Headphones size={48} color="#fff" />}
+            gradient={['#093028', '#237a57']}   
+          />
+          {/* Language Filter */}
+          <View style={styles.filterGroup}>
+            <Text style={[styles.filterGroupTitle, { color: colors.text.primary }]}>Languages</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterScrollContainer}
+              style={styles.filterScrollView}
+            >
             {languages.map((lang) => (
-              <FilterChip
-                key={lang.id}
-                label={lang.name}
+                <FilterChip
+                  key={lang.id}
+                  label={lang.name}
                 isSelected={selectedLanguage === lang.id}
                 onPress={() => setSelectedLanguage(lang.id)}
-                colors={colors}
-                isDarkMode={isDarkMode}
-              />
-            ))}
-          </ScrollView>
-        </View>
+                  colors={colors}
+                  isDarkMode={isDarkMode}
+                />
+              ))}
+            </ScrollView>
+          </View>
 
-        {/* Category Filter */}
-        <View style={styles.filterGroup}>
-          <Text style={[styles.filterGroupTitle, { color: colors.text.primary }]}>
-            Interests
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterScrollContainer}
-            style={styles.filterScrollView}
-          >
+          {/* Category Filter */}
+          <View style={styles.filterGroup}>
+            <Text style={[styles.filterGroupTitle, { color: colors.text.primary }]}>
+              Interests
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterScrollContainer}
+              style={styles.filterScrollView}
+            >
             {interests.map((category) => (
-              <FilterChip
-                key={category.id}
-                label={category.name}
+                <FilterChip
+                  key={category.id}
+                  label={category.name}
                 isSelected={selectedInterest === category.id}
                 onPress={() => setSelectedInterest(category.id)}
-                colors={colors}
-                isDarkMode={isDarkMode}
-              />
-            ))}
-          </ScrollView>
-        </View>
-      </View>
-
-      {/* Search Indicator */}
-      {searchQuery && searchQuery.trim() && (
-        <View style={styles.searchIndicator}>
-          <Icon name="search" size={16} color={colors.primary} />
-          <Text style={[styles.searchIndicatorText, {color: colors.primary}]}>
-            Search results for "{searchQuery.trim()}"
-          </Text>
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Icon name="x" size={16} color={colors.text.secondary} />
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Content Section */}
-      <View style={styles.contentSection}>
-        {initialLoading ? (
-          <ContactsSkeleton colors={colors} isDarkMode={isDarkMode} />
-        ) : usersError ? (
-          renderErrorState()
-        ) : filteredContacts.length === 0 ? (
-          renderEmptyState()
-        ) : (
-          <View style={{ marginVertical: 12 }}>
-            <FlatList
-              data={contactsWithAds}
-              renderItem={renderItem}
-              keyExtractor={(item, idx) => ('ad' in item ? item.key : String(item.id))}
-              refreshControl={
-                <RefreshControl
-                  refreshing={false} // Managed by React Query
-                  onRefresh={handleRefresh}
-                  colors={[colors.primary]}
-                  tintColor={colors.primary}
+                  colors={colors}
+                  isDarkMode={isDarkMode}
                 />
-              }
-              onEndReached={handleLoadMore}
-              onEndReachedThreshold={0.5}
-              ListFooterComponent={
-                loadingMore ? (
-                  <View style={{ padding: 20, alignItems: 'center' }}>
-                    <ActivityIndicator size="small" color={colors.primary} />
-                  </View>
-                ) : null
-              }
-              removeClippedSubviews={false}
-            />
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+
+        {/* Search Indicator */}
+        {searchQuery && searchQuery.trim() && (
+          <View style={styles.searchIndicator}>
+            <Icon name="search" size={16} color={colors.primary} />
+            <Text style={[styles.searchIndicatorText, {color: colors.primary}]}>
+              Search results for "{searchQuery.trim()}"
+            </Text>
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Icon name="x" size={16} color={colors.text.secondary} />
+            </TouchableOpacity>
           </View>
         )}
-      </View>
 
-      {/* User Profile Modal */}
-      <Modal
-        visible={showUserProfileModal}
-        animationType="slide"
-        onRequestClose={() => {
-          setShowUserProfileModal(false);
-          setSelectedUserId(null);
-        }}
-      >
-        {selectedUserId && (
-          <UserProfileScreen
-            userId={selectedUserId}
+        {/* Content Section */}
+        <View style={styles.contentSection}>
+          {initialLoading ? (
+            <ContactsSkeleton colors={colors} isDarkMode={isDarkMode} />
+          ) : usersError ? (
+            renderErrorState()
+          ) : filteredContacts.length === 0 ? (
+            renderEmptyState()
+          ) : (
+            <View style={{ marginVertical: 12 }}>
+              <FlatList
+                data={contactsWithAds}
+                renderItem={renderItem}
+                keyExtractor={(item, idx) => ('ad' in item ? item.key : String(item.id))}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={false} // Managed by React Query
+                    onRefresh={handleRefresh}
+                    colors={[colors.primary]}
+                    tintColor={colors.primary}
+                  />
+                }
+                onEndReached={handleLoadMore}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={
+                  loadingMore ? (
+                    <View style={{ padding: 20, alignItems: 'center' }}>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    </View>
+                  ) : null
+                }
+              removeClippedSubviews={false}
+              />
+            </View>
+          )}
+        </View>
+
+        {/* User Profile Modal */}
+        <Modal
+          visible={showUserProfileModal}
+          animationType="slide"
+          onRequestClose={() => {
+            setShowUserProfileModal(false);
+            setSelectedUserId(null);
+          }}
+        >
+          {selectedUserId && (
+            <UserProfileScreen
+              userId={selectedUserId}
             onClose={() => {
               setShowUserProfileModal(false);
               setSelectedUserId(null);
             }}
-          />
-        )}
-      </Modal>
+            />
+          )}
+        </Modal>
 
       {/* Premium Popup */}
       <PremiumPopup
@@ -1489,7 +1489,7 @@ export default function TipCallScreen() {
           setShowPremiumPopup(false);
         }}
       />
-    </View>
+      </View>
   );
 }
 
