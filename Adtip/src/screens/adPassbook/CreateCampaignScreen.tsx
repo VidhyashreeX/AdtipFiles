@@ -679,8 +679,11 @@ const CreateCampaignScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header 
+      <Header
         title="Create Campaign"
+        showSearch={false}
+        showWallet={false}
+        showPremium={false}
         leftComponent={
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Icon name="arrow-left" size={24} color={colors.text.primary} />
