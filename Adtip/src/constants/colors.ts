@@ -50,21 +50,21 @@ export const getThemeColors = (isDarkMode: boolean) => {
   if (isDarkMode) {
     return {
       ...COLORS,
-      background: '#0f172a', // Use a proper dark background
-      surface: '#1e293b',
-      card: '#334155',
+      background: '#000000', // Pure black background
+      surface: '#000000',    // Pure black surface
+      card: '#000000',       // Pure black card background
       text: {
-        primary: '#f8fafc',
-        secondary: '#e2e8f0',
-        tertiary: '#cbd5e1',
-        light: '#94a3b8',
+        primary: '#ffffff',   // Pure white text for contrast
+        secondary: '#e2e8f0', // Light grey for secondary text
+        tertiary: '#cbd5e1',  // Lighter grey for tertiary text
+        light: '#94a3b8',     // Keep light text as is
       },
-      border: '#475569',
-      borderLight: '#64748b',
+      border: '#333333',      // Dark grey for borders (not pure black for visibility)
+      borderLight: '#222222', // Slightly lighter for border variations
       // Skeleton colors for dark mode
       skeleton: {
-        background: '#475569',
-        highlight: '#64748b',
+        background: '#111111', // Very dark grey for skeleton background
+        highlight: '#222222',  // Slightly lighter for skeleton highlight
       },
     };
   }
