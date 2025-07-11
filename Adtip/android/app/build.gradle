@@ -78,10 +78,7 @@ def enableR8FullMode = true
  */
 def enableSeparateBuildPerCPUArchitecture = true
 
-/**
- * Enable universal APK generation alongside ABI-specific APKs
- */
-def universalApk = false
+
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -168,7 +165,7 @@ android {
         abi {
             reset()
             enable enableSeparateBuildPerCPUArchitecture
-            universalApk universalApk
+            universalApk false  // Set to true if you want a universal APK alongside ABI-specific ones
             include "armeabi-v7a", "arm64-v8a"
         }
     }
