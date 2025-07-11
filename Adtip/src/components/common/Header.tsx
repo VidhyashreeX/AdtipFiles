@@ -9,7 +9,7 @@ import {useAuth} from '../../contexts/AuthContext';
 import {useWallet} from '../../contexts/WalletContext';
 import {useSidebar} from '../../contexts/SidebarContext';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import { useCallStore } from '../../stores/callStore';
+import { useCallStore } from '../../stores/callStoreSimplified';
 import { useGuestGuard } from '../../hooks/useGuestGuard';
 import LoginPromptModal from '../modals/LoginPromptModal';
 
@@ -52,7 +52,8 @@ const formatDuration = (totalSeconds: number): string => {
 
 const LiveCallTimer: React.FC = () => {
   const navigation = useNavigation();
-  const callDuration = useCallStore((state) => state.callDuration);
+  const session = useCallStore((state) => state.session);
+  const callDuration = session?.startedAt ? Math.floor((Date.now() - session.startedAt) / 1000) : 0;
   const { colors } = useTheme();
 
   const handlePress = () => {
@@ -93,7 +94,7 @@ const Header: React.FC<HeaderProps> = ({
   const {width: screenWidth} = useWindowDimensions();
   const insets = useSafeAreaInsets(); 
   const searchInputRef = useRef<TextInput>(null);
-  const activeCall = useCallStore(state => state.activeCall);
+  const session = useCallStore(state => state.session);
 
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [searchQueryLocal, setSearchQueryLocal] = useState('');
@@ -246,7 +247,7 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   // Check if call is active and we are NOT on the meeting screen
-  const isCallActiveInBackground = activeCall && route.name !== 'Meeting';
+  const isCallActiveInBackground = session && route.name !== 'Meeting';
 
   return (
     <View 

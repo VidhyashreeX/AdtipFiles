@@ -61,8 +61,7 @@ global.resolveForegroundService = () => {
   }
 };
 
-// Register the headless JS task for call events
-import './src/tasks/CallEventTask';
+// CallEventTask removed - using simplified calling flow
 
 // Handle background messages
 messaging().setBackgroundMessageHandler(async remoteMessage => {

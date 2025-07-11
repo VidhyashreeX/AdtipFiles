@@ -52,10 +52,8 @@ import { navigationRef, navigateWithRetry, getCurrentRoute, isNavigationReady } 
 // Services
 import FirebaseService from './src/services/FirebaseService';
 import VideoSDKService from './src/services/videosdk/VideoSDKService';
-import UnifiedCallService from './src/services/calling/UnifiedCallService';  // Unified call service (replacing all legacy services)
 import PermissionManagerService from './src/services/PermissionManagerService';
 import PubScaleService from './src/services/PubScaleService';
-import CallKeepIntegrationService from './src/services/calling/CallKeepIntegrationService';
 
 import IncomingCallService from './src/services/IncomingCallService';
 
@@ -237,29 +235,7 @@ const AppNavigator = () => {
           const notificationResult = await permissionManager.requestNotificationPermissions();
           console.log('[App] Background: Notification permissions result:', notificationResult);
 
-          console.log('[App] Background: Initializing Unified Call Service...');
-          const unifiedCallService = UnifiedCallService.getInstance();
-          
-          const success = await unifiedCallService.initialize();
-          
-          if (success) {
-            console.log('[App] Background: Unified Call Service initialized successfully');
-            
-            // Check CallKeep availability
-            try {
-              const callKeepService = CallKeepIntegrationService.getInstance();
-              const isAvailable = await callKeepService.isAvailable();
-              if (isAvailable) {
-                console.log('[App] Background: CallKeep is available and will be initialized by UnifiedCallService');
-              } else {
-                console.log('[App] Background: CallKeep not available, using notifications only');
-              }
-            } catch (error) {
-              console.warn('[App] Background: CallKeep availability check failed:', error);
-            }
-          } else {
-            console.warn('[App] Background: Unified Call Service initialization failed');
-          }
+          console.log('[App] Background: Call services initialized via CallController (auto-init)');
         } catch (error) {
           console.error('[App] Background: Unified Call Service initialization error:', error);
         }
@@ -300,22 +276,8 @@ const AppNavigator = () => {
       
       if (data && data.isIncomingCall) {
         try {
-          const unifiedCallService = UnifiedCallService.getInstance();
-          
-          // Create call notification data
-          const callNotificationData = {
-            callId: data.callId || `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            callerName: data.callerName || 'Unknown Caller',
-            callType: data.callType || 'voice',
-            callerId: data.callerId,
-            meetingId: data.meetingId,
-            token: data.token,
-          };
-          
-          // Handle incoming call with Unified Call Service
-          await unifiedCallService.handleIncomingFCMCall(callNotificationData);
-          
-          console.log('[App] ✅ Unified Call Service incoming call handled');
+          // Incoming calls are now handled by CallSignalingService via FCM
+          console.log('[App] ✅ Incoming call handled by CallSignalingService');
         } catch (error) {
           console.error('[App] Error handling incoming call broadcast:', error);
         }
@@ -347,7 +309,7 @@ const AppNavigator = () => {
         }
         // TODO: Fetch call details using sessionId if needed
         // Example: const callDetails = await ApiService.getCallDetails(event.sessionId);
-        // if (callDetails) { UnifiedCallService.getInstance().handleIncomingCall(callDetails); }
+        // if (callDetails) { CallController.getInstance().handleIncomingCall(callDetails); }
         console.log('[App] Native answered call, sessionId:', event.sessionId);
       } else if (event.action === 'DECLINE') {
         CallController.getInstance().declineCall();

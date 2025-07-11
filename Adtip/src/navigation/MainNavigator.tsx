@@ -57,7 +57,7 @@ import { VideoPlayerModalScreen } from '../screens/tiptube';
 import CameraRecordingScreen from '../screens/content/CameraRecordingScreen';
 
 // Add TipCall imports - Fix the import path
-import TipCallScreen from '../screens/tipcall/TipCallScreen';
+import TipCallScreenSimple from '../screens/tipcall/TipCallScreenSimple';
 import MissedCallsScreen from '../screens/tipcall/MissedCallsScreen';
 // Import MeetingScreen
 import MeetingScreenSimple from '../screens/videosdk/MeetingScreenSimple';
@@ -136,7 +136,7 @@ const EnhancedFollowingsList = withWalletBalance(FollowingsList);
 const EnhancedExploreScreen = withWalletBalance(ExploreScreen);
 const EnhancedPremiumUserScreen = withWalletBalance(PremiumUserScreen);
 const EnhancedVideoPlayerModalScreen = withWalletBalance(VideoPlayerModalScreen);
-const EnhancedTipCallScreen = withWalletBalance(TipCallScreen);
+const EnhancedTipCallScreen = withWalletBalance(TipCallScreenSimple);
 const EnhancedMissedCallsScreen = withWalletBalance(MissedCallsScreen);
 
 // Custom transition configuration with Reanimated easing
@@ -376,7 +376,7 @@ const MainNavigator = () => {
       />
       <Stack.Screen
         name="TipCallSimple"
-        component={TipCallScreen}
+        component={TipCallScreenSimple}
         options={{ headerShown: false }}
       />
       {/* MissedCalls screen with standard transition */}

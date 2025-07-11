@@ -11,7 +11,8 @@
  */
 
 import WalletService from '../WalletService';
-import { getCallState } from '../../stores/callStore';
+import { useCallStore } from '../../stores/callStoreSimplified';
+import CallController from './CallController';
 
 export interface CallRates {
   voiceNonPremium: number; // ₹7 per minute
@@ -152,9 +153,8 @@ class CallBillingService {
         remainingSeconds: this.maxDurationSeconds,
       });
       
-      // Update call store with error if needed
-      const callStore = getCallState();
-      callStore.setError('Insufficient balance for call. Call will end soon.');
+      // Note: Error handling removed for simplified calling flow
+      console.warn('[CallBillingService] Insufficient balance for call. Call will end soon.');
     }
 
     // Start billing timer (updates every second)
@@ -276,7 +276,9 @@ class CallBillingService {
       // Check if call should be terminated
       if (remainingSeconds <= 0) {
         console.log('[CallBillingService] Call time limit reached, ending call');
-        this.endCallDueToInsufficientBalance();
+        this.endCallDueToInsufficientBalance().catch(err =>
+          console.error('[CallBillingService] Error ending call:', err)
+        );
         return;
       }
 
@@ -345,9 +347,8 @@ class CallBillingService {
       remainingSeconds,
     });
     
-    // Update call store with warning if needed
-    const callStore = getCallState();
-    callStore.setError(message);
+    // Note: Error handling removed for simplified calling flow
+    console.warn('[CallBillingService]', message);
   }
 
   /**
@@ -359,11 +360,11 @@ class CallBillingService {
     // Stop billing first
     this.stopCallBilling();
 
-    // End the call through Zustand store
+    // End the call through CallController
     console.log('[CallBillingService] Ending call due to insufficient balance');
-    const callStore = getCallState();
-    callStore.endCall('insufficient_balance');
-    callStore.setError('Call ended due to insufficient wallet balance');
+    const callController = CallController.getInstance();
+    await callController.endCall();
+    console.warn('[CallBillingService] Call ended due to insufficient wallet balance');
   }
 
   /**

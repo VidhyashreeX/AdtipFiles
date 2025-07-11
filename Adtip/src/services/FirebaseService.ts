@@ -7,14 +7,14 @@ import { getApps, getApp } from '@react-native-firebase/app';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { navigationRef } from '../navigation/NavigationService';
 import ApiService from './ApiService';
-import UnifiedCallService from './calling/UnifiedCallService';
+// UnifiedCallService removed - using simplified calling flow
 import CallConfig from '../config/CallConfig';
 
 /**
  * UPDATED FOR ZUSTAND MIGRATION:
  * Removed direct import of FirebaseCallService to break circular dependency.
  * FirebaseService no longer directly depends on FirebaseCallService.
- * All call-related communication now happens through Zustand store via UnifiedCallService.
+ * All call-related communication now happens through CallSignalingService.
  */
 
 export interface CallNotificationData {
@@ -117,22 +117,15 @@ class FirebaseService {
    */
   private _setBackgroundMessageHandler(msg: FirebaseMessagingTypes.Module): void {
     msg.setBackgroundMessageHandler(async (remoteMessage) => {
-      console.log('[FCM] Background message received - delegating to UnifiedCallService:', remoteMessage);
-      
-      // ✅ SINGLE POINT OF HANDLING: Only UnifiedCallService handles call-related FCM
-      try {
-        await UnifiedCallService.getInstance().handleFCMCallNotification(remoteMessage);
-      } catch (error) {
-        console.error('[FCM] Error in UnifiedCallService handling background FCM message:', error);
-      }
-      
-      // Note: Removed legacy handling to prevent duplicate processing
-      // All call handling is now centralized in UnifiedCallService
+      console.log('[FCM] Background message received - handled by CallSignalingService:', remoteMessage);
+
+      // Note: Call handling is now centralized in CallSignalingService
+      // which automatically processes FCM messages via its own listener
     });
   }
 
-  // ✅ REMOVED: Legacy _handleBackgroundCall method 
-  // All call handling is now centralized in UnifiedCallService via handleFCMCallNotification
+  // ✅ REMOVED: Legacy _handleBackgroundCall method
+  // All call handling is now centralized in CallSignalingService
 
   /**
    * Setup notification permissions with v22.2.1 enhanced permission handling
@@ -217,19 +210,12 @@ class FirebaseService {
         console.log('[FCM] App opened from background by notification:', remoteMessage);
       });
 
-      // Handle foreground messages - DELEGATE TO UnifiedCallService ONLY
+      // Handle foreground messages - handled by CallSignalingService
       const unsubscribeForegroundMessages = msg.onMessage(async (remoteMessage) => {
-        console.log('[FCM] Foreground message received - delegating to UnifiedCallService:', remoteMessage);
-        
-        // ✅ SINGLE POINT OF HANDLING: Only UnifiedCallService handles call-related FCM
-        try {
-          await UnifiedCallService.getInstance().handleFCMCallNotification(remoteMessage);
-        } catch (error) {
-          console.error('[FCM] Error in UnifiedCallService handling FCM message:', error);
-        }
-        
-        // Note: Removed legacy handling to prevent duplicate processing
-        // All call handling is now centralized in UnifiedCallService
+        console.log('[FCM] Foreground message received - handled by CallSignalingService:', remoteMessage);
+
+        // Note: Call handling is now centralized in CallSignalingService
+        // which automatically processes FCM messages via its own listener
       });
 
       // Listen for token refresh (improved in v22.2.1)

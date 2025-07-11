@@ -1,5 +1,4 @@
 import notifee, { AndroidImportance } from '@notifee/react-native'
-import CallKeepIntegrationService from './CallKeepIntegrationService'
 import { CallType } from '../../stores/callStoreSimplified'
 
 class NotificationService {

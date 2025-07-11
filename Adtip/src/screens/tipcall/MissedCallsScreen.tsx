@@ -20,7 +20,7 @@ import ScreenTransition from '../../components/common/ScreenTransition';
 import Icon from 'react-native-vector-icons/Feather';
 import { Contact } from '../../types/api';
 import { MainNavigatorParamList } from '../../types/navigation';
-import UnifiedCallService from '../../services/calling/UnifiedCallService';
+import CallController from '../../services/calling/CallController';
 
 type NavigationProp = NativeStackNavigationProp<MainNavigatorParamList, 'MissedCalls'>;
 
@@ -208,18 +208,17 @@ export default function MissedCallsScreen() {
   // Call handlers
   const handleVideoCall = useCallback(async (contact: Contact) => {
     try {
-      const unifiedCallService = UnifiedCallService.getInstance();
-      const callData = await unifiedCallService.startOutgoingCall(
+      const callController = CallController.getInstance();
+      const success = await callController.startCall(
         contact.id.toString(),
         contact.name || 'Unknown',
-        'video',
-        user?.name || 'User',
-        user?.id.toString() || '0'
+        'video'
       );
-      
-      if (callData) {
-        console.log('[MissedCallsScreen] Video call initiated successfully:', callData.callId);
-        // Navigation will be handled automatically by UnifiedCallService
+
+      if (success) {
+        console.log('[MissedCallsScreen] Video call initiated successfully');
+      } else {
+        Alert.alert('Call Failed', 'Unable to start video call. Please try again.');
       }
     } catch (error) {
       console.error('[MissedCallsScreen] Video call error:', error);
@@ -229,18 +228,17 @@ export default function MissedCallsScreen() {
 
   const handleVoiceCall = useCallback(async (contact: Contact) => {
     try {
-      const unifiedCallService = UnifiedCallService.getInstance();
-      const callData = await unifiedCallService.startOutgoingCall(
+      const callController = CallController.getInstance();
+      const success = await callController.startCall(
         contact.id.toString(),
         contact.name || 'Unknown',
-        'voice',
-        user?.name || 'User',
-        user?.id.toString() || '0'
+        'voice'
       );
-      
-      if (callData) {
-        console.log('[MissedCallsScreen] Voice call initiated successfully:', callData.callId);
-        // Navigation will be handled automatically by UnifiedCallService
+
+      if (success) {
+        console.log('[MissedCallsScreen] Voice call initiated successfully');
+      } else {
+        Alert.alert('Call Failed', 'Unable to start voice call. Please try again.');
       }
     } catch (error) {
       console.error('[MissedCallsScreen] Voice call error:', error);

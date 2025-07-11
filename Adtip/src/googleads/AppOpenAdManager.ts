@@ -1,7 +1,7 @@
 import { AppOpenAd, AdEventType, TestIds } from 'react-native-google-mobile-ads';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, AppState, AppStateStatus } from 'react-native';
-import UnifiedCallService from '../services/calling/UnifiedCallService';
+import { useCallStore } from '../stores/callStoreSimplified';
 import AdRotationService from '../services/AdRotationService';
 
 // Test Ad Unit ID (for development/testing)
@@ -149,10 +149,10 @@ export function useAppOpenAd() {
         !isAdCurrentlyShowing
       ) {
         // ✅ FIX: Check if a call is in progress before showing an ad using Zustand store
-        const { useCallStore } = require('../stores/callStore');
-        const callStatus = useCallStore.getState().callStatus;
+        const { useCallStore } = require('../stores/callStoreSimplified');
+        const session = useCallStore.getState().session;
 
-        if (callStatus !== 'idle' && callStatus !== 'ended') {
+        if (session) {
           console.log('[AppOpenAdManager] Suppressing ad because a call is active.');
           return;
         }
@@ -165,8 +165,8 @@ export function useAppOpenAd() {
         setTimeout(() => {
           // Double-check call state again after delay using Zustand store
           try {
-            const updatedCallStatus = useCallStore.getState().callStatus;
-            if (updatedCallStatus !== 'idle' && updatedCallStatus !== 'ended') {
+            const updatedSession = useCallStore.getState().session;
+            if (updatedSession) {
               console.log('[AppOpenAdManager] Suppressing delayed ad because a call is now active.');
               return;
             }

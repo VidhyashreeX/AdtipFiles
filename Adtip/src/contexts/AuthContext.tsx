@@ -4,7 +4,7 @@ import {API_BASE_URL, ENDPOINTS} from '../constants/api';
 import ApiService from '../services/ApiService';
 import {navigationRef} from '../navigation/NavigationService';
 import LastSeenService from '../services/LastSeenService'; // Ensure this import is present
-import UnifiedCallService from '../services/calling/UnifiedCallService';
+// UnifiedCallService removed - using simplified calling flow
 import FirebaseService from '../services/FirebaseService';
 import { ApiResponse, OtpLoginResponse as ApiOtpResponse, OtpVerifyResponse as ApiUserType, OtpVerifyApiResponse } from '../types/api';
 
@@ -311,10 +311,6 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       
       // Clean up all services before clearing storage
       try {
-        console.log('[AuthContext] Resetting UnifiedCallService...');
-        const unifiedCallService = UnifiedCallService.getInstance();
-        unifiedCallService.reset();
-        
         console.log('[AuthContext] Resetting FirebaseService...');
         const firebaseService = FirebaseService.getInstance();
         firebaseService.reset();
@@ -350,8 +346,6 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       
       // Still try to clean up services
       try {
-        const unifiedCallService = UnifiedCallService.getInstance();
-        unifiedCallService.reset();
         const firebaseService = FirebaseService.getInstance();
         firebaseService.reset();
       } catch (serviceError) {
