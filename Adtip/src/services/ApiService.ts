@@ -2386,4 +2386,113 @@ static async createSubscriptionTest(plan_id: string, user_id: number): Promise<a
   static async getVideoCallHistory(userId: number, page: number = 1, limit: number = 10): Promise<any> {
     return this.get(`/api/video-call/history/${userId}?page=${page}&limit=${limit}`);
   }
+
+  // ===== WITHDRAWAL APIs =====
+
+  // Get withdrawal settings
+  static async getWithdrawalSettings(): Promise<any> {
+    try {
+      const response = await this.get('/api/withdrawal-settings');
+      return response;
+    } catch (error) {
+      console.error('Error getting withdrawal settings:', error);
+      throw error;
+    }
+  }
+
+  // Check withdrawal eligibility
+  static async checkWithdrawalEligibility(userId: number, amount: number, withdrawalType: string): Promise<any> {
+    try {
+      const response = await this.post('/api/check-withdrawal-eligibility', {
+        userId,
+        amount,
+        withdrawalType
+      });
+      return response;
+    } catch (error) {
+      console.error('Error checking withdrawal eligibility:', error);
+      throw error;
+    }
+  }
+
+  // Process wallet withdrawal
+  static async processWalletWithdrawal(data: {
+    userId: number;
+    amount: number;
+    transactionMethod: 'BANK' | 'UPI';
+    bankName?: string;
+    accountNumber?: string;
+    ifscCode?: string;
+    mobileNumber?: string;
+    upiId?: string;
+  }): Promise<any> {
+    try {
+      const response = await this.post('/api/process-wallet-withdrawal', data);
+      return response;
+    } catch (error) {
+      console.error('Error processing wallet withdrawal:', error);
+      throw error;
+    }
+  }
+
+  // Process referral withdrawal
+  static async processReferralWithdrawal(data: {
+    userId: number;
+    amount: number;
+    withdrawalType: 'referral' | 'coupon';
+    bankName?: string;
+    bankIfsc?: string;
+    bankAccountNumber?: string;
+    upiId?: string;
+  }): Promise<any> {
+    try {
+      const response = await this.post('/api/process-referral-withdrawal', data);
+      return response;
+    } catch (error) {
+      console.error('Error processing referral withdrawal:', error);
+      throw error;
+    }
+  }
+
+  // Process channel withdrawal
+  static async processChannelWithdrawal(data: {
+    userId: number;
+    channelId?: number;
+    amount: number;
+    withdrawalType: 'creator_referral' | 'content_earnings';
+    bankName?: string;
+    bankIfsc?: string;
+    bankAccountNumber?: string;
+    upiId?: string;
+  }): Promise<any> {
+    try {
+      const response = await this.post('/api/process-channel-withdrawal', data);
+      return response;
+    } catch (error) {
+      console.error('Error processing channel withdrawal:', error);
+      throw error;
+    }
+  }
+
+  // Get withdrawal history
+  static async getWithdrawalHistory(userId: number, type: string = 'all', page: number = 1, limit: number = 10): Promise<any> {
+    try {
+      const response = await this.get(`/api/withdrawal-history/${userId}?type=${type}&page=${page}&limit=${limit}`);
+      return response;
+    } catch (error) {
+      console.error('Error getting withdrawal history:', error);
+      throw error;
+    }
+  }
+
+  // Get withdrawal statistics
+  static async getWithdrawalStats(userId: number): Promise<any> {
+    try {
+      const response = await this.get(`/api/withdrawal-stats/${userId}`);
+      return response;
+    } catch (error) {
+      console.error('Error getting withdrawal stats:', error);
+      throw error;
+    }
+  }
 }

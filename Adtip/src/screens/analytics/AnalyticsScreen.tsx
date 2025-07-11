@@ -7,12 +7,16 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
+import {useAuth} from '../../contexts/AuthContext';
 import Header from '../../components/common/Header';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import ApiService from '../../services/ApiService';
+import WithdrawalForm from '../../components/withdrawal/WithdrawalForm';
+import PremiumPopup from '../../components/common/PremiumPopup';
 
 interface AnalyticsData {
   channel_name: string;
@@ -35,6 +39,9 @@ type AnalyticsScreenRouteProp = RouteProp<RootStackParamList, 'Analytics'>;
 
 const AnalyticsScreen: React.FC = () => {
   const {colors} = useTheme();
+  const {user, premiumState} = useAuth();
+  const isPremium = premiumState.isPremium;
+  const [showPremiumPopup, setShowPremiumPopup] = useState(false);
   const route = useRoute<AnalyticsScreenRouteProp>();
   const { channelId } = route.params;
   const [loading, setLoading] = useState(true);
@@ -42,6 +49,7 @@ const AnalyticsScreen: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<'7d' | '30d' | '90d'>(
     '30d',
   );
+  const [isWithdrawalModalVisible, setIsWithdrawalModalVisible] = useState(false);
 
   const periods = [
     {id: '7d' as const, label: 'Last 7 days'},
@@ -106,6 +114,19 @@ const AnalyticsScreen: React.FC = () => {
       </Text>
     </View>
   );
+
+  const handleWithdraw = () => {
+    const availableBalance = parseFloat(analytics?.available_balance || '0');
+    if (!isPremium) {
+      setShowPremiumPopup(true);
+      return;
+    }
+    if (availableBalance < 1000) {
+      Alert.alert('Minimum withdrawal amount is ₹1000 for premium users.');
+      return;
+    }
+    setIsWithdrawalModalVisible(true);
+  };
 
   if (loading) {
     return (
@@ -210,7 +231,7 @@ const AnalyticsScreen: React.FC = () => {
             <View
               style={[
                 styles.statRow,
-                {borderBottomColor: colors.border.light},
+                {borderBottomColor: colors.border},
               ]}>
               <Text style={[styles.statDate, {color: colors.text.secondary}]}>
                 Paid Views
@@ -237,6 +258,18 @@ const AnalyticsScreen: React.FC = () => {
             </View>
         </View>
 
+        {/* Withdraw Earnings */}
+        {parseFloat(analytics?.available_balance || '0') > 0 && (
+          <TouchableOpacity
+            style={[styles.withdrawButton, {backgroundColor: colors.primary}]}
+            onPress={handleWithdraw}>
+            <Icon name="dollar-sign" size={20} color={colors.white} />
+            <Text style={[styles.withdrawButtonText, {color: colors.white}]}>
+              Withdraw Earnings (${parseFloat(analytics?.available_balance || '0').toFixed(2)})
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {/* Export Data */}
         <TouchableOpacity
           style={[styles.exportButton, {backgroundColor: colors.surface}]}
@@ -250,6 +283,26 @@ const AnalyticsScreen: React.FC = () => {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Withdrawal Form Modal */}
+      <WithdrawalForm
+        visible={isWithdrawalModalVisible}
+        onClose={() => setIsWithdrawalModalVisible(false)}
+        onSuccess={() => {
+          // Refresh analytics data after successful withdrawal
+          loadAnalytics();
+        }}
+        withdrawalType="content_earnings"
+        availableBalance={parseFloat(analytics?.available_balance || '0')}
+        userId={user?.id || 0}
+        channelId={parseInt(channelId)}
+      />
+
+      <PremiumPopup
+        visible={showPremiumPopup}
+        onClose={() => setShowPremiumPopup(false)}
+        onUpgrade={() => setShowPremiumPopup(false)}
+      />
     </View>
   );
 };
@@ -369,6 +422,20 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   exportButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  withdrawButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 8,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  withdrawButtonText: {
     fontSize: 14,
     fontWeight: '500',
     marginLeft: 8,

@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  FlatList,
+  ScrollView,
   SafeAreaView,
   Share,
   Clipboard,
@@ -12,8 +12,12 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
+import {useAuth} from '../../contexts/AuthContext';
 import Header from '../../components/common/Header';
 import ScreenTransition from '../../components/common/ScreenTransition';
+import WithdrawalForm from '../../components/withdrawal/WithdrawalForm';
+import ApiService from '../../services/ApiService';
+import PremiumPopup from '../../components/common/PremiumPopup';
 
 interface ReferralData {
   referral_code: string;
@@ -30,17 +34,12 @@ interface ReferralData {
   each_coupon: number;
 }
 
-interface ReferralActivity {
-  id: string;
-  userName: string;
-  action: 'joined' | 'first_purchase' | 'monthly_active';
-  earnings: number;
-  timestamp: Date;
-  status: 'completed' | 'pending';
-}
+
 
 const ReferralScreen: React.FC = () => {
   const {colors} = useTheme();
+  const {user, premiumState} = useAuth();
+  const isPremium = premiumState.isPremium;
   const [referralData, setReferralData] = useState<ReferralData>({
     referral_code: '',
     total_referrals: 0,
@@ -55,58 +54,30 @@ const ReferralScreen: React.FC = () => {
     coupon_code: '',
     each_coupon: 0,
   });
-  const [activities, setActivities] = useState<ReferralActivity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isReferralWithdrawalModalVisible, setIsReferralWithdrawalModalVisible] = useState(false);
+  const [isCouponWithdrawalModalVisible, setIsCouponWithdrawalModalVisible] = useState(false);
+  const [showPremiumPopup, setShowPremiumPopup] = useState(false);
 
   useEffect(() => {
-    loadReferralData();
-  }, []);
+    if (user?.id) {
+      loadReferralData();
+    }
+  }, [user?.id]);
 
-  const loadReferralData = () => {
-    // TODO: Replace with actual API call
-    // const response = await fetch('/api/referral/details/:userid');
-    // const data = await response.json();
-    
-    // Simulate API call with the new data structure
-    setTimeout(() => {
-      const mockData: ReferralData = {
-        referral_code: "ADTIP508167A",
-        total_referrals: 0,
-        total_referrals_earnings: 0,
-        total_referral_withdrawals_amount: 0,
-        available_referral_balance: 0,
-        each_referral: 3,
-        total_premiums: 0,
-        total_premium_earnings: 0,
-        total_coupon_withdrawals_amount: 0,
-        available_coupon_balance: 0,
-        coupon_code: "SAVE50816897W50",
-        each_coupon: 30,
-      };
-
-      const mockActivities: ReferralActivity[] = [
-        {
-          id: '1',
-          userName: 'John Doe',
-          action: 'joined',
-          earnings: 2.0,
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
-          status: 'completed',
-        },
-        {
-          id: '2',
-          userName: 'Sarah Smith',
-          action: 'first_purchase',
-          earnings: 5.0,
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24),
-          status: 'pending',
-        },
-      ];
-
-      setReferralData(mockData);
-      setActivities(mockActivities);
+  const loadReferralData = async () => {
+    try {
+      setIsLoading(true);
+      const response = await ApiService.get(`/api/referral/details/${user?.id}`);
+      console.log('Referral API Response:', response);
+      if (response.status === true) {
+        setReferralData(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading referral data:', error);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const handleShare = async () => {
@@ -141,78 +112,35 @@ const ReferralScreen: React.FC = () => {
   };
 
   const handleReferralWithdraw = () => {
-    // TODO: Implement referral withdrawal API
-    Alert.alert(
-      'Withdraw Referral Earnings',
-      `Withdraw ₹${referralData.available_referral_balance} from your referral earnings?`,
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {text: 'Withdraw', onPress: () => {
-          Alert.alert('Success', 'Withdrawal request submitted successfully!');
-        }},
-      ]
-    );
+    if (!isPremium) {
+      setShowPremiumPopup(true);
+      return;
+    }
+    if (referralData.available_referral_balance < 1000) {
+      Alert.alert('Minimum withdrawal amount is ₹1000 for premium users.');
+      return;
+    }
+    setIsReferralWithdrawalModalVisible(true);
   };
 
   const handleCouponWithdraw = () => {
-    // TODO: Implement coupon withdrawal API
-    Alert.alert(
-      'Withdraw Coupon Earnings',
-      `Withdraw ₹${referralData.available_coupon_balance} from your coupon earnings?`,
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {text: 'Withdraw', onPress: () => {
-          Alert.alert('Success', 'Withdrawal request submitted successfully!');
-        }},
-      ]
-    );
-  };
-
-  const getActionIcon = (action: string) => {
-    switch (action) {
-      case 'joined':
-        return 'user-plus';
-      case 'first_purchase':
-        return 'shopping-cart';
-      case 'monthly_active':
-        return 'activity';
-      default:
-        return 'user';
+    if (!isPremium) {
+      setShowPremiumPopup(true);
+      return;
     }
-  };
-
-  const getActionDescription = (action: string) => {
-    switch (action) {
-      case 'joined':
-        return 'joined using your code';
-      case 'first_purchase':
-        return 'made their first purchase';
-      case 'monthly_active':
-        return 'stayed active this month';
-      default:
-        return 'completed an action';
+    if (referralData.available_coupon_balance < 1000) {
+      Alert.alert('Minimum withdrawal amount is ₹1000 for premium users.');
+      return;
     }
+    setIsCouponWithdrawalModalVisible(true);
   };
 
-  const formatTimestamp = (timestamp: Date) => {
-    const now = new Date();
-    const diffInSeconds = Math.floor(
-      (now.getTime() - timestamp.getTime()) / 1000,
-    );
-
-    if (diffInSeconds < 60) {
-      return 'Just now';
-    } else if (diffInSeconds < 3600) {
-      const minutes = Math.floor(diffInSeconds / 60);
-      return `${minutes}m ago`;
-    } else if (diffInSeconds < 86400) {
-      const hours = Math.floor(diffInSeconds / 3600);
-      return `${hours}h ago`;
-    } else {
-      const days = Math.floor(diffInSeconds / 86400);
-      return `${days}d ago`;
-    }
+  const handleWithdrawalSuccess = () => {
+    // Refresh referral data after successful withdrawal
+    loadReferralData();
   };
+
+
 
   const renderStatCard = (title: string, value: string, subtitle?: string) => (
     <View style={[styles.statCard, {backgroundColor: colors.surface}]}>
@@ -228,57 +156,7 @@ const ReferralScreen: React.FC = () => {
     </View>
   );
 
-  const renderActivity = ({item}: {item: ReferralActivity}) => (
-    <View
-      style={[styles.activityItem, {borderBottomColor: colors.borderLight}]}>
-      <View
-        style={[
-          styles.activityIconContainer,
-          {backgroundColor: colors.primary + '20'},
-        ]}>
-        <Icon
-          name={getActionIcon(item.action)}
-          size={20}
-          color={colors.primary}
-        />
-      </View>
 
-      <View style={styles.activityContent}>
-        <Text style={[styles.activityUser, {color: colors.text.primary}]}>
-          {item.userName}
-        </Text>
-        <Text
-          style={[styles.activityDescription, {color: colors.text.secondary}]}>
-          {getActionDescription(item.action)}
-        </Text>
-        <Text style={[styles.activityTimestamp, {color: colors.text.tertiary}]}>
-          {formatTimestamp(item.timestamp)}
-        </Text>
-      </View>
-
-      <View style={styles.activityEarnings}>
-        <Text style={[styles.earningsAmount, {color: colors.primary}]}>
-          +₹{item.earnings.toFixed(2)}
-        </Text>
-        <View
-          style={[
-            styles.statusBadge,
-            {
-              backgroundColor:
-                item.status === 'completed' ? '#96CEB4' : '#FFEAA7',
-            },
-          ]}>
-          <Text
-            style={[
-              styles.statusText,
-              {color: item.status === 'completed' ? '#2D7D32' : '#F57F17'},
-            ]}>
-            {item.status}
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
 
   return (
     <ScreenTransition animationType="slide">
@@ -286,11 +164,8 @@ const ReferralScreen: React.FC = () => {
         style={[styles.container, {backgroundColor: colors.background}]}>
         <Header title="Referrals"/>
 
-        <FlatList
-          data={activities}
-          renderItem={renderActivity}
-          keyExtractor={item => item.id}
-          ListHeaderComponent={
+        <ScrollView
+          showsVerticalScrollIndicator={false}>
             <View>
               {/* Referral Stats */}
               <View style={styles.statsContainer}>
@@ -320,28 +195,20 @@ const ReferralScreen: React.FC = () => {
               </View>
 
               {/* Referral Withdraw Section */}
-              {referralData.available_referral_balance > 0 && (
-                <View
-                  style={[
-                    styles.withdrawContainer,
-                    {backgroundColor: colors.surface},
-                  ]}>
-                  <View style={styles.withdrawContent}>
-                    <Icon name="credit-card" size={20} color="#4CAF50" />
-                    <Text
-                      style={[styles.withdrawText, {color: colors.text.primary}]}>
-                      ₹{referralData.available_referral_balance.toFixed(2)} available to withdraw
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.withdrawButton, {backgroundColor: colors.primary}]}
-                    onPress={handleReferralWithdraw}>
-                    <Text style={[styles.withdrawButtonText, {color: colors.white}]}>
-                      Withdraw
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+              <View
+                style={[
+                  styles.withdrawContainer,
+                  {backgroundColor: colors.surface},
+                ]}>
+                <TouchableOpacity
+                  style={[styles.fullWidthWithdrawButton, {backgroundColor: colors.primary}]}
+                  onPress={handleReferralWithdraw}>
+                  <Icon name="credit-card" size={20} color={colors.white} />
+                  <Text style={[styles.fullWidthWithdrawButtonText, {color: colors.white}]}>
+                    Withdraw Referral Earnings (₹{referralData.available_referral_balance.toFixed(2)})
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
               {/* Coupon Stats */}
               <View style={styles.statsContainer}>
@@ -371,28 +238,20 @@ const ReferralScreen: React.FC = () => {
               </View>
 
               {/* Coupon Withdraw Section */}
-              {referralData.available_coupon_balance > 0 && (
-                <View
-                  style={[
-                    styles.withdrawContainer,
-                    {backgroundColor: colors.surface},
-                  ]}>
-                  <View style={styles.withdrawContent}>
-                    <Icon name="credit-card" size={20} color="#4CAF50" />
-                    <Text
-                      style={[styles.withdrawText, {color: colors.text.primary}]}>
-                      ₹{referralData.available_coupon_balance.toFixed(2)} available to withdraw
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.withdrawButton, {backgroundColor: colors.primary}]}
-                    onPress={handleCouponWithdraw}>
-                    <Text style={[styles.withdrawButtonText, {color: colors.white}]}>
-                      Withdraw
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+              <View
+                style={[
+                  styles.withdrawContainer,
+                  {backgroundColor: colors.surface},
+                ]}>
+                <TouchableOpacity
+                  style={[styles.fullWidthWithdrawButton, {backgroundColor: colors.primary}]}
+                  onPress={handleCouponWithdraw}>
+                  <Icon name="credit-card" size={20} color={colors.white} />
+                  <Text style={[styles.fullWidthWithdrawButtonText, {color: colors.white}]}>
+                    Withdraw Coupon Earnings (₹{referralData.available_coupon_balance.toFixed(2)})
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
               {/* Referral Code Section */}
               <View
@@ -518,32 +377,35 @@ const ReferralScreen: React.FC = () => {
                 </TouchableOpacity>
               </View>
 
-              {/* Activity Header */}
-              <View style={styles.activityHeader}>
-                <Text
-                  style={[styles.activityTitle, {color: colors.text.primary}]}>
-                  Referral Activity
-                </Text>
-              </View>
             </View>
-          }
-          ListEmptyComponent={
-            !isLoading && activities.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Icon name="users" size={48} color={colors.text.tertiary} />
-                <Text style={[styles.emptyText, {color: colors.text.secondary}]}>
-                  No referral activity yet
-                </Text>
-                <Text
-                  style={[styles.emptySubtext, {color: colors.text.tertiary}]}>
-                  Share your referral code to start earning
-                </Text>
-              </View>
-            ) : null
-          }
-          showsVerticalScrollIndicator={false}
-        />
+          </ScrollView>
       </SafeAreaView>
+
+      {/* Referral Withdrawal Form Modal */}
+      <WithdrawalForm
+        visible={isReferralWithdrawalModalVisible}
+        onClose={() => setIsReferralWithdrawalModalVisible(false)}
+        onSuccess={handleWithdrawalSuccess}
+        withdrawalType="referral"
+        availableBalance={referralData.available_referral_balance}
+        userId={user?.id || 0}
+      />
+
+      {/* Coupon Withdrawal Form Modal */}
+      <WithdrawalForm
+        visible={isCouponWithdrawalModalVisible}
+        onClose={() => setIsCouponWithdrawalModalVisible(false)}
+        onSuccess={handleWithdrawalSuccess}
+        withdrawalType="coupon"
+        availableBalance={referralData.available_coupon_balance}
+        userId={user?.id || 0}
+      />
+
+      <PremiumPopup
+        visible={showPremiumPopup}
+        onClose={() => setShowPremiumPopup(false)}
+        onUpgrade={() => setShowPremiumPopup(false)}
+      />
     </ScreenTransition>
   );
 };
@@ -615,6 +477,21 @@ const styles = StyleSheet.create({
   withdrawButtonText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  fullWidthWithdrawButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  fullWidthWithdrawButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   referralSection: {
     marginHorizontal: 16,
@@ -693,79 +570,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
-  activityHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  activityTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  activityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  activityIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  activityContent: {
-    flex: 1,
-  },
-  activityUser: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  activityDescription: {
-    fontSize: 14,
-    marginBottom: 2,
-  },
-  activityTimestamp: {
-    fontSize: 12,
-  },
-  activityEarnings: {
-    alignItems: 'flex-end',
-  },
-  earningsAmount: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  statusBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 32,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  emptySubtext: {
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
+
 });
 
 export default ReferralScreen;

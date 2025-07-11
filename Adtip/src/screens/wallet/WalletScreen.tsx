@@ -30,6 +30,8 @@ import PlanCardSkeleton from '../../components/skeletons/PlanCardSkeleton';
 import TransactionListSkeleton from '../../components/skeletons/TransactionListSkeleton';
 import { useWallet } from '../../contexts/WalletContext';
 import UserPremiumPlans from './UserPremiumPlans';
+import WithdrawalForm from '../../components/withdrawal/WithdrawalForm';
+import PremiumPopup from '../../components/common/PremiumPopup';
 
 const WITHDRAWAL_THRESHOLD = {
   REGULAR: 100,
@@ -58,6 +60,8 @@ const WalletScreen = () => {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [isAmountModalVisible, setIsAmountModalVisible] = useState(false);
   const [amountToAdd, setAmountToAdd] = useState('');
+  const [isWithdrawalModalVisible, setIsWithdrawalModalVisible] = useState(false);
+  const [showPremiumPopup, setShowPremiumPopup] = useState(false);
   
   // Error states
   const [balanceError, setBalanceError] = useState<string | null>(null);
@@ -240,23 +244,21 @@ const WalletScreen = () => {
   };
 
   const handleWithdraw = () => {
-    if (!canWithdraw) {
-      Alert.alert(
-        'Cannot Withdraw', 
-        `Minimum withdrawal amount is ₹${minimumWithdrawal}`
-      );
+    if (!isPremium) {
+      setShowPremiumPopup(true);
       return;
     }
-    
-    navigation.navigate('WithdrawalForm' as never, { 
-      balance: currentBalance,
-      minimumWithdrawal,
-      onSuccess: () => {
-        // Refresh both balance and withdrawals after successful withdrawal
-        if (refreshBalance) refreshBalance();
-        if (refetchWithdrawals) refetchWithdrawals();
-      }
-    });
+    if (currentBalance < 1000) {
+      Alert.alert('Minimum withdrawal amount is ₹1000 for premium users.');
+      return;
+    }
+    setIsWithdrawalModalVisible(true);
+  };
+
+  const handleWithdrawalSuccess = () => {
+    // Refresh both balance and withdrawals after successful withdrawal
+    if (refreshBalance) refreshBalance();
+    if (refetchWithdrawals) refetchWithdrawals();
   };
 
   const navigateToPremium = () => {
@@ -488,6 +490,21 @@ const WalletScreen = () => {
             </LinearGradient>
           </KeyboardAvoidingView>
         </Modal>
+
+        {/* Withdrawal Form Modal */}
+        <WithdrawalForm
+          visible={isWithdrawalModalVisible}
+          onClose={() => setIsWithdrawalModalVisible(false)}
+          onSuccess={handleWithdrawalSuccess}
+          withdrawalType="wallet"
+          availableBalance={currentBalance}
+          userId={user?.id || 0}
+        />
+        <PremiumPopup
+          visible={showPremiumPopup}
+          onClose={() => setShowPremiumPopup(false)}
+          onUpgrade={() => setShowPremiumPopup(false)}
+        />
       </View>
     </ScreenTransition>
   );
