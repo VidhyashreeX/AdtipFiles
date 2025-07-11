@@ -236,3 +236,74 @@ export function useLikeShortMutation() {
     },
   });
 }
+
+// Guest Shorts hook for unauthenticated users
+export const useGuestShortsQuery = () => {
+  return useQuery({
+    queryKey: ['guest-shorts'],
+    queryFn: async () => {
+      console.log('[useGuestShortsQuery] Fetching guest shorts...');
+
+      // Call the guest API that doesn't require authentication
+      const data = await ApiService.getPublicShots();
+
+      console.log('[useGuestShortsQuery] Raw API response:', data);
+
+      // Transform PublicShot[] to ShortVideo[] format with proper null checks
+      const transformedShorts: ShortVideo[] = (data.data || [])
+        .filter((shot: PublicShot) => {
+          const isValid = shot && shot.id && shot.channelId && shot.video_link;
+          if (!isValid) {
+            console.warn('[useGuestShortsQuery] Filtering out invalid shot:', shot);
+          }
+          return isValid;
+        })
+        .map((shot: PublicShot) => {
+          const transformed = {
+            id: shot.id?.toString() || 'unknown',
+            title: shot.name || 'Untitled Short',
+            thumbnail: shot.video_Thumbnail || null,
+            channel: {
+              id: shot.channelId?.toString() || 'unknown',
+              name: shot.channelName || 'Unknown Channel',
+              avatar: shot.channel_profile || getFallbackAvatarUrl(shot.channelId || 0),
+              verified: false,
+              subscribers: shot.total_channel_followers || 0,
+            },
+            views: shot.total_views || 0,
+            likes: shot.total_likes || 0,
+            duration: shot.play_duration || '0:00',
+            createdAt: shot.createddate || new Date().toISOString(),
+            category: shot.category_id?.toString() || '0',
+            isPaidPromotional: shot.is_paid_promotional === 1,
+            postedAt: shot.createddate || new Date().toISOString(),
+            description: shot.video_description || '',
+            videoUrl: shot.video_link || '',
+            comments: shot.total_comments || 0,
+            musicName: undefined,
+          };
+
+          console.log('[useGuestShortsQuery] Transformed short:', {
+            id: transformed.id,
+            title: transformed.title,
+            videoUrl: transformed.videoUrl,
+            channelName: transformed.channel.name
+          });
+
+          return transformed;
+        });
+
+      console.log('[useGuestShortsQuery] Total transformed shorts:', transformedShorts.length);
+
+      return {
+        pages: [{
+          data: transformedShorts,
+          nextCursor: null,
+        }],
+        pageParams: [null],
+      };
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnMount: false,
+  });
+};

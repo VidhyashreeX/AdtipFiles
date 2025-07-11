@@ -35,6 +35,8 @@ import {useNavigation, useFocusEffect, useNavigationState} from '@react-navigati
 import * as NavigationService from '../../navigation/NavigationService';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import { MainNavigatorParamList } from '../../types/navigation';
+import { useAuth } from '../../contexts/AuthContext';
+import LoginPromptModal from '../modals/LoginPromptModal';
 
 interface MenuItemProps {
   icon: string;
@@ -116,9 +118,14 @@ const Sidebar: React.FC = () => {
   const {colors, isDarkMode} = useTheme();
   const {isSidebarOpen, closeSidebar, openSidebar} = useSidebar(); // Assuming openSidebar exists
   const navigation = useNavigation();
+  const { isGuest } = useAuth();
   const [activeScreen, setActiveScreen] = useState<keyof MainNavigatorParamList>('TabHome');
   const {width: windowWidth} = useWindowDimensions();
   const insets = useSafeAreaInsets();
+
+  // Login prompt modal state for guest users
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [loginPromptMessage, setLoginPromptMessage] = useState('Login to unlock all features');
 
   const navigationState = useNavigationState(state => state);
 
@@ -244,6 +251,12 @@ const Sidebar: React.FC = () => {
     return () => backHandler.remove();
   }, [isSidebarOpen, closeSidebar]);
 
+  // Helper function to show login prompt for guest users
+  const showLoginPromptForAction = useCallback((action: string) => {
+    setLoginPromptMessage(`Login to ${action}`);
+    setShowLoginPrompt(true);
+  }, []);
+
   const menuItems: MenuItemProps[] = useMemo(() => [
     {icon: 'home', label: 'Home', screen: 'TabHome'},
     {icon: 'compass', label: 'Explore', screen: 'Explore'},
@@ -261,10 +274,55 @@ const Sidebar: React.FC = () => {
   ], []);
 
   const handleNavigate = useCallback((screenName: keyof MainNavigatorParamList) => {
-    // Start sidebar closing animation immediately
+    // Check if user is in guest mode and show appropriate login prompts
+    if (isGuest) {
+      const screenMessages: Record<string, string> = {
+        'Explore': 'access explore features',
+        'Wallet': 'access your wallet',
+        'Referral': 'access refer & earn',
+        'PlayToEarn': 'access play to earn games',
+        'AdPassbook': 'access your ad passbook',
+        'Profile': 'view your profile',
+        'PremiumUser': 'access premium features',
+        'ContentCreatorPremium': 'access content creator premium',
+        'Settings': 'access settings',
+        'Earnings': 'view your earnings',
+      };
+
+      // Allow navigation to Home, TipTube, and TipShorts for guest users
+      if (screenName === 'TabHome' || screenName === 'TipTube' || screenName === 'TipShorts') {
+        // Close sidebar and navigate for allowed screens
+        closeSidebar();
+        // For guest users, navigate to the guest navigator screens
+        setTimeout(() => {
+          try {
+            if (screenName === 'TipTube') {
+              NavigationService.navigate('Guest', { screen: 'GuestTabs', params: { screen: 'TipTube' } } as any);
+            } else if (screenName === 'TipShorts') {
+              NavigationService.navigate('Guest', { screen: 'TipShorts' } as any);
+            } else {
+              NavigationService.navigate('Guest', { screen: 'GuestTabs', params: { screen: 'Home' } } as any);
+            }
+          } catch (error) {
+            console.warn('Guest navigation error:', error);
+          }
+        }, 100);
+      } else {
+        // Show login prompt for restricted screens first, then close sidebar
+        const message = screenMessages[screenName] || `access ${screenName.toLowerCase()}`;
+        showLoginPromptForAction(message);
+        // Close sidebar after a short delay to ensure login prompt is shown
+        setTimeout(() => {
+          closeSidebar();
+        }, 100);
+      }
+      return;
+    }
+
+    // Start sidebar closing animation immediately for authenticated users
     closeSidebar();
-    
-    // Use a shorter delay for more responsive navigation
+
+    // Use a shorter delay for more responsive navigation (authenticated users)
     setTimeout(() => {
       try {
         // Special handling for nested screens like TipTube
@@ -283,7 +341,7 @@ const Sidebar: React.FC = () => {
         NavigationService.navigate('Main', { screen: 'TabHome' } as any);
       }
     }, 100); // Reduced delay for more responsive feel
-  }, [closeSidebar]);
+  }, [closeSidebar, isGuest, showLoginPromptForAction]);
 
   const panGesture = Gesture.Pan()
     .activeOffsetX([-10, 1000]) // Activate only for swipes from left edge or on sidebar
@@ -431,6 +489,13 @@ const Sidebar: React.FC = () => {
           </Animated.View>
         </GestureDetector>
       </View>
+
+      {/* Login Prompt Modal for Guest Users */}
+      <LoginPromptModal
+        visible={showLoginPrompt}
+        onClose={() => setShowLoginPrompt(false)}
+        message={loginPromptMessage}
+      />
     </GestureHandlerRootView>
   );
 };

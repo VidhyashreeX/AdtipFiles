@@ -5,10 +5,13 @@ import { TouchableOpacity } from 'react-native-gesture-handler';
 import Icon from 'react-native-vector-icons/Feather';
 import {useNavigation, useRoute} from '@react-navigation/native';
 import {useTheme} from '../../contexts/ThemeContext';
+import {useAuth} from '../../contexts/AuthContext';
 import {useWallet} from '../../contexts/WalletContext';
 import {useSidebar} from '../../contexts/SidebarContext';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import { useCallStore } from '../../stores/callStore';
+import { useGuestGuard } from '../../hooks/useGuestGuard';
+import LoginPromptModal from '../modals/LoginPromptModal';
 
 export interface HeaderProps {
   title: string;
@@ -83,8 +86,10 @@ const Header: React.FC<HeaderProps> = ({
   const navigation = useNavigation();
   const route = useRoute();
   const {colors, isDarkMode} = useTheme();
-  const {balance, isLoading, isPremium} = useWallet(); 
+  const {isGuest} = useAuth();
+  const {balance, isLoading, isPremium} = useWallet();
   const {toggleSidebar} = useSidebar();
+  const { requireAuth, loginPromptVisible, hideLoginPrompt, loginPromptMessage } = useGuestGuard();
   const {width: screenWidth} = useWindowDimensions();
   const insets = useSafeAreaInsets(); 
   const searchInputRef = useRef<TextInput>(null);
@@ -210,7 +215,7 @@ const Header: React.FC<HeaderProps> = ({
     return (
       <TouchableOpacity
         style={[styles.premiumToggleContainer, { marginLeft: sizes.iconSpacing / 2 }]}
-        onPress={navigateToPremium}
+        onPress={() => requireAuth('premium', navigateToPremium)}
         activeOpacity={0.8}
       >
         <Animated.View
@@ -259,7 +264,10 @@ const Header: React.FC<HeaderProps> = ({
       <View style={[styles.leftSection, { marginRight: sizes.iconSpacing / 2 }]}>
         {leftComponent !== undefined ? renderNodeSafely(leftComponent, styles.title) : (
           <>
-            <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
+            <TouchableOpacity
+              onPress={toggleSidebar}
+              style={styles.menuButton}
+            >
               <Icon name="menu" size={sizes.menuIconSize} color={colors.text.primary} />
             </TouchableOpacity>
             {actualShowLogo && (
@@ -272,13 +280,20 @@ const Header: React.FC<HeaderProps> = ({
               </View>
             )}
             {title && !centerComponent && (
-              <Text 
-                numberOfLines={1} 
-                ellipsizeMode="tail"
-                style={[styles.title, {color: colors.text.primary, fontSize: sizes.titleSize, marginLeft: actualShowLogo ? sizes.iconSpacing / 2 : 0 }]}
-              >
-                {title}
-              </Text>
+              <View style={styles.titleContainer}>
+                <Text
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={[styles.title, {color: colors.text.primary, fontSize: sizes.titleSize, marginLeft: actualShowLogo ? sizes.iconSpacing / 2 : 0 }]}
+                >
+                  {title}
+                </Text>
+                {isGuest && (
+                  <View style={[styles.guestBadge, { backgroundColor: colors.border, borderColor: colors.primary }]}>
+                    <Text style={[styles.guestBadgeText, { color: colors.primary }]}>Guest</Text>
+                  </View>
+                )}
+              </View>
             )}
           </>
         )}
@@ -353,7 +368,7 @@ const Header: React.FC<HeaderProps> = ({
             {renderPremiumToggle()}
             {showWallet && (
               <TouchableOpacity
-                onPress={navigateToWallet}
+                onPress={() => requireAuth('wallet', navigateToWallet)}
                 style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}
               >
                 <Icon name="credit-card" size={sizes.iconSize} color={colors.primary} />
@@ -362,6 +377,13 @@ const Header: React.FC<HeaderProps> = ({
           </>
         )}
       </View>
+
+      {/* Login Prompt Modal for Guest Mode Restrictions */}
+      <LoginPromptModal
+        visible={loginPromptVisible}
+        onClose={hideLoginPrompt}
+        message={loginPromptMessage}
+      />
     </View>
   );
 };
@@ -423,9 +445,27 @@ const styles = StyleSheet.create({
   logoImage: {
     resizeMode: 'contain',
   },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+  },
   title: {
     fontWeight: 'bold',
     flexShrink: 1,
+  },
+  guestBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  guestBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   iconButton: {
     padding: 6,

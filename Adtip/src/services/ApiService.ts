@@ -187,6 +187,10 @@ export interface UpdateCallStatusResponse {
 const PUBLIC_ENDPOINTS = [
   ApiEndpoints.AUTH_ENDPOINTS.OTP_LOGIN,
   ApiEndpoints.AUTH_ENDPOINTS.OTP_VERIFY,
+  // Guest mode endpoints
+  '/api/list-premium-posts',
+  '/api/getpublicvideos',
+  '/api/getpublicshots',
 ];
 
 // Create axios instance with default configuration
@@ -203,13 +207,16 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   async config => {
     try {
+      // Check if user is in guest mode
+      const isGuestMode = await AsyncStorage.getItem('@guest_mode') === 'true';
+
       const isPublicEndpoint = PUBLIC_ENDPOINTS.some(endpoint => {
         const requestPath = config.url;
-        return requestPath === endpoint;
+        return requestPath === endpoint || requestPath?.startsWith(endpoint);
       });
 
-      if (isPublicEndpoint) {
-        console.log(`Request to public endpoint: ${config.url}. No Authorization header will be added.`);
+      if (isPublicEndpoint || isGuestMode) {
+        console.log(`Request to public endpoint or guest mode: ${config.url}. No Authorization header will be added.`);
       } else {
         console.log(`Request to protected endpoint: ${config.url}. Attempting to add Authorization header.`);
         let token = await AsyncStorage.getItem('accessToken');

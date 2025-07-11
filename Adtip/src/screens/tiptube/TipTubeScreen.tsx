@@ -29,8 +29,9 @@ import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataContext } from '../../providers/DataProvider';
 import { useContentCreatorPremium } from '../../contexts/ContentCreatorPremiumContext';
-import { useVideos, useSearchVideos, usePrefetchData, useChannelData } from '../../hooks/useQueries';
+import { useVideos, useGuestVideos, useSearchVideos, usePrefetchData, useChannelData } from '../../hooks/useQueries';
 import { useNetInfo } from '@react-native-community/netinfo';
+import { useGuestGuard } from '../../hooks/useGuestGuard';
 import Header from '../../components/common/Header';
 import VideoCardSkeleton from '../../components/skeletons/VideoCardSkeleton';
 import ScreenTransition from '../../components/common/ScreenTransition';
@@ -45,6 +46,7 @@ import RectangleAdComponent from '../../googleads/RectangleAdComponent';
 import ApiService from '../../services/ApiService';
 import ContentCreatorPlanToggle from '../../components/common/ContentCreatorPlanToggle';
 import VideoCommentsModal from '../../components/tiptube/VideoCommentsModal';
+import LoginPromptModal from '../../components/modals/LoginPromptModal';
 
 // Get screen dimensions and create constants
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -166,8 +168,9 @@ const TipTubeScreen = () => {
   const queryClient = useQueryClient();
   const { isDarkMode, colors } = useTheme();
   const { contentPaddingBottom } = useTabNavigator();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const { clearCache } = useDataContext();
+  const { requireAuth } = useGuestGuard();
   const navigation = useNavigation<any>();
   const netInfo = useNetInfo();
   const route = useRoute();
@@ -186,6 +189,10 @@ const TipTubeScreen = () => {
   const [showChannelVideos, setShowChannelVideos] = useState(false);
   const [showPlanModal, setShowPlanModal] = useState(false);
 
+  // Login prompt modal state
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [loginPromptMessage, setLoginPromptMessage] = useState('Login to unlock all features');
+
   // Content Creator Premium State - Using shared context
   const { 
     isContentCreatorPremium, 
@@ -201,7 +208,14 @@ const TipTubeScreen = () => {
   // Enhanced data layer using React Query v5
   const categoryId = categoryToIdMap[selectedCategory] || 0;
   
-  // Use search hook when there's a search query, otherwise use regular videos hook
+  // Use different hooks based on guest mode and search state
+  const authenticatedVideosQuery = searchQuery && searchQuery.trim()
+    ? useSearchVideos(searchQuery.trim(), user?.id)
+    : useVideos(categoryId, user?.id, undefined, showChannelVideos);
+
+  const guestVideosQuery = useGuestVideos();
+
+  // Choose the appropriate query based on guest mode
   const {
     data: videosData,
     isLoading: videosLoading,
@@ -210,9 +224,15 @@ const TipTubeScreen = () => {
     refetch: refreshVideos,
     fetchNextPage: loadMoreVideos,
     hasNextPage: hasMoreVideos,
-  } = searchQuery && searchQuery.trim() 
-    ? useSearchVideos(searchQuery.trim(), user?.id)
-    : useVideos(categoryId, user?.id, undefined, showChannelVideos);
+  } = isGuest ? {
+    data: guestVideosQuery.data,
+    isLoading: guestVideosQuery.isLoading,
+    isFetchingNextPage: false, // Guest mode doesn't support pagination
+    error: guestVideosQuery.error,
+    refetch: guestVideosQuery.refetch,
+    fetchNextPage: () => Promise.resolve({ data: undefined, pageParam: undefined, direction: 'forward' as const }),
+    hasNextPage: false,
+  } : authenticatedVideosQuery;
 
   // Prefetch data for better performance
   const { prefetchProfile } = usePrefetchData();
@@ -269,11 +289,25 @@ const TipTubeScreen = () => {
 
   // Toggle comments section
   const toggleComments = useCallback((videoId: number) => {
+    if (isGuest) {
+      showLoginPromptForAction('view and add comments');
+      return;
+    }
     setShowComments(!showComments);
-  }, [showComments]);
+  }, [showComments, isGuest, showLoginPromptForAction]);
+
+  // Helper function to show login prompt for guest users
+  const showLoginPromptForAction = useCallback((action: string) => {
+    setLoginPromptMessage(`Login to ${action}`);
+    setShowLoginPrompt(true);
+  }, []);
 
   // Handle liking a video
   const handleLikeVideo = useCallback(async (video: Video) => {
+    if (isGuest) {
+      showLoginPromptForAction('like videos');
+      return;
+    }
     if (!user?.id) {
       Alert.alert('Error', 'You must be logged in to like videos.');
       return;
@@ -294,7 +328,7 @@ const TipTubeScreen = () => {
       console.error('[TipTubeScreen] Error liking video:', error);
       Alert.alert('Error', 'Failed to like the video. Please try again.');
     }
-  }, [user?.id, likedVideos]);
+  }, [user?.id, isGuest, likedVideos, showLoginPromptForAction]);
 
   // Handle adding a comment
 
@@ -323,11 +357,20 @@ const TipTubeScreen = () => {
 
   // Transform videos data for compatibility and proper typing
   const videos = useMemo(() => {
-    const allVideos = videosData?.pages?.flatMap(page => page?.data || []) || [];
-    
+    let allVideos;
+
+    if (isGuest) {
+      // Guest mode: videosData is a single response object
+      allVideos = videosData?.data || [];
+    } else {
+      // Authenticated mode: videosData has pages for infinite query
+      allVideos = videosData?.pages?.flatMap(page => page?.data || []) || [];
+    }
+
     console.log('[TipTubeScreen] Raw videos data:', {
-      pagesCount: videosData?.pages?.length || 0,
-      firstPage: videosData?.pages?.[0]?.data?.slice(0, 2), // Log first 2 videos from first page
+      isGuest,
+      pagesCount: isGuest ? 1 : (videosData?.pages?.length || 0),
+      firstPage: isGuest ? videosData?.data?.slice(0, 2) : videosData?.pages?.[0]?.data?.slice(0, 2),
       allVideosCount: allVideos.length
     });
     
@@ -355,7 +398,7 @@ const TipTubeScreen = () => {
     });
     
     return transformedVideos;
-  }, [videosData]);
+  }, [videosData, isGuest]);
 
   // Network state for offline handling
   const isOnline = netInfo.isConnected;
@@ -418,6 +461,10 @@ const TipTubeScreen = () => {
   }, [searchQuery, handleTipTubeSearch]);
 
   const handleMyChannel = useCallback(() => {
+    if (isGuest) {
+      showLoginPromptForAction('access your channel');
+      return;
+    }
     if (userChannelId && user?.id) {
       // Note: Despite the parameter name being 'channelId', we pass the userId
       // because the ChannelScreen API expects userId, not channelId
@@ -426,16 +473,30 @@ const TipTubeScreen = () => {
       // If no channel found, redirect to create channel
       navigation.navigate('CreateChannel');
     }
-  }, [userChannelId, user?.id, navigation]);
+  }, [userChannelId, user?.id, isGuest, navigation, showLoginPromptForAction]);
+
+  const handleNavigateToChannel = useCallback((channelId: string) => {
+    if (isGuest) {
+      showLoginPromptForAction('view channels');
+      return;
+    }
+    navigation.navigate('Channel', { channelId });
+  }, [isGuest, navigation, showLoginPromptForAction]);
 
   const handleAnalytics = useCallback(() => {
+    // Check if user is in guest mode
+    if (isGuest) {
+      showLoginPromptForAction('access analytics');
+      return;
+    }
+
     if (userChannelId) {
       navigation.navigate('Analytics', { channelId: userChannelId });
     } else {
       // If no channel found, redirect to create channel
       navigation.navigate('CreateChannel');
     }
-  }, [userChannelId, navigation]);
+  }, [userChannelId, navigation, isGuest, showLoginPromptForAction]);
 
   const handleNavigateToTipShorts = useCallback(() => {
     navigation.navigate('TipShorts');
@@ -444,6 +505,13 @@ const TipTubeScreen = () => {
   // Handle video press with view API calls
   const handleVideoPress = useCallback(async (video: Video) => {
     console.log('[TipTubeScreen] Video pressed:', { id: video.id, title: video.title, isPaid: video.isPaidPromotional });
+
+    // Check if user is in guest mode
+    if (isGuest) {
+      showLoginPromptForAction('watch videos');
+      return;
+    }
+
     setSelectedVideoId(video.id);
     try {
       if (video.isPaidPromotional && video.contentCreatorPlanId > 0) {
@@ -474,7 +542,7 @@ const TipTubeScreen = () => {
       console.error('[TipTubeScreen] Error handling video press:', error);
       Alert.alert('Error', 'There was an issue accessing this video. Please try again later.');
     }
-  }, [videos, navigation]);
+  }, [videos, navigation, isGuest, showLoginPromptForAction]);
 
   // Render helper functions
   const renderSkeletonLoading = useCallback(() => (
@@ -599,7 +667,7 @@ const TipTubeScreen = () => {
         isPreview={previewingVideoId === item.id}
         styles={styles}
         colors={colors}
-        onNavigateToChannel={() => navigation.navigate('Channel', { channelId: item.channelId })}
+        onNavigateToChannel={() => handleNavigateToChannel(item.channelId)}
         index={index}
         isYouTubeLayout={true} // Pass flag for YouTube-like layout
         onToggleComments={() => {
@@ -614,7 +682,7 @@ const TipTubeScreen = () => {
         </View>
       )}
     </>
-  ), [handleVideoPress, selectedVideoId, previewingVideoId, styles, colors, navigation, toggleComments]);
+  ), [handleVideoPress, selectedVideoId, previewingVideoId, styles, colors, handleNavigateToChannel, toggleComments]);
 
   // Prevent autoplay for paid videos
   useEffect(() => {
@@ -630,12 +698,14 @@ const TipTubeScreen = () => {
 
   // Content Creator Premium Toggle Handler
   const handleTogglePremium = () => {
-    console.log('🚀 [TipTubeScreen] User clicked content creator premium toggle');
-    console.log('📊 [TipTubeScreen] Current content creator premium status:', { 
-      isContentCreatorPremium, 
-      hasData: !!contentCreatorPremiumData 
+    requireAuth('premium', () => {
+      console.log('🚀 [TipTubeScreen] User clicked content creator premium toggle');
+      console.log('📊 [TipTubeScreen] Current content creator premium status:', {
+        isContentCreatorPremium,
+        hasData: !!contentCreatorPremiumData
+      });
+      navigation.navigate('ContentCreatorPremium');
     });
-    navigation.navigate('ContentCreatorPremium');
   };
 
   // Add state for live search query (separate from committed searchQuery)
@@ -831,6 +901,13 @@ const TipTubeScreen = () => {
             userId={user?.id ? Number(user.id) : 0}
           />
         )}
+
+        {/* Login Prompt Modal for Guest Users */}
+        <LoginPromptModal
+          visible={showLoginPrompt}
+          onClose={() => setShowLoginPrompt(false)}
+          message={loginPromptMessage}
+        />
       </View>
     </ScreenTransition>
   );

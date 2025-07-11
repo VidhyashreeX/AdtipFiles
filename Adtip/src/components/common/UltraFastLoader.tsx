@@ -22,6 +22,7 @@ import Sidebar from '../sidebar/Sidebar';
 // Import navigation screens
 import MainNavigator from '../../navigation/MainNavigator';
 import AuthNavigator from '../../navigation/AuthNavigator';
+import GuestNavigator from '../../navigation/GuestNavigator';
 import { RootStackParamList } from '../../types/navigation';
 
 interface UltraFastLoaderProps {
@@ -60,7 +61,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
   onInitializationComplete 
 }) => {
   const { colors, isDarkMode } = useTheme();
-  const { isAuthenticated, isInitialized, user } = useAuth();
+  const { isAuthenticated, isGuest, isInitialized, user } = useAuth();
   const activeCall = useCallStore(state => state.activeCall);
   const [isVisible, setIsVisible] = useState(true);
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -83,16 +84,20 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
   onInitializationCompleteRef.current = onInitializationComplete || null;
 
   // Determine which screen to show based on authentication state
+  // Authenticated users go to MainNavigator, guest users go to GuestNavigator
   const shouldShowMainApp = isAuthenticated && userHasName && userSaveStatus === 1;
-  
+  const shouldShowGuestApp = isGuest;
+
   // Use useMemo to prevent excessive logging
   const renderingState = useMemo(() => ({
     shouldShowMainApp,
+    shouldShowGuestApp,
     isAuthenticated,
+    isGuest,
     hasUserName: userHasName,
     isSaveUserDetails: userSaveStatus,
     userProfileComplete: !!(userHasName && userSaveStatus === 1)
-  }), [shouldShowMainApp, isAuthenticated, userHasName, userSaveStatus]);
+  }), [shouldShowMainApp, shouldShowGuestApp, isAuthenticated, isGuest, userHasName, userSaveStatus]);
 
   // Only log when state changes
   useEffect(() => {
@@ -232,14 +237,25 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
           {!isInitialized ? (
             <RootStack.Screen name="InitialLoading" component={InitialLoadingScreen} />
           ) : shouldShowMainApp ? (
-            <RootStack.Screen name="Main" component={MainNavigator} />
+            <>
+              {console.log('[UltraFastLoader] Rendering MainNavigator for authenticated user')}
+              <RootStack.Screen name="Main" component={MainNavigator} />
+            </>
+          ) : shouldShowGuestApp ? (
+            <>
+              {console.log('[UltraFastLoader] Rendering GuestNavigator for guest user')}
+              <RootStack.Screen name="Guest" component={GuestNavigator} />
+            </>
           ) : (
-            <RootStack.Screen name="Auth" component={AuthNavigator} />
+            <>
+              {console.log('[UltraFastLoader] Rendering AuthNavigator (OnboardingScreen) for new user')}
+              <RootStack.Screen name="Auth" component={AuthNavigator} />
+            </>
           )}
         </RootStack.Navigator>
         
-        {/* Show sidebar only when initialized and in the main app */}
-        {isInitialized && shouldShowMainApp && <Sidebar />}
+        {/* Show sidebar when initialized and in the main app or guest mode */}
+        {isInitialized && (shouldShowMainApp || shouldShowGuestApp) && <Sidebar />}
       </NavigationContainer>
     </SafeAreaView>
   );

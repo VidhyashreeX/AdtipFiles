@@ -40,14 +40,16 @@ import { Share2 } from 'lucide-react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useShorts } from '../../contexts/ShortsContext';
-import { 
-  useShortsInfiniteQuery, 
+import {
+  useShortsInfiniteQuery,
+  useGuestShortsQuery,
   useLikeShortMutation,
   useShortsQueryActions,
   type ShortVideo as TanStackShortVideo
 } from '../../hooks/useShortsQuery';
 import ShortsCardSkeleton from '../../components/skeletons/ShortsCardSkeleton';
 import EnhancedShortCard from './components/EnhancedShortCard';
+import LoginPromptModal from '../../components/modals/LoginPromptModal';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -337,7 +339,7 @@ const TipShortsEnhanced = () => {
   const { colors } = useTheme();
   const navigation = useNavigation();
   const route = useRoute<TipShortsRouteProp>();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const { 
     isGloballyMuted, 
     isGloballyPlaying, 
@@ -367,7 +369,11 @@ const TipShortsEnhanced = () => {
     }
   }, [route.params, passedShorts, startIndex, shortId]);
 
-  // TanStack Query hooks
+  // TanStack Query hooks - use different hooks based on guest mode
+  const authenticatedShortsQuery = useShortsInfiniteQuery(user?.id?.toString() || '50816');
+  const guestShortsQuery = useGuestShortsQuery();
+
+  // Choose the appropriate query based on guest mode
   const {
     data,
     isLoading,
@@ -377,7 +383,16 @@ const TipShortsEnhanced = () => {
     isFetchingNextPage,
     refetch,
     isRefetching,
-  } = useShortsInfiniteQuery(user?.id?.toString() || '50816');
+  } = isGuest ? {
+    data: guestShortsQuery.data,
+    isLoading: guestShortsQuery.isLoading,
+    error: guestShortsQuery.error,
+    fetchNextPage: () => Promise.resolve({ data: undefined, pageParam: undefined, direction: 'forward' as const }),
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    refetch: guestShortsQuery.refetch,
+    isRefetching: guestShortsQuery.isRefetching,
+  } : authenticatedShortsQuery;
 
   const likeMutation = useLikeShortMutation();
   const { updateShortLikes } = useShortsQueryActions();
@@ -388,37 +403,86 @@ const TipShortsEnhanced = () => {
   const [showPlayPause, setShowPlayPause] = useState(false);
   const playPauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Login prompt modal state
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [loginPromptMessage, setLoginPromptMessage] = useState('Login to unlock all features');
+
   // Refs
   const flatListRef = useRef<FlatList>(null);
   const scrollY = useSharedValue(0);
 
   // Flatten data from TanStack Query
   const shorts: ShortVideo[] = useMemo(() => {
-    if (passedShorts && passedShorts.length > 0) return passedShorts;
-    return data?.pages?.flat() || [];
-  }, [data?.pages, passedShorts]);
+    if (passedShorts && passedShorts.length > 0) {
+      // For guest users, limit to first 5 shorts even if more are passed
+      return isGuest ? passedShorts.slice(0, 5) : passedShorts;
+    }
+
+    let allShorts: ShortVideo[] = [];
+
+    // Handle guest mode data structure
+    if (isGuest && data?.pages) {
+      allShorts = data.pages.flatMap(page => page.data || []);
+      // Limit guest users to first 5 shorts
+      return allShorts.slice(0, 5);
+    }
+
+    // Handle authenticated user data structure
+    allShorts = data?.pages?.flat() || [];
+    return allShorts;
+  }, [data?.pages, passedShorts, isGuest]);
 
   useEffect(() => {
     console.log('[TipShortsEnhanced] shorts array:', shorts);
-  }, [shorts]);
+    console.log('[TipShortsEnhanced] isGuest:', isGuest);
+    console.log('[TipShortsEnhanced] data structure:', data);
+    console.log('[TipShortsEnhanced] isLoading:', isLoading);
+    console.log('[TipShortsEnhanced] error:', error);
+  }, [shorts, isGuest, data, isLoading, error]);
 
   // Viewability config for video control
-  const viewabilityConfig = {
-    itemVisiblePercentThreshold: 90,
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 50, // Reduced threshold for better responsiveness
     minimumViewTime: 100,
     waitForInteraction: false,
-  };
+  }).current;
 
   // Handle viewability changes
-  const onViewableItemsChanged = useCallback(({viewableItems}: {viewableItems: ViewToken[]}) => {
+  const onViewableItemsChanged = useRef(({viewableItems}: {viewableItems: ViewToken[]}) => {
     const mostVisibleItem = viewableItems.find(item => item.isViewable);
     if (mostVisibleItem && mostVisibleItem.index !== null) {
       const newActiveIndex = mostVisibleItem.index;
+
+      // Debug logging for guest mode
+      if (isGuest && __DEV__) {
+        console.log('[TipShortsEnhanced] Guest mode - viewable item changed:', {
+          newActiveIndex,
+          currentActiveIndex: activeIndex,
+          totalShorts: shorts.length,
+          isAtLimit: newActiveIndex >= 5
+        });
+      }
+
+      // For guest users, prevent viewing beyond the 5th video (index 4)
+      if (isGuest && newActiveIndex >= 5) {
+        console.log('[TipShortsEnhanced] Guest user reached limit, showing login prompt');
+        showLoginPromptForAction('watch more shorts');
+        // Scroll back to the 4th video (index 4)
+        if (flatListRef.current) {
+          flatListRef.current.scrollToIndex({
+            index: 4,
+            animated: true,
+          });
+        }
+        return;
+      }
+
       if (newActiveIndex !== activeIndex) {
+        console.log('[TipShortsEnhanced] Updating activeIndex from', activeIndex, 'to', newActiveIndex);
         setActiveIndex(newActiveIndex);
       }
     }
-  }, [activeIndex]);
+  }).current;
 
   // Handle video load
   const handleVideoLoad = useCallback((videoId: string) => {
@@ -432,8 +496,18 @@ const TipShortsEnhanced = () => {
     },
   });
 
+  // Helper function to show login prompt for guest users
+  const showLoginPromptForAction = useCallback((action: string) => {
+    setLoginPromptMessage(`Login to ${action}`);
+    setShowLoginPrompt(true);
+  }, []);
+
   // Handle like with TanStack Query mutation
   const handleLikeShort = useCallback(async (shortId: string, creatorId: string, isCurrentlyLiked: boolean) => {
+    if (isGuest) {
+      showLoginPromptForAction('like shorts');
+      return;
+    }
     if (!user?.id) return;
 
     try {
@@ -446,7 +520,7 @@ const TipShortsEnhanced = () => {
     } catch (error) {
       console.error('Error liking short:', error);
     }
-  }, [user?.id, likeMutation]);
+  }, [user?.id, isGuest, likeMutation, showLoginPromptForAction]);
 
   // Refresh handler
   const handleRefresh = useCallback(() => {
@@ -496,10 +570,16 @@ const TipShortsEnhanced = () => {
 
   // End reached handler
   const handleEndReached = useCallback(() => {
+    // For guest users, don't load more content beyond 5 videos
+    if (isGuest) {
+      showLoginPromptForAction('watch more shorts');
+      return;
+    }
+
     if (hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
     }
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, isGuest, showLoginPromptForAction]);
 
   // Handle back button
   useEffect(() => {
@@ -643,6 +723,8 @@ const TipShortsEnhanced = () => {
             isGloballyMuted={isGloballyMuted}
             toggleGlobalMute={toggleGlobalMute}
             insets={insets}
+            isGuest={isGuest}
+            onGuestAction={showLoginPromptForAction}
           />
         )}
         pagingEnabled
@@ -681,6 +763,15 @@ const TipShortsEnhanced = () => {
         }
       />
 
+      {/* Guest Mode Short Count Indicator */}
+      {isGuest && shorts.length > 0 && (
+        <View style={styles.guestCountIndicator}>
+          <Text style={styles.guestCountText}>
+            {activeIndex + 1} of {Math.min(shorts.length, 5)}
+          </Text>
+        </View>
+      )}
+
       {/* Debug info (remove in production) */}
       {__DEV__ && (
         <View style={styles.debugInfo}>
@@ -689,6 +780,13 @@ const TipShortsEnhanced = () => {
           </Text>
         </View>
       )}
+
+      {/* Login Prompt Modal for Guest Users */}
+      <LoginPromptModal
+        visible={showLoginPrompt}
+        onClose={() => setShowLoginPrompt(false)}
+        message={loginPromptMessage}
+      />
     </SafeAreaView>
   );
 };
@@ -803,6 +901,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#000',
+  },
+
+  // Guest Count Indicator
+  guestCountIndicator: {
+    position: 'absolute',
+    top: 60,
+    right: 16,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    zIndex: 10,
+  },
+  guestCountText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 
   // Debug Info

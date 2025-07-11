@@ -34,7 +34,7 @@ import {useDataContext} from '../../providers/DataProvider';
 import ApiService from '../../services/ApiService';
 import {API_BASE_URL} from '../../constants/api';
 import {HOME_ENDPOINTS} from '../../constants/apiEndpoints';
-import { usePosts, useLikeMutation, useFollowMutation, usePrefetchData, useSubscriptionStatus, useCategories } from '../../hooks/useQueries';
+import { usePosts, useGuestPosts, useLikeMutation, useFollowMutation, usePrefetchData, useSubscriptionStatus, useCategories } from '../../hooks/useQueries';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
 import PubScaleService from '../../services/PubScaleService';
@@ -48,6 +48,7 @@ import CategoryItem from '../../components/home/CategoryItem';
 import EarnCard from '../../components/home/EarnCard';
 import BannerCarousel from '../../components/home/BannerCarousel';
 import PremiumPopup from '../../components/common/PremiumPopup';
+import LoginPromptModal from '../../components/modals/LoginPromptModal';
 import InstallToEarnPopup from '../../components/common/InstallToEarnPopup';
 
 
@@ -421,7 +422,7 @@ function shuffleArray<T>(array: T[]): T[] {
 // MAIN COMPONENT - Enhanced with bulletproof navigation
 const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}) => {
   const {colors, isDarkMode} = useTheme();
-  const {user, refreshUserData} = useAuth();
+  const {user, isGuest, refreshUserData} = useAuth();
   const navigation = useNavigation<AppNavigationProps>();
   const {contentPaddingBottom} = useTabNavigator();
   const {clearCache, invalidateData} = useDataContext();
@@ -473,6 +474,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   // Install to earn popup state
   const [showInstallToEarnPopup, setShowInstallToEarnPopup] = useState(false);
 
+  // Login prompt modal state
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [loginPromptMessage, setLoginPromptMessage] = useState('Login to unlock all features');
+
   // Log when HomeScreen mounts
   useEffect(() => {
     console.log('🏠 [HomeScreen] Component mounted with user:', user?.id);
@@ -483,6 +488,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const [bannersLoading, setBannersLoading] = useState<boolean>(true);
 
   // Enhanced data layer using React Query v5 hooks
+  // Use guest posts for guest users, regular posts for authenticated users
+  const authenticatedPostsQuery = usePosts(
+    selectedCategoryState ? parseInt(selectedCategoryState, 10) : 0,
+    user?.id
+  );
+
+  const guestPostsQuery = useGuestPosts();
+
+  // Choose the appropriate query based on guest mode
   const {
     data: postsData,
     isLoading: postsLoading,
@@ -491,10 +505,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     refetch: refreshPosts,
     fetchNextPage: loadMorePosts,
     hasNextPage: hasMorePosts,
-  } = usePosts(
-    selectedCategoryState ? parseInt(selectedCategoryState, 10) : 0,
-    user?.id
-  );
+  } = isGuest ? {
+    data: guestPostsQuery.data,
+    isLoading: guestPostsQuery.isLoading,
+    isFetchingNextPage: false, // Guest mode doesn't support pagination
+    error: guestPostsQuery.error,
+    refetch: guestPostsQuery.refetch,
+    fetchNextPage: () => Promise.resolve({ data: undefined, pageParam: undefined, direction: 'forward' as const }),
+    hasNextPage: false,
+  } : authenticatedPostsQuery;
 
   // Use TanStack Query for subscription status
   const { 
@@ -622,8 +641,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
   // Transform posts data for compatibility
   const posts = useMemo(() => {
-    return postsData?.pages?.flatMap(page => page?.data || []) || [];
-  }, [postsData]);
+    if (isGuest) {
+      // Guest mode: postsData is a single response object
+      return postsData?.data || [];
+    } else {
+      // Authenticated mode: postsData has pages for infinite query
+      return postsData?.pages?.flatMap(page => page?.data || []) || [];
+    }
+  }, [postsData, isGuest]);
 
   // Like and Follow mutations
   const likeMutation = useLikeMutation();
@@ -641,18 +666,32 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
 
 
+  // Helper function to show login prompt for guest users
+  const showLoginPromptForAction = useCallback((action: string) => {
+    setLoginPromptMessage(`Login to ${action}`);
+    setShowLoginPrompt(true);
+  }, []);
+
   // Optimistic mutations for instant UI feedback (now using the new hooks)
   const handleLikePost = useCallback((postId: number, isLiked: boolean) => {
+    if (isGuest) {
+      showLoginPromptForAction('like posts');
+      return;
+    }
     if (!user?.id) {
       console.warn('Cannot like post: User not logged in');
       return;
     }
     likeMutation.mutate({ postId, userId: user.id, isLiked });
-  }, [likeMutation, user?.id]);
+  }, [likeMutation, user?.id, isGuest, showLoginPromptForAction]);
 
   const handleFollowUser = useCallback((userId: number, isFollowing: boolean) => {
+    if (isGuest) {
+      showLoginPromptForAction('follow users');
+      return;
+    }
     followMutation.mutate({ userId, isFollowing });
-  }, [followMutation]);
+  }, [followMutation, isGuest, showLoginPromptForAction]);
 
   // Prefetch posts and profile data
   const handlePostPress = useCallback((postId: number, userId: number) => {
@@ -825,14 +864,31 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   }, [handleFollowUser, displayPosts]);
 
   const handleCommentPress = useCallback((postId: number) => {
+    if (isGuest) {
+      showLoginPromptForAction('comment on posts');
+      return;
+    }
     setSelectedCommentPostId(postId);
     setCommentModalVisible(true);
-  }, []);
+  }, [isGuest, showLoginPromptForAction]);
 
   const handleUserProfilePress = useCallback((userId: number) => {
+    if (isGuest) {
+      showLoginPromptForAction('view user profiles');
+      return;
+    }
     setSelectedUserId(userId);
     setShowUserProfileModal(true);
-  }, []);
+  }, [isGuest, showLoginPromptForAction]);
+
+  const handleSharePost = useCallback((postId: number) => {
+    if (isGuest) {
+      showLoginPromptForAction('share posts');
+      return;
+    }
+    const deepLink = `https://adtip.in/tiptube?videoId=${postId}`;
+    Share.share({ message: `Check out this video: ${deepLink}` });
+  }, [isGuest, showLoginPromptForAction]);
 
   const handleSearchIconPress = useCallback(() => {
     (navigation as any).navigate('Search');
@@ -901,10 +957,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           onToggleGlobalMute={handleToggleGlobalMute}
           onLike={handlePostLike}
           onComment={handleCommentPress}
-          onShare={(postId: number) => {
-            const deepLink = `https://adtip.in/tiptube?videoId=${postId}`;
-            Share.share({ message: `Check out this video: ${deepLink}` });
-          }}
+          onShare={handleSharePost}
           onPostPress={(postId: number) => console.log('Post pressed:', postId)}
           onUserPress={handleUserProfilePress}
           onFollow={handleUserFollow}
@@ -918,7 +971,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
         )}
       </>
     );
-  }, [visiblePostIds, getTimeAgo, handlePostLike, handleCommentPress, handleUserProfilePress, handleUserFollow, styles, isGloballyMuted, handleToggleGlobalMute]);
+  }, [visiblePostIds, getTimeAgo, handlePostLike, handleCommentPress, handleSharePost, handleUserProfilePress, handleUserFollow, styles, isGloballyMuted, handleToggleGlobalMute]);
 
   // Render empty state
   const renderEmptyState = useCallback(() => {
@@ -1082,6 +1135,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             console.log('🚀 [HomeScreen] Premium upgrade initiated from popup');
             setShowPremiumPopup(false);
           }}
+        />
+
+        {/* Login Prompt Modal for Guest Users */}
+        <LoginPromptModal
+          visible={showLoginPrompt}
+          onClose={() => setShowLoginPrompt(false)}
+          message={loginPromptMessage}
         />
 
       </View>

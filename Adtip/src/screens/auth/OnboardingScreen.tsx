@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useTheme} from '../../contexts/ThemeContext';
+import {useAuth} from '../../contexts/AuthContext';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 // Import Lucide React Native icons
 import { ChevronRight, Play, Phone, Gamepad2, Download, Coins } from 'lucide-react-native';
@@ -364,8 +365,9 @@ interface OnboardingScreenProps {
 }
 
 const OnboardingScreen: React.FC<OnboardingScreenProps> = ({navigation}) => {
-  // Theme
+  // Theme and Auth
   const {colors} = useTheme();
+  const {enterGuestMode} = useAuth();
 
   // Local state
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -499,6 +501,16 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({navigation}) => {
     navigation.replace('Login');
   }, [navigation]);
 
+  // Handle guest mode
+  const handleTryNow = useCallback(async () => {
+    try {
+      await enterGuestMode();
+      // Navigation will be handled by UltraFastLoader based on guest state
+    } catch (error) {
+      console.error('Failed to enter guest mode:', error);
+    }
+  }, [enterGuestMode]);
+
   // Render dot indicators
   const Dots = useCallback(() => {
     return (
@@ -594,6 +606,13 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({navigation}) => {
         <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
           <Text style={styles.skipText}>Skip</Text>
         </TouchableOpacity>
+
+        {/* Try Now button - only show on last slide */}
+        {currentIndex === onboardingData.length - 1 && (
+          <TouchableOpacity style={styles.tryNowButton} onPress={handleTryNow}>
+            <Text style={styles.tryNowText}>Try Now</Text>
+          </TouchableOpacity>
+        )}
 
         <Animated.View style={{transform: [{scale: buttonScale}]}}>
           <TouchableOpacity
@@ -702,6 +721,23 @@ const styles = StyleSheet.create({
   },
   nextIcon: {
     marginLeft: 8,
+  },
+  // Try Now button styles - outline style, 44px height
+  tryNowButton: {
+    height: 44,
+    paddingHorizontal: 20,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: '#4A90E2',
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 8,
+  },
+  tryNowText: {
+    color: '#4A90E2',
+    fontSize: 14,
+    fontWeight: '600',
   },
   // Illustration styles
   illustrationWrapper: {

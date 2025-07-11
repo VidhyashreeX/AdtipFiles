@@ -768,13 +768,82 @@ export const useWalletData = (userId?: string) => {
   });
 };
 
+// Guest Posts hook for unauthenticated users
+export const useGuestPosts = () => {
+  return useQuery({
+    queryKey: ['guest-posts'],
+    queryFn: async () => {
+      // Call the guest API that doesn't require authentication
+      const data = await ApiService.getListPremiumPosts();
+
+      // Transform to match expected format
+      return {
+        data: data.data || [],
+        pagination: {
+          current_page: 1,
+          total_page: 1,
+          total_count: data.data?.length || 0
+        }
+      };
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnMount: false,
+  });
+};
+
+// Guest Videos hook for unauthenticated users
+export const useGuestVideos = () => {
+  return useQuery({
+    queryKey: ['guest-videos'],
+    queryFn: async () => {
+      // Call the guest API that doesn't require authentication
+      const data = await ApiService.getPublicVideos(0, 1); // categoryId=0, offset=1
+
+      // Transform to match expected format
+      return {
+        data: data.data || [],
+        pagination: {
+          current_page: 1,
+          total_page: 1,
+          total_count: data.data?.length || 0
+        }
+      };
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnMount: false,
+  });
+};
+
+// Guest Shorts hook for unauthenticated users
+export const useGuestShorts = () => {
+  return useQuery({
+    queryKey: ['guest-shorts'],
+    queryFn: async () => {
+      // Call the guest API that doesn't require authentication
+      const data = await ApiService.getPublicShots();
+
+      // Transform to match expected format
+      return {
+        data: data.data || [],
+        pagination: {
+          current_page: 1,
+          total_page: 1,
+          total_count: data.data?.length || 0
+        }
+      };
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnMount: false,
+  });
+};
+
 // Enhanced Posts hook with React Query v5 compatibility
 export const usePosts = (category: number = 0, userId?: number) => {
   return useInfiniteQuery({
     queryKey: ['posts', category, userId],
     queryFn: async ({ pageParam }) => {
       const page = pageParam as number;
-      
+
       // Directly call the ApiService. React Query handles offline logic.
       const data = await ApiService.listPosts({
         category,

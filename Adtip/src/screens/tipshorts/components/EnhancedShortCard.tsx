@@ -7,6 +7,7 @@ import {
   Share,
   StyleSheet,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
 import Icon from 'react-native-vector-icons/Feather';
@@ -29,6 +30,8 @@ interface EnhancedShortCardProps {
   isGloballyMuted: boolean;
   toggleGlobalMute: () => void;
   insets: any;
+  isGuest: boolean;
+  onGuestAction: (action: string) => void;
 }
 
 // Optimized Video Player Component
@@ -199,29 +202,46 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
   isGloballyMuted,
   toggleGlobalMute,
   insets,
+  isGuest,
+  onGuestAction,
 }) => {
   const [showThumbnail, setShowThumbnail] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
 
+  // Safety check: Don't render if item is invalid
+  if (!item || !item.id || !item.channel || !item.channel.id) {
+    console.warn('[EnhancedShortCard] Invalid item data:', item);
+    return null;
+  }
+
   const handleVideoLoadLocal = useCallback(() => {
     setShowThumbnail(false);
-    onVideoLoad(item.id);
-  }, [item.id, onVideoLoad]);
+    if (item?.id) {
+      onVideoLoad(item.id);
+    }
+  }, [item?.id, onVideoLoad]);
 
   const handleVideoProgress = useCallback((data: any) => {
-    if (isActive && data.currentTime && data.seekableDuration) {
+    if (isActive && data.currentTime && data.seekableDuration && item?.id) {
       const progress = data.currentTime / data.seekableDuration;
       setVideoProgress(prev => ({
         ...prev,
         [item.id]: Math.min(Math.max(progress, 0), 1)
       }));
     }
-  }, [isActive, item.id, setVideoProgress]);
+  }, [isActive, item?.id, setVideoProgress]);
 
   const handleLike = useCallback(() => {
-    setIsLiked(!isLiked);
-    onLike(item.id, item.channel.id, isLiked);
-  }, [item.id, item.channel.id, isLiked, onLike]);
+    if (isGuest) {
+      onGuestAction('like shorts');
+      return;
+    }
+
+    if (item?.id && item?.channel?.id) {
+      setIsLiked(!isLiked);
+      onLike(item.id, item.channel.id, isLiked);
+    }
+  }, [item?.id, item?.channel?.id, isLiked, onLike, isGuest, onGuestAction]);
 
   return (
     <View style={styles.shortCardContainer}>
@@ -256,8 +276,8 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
       </GestureDetector>
 
       {/* Progress Bar */}
-      <VideoProgressBar 
-        progress={videoProgress[item.id] || 0}
+      <VideoProgressBar
+        progress={item?.id ? (videoProgress[item.id] || 0) : 0}
         isActive={isActive}
       />
 
@@ -273,8 +293,13 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
         </TouchableOpacity>
 
         {/* Fixed bottom content positioning */}
-        <View style={[styles.bottomContent, { 
-          paddingBottom: Math.max(insets.bottom + 70, 40),
+        <View style={[styles.bottomContent, {
+          paddingBottom: Math.max(
+            insets.bottom +
+            (isGuest ? 90 : 70) +
+            (Platform.OS === 'android' && isGuest ? 20 : 0),
+            40
+          ),
           bottom: 0,
         }]}>
           <View style={styles.leftContent}>
@@ -292,7 +317,17 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
                   ♪ {item.musicName || 'Original Sound'}
                 </Text>
               </View>
-              <TouchableOpacity style={styles.followButton} activeOpacity={0.8}>
+              <TouchableOpacity
+                style={styles.followButton}
+                activeOpacity={0.8}
+                onPress={() => {
+                  if (isGuest) {
+                    onGuestAction('follow users');
+                    return;
+                  }
+                  // TODO: Add follow functionality for authenticated users
+                }}
+              >
                 <Text style={styles.followText}>Follow</Text>
               </TouchableOpacity>
             </View>
@@ -312,9 +347,16 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
               disabled={false}
             />
             
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.actionButton}
               activeOpacity={0.7}
+              onPress={() => {
+                if (isGuest) {
+                  onGuestAction('comment on shorts');
+                  return;
+                }
+                // TODO: Add comment functionality for authenticated users
+              }}
             >
               <View style={styles.actionIconContainer}>
                 <Icon name="message-circle" size={24} color="#FFF" />
@@ -324,10 +366,16 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
               </Text>
             </TouchableOpacity>
             
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.actionButton}
               activeOpacity={0.7}
               onPress={async () => {
+                if (isGuest) {
+                  onGuestAction('share shorts');
+                  return;
+                }
+
+                if (!item?.id || !item?.channel?.name) return;
                 try {
                   const deepLink = `https://adtip.in/tipshorts/${item.id}`;
                   const shareContent = {
@@ -335,7 +383,7 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
                     url: deepLink,
                     title: `${item.channel.name} - Short Video`,
                   };
-                  
+
                   await Share.share(shareContent);
                   console.log('[EnhancedShortCard] Successfully shared deep link:', deepLink);
                 } catch (error) {
@@ -349,9 +397,16 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
               <Text style={styles.actionText}>Share</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.actionButton}
               activeOpacity={0.7}
+              onPress={() => {
+                if (isGuest) {
+                  onGuestAction('access more options');
+                  return;
+                }
+                // TODO: Add more options functionality for authenticated users
+              }}
             >
               <View style={styles.actionIconContainer}>
                 <Icon name="more-horizontal" size={24} color="#FFF" />

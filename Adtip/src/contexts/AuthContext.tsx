@@ -29,6 +29,7 @@ interface PremiumState {
 // Define context type
 type AuthContextType = {
   isAuthenticated: boolean;
+  isGuest: boolean; // Add guest mode flag
   user: User | null;
   loading: boolean; // For individual operations like login, verifyOtp
   error: string | null;
@@ -36,6 +37,8 @@ type AuthContextType = {
   login: (mobileNumber: string) => Promise<ApiResponse<OtpResponse[]>>;  // Updated return type
   verifyOtp: (mobileNumber: string, otp: string, id: string) => Promise<OtpVerifyApiResponse>;
   logout: () => Promise<void>;
+  enterGuestMode: () => Promise<void>; // Add guest mode entry
+  exitGuestMode: () => Promise<void>; // Add guest mode exit
   updateUserDetails: (userData: Partial<User> & {
     languages?: number;
     interests?: number;
@@ -51,6 +54,7 @@ type AuthContextType = {
 // Create context
 const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
+  isGuest: false, // Default guest mode to false
   user: null,
   loading: false, // Default operation loading to false
   error: null,
@@ -61,6 +65,8 @@ const AuthContext = createContext<AuthContextType>({
   }) as ApiResponse<OtpResponse[]>,
   verifyOtp: async () => ({}) as OtpVerifyApiResponse,
   logout: async () => {},
+  enterGuestMode: async () => {}, // Default guest mode entry
+  exitGuestMode: async () => {}, // Default guest mode exit
   updateUserDetails: async () => {},
   refreshUserData: async () => {},
   hasChannel: false,
@@ -80,6 +86,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
   children,
 }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isGuest, setIsGuest] = useState(false); // Add guest state
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false); // For individual operations
   const [error, setError] = useState<string | null>(null);
@@ -107,13 +114,28 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         const userJson = await AsyncStorage.getItem('user');
         const token = await AsyncStorage.getItem('accessToken');
 
+        // Clean up any existing guest mode state from previous versions
+        // Guest mode should not persist across app restarts
+        await AsyncStorage.removeItem('@guest_mode');
+
+        console.log('[AuthContext] Loading user state:', {
+          hasUser: !!userJson,
+          hasToken: !!token,
+        });
+
+        // Check if user is authenticated first
         if (userJson && token) {
           const userData = JSON.parse(userJson) as User;
           setUser(userData);
           if (userData.is_first_time === 0 || userData.isSaveUserDetails === 1) {
             setIsAuthenticated(true);
+            console.log('[AuthContext] Authenticated user detected - routing to MainNavigator');
+          } else {
+            console.log('[AuthContext] User needs to complete profile - routing to AuthNavigator');
           }
           checkChannelStatus(userData.id.toString());
+        } else {
+          console.log('[AuthContext] New user detected - routing to AuthNavigator (OnboardingScreen)');
         }
       } catch (err) {
         console.error('Error loading user data:', err);
@@ -222,7 +244,13 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       if (userData && userData.id) {
         // Store user data
         setUser(userData);
-        
+
+        // Clear guest mode if user was in guest mode
+        if (isGuest) {
+          setIsGuest(false);
+          console.log('[AuthContext] Cleared guest mode after successful login');
+        }
+
         // Store user ID and token
         await AsyncStorage.setItem('userId', userData.id.toString());
         await AsyncStorage.setItem('userName', userData.name || '');
@@ -299,6 +327,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
 
       setUser(null);
       setIsAuthenticated(false);
+      setIsGuest(false); // Clear guest mode on logout
       setHasChannel(false);
       setPremiumState({
         isPremium: false,
@@ -332,6 +361,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       await AsyncStorage.clear();
       setUser(null);
       setIsAuthenticated(false);
+      setIsGuest(false); // Clear guest mode on logout fallback
       setHasChannel(false);
       setPremiumState({
         isPremium: false,
@@ -442,6 +472,64 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     }
   };
 
+  // Enter guest mode
+  const enterGuestMode = async (): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Set guest mode state (temporary, not persisted)
+      setIsGuest(true);
+      setIsAuthenticated(false);
+      setUser(null);
+      setHasChannel(false);
+
+      // Note: We don't persist guest mode to AsyncStorage
+      // Guest mode should be temporary and reset on app restart
+      // This ensures users always see OnboardingScreens first
+
+      console.log('[AuthContext] Entered guest mode (temporary session)');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to enter guest mode';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Exit guest mode
+  const exitGuestMode = async (): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Clear guest mode state
+      setIsGuest(false);
+      setIsAuthenticated(false);
+      setUser(null);
+      setHasChannel(false);
+
+      // Reset premium state to default
+      setPremiumState({
+        isPremium: false,
+        premiumPlanId: 0,
+        contentCreatorPlanId: 0,
+        walletBalance: '0.00',
+      });
+
+      // Note: No AsyncStorage operations needed since guest mode is not persisted
+
+      console.log('[AuthContext] Exited guest mode - state cleaned up');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to exit guest mode';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Create channel
   const createChannel = async (
     name: string,
@@ -471,6 +559,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
   // Provide context value - MEMOIZED to prevent unnecessary re-renders
   const contextValue: AuthContextType = useMemo(() => ({
     isAuthenticated,
+    isGuest,
     user,
     loading,
     error,
@@ -478,6 +567,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     login,
     verifyOtp,
     logout,
+    enterGuestMode,
+    exitGuestMode,
     updateUserDetails,
     refreshUserData,
     hasChannel,
@@ -487,6 +578,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     setPremiumState,
   }), [
     isAuthenticated,
+    isGuest,
     user,
     loading,
     error,

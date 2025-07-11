@@ -10,7 +10,6 @@ import {useNavigation} from '@react-navigation/native';
 import HomeScreen from '../screens/home/HomeScreen';
 import TipTubeScreen from '../screens/tiptube/TipTubeScreen';
 import TipCallScreenSimple from '../screens/tipcall/TipCallScreenSimple';
-import ProfileScreen from '../screens/profile/ProfileScreen';
 import CreateContentModal from '../screens/content/CreateContentModal';
 import TipShortsEnhanced from '../screens/tipshorts/TipShortsEnhanced';
 
@@ -26,7 +25,6 @@ const Tab = createBottomTabNavigator();
 const EnhancedHomeScreen = withWalletBalance(HomeScreen);
 const EnhancedTipTubeScreen = withWalletBalance(TipTubeScreen);
 const EnhancedTipCallScreen = withWalletBalance(TipCallScreenSimple);
-const EnhancedProfileScreen = withWalletBalance(ProfileScreen);
 
 /**
  * Bottom tab navigator component
@@ -181,13 +179,13 @@ const TabNavigator = () => {
           }}
         />
         <Tab.Screen
-          name="Profile"
-          component={EnhancedProfileScreen}
+          name="TipShorts"
+          component={TipShortsEnhanced}
           options={{
-            tabBarIcon: ProfileIcon,
+            tabBarIcon: TipTubeIcon, // Reuse the video icon for shorts
           }}
           listeners={{
-            tabPress: profileTabPress,
+            tabPress: tipTubeTabPress, // Reuse the TipTube tab press handler
           }}
         />
       </Tab.Navigator>
