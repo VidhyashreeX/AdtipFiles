@@ -645,7 +645,7 @@ const TipTubeScreen = () => {
                   styles.categoryButtonText,
                   selectedCategory === item.name && styles.selectedCategoryButtonText
                 ]}>
-                  {item.icon || ''} {item.name || ''}
+                  {item.icon || ''}{item.icon ? ' ' : ''}{item.name || ''}
                 </Text>
               </TouchableOpacity>
             </Animated.View>

@@ -62,7 +62,7 @@ const WalletBalance = ({
               style={styles.icon}
             />
             <Text style={[styles.compactBalance, {color: colors.text.primary}]}>
-              ₹{String(balance)}{' '}
+              ₹{String(balance)}
             </Text>
             {isPremium ? (
               <Icon
@@ -93,7 +93,7 @@ const WalletBalance = ({
             <View style={styles.balanceContainer}>
               <Text style={[styles.balance, {color: colors.text.primary}]}>
                 ₹{String(balance)}
-              </Text>{' '}
+              </Text>
               {isPremium ? (
                 <Icon
                   name="star"

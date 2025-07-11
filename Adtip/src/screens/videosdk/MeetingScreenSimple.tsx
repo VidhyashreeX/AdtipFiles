@@ -89,7 +89,7 @@ const ParticipantVideo = ({ participantId, isLocal = false }: { participantId: s
       />
       <View style={styles.nameTag}>
         <Text style={styles.nameTagText}>
-          {displayName || 'Unknown'} {finalIsLocal && '(You)'}
+          {displayName || 'Unknown'}{finalIsLocal ? ' (You)' : ''}
         </Text>
       </View>
       
