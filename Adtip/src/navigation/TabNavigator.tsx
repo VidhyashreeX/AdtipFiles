@@ -9,7 +9,7 @@ import {useNavigation} from '@react-navigation/native';
 
 import HomeScreen from '../screens/home/HomeScreen';
 import TipTubeScreen from '../screens/tiptube/TipTubeScreen';
-import TipCallScreen from '../screens/tipcall/TipCallScreen';
+import TipCallScreenSimple from '../screens/tipcall/TipCallScreenSimple';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import CreateContentModal from '../screens/content/CreateContentModal';
 import TipShortsEnhanced from '../screens/tipshorts/TipShortsEnhanced';
@@ -25,7 +25,7 @@ const Tab = createBottomTabNavigator();
 // ✅ SOLUTION: Define HOC-wrapped components OUTSIDE the TabNavigator component
 const EnhancedHomeScreen = withWalletBalance(HomeScreen);
 const EnhancedTipTubeScreen = withWalletBalance(TipTubeScreen);
-const EnhancedTipCallScreen = withWalletBalance(TipCallScreen);
+const EnhancedTipCallScreen = withWalletBalance(TipCallScreenSimple);
 const EnhancedProfileScreen = withWalletBalance(ProfileScreen);
 
 /**

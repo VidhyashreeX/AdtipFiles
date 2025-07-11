@@ -29,7 +29,7 @@ import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataContext } from '../../providers/DataProvider';
 import { useContentCreatorPremium } from '../../contexts/ContentCreatorPremiumContext';
-import { useVideos, useSearchVideos, usePrefetchData } from '../../hooks/useQueries';
+import { useVideos, useSearchVideos, usePrefetchData, useChannelData } from '../../hooks/useQueries';
 import { useNetInfo } from '@react-native-community/netinfo';
 import Header from '../../components/common/Header';
 import VideoCardSkeleton from '../../components/skeletons/VideoCardSkeleton';
@@ -251,25 +251,18 @@ const TipTubeScreen = () => {
     }, [refreshVideos])
   );
 
-  // Fetch user's channel ID
-  useFocusEffect(
-    useCallback(() => {
-      const fetchUserChannel = async () => {
-        if (user?.id) {
-          try {
-            const channelResponse = await ApiService.getChannelByUserId(Number(user.id));
-            if (channelResponse.status === 200 && channelResponse.data && channelResponse.data.length > 0) {
-              setUserChannelId(String(channelResponse.data[0].channelId));
-            }
-          } catch (error) {
-            console.log('No channel found for user');
-          }
-        }
-      };
+  // Use TanStack Query hook for channel data instead of manual API call
+  const {
+    data: channelData,
+    isLoading: channelLoading,
+  } = useChannelData(user?.id || 0);
 
-      fetchUserChannel();
-    }, [user?.id])
-  );
+  // Update userChannelId when channel data changes
+  useEffect(() => {
+    if (channelData?.status === 200 && channelData?.data?.length > 0) {
+      setUserChannelId(String(channelData.data[0].channelId));
+    }
+  }, [channelData]);
 
   // Fetch comments for a video
 

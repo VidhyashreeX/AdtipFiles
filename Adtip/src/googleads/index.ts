@@ -3,6 +3,7 @@ export { default as BannerAdComponent } from './BannerAdComponent';
 export { default as RectangleAdComponent } from './RectangleAdComponent';
 export { default as NativeAdComponent } from './NativeAdComponent';
 export { default as AppOpenAdTester } from './AppOpenAdTester';
+export { default as AdDebugger } from './AdDebugger';
 
 // Ad Hooks
 export { useAppOpenAd } from './AppOpenAdManager';

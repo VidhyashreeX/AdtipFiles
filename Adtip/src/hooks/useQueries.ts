@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ApiService from '../services/ApiService';
-import { ENDPOINTS } from '../constants/api';
+import { ENDPOINTS, API_BASE_URL } from '../constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { queryClient } from '../providers/QueryProvider';
 import { PostListResponse, ExploreContentResponse, ExploreItem as ApiExploreItem } from '../types/api';
@@ -454,39 +454,145 @@ export const useFollowUser = () => {
   });
 };
 
-// Save Video Like Mutation
+// Save Video Like Mutation with optimistic updates
 export const useSaveVideoLike = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: (data: { videoId: number; userId: number; like: number; videoCreatorId: number }) => 
+    mutationFn: (data: { videoId: number; userId: number; like: number; videoCreatorId: number }) =>
       ApiService.saveVideoLike(data.videoId, data.userId, data.like, data.videoCreatorId),
-    onSuccess: (data, variables) => {
-      // Invalidate related queries
+    onMutate: async ({ videoId, like }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['videos'] });
+      await queryClient.cancelQueries({ queryKey: ['shorts'] });
+
+      // Snapshot previous values
+      const previousVideos = queryClient.getQueriesData({ queryKey: ['videos'] });
+      const previousShorts = queryClient.getQueriesData({ queryKey: ['shorts'] });
+
+      // Optimistically update video like count and status
+      const updateVideoData = (old: any) => {
+        if (!old) return old;
+
+        return {
+          ...old,
+          pages: old.pages?.map((page: any) => ({
+            ...page,
+            data: page.data?.map((video: any) => {
+              if (video.id === videoId) {
+                const currentLikeCount = video.likeCount || 0;
+                const isCurrentlyLiked = video.is_liked || false;
+
+                return {
+                  ...video,
+                  likeCount: like === 1
+                    ? (isCurrentlyLiked ? currentLikeCount : currentLikeCount + 1)
+                    : (isCurrentlyLiked ? currentLikeCount - 1 : currentLikeCount),
+                  is_liked: like === 1
+                };
+              }
+              return video;
+            })
+          }))
+        };
+      };
+
+      queryClient.setQueriesData({ queryKey: ['videos'] }, updateVideoData);
+      queryClient.setQueriesData({ queryKey: ['shorts'] }, updateVideoData);
+
+      return { previousVideos, previousShorts };
+    },
+    onError: (err, variables, context) => {
+      // Revert optimistic updates
+      if (context?.previousVideos) {
+        context.previousVideos.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+      if (context?.previousShorts) {
+        context.previousShorts.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+    },
+    onSettled: (data, error, variables) => {
+      // Always refetch to ensure consistency
       queryClient.invalidateQueries({ queryKey: ['videos'] });
       queryClient.invalidateQueries({ queryKey: ['channel', 'videos'] });
       queryClient.invalidateQueries({ queryKey: ['shorts'] });
     },
-    onError: (error) => {
-      console.error('Save video like error:', error);
-    },
   });
 };
 
-// Save Video Comment Mutation
+// Save Video Comment Mutation with optimistic updates
 export const useSaveVideoComment = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: (data: { videoId: number; userId: number; comment: string }) => 
+    mutationFn: (data: { videoId: number; userId: number; comment: string }) =>
       ApiService.saveVideoComment(data.videoId, data.userId, data.comment),
-    onSuccess: (data, variables) => {
-      // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: ['videos'] });
-      queryClient.invalidateQueries({ queryKey: ['channel', 'videos'] });
+    onMutate: async ({ videoId, userId, comment }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['videos'] });
+      await queryClient.cancelQueries({ queryKey: ['comments', 'video', videoId] });
+
+      // Snapshot previous values
+      const previousVideos = queryClient.getQueriesData({ queryKey: ['videos'] });
+      const previousComments = queryClient.getQueryData(['comments', 'video', videoId]);
+
+      // Optimistically update video comment count
+      queryClient.setQueriesData({ queryKey: ['videos'] }, (old: any) => {
+        if (!old) return old;
+
+        return {
+          ...old,
+          pages: old.pages?.map((page: any) => ({
+            ...page,
+            data: page.data?.map((video: any) =>
+              video.id === videoId
+                ? { ...video, commentCount: (video.commentCount || 0) + 1 }
+                : video
+            )
+          }))
+        };
+      });
+
+      // Optimistically add comment to comments list
+      const optimisticComment = {
+        id: Date.now(), // Temporary ID
+        video_id: videoId,
+        user_id: userId,
+        comment: comment,
+        created_at: new Date().toISOString(),
+        user_name: 'You', // Will be updated from server response
+      };
+
+      queryClient.setQueryData(['comments', 'video', videoId], (old: any) => {
+        if (!old) return { data: [optimisticComment] };
+        return {
+          ...old,
+          data: [optimisticComment, ...(old.data || [])]
+        };
+      });
+
+      return { previousVideos, previousComments };
     },
-    onError: (error) => {
-      console.error('Save video comment error:', error);
+    onError: (err, variables, context) => {
+      // Revert optimistic updates
+      if (context?.previousVideos) {
+        context.previousVideos.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+      if (context?.previousComments) {
+        queryClient.setQueryData(['comments', 'video', variables.videoId], context.previousComments);
+      }
+    },
+    onSettled: (data, error, variables) => {
+      // Always refetch to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ['videos'] });
+      queryClient.invalidateQueries({ queryKey: ['comments', 'video', variables.videoId] });
+      queryClient.invalidateQueries({ queryKey: ['channel', 'videos'] });
     },
   });
 };
@@ -544,18 +650,59 @@ export const useUpdateUser = () => {
   });
 };
 
-// Save User Details Mutation
+// Save User Details Mutation with optimistic updates
 export const useSaveUserDetails = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: (data: any) => ApiService.saveUserDetails(data),
-    onSuccess: (data, variables) => {
-      // Invalidate user-related queries
-      queryClient.invalidateQueries({ queryKey: ['profile', variables.user_id] });
+    onMutate: async (newUserData) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['profile', newUserData.user_id] });
+      await queryClient.cancelQueries({ queryKey: ['userProfile', newUserData.user_id] });
+
+      // Snapshot previous values
+      const previousProfile = queryClient.getQueryData(['profile', newUserData.user_id]);
+      const previousUserProfile = queryClient.getQueryData(['userProfile', newUserData.user_id]);
+
+      // Optimistically update profile data
+      queryClient.setQueryData(['profile', newUserData.user_id], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            ...newUserData
+          }
+        };
+      });
+
+      queryClient.setQueryData(['userProfile', newUserData.user_id], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            ...newUserData
+          }
+        };
+      });
+
+      return { previousProfile, previousUserProfile };
     },
-    onError: (error) => {
-      console.error('Save user details error:', error);
+    onError: (err, variables, context) => {
+      // Revert optimistic updates
+      if (context?.previousProfile) {
+        queryClient.setQueryData(['profile', variables.user_id], context.previousProfile);
+      }
+      if (context?.previousUserProfile) {
+        queryClient.setQueryData(['userProfile', variables.user_id], context.previousUserProfile);
+      }
+    },
+    onSettled: (data, error, variables) => {
+      // Always refetch to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ['profile', variables.user_id] });
+      queryClient.invalidateQueries({ queryKey: ['userProfile', variables.user_id] });
     },
   });
 };
@@ -787,6 +934,108 @@ export const useFollowMutation = () => {
       // Invalidate relevant queries
       queryClientInstance.invalidateQueries({ queryKey: ['profile'] });
       queryClientInstance.invalidateQueries({ queryKey: ['posts'] });
+    },
+  });
+};
+
+// User Profile Data Hook (for ProfileScreen)
+export const useUserProfile = (userId: number | string) => {
+  return useQuery({
+    queryKey: ['userProfile', userId],
+    queryFn: async () => {
+      const response = await ApiService.get(`/api/users/${userId}`);
+      return response;
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: (failureCount, error: any) => {
+      if (error?.response?.status === 404) return false;
+      return failureCount < 3;
+    },
+  });
+};
+
+// Dynamic User Name Hook
+export const useDynamicUserName = (userId: number | string) => {
+  return useQuery({
+    queryKey: ['dynamicUserName', userId],
+    queryFn: async () => {
+      const response = await ApiService.post('/api/get-user-name', {
+        userid: userId
+      });
+      return response;
+    },
+    enabled: !!userId,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    retry: (failureCount, error: any) => {
+      if (error?.response?.status === 404) return false;
+      return failureCount < 2;
+    },
+  });
+};
+
+// Enhanced Follow User Mutation with optimistic updates
+export const useFollowUserMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ followingId, followerId, action }: {
+      followingId: number;
+      followerId: number;
+      action: 'follow' | 'unfollow'
+    }) => {
+      const token = await AsyncStorage.getItem('accessToken');
+      const response = await fetch(`${API_BASE_URL}/api/follow-user`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ followingId, followerId, action }),
+      });
+      return response.json();
+    },
+    onMutate: async ({ followingId, action }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['userProfile', followingId] });
+      await queryClient.cancelQueries({ queryKey: ['followers', followingId] });
+
+      // Snapshot previous values
+      const previousProfile = queryClient.getQueryData(['userProfile', followingId]);
+      const previousFollowers = queryClient.getQueryData(['followers', followingId]);
+
+      // Optimistically update profile
+      queryClient.setQueryData(['userProfile', followingId], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            isFollowing: action === 'follow',
+            followersCount: action === 'follow'
+              ? (old.data?.followersCount || 0) + 1
+              : Math.max(0, (old.data?.followersCount || 0) - 1)
+          }
+        };
+      });
+
+      return { previousProfile, previousFollowers };
+    },
+    onError: (err, variables, context) => {
+      // Revert optimistic updates
+      if (context?.previousProfile) {
+        queryClient.setQueryData(['userProfile', variables.followingId], context.previousProfile);
+      }
+      if (context?.previousFollowers) {
+        queryClient.setQueryData(['followers', variables.followingId], context.previousFollowers);
+      }
+    },
+    onSettled: (data, error, variables) => {
+      // Always refetch to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ['userProfile', variables.followingId] });
+      queryClient.invalidateQueries({ queryKey: ['followers', variables.followingId] });
+      queryClient.invalidateQueries({ queryKey: ['followings', variables.followerId] });
     },
   });
 };
@@ -1560,6 +1809,123 @@ export const useSearchUsers = (searchQuery: string, page: number = 1, limit: num
     retry: (failureCount, error: any) => {
       if (error?.response?.status === 401) return false;
       return failureCount < 2;
+    },
+  });
+};
+
+// Fallback location data for when API is unavailable
+const getFallbackLocationData = (searchQuery: string) => {
+  const commonLocations = [
+    { name: 'Mumbai', country: 'India' },
+    { name: 'Delhi', country: 'India' },
+    { name: 'Bangalore', country: 'India' },
+    { name: 'Chennai', country: 'India' },
+    { name: 'Kolkata', country: 'India' },
+    { name: 'Hyderabad', country: 'India' },
+    { name: 'Pune', country: 'India' },
+    { name: 'Ahmedabad', country: 'India' },
+    { name: 'Jaipur', country: 'India' },
+    { name: 'Lucknow', country: 'India' },
+    { name: 'New York', country: 'USA' },
+    { name: 'Los Angeles', country: 'USA' },
+    { name: 'London', country: 'UK' },
+    { name: 'Paris', country: 'France' },
+    { name: 'Tokyo', country: 'Japan' },
+    { name: 'Sydney', country: 'Australia' },
+    { name: 'Toronto', country: 'Canada' },
+    { name: 'Dubai', country: 'UAE' },
+    { name: 'Singapore', country: 'Singapore' },
+    { name: 'Bangkok', country: 'Thailand' },
+  ];
+
+  const query = searchQuery.toLowerCase();
+  return commonLocations
+    .filter(location =>
+      location.name.toLowerCase().includes(query) ||
+      location.country.toLowerCase().includes(query)
+    )
+    .slice(0, 5) // Limit to 5 results
+    .map((location, index) => ({
+      place_id: `fallback_${location.name.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}_${index}`,
+      description: `${location.name}, ${location.country}`,
+      structured_formatting: {
+        main_text: location.name,
+        secondary_text: location.country,
+      },
+      types: ['locality', 'political'],
+      terms: [
+        { offset: 0, value: location.name },
+        { offset: location.name.length + 2, value: location.country },
+      ],
+    }));
+};
+
+// Google Places Search Hook for Location Autocomplete
+export const useLocationSearch = (searchQuery: string) => {
+  return useQuery({
+    queryKey: ['location', 'search', searchQuery],
+    queryFn: async () => {
+      if (searchQuery.length < 3) {
+        return [];
+      }
+
+      try {
+        // Import Google Maps configuration
+        const { buildPlacesAutocompleteUrl, validatePlacesResponse, GOOGLE_MAPS_CONFIG } = await import('../config/googleMapsConfig');
+
+        const url = buildPlacesAutocompleteUrl(searchQuery);
+
+        // Create AbortController for timeout (React Native compatible)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+        }, GOOGLE_MAPS_CONFIG.REQUEST_TIMEOUT);
+
+        try {
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            signal: controller.signal,
+          });
+
+          // Clear timeout on successful response
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const data = await response.json();
+          const validatedResponse = validatePlacesResponse(data);
+
+          return validatedResponse.predictions || [];
+        } catch (error) {
+          // Clear timeout on error
+          clearTimeout(timeoutId);
+
+          // Handle abort error specifically
+          if (error instanceof Error && error.name === 'AbortError') {
+            throw new Error('Request timeout - please check your internet connection');
+          }
+
+          throw error;
+        }
+      } catch (error) {
+        // If Google Places API fails, return fallback data
+        console.warn('Google Places API failed, using fallback data:', error);
+        return getFallbackLocationData(searchQuery);
+      }
+    },
+    enabled: !!searchQuery && searchQuery.trim().length >= 3, // Only search if query is 3+ characters
+    staleTime: 10 * 60 * 1000, // 10 minutes - location data doesn't change often
+    retry: (failureCount, error: any) => {
+      // Don't retry on API quota errors or timeouts - use fallback instead
+      if (error?.message?.includes('OVER_QUERY_LIMIT')) return false;
+      if (error?.message?.includes('REQUEST_DENIED')) return false;
+      if (error?.message?.includes('Request timeout')) return false;
+      return failureCount < 1; // Only retry once before falling back
     },
   });
 };

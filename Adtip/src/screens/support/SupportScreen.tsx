@@ -10,11 +10,13 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
+import {useNavigation} from '@react-navigation/native';
 import Header from '../../components/common/Header';
 import LinearGradient from 'react-native-linear-gradient';
 
 const SupportScreen: React.FC = () => {
   const {colors, isDarkMode} = useTheme();
+  const navigation = useNavigation();
 
   const handleEmailPress = () => {
     Linking.openURL('mailto:support@adtip.in');
@@ -83,9 +85,19 @@ const SupportScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Help & Support"
-      showSearch={false}
-      showWallet={false}
+      <Header
+        title="Help & Support"
+        showSearch={false}
+        showWallet={false}
+        showPremium={false}
+        leftComponent={
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Icon name="arrow-left" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        }
       />
       
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
@@ -276,6 +288,10 @@ const styles = StyleSheet.create({
   addressText: {
     fontSize: 14,
     lineHeight: 22,
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
   },
 });
 

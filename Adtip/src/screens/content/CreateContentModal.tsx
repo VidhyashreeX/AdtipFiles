@@ -8,12 +8,26 @@ import {
   Modal,
   SafeAreaView,
   StatusBar,
-  Animated,
   Platform,
   Dimensions,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  runOnJS,
+  interpolate,
+  Extrapolate,
+  Easing,
+} from 'react-native-reanimated';
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from 'react-native-gesture-handler';
 
 // Context
 import {useTheme} from '../../contexts/ThemeContext';
@@ -25,43 +39,97 @@ interface CreateContentModalProps {
 
 const screenHeight = Dimensions.get('window').height;
 
-const CreateContentModal: React.FC<CreateContentModalProps> = ({
+const CreateContentModal: React.FC<CreateContentModalProps> = React.memo(({
   visible: propVisible,
   onClose,
 }) => {
   const {colors, isDarkMode} = useTheme();
   const navigation = useNavigation();
-  const [isContentMounted, setIsContentMounted] = React.useState(false);
-  const slideAnimation = React.useRef(new Animated.Value(0)).current;
+
+  // Reanimated shared values for smooth animations
+  const translateY = useSharedValue(screenHeight);
+  const backdropOpacity = useSharedValue(0);
+  const gestureTranslateY = useSharedValue(0);
+
+  // Spring configuration for smooth, natural animations
+  const springConfig = {
+    damping: 20,
+    mass: 0.8,
+    stiffness: 150,
+    overshootClamping: false,
+    restSpeedThreshold: 0.1,
+    restDisplacementThreshold: 0.1,
+  };
+
+  // Timing configuration for backdrop
+  const timingConfig = {
+    duration: 250,
+    easing: Easing.out(Easing.cubic),
+  };
+
+  // Pan gesture for swipe to dismiss
+  const panGesture = Gesture.Pan()
+    .onUpdate((event) => {
+      // Only allow downward swipes
+      if (event.translationY > 0) {
+        gestureTranslateY.value = event.translationY;
+        // Reduce backdrop opacity as user swipes down
+        const progress = Math.min(event.translationY / (screenHeight * 0.3), 1);
+        backdropOpacity.value = 1 - progress * 0.5;
+      }
+    })
+    .onEnd((event) => {
+      const shouldDismiss = event.translationY > screenHeight * 0.2 || event.velocityY > 500;
+
+      if (shouldDismiss) {
+        // Dismiss modal
+        translateY.value = withSpring(screenHeight, springConfig);
+        backdropOpacity.value = withTiming(0, timingConfig, (finished) => {
+          if (finished) {
+            runOnJS(onClose)();
+          }
+        });
+      } else {
+        // Snap back to original position
+        gestureTranslateY.value = withSpring(0, springConfig);
+        backdropOpacity.value = withTiming(1, timingConfig);
+      }
+    });
 
   React.useEffect(() => {
     if (propVisible) {
-      setIsContentMounted(true);
-      Animated.timing(slideAnimation, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
+      // Reset gesture value and animate in
+      gestureTranslateY.value = 0;
+      translateY.value = withSpring(0, springConfig);
+      backdropOpacity.value = withTiming(1, timingConfig);
     } else {
-      if (isContentMounted) {
-        Animated.timing(slideAnimation, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }).start(() => {
-          setIsContentMounted(false);
-        });
-      }
+      // Animate out with spring for modal and timing for backdrop
+      translateY.value = withSpring(screenHeight, springConfig);
+      backdropOpacity.value = withTiming(0, timingConfig);
     }
-  }, [propVisible, slideAnimation, isContentMounted]);
+  }, [propVisible]);
 
   const handleCloseModalWithAnimation = () => {
-    onClose();
+    // Start close animation then call onClose
+    translateY.value = withSpring(screenHeight, springConfig);
+    backdropOpacity.value = withTiming(0, timingConfig, (finished) => {
+      if (finished) {
+        runOnJS(onClose)();
+      }
+    });
   };
 
   const createNavigationHandler = (screenName: string) => () => {
-    onClose();
-    navigation.navigate(screenName as never);
+    // Close modal with animation then navigate
+    translateY.value = withSpring(screenHeight, springConfig);
+    backdropOpacity.value = withTiming(0, timingConfig, (finished) => {
+      if (finished) {
+        runOnJS(() => {
+          onClose();
+          navigation.navigate(screenName as never);
+        })();
+      }
+    });
   };
 
   const handleCreatePost = createNavigationHandler('CreatePost');
@@ -69,13 +137,24 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({
   const handleCreateShort = createNavigationHandler('TipShortsUpload');
   const handleStartStream = createNavigationHandler('StartStream');
 
-  const translateY = slideAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [screenHeight, 0],
+  // Animated styles using Reanimated
+  const modalAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{
+        translateY: translateY.value + gestureTranslateY.value
+      }],
+    };
   });
 
-  if (!isContentMounted && !propVisible) {
-      return null;
+  const backdropAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: backdropOpacity.value,
+    };
+  });
+
+  // Don't render if not visible
+  if (!propVisible) {
+    return null;
   }
 
   return (
@@ -84,19 +163,34 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({
       visible={propVisible}
       onRequestClose={handleCloseModalWithAnimation}
       animationType="none"
+      statusBarTranslucent={true}
     >
-      <SafeAreaView style={styles.safeArea}>
+      <GestureHandlerRootView style={styles.safeArea}>
+        <SafeAreaView style={styles.safeArea}>
         <StatusBar
           backgroundColor={propVisible ? (isDarkMode ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.5)") : "transparent"}
           barStyle={propVisible ? "light-content" : (isDarkMode ? "light-content" : "dark-content")}
         />
-        <TouchableOpacity
-            style={[StyleSheet.absoluteFill, {backgroundColor: isDarkMode ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)'}]}
+
+        {/* Animated backdrop */}
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: isDarkMode ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)',
+            },
+            backdropAnimatedStyle,
+          ]}
+        >
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
             activeOpacity={1}
             onPress={handleCloseModalWithAnimation}
-        />
+          />
+        </Animated.View>
+
         <View style={styles.centeredView} pointerEvents="box-none">
-          {isContentMounted && (
+          <GestureDetector gesture={panGesture}>
             <Animated.View
               style={[
                 styles.modalView,
@@ -104,7 +198,7 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({
                   backgroundColor: colors.background,
                   shadowColor: isDarkMode ? colors.white : colors.black,
                 },
-                {transform: [{translateY}]},
+                modalAnimatedStyle,
               ]}
             >
               <View style={styles.header}>
@@ -234,12 +328,13 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({
                 </TouchableOpacity>
               </View>
             </Animated.View>
-          )}
+          </GestureDetector>
         </View>
       </SafeAreaView>
+      </GestureHandlerRootView>
     </Modal>
   );
-};
+});
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -307,5 +402,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
 });
+
+CreateContentModal.displayName = 'CreateContentModal';
 
 export default CreateContentModal;

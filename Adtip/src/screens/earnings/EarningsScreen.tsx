@@ -100,7 +100,20 @@ const EarningsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, {backgroundColor: colors.background}]}>
-      <Header title="Earnings"/>
+      <Header
+        title="Earnings"
+        showWallet={false}
+        showSearch={false}
+        showPremium={false}
+        leftComponent={
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Icon name="arrow-left" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        }
+      />
       
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Earnings Card */}
@@ -293,6 +306,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '500',
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
   },
 });
 

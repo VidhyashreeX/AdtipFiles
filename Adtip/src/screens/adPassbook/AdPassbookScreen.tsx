@@ -408,7 +408,20 @@ const AdPassbookScreen: React.FC = () => {
   return (
     <ScreenTransition animationType="scale">
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <Header title="My Ad Passbook" />
+        <Header
+          title="My Ad Passbook"
+          showWallet={false}
+          showSearch={false}
+          showPremium={false}
+          leftComponent={
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
+        />
         <ScrollView 
           style={styles.content} 
           showsVerticalScrollIndicator={false}
@@ -736,6 +749,10 @@ const styles = StyleSheet.create({
   },
   completedText: {
     fontSize: 12,
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
   },
 });
 

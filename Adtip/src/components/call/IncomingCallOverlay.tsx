@@ -74,7 +74,7 @@ const IncomingCallOverlay: React.FC<IncomingCallOverlayProps> = ({
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#121212" />
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
       
       {/* Dark patterned background */}
       <View style={styles.backgroundPattern}>
@@ -156,7 +156,7 @@ const IncomingCallOverlay: React.FC<IncomingCallOverlayProps> = ({
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#121212',
+    backgroundColor: '#000000',
     justifyContent: 'space-between',
     paddingBottom: 40,
   },

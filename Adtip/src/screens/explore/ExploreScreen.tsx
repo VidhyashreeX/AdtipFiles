@@ -192,7 +192,20 @@ const ExploreScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background}]}>
-      <Header title="Explore" />
+      <Header
+        title="Explore"
+        showWallet={false}
+        showSearch={false}
+        showPremium={false}
+        leftComponent={
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Icon name="arrow-left" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        }
+      />
       {NetworkIndicator}
       
       {loading && exploreItems.length === 0 ? (
@@ -289,6 +302,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginLeft: 8,
     fontWeight: '500',
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
   },
 });
 

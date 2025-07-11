@@ -19,7 +19,10 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useContentCreatorPremium } from '../../contexts/ContentCreatorPremiumContext';
+import Icon from 'react-native-vector-icons/Feather';
 import Header from '../../components/common/Header';
+import ContentCreatorPlanToggle from '../../components/common/ContentCreatorPlanToggle';
 import ApiService from '../../services/ApiService';
 import CloudflareUploadService from '../../services/CloudflareUploadService';
 import { CheckCircle, Play, Calendar, Users, Eye, Bell, BellOff, Edit3, Camera, X } from 'lucide-react-native';
@@ -78,6 +81,11 @@ const ChannelScreen: React.FC = () => {
   const route = useRoute();
   const { colors } = useTheme();
   const { user } = useAuth();
+  const {
+    isContentCreatorPremium,
+    contentCreatorPremiumData,
+    isLoading: contentCreatorPremiumLoading
+  } = useContentCreatorPremium();
   const [selectedTab, setSelectedTab] = useState<'home' | 'videos' | 'about'>('home');
   const [isSubscribing, setIsSubscribing] = useState(false);
   
@@ -533,12 +541,32 @@ const ChannelScreen: React.FC = () => {
     handleRefresh();
   }, [handleRefresh]);
 
+  // Content Creator Premium Toggle Handler
+  const handleTogglePremium = useCallback(() => {
+    console.log('🚀 [ChannelScreen] User clicked content creator premium toggle');
+    console.log('📊 [ChannelScreen] Current content creator premium status:', {
+      isContentCreatorPremium,
+      hasData: !!contentCreatorPremiumData
+    });
+    navigation.navigate('ContentCreatorPremium');
+  }, [isContentCreatorPremium, contentCreatorPremiumData, navigation]);
+
   if (channelLoading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Header title="Channel"
-        showSearch={false}
-        showWallet={false}
+        <Header
+          title="My Channel"
+          showSearch={false}
+          showWallet={false}
+          showPremium={false}
+          leftComponent={
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -553,8 +581,20 @@ const ChannelScreen: React.FC = () => {
   if (!channelInfo) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Header title="Channel" showSearch={false}
-        showWallet={false} />
+        <Header
+          title="My Channel"
+          showSearch={false}
+          showWallet={false}
+          showPremium={false}
+          leftComponent={
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
+        />
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: colors.text.primary }]}>
             Channel not found
@@ -573,7 +613,26 @@ const ChannelScreen: React.FC = () => {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Header
-        title={channelInfo?.channelName || 'Channel'}
+        title="My Channel"
+        showSearch={false}
+        showWallet={false}
+        showPremium={false}
+        leftComponent={
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Icon name="arrow-left" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        }
+        rightComponent={
+          isMyChannel ? (
+            <View style={styles.headerRight}>
+              {/* Content Creator Premium Toggle */}
+              <ContentCreatorPlanToggle onPress={handleTogglePremium} />
+            </View>
+          ) : null
+        }
       />
 
       <ScrollView
@@ -1361,6 +1420,15 @@ const styles = StyleSheet.create({
     color: '#ffd600',
     fontWeight: 'bold',
   },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
 });
 
 export default ChannelScreen;

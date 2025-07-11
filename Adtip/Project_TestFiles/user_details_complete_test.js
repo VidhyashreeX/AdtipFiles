@@ -364,7 +364,7 @@ const testCases = [
       
       // Simulate dark theme colors
       const darkThemeColors = {
-        background: '#121212',
+        background: '#000000',
         text: {
           primary: '#ffffff',
           secondary: '#b3b3b3',
@@ -383,7 +383,7 @@ const testCases = [
         color: darkThemeColors.text.primary 
       };
       
-      if (containerStyle.backgroundColor !== '#121212') {
+      if (containerStyle.backgroundColor !== '#000000') {
         throw new Error("Dark theme background color not applied correctly");
       }
       if (textStyle.color !== '#ffffff') {

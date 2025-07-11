@@ -11,8 +11,9 @@ import {
   ScrollView,
   TextInput,
   Animated,
+  Modal,
 } from 'react-native'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useAuth } from '../../contexts/AuthContext'
@@ -23,10 +24,17 @@ import Icon from 'react-native-vector-icons/Feather'
 import { useBlocklist } from '../../hooks/useBlocklist'
 import { useMissedCallsCount } from '../../hooks/useMissedCalls'
 import { useWallet } from '../../hooks/useWallet'
-import { BanknoteArrowUp, Ban } from 'lucide-react-native'
+import { BanknoteArrowUp, Ban, MoreVertical } from 'lucide-react-native'
 import { MainNavigatorParamList } from '../../types/navigation'
 import { CallType } from '../../stores/callStoreSimplified'
 import debounce from 'lodash.debounce'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import LinearGradient from 'react-native-linear-gradient'
+import PremiumPopup from '../../components/common/PremiumPopup'
+import RectangleAdComponent from '../../googleads/RectangleAdComponent'
+import UserProfileScreen from '../profile/UserProfileScreen'
+import DndToggleSwitch from '../../components/common/DndToggleSwitch'
+import ApiService from '../../services/ApiService'
 
 // Import our new call controller and billing service
 import CallController from '../../services/calling/CallController'
@@ -211,6 +219,38 @@ const CATEGORIES: CategoryOption[] = [
   { id: 48, name: 'Astrology' },
 ]
 
+// Premium Banner Component
+const PremiumBanner = ({ colors, isDarkMode, onUpgradePress }: { 
+  colors: any, 
+  isDarkMode: boolean, 
+  onUpgradePress: () => void 
+}) => (
+  <LinearGradient
+    colors={isDarkMode ? ['#1F2937', '#374151'] : ['#FEF3C7', '#FDE68A']}
+    style={styles.premiumContainer}
+  >
+    <View style={styles.premiumBanner}>
+      <Text style={styles.crownIcon}>👑</Text>
+      <View style={styles.premiumTextContainer}>
+        <Text style={[styles.premiumTitle, { color: isDarkMode ? '#F9FAFB' : '#000000' }]}>
+          Upgrade to Premium
+        </Text>
+        <Text style={[styles.premiumSubtitle, { color: isDarkMode ? '#D1D5DB' : '#000000' }]}>
+          Unlimited calls, priority support & more
+        </Text>
+      </View>
+      <TouchableOpacity 
+        style={[styles.upgradeButton, { borderColor: isDarkMode ? '#F9FAFB' : '#000000' }]}
+        onPress={onUpgradePress}
+      >
+        <Text style={[styles.upgradeButtonText, { color: isDarkMode ? '#F9FAFB' : '#000000' }]}>
+          Upgrade
+        </Text>
+      </TouchableOpacity>
+    </View>
+  </LinearGradient>
+)
+
 const FilterChip = ({
   label,
   isSelected,
@@ -310,6 +350,171 @@ const TipCallScreenSimple = () => {
   const { balance, isPremium } = useWallet()
   const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>()
   const { blockUser, isUserBlocked } = useBlocklist()
+  const queryClient = useQueryClient()
+
+  // -------------------- Premium --------------------
+  const [premiumActive, setPremiumActive] = useState(false)
+  const [showPremiumPopup, setShowPremiumPopup] = useState(false)
+  const { data: premiumData, isLoading: premiumLoading } = useQuery({
+    queryKey: ['premium', user?.id],
+    queryFn: () => (user?.id ? ApiService.checkPremium(user.id) : null),
+    enabled: !!user?.id,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // Update premium state when data changes
+  useEffect(() => {
+    if (premiumData) {
+      const active = !premiumData.is_premium_expired
+      setPremiumActive(active)
+    }
+  }, [premiumData])
+  // --------------------------------------------------
+
+  // -------------------- DND -------------------------
+  const [isDndEnabled, setIsDndEnabled] = useState<boolean>(!!user?.dnd)
+  const [isDndLoading, setIsDndLoading] = useState(false)
+  const updateUserMutation = useMutation({
+    mutationFn: (data: any) => ApiService.updateUser(data),
+    onSuccess: (_data: any, variables: any) => {
+      console.log('[TipCallScreenSimple] DND update successful:', _data, 'Variables:', variables)
+      setIsDndEnabled(!!variables.dnd)
+      queryClient.invalidateQueries({ queryKey: ['profile', user?.id] })
+    },
+    onError: (error: any) => {
+      console.error('[TipCallScreenSimple] DND update failed:', error)
+      Alert.alert('Error', 'Failed to update DND status')
+    },
+  })
+
+  const handleDndToggle = useCallback(() => {
+    console.log('[TipCallScreenSimple] DND toggle initiated. Current state:', isDndEnabled, 'User ID:', user?.id)
+
+    if (!user?.id) {
+      console.error('[TipCallScreenSimple] No user ID available for DND toggle')
+      Alert.alert('Error', 'User not found. Please try again.')
+      return
+    }
+
+    const newState = !isDndEnabled
+    const statusTxt = newState ? 'ON' : 'OFF'
+
+    console.log('[TipCallScreenSimple] Showing DND confirmation dialog for state:', newState)
+
+    Alert.alert(
+      `Turn DND ${statusTxt}?`,
+      newState ? 'You will not receive any incoming call notifications.' : 'You will start receiving incoming call notifications.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: `Turn ${statusTxt}`,
+          onPress: () => {
+            console.log('[TipCallScreenSimple] User confirmed DND toggle. Making API call...')
+            setIsDndLoading(true)
+
+            const updateData = { id: user.id, dnd: newState ? 1 : 0 }
+            console.log('[TipCallScreenSimple] Calling updateUserMutation.mutate with data:', updateData)
+
+            updateUserMutation.mutate(
+              updateData,
+              {
+                onSettled: () => {
+                  console.log('[TipCallScreenSimple] DND mutation settled')
+                  setIsDndLoading(false)
+                },
+              }
+            )
+          },
+        },
+      ],
+    )
+  }, [isDndEnabled, updateUserMutation, user])
+  // --------------------------------------------------
+
+  // ------------------ Dynamic Filters ---------------
+  const [languages, setLanguages] = useState<LanguageOption[]>([{ id: 0, name: 'All' }])
+  const [categories, setCategories] = useState<CategoryOption[]>([{ id: 0, name: 'All' }])
+
+  const { data: languagesData } = useQuery({
+    queryKey: ['languages'],
+    queryFn: ApiService.getLanguages,
+    staleTime: 24 * 60 * 60 * 1000,
+  })
+
+  const { data: interestsData } = useQuery({
+    queryKey: ['interests'],
+    queryFn: ApiService.getInterests,
+    staleTime: 24 * 60 * 60 * 1000,
+  })
+
+  // Update languages when data changes
+  useEffect(() => {
+    if (languagesData?.data) {
+      setLanguages([{ id: 0, name: 'All' }, ...languagesData.data.map((l: any) => ({ id: l.id, name: l.name }))])
+    }
+  }, [languagesData])
+
+  // Update categories when data changes
+  useEffect(() => {
+    if (interestsData?.data) {
+      setCategories([{ id: 0, name: 'All' }, ...interestsData.data.map((c: any) => ({ id: c.id, name: c.name }))])
+    }
+  }, [interestsData])
+  // --------------------------------------------------
+
+  // ----------------- Unread Counts ------------------
+  const [unreadCounts, setUnreadCounts] = useState<{ [key: number]: number }>({})
+  const fetchUnreadCounts = useCallback(async () => {
+    if (!user?.id) return
+    try {
+      const response = await ApiService.getUnreadMessageCount(user.id)
+      const counts: { [key: number]: number } = {}
+      if (response?.data?.conversations) {
+        response.data.conversations.forEach((conv: any) => {
+          counts[conv.peerId] = conv.unread || 0
+        })
+      }
+      setUnreadCounts(counts)
+    } catch (e) {
+      console.log('Unread count error', e)
+    }
+  }, [user?.id])
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchUnreadCounts()
+    }, [fetchUnreadCounts])
+  )
+  // --------------------------------------------------
+
+  // -------------- User Profile Modal ----------------
+  const [showUserProfileModal, setShowUserProfileModal] = useState(false)
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
+  const openProfile = useCallback((uid: number) => {
+    setSelectedUserId(uid)
+    setShowUserProfileModal(true)
+  }, [])
+  // --------------------------------------------------
+
+  // -------------- Blocklist Badge -------------------
+  const { blockedUsersCount, refreshBlocklist } = useBlocklist()
+  useFocusEffect(
+    useCallback(() => {
+      refreshBlocklist()
+    }, [refreshBlocklist])
+  )
+  // --------------------------------------------------
+
+  // --------------- Ad Insertion Helper --------------
+  const getContactsWithAds = (list: Contact[]) => {
+    const arr: (Contact | { ad: true; key: string })[] = []
+    list.forEach((c, idx) => {
+      arr.push(c)
+      if ((idx + 1) % 3 === 0) arr.push({ ad: true, key: 'ad-' + idx })
+    })
+    return arr
+  }
+  // --------------------------------------------------
 
   // Filters & Search state
   const [languageFilter, setLanguageFilter] = useState<number>(0)
@@ -371,8 +576,13 @@ const TipCallScreenSimple = () => {
   // Transform users data
   const contacts = usersData?.pages?.flatMap((page) => page?.data || []) || []
   const filteredContacts = contacts.filter(
-    (contact) => contact.id !== user?.id && !isUserBlocked(contact.id.toString())
+    (contact) =>
+      contact.id !== user?.id &&
+      !isUserBlocked(contact.id.toString()) &&
+      (debouncedSearch === '' || contact.name?.toLowerCase().includes(debouncedSearch.toLowerCase()))
   )
+
+  const contactsWithAds = useMemo(() => getContactsWithAds(filteredContacts), [filteredContacts])
 
   // Transform live search results
   const liveSearchContacts = useMemo(() => {
@@ -394,7 +604,7 @@ const TipCallScreenSimple = () => {
             'You need at least ₹1 to make a call. Please add money to your wallet.',
             [
               { text: 'Cancel', style: 'cancel' },
-              { text: 'Add Money', onPress: () => navigation.navigate('Wallet') }
+              { text: 'Add Funds', onPress: () => navigation.navigate('AddFundsScreen' as never) }
             ]
           )
           return
@@ -490,8 +700,19 @@ const TipCallScreenSimple = () => {
 
   // Handle chat
   const handleChatNavigation = useCallback((contact: Contact) => {
+    if (!isPremium) {
+      setShowPremiumPopup(true)
+      return
+    }
     navigation.navigate('Chat', { user: contact })
-  }, [navigation])
+
+    // Mark messages as read in background
+    if (user?.id && unreadCounts[contact.id] > 0) {
+      ApiService.markMessagesAsRead(user.id, contact.id).finally(() => {
+        setUnreadCounts(prev => ({ ...prev, [contact.id]: 0 }))
+      })
+    }
+  }, [navigation, isPremium, unreadCounts, user?.id])
 
   // Handle search activation
   const handleSearchActivation = useCallback(() => {
@@ -521,23 +742,26 @@ const TipCallScreenSimple = () => {
   }, [handleProfilePress])
 
   // Render contact item
-  const renderContactItem = ({ item }: { item: Contact }) => (
-    <ContactCard
-      contact={item}
-      onVideoCall={() =>
-        handleStartCall(item.id.toString(), item.name || 'Unknown User', 'video')
-      }
-      onVoiceCall={() =>
-        handleStartCall(item.id.toString(), item.name || 'Unknown User', 'voice')
-      }
-      onChat={() => handleChatNavigation(item)}
-      hasUnreadMessages={false}
-      colors={colors}
-      isDarkMode={isDarkMode}
-      onProfilePress={() => handleProfilePress(item.id)}
-      onBlockUser={() => handleBlockUser(item)}
-    />
-  )
+  const renderContactItem = ({ item }: { item: Contact | { ad: true; key: string } }) => {
+    if ('ad' in item) return <RectangleAdComponent key={item.key} />
+    return (
+      <ContactCard
+        contact={item}
+        onVideoCall={() =>
+          handleStartCall(item.id.toString(), item.name || 'Unknown User', 'video')
+        }
+        onVoiceCall={() =>
+          handleStartCall(item.id.toString(), item.name || 'Unknown User', 'voice')
+        }
+        onChat={() => handleChatNavigation(item)}
+        hasUnreadMessages={unreadCounts[item.id] > 0}
+        colors={colors}
+        isDarkMode={isDarkMode}
+        onProfilePress={() => openProfile(item.id)}
+        onBlockUser={() => handleBlockUser(item as Contact)}
+      />
+    )
+  }
 
   // Render live search item using the same enhanced ContactCard
   const renderLiveSearchItem = ({ item }: { item: Contact }) => (
@@ -557,30 +781,46 @@ const TipCallScreenSimple = () => {
   // Missed calls count
   const { count: missedCallsCount } = useMissedCallsCount(user?.id ? String(user.id) : undefined)
 
+  // ---------- Premium Banner renderer ---------------
+  const renderPremiumBanner = () => {
+    if (premiumLoading) return null
+    if (!isPremium) {
+      return (
+        <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+          <LinearGradient colors={['#FFD700', '#FFB300']} style={{ borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ fontSize: 20, marginRight: 12 }}>👑</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontWeight: '700' }}>Upgrade to Premium</Text>
+              <Text>Lower call rates & ₹2 per call acceptance</Text>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate('SubscriptionScreen' as never)} style={{ backgroundColor: 'rgba(0,0,0,0.1)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}>
+              <Text style={{ fontWeight: '600' }}>Upgrade</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      )
+    }
+    return null
+  }
+  // --------------------------------------------------
+
+  // ------------------ Header Menu State -------------
+  const [showDropdown, setShowDropdown] = useState(false)
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (showDropdown) {
+      const timer = setTimeout(() => {
+        setShowDropdown(false)
+      }, 5000) // Auto close after 5 seconds
+      return () => clearTimeout(timer)
+    }
+  }, [showDropdown])
+
   // Header right icons component
   const HeaderRight = () => (
     <View style={styles.headerRightContainer}>
-      <TouchableOpacity
-        onPress={() => navigation.navigate('MissedCalls')}
-        style={styles.headerIconButton}
-      >
-        <Icon name="phone-missed" size={20} color={colors.error} />
-        {missedCallsCount > 0 && (
-          <View style={[styles.missedBadge, { backgroundColor: colors.error }]}>
-            <Text style={styles.missedBadgeText}>
-              {missedCallsCount > 99 ? '99+' : missedCallsCount.toString()}
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        onPress={() => navigation.navigate('BlockedUsers')}
-        style={styles.headerIconButton}
-      >
-        <Ban size={20} color={colors.text.secondary} />
-      </TouchableOpacity>
-
+      {/* Add Funds */}
       <TouchableOpacity
         onPress={() => navigation.navigate('AddFundsScreen')}
         style={styles.headerIconButton}
@@ -588,12 +828,88 @@ const TipCallScreenSimple = () => {
         <BanknoteArrowUp size={20} color={colors.primary} />
       </TouchableOpacity>
 
+      {/* Search */}
       <TouchableOpacity
         onPress={handleSearchActivation}
         style={styles.headerIconButton}
       >
         <Icon name="search" size={20} color={colors.text.secondary} />
       </TouchableOpacity>
+
+      {/* Menu Dropdown */}
+      <View style={{ position: 'relative' }}>
+        <TouchableOpacity
+          onPress={() => setShowDropdown(!showDropdown)}
+          style={styles.headerIconButton}
+        >
+          <MoreVertical size={20} color={colors.text.secondary} />
+        </TouchableOpacity>
+
+        {showDropdown && (
+          <View style={[styles.dropdownMenu, { 
+            backgroundColor: colors.background,
+            borderColor: colors.border,
+            shadowColor: colors.text.primary,
+          }]}>
+            {/* Missed Calls */}
+            <TouchableOpacity
+              onPress={() => {
+                setShowDropdown(false)
+                navigation.navigate('MissedCalls')
+              }}
+              style={styles.dropdownItem}
+            >
+              <Icon name="phone-missed" size={18} color={colors.error} />
+              <Text style={[styles.dropdownItemText, { color: colors.text.primary }]}>
+                Missed Calls
+              </Text>
+              {missedCallsCount > 0 && (
+                <View style={[styles.dropdownBadge, { backgroundColor: colors.error }]}>
+                  <Text style={styles.dropdownBadgeText}>
+                    {missedCallsCount > 99 ? '99+' : missedCallsCount.toString()}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Blocked Users */}
+            <TouchableOpacity
+              onPress={() => {
+                setShowDropdown(false)
+                navigation.navigate('BlockedUsers')
+              }}
+              style={styles.dropdownItem}
+            >
+              <Ban size={18} color={colors.text.secondary} />
+              <Text style={[styles.dropdownItemText, { color: colors.text.primary }]}>
+                Blocked Users
+              </Text>
+              {blockedUsersCount > 0 && (
+                <View style={[styles.dropdownBadge, { backgroundColor: colors.error }]}>
+                  <Text style={styles.dropdownBadgeText}>
+                    {blockedUsersCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* DND Toggle */}
+            <View style={styles.dropdownItem}>
+              <Icon name="moon" size={18} color={colors.text.secondary} />
+              <Text style={[styles.dropdownItemText, { color: colors.text.primary }]}>
+                Do Not Disturb
+              </Text>
+              <DndToggleSwitch
+                isDndEnabled={isDndEnabled}
+                onToggle={handleDndToggle}
+                isLoading={isDndLoading}
+                colors={colors}
+                size={32}
+              />
+            </View>
+          </View>
+        )}
+      </View>
     </View>
   )
 
@@ -656,58 +972,66 @@ const TipCallScreenSimple = () => {
         rightComponent={<HeaderRight />}
       />
 
-      {/* Minimalist Filters Section */}
+      {/* Premium Banner - Always at top if not premium */}
+      {!isPremium && (
+        <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+          <LinearGradient colors={['#FFD700', '#FFB300']} style={{ borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ fontSize: 20, marginRight: 12 }}>👑</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontWeight: '700' }}>Upgrade to Premium</Text>
+              <Text>Lower call rates & ₹2 per call acceptance</Text>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate('SubscriptionScreen' as never)} style={{ backgroundColor: 'rgba(0,0,0,0.1)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}>
+              <Text style={{ fontWeight: '600' }}>Upgrade</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      )}
+
+      {/* Enhanced Filters Section with Languages and Interests */}
       <View style={[styles.filtersSection, { backgroundColor: colors.background }]}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
-        >
-          {LANGUAGES.map((lang) => (
-            <FilterChip
-              key={lang.id}
-              label={lang.name}
-              isSelected={languageFilter === lang.id}
-              onPress={() => handleLanguageFilter(lang.id)}
-              colors={colors}
-              isDarkMode={isDarkMode}
-            />
-          ))}
-        </ScrollView>
+        {/* Languages Filter */}
+        <View style={styles.filterGroup}>
+          <Text style={[styles.filterGroupTitle, { color: colors.text.primary }]}>Languages</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterScroll}
+          >
+            {languages.map((lang) => (
+              <FilterChip
+                key={lang.id}
+                label={lang.name}
+                isSelected={languageFilter === lang.id}
+                onPress={() => handleLanguageFilter(lang.id)}
+                colors={colors}
+                isDarkMode={isDarkMode}
+              />
+            ))}
+          </ScrollView>
+        </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
-        >
-          {CATEGORIES.map((cat) => (
-            <FilterChip
-              key={cat.id}
-              label={cat.name}
-              isSelected={categoryFilter === cat.id}
-              onPress={() => handleCategoryFilter(cat.id)}
-              colors={colors}
-              isDarkMode={isDarkMode}
-            />
-          ))}
-        </ScrollView>
+        {/* Interests/Categories Filter */}
+        <View style={styles.filterGroup}>
+          <Text style={[styles.filterGroupTitle, { color: colors.text.primary }]}>Interests</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterScroll}
+          >
+            {categories.map((category) => (
+              <FilterChip
+                key={category.id}
+                label={category.name}
+                isSelected={categoryFilter === category.id}
+                onPress={() => handleCategoryFilter(category.id)}
+                colors={colors}
+                isDarkMode={isDarkMode}
+              />
+            ))}
+          </ScrollView>
+        </View>
       </View>
-
-      {/* Test Call Button - Hidden but code preserved */}
-      {/* <TouchableOpacity
-        style={[
-          styles.testButton,
-          {
-            backgroundColor: colors.primary,
-            shadowColor: colors.primary,
-          }
-        ]}
-        onPress={() => navigation.navigate('TestCall')}
-        activeOpacity={0.8}
-      >
-        <Icon name="phone" size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
-        <Text style={styles.testButtonText}>Open Test Call Screen</Text>
-      </TouchableOpacity> */}
 
       {/* Enhanced Content Section */}
       <View style={styles.contentSection}>
@@ -745,9 +1069,9 @@ const TipCallScreenSimple = () => {
           </View>
         ) : (
           <FlatList
-            data={filteredContacts}
+            data={contactsWithAds}
             renderItem={renderContactItem}
-            keyExtractor={(item) => item.id.toString()}
+            keyExtractor={(item) => ('ad' in item ? item.key : item.id.toString())}
             contentContainerStyle={styles.contactList}
             onRefresh={refreshUsers}
             refreshing={usersLoading}
@@ -777,6 +1101,30 @@ const TipCallScreenSimple = () => {
           </TouchableOpacity>
         </Animated.View>
       )}
+
+      {/* Premium banner render */}
+      
+
+      {/* Modal for user profile */}
+      <Modal
+        visible={showUserProfileModal}
+        animationType="slide"
+        onRequestClose={() => setShowUserProfileModal(false)}
+      >
+        {selectedUserId && (
+          <UserProfileScreen userId={selectedUserId} onClose={() => setShowUserProfileModal(false)} />
+        )}
+      </Modal>
+
+      {/* Premium Popup */}
+      <PremiumPopup
+        visible={showPremiumPopup}
+        onClose={() => setShowPremiumPopup(false)}
+        onUpgrade={() => {
+          setShowPremiumPopup(false)
+          navigation.navigate('SubscriptionScreen' as never)
+        }}
+      />
     </View>
   )
 }
@@ -1028,10 +1376,9 @@ const styles = StyleSheet.create({
 
   // Minimalist Filters
   filtersSection: {
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.08)',
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E7EB',
   },
   filterScroll: {
     paddingHorizontal: 12,
@@ -1173,6 +1520,107 @@ const styles = StyleSheet.create({
     padding: 4,
     borderRadius: 12,
   },
+
+  // Dropdown menu styles
+  dropdownMenu: {
+    position: 'absolute',
+    top: 35,
+    right: 0,
+    minWidth: 180,
+    borderRadius: 12,
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 1000,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 12,
+    flex: 1,
+  },
+  dropdownBadge: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  dropdownBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+
+  // Premium banner styles
+  premiumContainer: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 0,
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    paddingVertical: 4,
+  },
+  premiumBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginHorizontal: 4,
+  },
+  crownIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  premiumTextContainer: {
+    flex: 1,
+  },
+  premiumTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  premiumSubtitle: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  upgradeButton: {
+    backgroundColor: 'rgba(184, 134, 11, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  upgradeButtonText: {
+    fontWeight: '600',
+    fontSize: 13,
+  },
+
+  // Filter group styles
+  filterGroup: {
+    marginBottom: 16,
+  },
+  filterGroupTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    marginHorizontal: 16,
+  },
 })
 
-export default TipCallScreenSimple 
+export default TipCallScreenSimple

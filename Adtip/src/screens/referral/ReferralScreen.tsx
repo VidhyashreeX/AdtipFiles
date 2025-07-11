@@ -13,6 +13,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
 import {useAuth} from '../../contexts/AuthContext';
+import {useNavigation} from '@react-navigation/native';
 import Header from '../../components/common/Header';
 import ScreenTransition from '../../components/common/ScreenTransition';
 import WithdrawalForm from '../../components/withdrawal/WithdrawalForm';
@@ -40,6 +41,7 @@ const ReferralScreen: React.FC = () => {
   const {colors} = useTheme();
   const {user, premiumState} = useAuth();
   const isPremium = premiumState.isPremium;
+  const navigation = useNavigation();
   const [referralData, setReferralData] = useState<ReferralData>({
     referral_code: '',
     total_referrals: 0,
@@ -571,6 +573,10 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
+  backButton: {
+    padding: 8,
+    marginRight: 8,
+  },
 });
 
 export default ReferralScreen;

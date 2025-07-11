@@ -204,7 +204,20 @@ const ContentCreatorPremiumScreen = () => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}> 
       <StatusBar backgroundColor={colors.background} barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <Header title="Content Creator Premium Status" showSearch={false} showWallet={false} />
+      <Header
+        title="Content Creator Premium Status"
+        showSearch={false}
+        showWallet={false}
+        showPremium={false}
+        leftComponent={
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Icon name="arrow-left" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        }
+      />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {subscriptionData ? (
           <>
@@ -350,6 +363,10 @@ const styles = StyleSheet.create({
   noSubscriptionCard: { alignItems: 'center', padding: 32, borderRadius: 16 },
   noSubscriptionTitle: { fontSize: 20, fontWeight: 'bold', marginTop: 16, marginBottom: 8 },
   noSubscriptionSubtitle: { fontSize: 14, color: '#888', textAlign: 'center', marginBottom: 16 },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
+  },
 });
 
 export default ContentCreatorPremiumScreen; 

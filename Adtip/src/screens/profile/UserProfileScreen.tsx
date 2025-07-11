@@ -19,10 +19,15 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useWallet } from '../../hooks/useWallet';
 import { API_BASE_URL } from '../../constants/api';
 import ImageViewer from '@react-native-oh-tpl/react-native-image-zoom-viewer';
 import UnifiedCallService from '../../services/calling/UnifiedCallService';
 import ApiService from '../../services/ApiService';
+import BlocklistService from '../../services/BlocklistService';
+import CallController from '../../services/calling/CallController';
+import CallBillingService from '../../services/calling/CallBillingService';
+import { CallType } from '../../stores/callStoreSimplified';
 
 const AVATAR_SIZE = 96;
 const GRID_SPACING = 6;
@@ -43,6 +48,7 @@ interface Post {
 const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
   const { colors, isDarkMode } = useTheme();
   const { user: currentUser } = useAuth();
+  const { balance, isPremium } = useWallet();
   const navigation = useNavigation();
   const route = useRoute();
   const userIdFromParams = route.params && typeof route.params === 'object' && 'userId' in route.params ? Number(route.params.userId) : undefined;
@@ -61,8 +67,12 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
   const [followersList, setFollowersList] = useState<any[]>([]);
   const [followingList, setFollowingList] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isBlocked, setIsBlocked] = useState(false);
 
   const { onClose } = props;
+  const blocklistService = BlocklistService.getInstance();
+  const callController = CallController.getInstance();
+  const billingService = CallBillingService.getInstance();
 
   // When closing the main modal, also close all nested modals
   const handleClose = useCallback(() => {
@@ -80,83 +90,125 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
     }
   }, [userIdFromParams]);
 
-  // Imported functionality from TipCallScreen
-  const handleStartCall = useCallback(async (callType: 'voice' | 'video') => {
-    if (!currentUser || !user?.name) {
-      Alert.alert("Error", "User or recipient information is missing.");
-      return;
-    }
-
-    // Prevent multiple rapid call attempts using Zustand store
-    const { useCallStore } = require('../../stores/callStore');
-    const currentCallStatus = useCallStore.getState().callStatus;
-    if (currentCallStatus !== 'idle' && currentCallStatus !== 'ended') {
-      Alert.alert("Call In Progress", "You are already in a call.");
-      return;
-    }
-
-    try {
-      console.log('[UserProfile] Starting WhatsApp-like call to:', user.name, 'Type:', callType);
-      
-      // Initialize Unified Call Service if not already done
-      const unifiedCallService = UnifiedCallService.getInstance();
-      const initialized = await unifiedCallService.initialize();
-      
-      if (!initialized) {
-        Alert.alert("Call Error", "Unable to initialize calling system. Please try again.");
+  // Handle call initiation with billing check (from TipCallScreenSimple)
+  const handleStartCall = useCallback(
+    async (callType: CallType) => {
+      if (!currentUser || !user?.name) {
+        Alert.alert("Error", "User or recipient information is missing.");
         return;
       }
-      
-      // Start the call with Unified Call Service
-      const callData = await unifiedCallService.startOutgoingCall(
-        userId.toString(),
-        user.name,
-        callType,
-        currentUser.name || 'User',
-        currentUser.id.toString()
-      );
-      
-      if (callData) {
-        console.log('[UserProfile] WhatsApp-like call initiated successfully:', callData.callId);
-        // Navigation will be handled automatically by WhatsApp Call Manager
-      } else {
-        console.error('[UserProfile] WhatsApp Call Manager failed to start the call.');
-        Alert.alert('Call Failed', 'Unable to start the call. Please check your connection and try again.');
-      }
-    } catch (error) {
-      console.error('[UserProfile] Error in handleStartCall:', error);
-      Alert.alert('Call Error', 'An unexpected error occurred while starting the call. Please try again.');
-    }
-  }, [currentUser, user, userId]);
 
-  const handleChatNavigation = useCallback(async () => {
+      // Check if user is blocked
+      if (isBlocked) {
+        Alert.alert("Cannot Call", "You cannot call a blocked user.");
+        return;
+      }
+
+      try {
+        // Convert balance to number for calculations
+        const numericBalance = parseFloat(balance || '0')
+        
+        // Check minimum balance requirement
+        if (numericBalance < 1) {
+          Alert.alert(
+            'Insufficient Balance',
+            'You need at least ₹1 to make a call. Please add money to your wallet.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Add Funds', onPress: () => navigation.navigate('AddFundsScreen' as never) }
+            ]
+          )
+          return
+        }
+
+        // Calculate billing info to show user
+        const billingInfo = await billingService.calculateCallBilling(
+          currentUser.id?.toString() || '',
+          callType,
+          numericBalance,
+          isPremium
+        )
+
+        const maxMinutes = Math.floor(billingInfo.maxDurationSeconds / 60)
+        const rateText = billingService.formatCurrency(billingInfo.ratePerMinute)
+
+        // Show confirmation dialog with billing information
+        Alert.alert(
+          `${callType === 'video' ? 'Video' : 'Voice'} Call`,
+          `Rate: ${rateText}/min${isPremium ? ' (Premium)' : ''}\nMax Duration: ${maxMinutes} minutes\nCurrent Balance: ${billingService.formatCurrency(numericBalance)}\n\nProceed with the call?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Call Now',
+              onPress: async () => {
+                const success = await callController.startCall(
+                  userId.toString(),
+                  user.name,
+                  callType
+                )
+                
+                if (!success) {
+                  Alert.alert(
+                    'Call Failed',
+                    'Unable to start the call. The user may be unavailable.'
+                  )
+                }
+              }
+            }
+          ]
+        )
+      } catch (error) {
+        console.error('[UserProfile] Start call error:', error)
+        Alert.alert('Call Error', 'An unexpected error occurred while starting the call. Please try again.')
+      }
+    },
+    [callController, billingService, balance, isPremium, currentUser, user, userId, isBlocked, navigation]
+  );
+
+  // Handle chat navigation (from TipCallScreenSimple)
+  const handleChatNavigation = useCallback(() => {
     if (!user) return;
     
-    // Mark messages as read when opening chat
-    if (currentUser?.id && unreadCount > 0) {
-      try {
-        await ApiService.markMessagesAsRead(currentUser.id, userId);
-        setUnreadCount(0);
-      } catch (error) {
-        console.error('Failed to mark messages as read:', error);
-      }
+    // Check if user is blocked
+    if (isBlocked) {
+      Alert.alert("Cannot Message", "You cannot message a blocked user.");
+      return;
     }
-    
-    // Navigate to chat with the user data structure expected by Chat screen
-    //@ts-ignore
-    navigation.navigate('Chat', { 
-      user: {
-        id: userId,
-        name: user.name,
-        profile_image: user.profile_image,
-        emailId: user.emailId,
-        online_status: user.online_status,
-        last_seen: user.last_seen,
-        is_available: user.is_available,
-        dnd: user.dnd
-      }
-    });
-  }, [navigation, user, currentUser?.id, unreadCount, userId]);
+
+    if (!isPremium) {
+      Alert.alert(
+        'Premium Feature',
+        'Messaging is available for Premium users only. Please upgrade to Premium to use this feature.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => navigation.navigate('PremiumScreen' as never) }
+        ]
+      )
+      return
+    }
+
+    // Create contact object similar to TipCallScreenSimple
+    const contact = {
+      id: userId,
+      name: user.name,
+      profile_image: user.profile_image,
+      emailId: user.emailId,
+      online_status: user.online_status,
+      last_seen: user.last_seen,
+      is_available: user.is_available,
+      dnd: user.dnd
+    }
+
+    // @ts-ignore
+    navigation.navigate('Chat', { user: contact })
+
+    // Mark messages as read in background
+    if (currentUser?.id && unreadCount > 0) {
+      ApiService.markMessagesAsRead(currentUser.id, userId).finally(() => {
+        setUnreadCount(0)
+      })
+    }
+  }, [user, isBlocked, isPremium, navigation, currentUser?.id, unreadCount, userId]);
 
   // Fetch unread message count for this specific user
   const fetchUnreadCount = useCallback(async () => {
@@ -173,6 +225,58 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
       console.error('Failed to fetch unread count:', error);
     }
   }, [currentUser?.id]);
+
+  // Block/Unblock user functionality
+  const handleBlockUser = useCallback(async () => {
+    if (!user?.name || !userId) return;
+    
+    const action = isBlocked ? 'unblock' : 'block';
+    const userName = user.name || 'Unknown User';
+    
+    Alert.alert(
+      `${action === 'block' ? 'Block' : 'Unblock'} User`,
+      `Are you sure you want to ${action} ${userName}?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: action === 'block' ? 'Block' : 'Unblock',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (action === 'block') {
+                await blocklistService.blockUser(userId.toString(), userName);
+                setIsBlocked(true);
+                Alert.alert('Success', `${userName} has been blocked.`);
+              } else {
+                await blocklistService.unblockUser(userId.toString());
+                setIsBlocked(false);
+                Alert.alert('Success', `${userName} has been unblocked.`);
+              }
+            } catch (error) {
+              console.error('[UserProfile] Failed to block/unblock user:', error);
+              Alert.alert('Error', `Failed to ${action} user. Please try again.`);
+            }
+          },
+        },
+      ]
+    );
+  }, [user?.name, userId, isBlocked, blocklistService]);
+
+  // Check if user is blocked on profile load
+  const checkBlockStatus = useCallback(async () => {
+    if (!userId) return;
+    
+    try {
+      await blocklistService.initialize(); // Ensure blocklist is initialized
+      const blocked = blocklistService.isUserBlocked(userId.toString());
+      setIsBlocked(blocked);
+    } catch (error) {
+      console.error('[UserProfile] Failed to check block status:', error);
+    }
+  }, [userId, blocklistService]);
 
   const getFullImageUrl = (url?: string | null): string => {
     if (!url || url === 'null' || url === 'undefined') {
@@ -268,6 +372,10 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
   useEffect(() => {
     fetchUnreadCount();
   }, [fetchUnreadCount]);
+
+  useEffect(() => {
+    checkBlockStatus();
+  }, [checkBlockStatus]);
 
   // Fetch followers/following list on modal open
   const fetchFollowersList = async () => {
@@ -410,11 +518,13 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
             style={[
               styles.callButton, 
               { 
-                backgroundColor: colors.primary
+                backgroundColor: isBlocked ? colors.gray[400] : colors.primary,
+                opacity: isBlocked ? 0.5 : 1
               }
             ]} 
             onPress={() => handleStartCall('video')}
             activeOpacity={0.8}
+            disabled={isBlocked}
           >
             <Icon name="video" size={22} color={colors.white} />
           </TouchableOpacity>
@@ -424,11 +534,13 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
             style={[
               styles.callButton, 
               { 
-                backgroundColor: colors.success
+                backgroundColor: isBlocked ? colors.gray[400] : colors.success,
+                opacity: isBlocked ? 0.5 : 1
               }
             ]} 
             onPress={() => handleStartCall('voice')}
             activeOpacity={0.8}
+            disabled={isBlocked}
           >
             <Icon name="phone" size={22} color={colors.white} />
           </TouchableOpacity>
@@ -438,20 +550,36 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
             style={[
               styles.callButton, 
               { 
-                backgroundColor: colors.info || '#3B82F6',
-                position: 'relative'
+                backgroundColor: isBlocked ? colors.gray[400] : colors.info || '#3B82F6',
+                position: 'relative',
+                opacity: isBlocked ? 0.5 : 1
               }
             ]} 
             onPress={handleChatNavigation}
             activeOpacity={0.8}
+            disabled={isBlocked}
           >
             <Icon name="message-circle" size={22} color={colors.white} />
             {/* Unread messages indicator */}
-            {unreadCount > 0 && (
+            {unreadCount > 0 && !isBlocked && (
               <View style={styles.unreadDot}>
                 <Text style={styles.unreadCount}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
               </View>
             )}
+          </TouchableOpacity>
+          
+          {/* Block/Unblock Button */}
+          <TouchableOpacity 
+            style={[
+              styles.callButton, 
+              { 
+                backgroundColor: isBlocked ? colors.success : colors.error
+              }
+            ]} 
+            onPress={handleBlockUser}
+            activeOpacity={0.8}
+          >
+            <Icon name={isBlocked ? "user-check" : "user-x"} size={22} color={colors.white} />
           </TouchableOpacity>
         </View>
       )}

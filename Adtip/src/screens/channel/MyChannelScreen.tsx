@@ -21,6 +21,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useContentCreatorPremium } from '../../contexts/ContentCreatorPremiumContext';
 import { launchImageLibrary } from 'react-native-image-picker';
+import Header from '../../components/common/Header';
+import ContentCreatorPlanToggle from '../../components/common/ContentCreatorPlanToggle';
 import ApiService from '../../services/ApiService';
 import { 
   ChannelInfo, 
@@ -193,6 +195,16 @@ const MyChannelScreen: React.FC = () => {
     setIsRefreshing(true);
     fetchChannelData();
   }, [fetchChannelData]);
+
+  // Content Creator Premium Toggle Handler
+  const handleTogglePremium = useCallback(() => {
+    console.log('🚀 [MyChannelScreen] User clicked content creator premium toggle');
+    console.log('📊 [MyChannelScreen] Current content creator premium status:', {
+      isContentCreatorPremium,
+      hasData: !!contentCreatorPremiumData
+    });
+    navigation.navigate('ContentCreatorPremium');
+  }, [isContentCreatorPremium, contentCreatorPremiumData, navigation]);
 
   // Handle avatar change
   const handleAvatarChange = () => {
@@ -631,29 +643,7 @@ const MyChannelScreen: React.FC = () => {
           <Text style={[styles.headerTitle, { color: colors.text.primary }]}>My Channel</Text>
           <View style={styles.headerRight}>
             {/* Content Creator Premium Toggle */}
-            <TouchableOpacity
-              style={[
-                styles.headerPremiumToggle,
-                { 
-                  backgroundColor: isContentCreatorPremium ? '#10B981' : '#EF4444',
-                  opacity: contentCreatorPremiumLoading ? 0.6 : 1
-                }
-              ]}
-              onPress={() => {
-                console.log('🚀 [MyChannelScreen] User clicked content creator premium toggle from header');
-                console.log('📊 [MyChannelScreen] Current content creator premium status:', { 
-                  isContentCreatorPremium, 
-                  hasData: !!contentCreatorPremiumData 
-                });
-                navigation.navigate('ContentCreatorPremium');
-              }}
-              disabled={contentCreatorPremiumLoading}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.headerPremiumToggleText}>
-                {contentCreatorPremiumLoading ? '...' : (isContentCreatorPremium ? 'Premium' : 'Basic')}
-              </Text>
-            </TouchableOpacity>
+            <ContentCreatorPlanToggle onPress={handleTogglePremium} />
             <TouchableOpacity onPress={() => navigation.navigate('ChannelSettings')}>
               <Settings size={24} color={colors.text.primary} />
             </TouchableOpacity>
@@ -1004,18 +994,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 4,
   },
-  premiumToggle: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    minWidth: 80,
-    alignItems: 'center',
-  },
-  premiumToggleText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
+
 });
 
 export default MyChannelScreen;

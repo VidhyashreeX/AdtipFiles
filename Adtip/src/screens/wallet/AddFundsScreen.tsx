@@ -9,6 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import FeatherIcon from 'react-native-vector-icons/Feather';
 import { Zap } from 'lucide-react-native';
 import Header from '../../components/common/Header';
 
@@ -250,7 +251,20 @@ const AddFundsScreen = () => {
         barStyle={isDarkMode ? 'light-content' : 'dark-content'} 
       />
       
-      <Header title="Add Funds" showSearch={false} showWallet={false} />
+      <Header
+        title="Add Funds"
+        showSearch={false}
+        showWallet={false}
+        showPremium={false}
+        leftComponent={
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <FeatherIcon name="arrow-left" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        }
+      />
       
       <ScrollView 
         style={styles.scrollView}
@@ -540,6 +554,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 16,
     overflow: 'hidden',
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
   },
 });
 
