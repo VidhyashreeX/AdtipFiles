@@ -2,21 +2,18 @@ import { AppOpenAd, AdEventType, TestIds } from 'react-native-google-mobile-ads'
 import { useEffect, useRef, useState } from 'react';
 import { Platform, AppState, AppStateStatus } from 'react-native';
 import UnifiedCallService from '../services/calling/UnifiedCallService';
+import AdRotationService from '../services/AdRotationService';
 
 // Test Ad Unit ID (for development/testing)
 const TEST_APP_OPEN_AD_UNIT_ID = TestIds.APP_OPEN; // Official Google test ID for app open ads
-// For custom test ID, use a real ad unit ID, not the app ID:
-// const TEST_APP_OPEN_AD_UNIT_ID = 'ca-app-pub-3940256099942544/3419835294'; // Google's test app open ad unit
 
-// Production Ad Unit ID (for live app)
-const PROD_APP_OPEN_AD_UNIT_ID =
-  Platform.OS === 'android'
-    ? '/22387492205,23292119919/com.adtip.app.adtip_app.AppOpen0.1750929051'
-    : '/22387492205,23292119919/com.adtip.app.adtip_app.AppOpen0.1750929051';
-
-// Switch between test and production ad unit IDs
-// const APP_OPEN_AD_UNIT_ID = __DEV__ ? TEST_APP_OPEN_AD_UNIT_ID : PROD_APP_OPEN_AD_UNIT_ID;
-const APP_OPEN_AD_UNIT_ID = PROD_APP_OPEN_AD_UNIT_ID; // 🔴 TESTING LIVE ADS TEMPORARILY
+// Get ad unit ID from rotation service
+const getAppOpenAdUnitId = () => {
+  if (__DEV__) {
+    return TEST_APP_OPEN_AD_UNIT_ID;
+  }
+  return AdRotationService.getInstance().getAdUnitId('appOpen');
+};
 
 // Minimum cooldown period between app open ads (in milliseconds)
 const AD_COOLDOWN_PERIOD = 60 * 1000; // 1 minute to balance user experience with ad revenue
@@ -28,13 +25,81 @@ let hasShownOnThisSession = false;
 export function useAppOpenAd() {
   const [adLoaded, setAdLoaded] = useState(false);
   const [adVisible, setAdVisible] = useState(false);
+  const [currentAdUnitId, setCurrentAdUnitId] = useState(getAppOpenAdUnitId());
+  const [adFailed, setAdFailed] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 2; // Try each network up to 2 times before switching
   const adRef = useRef<AppOpenAd | null>(null);
   const appStateRef = useRef(AppState.currentState);
   const isInitialMount = useRef(true);
 
+  // Rotate to next network when ad fails
+  const handleAdError = (error: any) => {
+    console.log('App open ad failed to load:', error);
+    setAdLoaded(false);
+    isAdCurrentlyShowing = false;
+    setAdFailed(true);
+
+    // Enhanced error handling for different error types
+    if (error.code === 'no-fill') {
+      console.log('🎯 [AppOpenAd] No-fill error - this is normal for new ad units');
+      console.log('📊 [AppOpenAd] Ad inventory will improve over time as the app gains users');
+
+      // If we've tried the current network enough times, switch to next network
+      if (retryCount >= maxRetries) {
+        console.log('🔄 [AppOpenAd] Switching to next ad network after max retries');
+        const nextAdUnitId = AdRotationService.getInstance().getNextAdUnitId('appOpen');
+        setCurrentAdUnitId(nextAdUnitId);
+        setRetryCount(0);
+        setAdFailed(false);
+        
+        // Retry with new network
+        setTimeout(() => {
+          console.log('🔄 [AppOpenAd] Retrying with new network...');
+          adRef.current?.load();
+        }, 5000);
+      } else {
+        // Retry with same network
+        setRetryCount(prev => prev + 1);
+        console.log(`🔄 [AppOpenAd] Retrying with same network (attempt ${retryCount + 1}/${maxRetries})`);
+        
+        setTimeout(() => {
+          console.log('🔄 [AppOpenAd] Retrying ad load after no-fill...');
+          adRef.current?.load();
+        }, 60000); // Retry after 1 minute for no-fill
+      }
+    } else {
+      console.log('❌ [AppOpenAd] Other ad error:', error.code, error.message);
+
+      // If we've tried the current network enough times, switch to next network
+      if (retryCount >= maxRetries) {
+        console.log('🔄 [AppOpenAd] Switching to next ad network after max retries');
+        const nextAdUnitId = AdRotationService.getInstance().getNextAdUnitId('appOpen');
+        setCurrentAdUnitId(nextAdUnitId);
+        setRetryCount(0);
+        setAdFailed(false);
+        
+        // Retry with new network
+        setTimeout(() => {
+          console.log('🔄 [AppOpenAd] Retrying with new network...');
+          adRef.current?.load();
+        }, 5000);
+      } else {
+        // Retry with same network
+        setRetryCount(prev => prev + 1);
+        console.log(`🔄 [AppOpenAd] Retrying with same network (attempt ${retryCount + 1}/${maxRetries})`);
+        
+        setTimeout(() => {
+          console.log('🔄 [AppOpenAd] Retrying ad load after error...');
+          adRef.current?.load();
+        }, 15000); // Retry after 15 seconds for other errors
+      }
+    }
+  };
+
   useEffect(() => {
     // Create app open ad instance with optimized request options
-    adRef.current = AppOpenAd.createForAdRequest(APP_OPEN_AD_UNIT_ID, {
+    adRef.current = AppOpenAd.createForAdRequest(currentAdUnitId, {
       requestNonPersonalizedAdsOnly: false, // Allow personalized ads for better fill rates
       keywords: ['entertainment', 'social', 'communication', 'lifestyle'],
       contentUrl: 'https://adtip.app',
@@ -43,6 +108,8 @@ export function useAppOpenAd() {
     const onLoaded = () => {
       console.log('App open ad loaded successfully');
       setAdLoaded(true);
+      setAdFailed(false);
+      setRetryCount(0);
     };
     
     const onClosed = () => {
@@ -65,37 +132,11 @@ export function useAppOpenAd() {
       isAdCurrentlyShowing = true;
     };
 
-    const onError = (error: any) => {
-      console.log('App open ad failed to load:', error);
-      setAdLoaded(false);
-      isAdCurrentlyShowing = false;
-
-      // Enhanced error handling for different error types
-      if (error.code === 'no-fill') {
-        console.log('🎯 [AppOpenAd] No-fill error - this is normal for new ad units');
-        console.log('📊 [AppOpenAd] Ad inventory will improve over time as the app gains users');
-
-        // Retry with exponential backoff for no-fill errors
-        setTimeout(() => {
-          console.log('🔄 [AppOpenAd] Retrying ad load after no-fill...');
-          adRef.current?.load();
-        }, 60000); // Retry after 1 minute for no-fill
-      } else {
-        console.log('❌ [AppOpenAd] Other ad error:', error.code, error.message);
-
-        // Retry sooner for other types of errors
-        setTimeout(() => {
-          console.log('🔄 [AppOpenAd] Retrying ad load after error...');
-          adRef.current?.load();
-        }, 15000); // Retry after 15 seconds for other errors
-      }
-    };
-
     // Set up event listeners
     const unsubscribeLoaded = adRef.current.addAdEventListener(AdEventType.LOADED, onLoaded);
     const unsubscribeClosed = adRef.current.addAdEventListener(AdEventType.CLOSED, onClosed);
     const unsubscribeOpened = adRef.current.addAdEventListener(AdEventType.OPENED, onOpened);
-    const unsubscribeError = adRef.current.addAdEventListener(AdEventType.ERROR, onError);
+    const unsubscribeError = adRef.current.addAdEventListener(AdEventType.ERROR, handleAdError);
 
     // Handle app state changes
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
@@ -159,7 +200,7 @@ export function useAppOpenAd() {
       unsubscribeError();
       appStateSubscription.remove();
     };
-  }, []);
+  }, [currentAdUnitId]); // Re-create ad when ad unit changes
 
   const showAdIfAppropriate = () => {
     const currentTime = Date.now();

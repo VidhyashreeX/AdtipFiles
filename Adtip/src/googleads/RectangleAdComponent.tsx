@@ -1,35 +1,85 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
+import AdRotationService from '../services/AdRotationService';
 
 // Test Ad Unit ID (for development/testing) - using banner test ID for rectangle
 const TEST_RECTANGLE_AD_UNIT_ID = TestIds.BANNER; // Official Google test ID for banner ads
-// For custom test ID, use a real ad unit ID, not the app ID:
-// const TEST_RECTANGLE_AD_UNIT_ID = 'ca-app-pub-3940256099942544/6300978111'; // Google's test banner ad unit
 
-// Production Ad Unit ID (for live app) - using MREC ad unit
-const PROD_RECTANGLE_AD_UNIT_ID =
-  Platform.OS === 'android'
-    ? '/22387492205,23292119919/com.adtip.app.adtip_app.Mrec0.1750929251'
-    : '/22387492205,23292119919/com.adtip.app.adtip_app.Mrec0.1750929251';
-
-// Switch between test and production ad unit IDs
-const RECTANGLE_AD_UNIT_ID = __DEV__ ? TEST_RECTANGLE_AD_UNIT_ID : PROD_RECTANGLE_AD_UNIT_ID;
-//const RECTANGLE_AD_UNIT_ID = PROD_RECTANGLE_AD_UNIT_ID;
+// Get ad unit ID from rotation service
+const getRectangleAdUnitId = () => {
+  if (__DEV__) {
+    return TEST_RECTANGLE_AD_UNIT_ID;
+  }
+  return AdRotationService.getInstance().getAdUnitId('rectangle');
+};
 
 const RectangleAdComponent = () => {
+  const [currentAdUnitId, setCurrentAdUnitId] = useState(getRectangleAdUnitId());
+  const [adFailed, setAdFailed] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 2; // Try each network up to 2 times before switching
+
+  // Rotate to next network when ad fails
+  const handleAdFailed = (error: any) => {
+    console.log('Rectangle ad failed to load:', error);
+    setAdFailed(true);
+
+    // Enhanced error logging for debugging
+    if (error.code === 'no-fill') {
+      console.log('🎯 [RectangleAd] No-fill error - this is normal for new ad units');
+      console.log('📊 [RectangleAd] Ad inventory will improve over time');
+    } else {
+      console.log('❌ [RectangleAd] Other ad error:', error.code, error.message);
+    }
+
+    // If we've tried the current network enough times, switch to next network
+    if (retryCount >= maxRetries) {
+      console.log('🔄 [RectangleAd] Switching to next ad network after max retries');
+      const nextAdUnitId = AdRotationService.getInstance().getNextAdUnitId('rectangle');
+      setCurrentAdUnitId(nextAdUnitId);
+      setRetryCount(0);
+      setAdFailed(false);
+    } else {
+      // Retry with same network
+      setRetryCount(prev => prev + 1);
+      console.log(`🔄 [RectangleAd] Retrying with same network (attempt ${retryCount + 1}/${maxRetries})`);
+    }
+  };
+
+  // Reset retry count when ad loads successfully
+  const handleAdLoaded = () => {
+    console.log('Rectangle ad loaded successfully');
+    setAdFailed(false);
+    setRetryCount(0);
+  };
+
+  // Auto-rotate ads every 45 seconds for better fill rates
+  useEffect(() => {
+    const rotationInterval = setInterval(() => {
+      if (!adFailed) {
+        console.log('🔄 [RectangleAd] Auto-rotating to next ad network');
+        const nextAdUnitId = AdRotationService.getInstance().getNextAdUnitId('rectangle');
+        setCurrentAdUnitId(nextAdUnitId);
+      }
+    }, 45000); // Rotate every 45 seconds
+
+    return () => clearInterval(rotationInterval);
+  }, [adFailed]);
+
   return (
     <View style={styles.container}>
       <BannerAd
-        unitId={RECTANGLE_AD_UNIT_ID}
+        key={currentAdUnitId} // Force re-render when ad unit changes
+        unitId={currentAdUnitId}
         size={BannerAdSize.MEDIUM_RECTANGLE}
-        requestOptions={{ requestNonPersonalizedAdsOnly: true }}
-        onAdLoaded={() => {
-          console.log('Rectangle ad loaded successfully');
+        requestOptions={{ 
+          requestNonPersonalizedAdsOnly: false, // Allow personalized ads for better fill rates
+          keywords: ['entertainment', 'social', 'communication', 'lifestyle'],
+          contentUrl: 'https://adtip.app',
         }}
-        onAdFailedToLoad={(error) => {
-          console.log('Rectangle ad failed to load:', error);
-        }}
+        onAdLoaded={handleAdLoaded}
+        onAdFailedToLoad={handleAdFailed}
         onAdOpened={() => {
           console.log('Rectangle ad opened');
         }}

@@ -81,10 +81,11 @@
             android:name="android.app.extract_native_libs"
             android:value="true" />
 
-        <!-- AdMob App ID -->
+        <!-- AdMob App ID - PubScale Primary -->
+        <!-- Note: Ad rotation system uses both PubScale and Business Collaboration ad units -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-7659347823138327~5340960546"
+            android:value="ca-app-pub-3206456546664189~6654042212"
             tools:replace="android:value" />
 
         <!-- VIDEOSDK FOREGROUND SERVICE CONFIGURATION -->
