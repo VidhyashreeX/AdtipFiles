@@ -1,0 +1,22 @@
+diff --git a/node_modules/react-native-callkeep/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java b/node_modules/react-native-callkeep/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java
+index c92dd98..7a77318 100644
+--- a/node_modules/react-native-callkeep/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java
++++ b/node_modules/react-native-callkeep/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java
+@@ -307,7 +307,7 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule {
+     }
+ 
+     @ReactMethod
+-    public void displayIncomingCall(String uuid, String number, String callerName) {
++    public void basicdisplayIncomingCall(String uuid, String number, String callerName) {
+         this.displayIncomingCall(uuid, number, callerName, false);
+     }
+ 
+@@ -349,7 +349,7 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule {
+     }
+ 
+     @ReactMethod
+-    public void startCall(String uuid, String number, String callerName) {
++    public void basicstartCall(String uuid, String number, String callerName) {
+         this.startCall(uuid, number, callerName, false);
+     }
+ 
