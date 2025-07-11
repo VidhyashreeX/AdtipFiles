@@ -17,6 +17,7 @@ import {
   Image,
   Alert,
   Share,
+  Linking,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import {useNavigation, useFocusEffect} from '@react-navigation/native';
@@ -173,6 +174,162 @@ interface EarnCardsRowProps {
   onInstallToEarn: () => void; 
   isLoading?: boolean; 
 }
+
+// External Link Banner Component
+interface ExternalLinkBannerProps {
+  isPremium: boolean;
+  onUpgrade: () => void;
+}
+
+const ExternalLinkBanner: React.FC<ExternalLinkBannerProps> = ({ isPremium, onUpgrade }) => {
+  const { colors } = useTheme();
+  const styles = createHomeScreenStyles(colors);
+
+  const handleBannerPress = async () => {
+    if (!isPremium) {
+      onUpgrade();
+      return;
+    }
+
+    try {
+      const url = 'https://37b802eb.epicplay.in/';
+      const supported = await Linking.canOpenURL(url);
+      
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Error', 'Cannot open the link. Please try again later.');
+      }
+    } catch (error) {
+      console.error('Error opening external link:', error);
+      Alert.alert('Error', 'Failed to open the link. Please try again.');
+    }
+  };
+
+  return (
+    <View style={styles.externalLinkBannerSection}>
+      <View style={styles.externalLinkBannerContainer}>
+        <TouchableOpacity
+          style={styles.externalLinkBanner}
+          onPress={handleBannerPress}
+          activeOpacity={0.9}
+        >
+          <LinearGradient
+            colors={isPremium ? ['#4CAF50', '#45A049'] : ['#FFD700', '#FFB300']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.externalLinkBannerGradient}
+          >
+            <View style={styles.externalLinkBannerContent}>
+              <View style={styles.externalLinkBannerTextContainer}>
+                <Text style={styles.externalLinkBannerTitle}>
+                  {isPremium ? '🎮 Epic Play Games' : '🎮 Epic Play Games'}
+                </Text>
+                <Text style={styles.externalLinkBannerDescription}>
+                  {isPremium 
+                    ? 'Click to play exciting games and earn rewards!' 
+                    : 'Upgrade to Premium to unlock this feature'
+                  }
+                </Text>
+                {!isPremium && (
+                  <LinearGradient
+                    colors={['#FFD700', '#FFA500', '#FF8C00']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.externalLinkBannerUpgradeBadge}
+                  >
+                    <Text style={styles.externalLinkBannerUpgradeText}>Premium Only</Text>
+                  </LinearGradient>
+                )}
+              </View>
+              <View style={styles.externalLinkBannerIconContainer}>
+                <Gamepad2 size={32} color="#FFFFFF" />
+              </View>
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+// Rush Play Games Banner Component
+interface RushPlayGamesBannerProps {
+  isPremium: boolean;
+  onUpgrade: () => void;
+}
+
+const RushPlayGamesBanner: React.FC<RushPlayGamesBannerProps> = ({ isPremium, onUpgrade }) => {
+  const { colors } = useTheme();
+  const styles = createHomeScreenStyles(colors);
+
+  const handleBannerPress = async () => {
+    if (!isPremium) {
+      onUpgrade();
+      return;
+    }
+
+    try {
+      const url = 'https://439096e5.rushquiz.com/';
+      const supported = await Linking.canOpenURL(url);
+      
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Error', 'Cannot open the link. Please try again later.');
+      }
+    } catch (error) {
+      console.error('Error opening external link:', error);
+      Alert.alert('Error', 'Failed to open the link. Please try again.');
+    }
+  };
+
+  return (
+    <View style={styles.rushPlayGamesBannerSection}>
+      <View style={styles.rushPlayGamesBannerContainer}>
+        <TouchableOpacity
+          style={styles.rushPlayGamesBanner}
+          onPress={handleBannerPress}
+          activeOpacity={0.9}
+        >
+          <LinearGradient
+            colors={isPremium ? ['#9C27B0', '#7B1FA2'] : ['#FF6B35', '#FF8E53']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.rushPlayGamesBannerGradient}
+          >
+            <View style={styles.rushPlayGamesBannerContent}>
+              <View style={styles.rushPlayGamesBannerTextContainer}>
+                <Text style={styles.rushPlayGamesBannerTitle}>
+                  {isPremium ? '🧠 Rush Play Games' : '🧠 Rush Play Games'}
+                </Text>
+                <Text style={styles.rushPlayGamesBannerDescription}>
+                  {isPremium 
+                    ? 'Test your knowledge with exciting quiz games!' 
+                    : 'Upgrade to Premium to unlock this feature'
+                  }
+                </Text>
+                {!isPremium && (
+                  <LinearGradient
+                    colors={['#FFD700', '#FFA500', '#FF8C00']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.rushPlayGamesBannerUpgradeBadge}
+                  >
+                    <Text style={styles.rushPlayGamesBannerUpgradeText}>Premium Only</Text>
+                  </LinearGradient>
+                )}
+              </View>
+              <View style={styles.rushPlayGamesBannerIconContainer}>
+                <Gamepad2 size={32} color="#FFFFFF" />
+              </View>
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
 
 const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onPlayAndEarn, onInstallToEarn, isLoading }) => {
   const {colors} = useTheme();
@@ -795,6 +952,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             <CategoriesRow categories={[]} selectedCategory={null} onCategoryPress={handleCategoryPress} isLoading={true} />
                           <BannerCarousel />
             <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} onInstallToEarn={handleInstallToEarn} isLoading={true} />
+            <ExternalLinkBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
+            <RushPlayGamesBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
             <View style={styles.skeletonContainer}>
               {Array(6).fill(0).map((_, index) => <PostItemSkeleton key={`skeleton-${index}`} />)}
             </View>
@@ -859,6 +1018,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
               <CategoriesRow categories={displayCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} isLoading={categoriesLoading} />
               <BannerCarousel onBannerPress={handleBannerPress} />
               <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} onInstallToEarn={handleInstallToEarn} />
+              <ExternalLinkBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
+              <RushPlayGamesBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
               <InstallToEarnPopup
                 visible={showInstallToEarnPopup}
                 onClose={() => setShowInstallToEarnPopup(false)}
@@ -971,6 +1132,17 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
 
   // Earn cards carousel section
   earnCardsCarouselSection: {
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  // External link banner section
+  externalLinkBannerSection: {
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  rushPlayGamesBannerSection: {
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -1162,6 +1334,120 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
     color: '#000000',
     fontWeight: '600',
     fontSize: 13,
+  },
+
+  // External Link Banner styles
+  externalLinkBannerContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  externalLinkBanner: {
+    borderRadius: 12,
+    padding: 16,
+    minHeight: 100,
+  },
+  externalLinkBannerGradient: {
+    borderRadius: 12,
+    padding: 16,
+    minHeight: 100,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  externalLinkBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  externalLinkBannerTextContainer: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  externalLinkBannerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  externalLinkBannerDescription: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    opacity: 0.9,
+    marginBottom: 8,
+  },
+  externalLinkBannerUpgradeBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  externalLinkBannerUpgradeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  externalLinkBannerIconContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Rush Play Games Banner styles
+  rushPlayGamesBannerContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  rushPlayGamesBanner: {
+    borderRadius: 12,
+    padding: 16,
+    minHeight: 100,
+  },
+  rushPlayGamesBannerGradient: {
+    borderRadius: 12,
+    padding: 16,
+    minHeight: 100,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  rushPlayGamesBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  rushPlayGamesBannerTextContainer: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  rushPlayGamesBannerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  rushPlayGamesBannerDescription: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    opacity: 0.9,
+    marginBottom: 8,
+  },
+  rushPlayGamesBannerUpgradeBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  rushPlayGamesBannerUpgradeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  rushPlayGamesBannerIconContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

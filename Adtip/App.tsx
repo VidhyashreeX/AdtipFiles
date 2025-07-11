@@ -434,7 +434,7 @@ function App(): React.JSX.Element {
                             {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
 
                             {/* Ad Debugger - only shows in development */}
-                            <AdDebugger />
+                            {/*<AdDebugger />*/}
                           </GestureHandlerRootView>
                         </SidebarProvider>
                       </TabNavigatorProvider>
