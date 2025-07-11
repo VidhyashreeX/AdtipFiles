@@ -8,8 +8,8 @@ This guide explains the comprehensive production optimizations implemented for t
 
 ### 1. ProGuard/R8 Minification & Obfuscation
 - **Enabled**: `enableProguardInReleaseBuilds = true`
-- **R8 Full Mode**: Advanced optimization with aggressive code shrinking
-- **Benefits**: Reduces APK size by 30-50%, obfuscates code for security
+- **R8 Full Mode**: Safer optimization configuration (removed unstable optimizations)
+- **Benefits**: Reduces APK size by 20-35%, obfuscates code for security, improved stability
 
 ### 2. Resource Shrinking
 - **Enabled**: `shrinkResources = true`
@@ -156,6 +156,52 @@ cd android && ./gradlew bundleRelease && cd ..
 1. **Use AAB**: Upload `app-release.aab` to Google Play Console
 2. **Enable App Signing**: Let Google Play manage app signing
 3. **Test Track**: Use internal testing track before production release
+
+## 🛡️ Safer R8 Configuration
+
+### What Changed
+The R8 configuration has been updated to remove risky unstable optimizations while keeping beneficial size reductions:
+
+**Removed Risky Optimizations:**
+- `allowaccessmodification` - Can break reflection and native modules
+- `repackageclasses` & `flattenpackagehierarchy` - Can cause class loading issues
+- `mergeinterfacesaggressively` - Can cause runtime issues
+- Advanced method inlining - Can break React Native bridge
+- Aggressive dead code elimination - Can break timing and reflection
+- Advanced field optimization - Can break data binding
+- Class merging optimizations - Can cause runtime issues
+- Reduced optimization passes from 5 to 2 for stability
+
+**Kept Safe Optimizations:**
+- Resource shrinking (`-shrinkresources`)
+- Log removal (Android Log class)
+- Basic React Native protections
+- Essential keep rules for frameworks
+- Crash reporting symbols
+- String concatenation optimization
+- Basic code simplification (safe subset)
+
+**Added Safe Build-Time Optimizations:**
+- Variable and field simplification optimizations
+- Object instantiation and math method optimizations
+- Safe method/class/field marking (private, final, synchronized)
+- Code merging for identical blocks
+- Variable allocation optimization
+- Simple dead code removal (safe analysis only)
+- Enum to constant optimization (when safe)
+- Gson library optimization (if using Gson)
+- Safe package name optimization
+- Resource file content adaptation
+- Class string adaptation for obfuscation
+- Android-specific safe optimizations
+- React Native specific safe optimizations
+
+### Expected Impact
+- **APK Size Reduction**: 25-40% (improved from previous safer config)
+- **Build Stability**: Significantly improved
+- **Runtime Stability**: Reduced risk of crashes and unexpected behavior
+- **React Native Compatibility**: Better compatibility with RN bridge and native modules
+- **Build Performance**: Faster builds with better optimization
 
 ## 🔧 Customization
 

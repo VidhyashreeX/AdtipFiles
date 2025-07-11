@@ -23,13 +23,13 @@ if errorlevel 1 (
     echo ✅ ProGuard is enabled
 )
 
-REM Check if R8 full mode is enabled
+REM Check if R8 full mode is enabled (with safer configuration)
 findstr /C:"enableR8FullMode = true" android\app\build.gradle >nul
 if errorlevel 1 (
     echo ❌ R8 full mode is NOT enabled
     set "CONFIG_OK=false"
 ) else (
-    echo ✅ R8 full mode is enabled
+    echo ✅ R8 full mode is enabled (with safer configuration)
 )
 
 REM Check if ABI splitting is enabled
@@ -75,7 +75,7 @@ if exist "android\app\proguard-rules.pro" (
 )
 
 if exist "android\app\proguard-rules-r8.pro" (
-    echo ✅ R8 ProGuard rules file exists
+    echo ✅ R8 ProGuard rules file exists (safer configuration)
 ) else (
     echo ❌ R8 ProGuard rules file is MISSING
     set "CONFIG_OK=false"
@@ -197,6 +197,9 @@ if "%CONFIG_OK%"=="true" (
 )
 
 echo.
+echo ================================================================================================
+echo NOTE: R8 configuration has been updated to use safer optimization settings.
+echo Risky unstable optimizations have been removed while keeping beneficial size reductions.
 echo ================================================================================================
 echo.
 

@@ -69,7 +69,8 @@ react {
 def enableProguardInReleaseBuilds = true
 
 /**
- * Enable R8 full mode for better optimization
+ * Enable R8 full mode with safer optimization rules
+ * Uses safer configuration in proguard-rules-r8.pro to avoid unstable optimizations
  */
 def enableR8FullMode = true
 
