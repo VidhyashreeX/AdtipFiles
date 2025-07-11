@@ -59,14 +59,18 @@ const GuestTabNavigator = () => {
     </TouchableOpacity>
   );
 
+  // Calculate Android-specific padding for OS navbar
+  const androidNavbarPadding = Platform.OS === 'android' ? 20 : 0; // Increased from 10 to 20
+  const tabBarHeight = 60 + Math.min(insets.bottom, 20) + androidNavbarPadding;
+
   const screenOptions = {
     headerShown: false,
     tabBarStyle: {
       backgroundColor: colors.background,
       borderTopColor: colors.border,
       borderTopWidth: 1,
-      height: 60 + (Platform.OS === 'android' ? 10 : 0),
-      paddingBottom: Math.max(insets.bottom, 8) + (Platform.OS === 'android' ? 10 : 0),
+      height: tabBarHeight,
+      paddingBottom: Math.max(insets.bottom, 8) + androidNavbarPadding,
       paddingTop: 8,
     },
     tabBarActiveTintColor: colors.primary,
