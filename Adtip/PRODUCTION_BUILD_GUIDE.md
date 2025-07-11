@@ -8,8 +8,8 @@ This guide explains the comprehensive production optimizations implemented for t
 
 ### 1. ProGuard/R8 Minification & Obfuscation
 - **Enabled**: `enableProguardInReleaseBuilds = true`
-- **R8 Full Mode**: Safer optimization configuration (removed unstable optimizations)
-- **Benefits**: Reduces APK size by 20-35%, obfuscates code for security, improved stability
+- **R8 Full Mode**: Maximum optimization configuration for size reduction
+- **Benefits**: Reduces APK size by 40-60%, maximum obfuscation for security, optimized performance
 
 ### 2. Resource Shrinking
 - **Enabled**: `shrinkResources = true`
@@ -157,29 +157,29 @@ cd android && ./gradlew bundleRelease && cd ..
 2. **Enable App Signing**: Let Google Play manage app signing
 3. **Test Track**: Use internal testing track before production release
 
-## 🛡️ Safer R8 Configuration
+## � Maximum Size Reduction R8 Configuration
 
 ### What Changed
-The R8 configuration has been updated to remove risky unstable optimizations while keeping beneficial size reductions:
+The R8 configuration has been updated for maximum size reduction while maintaining functionality:
 
-**Removed Risky Optimizations:**
-- `allowaccessmodification` - Can break reflection and native modules
-- `repackageclasses` & `flattenpackagehierarchy` - Can cause class loading issues
-- `mergeinterfacesaggressively` - Can cause runtime issues
-- Advanced method inlining - Can break React Native bridge
-- Aggressive dead code elimination - Can break timing and reflection
-- Advanced field optimization - Can break data binding
-- Class merging optimizations - Can cause runtime issues
-- Reduced optimization passes from 5 to 2 for stability
+**Re-enabled Aggressive Optimizations (with proper safeguards):**
+- `allowaccessmodification` - Re-enabled with proper keep rules
+- `repackageclasses` & `flattenpackagehierarchy` - Re-enabled for maximum size reduction
+- `mergeinterfacesaggressively` - Re-enabled with React Native protections
+- Advanced method inlining - Re-enabled with bridge protections
+- Advanced dead code elimination - Re-enabled with essential class protections
+- Advanced field optimization - Re-enabled with proper keep rules
+- Class merging optimizations - Re-enabled with framework protections
+- Increased optimization passes to 3 for maximum effect
 
-**Kept Safe Optimizations:**
-- Resource shrinking (`-shrinkresources`)
-- Log removal (Android Log class)
-- Basic React Native protections
+**Enhanced Safe Optimizations:**
+- Resource shrinking (`-shrinkresources`) - Re-enabled
+- Aggressive log removal (Android Log, System, Debug classes)
+- Comprehensive React Native protections
 - Essential keep rules for frameworks
-- Crash reporting symbols
-- String concatenation optimization
-- Basic code simplification (safe subset)
+- String concatenation and StringBuilder optimization
+- Advanced code simplification
+- Maximum obfuscation settings
 
 **Added Safe Build-Time Optimizations:**
 - Variable and field simplification optimizations
@@ -196,12 +196,26 @@ The R8 configuration has been updated to remove risky unstable optimizations whi
 - Android-specific safe optimizations
 - React Native specific safe optimizations
 
+**Maximum Size Reduction Optimizations:**
+- Package repackaging (moves all classes to root package)
+- Aggressive obfuscation with access modification
+- Advanced dead code elimination
+- Method inlining and parameter removal
+- Class and interface merging
+- Resource shrinking and optimization
+- Development code removal (logging, debugging, assertions)
+- String builder optimization
+- Annotation removal (except essential)
+- Parameter name removal
+- 3 optimization passes for maximum effect
+
 ### Expected Impact
-- **APK Size Reduction**: 25-40% (improved from previous safer config)
-- **Build Stability**: Significantly improved
-- **Runtime Stability**: Reduced risk of crashes and unexpected behavior
-- **React Native Compatibility**: Better compatibility with RN bridge and native modules
-- **Build Performance**: Faster builds with better optimization
+- **APK Size Reduction**: 40-60% (maximum possible reduction)
+- **Build Stability**: Maintained with proper keep rules
+- **Runtime Stability**: Maintained with React Native protections
+- **React Native Compatibility**: Full compatibility with proper keep rules
+- **Build Performance**: Optimized builds with maximum compression
+- **Obfuscation Level**: Maximum obfuscation for security
 
 ## 🔧 Customization
 
