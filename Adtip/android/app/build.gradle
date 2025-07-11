@@ -50,7 +50,14 @@ react {
     // hermesCommand = "$rootDir/my-custom-hermesc/bin/hermesc"
     //
     //   The list of flags to pass to the Hermes compiler. By default is "-O", "-output-source-map"
-    // hermesFlags = ["-O", "-output-source-map"]
+    hermesFlags = ["-O", "-output-source-map"]
+
+    /* Production Bundle Optimization */
+    bundleCommand = "bundle"
+    extraPackagerArgs = [
+        "--minify",
+        "--reset-cache"
+    ]
 
     /* Autolinking */
     autolinkLibrariesWithApp()
@@ -59,7 +66,22 @@ react {
 /**
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
-def enableProguardInReleaseBuilds = false
+def enableProguardInReleaseBuilds = true
+
+/**
+ * Enable R8 full mode for better optimization
+ */
+def enableR8FullMode = true
+
+/**
+ * Enable bundle splitting by ABI to reduce APK size
+ */
+def enableSeparateBuildPerCPUArchitecture = true
+
+/**
+ * Enable universal APK generation alongside ABI-specific APKs
+ */
+def universalApk = false
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -86,6 +108,18 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 2800
         versionName "28.0.0"
+
+        // Enable multidex for large apps
+        multiDexEnabled true
+
+        // Optimize for production
+        resConfigs "en", "xxhdpi"
+
+        // Enable vector drawable support
+        vectorDrawables.useSupportLibrary = true
+
+        // Proguard optimization
+        proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
     }
     signingConfigs {
         debug {
@@ -104,13 +138,96 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            applicationIdSuffix ".debug"
+            debuggable true
+            minifyEnabled false
+            shrinkResources false
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
+            // Production release configuration
             signingConfig signingConfigs.release
             minifyEnabled enableProguardInReleaseBuilds
-            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            shrinkResources enableProguardInReleaseBuilds
+            debuggable false
+            jniDebuggable false
+            renderscriptDebuggable false
+            zipAlignEnabled true
+
+            // Use optimized ProGuard configuration
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+
+            // Enable R8 full mode
+            if (enableR8FullMode) {
+                proguardFiles 'proguard-rules-r8.pro'
+            }
+        }
+    }
+
+    // Split APKs by ABI for smaller download sizes
+    splits {
+        abi {
+            reset()
+            enable enableSeparateBuildPerCPUArchitecture
+            universalApk universalApk
+            include "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+        }
+    }
+
+    // Map version codes for ABI splits
+    project.ext.abiCodes = [
+        'armeabi-v7a': 1,
+        'arm64-v8a': 2,
+        'x86': 3,
+        'x86_64': 4
+    ]
+
+    // Automatically assign version codes for ABI splits
+    android.applicationVariants.all { variant ->
+        variant.outputs.each { output ->
+            def abiVersionCode = project.ext.abiCodes.get(output.getFilter(com.android.build.OutputFile.ABI))
+            if (abiVersionCode != null) {
+                output.versionCodeOverride = defaultConfig.versionCode * 10 + abiVersionCode
+            }
+        }
+    }
+
+    // Optimize packaging
+    packagingOptions {
+        pickFirst '**/libc++_shared.so'
+        pickFirst '**/libjsc.so'
+        pickFirst '**/libhermes.so'
+        pickFirst '**/libreactnativejni.so'
+        pickFirst '**/libfbjni.so'
+        exclude 'META-INF/DEPENDENCIES'
+        exclude 'META-INF/LICENSE'
+        exclude 'META-INF/LICENSE.txt'
+        exclude 'META-INF/NOTICE'
+        exclude 'META-INF/NOTICE.txt'
+        exclude 'META-INF/ASL2.0'
+        exclude 'META-INF/LGPL2.1'
+        exclude 'META-INF/*.kotlin_module'
+        exclude '**/kotlin/**'
+        exclude '**/*.kotlin_metadata'
+        exclude '**/*.kotlin_builtins'
+        exclude '**/kotlin-tooling-metadata.json'
+    }
+
+    // Compile options for optimization
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // Bundle configuration for AAB optimization
+    bundle {
+        language {
+            enableSplit = true
+        }
+        density {
+            enableSplit = true
+        }
+        abi {
+            enableSplit = true
         }
     }
 }
