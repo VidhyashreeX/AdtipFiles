@@ -161,7 +161,7 @@ const WalletScreen = () => {
       return;
     }
     
-    navigation.navigate('WithdrawalForm' as never, { 
+    navigation.navigate('WithdrawalAmountScreen' as never, { 
       balance: currentBalance,
       minimumWithdrawal,
       onSuccess: () => {

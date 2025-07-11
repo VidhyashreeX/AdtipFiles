@@ -69,6 +69,11 @@ import BlockedUsersScreen from '../screens/blocklist/BlockedUsersScreen';
 // Add AddFundsScreen import
 import AddFundsScreen from '../screens/wallet/AddFundsScreen';
 
+// Add withdrawal screens
+import WithdrawalAmountScreen from '../screens/wallet/WithdrawalAmountScreen';
+import WithdrawalMethodScreen from '../screens/wallet/WithdrawalMethodScreen';
+import WithdrawalConfirmationScreen from '../screens/wallet/WithdrawalConfirmationScreen';
+
 // Add UpgradePremiumScreen import
 import UpgradePremiumScreen from '../screens/wallet/UpgradePremiumScreen';
 
@@ -476,6 +481,9 @@ const MainNavigator = () => {
       <Stack.Screen name="EditProfile" component={EnhancedEditProfileScreen} />
       <Stack.Screen name="Wallet" component={WalletScreen} />
       <Stack.Screen name="AddFundsScreen" component={AddFundsScreen} />
+      <Stack.Screen name="WithdrawalAmountScreen" component={WithdrawalAmountScreen} />
+      <Stack.Screen name="WithdrawalMethodScreen" component={WithdrawalMethodScreen} />
+      <Stack.Screen name="WithdrawalConfirmationScreen" component={WithdrawalConfirmationScreen} />
       <Stack.Screen name="TrackOrder" component={EnhancedTrackOrderScreen} />
       <Stack.Screen name="Search" component={EnhancedSearchScreen} />
       <Stack.Screen name="Notifications" component={EnhancedNotificationScreen} />

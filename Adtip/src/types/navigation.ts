@@ -60,6 +60,25 @@ export type MainNavigatorParamList = {
   TabHome: undefined; // Assuming these are part of MainNavigator, e.g., tabs
   Search: undefined;
   Wallet: undefined;
+  WithdrawalAmountScreen: {
+    balance: number;
+    minimumWithdrawal: number;
+    onSuccess?: () => void;
+  };
+  WithdrawalMethodScreen: {
+    amount: number;
+    balance: number;
+    minimumWithdrawal: number;
+    onSuccess?: () => void;
+  };
+  WithdrawalConfirmationScreen: {
+    amount: number;
+    balance: number;
+    minimumWithdrawal: number;
+    selectedMethod: string;
+    upiId?: string;
+    onSuccess?: () => void;
+  };
   Settings: undefined;
   // Update TipShorts type definition to support enhanced features
   TipShorts: { 
