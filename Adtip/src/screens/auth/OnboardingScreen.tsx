@@ -496,11 +496,6 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({navigation}) => {
     }
   }, [currentIndex, buttonScale, navigation]);
 
-  // Handle skip
-  const handleSkip = useCallback(() => {
-    navigation.replace('Login');
-  }, [navigation]);
-
   // Handle guest mode
   const handleTryNow = useCallback(async () => {
     try {
@@ -603,16 +598,10 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({navigation}) => {
 
       {/* Bottom navigation controls */}
       <View style={styles.navigationContainer}>
-        <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
-          <Text style={styles.skipText}>Skip</Text>
+        {/* Try Now button - now shows on all slides */}
+        <TouchableOpacity style={styles.tryNowButton} onPress={handleTryNow}>
+          <Text style={styles.tryNowText}>Try Now</Text>
         </TouchableOpacity>
-
-        {/* Try Now button - only show on last slide */}
-        {currentIndex === onboardingData.length - 1 && (
-          <TouchableOpacity style={styles.tryNowButton} onPress={handleTryNow}>
-            <Text style={styles.tryNowText}>Try Now</Text>
-          </TouchableOpacity>
-        )}
 
         <Animated.View style={{transform: [{scale: buttonScale}]}}>
           <TouchableOpacity
@@ -692,14 +681,7 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: '#F8F9FA',
   },
-  skipButton: {
-    padding: 16,
-  },
-  skipText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#757575',
-  },
+
   nextButton: {
     flexDirection: 'row',
     height: 50,
