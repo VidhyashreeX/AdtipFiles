@@ -97,12 +97,10 @@ echo ===========================================================================
 echo BUILD ARTIFACTS LOCATION:
 echo ================================================================================================
 echo.
-echo APK Files:
+echo APK Files (ARM architectures only - real devices):
 echo   - Universal APK: android\app\build\outputs\apk\release\app-release.apk
 echo   - ARM64 APK: android\app\build\outputs\apk\release\app-arm64-v8a-release.apk
 echo   - ARM APK: android\app\build\outputs\apk\release\app-armeabi-v7a-release.apk
-echo   - x86_64 APK: android\app\build\outputs\apk\release\app-x86_64-release.apk
-echo   - x86 APK: android\app\build\outputs\apk\release\app-x86-release.apk
 echo.
 echo AAB File:
 echo   - Android App Bundle: android\app\build\outputs\bundle\release\app-release.aab

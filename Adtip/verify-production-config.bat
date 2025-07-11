@@ -181,7 +181,7 @@ if "%CONFIG_OK%"=="true" (
     echo Your app is ready for production builds with:
     echo   • ProGuard/R8 minification and obfuscation
     echo   • Resource shrinking and optimization
-    echo   • ABI-specific APK splitting
+    echo   • ARM-specific APK splitting (real devices only)
     echo   • Hermes JavaScript engine optimization
     echo   • Bundle minification and optimization
     echo   • Production signing configuration

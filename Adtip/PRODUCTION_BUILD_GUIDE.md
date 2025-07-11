@@ -17,8 +17,8 @@ This guide explains the comprehensive production optimizations implemented for t
 - **Impact**: Reduces APK size by 10-20%
 
 ### 3. ABI Splitting
-- **Enabled**: Separate APKs for different CPU architectures
-- **Architectures**: ARM64, ARM32, x86_64, x86
+- **Enabled**: Separate APKs for ARM architectures (real devices only)
+- **Architectures**: ARM64 (arm64-v8a), ARM32 (armeabi-v7a)
 - **Benefits**: Users download only the APK for their device architecture
 - **Size Reduction**: 40-60% smaller downloads per user
 
@@ -92,12 +92,10 @@ cd android && ./gradlew bundleRelease && cd ..
 
 ## 📦 Build Artifacts
 
-### APK Files (Direct Distribution)
-- `app-release.apk` - Universal APK (largest, works on all devices)
+### APK Files (Direct Distribution - ARM Only)
+- `app-release.apk` - Universal APK (works on all ARM devices)
 - `app-arm64-v8a-release.apk` - ARM64 devices (most modern phones)
 - `app-armeabi-v7a-release.apk` - ARM32 devices (older phones)
-- `app-x86_64-release.apk` - x86_64 devices (emulators, some tablets)
-- `app-x86-release.apk` - x86 devices (older emulators)
 
 ### AAB File (Play Store Distribution)
 - `app-release.aab` - Android App Bundle for Google Play Store
@@ -128,8 +126,8 @@ cd android && ./gradlew bundleRelease && cd ..
 
 ### APK Size Reduction
 - **Before Optimization**: ~80-120 MB
-- **After Optimization**: ~25-40 MB per architecture-specific APK
-- **Universal APK**: ~60-80 MB
+- **After Optimization**: ~25-40 MB per ARM architecture-specific APK
+- **Universal ARM APK**: ~50-70 MB
 
 ### Performance Improvements
 - **App Startup**: 30-50% faster with Hermes
@@ -144,8 +142,8 @@ cd android && ./gradlew bundleRelease && cd ..
 ## ⚠️ Important Notes
 
 ### Testing Requirements
-1. **Test on Real Devices**: Always test optimized builds on physical devices
-2. **Test All Architectures**: Verify each ABI-specific APK works correctly
+1. **Test on Real Devices**: Always test optimized builds on physical ARM devices
+2. **Test Both ARM Architectures**: Verify ARM64 and ARM32 APKs work correctly
 3. **Functionality Testing**: Ensure all features work after obfuscation
 4. **Performance Testing**: Verify startup time and memory usage improvements
 
