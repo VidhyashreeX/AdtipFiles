@@ -11,7 +11,7 @@ import TipShortsEnhanced from '../screens/tipshorts/TipShortsEnhanced';
 
 // Import icons
 import Icon from 'react-native-vector-icons/Feather';
-import { View, TouchableOpacity, Platform } from 'react-native';
+import { View, TouchableOpacity, Platform, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LoginPromptModal from '../components/modals/LoginPromptModal';
 
@@ -44,8 +44,18 @@ const GuestTabNavigator = () => {
     <Icon name="video" size={24} color={focused ? colors.primary : colors.text.secondary} />
   );
 
+  // Create content icon for guest mode (shows plus icon but triggers login prompt)
+  const CreateContentIcon = ({ focused }: { focused: boolean }) => (
+    <Icon name="plus" size={24} color={focused ? colors.primary : colors.text.secondary} />
+  );
+
+  // TipCall icon for guest mode (shows phone icon but triggers login prompt)
+  const TipCallIcon = ({ focused }: { focused: boolean }) => (
+    <Icon name="phone" size={24} color={focused ? colors.primary : colors.text.secondary} />
+  );
+
   // Restricted button for features not available to guests
-  const RestrictedButton = ({ feature }: { feature: string }) => (
+  const RestrictedButton = ({ feature, iconName, label }: { feature: string; iconName: string; label: string }) => (
     <TouchableOpacity
       style={{
         flex: 1,
@@ -55,7 +65,15 @@ const GuestTabNavigator = () => {
       }}
       onPress={() => showRestrictedAccessPrompt(feature)}
     >
-      <Icon name="lock" size={24} color={colors.text.secondary} />
+      <Icon name={iconName} size={24} color={colors.text.secondary} />
+      <Text style={{
+        color: colors.text.secondary,
+        fontSize: 12,
+        marginTop: 4,
+        textAlign: 'center',
+      }}>
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 
@@ -104,16 +122,14 @@ const GuestTabNavigator = () => {
           name="CreateContent"
           component={View} // Dummy component
           options={{
-            tabBarButton: () => <RestrictedButton feature="content creation" />,
-            tabBarLabel: 'Create',
+            tabBarButton: () => <RestrictedButton feature="content creation" iconName="plus" label="Create" />,
           }}
         />
         <Tab.Screen
           name="TipCall"
           component={View} // Dummy component
           options={{
-            tabBarButton: () => <RestrictedButton feature="video calls" />,
-            tabBarLabel: 'Calls',
+            tabBarButton: () => <RestrictedButton feature="video calls" iconName="phone" label="Calls" />,
           }}
         />
         <Tab.Screen
