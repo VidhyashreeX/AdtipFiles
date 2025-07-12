@@ -32,7 +32,6 @@ import {
 // Context
 import {useTheme} from '../../contexts/ThemeContext';
 import {useAuth} from '../../contexts/AuthContext';
-import {useGuestGuard} from '../../hooks/useGuestGuard';
 
 interface CreateContentModalProps {
   visible: boolean;
@@ -47,8 +46,11 @@ const CreateContentModal: React.FC<CreateContentModalProps> = React.memo(({
 }) => {
   const {colors, isDarkMode} = useTheme();
   const navigation = useNavigation();
-  const {isGuest} = useAuth();
-  const {requireAuth} = useGuestGuard();
+  const {isGuest, exitGuestMode} = useAuth();
+
+  // Local state for login prompt instead of using global useGuestGuard
+  const [showLocalLoginPrompt, setShowLocalLoginPrompt] = React.useState(false);
+  const [loginPromptMessage, setLoginPromptMessage] = React.useState('');
 
   // Reanimated shared values for smooth animations
   const translateY = useSharedValue(screenHeight);
@@ -123,31 +125,59 @@ const CreateContentModal: React.FC<CreateContentModalProps> = React.memo(({
     });
   };
 
+  // Local login prompt handlers
+  const showLoginPrompt = (message: string) => {
+    setLoginPromptMessage(message);
+    setShowLocalLoginPrompt(true);
+  };
+
+  const hideLoginPrompt = () => {
+    setShowLocalLoginPrompt(false);
+  };
+
+  const handleLogin = async () => {
+    try {
+      await exitGuestMode();
+      hideLoginPrompt();
+      onClose(); // Close the create content modal
+      // Navigation will be handled by UltraFastLoader
+    } catch (error) {
+      console.error('[CreateContentModal] Failed to exit guest mode:', error);
+    }
+  };
+
   const createNavigationHandler = (screenName: string, actionName: string) => () => {
-    // Check if user is guest and require authentication for content creation
+    console.log(`[CreateContentModal] Navigation handler called for ${screenName}, isGuest: ${isGuest}`);
+
+    // Check if user is guest and show local login prompt
     if (isGuest) {
-      console.log(`[CreateContentModal] Guest user attempting to access ${screenName}, showing login prompt`);
-      requireAuth(actionName);
-      onClose(); // Close modal after showing login prompt
+      console.log(`[CreateContentModal] Guest user attempting to access ${screenName}, showing local login prompt`);
+      const actionMessages: Record<string, string> = {
+        'create posts': 'Login to create and share posts',
+        'upload videos': 'Login to upload and share videos',
+        'create shorts': 'Login to create short videos',
+        'start live streams': 'Login to start live streaming',
+      };
+      const message = actionMessages[actionName] || `Login to ${actionName}`;
+      showLoginPrompt(message);
       return;
     }
 
-    // Close modal with animation then navigate
-    translateY.value = withSpring(screenHeight, springConfig);
-    backdropOpacity.value = withTiming(0, timingConfig, (finished) => {
-      if (finished) {
-        runOnJS(() => {
-          try {
-            onClose();
-            console.log(`[CreateContentModal] Navigating to ${screenName}`);
-            navigation.navigate(screenName as never);
-          } catch (error) {
-            console.error(`[CreateContentModal] Navigation error to ${screenName}:`, error);
-            onClose(); // Ensure modal closes even if navigation fails
-          }
-        })();
+    // For authenticated users, close modal first, then navigate
+    console.log(`[CreateContentModal] Authenticated user, closing modal and navigating to ${screenName}`);
+
+    // Close modal immediately without animation to avoid conflicts
+    onClose();
+
+    // Navigate after a small delay to ensure modal is closed
+    setTimeout(() => {
+      try {
+        console.log(`[CreateContentModal] Navigating to ${screenName}`);
+        navigation.navigate(screenName as never);
+      } catch (error) {
+        console.error(`[CreateContentModal] Navigation error to ${screenName}:`, error);
       }
-    });
+    }, 100);
   };
 
   const handleCreatePost = createNavigationHandler('CreatePost', 'create posts');
@@ -317,7 +347,7 @@ const CreateContentModal: React.FC<CreateContentModalProps> = React.memo(({
 
                 <TouchableOpacity
                   style={[
-                    styles.option, 
+                    styles.option,
                     styles.disabledOption, // Add disabled style
                     {
                       backgroundColor: isDarkMode ? colors.gray[900] : colors.gray[50],
@@ -341,7 +371,7 @@ const CreateContentModal: React.FC<CreateContentModalProps> = React.memo(({
                   <Icon
                     name="chevron-right"
                     size={20}
-                    color={colors.text.disabled || colors.gray[400]}
+                    color={colors.gray[400]}
                   />
                 </TouchableOpacity>
               </View>
@@ -350,6 +380,47 @@ const CreateContentModal: React.FC<CreateContentModalProps> = React.memo(({
         </View>
       </SafeAreaView>
       </GestureHandlerRootView>
+
+      {/* Local Login Prompt Overlay - Inside the main modal to avoid nested modal conflicts */}
+      {showLocalLoginPrompt && (
+        <View style={[StyleSheet.absoluteFill, styles.loginOverlay]}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={hideLoginPrompt}
+          />
+          <View style={[styles.loginContainer, {backgroundColor: colors.background}]}>
+            <Text style={[styles.loginTitle, {color: colors.text.primary}]}>
+              Login Required
+            </Text>
+            <Text style={[styles.loginMessage, {color: colors.text.secondary}]}>
+              {loginPromptMessage}
+            </Text>
+
+            <View style={styles.loginButtonContainer}>
+              <TouchableOpacity
+                style={[styles.loginCancelButton, {borderColor: colors.gray[300]}]}
+                onPress={hideLoginPrompt}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.loginCancelButtonText, {color: colors.text.secondary}]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.loginActionButton, {backgroundColor: colors.primary}]}
+                onPress={handleLogin}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.loginActionButtonText, {color: colors.white}]}>
+                  Login
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </Modal>
   );
 });
@@ -418,6 +489,66 @@ const styles = StyleSheet.create({
   },
   disabledOption: {
     opacity: 0.6,
+  },
+  // Login prompt overlay styles
+  loginOverlay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    zIndex: 1000,
+  },
+  loginContainer: {
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 320,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  loginTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  loginMessage: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  loginButtonContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  loginCancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  loginCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  loginActionButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  loginActionButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
