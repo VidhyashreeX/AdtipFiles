@@ -1,4 +1,4 @@
-package com.adtip;
+package com.adtip.app.adtip_app;
 
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -15,10 +15,6 @@ import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
 
 import java.util.Map;
-
-// Import MainActivity and R from the correct package
-import com.adtip.app.adtip_app.MainActivity;
-import com.adtip.app.adtip_app.R;
 
 public class AdtipFirebaseMessagingService extends FirebaseMessagingService {
     private static final String TAG = "AdtipFCMService";

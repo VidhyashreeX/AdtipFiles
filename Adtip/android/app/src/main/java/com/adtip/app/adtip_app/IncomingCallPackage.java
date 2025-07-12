@@ -1,4 +1,4 @@
-package com.adtip;
+package com.adtip.app.adtip_app;
 
 import androidx.annotation.NonNull;
 

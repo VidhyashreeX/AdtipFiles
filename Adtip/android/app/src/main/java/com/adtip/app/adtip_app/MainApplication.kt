@@ -20,7 +20,7 @@ import live.videosdk.rnincallmanager.InCallManagerPackage
 import com.adtip.app.adtip_app.PubscaleOfferwallPackage
 
 // IncomingCall Import
-import com.adtip.IncomingCallPackage
+import com.adtip.app.adtip_app.IncomingCallPackage
 
 class MainApplication : Application(), ReactApplication {
 
