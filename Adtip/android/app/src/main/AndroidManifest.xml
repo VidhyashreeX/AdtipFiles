@@ -51,7 +51,7 @@
     <!-- CALLLEEP SELF-MANAGED PERMISSIONS -->
     <uses-permission android:name="android.permission.BIND_TELECOM_CONNECTION_SERVICE" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
-    <uses-permission android:name="android.permission.ADD_VOICEMAIL" />
+    <!-- ADD_VOICEMAIL removed - not used by core app functionality -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <!-- Camera features -->
@@ -62,9 +62,17 @@
     <!-- AD TRACKING -->
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
 
-    <!-- SMS (for OTP verification) -->
-    <uses-permission android:name="android.permission.RECEIVE_SMS" />
-    <uses-permission android:name="android.permission.READ_SMS" />
+    <!-- SMS permissions removed - not used by core app functionality -->
+    <!-- OTP verification is handled via API calls, not SMS reading -->
+    <!-- Razorpay auto-fill is disabled in rzp_config_checkout.json -->
+
+    <!-- Explicitly remove problematic permissions that may be added by dependencies -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_SMS" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" tools:node="remove" />
+    <uses-permission android:name="android.permission.ADD_VOICEMAIL" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" tools:node="remove" />
 
     <application
         android:name=".MainApplication"

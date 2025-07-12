@@ -446,6 +446,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Header
           title={isOwnProfile ? "My Profile" : "Profile"}
+          showSearch={false}
+          showWallet={false}
+          showPremium={false}
           leftComponent={
             <TouchableOpacity
               onPress={() => navigation.goBack()}
@@ -465,6 +468,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Header
           title={isOwnProfile ? "My Profile" : "Profile"}
+          showSearch={false}
+          showWallet={false}
+          showPremium={false}
           leftComponent={
             <TouchableOpacity
               onPress={() => navigation.goBack()}
@@ -484,6 +490,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
       {/* Header with back button */}
       <Header
         title={isOwnProfile ? "My Profile" : "Profile"}
+        showSearch={false}
+        showWallet={false}
+        showPremium={false}
         leftComponent={
           <TouchableOpacity
             onPress={() => navigation.goBack()}
