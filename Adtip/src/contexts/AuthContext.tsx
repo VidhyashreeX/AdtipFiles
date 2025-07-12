@@ -6,6 +6,7 @@ import {navigationRef} from '../navigation/NavigationService';
 import LastSeenService from '../services/LastSeenService'; // Ensure this import is present
 // UnifiedCallService removed - using simplified calling flow
 import FirebaseService from '../services/FirebaseService';
+import UserDataStorageService from '../services/UserDataStorageService';
 import { ApiResponse, OtpLoginResponse as ApiOtpResponse, OtpVerifyResponse as ApiUserType, OtpVerifyApiResponse } from '../types/api';
 
 // Define user type (using the one from api.ts for consistency)
@@ -317,7 +318,15 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       } catch (serviceError) {
         console.warn('[AuthContext] Error cleaning up services during logout:', serviceError);
       }
-      
+
+      // Clear user data cache
+      try {
+        console.log('[AuthContext] Clearing user data cache...');
+        await UserDataStorageService.clearAllUserData();
+      } catch (userDataError) {
+        console.warn('[AuthContext] Error clearing user data cache during logout:', userDataError);
+      }
+
       await AsyncStorage.clear();
       console.log('[AuthContext] AsyncStorage cleared.');
 

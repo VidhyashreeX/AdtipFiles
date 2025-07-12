@@ -35,6 +35,8 @@ import ApiService from '../../services/ApiService';
 import {API_BASE_URL} from '../../constants/api';
 import {HOME_ENDPOINTS} from '../../constants/apiEndpoints';
 import { usePosts, useGuestPosts, useLikeMutation, useFollowMutation, usePrefetchData, useSubscriptionStatus, useCategories } from '../../hooks/useQueries';
+import { useUserDataContext, useUserPremiumStatus, useUserWallet } from '../../contexts/UserDataContext';
+import { getUserDisplayName, isPremiumUser } from '../../utils/userDataUtils';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
 import PubScaleService from '../../services/PubScaleService';
@@ -428,6 +430,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const {clearCache, invalidateData} = useDataContext();
   const queryClient = useQueryClient();
   const styles = createHomeScreenStyles(colors);
+
+  // Enhanced user data from new system (only for authenticated users)
+  const { userData, isLoading: userDataLoading } = useUserDataContext();
+  const { isPremium: isPremiumNew, premiumExpiresAt } = useUserPremiumStatus();
+  const { walletBalance: userWalletBalance } = useUserWallet();
 
   // UI state management (never blocks navigation)
   const [selectedCategoryState, setSelectedCategoryState] = useState<string>('0');

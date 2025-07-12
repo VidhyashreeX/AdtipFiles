@@ -11,14 +11,47 @@ import {
   Alert,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProfile } from '../../hooks/useQueries';
-import { ProfileFastImage, ContentFastImage } from '../../utils/FastImageOptimizer';
-import { createOptimizedFlatListProps, createKeyExtractor } from '../../utils/PerformanceUtils';
+import { useUserDataContext } from '../../contexts/UserDataContext';
+import { getUserDisplayName } from '../../utils/userDataUtils';
+import Header from '../../components/common/Header';
 import Icon from 'react-native-vector-icons/Feather';
+import ApiService from '../../services/ApiService';
+import { ProfileFastImage, ContentFastImage } from '../../utils/FastImageOptimizer';
 import { API_BASE_URL } from '../../constants/api';
+
+// Helper function to normalize profile data between old and new API formats
+const normalizeProfileData = (data: any, socialStats?: any) => {
+  if (!data) return null;
+
+  // If it's comprehensive user data (new API), map to old format
+  if (data.emailId && data.mobile_number) {
+    return {
+      id: data.id,
+      username: data.username || data.name,
+      display_name: getUserDisplayName(data),
+      name: data.name,
+      bio: data.bio,
+      profile_image: data.profile_image,
+      posts_count: socialStats?.posts_count || 0,
+      followers_count: socialStats?.followers_count || 0,
+      following_count: socialStats?.following_count || 0,
+      is_premium: data.is_premium,
+      premium_expires_at: data.premium_expires_at,
+      // Add other fields as needed
+    };
+  }
+
+  // If it's old API format, return as is but merge with social stats if available
+  return {
+    ...data,
+    posts_count: socialStats?.posts_count || data.posts_count || 0,
+    followers_count: socialStats?.followers_count || data.followers_count || 0,
+    following_count: socialStats?.following_count || data.following_count || 0,
+  };
+};
 
 const { width } = Dimensions.get('window');
 
@@ -50,12 +83,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
   const { user } = useAuth();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const insets = useSafeAreaInsets();
 
   // Get userId from props, route params, or current user
   const userId = propUserId || route.params?.userId || user?.id || 56768;
+  const isOwnProfile = userId === user?.id;
 
-  // Profile data query
+  // Enhanced profile data query - now uses comprehensive user data API for all users
   const {
     data: profileData,
     isLoading: profileLoading,
@@ -63,11 +96,79 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
     refetch: refreshProfile,
   } = useProfile(userId);
 
+  // For current user, also get data from context for real-time updates
+  const { userData: contextUserData, refetch: refetchUserData } = useUserDataContext();
+
+  // Use context data for current user if available, otherwise use profile query data
+  const currentProfileData = isOwnProfile && contextUserData ? contextUserData : profileData;
+
+  // Separate state for social stats (followers, following, posts)
+  const [socialStats, setSocialStats] = useState({
+    followers_count: 0,
+    following_count: 0,
+    posts_count: 0,
+  });
+  const [socialStatsLoading, setSocialStatsLoading] = useState(false);
+
+  // Fetch social stats separately since they're not in the main user data API
+  const fetchSocialStats = useCallback(async () => {
+    if (!userId) return;
+
+    setSocialStatsLoading(true);
+    try {
+      // Use actual API calls for social stats
+      const [followersRes, followingRes, postsRes] = await Promise.allSettled([
+        ApiService.getUserFollowers(userId),
+        ApiService.getUserFollowings(userId),
+        ApiService.getUserPosts(userId, 1, 1, user?.id || 0), // Get first page to count total
+      ]);
+
+      // Extract counts from API responses
+      const followersCount = followersRes.status === 'fulfilled' && followersRes.value?.data
+        ? Array.isArray(followersRes.value.data) ? followersRes.value.data.length : followersRes.value.total || 0
+        : 0;
+
+      const followingCount = followingRes.status === 'fulfilled' && followingRes.value?.data
+        ? Array.isArray(followingRes.value.data) ? followingRes.value.data.length : followingRes.value.total || 0
+        : 0;
+
+      const postsCount = postsRes.status === 'fulfilled' && postsRes.value?.data
+        ? postsRes.value.total || (Array.isArray(postsRes.value.data) ? postsRes.value.data.length : 0)
+        : 0;
+
+      setSocialStats({
+        followers_count: followersCount,
+        following_count: followingCount,
+        posts_count: postsCount,
+      });
+
+      console.log('[ProfileScreen] Social stats fetched:', {
+        followers: followersCount,
+        following: followingCount,
+        posts: postsCount,
+      });
+    } catch (error) {
+      console.error('Failed to fetch social stats:', error);
+      // Keep default values on error
+      setSocialStats({
+        followers_count: 0,
+        following_count: 0,
+        posts_count: 0,
+      });
+    } finally {
+      setSocialStatsLoading(false);
+    }
+  }, [userId, user?.id]);
+
+  // Fetch social stats when userId changes
+  useEffect(() => {
+    fetchSocialStats();
+  }, [fetchSocialStats]);
+
   // Mock posts data for now - replace with actual query when available
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [postsLoading, setPostsLoading] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
+  const [posts] = useState<Post[]>([]);
+  const [postsLoading] = useState(false);
+  const [isLoadingMore] = useState(false);
 
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTab, setSelectedTab] = useState<'posts' | 'saved'>('posts');
@@ -87,25 +188,30 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
+      // Refresh profile data
       await refreshProfile();
+
+      // If it's the current user's profile, also refresh the user data context
+      if (isOwnProfile) {
+        await refetchUserData();
+      }
+
+      // Refresh social stats
+      await fetchSocialStats();
+
       // Add posts refresh logic here when available
     } catch (error) {
       console.error('Refresh error:', error);
     } finally {
       setRefreshing(false);
     }
-  }, [refreshProfile]);
+  }, [refreshProfile, refetchUserData, isOwnProfile, fetchSocialStats]);
 
   // Handle load more posts
   const handleLoadMore = useCallback(() => {
-    if (hasMore && !isLoadingMore) {
-      setIsLoadingMore(true);
-      // Add load more logic here when available
-      setTimeout(() => {
-        setIsLoadingMore(false);
-      }, 1000);
-    }
-  }, [hasMore, isLoadingMore]);
+    // Add load more logic here when available
+    console.log('Load more posts requested');
+  }, []);
 
   // Handle post press
   const handlePostPress = useCallback((postId: number) => {
@@ -203,9 +309,17 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
 
   // Profile header component
   const renderProfileHeader = useMemo(() => {
-    if (!profileData) return null;
+    if (!currentProfileData) return null;
 
-    const profile = (profileData as ProfileData).data;
+    // Handle both old API format (with .data) and new comprehensive format (direct)
+    const rawProfile = currentProfileData.hasOwnProperty('data')
+      ? (currentProfileData as ProfileData).data
+      : currentProfileData;
+
+    // Normalize the profile data to ensure compatibility and include social stats
+    const profile = normalizeProfileData(rawProfile, socialStats);
+    if (!profile) return null;
+
     const isOwnProfile = userId === user?.id;
 
     return (
@@ -233,25 +347,37 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
 
         <View style={styles.statsContainer}>
           <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: colors.text.primary }]}>
-              {profile.posts_count || 0}
-            </Text>
+            {socialStatsLoading ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Text style={[styles.statNumber, { color: colors.text.primary }]}>
+                {profile.posts_count || 0}
+              </Text>
+            )}
             <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
               Posts
             </Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: colors.text.primary }]}>
-              {profile.followers_count || 0}
-            </Text>
+            {socialStatsLoading ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Text style={[styles.statNumber, { color: colors.text.primary }]}>
+                {profile.followers_count || 0}
+              </Text>
+            )}
             <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
               Followers
             </Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: colors.text.primary }]}>
-              {profile.following_count || 0}
-            </Text>
+            {socialStatsLoading ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Text style={[styles.statNumber, { color: colors.text.primary }]}>
+                {profile.following_count || 0}
+              </Text>
+            )}
             <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
               Following
             </Text>
@@ -281,7 +407,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
         )}
       </View>
     );
-  }, [profileData, userId, user?.id, colors, getFullImageUrl, handleFollow, navigation]);
+  }, [currentProfileData, socialStats, socialStatsLoading, userId, user?.id, colors, getFullImageUrl, handleFollow, navigation]);
 
   // Tab navigation
   const renderTabNavigation = useMemo(() => (
@@ -318,6 +444,17 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
   if (profileLoading && !profileData) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Header
+          title={isOwnProfile ? "My Profile" : "Profile"}
+          leftComponent={
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={{ padding: 8 }}
+            >
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
+        />
         {renderLoadingSkeleton}
       </View>
     );
@@ -326,6 +463,17 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
   if (profileError) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Header
+          title={isOwnProfile ? "My Profile" : "Profile"}
+          leftComponent={
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={{ padding: 8 }}
+            >
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
+        />
         {renderError}
       </View>
     );
@@ -333,6 +481,19 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Header with back button */}
+      <Header
+        title={isOwnProfile ? "My Profile" : "Profile"}
+        leftComponent={
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={{ padding: 8 }}
+          >
+            <Icon name="arrow-left" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        }
+      />
+
       <ScrollView
         style={styles.scrollView}
         refreshControl={

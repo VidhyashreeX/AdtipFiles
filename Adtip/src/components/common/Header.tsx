@@ -7,6 +7,7 @@ import {useNavigation, useRoute} from '@react-navigation/native';
 import {useTheme} from '../../contexts/ThemeContext';
 import {useAuth} from '../../contexts/AuthContext';
 import {useWallet} from '../../contexts/WalletContext';
+import {useUserDataContext, useUserPremiumStatus, useUserWallet} from '../../contexts/UserDataContext';
 import {useSidebar} from '../../contexts/SidebarContext';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import { useCallStore } from '../../stores/callStoreSimplified';
@@ -89,6 +90,10 @@ const Header: React.FC<HeaderProps> = ({
   const {colors, isDarkMode} = useTheme();
   const {isGuest} = useAuth();
   const {balance, isLoading, isPremium} = useWallet();
+  // Enhanced user data from new system (with fallback to old system)
+  const { userData, isLoading: userDataLoading } = useUserDataContext();
+  const { isPremium: isPremiumNew } = useUserPremiumStatus();
+  const { walletBalance: walletBalanceNew } = useUserWallet();
   const {toggleSidebar} = useSidebar();
   const { requireAuth, loginPromptVisible, hideLoginPrompt, loginPromptMessage } = useGuestGuard();
   const {width: screenWidth} = useWindowDimensions();

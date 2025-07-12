@@ -7,6 +7,9 @@ import { ENDPOINTS, API_BASE_URL } from '../constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { queryClient } from '../providers/QueryProvider';
 import { PostListResponse, ExploreContentResponse, ExploreItem as ApiExploreItem } from '../types/api';
+import UserDataStorageService from '../services/UserDataStorageService';
+import UserDataErrorHandler from '../services/UserDataErrorHandler';
+import { useAuth } from '../contexts/AuthContext';
 
 // Enhanced Types with proper interfaces
 interface Post {
@@ -221,6 +224,69 @@ export const useUserPosts = (userId: number, loggedUserId: number) => {
     enabled: !!userId && !!loggedUserId,
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnMount: false,
+  });
+};
+
+// Comprehensive User Data Hook with background refresh and AsyncStorage persistence
+export const useUserData = (userId: number) => {
+  const netInfo = useNetInfo();
+
+  return useQuery({
+    queryKey: ['userData', userId],
+    queryFn: async () => {
+      console.log('[useUserData] Fetching comprehensive user data for userId:', userId);
+
+      try {
+        const response = await ApiService.getUserData({ userid: userId });
+
+        // Store in AsyncStorage using the dedicated storage service
+        if (response.data) {
+          await UserDataStorageService.storeUserData(userId, response.data);
+          console.log('[useUserData] User data cached successfully');
+        }
+
+        return response.data;
+      } catch (error) {
+        console.error('[useUserData] Failed to fetch user data:', error);
+
+        // Use enhanced error handler for intelligent fallback
+        try {
+          const fallbackData = await UserDataErrorHandler.handleUserDataError(error, userId);
+          if (fallbackData) {
+            console.log('[useUserData] Using fallback data from error handler');
+            return fallbackData;
+          }
+        } catch (handlerError) {
+          console.error('[useUserData] Error handler also failed:', handlerError);
+          // Log the error for analytics
+          UserDataErrorHandler.logError(
+            UserDataErrorHandler.createUserDataError(error),
+            userId,
+            'useUserData'
+          );
+        }
+
+        throw error;
+      }
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000, // 5 minutes - data stays fresh
+    gcTime: 30 * 60 * 1000, // 30 minutes - cache time
+    refetchInterval: 5 * 60 * 1000, // Auto-refresh every 5 minutes
+    refetchIntervalInBackground: false, // Pause when app is backgrounded
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    networkMode: 'offlineFirst', // Use cache when offline
+    retry: (failureCount, error: any) => {
+      // Don't retry on auth errors
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        return false;
+      }
+      // Retry up to 3 times with exponential backoff
+      return failureCount < 3;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 };
 
@@ -917,17 +983,38 @@ export const useExplore = (userId?: number) => {
   });
 };
 
-// Enhanced Profile data hook
+// Enhanced Profile data hook - uses comprehensive user data API
 export const useProfile = (userId?: number) => {
+  const { user } = useAuth();
+  const isCurrentUser = userId === user?.id;
+
   return useQuery({
     queryKey: ['profile', userId],
     queryFn: async () => {
-      // Directly call ApiService.
-      const response = await ApiService.get(`/api/user/${userId}`);
-      return response;
+      if (!userId) throw new Error('User ID is required');
+
+      try {
+        // Use comprehensive user data API for better data
+        const response = await ApiService.getUserData({ userid: userId });
+        return response.data;
+      } catch (error) {
+        console.error('[useProfile] Failed to fetch comprehensive user data, falling back to old API:', error);
+        // Fallback to old API if comprehensive API fails
+        const fallbackResponse = await ApiService.get(`/api/user/${userId}`);
+        return fallbackResponse;
+      }
     },
     enabled: !!userId,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: isCurrentUser ? 5 * 60 * 1000 : 10 * 60 * 1000, // 5 min for current user, 10 min for others
+    gcTime: 30 * 60 * 1000, // 30 minutes cache time
+    retry: (failureCount, error: any) => {
+      // Don't retry on auth errors
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 };
 

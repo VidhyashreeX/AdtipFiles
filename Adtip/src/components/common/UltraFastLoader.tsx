@@ -8,7 +8,7 @@
  * No loading screens, no blocking initialization - just immediate UI.
  */
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { View, StatusBar, Animated, Image } from 'react-native';
+import { View, StatusBar, Animated, Image, BackHandler, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -16,7 +16,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCallStore } from '../../stores/callStoreSimplified';
 import { safeAreaStyles, statusBarConfig } from '../../utils/SafeAreaUtils';
-import { navigationRef } from '../../navigation/NavigationService';
+import { navigationRef, resetTo } from '../../navigation/NavigationService';
 import Sidebar from '../sidebar/Sidebar';
 
 // Import navigation screens
@@ -61,7 +61,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
   onInitializationComplete 
 }) => {
   const { colors, isDarkMode } = useTheme();
-  const { isAuthenticated, isGuest, isInitialized, user } = useAuth();
+  const { isAuthenticated, isGuest, isInitialized, user, exitGuestMode } = useAuth();
   const session = useCallStore(state => state.session);
   const [isVisible, setIsVisible] = useState(true);
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -87,6 +87,58 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
   // Authenticated users go to MainNavigator, guest users go to GuestNavigator
   const shouldShowMainApp = isAuthenticated && userHasName && userSaveStatus === 1;
   const shouldShowGuestApp = isGuest;
+
+  // Global back button handler
+  useEffect(() => {
+    const backAction = () => {
+      // Only handle back button when navigation is ready and initialized
+      if (!isNavReady || !isInitialized) {
+        return false;
+      }
+
+      // Check if navigation can go back
+      if (navigationRef.isReady() && navigationRef.canGoBack()) {
+        // Let the default back action happen
+        return false;
+      }
+
+      // Handle the case when there's no previous screen to go back to
+      if (shouldShowMainApp) {
+        // For logged-in users: Show exit app alert
+        Alert.alert(
+          'Exit App',
+          'Do you want to exit the app?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Exit', style: 'destructive', onPress: () => BackHandler.exitApp() }
+          ]
+        );
+        return true; // Prevent default back action
+      } else if (shouldShowGuestApp) {
+        // For guest users: Exit guest mode and navigate back to onboarding screens
+        try {
+          console.log('[UltraFastLoader] Guest mode back button - exiting guest mode and returning to onboarding');
+          exitGuestMode().then(() => {
+            resetTo('Auth');
+          }).catch((error) => {
+            console.error('[UltraFastLoader] Error exiting guest mode:', error);
+            // Still try to navigate to onboarding even if exitGuestMode fails
+            resetTo('Auth');
+          });
+          return true; // Prevent default back action
+        } catch (error) {
+          console.error('[UltraFastLoader] Error handling guest mode back button:', error);
+          return false;
+        }
+      }
+
+      // For other cases (like onboarding), allow default behavior
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, [isNavReady, isInitialized, shouldShowMainApp, shouldShowGuestApp, exitGuestMode]);
 
   // Use useMemo to prevent excessive logging
   const renderingState = useMemo(() => ({

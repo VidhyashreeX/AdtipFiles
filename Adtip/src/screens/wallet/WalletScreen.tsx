@@ -29,6 +29,7 @@ import BalanceCardSkeleton from '../../components/skeletons/BalanceCardSkeleton'
 import PlanCardSkeleton from '../../components/skeletons/PlanCardSkeleton';
 import TransactionListSkeleton from '../../components/skeletons/TransactionListSkeleton';
 import { useWallet } from '../../contexts/WalletContext';
+import { useUserDataContext, useUserPremiumStatus, useUserWallet } from '../../contexts/UserDataContext';
 import UserPremiumPlans from './UserPremiumPlans';
 import WithdrawalForm from '../../components/withdrawal/WithdrawalForm';
 import PremiumPopup from '../../components/common/PremiumPopup';
@@ -44,7 +45,12 @@ const WalletScreen = () => {
   const {colors, isDarkMode} = useTheme();
   const {user, premiumState, setPremiumState} = useAuth();
   const { refreshBalance } = useWallet();
-  
+
+  // Use new user data context for comprehensive user information
+  const { userData, isLoading: userDataLoading, refetch: refetchUserData } = useUserDataContext();
+  const { isPremium, premiumExpiresAt } = useUserPremiumStatus();
+  const { walletBalance, totalWithdrawals } = useUserWallet();
+
   // UI states only - data comes from TanStack Query
   const [activeTab, setActiveTab] = useState<'earnings' | 'withdrawals'>('earnings');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -92,15 +98,13 @@ const WalletScreen = () => {
 
 
 
-  // Computed values from TanStack Query data
+  // Computed values from TanStack Query data (keeping existing for backward compatibility)
   const balance = useMemo(() => {
-    return balanceData?.availableBalance || 0;
-  }, [balanceData]);
+    // Prefer user data context, fallback to old API
+    return walletBalance || balanceData?.availableBalance || 0;
+  }, [walletBalance, balanceData]);
 
-  const isPremium = useMemo(() => {
-    return premiumData && !premiumData.is_premium_expired;
-  }, [premiumData]);
-
+  // isPremium is now from user data context
   const withdrawRequests = useMemo(() => {
     return withdrawalData?.data || [];
   }, [withdrawalData]);

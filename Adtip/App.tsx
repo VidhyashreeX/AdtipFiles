@@ -40,6 +40,7 @@ import { VideoSDKProvider } from './src/contexts/VideoSDKContext';
 import { useTabNavigator, TabNavigatorProvider } from './src/contexts/TabNavigatorContext';
 //import { CallProvider, useCall, ActiveCall } from './src/contexts/CallProvider';
 import { ContentCreatorPremiumProvider } from './src/contexts/ContentCreatorPremiumContext';
+import { UserDataProvider } from './src/contexts/UserDataContext';
 import { DataProvider } from './src/providers/DataProvider';
 import { EnhancedQueryProvider } from './src/providers/QueryProvider';
 
@@ -383,28 +384,30 @@ function App(): React.JSX.Element {
       <SafeAreaProvider>
         <ThemeProvider>
           <AuthProvider>
-            <WalletProvider>
-              <ContentCreatorPremiumProvider>
-                <EnhancedQueryProvider>
-                  <DataProvider>
-                    <ShortsProvider>
-                      <TabNavigatorProvider>
-                        <SidebarProvider>
-                          <GestureHandlerRootView style={{ flex: 1 }}>
-                            <AppNavigator />
-                            <PersistentMeetingManager />
-                            {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
+            <EnhancedQueryProvider>
+              <UserDataProvider>
+                <WalletProvider>
+                  <ContentCreatorPremiumProvider>
+                    <DataProvider>
+                      <ShortsProvider>
+                        <TabNavigatorProvider>
+                          <SidebarProvider>
+                            <GestureHandlerRootView style={{ flex: 1 }}>
+                              <AppNavigator />
+                              <PersistentMeetingManager />
+                              {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
 
-                            {/* Ad Debugger - only shows in development */}
-                            {/*<AdDebugger />*/}
-                          </GestureHandlerRootView>
-                        </SidebarProvider>
-                      </TabNavigatorProvider>
-                    </ShortsProvider>
-                  </DataProvider>
-                </EnhancedQueryProvider>
-              </ContentCreatorPremiumProvider>
-            </WalletProvider>
+                              {/* Ad Debugger - only shows in development */}
+                              {/*<AdDebugger />*/}
+                            </GestureHandlerRootView>
+                          </SidebarProvider>
+                        </TabNavigatorProvider>
+                      </ShortsProvider>
+                    </DataProvider>
+                  </ContentCreatorPremiumProvider>
+                </WalletProvider>
+              </UserDataProvider>
+            </EnhancedQueryProvider>
           </AuthProvider>
         </ThemeProvider>
       </SafeAreaProvider>

@@ -140,6 +140,76 @@ export interface FcmTokenRequest {
   fcmToken: string;
 }
 
+// Comprehensive User Data Interface for /api/get-user-data endpoint
+export interface GetUserDataRequest {
+  userid: number;
+}
+
+export interface ComprehensiveUserData {
+  id: number;
+  name: string;
+  firstName: string | null;
+  lastName: string | null;
+  emailId: string;
+  gender: string;
+  dob: string;
+  profile_image: string | null;
+  message_id: string | null;
+  mobile_number: string;
+  otp: string | null;
+  user_type: number;
+  profession: string;
+  maternal_status: string;
+  address: string;
+  longitude: string;
+  latitude: string;
+  pincode: string | null;
+  current_otp_verified: string | null;
+  created_date: string;
+  updated_date: string;
+  isOtpVerified: number;
+  isSaveUserDetails: number;
+  is_active: string | null;
+  createdby: string | null;
+  access_type: number;
+  online_status: number;
+  device_token: string;
+  is_block: string | null;
+  is_mute: string | null;
+  referal_code: string;
+  referal_earnings: number;
+  referred_by: string | null;
+  username: string | null;
+  referred_count: number;
+  is_first_time: number;
+  bio: string | null;
+  premium_plan_id: number;
+  content_creator_plan_id: number;
+  is_available: number;
+  dnd: number;
+  premium: number;
+  country_code: string;
+  country: string;
+  fcm_token: string;
+  fcm_token_updation_date: string | null;
+  platform: string | null;
+  device_id: string | null;
+  premium_expires_at: string | null;
+  is_premium: number;
+  content_creator_premium_status: number;
+  content_creator_premium_expires_at: string | null;
+  otp_created_at: string | null;
+  total_withdrawals: number;
+  last_withdrawal_date: string | null;
+  withdrawal_count: number;
+}
+
+export interface GetUserDataResponse {
+  status: boolean;
+  message: string;
+  data: ComprehensiveUserData;
+}
+
 export interface MissedCallsResponse {
   calls: Array<{
     id: number;

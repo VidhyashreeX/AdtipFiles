@@ -50,6 +50,8 @@ import {
   ReportCommentResponse,
   ExploreContentRequest,
   ExploreContentResponse,
+  GetUserDataRequest,
+  GetUserDataResponse,
 } from '../types/api';
 
 // Interfaces moved from inside the class
@@ -719,6 +721,31 @@ export default class ApiService {
    */
   static async ping(): Promise<any> {
     return this.get(ApiEndpoints.AUTH_ENDPOINTS.PING);
+  }
+
+  /**
+   * Get comprehensive user data including profile, premium status, and withdrawal information
+   */
+  static async getUserData(data: GetUserDataRequest): Promise<GetUserDataResponse> {
+    console.log('[ApiService] Fetching comprehensive user data for userId:', data.userid);
+
+    try {
+      const response = await this.post<GetUserDataResponse>(
+        '/api/get-user-data',
+        data,
+      );
+
+      console.log('[ApiService] User data fetched successfully:', {
+        userId: response.data?.id,
+        isPremium: response.data?.is_premium,
+        premiumExpiresAt: response.data?.premium_expires_at,
+      });
+
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Failed to fetch user data:', error);
+      throw this.handleError(error);
+    }
   }
 
   // ===== FIREBASE FCM SERVICES =====
