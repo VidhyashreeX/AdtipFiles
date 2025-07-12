@@ -18,6 +18,7 @@ import * as NavigationService from '../../navigation/NavigationService'
 import ApiService from '../ApiService'
 import CallStateCleanup from '../../utils/callStateCleanup'
 import { startPersistentCall, updatePersistentCallStatus, endPersistentCall } from '../../components/videosdk/PersistentMeetingManager'
+import PermissionManagerService from '../PermissionManagerService'
 
 /**
  * CallController - Main orchestration layer for call flows
@@ -304,14 +305,31 @@ class CallController {
    */
   async startCall(recipientId: string, recipientName: string, callType: CallType) {
     console.log(`[CallController] Starting ${callType} call to ${recipientName}`)
-    
+
     try {
+      // Validate permissions before starting call
+      console.log('[CallController] Validating call permissions...')
+      const permissionManager = PermissionManagerService.getInstance()
+      const permissionResult = await permissionManager.requestCallPermissions(callType === 'video')
+
+      if (!permissionResult.microphone) {
+        console.error('[CallController] Microphone permission not granted')
+        throw new Error('Microphone permission is required to make calls')
+      }
+
+      if (callType === 'video' && !permissionResult.camera) {
+        console.error('[CallController] Camera permission not granted for video call')
+        throw new Error('Camera permission is required to make video calls')
+      }
+
+      console.log('[CallController] Call permissions validated successfully:', permissionResult)
+
       // Ensure comprehensive cleanup before starting new call
       await this.cleanup()
-      
-      // Ensure VideoSDK is initialized 
+
+      // Ensure VideoSDK is initialized
       await this.videoSDK.initialize()
-      
+
       // Clear any existing meeting state to prevent conflicts
       await this.videoSDK.clearExistingMeetingState()
       
@@ -415,6 +433,27 @@ class CallController {
 
     try {
       console.log('[CallController] Accepting call:', session.sessionId)
+
+      // Validate permissions before accepting call
+      console.log('[CallController] Validating call permissions for incoming call...')
+      const permissionManager = PermissionManagerService.getInstance()
+      const permissionResult = await permissionManager.requestCallPermissions(session.type === 'video')
+
+      if (!permissionResult.microphone) {
+        console.error('[CallController] Microphone permission not granted for accepting call')
+        // Decline the call if permissions are not granted
+        await this.declineCall()
+        return false
+      }
+
+      if (session.type === 'video' && !permissionResult.camera) {
+        console.error('[CallController] Camera permission not granted for accepting video call')
+        // Decline the call if camera permission is not granted for video call
+        await this.declineCall()
+        return false
+      }
+
+      console.log('[CallController] Call permissions validated for accepting call:', permissionResult)
 
       // Stop vibrating
       this.stopVibrate()
@@ -607,7 +646,125 @@ class CallController {
    */
   handleFCMMessage(message: FirebaseMessagingTypes.RemoteMessage) {
     console.log('[CallController] Handling FCM message', message.data)
-    // Handled by CallSignalingService FCM listener
+
+    try {
+      const data = message.data
+      if (!data || !data.type) {
+        console.log('[CallController] No call data in FCM message, ignoring')
+        return
+      }
+
+      const messageType = data.type
+      console.log('[CallController] Processing FCM message type:', messageType)
+
+      switch (messageType) {
+        case 'CALL_INITIATE':
+          this.handleIncomingCallFCM(data)
+          break
+        case 'CALL_ACCEPT':
+          this.handleCallAcceptFCM(data)
+          break
+        case 'CALL_END':
+          this.handleCallEndFCM(data)
+          break
+        default:
+          console.log('[CallController] Unknown FCM message type:', messageType)
+      }
+    } catch (error) {
+      console.error('[CallController] Error handling FCM message:', error)
+      // Don't throw - just log the error to prevent app crashes
+    }
+  }
+
+  /**
+   * Handle incoming call FCM message
+   */
+  private handleIncomingCallFCM(data: any) {
+    try {
+      console.log('[CallController] Handling incoming call FCM:', data)
+
+      const sessionId = data.sessionId
+      const callerName = data.callerName || 'Unknown Caller'
+      const callType = data.callType || 'voice'
+      const meetingId = data.meetingId
+      const token = data.token
+      const callerId = data.callerId
+
+      if (!sessionId || !meetingId || !token) {
+        console.error('[CallController] Missing required call data in FCM message')
+        return
+      }
+
+      // Update call store with incoming call
+      const store = useCallStore.getState()
+      store.actions.setSession({
+        sessionId,
+        meetingId,
+        token,
+        peerId: callerId,
+        peerName: callerName,
+        direction: 'incoming',
+        type: callType as CallType,
+        startedAt: Date.now()
+      })
+      store.actions.setStatus('ringing')
+
+      // Show incoming call notification
+      this.notification.showIncomingCall(sessionId, callerName, callType)
+
+      // Start vibration
+      this.startVibrate()
+
+      console.log('[CallController] Incoming call FCM processed successfully')
+    } catch (error) {
+      console.error('[CallController] Error handling incoming call FCM:', error)
+    }
+  }
+
+  /**
+   * Handle call accept FCM message
+   */
+  private handleCallAcceptFCM(data: any) {
+    try {
+      console.log('[CallController] Handling call accept FCM:', data)
+
+      const sessionId = data.sessionId
+      const store = useCallStore.getState()
+
+      if (store.session?.sessionId === sessionId) {
+        store.actions.setStatus('connecting')
+        console.log('[CallController] Call accept FCM processed successfully')
+      }
+    } catch (error) {
+      console.error('[CallController] Error handling call accept FCM:', error)
+    }
+  }
+
+  /**
+   * Handle call end FCM message
+   */
+  private handleCallEndFCM(data: any) {
+    try {
+      console.log('[CallController] Handling call end FCM:', data)
+
+      const sessionId = data.sessionId
+      const store = useCallStore.getState()
+
+      if (store.session?.sessionId === sessionId) {
+        // Stop vibration
+        this.stopVibrate()
+
+        // Hide notifications
+        this.notification.hideNotification(sessionId)
+
+        // Update status to ended
+        store.actions.setStatus('ended')
+
+        console.log('[CallController] Call end FCM processed successfully')
+      }
+    } catch (error) {
+      console.error('[CallController] Error handling call end FCM:', error)
+    }
   }
 
   /**

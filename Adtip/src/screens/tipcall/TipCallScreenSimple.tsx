@@ -34,6 +34,7 @@ import PremiumPopup from '../../components/common/PremiumPopup'
 import RectangleAdComponent from '../../googleads/RectangleAdComponent'
 import UserProfileScreen from '../profile/UserProfileScreen'
 import DndToggleSwitch from '../../components/common/DndToggleSwitch'
+import PermissionManagerService from '../../services/PermissionManagerService'
 import ApiService from '../../services/ApiService'
 
 // Import our new call controller and billing service
@@ -594,9 +595,34 @@ const TipCallScreenSimple = () => {
   const handleStartCall = useCallback(
     async (recipientId: string, recipientName: string, callType: CallType) => {
       try {
+        // First, request runtime permissions for camera and microphone
+        console.log('[TipCallScreen] Requesting call permissions for', callType, 'call')
+        const permissionManager = PermissionManagerService.getInstance()
+        const permissionResult = await permissionManager.requestCallPermissions(callType === 'video')
+
+        if (!permissionResult.microphone) {
+          Alert.alert(
+            'Permission Required',
+            'Microphone permission is required to make calls. Please grant permission in settings.',
+            [{ text: 'OK' }]
+          )
+          return
+        }
+
+        if (callType === 'video' && !permissionResult.camera) {
+          Alert.alert(
+            'Permission Required',
+            'Camera permission is required to make video calls. Please grant permission in settings.',
+            [{ text: 'OK' }]
+          )
+          return
+        }
+
+        console.log('[TipCallScreen] Call permissions granted:', permissionResult)
+
         // Convert balance to number for calculations
         const numericBalance = parseFloat(balance || '0')
-        
+
         // Check minimum balance requirement
         if (numericBalance < 1) {
           Alert.alert(
@@ -635,7 +661,7 @@ const TipCallScreenSimple = () => {
                   recipientName,
                   callType
                 )
-                
+
                 if (!success) {
                   Alert.alert(
                     'Call Failed',

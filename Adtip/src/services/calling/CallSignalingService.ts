@@ -43,60 +43,109 @@ class CallSignalingService {
   }
 
   private onMessage = async (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => {
-    console.log('[CallSignalingService] FCM message received:', remoteMessage.data)
+    try {
+      console.log('[CallSignalingService] FCM message received:', remoteMessage.data)
 
-    const data = remoteMessage.data
-    if (!data || !data.type) {
-      console.log('[CallSignalingService] No call data in message, ignoring')
-      return
-    }
-
-    const payload = data as unknown as CallSignalPayload
-    console.log('[CallSignalingService] Processing call signal:', payload.type)
-
-    const store = useCallStore.getState()
-    const actions = store.actions
-
-    switch (payload.type) {
-      case 'CALL_INITIATE': {
-        console.log('[CallSignalingService] Incoming call initiated:', payload.callerName)
-
-        // Set session state
-        actions.setSession({
-          sessionId: payload.sessionId,
-          meetingId: payload.meetingId,
-          token: payload.token,
-          peerId: payload.callerId,
-          peerName: payload.callerName,
-          direction: 'incoming',
-          type: payload.callType,
-          startedAt: Date.now()
-        })
-        actions.setStatus('ringing')
-
-        // Start persistent call for incoming calls
-        startPersistentCall({
-          sessionId: payload.sessionId,
-          meetingId: payload.meetingId,
-          token: payload.token,
-          peerName: payload.callerName,
-          callType: payload.callType,
-          direction: 'incoming'
-        })
-
-        console.log('[CallSignalingService] Incoming call session created and persistent call started')
-        break
+      const data = remoteMessage.data
+      if (!data || !data.type) {
+        console.log('[CallSignalingService] No call data in message, ignoring')
+        return
       }
-      case 'CALL_ACCEPT': {
-        if (store.session?.sessionId !== payload.sessionId) return
-        actions.setStatus('connecting')
-        break
+
+      const payload = data as unknown as CallSignalPayload
+      console.log('[CallSignalingService] Processing call signal:', payload.type)
+
+      // Validate required fields
+      if (!payload.sessionId) {
+        console.error('[CallSignalingService] Missing sessionId in FCM message')
+        return
       }
-      case 'CALL_END': {
-        if (store.session?.sessionId !== payload.sessionId) return
-        actions.setStatus('ended')
-        break
+
+      const store = useCallStore.getState()
+      const actions = store.actions
+
+      switch (payload.type) {
+        case 'CALL_INITIATE': {
+          try {
+            console.log('[CallSignalingService] Incoming call initiated:', payload.callerName)
+
+            // Validate required fields for incoming call
+            if (!payload.meetingId || !payload.token || !payload.callerId) {
+              console.error('[CallSignalingService] Missing required fields for CALL_INITIATE:', {
+                meetingId: !!payload.meetingId,
+                token: !!payload.token,
+                callerId: !!payload.callerId
+              })
+              return
+            }
+
+            // Set session state
+            actions.setSession({
+              sessionId: payload.sessionId,
+              meetingId: payload.meetingId,
+              token: payload.token,
+              peerId: payload.callerId,
+              peerName: payload.callerName || 'Unknown Caller',
+              direction: 'incoming',
+              type: payload.callType || 'voice',
+              startedAt: Date.now()
+            })
+            actions.setStatus('ringing')
+
+            // Start persistent call for incoming calls with error handling
+            try {
+              startPersistentCall({
+                sessionId: payload.sessionId,
+                meetingId: payload.meetingId,
+                token: payload.token,
+                peerName: payload.callerName || 'Unknown Caller',
+                callType: payload.callType || 'voice',
+                direction: 'incoming'
+              })
+              console.log('[CallSignalingService] Incoming call session created and persistent call started')
+            } catch (persistentCallError) {
+              console.error('[CallSignalingService] Error starting persistent call:', persistentCallError)
+              // Set status to error so UI can handle it
+              actions.setStatus('ended')
+            }
+            break
+          } catch (initiateError) {
+            console.error('[CallSignalingService] Error handling CALL_INITIATE:', initiateError)
+          }
+          break
+        }
+        case 'CALL_ACCEPT': {
+          try {
+            if (store.session?.sessionId !== payload.sessionId) {
+              console.log('[CallSignalingService] CALL_ACCEPT sessionId mismatch, ignoring')
+              return
+            }
+            actions.setStatus('connecting')
+            console.log('[CallSignalingService] Call accepted, status set to connecting')
+          } catch (acceptError) {
+            console.error('[CallSignalingService] Error handling CALL_ACCEPT:', acceptError)
+          }
+          break
+        }
+        case 'CALL_END': {
+          try {
+            if (store.session?.sessionId !== payload.sessionId) {
+              console.log('[CallSignalingService] CALL_END sessionId mismatch, ignoring')
+              return
+            }
+            actions.setStatus('ended')
+            console.log('[CallSignalingService] Call ended, status set to ended')
+          } catch (endError) {
+            console.error('[CallSignalingService] Error handling CALL_END:', endError)
+          }
+          break
+        }
+        default:
+          console.warn('[CallSignalingService] Unknown call signal type:', payload.type)
       }
+    } catch (error) {
+      console.error('[CallSignalingService] Critical error in FCM message processing:', error)
+      // Don't throw - just log to prevent app crashes
     }
   }
 
@@ -115,11 +164,39 @@ class CallSignalingService {
   }
 
   async sendAccept(recipientId: string, sessionId: string) {
-    await this.sendSignal(recipientId, { type: 'CALL_ACCEPT', sessionId })
+    try {
+      console.log('[CallSignalingService] Sending CALL_ACCEPT signal:', { recipientId, sessionId })
+      await this.sendSignal(recipientId, {
+        type: 'CALL_ACCEPT',
+        sessionId,
+        // Add additional fields to ensure proper FCM message structure
+        callType: 'voice', // Default, will be overridden by actual call type
+        meetingId: 'accepted',
+        token: 'accepted'
+      })
+      console.log('[CallSignalingService] CALL_ACCEPT signal sent successfully')
+    } catch (error) {
+      console.error('[CallSignalingService] Error sending CALL_ACCEPT signal:', error)
+      // Don't throw - just log to prevent app crashes
+    }
   }
 
   async sendEnd(recipientId: string, sessionId: string) {
-    await this.sendSignal(recipientId, { type: 'CALL_END', sessionId })
+    try {
+      console.log('[CallSignalingService] Sending CALL_END signal:', { recipientId, sessionId })
+      await this.sendSignal(recipientId, {
+        type: 'CALL_END',
+        sessionId,
+        // Add additional fields to ensure proper FCM message structure
+        callType: 'voice', // Default, will be overridden by actual call type
+        meetingId: 'ended',
+        token: 'ended'
+      })
+      console.log('[CallSignalingService] CALL_END signal sent successfully')
+    } catch (error) {
+      console.error('[CallSignalingService] Error sending CALL_END signal:', error)
+      // Don't throw - just log to prevent app crashes
+    }
   }
 }
 

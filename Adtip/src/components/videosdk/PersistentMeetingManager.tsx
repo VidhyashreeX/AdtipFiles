@@ -471,17 +471,50 @@ const PersistentMeetingManager: React.FC = () => {
 
 // Export singleton access functions
 export const startPersistentCall = (config: MeetingConfig) => {
-  console.log('[PersistentMeetingManager] Starting new call:', config.sessionId)
-  
-  // Reset previous call if any
-  if (globalState.currentConfig && globalStateSetters) {
-    globalStateSetters.resetCall()
-  }
-  
-  if (globalStateSetters) {
-    globalStateSetters.setCurrentConfig(config)
-    globalStateSetters.setStatus(config.direction === 'outgoing' ? 'connecting' : 'connecting')
-    globalStateSetters.setIsVisible(true)
+  try {
+    console.log('[PersistentMeetingManager] Starting new call:', config.sessionId)
+
+    // Validate config
+    if (!config.sessionId || !config.meetingId || !config.token) {
+      console.error('[PersistentMeetingManager] Invalid config provided:', {
+        sessionId: !!config.sessionId,
+        meetingId: !!config.meetingId,
+        token: !!config.token
+      })
+      throw new Error('Invalid meeting configuration')
+    }
+
+    // Reset previous call if any
+    if (globalState.currentConfig && globalStateSetters) {
+      try {
+        globalStateSetters.resetCall()
+      } catch (resetError) {
+        console.warn('[PersistentMeetingManager] Error resetting previous call:', resetError)
+      }
+    }
+
+    if (globalStateSetters) {
+      globalStateSetters.setCurrentConfig(config)
+      globalStateSetters.setStatus(config.direction === 'outgoing' ? 'connecting' : 'connecting')
+      globalStateSetters.setIsVisible(true)
+      console.log('[PersistentMeetingManager] Persistent call started successfully')
+    } else {
+      console.error('[PersistentMeetingManager] Global state setters not available')
+      throw new Error('Persistent meeting manager not initialized')
+    }
+  } catch (error) {
+    console.error('[PersistentMeetingManager] Error starting persistent call:', error)
+
+    // Try to update call store to indicate error
+    try {
+      const { useCallStore } = require('../../stores/callStoreSimplified')
+      const store = useCallStore.getState()
+      store.actions.setStatus('ended')
+    } catch (storeError) {
+      console.error('[PersistentMeetingManager] Error updating call store on failure:', storeError)
+    }
+
+    throw error
   }
 }
 
