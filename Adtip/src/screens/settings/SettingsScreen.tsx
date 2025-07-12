@@ -399,7 +399,7 @@ const SettingsScreen: React.FC = () => {
           </TouchableOpacity>
           
           <View style={styles.footer}>
-            <Text style={[styles.version, {color: colors.text.tertiary}]}>Version 1.0.0</Text>
+            <Text style={[styles.version, {color: colors.text.tertiary}]}>Version 29.0.0</Text>
           </View>
         </ScrollView>
       </SafeAreaView>
