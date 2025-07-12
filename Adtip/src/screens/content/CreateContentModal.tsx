@@ -125,8 +125,14 @@ const CreateContentModal: React.FC<CreateContentModalProps> = React.memo(({
     backdropOpacity.value = withTiming(0, timingConfig, (finished) => {
       if (finished) {
         runOnJS(() => {
-          onClose();
-          navigation.navigate(screenName as never);
+          try {
+            onClose();
+            console.log(`[CreateContentModal] Navigating to ${screenName}`);
+            navigation.navigate(screenName as never);
+          } catch (error) {
+            console.error(`[CreateContentModal] Navigation error to ${screenName}:`, error);
+            onClose(); // Ensure modal closes even if navigation fails
+          }
         })();
       }
     });

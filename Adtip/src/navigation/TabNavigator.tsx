@@ -3,6 +3,7 @@ import {StyleSheet, View, TouchableOpacity, Platform, Text} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {BlurView} from '@react-native-community/blur';
 import Icon from 'react-native-vector-icons/Feather';
+import { CirclePlay, Airplay } from 'lucide-react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useWallet} from '../contexts/WalletContext';
 import {useNavigation} from '@react-navigation/native';
@@ -92,7 +93,11 @@ const TabNavigator = () => {
   ), []);
 
   const TipTubeIcon = useCallback(({color, size}: {color: string, size: number}) => (
-    <Icon name="video" color={color} size={size} />
+    <Airplay color={color} size={size} />
+  ), []);
+
+  const TipShortsIcon = useCallback(({color, size}: {color: string, size: number}) => (
+    <CirclePlay color={color} size={size} />
   ), []);
 
   const TipCallIcon = useCallback(({color, size}: {color: string, size: number}) => (
@@ -182,7 +187,7 @@ const TabNavigator = () => {
           name="TipShorts"
           component={TipShortsEnhanced}
           options={{
-            tabBarIcon: TipTubeIcon, // Reuse the video icon for shorts
+            tabBarIcon: TipShortsIcon, // Reuse the video icon for shorts
           }}
           listeners={{
             tabPress: tipTubeTabPress, // Reuse the TipTube tab press handler

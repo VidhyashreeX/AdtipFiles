@@ -51,7 +51,7 @@ import EarnCard from '../../components/home/EarnCard';
 import BannerCarousel from '../../components/home/BannerCarousel';
 import PremiumPopup from '../../components/common/PremiumPopup';
 import LoginPromptModal from '../../components/modals/LoginPromptModal';
-import InstallToEarnPopup from '../../components/common/InstallToEarnPopup';
+
 
 
 import ScreenTransition from '../../components/common/ScreenTransition';
@@ -171,11 +171,10 @@ const CategoriesRow: React.FC<CategoriesRowProps> = ({ categories, selectedCateg
   );
 };
 
-interface EarnCardsRowProps { 
-  onWatchAndEarn: () => void; 
-  onPlayAndEarn: () => void; 
-  onInstallToEarn: () => void; 
-  isLoading?: boolean; 
+interface EarnCardsRowProps {
+  onWatchAndEarn: () => void;
+  onInstallToEarn: () => void;
+  isLoading?: boolean;
 }
 
 // External Link Banner Component
@@ -189,15 +188,11 @@ const ExternalLinkBanner: React.FC<ExternalLinkBannerProps> = ({ isPremium, onUp
   const styles = createHomeScreenStyles(colors);
 
   const handleBannerPress = async () => {
-    if (!isPremium) {
-      onUpgrade();
-      return;
-    }
-
+    // Allow all users to access the games - no premium restriction
     try {
       const url = 'https://37b802eb.epicplay.in/';
       const supported = await Linking.canOpenURL(url);
-      
+
       if (supported) {
         await Linking.openURL(url);
       } else {
@@ -210,48 +205,37 @@ const ExternalLinkBanner: React.FC<ExternalLinkBannerProps> = ({ isPremium, onUp
   };
 
   return (
-    <View style={styles.externalLinkBannerSection}>
-      <View style={styles.externalLinkBannerContainer}>
-        <TouchableOpacity
-          style={styles.externalLinkBanner}
-          onPress={handleBannerPress}
-          activeOpacity={0.9}
+    <View style={styles.earnCardsCarouselSection}>
+      <TouchableOpacity
+        style={styles.earnCardVerticalItem}
+        onPress={handleBannerPress}
+        activeOpacity={0.9}
+      >
+        <LinearGradient
+          colors={['#4CAF50', '#45A049', '#2E7D32']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.earnCardGradient}
         >
-          <LinearGradient
-            colors={isPremium ? ['#4CAF50', '#45A049'] : ['#FFD700', '#FFB300']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.externalLinkBannerGradient}
-          >
-            <View style={styles.externalLinkBannerContent}>
-              <View style={styles.externalLinkBannerTextContainer}>
-                <Text style={styles.externalLinkBannerTitle}>
-                  {isPremium ? '🎮 Epic Play Games' : '🎮 Epic Play Games'}
-                </Text>
-                <Text style={styles.externalLinkBannerDescription}>
-                  {isPremium 
-                    ? 'Click to play exciting games and earn rewards!' 
-                    : 'Upgrade to Premium to unlock this feature'
-                  }
-                </Text>
-                {!isPremium && (
-                  <LinearGradient
-                    colors={['#FFD700', '#FFA500', '#FF8C00']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.externalLinkBannerUpgradeBadge}
-                  >
-                    <Text style={styles.externalLinkBannerUpgradeText}>Premium Only</Text>
-                  </LinearGradient>
-                )}
-              </View>
-              <View style={styles.externalLinkBannerIconContainer}>
-                <Gamepad2 size={32} color="#FFFFFF" />
-              </View>
+          <View style={styles.earnCardContent}>
+            <View style={styles.earnCardTextContainer}>
+              <Text style={styles.earnCardTitle}>🎮 Epic Play Games</Text>
+              <Text style={styles.earnCardDescription}>Click to play exciting games and earn rewards!</Text>
+              <LinearGradient
+                colors={['#FFD700', '#FFA500', '#FF8C00']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.earnCardRewardBadge}
+              >
+                <Text style={styles.earnCardRewardText}>Play Now!</Text>
+              </LinearGradient>
             </View>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
+            <View style={styles.earnCardIconContainer}>
+              <Gamepad2 size={32} color="#FFFFFF" />
+            </View>
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -267,15 +251,11 @@ const RushPlayGamesBanner: React.FC<RushPlayGamesBannerProps> = ({ isPremium, on
   const styles = createHomeScreenStyles(colors);
 
   const handleBannerPress = async () => {
-    if (!isPremium) {
-      onUpgrade();
-      return;
-    }
-
+    // Allow all users to access the games - no premium restriction
     try {
       const url = 'https://439096e5.rushquiz.com/';
       const supported = await Linking.canOpenURL(url);
-      
+
       if (supported) {
         await Linking.openURL(url);
       } else {
@@ -288,66 +268,47 @@ const RushPlayGamesBanner: React.FC<RushPlayGamesBannerProps> = ({ isPremium, on
   };
 
   return (
-    <View style={styles.rushPlayGamesBannerSection}>
-      <View style={styles.rushPlayGamesBannerContainer}>
-        <TouchableOpacity
-          style={styles.rushPlayGamesBanner}
-          onPress={handleBannerPress}
-          activeOpacity={0.9}
+    <View style={styles.earnCardsCarouselSection}>
+      <TouchableOpacity
+        style={styles.earnCardVerticalItem}
+        onPress={handleBannerPress}
+        activeOpacity={0.9}
+      >
+        <LinearGradient
+          colors={['#9C27B0', '#7B1FA2', '#4A148C']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.earnCardGradient}
         >
-          <LinearGradient
-            colors={isPremium ? ['#9C27B0', '#7B1FA2'] : ['#FF6B35', '#FF8E53']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.rushPlayGamesBannerGradient}
-          >
-            <View style={styles.rushPlayGamesBannerContent}>
-              <View style={styles.rushPlayGamesBannerTextContainer}>
-                <Text style={styles.rushPlayGamesBannerTitle}>
-                  {isPremium ? '🧠 Rush Play Games' : '🧠 Rush Play Games'}
-                </Text>
-                <Text style={styles.rushPlayGamesBannerDescription}>
-                  {isPremium 
-                    ? 'Test your knowledge with exciting quiz games!' 
-                    : 'Upgrade to Premium to unlock this feature'
-                  }
-                </Text>
-                {!isPremium && (
-                  <LinearGradient
-                    colors={['#FFD700', '#FFA500', '#FF8C00']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.rushPlayGamesBannerUpgradeBadge}
-                  >
-                    <Text style={styles.rushPlayGamesBannerUpgradeText}>Premium Only</Text>
-                  </LinearGradient>
-                )}
-              </View>
-              <View style={styles.rushPlayGamesBannerIconContainer}>
-                <Gamepad2 size={32} color="#FFFFFF" />
-              </View>
+          <View style={styles.earnCardContent}>
+            <View style={styles.earnCardTextContainer}>
+              <Text style={styles.earnCardTitle}>🧠 Rush Play Games</Text>
+              <Text style={styles.earnCardDescription}>Test your knowledge with exciting quiz games!</Text>
+              <LinearGradient
+                colors={['#FFD700', '#FFA500', '#FF8C00']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.earnCardRewardBadge}
+              >
+                <Text style={styles.earnCardRewardText}>Quiz Now!</Text>
+              </LinearGradient>
             </View>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
+            <View style={styles.earnCardIconContainer}>
+              <Gamepad2 size={32} color="#FFFFFF" />
+            </View>
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
     </View>
   );
 };
 
-const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onPlayAndEarn, onInstallToEarn, isLoading }) => {
+const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onInstallToEarn, isLoading }) => {
   const {colors} = useTheme();
   const styles = createHomeScreenStyles(colors);
   
-  // Define earn cards data
+  // Define earn cards data - Only Install to Earn
   const earnCardsData = [
-    {
-      id: '2',
-      title: 'Play & Earn',
-      description: 'Play games and earn double rewards',
-      iconName: 'gamepad-2',
-      onPress: onPlayAndEarn,
-      gradientColors: ['#1565C0', '#1976D2', '#0D47A1'],
-    },
     {
       id: '3',
       title: 'Install to Earn',
@@ -478,8 +439,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const [showPremiumPopup, setShowPremiumPopup] = useState<boolean>(false);
   const [hasCheckedVersion, setHasCheckedVersion] = useState<boolean>(false);
 
-  // Install to earn popup state
-  const [showInstallToEarnPopup, setShowInstallToEarnPopup] = useState(false);
+
 
   // Login prompt modal state
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
@@ -583,23 +543,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
       console.log('🔍 [HomeScreen] Starting version check and premium validation...');
       
       try {
-        // Check for app updates first
-        const versionCheckService = VersionCheckService.getInstance();
-        const updateInfo = await versionCheckService.checkForUpdates();
-        
-        if (updateInfo && updateInfo.data) {
-          console.log('⚠️ [HomeScreen] Update required, showing update dialog');
-          versionCheckService.showUpdateDialog(updateInfo.data);
-          return; // Don't show premium popup if update is required
-        }
-
         // Check premium status and show popup if needed
         if (subscriptionResponse && !subscriptionResponse.status && !subscriptionLoading) {
           console.log('💎 [HomeScreen] No premium subscription found, showing premium popup');
           setShowPremiumPopup(true);
         }
       } catch (error) {
-        console.error('❌ [HomeScreen] Error in version check or premium validation:', error);
+        console.error('❌ [HomeScreen] Error in premium validation:', error);
       } finally {
         setHasCheckedVersion(true);
       }
@@ -811,28 +761,28 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     navigation.navigate('TipTube' as never);
   }, [navigation]);
 
-  const handlePlayAndEarn = useCallback(() => {
-    console.log('Play and earn pressed');
-    navigation.navigate('PlayToEarn' as never);
-  }, [navigation]);
+
 
   const handleInstallToEarn = useCallback(async () => {
-    if (!isPremium) {
-      setShowInstallToEarnPopup(true);
-      return;
-    }
+    // Allow all users to access PubScale - no premium restriction
     try {
-      const userId = user?.id ? String(user.id) : 'anonymous-user';
       setOfferwallLoading(true);
       await PubScaleService.showOfferwall();
       console.log('Offerwall launched successfully');
+
+      // Show alert after user returns from PubScale
+      Alert.alert(
+        'PubScale Offers',
+        'If you completed any offers from PubScale, your earnings will be credited within 4-5 business days.',
+        [{ text: 'OK' }]
+      );
     } catch (error) {
       console.error('Failed to show offerwall:', error);
       Alert.alert('Error', 'Failed to load offerwall. Please try again later.', [{ text: 'OK' }]);
     } finally {
       setOfferwallLoading(false);
     }
-  }, [isPremium, user?.id]);
+  }, []);
 
   const handleBannerPress = useCallback((bannerId: number) => {
     switch (bannerId) {
@@ -1012,6 +962,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           />
           <ScrollView style={styles.content} contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}>
             <StoriesRow stories={[]} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} isLoading={true} />
+            <CategoriesRow categories={[]} selectedCategory={null} onCategoryPress={handleCategoryPress} isLoading={true} />
+            <BannerCarousel />
+            <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onInstallToEarn={handleInstallToEarn} isLoading={true} />
+            <ExternalLinkBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
+            <RushPlayGamesBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
             <View style={styles.skeletonContainer}>
               {Array(6).fill(0).map((_, index) => <PostItemSkeleton key={`skeleton-${index}`} />)}
             </View>
@@ -1075,6 +1030,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           ListHeaderComponent={() => (
             <>
               <StoriesRow stories={displayStories} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} />
+              <CategoriesRow categories={displayCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} isLoading={categoriesLoading} />
+              <BannerCarousel onBannerPress={handleBannerPress} />
+              <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onInstallToEarn={handleInstallToEarn} />
+              <ExternalLinkBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
+              <RushPlayGamesBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
             </>
           )}
           ListEmptyComponent={renderEmptyState}

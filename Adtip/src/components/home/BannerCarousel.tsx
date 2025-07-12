@@ -18,14 +18,14 @@ const STATIC_BANNERS = [
     id: 1,
     title: 'Talk to Earn',
     description: 'Earn on Every Call: ₹2/min (Premium)\n₹0.60/min (Free)',
-    icon: <Headphones size={48} color="#fff" />,
+    icon: <Headphones size={32} color="#fff" />,
     gradient: ['#114357', '#f29492'],       
   },
   {
     id: 2,
     title: 'Watch to Earn',
     description: 'Earn ₹10 per Ad – Just by Watching',
-    icon: <PlayCircle size={48} color="#fff" />,
+    icon: <PlayCircle size={32} color="#fff" />,
     gradient: ['#43cea2', '#185a9d'],  // 
   
   },
@@ -33,14 +33,14 @@ const STATIC_BANNERS = [
     id: 3,
     title: 'Refer & Earn',
     description: 'Get ₹3 for every successful referral and earn ₹30 for each premium upgrade',
-    icon: <Users size={48} color="#fff" />,
+    icon: <Users size={32} color="#fff" />,
     gradient: ['#c33764', '#1d2671' ],  // 
   },
   {
     id: 4,
     title: 'Upload',
     description: 'Upload video to get ₹100 for 10,000 views.',
-    icon: <UploadCloud size={48} color="#fff" />,
+    icon: <UploadCloud size={32} color="#fff" />,
     gradient: ['#6a3093', '#a044ff'],    //#6a3093
   },
 ];
@@ -140,26 +140,27 @@ const BannerCarousel: React.FC<BannerCarouselProps> = ({ onBannerPress }) => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 12,
+    backgroundColor: 'transparent',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.1)',
   },
   carouselContainer: {
-    height: 132,
+    height: 112,
     width: screenWidth,
   },
   bannerCard: {
-    width: screenWidth,
-    height: 120,
-    borderRadius: 16,
+    width: screenWidth - 32, // Account for horizontal padding
+    height: 100,
+    borderRadius: 12,
+    marginHorizontal: 16,
     paddingHorizontal: 16,
-    paddingVertical: 20,
+    paddingVertical: 16,
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   bannerContent: {
     flexDirection: 'row',
@@ -171,16 +172,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   bannerTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   bannerDescription: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#fff',
-    opacity: 0.95,
-    lineHeight: 22,
+    opacity: 0.9,
+    lineHeight: 20,
   },
   iconContainer: {
     marginLeft: 16,

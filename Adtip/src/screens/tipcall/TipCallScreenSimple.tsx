@@ -31,6 +31,7 @@ import debounce from 'lodash.debounce'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import LinearGradient from 'react-native-linear-gradient'
 import PremiumPopup from '../../components/common/PremiumPopup'
+import PremiumCallRateModal from '../../components/modals/PremiumCallRateModal'
 import RectangleAdComponent from '../../googleads/RectangleAdComponent'
 import UserProfileScreen from '../profile/UserProfileScreen'
 import DndToggleSwitch from '../../components/common/DndToggleSwitch'
@@ -356,6 +357,12 @@ const TipCallScreenSimple = () => {
   // -------------------- Premium --------------------
   const [premiumActive, setPremiumActive] = useState(false)
   const [showPremiumPopup, setShowPremiumPopup] = useState(false)
+  const [showPremiumCallRateModal, setShowPremiumCallRateModal] = useState(false)
+  const [pendingCallData, setPendingCallData] = useState<{
+    recipientId: string;
+    recipientName: string;
+    callType: CallType;
+  } | null>(null)
   const { data: premiumData, isLoading: premiumLoading } = useQuery({
     queryKey: ['premium', user?.id],
     queryFn: () => (user?.id ? ApiService.checkPremium(user.id) : null),
@@ -595,6 +602,14 @@ const TipCallScreenSimple = () => {
   const handleStartCall = useCallback(
     async (recipientId: string, recipientName: string, callType: CallType) => {
       try {
+        // Check if user is premium - if not, show premium rate modal first
+        if (!isPremium) {
+          console.log('[TipCallScreen] Non-premium user, showing rate comparison modal')
+          setPendingCallData({ recipientId, recipientName, callType })
+          setShowPremiumCallRateModal(true)
+          return
+        }
+
         // First, request runtime permissions for camera and microphone
         console.log('[TipCallScreen] Requesting call permissions for', callType, 'call')
         const permissionManager = PermissionManagerService.getInstance()
@@ -679,6 +694,117 @@ const TipCallScreenSimple = () => {
     },
     [callController, billingService, balance, isPremium, user?.id, navigation]
   )
+
+  // Handle actual call initiation (used by both premium and non-premium flows)
+  const initiateCall = useCallback(
+    async (recipientId: string, recipientName: string, callType: CallType) => {
+      try {
+        // First, request runtime permissions for camera and microphone
+        console.log('[TipCallScreen] Requesting call permissions for', callType, 'call')
+        const permissionManager = PermissionManagerService.getInstance()
+        const permissionResult = await permissionManager.requestCallPermissions(callType === 'video')
+
+        if (!permissionResult.microphone) {
+          Alert.alert(
+            'Permission Required',
+            'Microphone permission is required to make calls. Please grant permission in settings.',
+            [{ text: 'OK' }]
+          )
+          return
+        }
+
+        if (callType === 'video' && !permissionResult.camera) {
+          Alert.alert(
+            'Permission Required',
+            'Camera permission is required to make video calls. Please grant permission in settings.',
+            [{ text: 'OK' }]
+          )
+          return
+        }
+
+        console.log('[TipCallScreen] Call permissions granted:', permissionResult)
+
+        // Convert balance to number for calculations
+        const numericBalance = parseFloat(balance || '0')
+
+        // Check minimum balance requirement
+        if (numericBalance < 1) {
+          Alert.alert(
+            'Insufficient Balance',
+            'You need at least ₹1 to make a call. Please add money to your wallet.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Add Funds', onPress: () => navigation.navigate('AddFundsScreen' as never) }
+            ]
+          )
+          return
+        }
+
+        // Calculate billing info to show user
+        const billingInfo = await billingService.calculateCallBilling(
+          user?.id?.toString() || '',
+          callType,
+          numericBalance,
+          isPremium
+        )
+
+        const maxMinutes = Math.floor(billingInfo.maxDurationSeconds / 60)
+        const rateText = billingService.formatCurrency(billingInfo.ratePerMinute)
+
+        // Show confirmation dialog with billing information
+        Alert.alert(
+          `${callType === 'video' ? 'Video' : 'Voice'} Call`,
+          `Rate: ${rateText}/min${isPremium ? ' (Premium)' : ''}\nMax Duration: ${maxMinutes} minutes\nCurrent Balance: ${billingService.formatCurrency(numericBalance)}\n\nProceed with the call?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Call Now',
+              onPress: async () => {
+                const success = await callController.startCall(
+                  recipientId,
+                  recipientName,
+                  callType
+                )
+
+                if (!success) {
+                  Alert.alert(
+                    'Call Failed',
+                    'Unable to start the call. The user may be unavailable.'
+                  )
+                }
+              }
+            }
+          ]
+        )
+      } catch (error) {
+        console.error('[TipCallScreen] Start call error:', error)
+        Alert.alert('Error', 'Failed to start call. Please try again.')
+      }
+    },
+    [callController, billingService, balance, isPremium, user?.id, navigation]
+  )
+
+  // Handle premium modal actions
+  const handlePremiumModalUpgrade = useCallback(() => {
+    setShowPremiumCallRateModal(false)
+    setPendingCallData(null)
+    navigation.navigate('PremiumUser' as never)
+  }, [navigation])
+
+  const handlePremiumModalContinue = useCallback(() => {
+    setShowPremiumCallRateModal(false)
+    if (pendingCallData) {
+      const { recipientId, recipientName, callType } = pendingCallData
+      setPendingCallData(null)
+      // Continue with the call at non-premium rates
+      initiateCall(recipientId, recipientName, callType)
+    }
+  }, [pendingCallData, initiateCall])
+
+  const handlePremiumModalClose = useCallback(() => {
+    setShowPremiumCallRateModal(false)
+    setPendingCallData(null)
+  }, [])
 
   // Handle profile press
   const handleProfilePress = useCallback((userId: number) => {
@@ -1150,6 +1276,15 @@ const TipCallScreenSimple = () => {
           setShowPremiumPopup(false)
           navigation.navigate('SubscriptionScreen' as never)
         }}
+      />
+
+      {/* Premium Call Rate Modal */}
+      <PremiumCallRateModal
+        visible={showPremiumCallRateModal}
+        onClose={handlePremiumModalClose}
+        onUpgrade={handlePremiumModalUpgrade}
+        onContinue={handlePremiumModalContinue}
+        callType={pendingCallData?.callType}
       />
     </View>
   )
