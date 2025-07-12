@@ -1,34 +1,25 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, Image, TouchableOpacity, useWindowDimensions } from 'react-native';
+import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity, useWindowDimensions } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Icon from 'react-native-vector-icons/Feather';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import Header from '../../components/common/Header';
 import { useExplore } from '../../hooks/useQueries';
 import PostItemSkeleton from '../../components/skeletons/PostItemSkeleton';
 import { ExploreItem } from '../../types/api';
+import { ThumbnailFastImage } from '../../utils/FastImageOptimizer';
+import { createOptimizedFlatListProps, createKeyExtractor, createGridLayout } from '../../utils/PerformanceUtils';
+import Icon from 'react-native-vector-icons/Feather';
+import { API_BASE_URL } from '../../constants/api';
 
 // Constants
-const API_BASE_URL = 'https://api.adtip.in';
-
-// Define navigation param list
-type RootStackParamList = {
-  VideoPreview: { postId: string };
-  TipShorts: { shortId: string };
-  Explore: undefined;
-};
-
-// Define navigation type
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+const GRID_SPACING = 2;
+const ITEMS_PER_ROW = 3;
 
 const ExploreScreen: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
-  const navigation = useNavigation<NavigationProp>();
+  const navigation = useNavigation<any>();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   
@@ -61,57 +52,26 @@ const ExploreScreen: React.FC = () => {
     return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
   }, []);
 
-  // Memoized render item for better performance
   const renderItem = useCallback(({ item, index }: { item: ExploreItem, index: number }) => {
     const imageUrl = item.content_type === 'post' ? item.media_url : item.thumbnail;
     
+    const handleItemPress = () => {
+      if (item.content_type === 'post') {
+        navigation.navigate('Comments', { postId: item.id });
+      } else if (item.content_type === 'shot') {
+        navigation.navigate('TipShorts', { shortId: item.id });
+      }
+    };
+
     return (
       <TouchableOpacity
         style={styles.itemContainer}
-        onPress={() => {
-          if (item.content_type === 'post') {
-            navigation.navigate('VideoPreview', { postId: item.id.toString() });
-          } else {
-            // Filter only for shorts and map to the expected format
-            const shortsOnly = exploreItems
-              .filter(i => i.content_type === 'shot')
-              .map(i => ({
-                id: i.id.toString(),
-                videoUrl: getFullImageUrl(i.media_url),
-                // Add other required fields for ShortVideo type, possibly with fallbacks
-                title: i.title || 'Untitled Short',
-                thumbnail: getFullImageUrl(i.thumbnail),
-                channel: {
-                  id: i.channel_id?.toString() || 'unknown',
-                  name: i.channel_name || 'Unknown Channel',
-                  avatar: getFullImageUrl(i.channel_avatar),
-                  verified: false,
-                  subscribers: 0,
-                },
-                views: i.views || 0,
-                likes: i.likes || 0,
-                duration: '0:00',
-                createdAt: new Date().toISOString(),
-                category: '1',
-                postedAt: new Date().toISOString(),
-                description: i.title || '',
-                comments: 0,
-              }));
-            
-            const selectedShortIndex = shortsOnly.findIndex(s => s.id === item.id.toString());
-
-            navigation.navigate('TipShorts', { 
-              shorts: shortsOnly,
-              startIndex: selectedShortIndex,
-            });
-          }
-        }}
+        onPress={handleItemPress}
         activeOpacity={0.8}
       >
-        <Image
-          source={{ uri: getFullImageUrl(imageUrl) }}
+        <ThumbnailFastImage
+          source={getFullImageUrl(imageUrl)}
           style={styles.itemImage}
-          resizeMode="cover"
         />
         {item.content_type === 'shot' && (
           <View style={styles.shortIndicator}>
@@ -166,75 +126,74 @@ const ExploreScreen: React.FC = () => {
     />
   ), [colors.surface]);
 
+  // Error component
+  const renderError = useMemo(() => (
+    <View style={styles.errorContainer}>
+      <Icon name="alert-circle" size={48} color={colors.error} />
+      <Text style={[styles.errorText, { color: colors.text.secondary }]}>
+        Failed to load content
+      </Text>
+      <TouchableOpacity
+        style={[styles.retryButton, { backgroundColor: colors.primary }]}
+        onPress={handleRefresh}
+      >
+        <Text style={[styles.retryButtonText, { color: colors.white }]}>
+          Retry
+        </Text>
+      </TouchableOpacity>
+    </View>
+  ), [colors, handleRefresh]);
+
   // Empty state component
   const renderEmptyState = useMemo(() => (
     <View style={styles.emptyContainer}>
-      <Icon name="search" size={48} color={colors.text.secondary} />
+      <Icon name="search" size={48} color={colors.text.tertiary} />
       <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
-        {error ? 'Failed to load content' : 'No content found'}
+        No content found
       </Text>
-      {error && (
-        <TouchableOpacity 
-          style={[styles.retryButton, { backgroundColor: colors.primary }]}
-          onPress={handleRefresh}
-        >
-          <Text style={styles.retryText}>Retry</Text>
-        </TouchableOpacity>
-      )}
     </View>
-  ), [colors, error, handleRefresh]);
+  ), [colors]);
 
-  // Network status indicator - simplified since React Query handles offline/online
-  const NetworkIndicator = useMemo(() => {
-    // You can add network status checking here if needed
-    return null;
-  }, []);
+  // Optimized FlatList props
+  const optimizedFlatListProps = useMemo(() => 
+    createOptimizedFlatListProps('GRID', {
+      data: exploreItems,
+      renderItem,
+      keyExtractor,
+      numColumns: ITEMS_PER_ROW,
+      columnWrapperStyle: styles.row,
+      contentContainerStyle: styles.listContent,
+      showsVerticalScrollIndicator: false,
+      onEndReached: handleLoadMore,
+      onEndReachedThreshold: 0.5,
+      ListFooterComponent: isLoadingMore ? (
+        <View style={styles.loadingMore}>
+          <ActivityIndicator size="small" color={colors.primary} />
+        </View>
+      ) : null,
+      ListEmptyComponent: renderEmptyState,
+      getItemLayout: getItemLayout,
+    }), [exploreItems, renderItem, keyExtractor, handleLoadMore, isLoadingMore, colors, renderEmptyState, getItemLayout]);
+
+  if (loading && exploreItems.length === 0) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        {renderLoadingSkeleton}
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        {renderError}
+      </View>
+    );
+  }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background}]}>
-      <Header
-        title="Explore"
-        showWallet={false}
-        showSearch={false}
-        showPremium={false}
-        leftComponent={
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-          >
-            <Icon name="arrow-left" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
-        }
-      />
-      {NetworkIndicator}
-      
-      {loading && exploreItems.length === 0 ? (
-        renderLoadingSkeleton
-      ) : (
-        <FlatList
-          data={exploreItems}
-          renderItem={renderItem}
-          keyExtractor={keyExtractor}
-          numColumns={3}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.5}
-          onRefresh={handleRefresh}
-          refreshing={loading && exploreItems.length > 0}
-          ListFooterComponent={
-            isLoadingMore ? (
-              <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-            ) : null
-          }
-          ListEmptyComponent={renderEmptyState}
-          getItemLayout={getItemLayout}
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={9}
-          windowSize={5}
-          initialNumToRender={9}
-        />
-      )}
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <FlatList {...optimizedFlatListProps} />
     </View>
   );
 };
@@ -244,29 +203,54 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    padding: 2,
+    paddingBottom: 20,
+  },
+  row: {
+    justifyContent: 'space-between',
   },
   itemContainer: {
-    flex: 1/3,
+    flex: 1,
+    margin: GRID_SPACING,
     aspectRatio: 1,
-    margin: 1,
-    position: 'relative',
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   itemImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 4,
   },
   shortIndicator: {
     position: 'absolute',
-    bottom: 8,
+    top: 8,
     right: 8,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderRadius: 12,
     padding: 4,
   },
-  loader: {
-    marginVertical: 20,
+  loadingMore: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   emptyContainer: {
     flex: 1,
@@ -276,37 +260,9 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
+    marginTop: 12,
     textAlign: 'center',
-    marginTop: 16,
-    marginBottom: 20,
-  },
-  retryButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  networkIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  networkText: {
-    color: '#FFF',
-    fontSize: 14,
-    marginLeft: 8,
-    fontWeight: '500',
-  },
-  backButton: {
-    padding: 8,
-    marginRight: 8,
   },
 });
 
-export default ExploreScreen;
+export default React.memo(ExploreScreen);

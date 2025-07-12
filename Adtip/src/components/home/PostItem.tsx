@@ -3,7 +3,6 @@ import React, {useRef, useEffect, useState, useCallback} from 'react';
 import {
   View,
   Text,
-  Image,
   StyleSheet,
   TouchableOpacity,
   Dimensions,
@@ -11,7 +10,7 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import Video from 'react-native-video';
-import { Heart, MessageCircle, Share2, UserPlus, Play, Pause, VolumeX, Volume2, AlertTriangle, Image as ImageIcon } from 'lucide-react-native';
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Play, Pause, VolumeX, Volume2, AlertTriangle, Image as ImageIcon } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { 
   createSecureImageSource, 
@@ -19,8 +18,19 @@ import {
   testVideoUrl, 
   validateAndFixVideoUrl 
 } from '../../utils/mediaUtils';
+import { ProfileFastImage, ContentFastImage } from '../../utils/FastImageOptimizer';
 
 const {width} = Dimensions.get('window');
+
+// Helper function to format numbers
+const formatNumber = (num: number): string => {
+  if (num >= 1000000) {
+    return `${(num / 1000000).toFixed(1)}M`;
+  } else if (num >= 1000) {
+    return `${(num / 1000).toFixed(1)}K`;
+  }
+  return num.toString();
+};
 
 interface PostItemProps {
   id: number;
@@ -48,26 +58,6 @@ interface PostItemProps {
   onToggleGlobalMute?: () => void;
 }
 
-// Function to calculate relative time
-const calculateRelativeTime = (dateString: string): string => {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSeconds = Math.floor(diffMs / 1000);
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  const diffHours = Math.floor(diffMinutes / 60);
-  const diffDays = Math.floor(diffHours / 24);
-  const diffMonths = Math.floor(diffDays / 30);
-  const diffYears = Math.floor(diffDays / 365);
-
-  if (diffSeconds < 60) return `${diffSeconds}s ago`;
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 30) return `${diffDays}d ago`;
-  if (diffMonths < 12) return `${diffMonths}mo ago`;
-  return `${diffYears}y ago`;
-};
-
 const PostItem: React.FC<PostItemProps> = ({
   id,
   username,
@@ -77,8 +67,7 @@ const PostItem: React.FC<PostItemProps> = ({
   likes,
   comments,
   timeAgo,
-  created_at,
-  media_type,
+  media_type = 'image',
   isPremium = false,
   onLike,
   onComment,
@@ -88,65 +77,39 @@ const PostItem: React.FC<PostItemProps> = ({
   onFollow,
   isLiked = false,
   userId,
-  isVisible = false,
+  isVisible = true,
   last_active,
-  isGloballyMuted = true,
-  onToggleGlobalMute = () => {},
+  isGloballyMuted = false,
+  onToggleGlobalMute,
 }) => {
-  const {colors, isDarkMode} = useTheme();
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [videoLoading, setVideoLoading] = useState(true);
-  const [showControls, setShowControls] = useState(false);
-  const [videoDuration, setVideoDuration] = useState(0);
-  const [videoProgress, setVideoProgress] = useState(0);
-  const [videoError, setVideoError] = useState(false);
-  const [wasManuallyPaused, setWasManuallyPaused] = useState(false);
+  const { colors } = useTheme();
   const [secureProfileImage, setSecureProfileImage] = useState<any>(null);
   const [securePostImage, setSecurePostImage] = useState<any>(null);
   const [secureVideoSource, setSecureVideoSource] = useState<any>(null);
-  const [videoUrlTested, setVideoUrlTested] = useState(false);
-  const [originalVideoUrl, setOriginalVideoUrl] = useState<string | null>(null);
-
-  // Defensive: Ensure all text props are strings or numbers
-  const safeUsername = typeof username === 'string' || typeof username === 'number' ? String(username) : '';
-  const safeCaption = typeof caption === 'string' || typeof caption === 'number' ? String(caption) : '';
-  const safeTimeAgo = created_at ? calculateRelativeTime(created_at) : (typeof timeAgo === 'string' || typeof timeAgo === 'number' ? String(timeAgo) : '');
-  const safeLastActive = typeof last_active === 'string' || typeof last_active === 'number' ? String(last_active) : '';
-
-  if (typeof username !== 'string' && typeof username !== 'number') {
-    console.warn('PostItem: username is not a string/number', username);
-  }
-  if (typeof caption !== 'string' && typeof caption !== 'number') {
-    console.warn('PostItem: caption is not a string/number', caption);
-  }
-  if (typeof timeAgo !== 'string' && typeof timeAgo !== 'number') {
-    console.warn('PostItem: timeAgo is not a string/number', timeAgo);
-  }
-  if (last_active && typeof last_active !== 'string' && typeof last_active !== 'number') {
-    console.warn('PostItem: last_active is not a string/number', last_active);
-  }
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [wasManuallyPaused, setWasManuallyPaused] = useState(false);
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [videoError, setVideoError] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
 
   // Enhanced video URL testing and validation
-  const testAndValidateVideoUrl = useCallback(async (url: string | null) => {
-    if (!url || videoUrlTested) return;
-    
-    console.log(`[PostItem ${id}] Testing video URL:`, url);
-    setOriginalVideoUrl(url);
-    
-    const testResult = await testVideoUrl(url);
-    setVideoUrlTested(true);
-    
-    console.log(`[PostItem ${id}] Video URL test result:`, testResult);
-    
-    if (!testResult.isValid) {
-      console.error(`[PostItem ${id}] Video URL failed validation:`, {
-        originalUrl: url,
-        error: testResult.error,
-        status: testResult.status
-      });
-      setVideoError(true);
+  const testAndValidateVideoUrl = useCallback(async (url: string) => {
+    try {
+      const isValid = await testVideoUrl(url);
+      if (!isValid) {
+        const fixedUrl = await validateAndFixVideoUrl(url);
+        if (fixedUrl) {
+          console.log(`[PostItem ${id}] Fixed video URL:`, fixedUrl);
+          return fixedUrl;
+        }
+      }
+      return url;
+    } catch (error) {
+      console.error(`[PostItem ${id}] Video URL validation error:`, error);
+      return url;
     }
-  }, [id, videoUrlTested]);
+  }, [id]);
 
   // Load secure media sources with enhanced error handling
   useEffect(() => {
@@ -201,260 +164,242 @@ const PostItem: React.FC<PostItemProps> = ({
     }
   }, [isVisible, wasManuallyPaused, media_type, videoError]);
 
-  const togglePlayPause = useCallback(() => {
-    if (media_type === 'video' && !videoError) {
-      setIsPlaying(prev => !prev);
-      setWasManuallyPaused(!isPlaying);
-    }
-  }, [media_type, videoError, isPlaying]);
+  const handlePostPress = useCallback(() => {
+    onPostPress(id);
+  }, [onPostPress, id]);
 
-  const toggleMute = useCallback(() => {
-    if (media_type === 'video') {
-      onToggleGlobalMute();
+  const handleUserPress = useCallback(() => {
+    onUserPress(userId);
+  }, [onUserPress, userId]);
+
+  const handleLike = useCallback(() => {
+    onLike(id);
+  }, [onLike, id]);
+
+  const handleComment = useCallback(() => {
+    onComment(id);
+  }, [onComment, id]);
+
+  const handleShare = useCallback(() => {
+    onShare(id);
+  }, [onShare, id]);
+
+  const handleFollow = useCallback(async () => {
+    if (followLoading) return;
+    
+    setFollowLoading(true);
+    try {
+      await onFollow(userId);
+      setIsFollowing(!isFollowing);
+    } catch (error) {
+      console.error('Follow error:', error);
+    } finally {
+      setFollowLoading(false);
     }
-  }, [media_type, onToggleGlobalMute]);
+  }, [onFollow, userId, isFollowing, followLoading]);
+
+  const togglePlayPause = useCallback(() => {
+    if (media_type === 'video') {
+      setWasManuallyPaused(!isPlaying);
+      setIsPlaying(!isPlaying);
+    }
+  }, [media_type, isPlaying]);
 
   const handleVideoLoadStart = useCallback(() => {
-    console.log(`[PostItem ${id}] Video load started`);
     setVideoLoading(true);
-  }, [id]);
+    setVideoError(false);
+  }, []);
 
-  const handleVideoLoad = useCallback((data: any) => {
-    console.log(`[PostItem ${id}] Video loaded successfully:`, {
-      duration: data.duration,
-      naturalSize: data.naturalSize
-    });
-    setVideoDuration(data.duration);
+  const handleVideoLoad = useCallback(() => {
     setVideoLoading(false);
     setVideoError(false);
-  }, [id]);
+  }, []);
 
-  const handleVideoProgress = useCallback((progress: any) => {
-    setVideoProgress(progress.currentTime);
+  const handleVideoProgress = useCallback(() => {
+    // Video is playing successfully
   }, []);
 
   const handleVideoEnd = useCallback(() => {
-    console.log(`[PostItem ${id}] Video playback ended`);
-    setIsPlaying(false);
-    setWasManuallyPaused(false);
-  }, [id]);
+    // Video ended, could restart or show replay button
+  }, []);
 
   const handleVideoError = useCallback((error: any) => {
-    console.error(`[PostItem ${id}] Video playback error:`, {
-      error: error,
-      originalUrl: originalVideoUrl,
-      secureVideoSource: secureVideoSource
-    });
-    
-    setVideoError(true);
-    setIsPlaying(false);
+    console.error(`[PostItem ${id}] Video error:`, error);
     setVideoLoading(false);
-    setWasManuallyPaused(false);
-  }, [id, originalVideoUrl, secureVideoSource]);
+    setVideoError(true);
+  }, [id]);
 
-  const handleLikePress = () => {
-    onLike(id);
-  };
-
-  const handleCommentPress = () => {
-    onComment(id);
-  };
-
-  const handleSharePress = () => {
-    onShare(id);
-  };
-
-  const handlePostPress = () => {
-    onPostPress(id);
-  };
-
-  const handleUserPress = () => {
-    onUserPress(userId);
-  };
-
-  const handleFollowPress = async () => {
-    await onFollow(userId);
-  };
-
-  try {
-    return (
-      <View style={[styles.postContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        {/* User Info Header */}
-        <View style={styles.postHeader}>
-          <TouchableOpacity onPress={handleUserPress} style={styles.userInfo}>
-            <Image
-              source={secureProfileImage || {
-                uri: 'https://via.placeholder.com/40x40.png?text=U',
-              }}
-              style={styles.profileImage}
-            />
-            <View>
-              <Text style={[styles.username, {color: colors.text.primary}]}>
-                {safeUsername}
-              </Text>
-              {safeLastActive.trim() && (
-                <Text style={[styles.lastActive, {color: colors.text.secondary}]}>
-                  Active {safeLastActive}
-                </Text>
-              )}
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleFollowPress} style={styles.followIconButton}>
-            <UserPlus size={20} color={colors.primary} />
-          </TouchableOpacity>
-        </View>
-        
-        {/* Media Content (Image or Video) */}
-        <TouchableOpacity onPress={handlePostPress} activeOpacity={1}>
-          <View style={styles.mediaContainer}>
-            {media_type === 'image' && postImage && securePostImage && (
-              <Image
-                source={securePostImage}
-                style={styles.postMedia}
-                resizeMode="cover"
-              />
-            )}
-
-            {media_type === 'video' && postImage && secureVideoSource && !videoError && (
-              <TouchableWithoutFeedback onPress={togglePlayPause}>
-                <View style={styles.videoPlayerContainer}>
-                  <Video
-                    source={secureVideoSource}
-                    style={styles.postMedia}
-                    resizeMode="cover"
-                    repeat={true}
-                    paused={!isPlaying} // Instant pause/play response
-                    muted={isGloballyMuted}
-                    onLoadStart={handleVideoLoadStart}
-                    onLoad={handleVideoLoad}
-                    onProgress={handleVideoProgress}
-                    onEnd={handleVideoEnd}
-                    onError={handleVideoError}
-                    bufferConfig={{
-                      minBufferMs: 2000,
-                      maxBufferMs: 8000,
-                      bufferForPlaybackMs: 500,
-                      bufferForPlaybackAfterRebufferMs: 1000,
-                    }}
-                    playInBackground={false}
-                    playWhenInactive={false}
-                    ignoreSilentSwitch="ignore"
-                    mixWithOthers="duck"
-                  />
-                  {videoLoading && (
-                    <View style={styles.videoOverlay}>
-                      <ActivityIndicator size="large" color={colors.primary} />
-                      <Text style={[styles.loadingText, {color: colors.text.secondary}]}>
-                        Loading video...
-                      </Text>
-                    </View>
-                  )}
-                  {(showControls || !isPlaying || !isVisible) && !videoLoading && (
-                    <TouchableOpacity onPress={togglePlayPause} style={styles.videoControlOverlay}>
-                      {isPlaying && isVisible ? (
-                        <Pause size={50} color="white" />
-                      ) : (
-                        <Play size={50} color="white" fill="white" />
-                      )}
-                    </TouchableOpacity>
-                  )}
-                  {(showControls || !isPlaying) && !videoLoading && isVisible && (
-                    <TouchableOpacity onPress={toggleMute} style={styles.muteButton}>
-                      {isGloballyMuted ? (
-                        <VolumeX size={24} color="white" />
-                      ) : (
-                        <Volume2 size={24} color="white" />
-                      )}
-                    </TouchableOpacity>
-                  )}
-                  {!isVisible && (
-                    <View style={styles.outOfViewOverlay}>
-                      <Text style={styles.outOfViewText}>Video paused</Text>
-                    </View>
-                  )}
-                </View>
-              </TouchableWithoutFeedback>
-            )}
-            
-            {media_type === 'video' && videoError && (
-              <View style={styles.errorMedia}>
-                <AlertTriangle size={50} color={colors.danger || '#FF0000'} />
-                <Text style={[styles.errorText, {color: colors.text.secondary}]}>
-                  No media found
-                </Text>
-              </View>
-            )}
-            
-            {!postImage && (
-              <View style={[styles.placeholderMedia, { backgroundColor: colors.surface }]}>
-                <ImageIcon size={50} color={colors.text.tertiary || '#CCCCCC'} />
-                <Text style={[styles.placeholderText, { color: colors.text.tertiary }]}>No media</Text>
-              </View>
-            )}
-            {isPremium && (
-              <View style={styles.premiumBadge}>
-                <Text style={styles.premiumText}>Premium</Text>
-              </View>
-            )}
-          </View>
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={handleUserPress} style={styles.userInfo}>
+          <ProfileFastImage
+            source={profileImage}
+            size={32}
+            style={styles.profileImage}
+          />
+          <Text style={[styles.username, { color: colors.text.primary }]}>
+            {username}
+          </Text>
         </TouchableOpacity>
-        
-        {/* Actions (Like, Comment, Share) */}
-        <View style={styles.postActions}>
-          <View style={styles.leftActions}>
-            <TouchableOpacity onPress={handleLikePress} style={styles.actionButton}>
-              <Heart 
-                size={24} 
-                color={isLiked ? "#FF0000" : (isDarkMode ? colors.text.primary : "#1A1A1A")} 
-                fill={isLiked ? "#FF0000" : "none"}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleCommentPress} style={styles.actionButton}>
-              <MessageCircle size={24} color={isDarkMode ? colors.text.primary : "#1A1A1A"} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleSharePress} style={styles.actionButton}>
-              <Share2 size={24} color={isDarkMode ? colors.text.primary : "#1A1A1A"} />
-            </TouchableOpacity>
-          </View>
-        </View>
-        <Text style={[styles.likesCount, {color: colors.text.primary}]}>
-          {`${likes} ${likes === 1 ? 'like' : 'likes'}`}
-        </Text>
-        {safeCaption.trim() && (
-          <Text style={[styles.caption, {color: colors.text.primary}]}>
-            <Text style={styles.captionUsername}>{safeUsername}</Text>
-            {` ${safeCaption.trim()}`}
-          </Text>
-        )}
-        {comments > 0 && (
-          <TouchableOpacity onPress={handleCommentPress}>
-            <Text style={[styles.commentsCount, {color: colors.text.secondary}]}>
-              View all {comments} comments
-            </Text>
-          </TouchableOpacity>
-        )}
-        {safeTimeAgo.trim() && (
-          <Text style={[styles.timeAgo, {color: colors.text.secondary}]}>
-            {safeTimeAgo}
-          </Text>
-        )}
+
+        <TouchableOpacity onPress={() => {}} style={styles.moreButton}>
+          <MoreHorizontal size={20} color={colors.text.primary} />
+        </TouchableOpacity>
       </View>
-    );
-  } catch (err) {
-    console.error('Error rendering PostItem:', err);
-    return <Text style={{color: 'red'}}>Error rendering post</Text>;
-  }
+
+      {/* Media Content */}
+      <TouchableOpacity onPress={handlePostPress} activeOpacity={1}>
+        <View style={styles.mediaContainer}>
+          {media_type === 'image' && postImage && (
+            <ContentFastImage
+              source={postImage}
+              style={styles.postMedia}
+            />
+          )}
+
+          {media_type === 'video' && postImage && !videoError && (
+            <TouchableWithoutFeedback onPress={togglePlayPause}>
+              <View style={styles.videoPlayerContainer}>
+                <Video
+                  source={secureVideoSource}
+                  style={styles.postMedia}
+                  resizeMode="cover"
+                  repeat={true}
+                  paused={!isPlaying} // Instant pause/play response
+                  muted={isGloballyMuted}
+                  onLoadStart={handleVideoLoadStart}
+                  onLoad={handleVideoLoad}
+                  onProgress={handleVideoProgress}
+                  onEnd={handleVideoEnd}
+                  onError={handleVideoError}
+                  bufferConfig={{
+                    minBufferMs: 2000,
+                    maxBufferMs: 8000,
+                    bufferForPlaybackMs: 500,
+                    bufferForPlaybackAfterRebufferMs: 1000,
+                  }}
+                  playInBackground={false}
+                  playWhenInactive={false}
+                  ignoreSilentSwitch="ignore"
+                  mixWithOthers="duck"
+                />
+                {videoLoading && (
+                  <View style={styles.videoOverlay}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={[styles.loadingText, {color: colors.text.secondary}]}>
+                      Loading video...
+                    </Text>
+                  </View>
+                )}
+                {!videoLoading && !isPlaying && (
+                  <View style={styles.playButton}>
+                    <Play size={40} color="#fff" />
+                  </View>
+                )}
+              </View>
+            </TouchableWithoutFeedback>
+          )}
+
+          {media_type === 'video' && videoError && (
+            <View style={styles.videoErrorContainer}>
+              <AlertTriangle size={50} color={colors.text.tertiary || '#CCCCCC'} />
+              <Text style={[styles.errorText, {color: colors.text.secondary}]}>
+                Video unavailable
+              </Text>
+            </View>
+          )}
+
+          {!postImage && media_type === 'image' && (
+            <View style={styles.noImageContainer}>
+              <ImageIcon size={50} color={colors.text.tertiary || '#CCCCCC'} />
+              <Text style={[styles.noImageText, {color: colors.text.secondary}]}>
+                No image available
+              </Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+
+      {/* Actions */}
+      <View style={styles.actions}>
+        <View style={styles.leftActions}>
+          <TouchableOpacity onPress={handleLike} style={styles.actionButton}>
+            <Heart
+              size={24}
+              color={isLiked ? '#FF3040' : colors.text.primary}
+              fill={isLiked ? '#FF3040' : 'transparent'}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={handleComment} style={styles.actionButton}>
+            <MessageCircle size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={handleShare} style={styles.actionButton}>
+            <Send size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity onPress={() => {}} style={styles.bookmarkButton}>
+          <Bookmark size={24} color={colors.text.primary} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Likes Count */}
+      {likes > 0 && (
+        <View style={styles.likesContainer}>
+          <Text style={[styles.likesText, { color: colors.text.primary }]}>
+            {likes === 1 ? '1 like' : `${formatNumber(likes)} likes`}
+          </Text>
+        </View>
+      )}
+
+      {/* Caption */}
+      {caption && (
+        <View style={styles.captionContainer}>
+          <Text style={[styles.caption, { color: colors.text.primary }]}>
+            <Text style={[styles.captionUsername, { color: colors.text.primary }]}>
+              {username}{' '}
+            </Text>
+            {caption}
+          </Text>
+        </View>
+      )}
+
+      {/* Comments Link */}
+      {comments > 0 && (
+        <TouchableOpacity onPress={handleComment} style={styles.commentsContainer}>
+          <Text style={[styles.commentsText, { color: colors.text.secondary }]}>
+            View all {comments} comments
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Time Ago */}
+      <View style={styles.timeContainer}>
+        <Text style={[styles.timeText, { color: colors.text.secondary }]}>
+          {timeAgo}
+        </Text>
+      </View>
+
+      {/* Premium Badge */}
+      {isPremium && (
+        <View style={[styles.premiumBadge, { backgroundColor: colors.primary }]}>
+          <Text style={styles.premiumText}>Premium</Text>
+        </View>
+      )}
+    </View>
+  );
 };
 
-// Add new styles for the enhanced error handling
 const styles = StyleSheet.create({
-  postContainer: {
-    backgroundColor: '#FFFFFF',
+  container: {
+    backgroundColor: '#fff',
     marginBottom: 0,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
   },
-  postHeader: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -467,123 +412,75 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profileImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
     marginRight: 12,
-    backgroundColor: '#E0E0E0',
   },
   username: {
-    fontWeight: '600',
     fontSize: 14,
-    color: '#1A1A1A',
+    fontWeight: '600',
   },
-  lastActive: {
-    fontSize: 12,
-    marginTop: 2,
-    color: '#666666',
-  },
-  followIconButton: {
+  moreButton: {
     padding: 4,
   },
   mediaContainer: {
-    width: '100%',
-    height: width,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
+    position: 'relative',
   },
   postMedia: {
     width: '100%',
-    height: '100%',
+    height: width, // Square aspect ratio like Instagram
   },
   videoPlayerContainer: {
-    width: '100%',
-    height: '100%',
     position: 'relative',
   },
   videoOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   loadingText: {
     marginTop: 8,
     fontSize: 14,
-    color: '#FFFFFF',
   },
-  videoControlOverlay: {
-    ...StyleSheet.absoluteFillObject,
+  playButton: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -20 }, { translateY: -20 }],
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    width: 40,
+    height: 40,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
   },
-  muteButton: {
-    position: 'absolute',
-    bottom: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 15,
-    padding: 5,
-  },
-  outOfViewOverlay: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  outOfViewText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  errorMedia: {
-    ...StyleSheet.absoluteFillObject,
+  videoErrorContainer: {
+    height: width,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    padding: 20,
+    backgroundColor: '#f5f5f5',
   },
   errorText: {
-    fontSize: 16,
-    fontWeight: '500',
-    textAlign: 'center',
-    marginTop: 10,
-    color: '#FFFFFF',
-  },
-  placeholderMedia: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-  },
-  placeholderText: {
     marginTop: 8,
     fontSize: 14,
-    color: '#CCCCCC',
   },
-  premiumBadge: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    backgroundColor: 'rgba(255, 215, 0, 0.9)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  premiumText: {
-    color: '#000',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  postActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  noImageContainer: {
+    height: width,
+    justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  noImageText: {
+    marginTop: 8,
+    fontSize: 14,
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
@@ -593,33 +490,57 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     marginRight: 16,
-    padding: 4,
   },
-  likesCount: {
-    fontWeight: '600',
-    fontSize: 14,
+  bookmarkButton: {
+    // No additional styling needed
+  },
+  likesContainer: {
     paddingHorizontal: 16,
-    marginBottom: 4,
+    paddingBottom: 4,
+  },
+  likesText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  captionContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 4,
   },
   caption: {
     fontSize: 14,
     lineHeight: 18,
-    paddingHorizontal: 16,
-    marginBottom: 4,
   },
   captionUsername: {
     fontWeight: '600',
   },
-  commentsCount: {
-    fontSize: 14,
+  commentsContainer: {
     paddingHorizontal: 16,
-    marginBottom: 4,
+    paddingBottom: 4,
   },
-  timeAgo: {
-    fontSize: 12,
+  commentsText: {
+    fontSize: 14,
+  },
+  timeContainer: {
     paddingHorizontal: 16,
-    marginBottom: 8,
+    paddingBottom: 16,
+  },
+  timeText: {
+    fontSize: 12,
+    textTransform: 'uppercase',
+  },
+  premiumBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  premiumText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
   },
 });
 
-export default PostItem;
+export default React.memo(PostItem);

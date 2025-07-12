@@ -996,17 +996,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     return (
       <ScreenTransition>
         <View style={[styles.container, {backgroundColor: colors.background}]}>
-          <Header 
-            title="" 
-            onSearchSubmit={handleSearchIconPress}
+          <Header
+            title=""
+            showLogo={false}
+            showSearch={true}
+            showWallet={true}
+            showPremium={true}
           />
           <ScrollView style={styles.content} contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}>
             <StoriesRow stories={[]} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} isLoading={true} />
-            <CategoriesRow categories={[]} selectedCategory={null} onCategoryPress={handleCategoryPress} isLoading={true} />
-                          <BannerCarousel />
-            <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} onInstallToEarn={handleInstallToEarn} isLoading={true} />
-            <ExternalLinkBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
-            <RushPlayGamesBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
             <View style={styles.skeletonContainer}>
               {Array(6).fill(0).map((_, index) => <PostItemSkeleton key={`skeleton-${index}`} />)}
             </View>
@@ -1043,9 +1041,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   return (
           <ScreenTransition>
         <View style={[styles.container, {backgroundColor: colors.background}]}>
-          <Header 
-            title="" 
-            onSearchSubmit={handleSearchIconPress}
+          <Header
+            title=""
+            showLogo={false}
+            showSearch={true}
+            showWallet={true}
+            showPremium={true}
           />
           <FlatList
           data={displayPosts}
@@ -1066,21 +1067,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           viewabilityConfig={viewabilityConfig}
           ListHeaderComponent={() => (
             <>
-              {renderPremiumBanner()}
               <StoriesRow stories={displayStories} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} />
-              <CategoriesRow categories={displayCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} isLoading={categoriesLoading} />
-              <BannerCarousel onBannerPress={handleBannerPress} />
-              <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onPlayAndEarn={handlePlayAndEarn} onInstallToEarn={handleInstallToEarn} />
-              <ExternalLinkBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
-              <RushPlayGamesBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
-              <InstallToEarnPopup
-                visible={showInstallToEarnPopup}
-                onClose={() => setShowInstallToEarnPopup(false)}
-                onUpgrade={() => {
-                  setShowInstallToEarnPopup(false);
-                  navigation.navigate('PremiumUser' as never);
-                }}
-              />
             </>
           )}
           ListEmptyComponent={renderEmptyState}
@@ -1164,9 +1151,9 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
 
   // Stories section
   storiesSection: {
-    paddingVertical: 12,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
+    paddingVertical: 16,
+    backgroundColor: colors.background,
+    borderBottomWidth: 0.5,
     borderBottomColor: colors.border,
   },
   storiesContainer: {

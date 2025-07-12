@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
+
+const { width } = Dimensions.get('window');
 
 const PostItemSkeleton: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
@@ -63,30 +65,28 @@ const PostItemSkeleton: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 12, // Match PostItem styling
-    marginVertical: 8,
-    marginHorizontal: 16,
-    paddingBottom: 12,
+    backgroundColor: '#fff',
+    marginBottom: 0,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   avatar: {
-    width: 40, // Match PostItem avatar size
-    height: 40,
-    borderRadius: 20,
-    marginRight: 10,
+    width: 32, // Match PostItem avatar size
+    height: 32,
+    borderRadius: 16,
+    marginRight: 12,
   },
   userInfo: {
     flex: 1,
   },
   username: {
-    width: '50%',
+    width: '40%',
     height: 14,
     borderRadius: 7,
-    marginBottom: 6,
   },
   timeAgo: {
     width: '30%',
@@ -97,19 +97,19 @@ const styles = StyleSheet.create({
     height: 12,
     width: '90%',
     borderRadius: 6,
-    marginHorizontal: 12,
+    marginHorizontal: 16,
     marginBottom: 6,
   },
   captionLine2: {
     height: 12,
     width: '70%',
     borderRadius: 6,
-    marginHorizontal: 12,
+    marginHorizontal: 16,
     marginBottom: 10,
   },
   media: {
     width: '100%',
-    height: 250, // Match typical PostItem media height
+    height: width, // Square aspect ratio like Instagram
   },
   actionsContainer: {
     flexDirection: 'row',
