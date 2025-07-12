@@ -49,14 +49,6 @@ export type MainNavigatorParamList = {
   CreatePost: undefined;
   WatchAndEarn: undefined;
   Referral: undefined;
-  TipShortsUploadScreen: {
-    videoSource?: {
-      uri: string;
-      type?: string;
-      name?: string;
-      duration?: number;
-    };
-  };
   TabHome: undefined; // Assuming these are part of MainNavigator, e.g., tabs
   Search: undefined;
   Wallet: undefined;
@@ -113,7 +105,14 @@ export type MainNavigatorParamList = {
   };
   SelectCategory: undefined;
   TipTubeUpload: undefined;
-  TipShortsUpload: undefined;
+  TipShortsUpload: {
+    videoSource?: {
+      uri: string;
+      type?: string;
+      name?: string;
+      duration?: number;
+    };
+  };
   Channel: { channelId: string | number };
   AddFundsScreen: undefined;
   UpgradePremiumScreen: undefined;

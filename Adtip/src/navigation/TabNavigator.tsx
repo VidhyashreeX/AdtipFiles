@@ -13,11 +13,13 @@ import TipTubeScreen from '../screens/tiptube/TipTubeScreen';
 import TipCallScreenSimple from '../screens/tipcall/TipCallScreenSimple';
 import CreateContentModal from '../screens/content/CreateContentModal';
 import TipShortsEnhanced from '../screens/tipshorts/TipShortsEnhanced';
+import LoginPromptModal from '../components/modals/LoginPromptModal';
 
 // Import theme and contexts
 import {useTheme} from '../contexts/ThemeContext';
 import {TabNavigatorProvider} from '../contexts/TabNavigatorContext';
 import {withWalletBalance} from '../components/hoc/withWalletBalance';
+import {useGuestGuard} from '../hooks/useGuestGuard';
 
 // Create tab navigator
 const Tab = createBottomTabNavigator();
@@ -204,6 +206,7 @@ const TabNavigator = () => {
 const CreateContentButton = () => {
   const {colors} = useTheme();
   const [modalVisible, setModalVisible] = useState(false);
+  const {loginPromptVisible, hideLoginPrompt, loginPromptMessage} = useGuestGuard();
 
   const handlePress = useCallback(() => {
     console.log('CreateContentButton: handlePress called');
@@ -229,6 +232,13 @@ const CreateContentButton = () => {
       {modalVisible && (
         <CreateContentModal visible={modalVisible} onClose={handleCloseModal} />
       )}
+
+      {/* Login Prompt Modal for Guest Users - Rendered at Tab Level */}
+      <LoginPromptModal
+        visible={loginPromptVisible}
+        onClose={hideLoginPrompt}
+        message={loginPromptMessage}
+      />
     </>
   );
 };

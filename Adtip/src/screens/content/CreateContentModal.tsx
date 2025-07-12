@@ -31,6 +31,8 @@ import {
 
 // Context
 import {useTheme} from '../../contexts/ThemeContext';
+import {useAuth} from '../../contexts/AuthContext';
+import {useGuestGuard} from '../../hooks/useGuestGuard';
 
 interface CreateContentModalProps {
   visible: boolean;
@@ -45,6 +47,8 @@ const CreateContentModal: React.FC<CreateContentModalProps> = React.memo(({
 }) => {
   const {colors, isDarkMode} = useTheme();
   const navigation = useNavigation();
+  const {isGuest} = useAuth();
+  const {requireAuth} = useGuestGuard();
 
   // Reanimated shared values for smooth animations
   const translateY = useSharedValue(screenHeight);
@@ -119,7 +123,15 @@ const CreateContentModal: React.FC<CreateContentModalProps> = React.memo(({
     });
   };
 
-  const createNavigationHandler = (screenName: string) => () => {
+  const createNavigationHandler = (screenName: string, actionName: string) => () => {
+    // Check if user is guest and require authentication for content creation
+    if (isGuest) {
+      console.log(`[CreateContentModal] Guest user attempting to access ${screenName}, showing login prompt`);
+      requireAuth(actionName);
+      onClose(); // Close modal after showing login prompt
+      return;
+    }
+
     // Close modal with animation then navigate
     translateY.value = withSpring(screenHeight, springConfig);
     backdropOpacity.value = withTiming(0, timingConfig, (finished) => {
@@ -138,10 +150,10 @@ const CreateContentModal: React.FC<CreateContentModalProps> = React.memo(({
     });
   };
 
-  const handleCreatePost = createNavigationHandler('CreatePost');
-  const handleUploadVideo = createNavigationHandler('TipTubeUpload');
-  const handleCreateShort = createNavigationHandler('TipShortsUpload');
-  const handleStartStream = createNavigationHandler('StartStream');
+  const handleCreatePost = createNavigationHandler('CreatePost', 'create posts');
+  const handleUploadVideo = createNavigationHandler('TipTubeUpload', 'upload videos');
+  const handleCreateShort = createNavigationHandler('TipShortsUpload', 'create shorts');
+  const handleStartStream = createNavigationHandler('StartStream', 'start live streams');
 
   // Animated styles using Reanimated
   const modalAnimatedStyle = useAnimatedStyle(() => {
