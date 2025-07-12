@@ -43,15 +43,25 @@ class CallSignalingService {
   }
 
   private onMessage = async (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => {
+    console.log('[CallSignalingService] FCM message received:', remoteMessage.data)
+
     const data = remoteMessage.data
-    if (!data || !data.type) return
+    if (!data || !data.type) {
+      console.log('[CallSignalingService] No call data in message, ignoring')
+      return
+    }
+
     const payload = data as unknown as CallSignalPayload
+    console.log('[CallSignalingService] Processing call signal:', payload.type)
 
     const store = useCallStore.getState()
     const actions = store.actions
 
     switch (payload.type) {
       case 'CALL_INITIATE': {
+        console.log('[CallSignalingService] Incoming call initiated:', payload.callerName)
+
+        // Set session state
         actions.setSession({
           sessionId: payload.sessionId,
           meetingId: payload.meetingId,
@@ -60,9 +70,10 @@ class CallSignalingService {
           peerName: payload.callerName,
           direction: 'incoming',
           type: payload.callType,
+          startedAt: Date.now()
         })
         actions.setStatus('ringing')
-        
+
         // Start persistent call for incoming calls
         startPersistentCall({
           sessionId: payload.sessionId,
@@ -72,6 +83,8 @@ class CallSignalingService {
           callType: payload.callType,
           direction: 'incoming'
         })
+
+        console.log('[CallSignalingService] Incoming call session created and persistent call started')
         break
       }
       case 'CALL_ACCEPT': {

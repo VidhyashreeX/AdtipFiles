@@ -155,7 +155,21 @@
                 android:name="android.telecom.CONNECTION_SERVICE"
                 android:value="android.telecom.ConnectionService" />
         </service>
-        
+
+        <!-- ADTIP FIREBASE MESSAGING SERVICE -->
+        <service
+            android:name=".AdtipFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- ADTIP CALL RINGING SERVICE -->
+        <service
+            android:name=".CallRingingService"
+            android:exported="false" />
+
     </application>
 
 </manifest>

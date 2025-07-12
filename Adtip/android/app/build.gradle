@@ -136,7 +136,7 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
-            applicationIdSuffix ".debug"
+            // applicationIdSuffix ".debug"  // Commented out to fix React Native CLI launch issue
             debuggable true
             minifyEnabled false
             shrinkResources false

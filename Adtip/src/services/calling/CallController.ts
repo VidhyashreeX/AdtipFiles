@@ -74,11 +74,13 @@ class CallController {
             if (session) {
               // Start vibrating
               this.startVibrate()
-              // Show incoming call notification
+              // Show incoming call notification with meeting details
               this.notification.showIncomingCall(
                 session.sessionId,
                 session.peerName,
-                session.type
+                session.type,
+                session.meetingId,
+                session.token
               )
             }
             break

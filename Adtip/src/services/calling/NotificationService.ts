@@ -1,5 +1,10 @@
 import notifee, { AndroidImportance } from '@notifee/react-native'
 import { CallType } from '../../stores/callStoreSimplified'
+import { NativeModules, Platform } from 'react-native'
+import CallKitService from './CallKitService'
+import NotificationPersistenceService from './NotificationPersistenceService'
+
+const { IncomingCallModule } = NativeModules
 
 class NotificationService {
   private static _instance: NotificationService
@@ -13,6 +18,10 @@ class NotificationService {
 
   private constructor() {
     this.createChannels()
+    // Also initialize enhanced channels
+    this.initializeEnhancedChannels().catch(error => {
+      console.warn('[NotificationService] Failed to initialize enhanced channels:', error)
+    })
   }
 
   private async createChannels() {
@@ -20,22 +29,92 @@ class NotificationService {
     await notifee.createChannel({ id: this.ongoingChannel, name: 'Ongoing Calls', importance: AndroidImportance.DEFAULT })
   }
 
-  async showIncomingCall(sessionId: string, callerName: string, type: CallType) {
-    await notifee.displayNotification({
-      id: sessionId,
-      title: `Incoming ${type} call`,
-      body: callerName,
-      android: {
-        channelId: this.incomingChannel,
-        category: 'call' as any,
-        fullScreenAction: { id: 'default' },
-        actions: [
-          { title: 'Answer', pressAction: { id: 'answer' } },
-          { title: 'Decline', pressAction: { id: 'decline' } },
-        ],
-      },
-      data: { sessionId },
+  async showIncomingCall(sessionId: string, callerName: string, type: CallType, meetingId?: string, token?: string) {
+    console.log('[NotificationService] Showing incoming call notification:', { sessionId, callerName, type })
+
+    // Add to persistence queue for reliability
+    const persistenceService = NotificationPersistenceService.getInstance()
+    await persistenceService.addPendingCall({
+      sessionId,
+      callerName,
+      callType: type,
+      meetingId,
+      token
     })
+
+    let notificationShown = false
+
+    // Handle iOS CallKit integration
+    if (Platform.OS === 'ios') {
+      const callKitService = CallKitService.getInstance()
+      if (callKitService.isAvailable()) {
+        try {
+          const success = await callKitService.displayIncomingCall({
+            sessionId,
+            callerName,
+            callType: type,
+            meetingId,
+            token
+          })
+
+          if (success) {
+            console.log('[NotificationService] CallKit incoming call displayed')
+            notificationShown = true
+            // Remove from persistence queue since CallKit handled it
+            await persistenceService.removePendingCall(sessionId)
+          }
+        } catch (error) {
+          console.warn('[NotificationService] Failed to display CallKit call:', error)
+        }
+      }
+    }
+
+    // Trigger native call handling for Android
+    if (Platform.OS === 'android' && IncomingCallModule) {
+      try {
+        await IncomingCallModule.triggerIncomingCall(sessionId, callerName, type, meetingId || '', token || '')
+        console.log('[NotificationService] Native incoming call triggered')
+      } catch (error) {
+        console.warn('[NotificationService] Failed to trigger native call:', error)
+      }
+    }
+
+    // Show Notifee notification as primary/fallback
+    if (!notificationShown) {
+      try {
+        await notifee.displayNotification({
+          id: sessionId,
+          title: `Incoming ${type} call`,
+          body: callerName,
+          android: {
+            channelId: this.incomingChannel,
+            category: 'call' as any,
+            fullScreenAction: { id: 'default' },
+            actions: [
+              { title: 'Answer', pressAction: { id: 'answer' } },
+              { title: 'Decline', pressAction: { id: 'decline' } },
+            ],
+            importance: AndroidImportance.HIGH,
+            pressAction: { id: 'default' },
+            sound: 'default',
+            vibrationPattern: [300, 1000, 300, 1000],
+          },
+          data: { sessionId, callerName, type, meetingId, token },
+        })
+
+        console.log('[NotificationService] Notifee notification displayed successfully')
+        notificationShown = true
+
+        // Remove from persistence queue since notification was shown
+        await persistenceService.removePendingCall(sessionId)
+
+      } catch (error) {
+        console.error('[NotificationService] Failed to show Notifee notification:', error)
+
+        // Create fallback notification
+        await persistenceService.createFallbackNotification(sessionId, callerName, type)
+      }
+    }
   }
 
   async showOngoingCall(sessionId: string, peerName: string, type: CallType) {
@@ -52,7 +131,46 @@ class NotificationService {
   }
 
   async hideNotification(id: string) {
+    console.log('[NotificationService] Hiding notification:', id)
+
+    // End native call handling
+    if (Platform.OS === 'android' && IncomingCallModule) {
+      try {
+        await IncomingCallModule.endCall()
+        console.log('[NotificationService] Native call ended')
+      } catch (error) {
+        console.warn('[NotificationService] Failed to end native call:', error)
+      }
+    }
+
     try { await notifee.cancelNotification(id) } catch {}
+  }
+
+  /**
+   * Initialize notification channels with enhanced settings
+   */
+  async initializeEnhancedChannels() {
+    await notifee.createChannel({
+      id: this.incomingChannel,
+      name: 'Incoming Calls',
+      importance: AndroidImportance.HIGH,
+      sound: 'default',
+      vibration: true,
+      vibrationPattern: [300, 1000, 300, 1000],
+      lights: true,
+      lightColor: '#00D4AA',
+      badge: true,
+    })
+
+    await notifee.createChannel({
+      id: this.ongoingChannel,
+      name: 'Ongoing Calls',
+      importance: AndroidImportance.DEFAULT,
+      sound: 'default',
+      vibration: false,
+    })
+
+    console.log('[NotificationService] Enhanced notification channels created')
   }
 }
 

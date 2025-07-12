@@ -63,23 +63,39 @@ global.resolveForegroundService = () => {
 
 // CallEventTask removed - using simplified calling flow
 
-// Handle background messages
+// Enhanced background message handler with wake-up and native integration
 messaging().setBackgroundMessageHandler(async remoteMessage => {
   console.log('[Index] Background message received:', remoteMessage);
-  
+
   // Check if this is a call-related message
   if (
     remoteMessage.data?.type === 'CALL_INITIATE' ||
     remoteMessage.data?.type === 'CALL_ACCEPT' ||
     remoteMessage.data?.type === 'CALL_END'
   ) {
-    // Initialize controller and handle the message
-    const callController = CallController.getInstance();
-    callController.handleFCMMessage(remoteMessage);
-    
-    // Return a promise that resolves when the background task is complete
-    return Promise.resolve();
+    try {
+      // Initialize controller and handle the message
+      const callController = CallController.getInstance();
+      callController.handleFCMMessage(remoteMessage);
+
+      // For incoming calls, ensure we wake up the device and show native UI
+      if (remoteMessage.data?.type === 'CALL_INITIATE') {
+        console.log('[Index] Processing incoming call in background');
+
+        // The AdtipFirebaseMessagingService will handle native wake-up and notifications
+        // This ensures redundancy and proper handling even if React Native context is limited
+      }
+
+      console.log('[Index] Background call message processed successfully');
+      return Promise.resolve();
+    } catch (error) {
+      console.error('[Index] Error processing background call message:', error);
+      return Promise.reject(error);
+    }
   }
+
+  console.log('[Index] Non-call background message ignored');
+  return Promise.resolve();
 });
 
 AppRegistry.registerComponent(appName, () => App);

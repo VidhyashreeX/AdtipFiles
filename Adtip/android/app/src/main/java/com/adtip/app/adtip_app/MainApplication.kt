@@ -19,6 +19,9 @@ import live.videosdk.rnincallmanager.InCallManagerPackage
 // PubScale Offerwall Import
 import com.adtip.app.adtip_app.PubscaleOfferwallPackage
 
+// IncomingCall Import
+import com.adtip.IncomingCallPackage
+
 class MainApplication : Application(), ReactApplication {
 
   override val reactNativeHost: ReactNativeHost =
@@ -31,6 +34,8 @@ class MainApplication : Application(), ReactApplication {
         packages.add(InCallManagerPackage())
         // pubscale
         packages.add(PubscaleOfferwallPackage())
+        // Add IncomingCall package for native call handling
+        packages.add(IncomingCallPackage())
         
         return packages
       }
