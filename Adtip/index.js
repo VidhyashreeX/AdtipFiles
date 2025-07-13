@@ -63,54 +63,56 @@ global.resolveForegroundService = () => {
 
 // CallEventTask removed - using simplified calling flow
 
-// Enhanced background message handler with reliable call management
+// Enhanced background message handler with centralized call management
 messaging().setBackgroundMessageHandler(async remoteMessage => {
   console.log('[Index] Background message received:', remoteMessage);
 
-  // Check if this is a call-related message
-  // Handle both new format (info field) and legacy format (direct type)
-  let isCallMessage = false;
+  try {
+    // Check if this is a call-related message
+    // Handle both new format (info field) and legacy format (direct type)
+    let isCallMessage = false;
+    let messageType = null;
+    let callData = null;
 
-  if (remoteMessage.data?.info) {
-    try {
-      const parsedInfo = JSON.parse(remoteMessage.data.info);
-      isCallMessage = parsedInfo.type === 'CALL_INITIATED' ||
-                     parsedInfo.type === 'CALL_INITIATE' ||
-                     parsedInfo.type === 'CALL_ACCEPT' ||
-                     parsedInfo.type === 'CALL_END';
-    } catch (e) {
-      // Ignore parse errors
+    if (remoteMessage.data?.info) {
+      try {
+        const parsedInfo = JSON.parse(remoteMessage.data.info);
+        messageType = parsedInfo.type;
+        callData = parsedInfo;
+        isCallMessage = ['CALL_INITIATED', 'CALL_INITIATE', 'CALL_ACCEPT', 'CALL_ACCEPTED', 'CALL_END', 'CALL_ENDED'].includes(messageType);
+      } catch (e) {
+        console.warn('[Index] Failed to parse info field:', e);
+      }
+    } else if (remoteMessage.data?.type) {
+      messageType = remoteMessage.data.type;
+      callData = remoteMessage.data;
+      isCallMessage = ['CALL_INITIATE', 'CALL_ACCEPT', 'CALL_END'].includes(messageType);
     }
-  } else if (remoteMessage.data?.type) {
-    isCallMessage = remoteMessage.data.type === 'CALL_INITIATE' ||
-                   remoteMessage.data.type === 'CALL_ACCEPT' ||
-                   remoteMessage.data.type === 'CALL_END';
-  }
 
-  if (isCallMessage) {
-    try {
-      // Use ReliableCallManager for background message handling
+    console.log('[Index] Message analysis:', { isCallMessage, messageType });
+
+    if (isCallMessage) {
+      // Use existing ReliableCallManager (temporarily disabled new services)
+      const { ReliableCallManager } = await import('./src/services/calling/ReliableCallManager');
       const callManager = ReliableCallManager.getInstance();
 
-      // Initialize if not already done
       if (!callManager.isReady()) {
         await callManager.initialize();
       }
 
-      // Handle the FCM message
       await callManager.handleFCMMessage(remoteMessage, 'background');
+      console.log('[Index] Background call message processed');
 
-      console.log('[Index] Background call message processed successfully');
-      return Promise.resolve();
-    } catch (error) {
-      console.error('[Index] Error processing background call message:', error);
-      // Don't reject to prevent app crashes
       return Promise.resolve();
     }
-  }
 
-  console.log('[Index] Non-call background message ignored');
-  return Promise.resolve();
+    console.log('[Index] Non-call background message ignored');
+    return Promise.resolve();
+  } catch (error) {
+    console.error('[Index] Error processing background message:', error);
+    // Don't reject to prevent app crashes
+    return Promise.resolve();
+  }
 });
 
 AppRegistry.registerComponent(appName, () => App);

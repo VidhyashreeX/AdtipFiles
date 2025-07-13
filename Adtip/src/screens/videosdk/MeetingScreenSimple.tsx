@@ -356,6 +356,19 @@ const MeetingContent = () => {
         console.log('[MeetingContent] Incoming call detected, setting VideoSDK session as active...')
         const videoSDK = VideoSDKService.getInstance()
         videoSDK.setActiveMeetingSession(session.sessionId)
+
+        // Check if this was a background call and ensure media is ready
+        try {
+          const { default: BackgroundMediaService } = await import('../../services/calling/BackgroundMediaService')
+          const backgroundMediaService = BackgroundMediaService.getInstance()
+
+          if (!backgroundMediaService.isMediaReady()) {
+            console.log('[MeetingContent] Background call detected, initializing media...')
+            await backgroundMediaService.initializeForBackgroundCall(session.type)
+          }
+        } catch (error) {
+          console.warn('[MeetingContent] Error initializing background media:', error)
+        }
       }
       
       if (joinedRef.current || joinAttemptsRef.current >= MAX_ATTEMPTS) return

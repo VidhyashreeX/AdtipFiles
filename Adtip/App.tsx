@@ -67,6 +67,7 @@ import ChatScreen from './src/screens/chat/ChatScreen';
 
 // Ultra Fast Loader for instant app initialization
 import UltraFastLoader from './src/components/common/UltraFastLoader';
+import AppErrorBoundary from './src/components/common/AppErrorBoundary';
 
 import { RootStackParamList } from 'src/types/navigation';
 import useReliableCallManager from './src/hooks/useReliableCallManager';
@@ -355,11 +356,91 @@ function App(): React.JSX.Element {
   // Add reliable call manager for FCM call handling
   useReliableCallManager();
 
+  // Initialize background call handler and CallKeep (non-blocking) - RE-ENABLED WITH FIXES
+  useEffect(() => {
+    const initCallServices = async () => {
+      try {
+        console.log('[App] 🔄 Starting non-blocking call services initialization...');
+
+        // Initialize background call handler first (lightweight)
+        const { BackgroundCallHandler } = await import('./src/services/calling/BackgroundCallHandler');
+        const handler = BackgroundCallHandler.getInstance();
+        await handler.loadPendingCall();
+        console.log('[App] ✅ Background call handler initialized');
+
+        // Initialize CallKeep with timeout to prevent blocking
+        const initCallKeepWithTimeout = async () => {
+          try {
+            console.log('[App] 🔄 Starting CallKeep initialization in background...');
+            const { default: CallKeepService } = await import('./src/services/calling/CallKeepService');
+            const callKeepService = CallKeepService.getInstance();
+
+            // Set a timeout for CallKeep initialization
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('CallKeep initialization timeout')), 3000)
+            );
+
+            const initPromise = callKeepService.initialize();
+            const callKeepInitialized = await Promise.race([initPromise, timeoutPromise]);
+            console.log('[App] ✅ CallKeep initialized successfully:', callKeepInitialized);
+          } catch (callKeepError) {
+            console.warn('[App] ⚠️ CallKeep initialization failed (non-critical):', callKeepError);
+            // Don't block app startup for CallKeep issues
+          }
+        };
+
+        // Run CallKeep initialization in background with delay to not interfere with UI
+        setTimeout(() => {
+          initCallKeepWithTimeout().catch(err => {
+            console.warn('[App] ⚠️ CallKeep background initialization error:', err);
+          });
+        }, 3000); // 3 second delay to let UI settle first
+
+      } catch (error) {
+        console.error('[App] ❌ Error initializing call services (non-critical):', error);
+        // Don't block app startup for call service issues
+      }
+    };
+
+    // Run initialization in background without blocking
+    setTimeout(initCallServices, 1000); // 1 second delay to let app initialize first
+  }, []);
+
   // Initialize AdMob SDK in background
   useEffect(() => {
     setTimeout(() => {
       mobileAds().initialize();
     }, 500);
+  }, []);
+
+  // Debug app state for blank screen issues - TEMPORARILY DISABLED
+  useEffect(() => {
+    console.log('[App] ⚠️ Debug utilities temporarily disabled to prevent blank screen');
+
+    // TODO: Re-enable once the blank screen issue is resolved
+    // const startDebugging = async () => {
+    //   try {
+    //     // Run initialization test first
+    //     const { testAppInitialization } = await import('./src/utils/testAppInitialization');
+    //     setTimeout(testAppInitialization, 1000);
+
+    //     // Then start regular debugging
+    //     const { debugAppState, startAppStateMonitoring } = await import('./src/utils/debugAppState');
+
+    //     // Initial debug
+    //     setTimeout(debugAppState, 3000);
+
+    //     // Start monitoring if app seems stuck
+    //     const stopMonitoring = startAppStateMonitoring();
+
+    //     // Stop monitoring after 2 minutes
+    //     setTimeout(stopMonitoring, 120000);
+    //   } catch (error) {
+    //     console.error('[App] Debug utility error:', error);
+    //   }
+    // };
+
+    // startDebugging();
   }, []);
 
   // Initialize App Open Ad with aggressive showing
@@ -380,38 +461,40 @@ function App(): React.JSX.Element {
   }, [adLoaded, forceLoadAd]);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <ThemeProvider>
-          <AuthProvider>
-            <EnhancedQueryProvider>
-              <UserDataProvider>
-                <WalletProvider>
-                  <ContentCreatorPremiumProvider>
-                    <DataProvider>
-                      <ShortsProvider>
-                        <TabNavigatorProvider>
-                          <SidebarProvider>
-                            <GestureHandlerRootView style={{ flex: 1 }}>
-                              <AppNavigator />
-                              <PersistentMeetingManager />
+    <AppErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <EnhancedQueryProvider>
+                <UserDataProvider>
+                  <WalletProvider>
+                    <ContentCreatorPremiumProvider>
+                      <DataProvider>
+                        <ShortsProvider>
+                          <TabNavigatorProvider>
+                            <SidebarProvider>
+                              <GestureHandlerRootView style={{ flex: 1 }}>
+                                <AppNavigator />
+                                <PersistentMeetingManager />
                               {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
 
                               {/* Ad Debugger - only shows in development */}
                               {/*<AdDebugger />*/}
-                            </GestureHandlerRootView>
-                          </SidebarProvider>
-                        </TabNavigatorProvider>
-                      </ShortsProvider>
-                    </DataProvider>
-                  </ContentCreatorPremiumProvider>
-                </WalletProvider>
-              </UserDataProvider>
-            </EnhancedQueryProvider>
-          </AuthProvider>
-        </ThemeProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+                              </GestureHandlerRootView>
+                            </SidebarProvider>
+                          </TabNavigatorProvider>
+                        </ShortsProvider>
+                      </DataProvider>
+                    </ContentCreatorPremiumProvider>
+                  </WalletProvider>
+                </UserDataProvider>
+              </EnhancedQueryProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </AppErrorBoundary>
   );
 }
 

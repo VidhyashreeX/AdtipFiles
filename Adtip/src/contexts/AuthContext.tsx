@@ -107,10 +107,12 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     }
   };
 
-  // Load user from storage on mount
+  // Load user from storage on mount with timeout protection
   useEffect(() => {
     const loadUser = async () => {
       try {
+        console.log('[AuthContext] 🔄 Starting user initialization...');
+
         // setLoading(true); // No, this loading is for operations, not initialization
         const userJson = await AsyncStorage.getItem('user');
         const token = await AsyncStorage.getItem('accessToken');
@@ -119,7 +121,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         // Guest mode should not persist across app restarts
         await AsyncStorage.removeItem('@guest_mode');
 
-        console.log('[AuthContext] Loading user state:', {
+        console.log('[AuthContext] 📱 Loading user state:', {
           hasUser: !!userJson,
           hasToken: !!token,
         });
@@ -130,24 +132,45 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
           setUser(userData);
           if (userData.is_first_time === 0 || userData.isSaveUserDetails === 1) {
             setIsAuthenticated(true);
-            console.log('[AuthContext] Authenticated user detected - routing to MainNavigator');
+            console.log('[AuthContext] ✅ Authenticated user detected - routing to MainNavigator');
           } else {
-            console.log('[AuthContext] User needs to complete profile - routing to AuthNavigator');
+            console.log('[AuthContext] 📝 User needs to complete profile - routing to AuthNavigator');
           }
-          checkChannelStatus(userData.id.toString());
+
+          // Check channel status in background (non-blocking)
+          checkChannelStatus(userData.id.toString()).catch(err => {
+            console.warn('[AuthContext] ⚠️ Channel status check failed (non-critical):', err);
+          });
         } else {
-          console.log('[AuthContext] New user detected - routing to AuthNavigator (OnboardingScreen)');
+          console.log('[AuthContext] 🆕 New user detected - routing to AuthNavigator (OnboardingScreen)');
         }
       } catch (err) {
-        console.error('Error loading user data:', err);
+        console.error('[AuthContext] ❌ Error loading user data:', err);
         setError('Failed to load user data');
       } finally {
         // setLoading(false); // Not this loading
+        console.log('[AuthContext] ✅ Marking as initialized');
         setIsInitialized(true); // <-- Mark as initialized
       }
     };
 
-    loadUser();
+    // Add timeout protection to prevent hanging
+    const initWithTimeout = async () => {
+      const timeoutPromise = new Promise((resolve) => {
+        setTimeout(() => {
+          console.warn('[AuthContext] ⚠️ Initialization timeout - forcing completion');
+          setIsInitialized(true);
+          resolve(null);
+        }, 10000); // 10 second timeout
+      });
+
+      const loadPromise = loadUser();
+
+      // Race between load and timeout
+      await Promise.race([loadPromise, timeoutPromise]);
+    };
+
+    initWithTimeout();
   }, []);
 
   // Load premium state from AsyncStorage on mount

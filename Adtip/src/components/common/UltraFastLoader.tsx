@@ -265,42 +265,66 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
   }, [activeCall, isNavReady]);
   */
 
+  // Add fallback state for debugging
+  const [showFallback, setShowFallback] = useState(false);
+
+  // Fallback timer to prevent blank screen
+  useEffect(() => {
+    const fallbackTimer = setTimeout(() => {
+      if (!isInitialized) {
+        console.warn('[UltraFastLoader] ⚠️ Initialization taking too long, showing fallback');
+        setShowFallback(true);
+      }
+    }, 15000); // 15 second fallback
+
+    return () => clearTimeout(fallbackTimer);
+  }, [isInitialized]);
+
   // --- START: Replace the entire return logic with this ---
   return (
-    <SafeAreaView 
+    <SafeAreaView
       style={[
-        safeAreaStyles.container, 
+        safeAreaStyles.container,
         { backgroundColor: colors.background }
-      ]} 
+      ]}
       edges={safeAreaStyles.container.edges}
     >
-      <StatusBar 
+      <StatusBar
         {...(isDarkMode ? statusBarConfig.dark : statusBarConfig.light)}
       />
-      
+
       <NavigationContainer
         ref={navigationRef}
         onReady={() => {
-          console.log('[UltraFastLoader] Navigation is ready');
+          console.log('[UltraFastLoader] ✅ Navigation is ready');
           setIsNavReady(true);
         }}
+        fallback={<InitialLoadingScreen />}
       >
         <RootStack.Navigator screenOptions={{ headerShown: false }}>
-          {!isInitialized ? (
-            <RootStack.Screen name="InitialLoading" component={InitialLoadingScreen} />
+          {!isInitialized && !showFallback ? (
+            <>
+              {console.log('[UltraFastLoader] 🔄 Showing InitialLoading screen - isInitialized:', isInitialized)}
+              <RootStack.Screen name="InitialLoading" component={InitialLoadingScreen} />
+            </>
+          ) : showFallback ? (
+            <>
+              {console.log('[UltraFastLoader] 🚨 Showing fallback AuthNavigator due to initialization timeout')}
+              <RootStack.Screen name="Auth" component={AuthNavigator} />
+            </>
           ) : shouldShowMainApp ? (
             <>
-              {console.log('[UltraFastLoader] Rendering MainNavigator for authenticated user')}
+              {console.log('[UltraFastLoader] ✅ Rendering MainNavigator for authenticated user')}
               <RootStack.Screen name="Main" component={MainNavigator} />
             </>
           ) : shouldShowGuestApp ? (
             <>
-              {console.log('[UltraFastLoader] Rendering GuestNavigator for guest user')}
+              {console.log('[UltraFastLoader] 👤 Rendering GuestNavigator for guest user')}
               <RootStack.Screen name="Guest" component={GuestNavigator} />
             </>
           ) : (
             <>
-              {console.log('[UltraFastLoader] Rendering AuthNavigator (OnboardingScreen) for new user')}
+              {console.log('[UltraFastLoader] 🆕 Rendering AuthNavigator (OnboardingScreen) for new user')}
               <RootStack.Screen name="Auth" component={AuthNavigator} />
             </>
           )}

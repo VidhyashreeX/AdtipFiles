@@ -37,15 +37,31 @@ class MediaService {
 
       console.log('[MediaService] Joining meeting:', { meetingId, name, type })
 
-      // Navigate to meeting screen which will handle the actual VideoSDK join
-      NavigationService.navigateToMeeting({
-        meetingId,
-        token,
-        callType: type,
-        displayName: name,
-        recipientName: name, // Will be updated by caller
-        isInitiator: false // Will be updated by caller
-      })
+      // Navigate to meeting screen with background-aware navigation
+      // Check if this is a background call by importing AppState
+      const { AppState } = await import('react-native')
+
+      if (AppState.currentState === 'background' || AppState.currentState === 'inactive') {
+        console.log('[MediaService] Using background-aware navigation')
+        NavigationService.navigateToMeetingFromBackground({
+          meetingId,
+          token,
+          callType: type,
+          displayName: name,
+          recipientName: name, // Will be updated by caller
+          isInitiator: false // Will be updated by caller
+        })
+      } else {
+        console.log('[MediaService] Using regular navigation')
+        NavigationService.navigateToMeeting({
+          meetingId,
+          token,
+          callType: type,
+          displayName: name,
+          recipientName: name, // Will be updated by caller
+          isInitiator: false // Will be updated by caller
+        })
+      }
 
       return true
     } catch (error) {

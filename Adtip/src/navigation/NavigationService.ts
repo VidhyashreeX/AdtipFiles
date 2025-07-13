@@ -219,16 +219,16 @@ export function navigateToMeetingFromNotification(params: {
   let retries = 0;
   const maxRetries = 10;
   const retryDelay = 300;
-  
+
   const attemptNavigation = () => {
     console.log(`[NavigationService] Attempting notification navigation (try ${retries+1}/${maxRetries})`);
-    
+
     if (navigationRef.isReady()) {
       try {
         console.log('[NavigationService] Navigation ready, proceeding to Meeting screen');
-        (navigationRef as any).navigate('Main', { 
-          screen: 'Meeting', 
-          params: params 
+        (navigationRef as any).navigate('Main', {
+          screen: 'Meeting',
+          params: params
         });
       } catch (error) {
         console.error('[NavigationService] Error navigating from notification:', error);
@@ -245,9 +245,59 @@ export function navigateToMeetingFromNotification(params: {
       console.error('[NavigationService] Failed to navigate after max retries');
     }
   };
-  
+
   // Start the first attempt
   attemptNavigation();
+}
+
+// Add new function for background-to-foreground navigation
+export function navigateToMeetingFromBackground(params: {
+  meetingId: string;
+  token: string;
+  displayName: string;
+  callType: 'voice' | 'video';
+  isInitiator?: boolean;
+  recipientName?: string;
+  callData?: any;
+  localParticipantId?: string;
+}) {
+  console.log('[NavigationService] Handling background-to-foreground navigation');
+
+  // Import AppState to check current state
+  import('react-native').then(({ AppState }) => {
+    const handleNavigation = () => {
+      console.log('[NavigationService] App state:', AppState.currentState);
+
+      if (AppState.currentState === 'active') {
+        // App is already active, navigate immediately
+        navigateToMeeting(params);
+      } else {
+        // App is not active, wait for it to become active
+        const listener = AppState.addEventListener('change', (nextAppState) => {
+          if (nextAppState === 'active') {
+            console.log('[NavigationService] App became active, navigating to meeting');
+            listener.remove();
+
+            // Add a small delay to ensure app is fully ready
+            setTimeout(() => {
+              navigateToMeeting(params);
+            }, 500);
+          }
+        });
+
+        // Cleanup listener after 30 seconds to prevent memory leaks
+        setTimeout(() => {
+          listener.remove();
+        }, 30000);
+      }
+    };
+
+    handleNavigation();
+  }).catch(error => {
+    console.error('[NavigationService] Error importing AppState:', error);
+    // Fallback to regular navigation
+    navigateToMeeting(params);
+  });
 }
 
 // ✅ CRITICAL FIX: Force navigation back to TipCall screen after call ends
