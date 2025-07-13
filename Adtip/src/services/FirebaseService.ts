@@ -88,8 +88,8 @@ class FirebaseService {
       
       this.messagingReady = true;
 
-      // Set background message handler
-      this._setBackgroundMessageHandler(msg);
+      // Background message handler is now handled by ReliableCallManager in index.js
+      // this._setBackgroundMessageHandler(msg);
 
       console.log('[FCM] Firebase messaging v22.2.1 initialized successfully.');
       return true;
@@ -210,13 +210,10 @@ class FirebaseService {
         console.log('[FCM] App opened from background by notification:', remoteMessage);
       });
 
-      // Handle foreground messages - handled by CallSignalingService
-      const unsubscribeForegroundMessages = msg.onMessage(async (remoteMessage) => {
-        console.log('[FCM] Foreground message received - handled by CallSignalingService:', remoteMessage);
-
-        // Note: Call handling is now centralized in CallSignalingService
-        // which automatically processes FCM messages via its own listener
-      });
+      // Foreground messages are now handled by ReliableCallManager
+      // const unsubscribeForegroundMessages = msg.onMessage(async (remoteMessage) => {
+      //   console.log('[FCM] Foreground message received - handled by ReliableCallManager:', remoteMessage);
+      // });
 
       // Listen for token refresh (improved in v22.2.1)
       const unsubscribeTokenRefresh = msg.onTokenRefresh(async (token) => {

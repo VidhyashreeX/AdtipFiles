@@ -186,6 +186,8 @@ const Controls = () => {
 // Main component
 
 const MeetingContent = () => {
+  console.log('[MeetingContent] Component rendering...')
+
   const meeting = useMeeting()
   const { participants, localParticipant, join, leave } = meeting
   const localParticipantId = localParticipant?.id
@@ -194,6 +196,15 @@ const MeetingContent = () => {
   const session = useCallStore(state => state.session)
   const status = useCallStore(state => state.status)
   const actions = useCallStore(state => state.actions)
+
+  console.log('[MeetingContent] Initial state:', {
+    sessionId: session?.sessionId,
+    status,
+    meetingId: session?.meetingId,
+    hasToken: !!session?.token,
+    localParticipantId,
+    participantCount: participants?.size || 0
+  })
 
   // Track if this component has set the meeting reference
   const hasSetMeetingRef = useRef(false)
@@ -206,10 +217,25 @@ const MeetingContent = () => {
   
   // Check if this MeetingContent belongs to the active component instance AND is tracked by VideoSDK
   const videoSDK = VideoSDKService.getInstance()
-  const isActiveInstance = globalComponentKey && 
+  const isVideoSDKSessionActive = sessionIsValid ? videoSDK.isSessionActive(session.sessionId) : false
+  const isActiveInstance = globalComponentKey &&
     global.meetingComponentInstances?.[globalComponentKey] &&
     global.meetingComponentInstances[globalComponentKey] !== 'deactivated' &&
-    (sessionIsValid ? videoSDK.isSessionActive(session.sessionId) : false)
+    isVideoSDKSessionActive
+
+  // Debug logging for isActiveInstance check
+  useEffect(() => {
+    if (sessionIsValid && globalComponentKey) {
+      console.log('[MeetingContent] Active instance check:', {
+        globalComponentKey,
+        hasGlobalInstance: !!global.meetingComponentInstances?.[globalComponentKey],
+        globalInstanceValue: global.meetingComponentInstances?.[globalComponentKey],
+        isVideoSDKSessionActive,
+        isActiveInstance,
+        sessionId: session.sessionId
+      })
+    }
+  }, [globalComponentKey, isVideoSDKSessionActive, isActiveInstance, session?.sessionId, sessionIsValid])
   
   // Add participant state validation ref to prevent bleeding
   const lastSessionId = useRef<string | null>(null)
@@ -308,15 +334,28 @@ const MeetingContent = () => {
 
     const joinWithRetry = async () => {
       // Enhanced validation before attempting to join
-      if (!sessionIsValid || !callIsActive || !isActiveInstance) {
+      // For incoming calls, we'll be more lenient with the isActiveInstance check
+      const isIncomingCall = session?.direction === 'incoming'
+      const shouldAllowJoin = sessionIsValid && callIsActive && (isActiveInstance || isIncomingCall)
+
+      if (!shouldAllowJoin) {
         console.log('[MeetingContent] Cannot join - validation failed:', {
           sessionIsValid,
           callIsActive,
           isActiveInstance,
+          isIncomingCall,
+          shouldAllowJoin,
           globalKey: globalComponentKey,
           registeredComponent: global.meetingComponentInstances?.[globalComponentKey || '']
         })
         return
+      }
+
+      // If this is an incoming call and VideoSDK session is not active, try to set it
+      if (isIncomingCall && !isVideoSDKSessionActive && session?.sessionId) {
+        console.log('[MeetingContent] Incoming call detected, setting VideoSDK session as active...')
+        const videoSDK = VideoSDKService.getInstance()
+        videoSDK.setActiveMeetingSession(session.sessionId)
       }
       
       if (joinedRef.current || joinAttemptsRef.current >= MAX_ATTEMPTS) return
@@ -584,7 +623,9 @@ const MeetingScreenSimple = () => {
   const session = useCallStore(state => state.session)
   const status = useCallStore(state => state.status)
   const navigation = useNavigation()
-  
+
+  // Remove debugging state since we're using persistent call approach
+
   // Enhanced component instance tracking with stricter validation
   const componentId = useRef(Math.random().toString(36).substr(2, 9))
   const isComponentActive = useRef(false) // Start as inactive until validated
@@ -594,6 +635,18 @@ const MeetingScreenSimple = () => {
   // More comprehensive session validation
   const sessionIsValid = session?.sessionId && session?.meetingId && session?.token
   const callIsActive = status === 'in_call' || status === 'connecting' || status === 'outgoing'
+
+  // Debug logging for state changes
+  useEffect(() => {
+    console.log('[MeetingScreenSimple] State changed:', {
+      sessionId: session?.sessionId,
+      status,
+      sessionIsValid,
+      callIsActive,
+      isComponentActive: isComponentActive.current,
+      hasInitialized: hasInitialized.current
+    })
+  }, [session?.sessionId, status, sessionIsValid, callIsActive])
   
   // Global component tracking key
   const globalComponentKey = sessionIsValid ? `meeting-${session.sessionId}` : null
@@ -702,21 +755,28 @@ const MeetingScreenSimple = () => {
   
   // Only create MeetingProvider if this is the active component instance AND we have a valid session
   console.log('[MeetingScreenSimple] Rendering active component for session:', session.sessionId, 'componentId:', componentId.current)
-  
+
+  const meetingConfig = {
+    meetingId: session.meetingId,
+    micEnabled: true,
+    webcamEnabled: session.type === 'video',
+    name: "User", // TODO: get from AsyncStorage
+    notification: {
+      title: `${session.type} call`,
+      message: `with ${session.peerName}`
+    }
+  }
+
+  console.log('[MeetingScreenSimple] MeetingProvider config:', {
+    token: session.token ? 'present' : 'missing',
+    config: meetingConfig
+  })
+
   return (
     <MeetingProvider
       key={`meeting-${session.sessionId}-${componentId.current}`} // Force new provider for each session
       token={session.token}
-      config={{
-        meetingId: session.meetingId,
-        micEnabled: true,
-        webcamEnabled: session.type === 'video',
-        name: "User", // TODO: get from AsyncStorage
-        notification: {
-          title: `${session.type} call`,
-          message: `with ${session.peerName}`
-        }
-      }}
+      config={meetingConfig}
     >
       <MeetingContent />
     </MeetingProvider>

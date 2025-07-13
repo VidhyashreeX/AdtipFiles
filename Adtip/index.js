@@ -9,8 +9,8 @@ import { getApps, initializeApp } from '@react-native-firebase/app';
 import notifee from '@notifee/react-native';
 import { register } from '@videosdk.live/react-native-sdk';
 import messaging from '@react-native-firebase/messaging';
-// Import CallController for handling background messages
-import CallController from './src/services/calling/CallController';
+// Import ReliableCallManager for handling background messages
+import ReliableCallManager from './src/services/calling/ReliableCallManager';
 
 // Register VideoSDK FIRST - Critical for proper initialization
 register();
@@ -63,34 +63,49 @@ global.resolveForegroundService = () => {
 
 // CallEventTask removed - using simplified calling flow
 
-// Enhanced background message handler with wake-up and native integration
+// Enhanced background message handler with reliable call management
 messaging().setBackgroundMessageHandler(async remoteMessage => {
   console.log('[Index] Background message received:', remoteMessage);
 
   // Check if this is a call-related message
-  if (
-    remoteMessage.data?.type === 'CALL_INITIATE' ||
-    remoteMessage.data?.type === 'CALL_ACCEPT' ||
-    remoteMessage.data?.type === 'CALL_END'
-  ) {
+  // Handle both new format (info field) and legacy format (direct type)
+  let isCallMessage = false;
+
+  if (remoteMessage.data?.info) {
     try {
-      // Initialize controller and handle the message
-      const callController = CallController.getInstance();
-      callController.handleFCMMessage(remoteMessage);
+      const parsedInfo = JSON.parse(remoteMessage.data.info);
+      isCallMessage = parsedInfo.type === 'CALL_INITIATED' ||
+                     parsedInfo.type === 'CALL_INITIATE' ||
+                     parsedInfo.type === 'CALL_ACCEPT' ||
+                     parsedInfo.type === 'CALL_END';
+    } catch (e) {
+      // Ignore parse errors
+    }
+  } else if (remoteMessage.data?.type) {
+    isCallMessage = remoteMessage.data.type === 'CALL_INITIATE' ||
+                   remoteMessage.data.type === 'CALL_ACCEPT' ||
+                   remoteMessage.data.type === 'CALL_END';
+  }
 
-      // For incoming calls, ensure we wake up the device and show native UI
-      if (remoteMessage.data?.type === 'CALL_INITIATE') {
-        console.log('[Index] Processing incoming call in background');
+  if (isCallMessage) {
+    try {
+      // Use ReliableCallManager for background message handling
+      const callManager = ReliableCallManager.getInstance();
 
-        // The AdtipFirebaseMessagingService will handle native wake-up and notifications
-        // This ensures redundancy and proper handling even if React Native context is limited
+      // Initialize if not already done
+      if (!callManager.isReady()) {
+        await callManager.initialize();
       }
+
+      // Handle the FCM message
+      await callManager.handleFCMMessage(remoteMessage, 'background');
 
       console.log('[Index] Background call message processed successfully');
       return Promise.resolve();
     } catch (error) {
       console.error('[Index] Error processing background call message:', error);
-      return Promise.reject(error);
+      // Don't reject to prevent app crashes
+      return Promise.resolve();
     }
   }
 

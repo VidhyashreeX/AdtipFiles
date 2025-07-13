@@ -35,10 +35,10 @@ class CallSignalingService {
     }
   }
 
-  // Listen to foreground FCM messages
+  // FCM messages are now handled by ReliableCallManager
   private registerFCMListener() {
-    console.log('[CallSignalingService] Registering FCM listener (legacy)')
-    messaging().onMessage(this.onMessage)
+    console.log('[CallSignalingService] FCM listener disabled - using ReliableCallManager')
+    // messaging().onMessage(this.onMessage)
     // background handler is registered in index.js of RN app
   }
 

@@ -69,7 +69,7 @@ import ChatScreen from './src/screens/chat/ChatScreen';
 import UltraFastLoader from './src/components/common/UltraFastLoader';
 
 import { RootStackParamList } from 'src/types/navigation';
-import useFcmCallHandlers from './src/hooks/useFcmCallHandlers';
+import useReliableCallManager from './src/hooks/useReliableCallManager';
 
 // Import call store (simplified)
 import { useCallStore } from './src/stores/callStoreSimplified';
@@ -352,8 +352,8 @@ function App(): React.JSX.Element {
     console.log('[App] Call configuration initialized for simplified flow');
   }, []);
 
-  // Add hooks for FCM call handling
-  useFcmCallHandlers();
+  // Add reliable call manager for FCM call handling
+  useReliableCallManager();
 
   // Initialize AdMob SDK in background
   useEffect(() => {
