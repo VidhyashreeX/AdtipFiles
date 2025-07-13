@@ -104,8 +104,8 @@ android {
         applicationId "com.adtip.app.adtip_app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2900
-        versionName "29.0.0"
+        versionCode 2901
+        versionName "29.0.1"
 
         // Enable multidex for large apps
         multiDexEnabled true

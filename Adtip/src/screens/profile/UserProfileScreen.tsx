@@ -36,7 +36,6 @@ const { width } = Dimensions.get('window');
 
 interface UserProfileScreenProps {
   userId: number;
-  onClose?: () => void;
 }
 
 interface Post {
@@ -44,6 +43,12 @@ interface Post {
   media_url?: string | null;
   media_type?: string;
   is_premium?: boolean;
+  content?: string;
+  likeCount?: number;
+  commentCount?: number;
+  created_at?: string;
+  is_liked?: boolean;
+  user_id?: number;
 }
 
 const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
@@ -71,18 +76,12 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
   const [isBlocked, setIsBlocked] = useState(false);
   const [selectedTab, setSelectedTab] = useState<'posts'>('posts'); // Instagram-style tab navigation
 
-  const { onClose } = props;
+
   const blocklistService = BlocklistService.getInstance();
   const callController = CallController.getInstance();
   const billingService = CallBillingService.getInstance();
 
-  // When closing the main modal, also close all nested modals
-  const handleClose = useCallback(() => {
-    setShowFollowersModal(false);
-    setShowFollowingModal(false);
-    setShowImageViewer(false);
-    if (onClose) onClose();
-  }, [onClose]);
+
 
 
 
@@ -760,10 +759,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
           </TouchableOpacity>
         </Modal>
       )}
-      {/* Main close button for the parent modal, if needed */}
-      <TouchableOpacity style={{ position: 'absolute', top: 40, left: 24, zIndex: 20 }} onPress={handleClose}>
-        <Icon name="x" size={32} color={colors.text.primary} />
-      </TouchableOpacity>
+
     </View>
   );
 };

@@ -264,21 +264,21 @@ const CreatePostScreen = () => {
     }
   };
 
+  // Validation helper function
+  const validatePostData = (): string | null => {
+    if (!title.trim()) return 'Please add a title to your post';
+    if (title.trim().length < 3) return 'Title must be at least 3 characters long';
+    if (!content.trim() && images.length === 0) return 'Please add some content or images to your post';
+    if (!userId) return 'User not found. Please log in again.';
+    return null;
+  };
+
   // Handle publish post
   const handlePublish = async () => {
-    // Validate form
-    if (!title.trim()) {
-      Alert.alert('Error', 'Please add a title to your post');
-      return;
-    }
-
-    if (!content.trim() && images.length === 0) {
-      Alert.alert('Error', 'Please add some content or images to your post');
-      return;
-    }
-
-    if (!userId) {
-      Alert.alert('Error', 'User not found. Please log in again.');
+    // Validate form using helper function
+    const validationError = validatePostData();
+    if (validationError) {
+      Alert.alert('Validation Error', validationError);
       return;
     }
 
@@ -292,16 +292,24 @@ const CreatePostScreen = () => {
       }
 
       // Prepare post data
+      const now = new Date();
+      const endDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+      // Format dates as MySQL datetime format
+      const formatMySQLDateTime = (date: Date) => {
+        return date.toISOString().slice(0, 19).replace('T', ' ');
+      };
+
       const postData = {
         user_id: parseInt(userId),
         title: title.trim(),
-        content: content.trim(),
-        media_url: mediaUrls.length > 0 ? mediaUrls[0] : '', // Use first image as primary media
-        media_type: mediaUrls.length > 0 ? 'image' : 'text' as 'video' | 'image' | 'text',
+        content: content.trim() || undefined, // Don't send empty string
+        media_url: mediaUrls.length > 0 ? mediaUrls[0] : undefined, // Don't send empty string
+        media_type: mediaUrls.length > 0 ? 'image' as 'video' | 'image' | 'audio' : 'image', // Default to image, backend will handle
         is_promoted: isPromoted,
-        video_category_id: selectedCategory?.id || 1, // Default category if none selected
-        start_date: new Date().toISOString().split('T')[0], // Today's date
-        end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7 days from now
+        video_category_id: selectedCategory?.id || undefined,
+        start_date: formatMySQLDateTime(now),
+        end_date: formatMySQLDateTime(endDate),
         // Add all uploaded image URLs as additional data if needed
         all_media_urls: mediaUrls, // This can be used if the API supports multiple images
       };
@@ -326,21 +334,48 @@ const CreatePostScreen = () => {
       );
     } catch (error: any) {
       console.error('[CreatePost] Error creating post:', error);
-      
-      // More specific error messages
+
+      // Enhanced error handling with specific messages
+      let errorTitle = 'Post Creation Failed';
       let errorMessage = 'Failed to publish your post. Please try again.';
-      
-      if (error.message?.includes('upload')) {
+
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message?.includes('upload')) {
+        errorTitle = 'Upload Error';
         errorMessage = 'Failed to upload images. Please check your internet connection and try again.';
+      } else if (error.message?.includes('Missing required fields')) {
+        errorTitle = 'Validation Error';
+        errorMessage = 'Please fill in all required fields.';
+      } else if (error.message?.includes('Either content or media file')) {
+        errorTitle = 'Content Required';
+        errorMessage = 'Please add some text content or upload an image.';
+      } else if (error.message?.includes('Invalid media_type')) {
+        errorTitle = 'Media Type Error';
+        errorMessage = 'Invalid media type. Please try uploading a different file.';
       } else if (error.message?.includes('Network')) {
-        errorMessage = 'Network error. Please check your internet connection.';
+        errorTitle = 'Network Error';
+        errorMessage = 'Network connection failed. Please check your internet connection.';
       } else if (error.message?.includes('User not authenticated')) {
-        errorMessage = 'Please log in again to continue.';
+        errorTitle = 'Authentication Error';
+        errorMessage = 'Your session has expired. Please log in again.';
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
-      Alert.alert('Error', errorMessage);
+
+      Alert.alert(errorTitle, errorMessage, [
+        {
+          text: 'OK',
+          style: 'default',
+        },
+        ...(error.message?.includes('Authentication') ? [{
+          text: 'Login Again',
+          onPress: () => {
+            // Navigate to login screen
+            navigation.navigate('Login' as never);
+          },
+        }] : []),
+      ]);
     }
   };
 

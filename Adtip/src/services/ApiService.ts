@@ -1743,11 +1743,11 @@ export default class ApiService {
     title: string;
     content: string;
     media_url: string;
-    media_type: 'video' | 'image';
+    media_type: 'video' | 'image' | 'audio';
     is_promoted: boolean;
-    video_category_id: number;
-    start_date: string;
-    end_date: string;
+    video_category_id?: number;
+    start_date?: string;
+    end_date?: string;
     target_min_age?: number;
     target_max_age?: number;
     pay_per_view?: number;
@@ -1755,10 +1755,54 @@ export default class ApiService {
     duration_days?: number;
     total_pay?: number;
     platform_fee?: number;
-    post_target_locations?: string[];
-    post_target_genders?: string[];
-  }): Promise<any> {
-    return this.post('/api/post', data);
+    post_target_locations?: Array<{id: number; name: string}>;
+    post_target_genders?: Array<{id: number; name: string}>;
+  }): Promise<{
+    status: boolean;
+    statusCode: number;
+    message: string;
+    data?: {
+      post_id: number;
+      user_id: number;
+      title: string;
+      is_promoted: boolean;
+    };
+  }> {
+    try {
+      console.log('[ApiService] Uploading post with data:', data);
+
+      // Validate required fields
+      if (!data.user_id || !data.title?.trim() || !data.media_type) {
+        throw new Error('Missing required fields: user_id, title, media_type');
+      }
+
+      // For non-promoted posts, either content or media_url is required
+      if (!data.is_promoted && !data.content?.trim() && !data.media_url) {
+        throw new Error('Either content or media file is required for posts');
+      }
+
+      // Validate media_type enum
+      if (!['image', 'video', 'audio'].includes(data.media_type)) {
+        throw new Error('Invalid media_type. Must be image, video, or audio');
+      }
+
+      // Validate promoted post requirements
+      if (data.is_promoted) {
+        if (!data.pay_per_view || !data.reach_goal || !data.duration_days || !data.total_pay) {
+          throw new Error('Missing required promotional fields: pay_per_view, reach_goal, duration_days, total_pay');
+        }
+        if (!data.post_target_locations?.length || !data.post_target_genders?.length) {
+          throw new Error('Missing targeting information: post_target_locations, post_target_genders');
+        }
+      }
+
+      const response = await this.post('/api/post', data);
+      console.log('[ApiService] Post upload response:', response);
+      return response;
+    } catch (error: any) {
+      console.error('[ApiService] Post upload failed:', error);
+      throw this.handleError(error);
+    }
   }
 
   /**
@@ -1774,8 +1818,64 @@ export default class ApiService {
     createdby: number;
     play_duration: string;
     video_Thumbnail: string;
-  }): Promise<any> {
-    return this.post('/api/uploadshot', data);
+    is_paid_promotional?: boolean;
+    promotional_price?: number;
+  }): Promise<{
+    status: number;
+    message: string;
+    data: Array<{
+      id: number;
+      name: string;
+      isShot: boolean;
+      categoryId: number;
+      channelId: number;
+      videoLink: string;
+      videoDesciption: string;
+      createdby: number;
+      play_duration: string;
+      video_Thumbnail: string;
+      is_paid_promotional?: boolean;
+      promotional_price?: number;
+    }>;
+  }> {
+    try {
+      console.log('[ApiService] Uploading video shot:', data);
+
+      // Validate required fields
+      if (!data.name?.trim()) {
+        throw new Error('Video title is required');
+      }
+      if (!data.categoryId) {
+        throw new Error('Video category is required');
+      }
+      if (!data.channelId) {
+        throw new Error('Channel ID is required');
+      }
+      if (!data.videoLink) {
+        throw new Error('Video URL is required');
+      }
+      if (!data.video_Thumbnail) {
+        throw new Error('Video thumbnail is required');
+      }
+      if (!data.createdby) {
+        throw new Error('User authentication required');
+      }
+      if (!data.play_duration) {
+        throw new Error('Video duration is required');
+      }
+
+      // Validate paid promotional fields if applicable
+      if (data.is_paid_promotional && (!data.promotional_price || data.promotional_price <= 0)) {
+        throw new Error('Valid promotional price is required for paid videos');
+      }
+
+      const response = await this.post('/api/uploadshot', data);
+      console.log('[ApiService] Video shot uploaded successfully:', response);
+      return response;
+    } catch (error: any) {
+      console.error('[ApiService] Video shot upload failed:', error);
+      throw this.handleError(error);
+    }
   }
 
   /**
@@ -2082,7 +2182,7 @@ static async createSubscriptionTest(plan_id: string, user_id: number): Promise<a
   // ===== TIP-TUBE UPLOAD SERVICES =====
 
   /**
-   * Upload TipShorts video using the /uploadshot API endpoint
+   * Upload TipShorts video using the enhanced uploadShot method
    */
   static async uploadTipShortsVideo(data: {
     name: string;
@@ -2109,26 +2209,14 @@ static async createSubscriptionTest(plan_id: string, user_id: number): Promise<a
       video_Thumbnail: string;
     }>;
   }> {
-    try {
-      console.log('[ApiService] Uploading TipShorts video:', data);
-
-      const requestBody = {
-        ...data,
-        isShot: true, // TipShorts videos have isShot: true
-      };
-
-      const response = await this.post('/api/uploadshot', requestBody);
-      
-      console.log('[ApiService] TipShorts video uploaded successfully:', response);
-      return response;
-    } catch (error: any) {
-      console.error('[ApiService] TipShorts video upload failed:', error);
-      throw this.handleError(error);
-    }
+    return this.uploadShot({
+      ...data,
+      isShot: true, // TipShorts videos have isShot: true
+    });
   }
 
   /**
-   * Upload TipTube video using the /uploadshot API endpoint
+   * Upload TipTube video using the enhanced uploadShot method
    */
   static async uploadTipTubeVideo(data: {
     name: string;
@@ -2159,37 +2247,25 @@ static async createSubscriptionTest(plan_id: string, user_id: number): Promise<a
       promotional_price?: number;
     }>;
   }> {
-    try {
-      console.log('[ApiService] Uploading TipTube video:', data);
-
-      const requestBody = {
-        ...data,
-        isShot: false, // TipTube videos have isShot: false
-      };
-
-      const response = await this.post('/api/uploadshot', requestBody);
-      
-      console.log('[ApiService] TipTube video uploaded successfully:', response);
-      return response;
-    } catch (error: any) {
-      console.error('[ApiService] TipTube video upload failed:', error);
-      throw this.handleError(error);
-    }
+    return this.uploadShot({
+      ...data,
+      isShot: false, // TipTube videos have isShot: false
+    });
   }
 
   /**
-   * Create a new post
+   * Create a new post (updated to use uploadPost method)
    */
   static async createPost(data: {
     user_id: number;
     title: string;
     content: string;
     media_url: string;
-    media_type: 'video' | 'image' | 'text';
+    media_type: 'video' | 'image' | 'audio';
     is_promoted: boolean;
-    video_category_id: number;
-    start_date: string;
-    end_date: string;
+    video_category_id?: number;
+    start_date?: string;
+    end_date?: string;
     target_min_age?: number;
     target_max_age?: number;
     pay_per_view?: number;
@@ -2197,28 +2273,21 @@ static async createSubscriptionTest(plan_id: string, user_id: number): Promise<a
     duration_days?: number;
     total_pay?: number;
     platform_fee?: number;
-    post_target_locations?: string[];
-    post_target_genders?: string[];
+    post_target_locations?: Array<{id: number; name: string}>;
+    post_target_genders?: Array<{id: number; name: string}>;
   }): Promise<{
     status: boolean;
     statusCode: number;
     message: string;
-    data: {
+    data?: {
       post_id: number;
       user_id: number;
       title: string;
       is_promoted: boolean;
     };
   }> {
-    try {
-      console.log('[ApiService] Creating post with data:', data);
-      const response = await this.post('/api/post', data);
-      console.log('[ApiService] Create post response:', response);
-      return response;
-    } catch (error) {
-      console.error('[ApiService] Error creating post:', error);
-      throw this.handleError(error);
-    }
+    // Use the updated uploadPost method
+    return this.uploadPost(data);
   }
 
   static async viewNormalVideo(videoId: number): Promise<any> {

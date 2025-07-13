@@ -242,9 +242,9 @@ export interface Post {
   title: string;
   content: string;
   media_url: string;
-  media_type: string;
+  media_type: 'image' | 'video' | 'audio';
   is_promoted: number;
-  video_category_id: number;
+  video_category_id?: number;
   user_name: string;
   user_profile_image: string | null;
   address: string | null;
@@ -262,6 +262,45 @@ export interface Post {
   platform_fee?: string;
   created_at: string; // Make created_at required and always a string
   is_premium?: boolean;
+  is_active?: number;
+  start_date?: string;
+  end_date?: string;
+  target_locations?: string;
+}
+
+// New interface for campaign creation
+export interface CampaignCreateRequest {
+  user_id: number;
+  title: string;
+  content: string;
+  media_url: string;
+  media_type: 'video' | 'image' | 'audio';
+  is_promoted: boolean;
+  video_category_id?: number;
+  start_date?: string;
+  end_date?: string;
+  target_min_age?: number;
+  target_max_age?: number;
+  pay_per_view?: number;
+  reach_goal?: number;
+  duration_days?: number;
+  total_pay?: number;
+  platform_fee?: number;
+  post_target_locations?: Array<{id: number; name: string}>;
+  post_target_genders?: Array<{id: number; name: string}>;
+}
+
+// Response interface for campaign creation
+export interface CampaignCreateResponse {
+  status: boolean;
+  statusCode: number;
+  message: string;
+  data?: {
+    post_id: number;
+    user_id: number;
+    title: string;
+    is_promoted: boolean;
+  };
 }
 
 export interface PostListResponse {

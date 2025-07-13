@@ -612,22 +612,25 @@ const TipShortsUploadScreen: React.FC = () => {
     }
   };
 
+  // Validation helper function
+  const validateUploadData = (): string | null => {
+    if (!selectedVideo) return 'Please select or record a video to upload.';
+    if (!title.trim()) return 'Please enter a title for your short video.';
+    if (title.trim().length < 3) return 'Video title must be at least 3 characters long.';
+    if (!selectedThumbnail) return 'Please select a thumbnail for your video.';
+    if (!categoryId) return 'Please select a video category.';
+    if (!channelId) return 'Please select a channel.';
+    if (!user?.id) return 'User authentication required. Please log in again.';
+    return null;
+  };
+
   // Main upload function
   const handleUpload = async () => {
     try {
-      // Validation
-      if (!selectedVideo) {
-        Alert.alert('Error', 'Please select or record a video to upload.');
-        return;
-      }
-
-      if (!title.trim()) {
-        Alert.alert('Error', 'Please enter a title for your short video.');
-        return;
-      }
-
-      if (!selectedThumbnail) {
-        Alert.alert('Error', 'Please select a thumbnail for your video.');
+      // Enhanced validation
+      const validationError = validateUploadData();
+      if (validationError) {
+        Alert.alert('Validation Error', validationError);
         return;
       }
 
@@ -658,8 +661,52 @@ const TipShortsUploadScreen: React.FC = () => {
 
     } catch (error: any) {
       console.error('[TipShortsUpload] Upload failed:', error);
-      setError(error.message || 'Upload failed. Please try again.');
-      Alert.alert('Upload Failed', error.message || 'Something went wrong. Please try again.');
+
+      // Enhanced error handling with specific messages
+      let errorTitle = 'Upload Failed';
+      let errorMessage = 'Something went wrong. Please try again.';
+
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message?.includes('Video title is required')) {
+        errorTitle = 'Validation Error';
+        errorMessage = 'Please enter a title for your short video.';
+      } else if (error.message?.includes('Video category is required')) {
+        errorTitle = 'Category Required';
+        errorMessage = 'Please select a video category.';
+      } else if (error.message?.includes('Channel ID is required')) {
+        errorTitle = 'Channel Required';
+        errorMessage = 'Please select a channel for your video.';
+      } else if (error.message?.includes('User authentication required')) {
+        errorTitle = 'Authentication Error';
+        errorMessage = 'Your session has expired. Please log in again.';
+      } else if (error.message?.includes('Upload failed')) {
+        errorTitle = 'Upload Error';
+        errorMessage = 'Failed to upload short video. Please check your internet connection and try again.';
+      } else if (error.message?.includes('compression')) {
+        errorTitle = 'Compression Error';
+        errorMessage = 'Failed to compress video. Please try with a different video file.';
+      } else if (error.message?.includes('Network')) {
+        errorTitle = 'Network Error';
+        errorMessage = 'Network connection failed. Please check your internet connection.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      setError(errorMessage);
+      Alert.alert(errorTitle, errorMessage, [
+        {
+          text: 'OK',
+          style: 'default',
+        },
+        ...(error.message?.includes('Authentication') ? [{
+          text: 'Login Again',
+          onPress: () => {
+            // Navigate to login screen
+            navigation.navigate('Login' as never);
+          },
+        }] : []),
+      ]);
     } finally {
       setIsUploading(false);
       setIsCompressing(false);

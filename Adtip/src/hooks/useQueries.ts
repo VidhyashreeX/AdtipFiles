@@ -392,14 +392,27 @@ export const useUploadTipShortsVideo = () => {
 // Create Post Mutation
 export const useCreatePost = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: (data: any) => ApiService.createPost(data),
+    mutationFn: (data: {
+      user_id: number;
+      title: string;
+      content?: string;
+      media_url?: string;
+      media_type: 'video' | 'image' | 'audio';
+      is_promoted: boolean;
+      video_category_id?: number;
+      start_date?: string;
+      end_date?: string;
+      all_media_urls?: string[];
+    }) => ApiService.createPost(data),
     onSuccess: (data, variables) => {
+      console.log('Post created successfully:', data);
       // Invalidate related queries
       queryClient.invalidateQueries({ queryKey: ['posts'] });
       queryClient.invalidateQueries({ queryKey: ['user', 'posts'] });
       queryClient.invalidateQueries({ queryKey: ['explore'] });
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
     onError: (error) => {
       console.error('Create post error:', error);

@@ -34,6 +34,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import CloudflareUploadService from '../../services/CloudflareUploadService';
 import Video from 'react-native-video';
 import { createThumbnail } from 'react-native-create-thumbnail';
+import { CampaignCreateRequest, CampaignCreateResponse } from '../../types/api';
 
 // Define interfaces
 interface PostData {
@@ -453,6 +454,31 @@ const CreateCampaignScreen: React.FC = () => {
     }
   };
 
+  // Validate campaign data before submission
+  const validateCampaignData = (): string | null => {
+    // Basic validation
+    if (!title.trim()) return 'Please enter a campaign title';
+    if (title.trim().length < 3) return 'Campaign title must be at least 3 characters long';
+    if (!content.trim()) return 'Please enter campaign content';
+    if (content.trim().length < 10) return 'Campaign content must be at least 10 characters long';
+    if (!selectedMediaUri) return 'Please select a media file for your campaign';
+    if (!userId) return 'User not found. Please log in again.';
+
+    // Promoted campaign validation
+    if (isPromoted) {
+      if (!videoCategoryId) return 'Please select a video category';
+      if (postTargetLocations.length === 0) return 'Please select at least one target location';
+      if (postTargetGenders.length === 0) return 'Please select target genders';
+      if (payPerView < 0.5 || payPerView > 5) return 'Pay per view must be between ₹0.5 and ₹5.0';
+      if (reachGoal < 100) return 'Reach goal must be at least 100 people';
+      if (totalPay <= 0) return 'Total budget must be greater than ₹0';
+      if (durationDays < 1 || durationDays > 30) return 'Campaign duration must be between 1 and 30 days';
+      if (targetMinAge && targetMaxAge && targetMinAge > targetMaxAge) return 'Minimum age cannot be greater than maximum age';
+    }
+
+    return null; // No validation errors
+  };
+
   // Upload media using CloudflareUploadService
   const uploadMedia = async (mediaUri: string): Promise<string> => {
     try {
@@ -517,49 +543,10 @@ const CreateCampaignScreen: React.FC = () => {
   };
 
   const handleLaunchCampaign = async () => {
-    // Validate form
-    if (!title.trim()) {
-      Alert.alert('Error', 'Please enter a campaign title');
-      return;
-    }
-
-    if (!content.trim()) {
-      Alert.alert('Error', 'Please enter campaign content');
-      return;
-    }
-
-    if (!selectedMediaUri) {
-      Alert.alert('Error', 'Please select a media file for your campaign');
-      return;
-    }
-
-    if (!userId) {
-      Alert.alert('Error', 'User not found. Please log in again.');
-      return;
-    }
-
-    if (postTargetLocations.length === 0) {
-      Alert.alert('Error', 'Please select at least one target location');
-      return;
-    }
-
-    if (postTargetGenders.length === 0) {
-      Alert.alert('Error', 'Please select target genders');
-      return;
-    }
-
-    if (payPerView < 0.5 || payPerView > 5) {
-      Alert.alert('Error', 'Pay per view must be between ₹0.5 and ₹5.0');
-      return;
-    }
-
-    if (reachGoal < 100) {
-      Alert.alert('Error', 'Reach goal must be at least 100 people');
-      return;
-    }
-
-    if (totalPay <= 0) {
-      Alert.alert('Error', 'Total budget must be greater than ₹0');
+    // Use validation helper function
+    const validationError = validateCampaignData();
+    if (validationError) {
+      Alert.alert('Validation Error', validationError);
       return;
     }
 
@@ -573,44 +560,69 @@ const CreateCampaignScreen: React.FC = () => {
       setMediaUrl(uploadedMediaUrl);
 
       console.log('[CreateCampaign] Step 2: Creating campaign');
-      // Prepare post data according to API format
+
+      // Validate campaign data before sending
+      if (!uploadedMediaUrl) {
+        throw new Error('Media upload failed - no URL received');
+      }
+
+      // Prepare post data according to updated API format
       const campaignData = {
         user_id: parseInt(userId),
         title: title.trim(),
         content: content.trim(),
         media_url: uploadedMediaUrl,
-        media_type: mediaType,
+        media_type: mediaType as 'video' | 'image' | 'audio',
         is_promoted: isPromoted,
-        video_category_id: videoCategoryId,
-        start_date: startDate,
-        end_date: endDate,
-        target_min_age: targetMinAge,
-        target_max_age: targetMaxAge,
-        pay_per_view: payPerView,
-        reach_goal: reachGoal,
-        duration_days: durationDays,
-        total_pay: totalPay,
-        platform_fee: platformFee,
-        post_target_locations: postTargetLocations,
-        post_target_genders: postTargetGenders,
+        video_category_id: videoCategoryId || undefined,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        target_min_age: targetMinAge || undefined,
+        target_max_age: targetMaxAge || undefined,
+        pay_per_view: isPromoted ? payPerView : undefined,
+        reach_goal: isPromoted ? reachGoal : undefined,
+        duration_days: isPromoted ? durationDays : undefined,
+        total_pay: isPromoted ? totalPay : undefined,
+        platform_fee: isPromoted ? platformFee : undefined,
+        post_target_locations: isPromoted ? postTargetLocations : undefined,
+        post_target_genders: isPromoted ? postTargetGenders : undefined,
       };
 
       console.log('Creating campaign with data:', campaignData);
 
-      // Create campaign using API
-      const response = await ApiService.post('/api/post', campaignData);
+      // Create campaign using updated API method
+      const response = await ApiService.uploadPost(campaignData);
 
       console.log('Campaign creation response:', response);
 
       if (response.status && response.statusCode === 201) {
-        // Show success message
+        // Show success message with more details
+        const campaignType = isPromoted ? 'promoted campaign' : 'post';
+        const successMessage = isPromoted
+          ? `Your promoted campaign "${title.trim()}" has been created successfully! It will reach up to ${reachGoal} people over ${durationDays} days.`
+          : `Your post "${title.trim()}" has been created successfully!`;
+
         Alert.alert(
-          'Success',
-          'Your promoted campaign has been created successfully!',
+          'Campaign Created!',
+          successMessage,
           [
             {
-              text: 'OK',
-              onPress: () => navigation.goBack(),
+              text: 'View Campaign',
+              onPress: () => {
+                // Navigate to campaign details or posts list
+                navigation.goBack();
+              },
+            },
+            {
+              text: 'Create Another',
+              onPress: () => {
+                // Reset form for another campaign
+                setTitle('');
+                setContent('');
+                setSelectedMediaUri(null);
+                setMediaUrl('');
+                setUploadProgress(0);
+              },
             },
           ]
         );
@@ -619,10 +631,57 @@ const CreateCampaignScreen: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Error creating campaign:', error);
-      Alert.alert(
-        'Error',
-        error.message || 'Failed to create your campaign. Please try again.'
-      );
+
+      // Enhanced error handling with specific messages
+      let errorTitle = 'Campaign Creation Failed';
+      let errorMessage = 'Failed to create your campaign. Please try again.';
+
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message?.includes('Media upload failed')) {
+        errorTitle = 'Upload Error';
+        errorMessage = 'Failed to upload your video. Please check your internet connection and try again.';
+      } else if (error.message?.includes('Missing required fields')) {
+        errorTitle = 'Validation Error';
+        errorMessage = 'Please fill in all required fields: title, content, and media file.';
+      } else if (error.message?.includes('Missing required promotional fields')) {
+        errorTitle = 'Promotional Settings Error';
+        errorMessage = 'Please complete all promotional settings: budget, reach goal, and duration.';
+      } else if (error.message?.includes('Missing targeting information')) {
+        errorTitle = 'Targeting Error';
+        errorMessage = 'Please select target locations and genders for your promotional campaign.';
+      } else if (error.message?.includes('Invalid media_type')) {
+        errorTitle = 'Media Type Error';
+        errorMessage = 'Invalid media type. Please select a valid video, image, or audio file.';
+      } else if (error.message?.includes('Network')) {
+        errorTitle = 'Network Error';
+        errorMessage = 'Network connection failed. Please check your internet connection and try again.';
+      } else if (error.message?.includes('Authentication')) {
+        errorTitle = 'Authentication Error';
+        errorMessage = 'Your session has expired. Please log in again.';
+      } else if (error.message?.includes('Budget Error')) {
+        errorTitle = 'Budget Error';
+        errorMessage = error.message;
+      } else if (error.message?.includes('Duration Error')) {
+        errorTitle = 'Duration Error';
+        errorMessage = error.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      Alert.alert(errorTitle, errorMessage, [
+        {
+          text: 'OK',
+          style: 'default',
+        },
+        ...(error.message?.includes('Authentication') ? [{
+          text: 'Login Again',
+          onPress: () => {
+            // Navigate to login screen
+            navigation.navigate('Login' as never);
+          },
+        }] : []),
+      ]);
     } finally {
       setIsLoading(false);
       setIsUploading(false);
