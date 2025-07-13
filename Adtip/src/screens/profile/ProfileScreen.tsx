@@ -213,10 +213,14 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
     console.log('Load more posts requested');
   }, []);
 
-  // Handle post press
-  const handlePostPress = useCallback((postId: number) => {
-    navigation.navigate('Comments', { postId });
-  }, [navigation]);
+  // Handle post press - navigate to PostViewer
+  const handlePostPress = useCallback((postIndex: number) => {
+    navigation.navigate('PostViewer', {
+      posts: posts,
+      initialIndex: postIndex,
+      userId: userId,
+    });
+  }, [navigation, posts, userId]);
 
   // Handle user press
   const handleUserPress = useCallback((userId: number) => {
@@ -254,13 +258,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
   }, []);
 
   // Render post item
-  const renderPostItem = useCallback(({ item }: { item: Post }) => {
+  const renderPostItem = useCallback(({ item, index }: { item: Post; index: number }) => {
     const imageUrl = item.media_type === 'video' ? item.thumbnail : item.media_url;
-    
+
     return (
       <TouchableOpacity
         style={styles.postItem}
-        onPress={() => handlePostPress(item.id)}
+        onPress={() => handlePostPress(index)}
         activeOpacity={0.8}
       >
         <ContentFastImage
@@ -270,6 +274,11 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
         {item.media_type === 'video' && (
           <View style={styles.videoIndicator}>
             <Icon name="play" size={16} color="#fff" />
+          </View>
+        )}
+        {item.is_premium && (
+          <View style={styles.premiumBadge}>
+            <Text style={styles.premiumText}>★</Text>
           </View>
         )}
       </TouchableOpacity>
@@ -523,9 +532,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
               <ActivityIndicator size="large" color={colors.primary} />
             ) : (
               <View style={styles.postsGrid}>
-                {posts.map((post: Post) => (
+                {posts.map((post: Post, index: number) => (
                   <View key={post.id} style={styles.postItem}>
-                    {renderPostItem({ item: post })}
+                    {renderPostItem({ item: post, index })}
                   </View>
                 ))}
               </View>
@@ -686,6 +695,22 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderRadius: 8,
     padding: 4,
+  },
+  premiumBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: 'rgba(255, 215, 0, 0.9)',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  premiumText: {
+    color: '#000',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   loadingMore: {
     paddingVertical: 20,

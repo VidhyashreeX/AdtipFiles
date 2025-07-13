@@ -42,9 +42,11 @@ export type MainNavigatorParamList = {
   Chat: { user: Contact }; // Add this line
   MissedCalls: undefined;
   Profile: {userId?: number};
+  InstagramProfile: {userId?: number};
   EditProfile: undefined;
-  PostDetail: {postId: number};
+  PostDetail: {postId: number; userId?: number};
   Video: {postId: number};
+  PostViewer: {posts: any[]; initialIndex: number; userId?: number};
   Story: {storyId: string};
   CreatePost: undefined;
   WatchAndEarn: undefined;

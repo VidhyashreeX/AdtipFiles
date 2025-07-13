@@ -97,6 +97,10 @@ import ContentCreatorPremiumScreen from '../screens/premium/ContentCreatorPremiu
 // Import PermissionsScreen
 import PermissionsScreen from '../screens/settings/PermissionsScreen';
 
+// Import new Instagram-style screens
+import InstagramProfileScreen from '../screens/profile/InstagramProfileScreen';
+import PostViewerScreen from '../screens/profile/PostViewerScreen';
+
 // Create stack navigator with proper typing
 const Stack = createNativeStackNavigator<MainNavigatorParamList>();
 
@@ -138,6 +142,8 @@ const EnhancedPremiumUserScreen = withWalletBalance(PremiumUserScreen);
 const EnhancedVideoPlayerModalScreen = withWalletBalance(VideoPlayerModalScreen);
 const EnhancedTipCallScreen = withWalletBalance(TipCallScreenSimple);
 const EnhancedMissedCallsScreen = withWalletBalance(MissedCallsScreen);
+const EnhancedInstagramProfileScreen = withWalletBalance(InstagramProfileScreen);
+const EnhancedPostViewerScreen = withWalletBalance(PostViewerScreen);
 
 // Custom transition configuration with Reanimated easing
 const customTransitionConfig = {
@@ -478,6 +484,18 @@ const MainNavigator = () => {
       {/* Other screens with standard transition */}
       <Stack.Screen name="Analytics" component={EnhancedAnalyticsScreen} />
       <Stack.Screen name="Profile" component={EnhancedProfileScreen} />
+      <Stack.Screen name="InstagramProfile" component={EnhancedInstagramProfileScreen} />
+      <Stack.Screen
+        name="PostViewer"
+        component={EnhancedPostViewerScreen}
+        options={{
+          presentation: 'fullScreenModal',
+          headerShown: false,
+          gestureEnabled: true,
+          gestureDirection: 'vertical',
+          animation: 'slide_from_bottom',
+        }}
+      />
       <Stack.Screen name="EditProfile" component={EnhancedEditProfileScreen} />
       <Stack.Screen name="Wallet" component={WalletScreen} />
       <Stack.Screen name="AddFundsScreen" component={AddFundsScreen} />
