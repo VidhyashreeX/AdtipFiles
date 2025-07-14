@@ -414,10 +414,15 @@ const ChatScreen: React.FC = () => {
           const data = JSON.parse(event.data);
           console.log('WebSocket message received:', data);
           
-          if (data.type === 'message') {
+                    if (data.type === 'message') {
             // Incoming message from another user
+            console.log('🔍 [ChatScreen] Processing incoming message:', data);
+            console.log('🔍 [ChatScreen] Message data:', data.data);
+            console.log('🔍 [ChatScreen] Expected sender:', otherUser.id, 'Actual sender:', data.data?.sender);
+            console.log('🔍 [ChatScreen] Expected receiver:', self.id, 'Actual receiver:', data.data?.receiver);
+            
             if (data.data && data.data.sender === otherUser.id && data.data.receiver === self.id) {
-              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              console.log('✅ [ChatScreen] Message condition matched, processing incoming message...');
               
               // Save incoming message to local storage
               const key = `${CHAT_STORAGE_PREFIX}${self.id}_${otherUser.id}`;
@@ -439,26 +444,31 @@ const ChatScreen: React.FC = () => {
                   AsyncStorage.setItem(key, JSON.stringify(messages));
                   console.log('✅ Incoming message saved to storage:', incomingMsg);
                   
-                  // Add to pending messages for instant display
+                  // Add to pending messages for instant display with a negative ID to make it unique
+                  const pendingMsg = {
+                    ...incomingMsg,
+                    id: -Math.abs(incomingMsg.id) // Use negative ID for pending messages
+                  };
                   setPendingMessages(prev => {
-                    const newPending = [...prev, incomingMsg];
+                    const newPending = [...prev, pendingMsg];
                     console.log('📝 [ChatScreen] Added incoming message to pending:', newPending.length);
                     return newPending;
                   });
+                  
+                  // Remove the pending message after a short delay and refetch
+                  setTimeout(() => {
+                    setPendingMessages(prev => prev.filter(msg => msg.id !== pendingMsg.id));
+                    refetchMessages();
+                    setTimeout(() => scrollToBottom(true), 100);
+                  }, 300);
+                } else {
+                  console.log('⚠️ Message already exists in storage, skipping duplicate');
                 }
               });
-              
-              // Refetch messages to get the latest data with a small delay
-              setTimeout(() => {
-                refetchMessages();
-                // Auto-scroll after adding new message
-                setTimeout(() => scrollToBottom(true), 100);
-                
-                // Remove the pending message after a short delay
-                setTimeout(() => {
-                  setPendingMessages(prev => prev.filter(msg => msg.id !== incomingMsg.id));
-                }, 200);
-              }, 100);
+            } else {
+              console.log('❌ [ChatScreen] Message rejected - sender or receiver mismatch');
+              console.log('Expected sender:', otherUser.id, 'Got:', data.data?.sender);
+              console.log('Expected receiver:', self.id, 'Got:', data.data?.receiver);
             }
           } else if (data.type === 'message_sent') {
             // Confirmation that our message was saved successfully
@@ -973,9 +983,12 @@ const ChatScreen: React.FC = () => {
               data={sortedMessages}
               renderItem={renderItem}
               keyExtractor={(item, index) => {
-                // Ensure we always have a valid key
+                // Create unique keys to avoid duplicates between server and pending messages
                 if (item.id !== undefined && item.id !== null) {
-                  return item.id.toString();
+                  // Check if this is a pending message (negative ID)
+                  const isPending = item.id < 0;
+                  const prefix = isPending ? 'pending' : 'server';
+                  return `${prefix}-${Math.abs(item.id)}`;
                 } else {
                   return `message-${index}-${item.createddate || Date.now()}`;
                 }
