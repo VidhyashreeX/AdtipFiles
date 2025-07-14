@@ -357,7 +357,7 @@ class CallController {
       const recipientToken = await this.fetchFcmToken(recipientId)
       if (!callerToken || !recipientToken) throw new Error('FCM token(s) missing')
       
-      // Build payload & call initiate-call API
+      // Build payload & call initiate-call API (FCM notification)
       await ApiService.initiateCall({
         calleeInfo: {
           platform: require('react-native').Platform.OS === 'ios' ? 'IOS' : 'ANDROID',
@@ -373,7 +373,34 @@ class CallController {
           callType,
         },
       })
-      
+
+      // Call payment API to start billing and get callId
+      let callId: number | undefined
+      try {
+        console.log(`[CallController] Starting payment tracking for ${callType} call`)
+        const paymentResponse = callType === 'video'
+          ? await ApiService.initiateVideoCall({
+              callerId: parseInt(userId),
+              receiverId: parseInt(recipientId),
+              action: 'start'
+            })
+          : await ApiService.initiateVoiceCall({
+              callerId: parseInt(userId),
+              receiverId: parseInt(recipientId),
+              action: 'start'
+            })
+
+        if (paymentResponse.status && paymentResponse.call_id) {
+          callId = paymentResponse.call_id
+          console.log(`[CallController] Payment tracking started, callId: ${callId}`)
+        } else {
+          console.warn('[CallController] Payment API call succeeded but no callId returned:', paymentResponse)
+        }
+      } catch (paymentError) {
+        console.error('[CallController] Failed to start payment tracking:', paymentError)
+        // Continue with call even if payment tracking fails - this prevents call failures due to payment API issues
+      }
+
       // Update store with outgoing call (use the same sessionId from VideoSDK tracking)
       const store = useCallStore.getState()
       store.actions.setSession({
@@ -384,7 +411,8 @@ class CallController {
         peerName: recipientName,
         direction: 'outgoing',
         type: callType,
-        startedAt: Date.now()
+        startedAt: Date.now(),
+        callId // Store the callId for payment processing when ending the call
       })
       store.actions.setStatus('outgoing')
       
@@ -482,6 +510,40 @@ class CallController {
         await this.signaling.sendAccept(session.peerId, session.sessionId)
       } catch (signalError) {
         console.error('[CallController] Failed to send accept signal:', signalError)
+      }
+
+      // Start payment tracking for accepted call (if not already started)
+      if (!session.callId) {
+        try {
+          console.log(`[CallController] Starting payment tracking for accepted ${session.type} call`)
+          const { userId } = await this.getUserInfo()
+
+          const paymentResponse = session.type === 'video'
+            ? await ApiService.initiateVideoCall({
+                callerId: parseInt(session.peerId), // The original caller
+                receiverId: parseInt(userId), // Current user (receiver)
+                action: 'start'
+              })
+            : await ApiService.initiateVoiceCall({
+                callerId: parseInt(session.peerId), // The original caller
+                receiverId: parseInt(userId), // Current user (receiver)
+                action: 'start'
+              })
+
+          if (paymentResponse.status && paymentResponse.call_id) {
+            // Update session with callId
+            store.actions.setSession({
+              ...session,
+              callId: paymentResponse.call_id
+            })
+            console.log(`[CallController] Payment tracking started for accepted call, callId: ${paymentResponse.call_id}`)
+          } else {
+            console.warn('[CallController] Payment API call succeeded but no callId returned:', paymentResponse)
+          }
+        } catch (paymentError) {
+          console.error('[CallController] Failed to start payment tracking for accepted call:', paymentError)
+          // Continue with call even if payment tracking fails
+        }
       }
 
       // Notify server of accepted call
@@ -596,6 +658,39 @@ class CallController {
 
       // CallManagerService removed - billing handled by CallBillingService
       console.log('ℹ️ [CallController] Call cleanup completed')
+
+      // Process payment for ended call
+      if (session.callId && session.peerId) {
+        try {
+          console.log(`[CallController] Processing payment for ended ${session.type} call, callId: ${session.callId}`)
+          const { userId } = await this.getUserInfo()
+
+          const paymentResponse = session.type === 'video'
+            ? await ApiService.initiateVideoCall({
+                callerId: parseInt(userId),
+                receiverId: parseInt(session.peerId),
+                action: 'end',
+                callId: session.callId
+              })
+            : await ApiService.initiateVoiceCall({
+                callerId: parseInt(userId),
+                receiverId: parseInt(session.peerId),
+                action: 'end',
+                callId: session.callId
+              })
+
+          if (paymentResponse.status) {
+            console.log('[CallController] Payment processed successfully:', paymentResponse)
+          } else {
+            console.warn('[CallController] Payment processing failed:', paymentResponse)
+          }
+        } catch (paymentError) {
+          console.error('[CallController] Failed to process payment for ended call:', paymentError)
+          // Continue with call cleanup even if payment processing fails
+        }
+      } else {
+        console.warn('[CallController] No callId available for payment processing - call may not have been properly tracked')
+      }
 
       // Notify server of ended call
       try {

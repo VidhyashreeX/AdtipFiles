@@ -22,6 +22,7 @@ export interface CallSession {
   type: CallType
   startedAt?: number
   endedAt?: number
+  callId?: number // backend call record id for payment processing
 }
 
 export interface MediaState {
