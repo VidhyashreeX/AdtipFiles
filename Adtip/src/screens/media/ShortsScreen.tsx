@@ -19,6 +19,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
 import ApiService from '../../services/ApiService';
 import {ENDPOINTS} from '../../constants/api';
+import { createSecureVideoSource } from '../../utils/mediaUtils';
 
 const {width: SCREEN_WIDTH, height: SCREEN_HEIGHT} = Dimensions.get('window');
 
@@ -171,6 +172,7 @@ const ShortsScreen = () => {
     const videoRef = useRef<any>(null);
     const [isPlaying, setIsPlaying] = useState(true);
     const [liked, setLiked] = useState(false);
+    const [secureVideoSource, setSecureVideoSource] = useState<any>(null);
 
     useEffect(() => {
       // Control video playback based on visibility
@@ -180,6 +182,24 @@ const ShortsScreen = () => {
         setIsPlaying(false);
       }
     }, [isActive, isPlaying]);
+
+    // Load secure video source
+    useEffect(() => {
+      const loadSecureVideoSource = async () => {
+        if (item.videoUrl) {
+          try {
+            console.log('[ShortsScreen] Loading secure video source for:', item.videoUrl);
+            const secureSource = await createSecureVideoSource(item.videoUrl);
+            setSecureVideoSource(secureSource);
+            console.log('[ShortsScreen] Secure video source loaded:', secureSource);
+          } catch (error) {
+            console.error('[ShortsScreen] Failed to load secure video source:', error);
+          }
+        }
+      };
+
+      loadSecureVideoSource();
+    }, [item.videoUrl]);
 
     const togglePlayPause = () => {
       setIsPlaying(!isPlaying);
@@ -214,18 +234,20 @@ const ShortsScreen = () => {
           activeOpacity={1}
           onPress={togglePlayPause}
           style={styles.videoContainer}>
-          <Video
-            ref={videoRef}
-            source={{uri: item.videoUrl}}
-            style={styles.video}
-            resizeMode="cover"
-            poster={item.thumbnail || undefined}
-            posterResizeMode="cover"
-            repeat
-            paused={!isPlaying || !isActive}
-            muted={false}
-            volume={1.0}
-          />
+          {secureVideoSource && (
+            <Video
+              ref={videoRef}
+              source={secureVideoSource}
+              style={styles.video}
+              resizeMode="cover"
+              poster={item.thumbnail || undefined}
+              posterResizeMode="cover"
+              repeat
+              paused={!isPlaying || !isActive}
+              muted={false}
+              volume={1.0}
+            />
+          )}
 
           {!isPlaying && (
             <View style={styles.pauseOverlay}>

@@ -18,6 +18,7 @@ import {useTheme} from '../../contexts/ThemeContext';
 // Removing unused import
 // import ApiService from '../../services/ApiService';
 import VideoCard from '../../components/tiptube/VideoCard';
+import { createSecureVideoSource } from '../../utils/mediaUtils';
 
 interface VideoData {
   id: number;
@@ -62,6 +63,7 @@ const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [secureVideoSource, setSecureVideoSource] = useState<any>(null);
 
   // Move showControlsTemporarily above useEffect to avoid use-before-define
   const showControlsTemporarily = useCallback(() => {
@@ -87,6 +89,24 @@ const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       }
     };
   }, [visible, videoData?.id, showControlsTemporarily]);
+
+  // Load secure video source when video data changes
+  useEffect(() => {
+    const loadSecureVideoSource = async () => {
+      if (videoData?.video_url) {
+        try {
+          console.log('[VideoPlayerModal] Loading secure video source for:', videoData.video_url);
+          const secureSource = await createSecureVideoSource(videoData.video_url);
+          setSecureVideoSource(secureSource);
+          console.log('[VideoPlayerModal] Secure video source loaded:', secureSource);
+        } catch (error) {
+          console.error('[VideoPlayerModal] Failed to load secure video source:', error);
+        }
+      }
+    };
+
+    loadSecureVideoSource();
+  }, [videoData?.video_url]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -178,10 +198,10 @@ const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
               isFullScreen && styles.fullScreenVideo,
             ]}
             onPress={handleVideoPress}>
-            {videoData.video_url ? (
+            {videoData.video_url && secureVideoSource ? (
               <Video
                 ref={videoRef}
-                source={{uri: videoData.video_url}}
+                source={secureVideoSource}
                 style={styles.video}
                 resizeMode="contain"
                 paused={!isPlaying}

@@ -38,10 +38,12 @@ export const getSecureMediaUrl = async (mediaUrl?: string | null): Promise<strin
           return presignedUrl;
         } else {
           console.warn('[MediaUtils] Failed to generate presigned URL, falling back to original');
+          // Return original URL as fallback - it might work if bucket becomes public
           return mediaUrl;
         }
       } catch (error) {
         console.error('[MediaUtils] Error generating presigned URL:', error);
+        // Return original URL as fallback
         return mediaUrl;
       }
     }
@@ -135,25 +137,32 @@ export const validateAndFixVideoUrl = async (videoUrl?: string | null): Promise<
  */
 export const createSecureVideoSource = async (videoUrl?: string | null) => {
   console.log('[MediaUtils] Creating secure video source for:', videoUrl);
-  
+
   const validatedUrl = await validateAndFixVideoUrl(videoUrl);
-  
+
   if (!validatedUrl) {
     console.error('[MediaUtils] Failed to create valid video URL');
     return { uri: '' };
   }
 
-  const headers = await getMediaHeaders();
-  
-  const source = {
+  // Check if this is a Cloudflare presigned URL (contains signature parameters)
+  const isPresignedUrl = validatedUrl.includes('X-Amz-Signature') || validatedUrl.includes('Signature=');
+
+  let source: any = {
     uri: validatedUrl,
-    headers: headers,
   };
+
+  // Only add headers for non-presigned URLs (API-based media)
+  if (!isPresignedUrl && !isCloudflareUrl(validatedUrl)) {
+    const headers = await getMediaHeaders();
+    source.headers = headers;
+  }
 
   console.log('[MediaUtils] Created video source:', {
     uri: source.uri,
-    hasAuth: !!headers['Authorization'],
-    hasHeaders: Object.keys(headers).length > 0
+    isPresigned: isPresignedUrl,
+    isCloudflare: isCloudflareUrl(validatedUrl),
+    hasHeaders: !!source.headers
   });
 
   return source;
@@ -164,17 +173,25 @@ export const createSecureVideoSource = async (videoUrl?: string | null) => {
  */
 export const createSecureImageSource = async (imageUrl?: string | null) => {
   const secureUrl = await getSecureMediaUrl(imageUrl);
-  
+
   if (!secureUrl) {
     return undefined;
   }
 
-  const headers = await getMediaHeaders();
-  
-  return {
+  // Check if this is a Cloudflare presigned URL (contains signature parameters)
+  const isPresignedUrl = secureUrl.includes('X-Amz-Signature') || secureUrl.includes('Signature=');
+
+  let source: any = {
     uri: secureUrl,
-    headers: headers,
   };
+
+  // Only add headers for non-presigned URLs (API-based media)
+  if (!isPresignedUrl && !isCloudflareUrl(secureUrl)) {
+    const headers = await getMediaHeaders();
+    source.headers = headers;
+  }
+
+  return source;
 };
 
 /**

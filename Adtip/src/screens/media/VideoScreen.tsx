@@ -22,6 +22,7 @@ import Orientation from 'react-native-orientation-locker';
 // Components
 import Header from '../../components/common/Header';
 import CategoryChip from '../../components/common/CategoryChip';
+import { createSecureVideoSource } from '../../utils/mediaUtils';
 
 // Context and services
 import {useTheme} from '../../contexts/ThemeContext';
@@ -88,6 +89,7 @@ const VideoScreen = () => {
   const [rewardShown, setRewardShown] = useState(false);
   const [watchTimeTracked, setWatchTimeTracked] = useState(false);
   const [localVideoPath, setLocalVideoPath] = useState<string | null>(null);
+  const [secureVideoSource, setSecureVideoSource] = useState<any>(null);
 
   // Control timer
   const controlsTimer = useRef<any>(null);
@@ -135,6 +137,24 @@ const VideoScreen = () => {
       setLoading(false);
     }
   }, [videoId, user]);
+
+  // Load secure video source when video data is available
+  useEffect(() => {
+    const loadSecureVideoSource = async () => {
+      if (video?.videoUrl && !localVideoPath) {
+        try {
+          console.log('[VideoScreen] Loading secure video source for:', video.videoUrl);
+          const secureSource = await createSecureVideoSource(video.videoUrl);
+          setSecureVideoSource(secureSource);
+          console.log('[VideoScreen] Secure video source loaded:', secureSource);
+        } catch (error) {
+          console.error('[VideoScreen] Failed to load secure video source:', error);
+        }
+      }
+    };
+
+    loadSecureVideoSource();
+  }, [video?.videoUrl, localVideoPath]);
 
   // Cache video for better playback
   const cacheVideo = useCallback(async () => {
@@ -431,7 +451,7 @@ const VideoScreen = () => {
         style={videoContainerStyles}>
         <Video
           ref={videoRef}
-          source={{uri: localVideoPath || video.videoUrl}}
+          source={localVideoPath ? {uri: localVideoPath} : (secureVideoSource || {uri: video?.videoUrl || ''})}
           style={styles.videoPlayer}
           resizeMode="contain"
           paused={paused}
