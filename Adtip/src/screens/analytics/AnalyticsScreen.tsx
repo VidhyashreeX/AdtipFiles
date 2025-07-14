@@ -18,6 +18,7 @@ import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
 import ApiService from '../../services/ApiService';
 import WithdrawalForm from '../../components/withdrawal/WithdrawalForm';
 import PremiumPopup from '../../components/common/PremiumPopup';
+import AnalyticsPremiumAlert from '../../components/alerts/AnalyticsPremiumAlertNew';
 
 interface AnalyticsData {
   channel_name: string;
@@ -47,6 +48,7 @@ const AnalyticsScreen: React.FC = () => {
     isLoading: contentCreatorPremiumLoading
   } = useContentCreatorPremium();
   const [showPremiumPopup, setShowPremiumPopup] = useState(false);
+  const [showPremiumAlert, setShowPremiumAlert] = useState(false);
   const navigation = useNavigation();
   const route = useRoute<AnalyticsScreenRouteProp>();
   const { channelId } = route.params;
@@ -66,26 +68,8 @@ const AnalyticsScreen: React.FC = () => {
   // Check content creator premium access
   useEffect(() => {
     if (!contentCreatorPremiumLoading && !isContentCreatorPremium) {
-      // User doesn't have content creator premium, show popup and navigate back
-      Alert.alert(
-        'Content Creator Premium Required',
-        'You need an active Content Creator Premium subscription to access analytics.',
-        [
-          {
-            text: 'Upgrade Now',
-            onPress: () => {
-              navigation.navigate('ContentCreatorPremium');
-            },
-          },
-          {
-            text: 'Go Back',
-            style: 'cancel',
-            onPress: () => {
-              navigation.goBack();
-            },
-          },
-        ]
-      );
+      // User doesn't have content creator premium, show custom alert
+      setShowPremiumAlert(true);
       return;
     }
 
@@ -94,6 +78,17 @@ const AnalyticsScreen: React.FC = () => {
       loadAnalytics();
     }
   }, [selectedPeriod, isContentCreatorPremium, contentCreatorPremiumLoading]);
+
+  // Handle premium alert actions
+  const handlePremiumUpgrade = () => {
+    setShowPremiumAlert(false);
+    navigation.navigate('ContentCreatorPremium');
+  };
+
+  const handlePremiumGoBack = () => {
+    setShowPremiumAlert(false);
+    navigation.goBack();
+  };
 
   const loadAnalytics = async () => {
     if (!channelId) {
@@ -399,6 +394,14 @@ const AnalyticsScreen: React.FC = () => {
         visible={showPremiumPopup}
         onClose={() => setShowPremiumPopup(false)}
         onUpgrade={() => setShowPremiumPopup(false)}
+      />
+
+      {/* Analytics Premium Alert */}
+      <AnalyticsPremiumAlert
+        visible={showPremiumAlert}
+        onClose={() => setShowPremiumAlert(false)}
+        onUpgrade={handlePremiumUpgrade}
+        onGoBack={handlePremiumGoBack}
       />
     </View>
   );

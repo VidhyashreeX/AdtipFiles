@@ -32,6 +32,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import LinearGradient from 'react-native-linear-gradient'
 import PremiumPopup from '../../components/common/PremiumPopup'
 import PremiumCallRateModal from '../../components/modals/PremiumCallRateModal'
+import PremiumCallRateAlert from '../../components/alerts/PremiumCallRateAlert'
+import CallConfirmationAlert from '../../components/alerts/CallConfirmationAlert'
 import RectangleAdComponent from '../../googleads/RectangleAdComponent'
 import UserProfileScreen from '../profile/UserProfileScreen'
 import DndToggleSwitch from '../../components/common/DndToggleSwitch'
@@ -358,10 +360,15 @@ const TipCallScreenSimple = () => {
   const [premiumActive, setPremiumActive] = useState(false)
   const [showPremiumPopup, setShowPremiumPopup] = useState(false)
   const [showPremiumCallRateModal, setShowPremiumCallRateModal] = useState(false)
+  const [showPremiumCallRateAlert, setShowPremiumCallRateAlert] = useState(false)
+  const [showCallConfirmationAlert, setShowCallConfirmationAlert] = useState(false)
   const [pendingCallData, setPendingCallData] = useState<{
     recipientId: string;
     recipientName: string;
     callType: CallType;
+    rateText?: string;
+    maxMinutes?: number;
+    currentBalance?: string;
   } | null>(null)
   const { data: premiumData, isLoading: premiumLoading } = useQuery({
     queryKey: ['premium', user?.id],
@@ -665,11 +672,11 @@ const TipCallScreenSimple = () => {
   const handleStartCall = useCallback(
     async (recipientId: string, recipientName: string, callType: CallType) => {
       try {
-        // Check if user is premium - if not, show premium rate modal first
+        // Check if user is premium - if not, show premium rate alert first
         if (!isPremium) {
-          console.log('[TipCallScreen] Non-premium user, showing rate comparison modal')
+          console.log('[TipCallScreen] Non-premium user, showing rate comparison alert')
           setPendingCallData({ recipientId, recipientName, callType })
-          setShowPremiumCallRateModal(true)
+          setShowPremiumCallRateAlert(true)
           return
         }
 
@@ -725,31 +732,16 @@ const TipCallScreenSimple = () => {
         const maxMinutes = Math.floor(billingInfo.maxDurationSeconds / 60)
         const rateText = billingService.formatCurrency(billingInfo.ratePerMinute)
 
-        // Show confirmation dialog with billing information
-        Alert.alert(
-          `${callType === 'video' ? 'Video' : 'Voice'} Call`,
-          `Rate: ${rateText}/min${isPremium ? ' (Premium)' : ''}\nMax Duration: ${maxMinutes} minutes\nCurrent Balance: ${billingService.formatCurrency(numericBalance)}\n\nProceed with the call?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Call Now',
-              onPress: async () => {
-                const success = await callController.startCall(
-                  recipientId,
-                  recipientName,
-                  callType
-                )
-
-                if (!success) {
-                  Alert.alert(
-                    'Call Failed',
-                    'Unable to start the call. The user may be unavailable.'
-                  )
-                }
-              }
-            }
-          ]
-        )
+        // Show custom confirmation alert with billing information
+        setPendingCallData({
+          recipientId,
+          recipientName,
+          callType,
+          rateText,
+          maxMinutes,
+          currentBalance: billingService.formatCurrency(numericBalance)
+        })
+        setShowCallConfirmationAlert(true)
       } catch (error) {
         console.error('[TipCallScreen] Start call error:', error)
         Alert.alert('Error', 'Failed to start call. Please try again.')
@@ -814,31 +806,16 @@ const TipCallScreenSimple = () => {
         const maxMinutes = Math.floor(billingInfo.maxDurationSeconds / 60)
         const rateText = billingService.formatCurrency(billingInfo.ratePerMinute)
 
-        // Show confirmation dialog with billing information
-        Alert.alert(
-          `${callType === 'video' ? 'Video' : 'Voice'} Call`,
-          `Rate: ${rateText}/min${isPremium ? ' (Premium)' : ''}\nMax Duration: ${maxMinutes} minutes\nCurrent Balance: ${billingService.formatCurrency(numericBalance)}\n\nProceed with the call?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Call Now',
-              onPress: async () => {
-                const success = await callController.startCall(
-                  recipientId,
-                  recipientName,
-                  callType
-                )
-
-                if (!success) {
-                  Alert.alert(
-                    'Call Failed',
-                    'Unable to start the call. The user may be unavailable.'
-                  )
-                }
-              }
-            }
-          ]
-        )
+        // Show custom confirmation alert with billing information
+        setPendingCallData({
+          recipientId,
+          recipientName,
+          callType,
+          rateText,
+          maxMinutes,
+          currentBalance: billingService.formatCurrency(numericBalance)
+        })
+        setShowCallConfirmationAlert(true)
       } catch (error) {
         console.error('[TipCallScreen] Start call error:', error)
         Alert.alert('Error', 'Failed to start call. Please try again.')
@@ -853,6 +830,60 @@ const TipCallScreenSimple = () => {
     setPendingCallData(null)
     navigation.navigate('PremiumUser' as never)
   }, [navigation])
+
+  // Handle premium alert actions
+  const handlePremiumAlertUpgrade = useCallback(() => {
+    setShowPremiumCallRateAlert(false)
+    setPendingCallData(null)
+    navigation.navigate('PremiumUser' as never)
+  }, [navigation])
+
+  const handlePremiumAlertContinue = useCallback(() => {
+    setShowPremiumCallRateAlert(false)
+    if (pendingCallData) {
+      const { recipientId, recipientName, callType } = pendingCallData
+      setPendingCallData(null)
+      // Continue with the call at non-premium rates
+      initiateCall(recipientId, recipientName, callType)
+    }
+  }, [pendingCallData, initiateCall])
+
+  const handlePremiumAlertClose = useCallback(() => {
+    setShowPremiumCallRateAlert(false)
+    setPendingCallData(null)
+  }, [])
+
+  // Handle call confirmation alert actions
+  const handleCallConfirmation = useCallback(async () => {
+    if (!pendingCallData) return
+
+    setShowCallConfirmationAlert(false)
+
+    try {
+      const success = await callController.startCall(
+        pendingCallData.recipientId,
+        pendingCallData.recipientName,
+        pendingCallData.callType
+      )
+
+      if (!success) {
+        Alert.alert(
+          'Call Failed',
+          'Unable to start the call. The user may be unavailable.'
+        )
+      }
+    } catch (error) {
+      console.error('[TipCallScreen] Call confirmation error:', error)
+      Alert.alert('Error', 'Failed to start call. Please try again.')
+    } finally {
+      setPendingCallData(null)
+    }
+  }, [pendingCallData, callController])
+
+  const handleCallCancel = useCallback(() => {
+    setShowCallConfirmationAlert(false)
+    setPendingCallData(null)
+  }, [])
 
   const handlePremiumModalContinue = useCallback(() => {
     setShowPremiumCallRateModal(false)
@@ -1350,6 +1381,28 @@ const TipCallScreenSimple = () => {
         onUpgrade={handlePremiumModalUpgrade}
         onContinue={handlePremiumModalContinue}
         callType={pendingCallData?.callType}
+      />
+
+      {/* Premium Call Rate Alert */}
+      <PremiumCallRateAlert
+        visible={showPremiumCallRateAlert}
+        onClose={handlePremiumAlertClose}
+        onUpgrade={handlePremiumAlertUpgrade}
+        onContinue={handlePremiumAlertContinue}
+        callType={pendingCallData?.callType}
+      />
+
+      {/* Call Confirmation Alert */}
+      <CallConfirmationAlert
+        visible={showCallConfirmationAlert}
+        onClose={handleCallCancel}
+        onConfirm={handleCallConfirmation}
+        callType={pendingCallData?.callType || 'voice'}
+        recipientName={pendingCallData?.recipientName || ''}
+        rateText={pendingCallData?.rateText || ''}
+        maxMinutes={pendingCallData?.maxMinutes || 0}
+        currentBalance={pendingCallData?.currentBalance || ''}
+        isPremium={isPremium}
       />
     </View>
   )

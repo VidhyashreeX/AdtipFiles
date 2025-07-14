@@ -10,24 +10,34 @@ import {
   Easing,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { Gift, Clock, CheckCircle, DollarSign } from 'lucide-react-native';
+import { Phone, Video, Clock, DollarSign, User } from 'lucide-react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../../contexts/ThemeContext';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-interface PubScaleCreditAlertProps {
+interface CallConfirmationAlertProps {
   visible: boolean;
   onClose: () => void;
-  onViewWallet?: () => void;
-  onViewHistory?: () => void;
+  onConfirm: () => void;
+  callType: 'voice' | 'video';
+  recipientName: string;
+  rateText: string;
+  maxMinutes: number;
+  currentBalance: string;
+  isPremium: boolean;
 }
 
-const PubScaleCreditAlert: React.FC<PubScaleCreditAlertProps> = ({
+const CallConfirmationAlert: React.FC<CallConfirmationAlertProps> = ({
   visible,
   onClose,
-  onViewWallet,
-  onViewHistory,
+  onConfirm,
+  callType,
+  recipientName,
+  rateText,
+  maxMinutes,
+  currentBalance,
+  isPremium,
 }) => {
   const { colors, isDarkMode } = useTheme();
   
@@ -36,7 +46,6 @@ const PubScaleCreditAlert: React.FC<PubScaleCreditAlertProps> = ({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const rotateAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
@@ -45,6 +54,7 @@ const PubScaleCreditAlert: React.FC<PubScaleCreditAlertProps> = ({
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 300,
+          easing: Easing.out(Easing.quad),
           useNativeDriver: true,
         }),
         Animated.spring(scaleAnim, {
@@ -56,49 +66,41 @@ const PubScaleCreditAlert: React.FC<PubScaleCreditAlertProps> = ({
         Animated.timing(slideAnim, {
           toValue: 0,
           duration: 400,
-          easing: Easing.out(Easing.cubic),
+          easing: Easing.out(Easing.back(1.2)),
           useNativeDriver: true,
         }),
       ]).start();
 
-      // Start continuous animations
-      startPulseAnimation();
-      startRotateAnimation();
+      // Start pulse animation for call icon
+      const pulseAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.1,
+            duration: 1000,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulseAnimation.start();
+
+      return () => {
+        pulseAnimation.stop();
+      };
     } else {
       // Reset animations
       scaleAnim.setValue(0);
       fadeAnim.setValue(0);
       slideAnim.setValue(50);
+      pulseAnim.setValue(1);
     }
   }, [visible]);
-
-  const startPulseAnimation = () => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  };
-
-  const startRotateAnimation = () => {
-    Animated.loop(
-      Animated.timing(rotateAnim, {
-        toValue: 1,
-        duration: 3000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
-  };
 
   const handleClose = () => {
     Animated.parallel([
@@ -117,10 +119,14 @@ const PubScaleCreditAlert: React.FC<PubScaleCreditAlertProps> = ({
     });
   };
 
-  const rotateInterpolate = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
+  const handleConfirm = () => {
+    handleClose();
+    setTimeout(() => onConfirm(), 100);
+  };
+
+  const CallIcon = callType === 'video' ? Video : Phone;
+  const callTypeColor = callType === 'video' ? '#3B82F6' : '#10B981';
+  const callTypeGradient = callType === 'video' ? ['#3B82F6', '#1D4ED8'] : ['#10B981', '#059669'];
 
   const styles = createStyles(colors, isDarkMode);
 
@@ -160,115 +166,100 @@ const PubScaleCreditAlert: React.FC<PubScaleCreditAlertProps> = ({
             colors={isDarkMode ? ['#1F2937', '#374151'] : ['#FFFFFF', '#F9FAFB']}
             style={styles.alertCard}
           >
-            {/* Header with animated icon */}
+            {/* Header with animated call icon */}
             <View style={styles.header}>
               <Animated.View
                 style={[
                   styles.iconContainer,
                   {
-                    transform: [
-                      { scale: pulseAnim },
-                      { rotate: rotateInterpolate },
-                    ],
+                    transform: [{ scale: pulseAnim }],
                   },
                 ]}
               >
                 <LinearGradient
-                  colors={['#10B981', '#059669']}
+                  colors={callTypeGradient}
                   style={styles.iconGradient}
                 >
-                  <Gift size={32} color="#FFFFFF" />
+                  <CallIcon size={32} color="#FFFFFF" />
                 </LinearGradient>
               </Animated.View>
-              
-              <TouchableOpacity 
-                style={styles.closeButton} 
-                onPress={handleClose}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Icon name="x" size={20} color={colors.text.secondary} />
-              </TouchableOpacity>
             </View>
 
             {/* Title */}
             <Text style={[styles.title, { color: colors.text.primary }]}>
-              💰 PubScale Rewards Processing!
+              {callType === 'video' ? '📹' : '📞'} {callType === 'video' ? 'Video' : 'Voice'} Call
             </Text>
 
-            {/* Description */}
-            <Text style={[styles.description, { color: colors.text.secondary }]}>
-              Money will be credited if you have completed any tasks from PubScale. Your rewards are being verified and processed.
-            </Text>
+            {/* Recipient */}
+            <View style={styles.recipientContainer}>
+              <User size={16} color={colors.text.secondary} />
+              <Text style={[styles.recipientText, { color: colors.text.secondary }]}>
+                Calling {recipientName}
+              </Text>
+            </View>
 
-            {/* Credit info cards */}
+            {/* Billing info cards */}
             <View style={styles.infoCards}>
               <View style={[styles.infoCard, { backgroundColor: isDarkMode ? colors.card : '#F0FDF4' }]}>
-                <Clock size={20} color="#10B981" />
+                <DollarSign size={18} color="#10B981" />
                 <View style={styles.infoCardText}>
                   <Text style={[styles.infoCardTitle, { color: colors.text.primary }]}>
-                    Processing Time
+                    Rate{isPremium ? ' (Premium)' : ''}
                   </Text>
                   <Text style={[styles.infoCardSubtitle, { color: colors.text.secondary }]}>
-                    Credits within 4-5 days
+                    {rateText}/min
                   </Text>
                 </View>
               </View>
 
               <View style={[styles.infoCard, { backgroundColor: isDarkMode ? colors.card : '#EFF6FF' }]}>
-                <DollarSign size={20} color="#3B82F6" />
+                <Clock size={18} color="#3B82F6" />
                 <View style={styles.infoCardText}>
                   <Text style={[styles.infoCardTitle, { color: colors.text.primary }]}>
-                    Reward Condition
+                    Max Duration
                   </Text>
                   <Text style={[styles.infoCardSubtitle, { color: colors.text.secondary }]}>
-                    Task completion verified
+                    {maxMinutes} minutes
                   </Text>
                 </View>
               </View>
+            </View>
+
+            {/* Balance info */}
+            <View style={[styles.balanceContainer, { backgroundColor: isDarkMode ? colors.card : '#FEF3C7' }]}>
+              <Icon name="credit-card" size={16} color="#F59E0B" />
+              <Text style={[styles.balanceText, { color: colors.text.primary }]}>
+                Current Balance: {currentBalance}
+              </Text>
             </View>
 
             {/* Action buttons */}
             <View style={styles.actionButtons}>
               <TouchableOpacity
                 style={[styles.secondaryButton, { borderColor: colors.border }]}
-                onPress={() => {
-                  handleClose();
-                  onViewHistory?.();
-                }}
+                onPress={handleClose}
                 activeOpacity={0.8}
               >
-                <Icon name="clock" size={16} color={colors.text.primary} />
-                <Text style={[styles.secondaryButtonText, { color: colors.text.primary }]}>
-                  View History
+                <Text style={[styles.secondaryButtonText, { color: colors.text.secondary }]}>
+                  Cancel
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.primaryButton}
-                onPress={() => {
-                  handleClose();
-                  onViewWallet?.();
-                }}
+                onPress={handleConfirm}
                 activeOpacity={0.8}
               >
                 <LinearGradient
-                  colors={['#10B981', '#059669']}
+                  colors={callTypeGradient}
                   style={styles.primaryButtonGradient}
                 >
-                  <Icon name="credit-card" size={16} color="#FFFFFF" />
+                  <CallIcon size={16} color="#FFFFFF" />
                   <Text style={styles.primaryButtonText}>
-                    Check Wallet
+                    Call Now
                   </Text>
                 </LinearGradient>
               </TouchableOpacity>
-            </View>
-
-            {/* Footer note */}
-            <View style={styles.footer}>
-              <CheckCircle size={14} color="#10B981" />
-              <Text style={[styles.footerText, { color: colors.text.tertiary }]}>
-                You'll receive a notification when credits are added
-              </Text>
             </View>
           </LinearGradient>
         </Animated.View>
@@ -308,9 +299,7 @@ const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
     elevation: 10,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 16,
   },
   iconContainer: {
@@ -323,61 +312,78 @@ const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  closeButton: {
-    padding: 4,
-  },
   title: {
     fontSize: 22,
-    fontWeight: 'bold',
+    fontWeight: '700',
     textAlign: 'center',
     marginBottom: 8,
+    letterSpacing: 0.5,
   },
-  description: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 24,
-  },
-  infoCards: {
-    gap: 12,
-    marginBottom: 24,
-  },
-  infoCard: {
+  recipientContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
+    justifyContent: 'center',
+    marginBottom: 20,
+    gap: 6,
+  },
+  recipientText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  infoCards: {
+    flexDirection: 'row',
     gap: 12,
+    marginBottom: 16,
+  },
+  infoCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    gap: 8,
   },
   infoCardText: {
     flex: 1,
   },
   infoCardTitle: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     marginBottom: 2,
   },
   infoCardSubtitle: {
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: '700',
   },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  secondaryButton: {
-    flex: 1,
+  balanceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 20,
+    gap: 8,
+  },
+  balanceText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  secondaryButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
     borderRadius: 12,
     borderWidth: 1,
-    gap: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   secondaryButtonText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
   },
   primaryButton: {
@@ -386,28 +392,18 @@ const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
     overflow: 'hidden',
   },
   primaryButtonGradient: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 6,
+    gap: 8,
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  footerText: {
-    fontSize: 12,
-    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 
-export default PubScaleCreditAlert;
+export default CallConfirmationAlert;
