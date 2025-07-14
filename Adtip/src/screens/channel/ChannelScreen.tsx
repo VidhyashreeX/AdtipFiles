@@ -100,14 +100,16 @@ const ChannelScreen: React.FC = () => {
   // New state for plan modal
   const [showPlanModal, setShowPlanModal] = useState(false);
 
-  // Get channel ID from route params
+  // Get channel ID and data from route params
   const routeChannelId = (route.params as any)?.channelId || (route.params as any)?.userId;
+  const passedChannelData = (route.params as any)?.channelData;
   const isMyChannel = !routeChannelId || String(routeChannelId) === String(user?.id);
   const channelId = isMyChannel ? user?.id : routeChannelId;
 
   console.log('[ChannelScreen] Route params and channel setup:', {
     routeParams: route.params,
     routeChannelId,
+    passedChannelData,
     isMyChannel,
     channelId,
     userId: user?.id
@@ -152,11 +154,26 @@ const ChannelScreen: React.FC = () => {
     status: channelData?.status,
     dataLength: channelData?.data?.length,
     firstChannel: channelData?.data?.[0],
+    passedChannelData,
     channelLoading,
     channelError
   });
 
-  const channelInfo: ChannelInfo | null = channelData?.data?.[0] ? {
+  // Use passed channel data if available, otherwise use API data
+  const channelInfo: ChannelInfo | null = passedChannelData ? {
+    channelId: String(passedChannelData.channelId),
+    channelName: passedChannelData.channelName || 'Unknown Channel',
+    description: passedChannelData.description || 'No description available',
+    profileImage: passedChannelData.profileImage || `https://api.dicebear.com/9.x/identicon/svg?seed=${channelId}`,
+    coverImage: passedChannelData.coverImage,
+    totalSubscribers: Number(passedChannelData.totalSubscribers || 0),
+    totalVideos: Number(passedChannelData.totalVideos || 0),
+    totalViews: Number(passedChannelData.totalViews || 0),
+    isSubscribed: Boolean(passedChannelData.isSubscribed || false),
+    isVerified: Boolean(passedChannelData.isVerified || false),
+    createdDate: passedChannelData.createdDate || new Date().toISOString(),
+    createdBy: Number(passedChannelData.createdBy || channelId),
+  } : channelData?.data?.[0] ? {
     channelId: String(channelData.data[0].channelId),
     channelName: channelData.data[0].channelName || 'Unknown Channel',
     description: channelData.data[0].description || 'No description available',

@@ -243,9 +243,18 @@ const VideoPlayerModalScreen: React.FC = () => {
   // Handle navigation to channel from channel section
   const handleNavigateToChannelFromSection = useCallback(() => {
     if (video?.channelId) {
-      navigation.navigate('Channel', { channelId: String(video.channelId) });
+      navigation.navigate('Channel', {
+        channelId: String(video.channelId),
+        channelData: {
+          channelId: String(video.channelId),
+          channelName: video.creatorName,
+          profileImage: video.avatar,
+          isVerified: video.isVerified || false,
+          createdBy: typeof video.channelId === 'number' ? video.channelId : parseInt(String(video.channelId))
+        }
+      });
     }
-  }, [navigation, video?.channelId]);
+  }, [navigation, video?.channelId, video?.creatorName, video?.avatar, video?.isVerified]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: 'transparent' }}>

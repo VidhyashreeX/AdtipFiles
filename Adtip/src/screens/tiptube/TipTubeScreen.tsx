@@ -510,12 +510,27 @@ const TipTubeScreen = () => {
     }
   }, [userChannelId, user?.id, isGuest, navigation, showLoginPromptForAction]);
 
-  const handleNavigateToChannel = useCallback((channelId: string) => {
+  const handleNavigateToChannel = useCallback((channelData: {
+    channelId: string;
+    channelName: string;
+    avatar?: string;
+    isVerified?: boolean;
+    createdBy?: number;
+  }) => {
     if (isGuest) {
       showLoginPromptForAction('view channels');
       return;
     }
-    navigation.navigate('Channel', { channelId });
+    navigation.navigate('Channel', {
+      channelId: channelData.channelId,
+      channelData: {
+        channelId: channelData.channelId,
+        channelName: channelData.channelName,
+        profileImage: channelData.avatar,
+        isVerified: channelData.isVerified || false,
+        createdBy: channelData.createdBy
+      }
+    });
   }, [isGuest, navigation, showLoginPromptForAction]);
 
   const handleAnalytics = useCallback(() => {
@@ -807,7 +822,13 @@ const TipTubeScreen = () => {
         isPreview={previewingVideoId === item.id}
         styles={styles}
         colors={colors}
-        onNavigateToChannel={() => handleNavigateToChannel(String(item.channelId))}
+        onNavigateToChannel={() => handleNavigateToChannel({
+          channelId: String(item.channelId),
+          channelName: item.creatorName,
+          avatar: item.avatar,
+          isVerified: item.isVerified,
+          createdBy: typeof item.channelId === 'number' ? item.channelId : parseInt(String(item.channelId))
+        })}
         index={index}
         isYouTubeLayout={true} // Pass flag for YouTube-like layout
         onToggleComments={() => {

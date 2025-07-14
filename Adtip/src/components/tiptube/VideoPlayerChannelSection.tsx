@@ -37,28 +37,15 @@ const VideoPlayerChannelSection: React.FC<ChannelSectionProps> = ({
   
   const [isFollowing, setIsFollowing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [channelInfo, setChannelInfo] = useState<any>(null);
   const [subscriberCount, setSubscriberCount] = useState(0);
 
-  // Fetch channel information
-  const fetchChannelInfo = useCallback(async () => {
-    if (!video.channelId) return;
-    
-    try {
-      // Get channel details
-      const channelResponse = await ApiService.getChannelByUserId(Number(video.channelId));
-      if (channelResponse?.data?.length > 0) {
-        setChannelInfo(channelResponse.data[0]);
-      }
-      
-      // Get subscriber count (followers)
-      // Note: This would need to be implemented in the API
-      // For now, we'll use a placeholder
-      setSubscriberCount(Math.floor(Math.random() * 10000) + 100);
-    } catch (error) {
-      console.error('[VideoPlayerChannelSection] Error fetching channel info:', error);
-    }
-  }, [video.channelId]);
+  // Use video data directly instead of making API calls
+  const channelInfo = {
+    channelName: video.creatorName,
+    profileImage: video.avatar,
+    isVerified: video.isVerified,
+    description: '', // Not available in video data
+  };
 
   // Check if user is following the channel
   const checkFollowStatus = useCallback(async () => {
@@ -115,9 +102,10 @@ const VideoPlayerChannelSection: React.FC<ChannelSectionProps> = ({
   };
 
   useEffect(() => {
-    fetchChannelInfo();
     checkFollowStatus();
-  }, [fetchChannelInfo, checkFollowStatus]);
+    // Set a placeholder subscriber count
+    setSubscriberCount(Math.floor(Math.random() * 10000) + 100);
+  }, [checkFollowStatus]);
 
   const styles = createStyles(colors, isDarkMode);
 
@@ -130,29 +118,23 @@ const VideoPlayerChannelSection: React.FC<ChannelSectionProps> = ({
         activeOpacity={0.8}
       >
         <Image
-          source={{ uri: video.avatar || channelInfo?.profileImage || "https://via.placeholder.com/48.png?text=CH" }}
+          source={{ uri: video.avatar || "https://via.placeholder.com/48.png?text=CH" }}
           style={styles.channelAvatar}
         />
-        
+
         <View style={styles.channelInfo}>
           <View style={styles.channelNameContainer}>
             <Text style={styles.channelName} numberOfLines={1}>
-              {channelInfo?.channelName || video.creatorName}
+              {video.creatorName}
             </Text>
-            {(video.isVerified || channelInfo?.isVerified) && (
+            {video.isVerified && (
               <Icon name="check-circle" size={16} color="#1DA1F2" style={styles.verifiedIcon} />
             )}
           </View>
-          
+
           <Text style={styles.subscriberCount}>
             {formatSubscriberCount(subscriberCount)} subscribers
           </Text>
-          
-          {channelInfo?.description && (
-            <Text style={styles.channelDescription} numberOfLines={2}>
-              {channelInfo.description}
-            </Text>
-          )}
         </View>
       </TouchableOpacity>
 
