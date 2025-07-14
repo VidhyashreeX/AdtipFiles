@@ -118,8 +118,51 @@ const TipTubeUploadScreen: React.FC = () => {
   const [isExtractingDuration, setIsExtractingDuration] = useState(false);
   const [hiddenVideoUri, setHiddenVideoUri] = useState<string | null>(null);
 
-  // Channel Info (mock - replace with actual API call)
-  const [channelId] = useState(1); // This should come from user's channel
+  // Channel Info - dynamically fetched from API
+  const [channelId, setChannelId] = useState<number | null>(null);
+  const [isLoadingChannel, setIsLoadingChannel] = useState(false);
+
+  // Fetch user's channel ID
+  const fetchChannelId = async () => {
+    if (!user?.id || channelId !== null) return;
+
+    try {
+      setIsLoadingChannel(true);
+      console.log('[TipTubeUpload] Fetching channel ID for user:', user.id);
+
+      const response = await ApiService.getChannelByUserId(user.id);
+      console.log('[TipTubeUpload] Channel response:', response);
+
+      if (response.status === 200 && response.data && response.data.length > 0) {
+        const userChannelId = response.data[0].channelId;
+        setChannelId(userChannelId);
+        console.log('[TipTubeUpload] Channel ID set to:', userChannelId);
+      } else {
+        console.error('[TipTubeUpload] No channel found for user');
+        Alert.alert(
+          'Channel Required',
+          'You need to create a channel before uploading videos. Please create a channel first.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      }
+    } catch (error) {
+      console.error('[TipTubeUpload] Error fetching channel ID:', error);
+      Alert.alert(
+        'Error',
+        'Failed to fetch channel information. Please try again.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    } finally {
+      setIsLoadingChannel(false);
+    }
+  };
+
+  // Fetch channel ID when component mounts
+  useEffect(() => {
+    if (user?.id) {
+      fetchChannelId();
+    }
+  }, [user?.id]);
 
   // Back Handler
   useFocusEffect(
@@ -479,7 +522,7 @@ const TipTubeUploadScreen: React.FC = () => {
     if (title.trim().length < 3) return 'Video title must be at least 3 characters long.';
     if (!selectedThumbnail) return 'Please select a thumbnail for your video.';
     if (!categoryId) return 'Please select a video category.';
-    if (!channelId) return 'Please select a channel.';
+    if (!channelId) return 'Channel information is required. Please wait for channel to load or try again.';
     if (!user?.id) return 'User authentication required. Please log in again.';
     if (isPaidVideo && (!promotionalPrice || parseFloat(promotionalPrice) <= 0)) {
       return 'Please enter a valid promotional price for paid video.';
@@ -950,21 +993,21 @@ const TipTubeUploadScreen: React.FC = () => {
             style={[
               styles.uploadBtn,
               {
-                backgroundColor: (!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing || (isPaidVideo && (!promotionalPrice || parseFloat(promotionalPrice) <= 0)))
+                backgroundColor: (!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing || isLoadingChannel || !channelId || (isPaidVideo && (!promotionalPrice || parseFloat(promotionalPrice) <= 0)))
                   ? colors.gray?.[400]
                   : colors.primary,
               }
             ]}
             onPress={handleUpload}
-            disabled={!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing || (isPaidVideo && (!promotionalPrice || parseFloat(promotionalPrice) <= 0))}
+            disabled={!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing || isLoadingChannel || !channelId || (isPaidVideo && (!promotionalPrice || parseFloat(promotionalPrice) <= 0))}
           >
-            {(isUploading || isCompressing) ? (
+            {(isUploading || isCompressing || isLoadingChannel) ? (
               <ActivityIndicator size="small" color={colors.white} />
             ) : (
               <Icon name="upload" size={20} color={colors.white} />
             )}
             <Text style={[styles.uploadBtnText, { color: colors.white }]}>
-              {isCompressing ? 'Compressing...' : isUploading ? 'Uploading...' : 'Upload Video'}
+              {isCompressing ? 'Compressing...' : isUploading ? 'Uploading...' : isLoadingChannel ? 'Loading Channel...' : 'Upload Video'}
             </Text>
           </TouchableOpacity>
         </View>
