@@ -17,11 +17,12 @@ import {
   Modal,
   ViewToken,
 } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
-import { CirclePlay } from 'lucide-react-native';
+import { CirclePlay, Gamepad2 } from 'lucide-react-native';
 import RazorpayCheckout from 'react-native-razorpay';
 import debounce from 'lodash.debounce';
 
@@ -42,14 +43,15 @@ import {
   getFallbackAvatarUrl, 
   getFallbackThumbnailUrl 
 } from '../../utils/mediaUtils';
-import BannerAdComponent from '../../googleads/BannerAdComponent';
-import RectangleAdComponent from '../../googleads/RectangleAdComponent';
+
 import ApiService from '../../services/ApiService';
 import { API_BASE_URL } from '../../constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import PubScaleService from '../../services/PubScaleService';
 import ContentCreatorPlanToggle from '../../components/common/ContentCreatorPlanToggle';
 import VideoCommentsModal from '../../components/tiptube/VideoCommentsModal';
 import LoginPromptModal from '../../components/modals/LoginPromptModal';
+import PubScaleCreditAlert from '../../components/common/PubScaleCreditAlert';
 import useSimpleRewardedAd from '../../googleads/SimpleRewardedAd';
 
 // Get screen dimensions and create constants
@@ -201,6 +203,10 @@ const TipTubeScreen = () => {
   // Login prompt modal state
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [loginPromptMessage, setLoginPromptMessage] = useState('Login to unlock all features');
+
+  // PubScale state
+  const [offerwallLoading, setOfferwallLoading] = useState(false);
+  const [showPubScaleCreditAlert, setShowPubScaleCreditAlert] = useState(false);
 
   // Content Creator Premium State - Using shared context
   const { 
@@ -552,6 +558,33 @@ const TipTubeScreen = () => {
     navigation.navigate('TipShorts');
   }, [navigation]);
 
+  // PubScale handlers
+  const handleInstallToEarn = useCallback(async () => {
+    // Allow all users to access PubScale - no premium restriction
+    try {
+      setOfferwallLoading(true);
+      await PubScaleService.showOfferwall();
+      console.log('Offerwall launched successfully');
+
+      // Show enhanced credit alert after user returns from PubScale
+      setShowPubScaleCreditAlert(true);
+    } catch (error) {
+      console.error('Failed to show offerwall:', error);
+      Alert.alert('Error', 'Failed to load offerwall. Please try again later.', [{ text: 'OK' }]);
+    } finally {
+      setOfferwallLoading(false);
+    }
+  }, []);
+
+  // Handle PubScale credit alert actions
+  const handleViewWallet = useCallback(() => {
+    navigation.navigate('Wallet' as never);
+  }, [navigation]);
+
+  const handleViewHistory = useCallback(() => {
+    navigation.navigate('Wallet' as never);
+  }, [navigation]);
+
   // Reward ads state
   const isPremium = user && typeof user.is_premium === 'boolean' ? user.is_premium : false;
   const [videoCount, setVideoCount] = useState(0);
@@ -761,14 +794,68 @@ const TipTubeScreen = () => {
     );
   }, [initialLoading, videosError, isOnline, searchQuery, styles, colors.text.tertiary]);
 
+  // Render EarnCardsRow component
+  const renderEarnCardsRow = useCallback(() => {
+    const earnCardsData = [
+      {
+        id: '3',
+        title: 'Install to Earn',
+        description: 'Complete tasks to earn rewards',
+        iconName: 'gamepad-2',
+        onPress: handleInstallToEarn,
+        gradientColors: ['#FF6B35', '#FF8E53', '#E55A2B'],
+      },
+    ];
+
+    const renderEarnCard = (item: typeof earnCardsData[0]) => {
+      return (
+        <TouchableOpacity
+          key={item.id}
+          style={styles.earnCardVerticalItem}
+          onPress={item.onPress}
+          activeOpacity={0.9}
+        >
+          <LinearGradient
+            colors={item.gradientColors}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.earnCardGradient}
+          >
+            <View style={styles.earnCardContent}>
+              <View style={styles.earnCardTextContainer}>
+                <Text style={styles.earnCardTitle}>{item.title}</Text>
+                <Text style={styles.earnCardDescription}>{item.description}</Text>
+                <LinearGradient
+                  colors={['#FFD700', '#FFA500', '#FF8C00']} // Gold gradient
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.earnCardRewardBadge}
+                >
+                  <Text style={styles.earnCardRewardText}>2x Rewards!</Text>
+                </LinearGradient>
+              </View>
+              <View style={styles.earnCardIconContainer}>
+                <Gamepad2 size={32} color="#FFFFFF" />
+              </View>
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+      );
+    };
+
+    return (
+      <View style={styles.earnCardsCarouselSection}>
+        {earnCardsData.map(renderEarnCard)}
+      </View>
+    );
+  }, [handleInstallToEarn, styles]);
+
   // Render category header
   const renderCategoryHeader = useCallback(() => (
     <View>
-      {/* Banner ad at the top */}
-      <View style={styles.adContainer}>
-        <BannerAdComponent />
-      </View>
-      
+      {/* Install to Earn PubScale Banner */}
+      {renderEarnCardsRow()}
+
       <View style={styles.categoryContainer}>
         {searchQuery && searchQuery.trim() && (
           <View style={styles.searchIndicator}>
@@ -836,12 +923,6 @@ const TipTubeScreen = () => {
           toggleComments(item.id);
         }}
       />
-      {/* Rectangle ad every 3 videos */}
-      {(index + 1) % 3 === 0 && (
-        <View style={styles.rectangleAdContainer}>
-          <RectangleAdComponent />
-        </View>
-      )}
     </>
   ), [handleVideoPress, selectedVideoId, previewingVideoId, styles, colors, handleNavigateToChannel, toggleComments]);
 
@@ -1070,6 +1151,14 @@ const TipTubeScreen = () => {
           message={loginPromptMessage}
         />
 
+        {/* PubScale Credit Alert */}
+        <PubScaleCreditAlert
+          visible={showPubScaleCreditAlert}
+          onClose={() => setShowPubScaleCreditAlert(false)}
+          onViewWallet={handleViewWallet}
+          onViewHistory={handleViewHistory}
+        />
+
         {/* Reward Popup */}
         {showRewardPopup && (
           <View style={styles.rewardPopup}>
@@ -1177,26 +1266,7 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
   listContent: {
     flexGrow: 1,
   },
-  adContainer: {
-    backgroundColor: colors.background,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginVertical: 8,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderTopColor: colors.border,
-    borderBottomColor: colors.border,
-  },
-  rectangleAdContainer: {
-    backgroundColor: colors.background,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginVertical: 8,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderTopColor: colors.border,
-    borderBottomColor: colors.border,
-  },
+
   categoryContainer: {
     backgroundColor: colors.background,
     paddingVertical: 12,
@@ -1310,7 +1380,7 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
     flexDirection: 'row',
     paddingHorizontal: HORIZONTAL_PADDING,
     paddingTop: 12,
-    paddingBottom: 4,
+    paddingBottom: 16,
   },
   youtubeAvatar: {
     width: 40,
@@ -1657,6 +1727,60 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
     color: '#666',
     fontWeight: '600',
     fontSize: 16,
+  },
+  // EarnCardsRow styles
+  earnCardsCarouselSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  earnCardVerticalItem: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  earnCardGradient: {
+    borderRadius: 16,
+    padding: 16,
+  },
+  earnCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  earnCardTextContainer: {
+    flex: 1,
+    marginRight: 12,
+  },
+  earnCardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  earnCardDescription: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    opacity: 0.9,
+    marginBottom: 8,
+  },
+  earnCardRewardBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  earnCardRewardText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  earnCardIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 
