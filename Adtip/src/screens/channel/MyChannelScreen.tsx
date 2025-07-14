@@ -139,7 +139,7 @@ const MyChannelScreen: React.FC = () => {
           coverImage: channelData.profileCoverImage, // Corrected from coverImage
           totalSubscribers: Number(channelData.totalSubscribers) || 0,
           totalViews: Number(channelData.total_ads_view) || 0, // Corrected from totalViews
-          totalVideos: Number(channelData.totalVideos) || 0,
+          totalVideos: Number((channelData.totalVideos || 0) + (channelData.totalShorts || 0) + (channelData.totalReels || 0)),
           totalEarnings: Number(channelData.total_earnings) || 0, // Corrected from hardcoded 0
           createdDate: channelData.createddate || new Date().toISOString(), // Corrected from createdDate
           isCallEnabled: channelData.isCallEnabled || false,

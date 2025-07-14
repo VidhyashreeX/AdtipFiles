@@ -147,7 +147,7 @@ const ChannelScreen: React.FC = () => {
     profileImage: channelData.data[0].profileImage || `https://api.dicebear.com/9.x/identicon/svg?seed=${channelId}`,
     coverImage: channelData.data[0].profileCoverImage,
     totalSubscribers: Number(channelData.data[0].totalSubscribers || 0),
-    totalVideos: Number(channelData.data[0].totalVideos || 0),
+    totalVideos: Number((channelData.data[0].totalVideos || 0) + (channelData.data[0].totalShorts || 0) + (channelData.data[0].totalReels || 0)),
     totalViews: Number(channelData.data[0].total_ads_view || 0),
     isSubscribed: Boolean(channelData.data[0].isSubscribed),
     isVerified: Boolean(channelData.data[0].isVerified),
