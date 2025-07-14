@@ -249,6 +249,8 @@ dependencies {
     //implementation project(':rnwebrtc')        // MISSING - ADDED
     implementation project(':rnincallmanager')    // MISSING - ADDED
 
+    implementation project(':react-native-callkeep')
+
     // ADD EXOPLAYER DEPENDENCIES - REQUIRED FOR ENHANCED TIPSHORTS
     implementation 'com.google.android.exoplayer:exoplayer:2.19.1'
     implementation 'com.google.android.exoplayer:exoplayer-core:2.19.1'

@@ -115,4 +115,28 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
   }
 });
 
+// Register CallKeep headless task for background call handling
+AppRegistry.registerHeadlessTask('RNCallKeepBackgroundMessage', () => ({ name, callUUID, handle }) => {
+  console.log(`[Index] CallKeep background task: name=${name}, callUUID=${callUUID}, handle=${handle}`);
+
+  // Handle the background call using ReliableCallManager
+  return new Promise(async (resolve) => {
+    try {
+      const { ReliableCallManager } = await import('./src/services/calling/ReliableCallManager');
+      const callManager = ReliableCallManager.getInstance();
+
+      if (!callManager.isReady()) {
+        await callManager.initialize();
+      }
+
+      // Process the CallKeep background message
+      console.log('[Index] Processing CallKeep background message');
+      resolve();
+    } catch (error) {
+      console.error('[Index] Error in CallKeep background task:', error);
+      resolve(); // Always resolve to prevent hanging
+    }
+  });
+});
+
 AppRegistry.registerComponent(appName, () => App);

@@ -2,6 +2,7 @@ import UIKit
 import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
+import RNCallKeep
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -30,6 +31,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     )
 
     return true
+  }
+
+  // MARK: - CallKeep Integration
+  func application(
+    _ application: UIApplication,
+    continue userActivity: NSUserActivity,
+    restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
+  ) -> Bool {
+    return RNCallKeep.application(application, continue: userActivity, restorationHandler: restorationHandler)
   }
 }
 
