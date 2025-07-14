@@ -16,6 +16,9 @@ import {
   useMarkMessagesAsRead 
 } from '../../hooks/useQueries';
 
+// Import the storage prefix constant
+const CHAT_STORAGE_PREFIX = '@chat_';
+
 // WebSocket URL (update to your backend ws endpoint)
 const WS_URL = 'wss://api.adtip.in/chat';
 
@@ -50,21 +53,300 @@ const ChatScreen: React.FC = () => {
 
   // Transform messages data
   const messages: ChatMessage[] = messagesData?.pages?.flatMap(page => 
-    page?.messages?.map((msg: any) => ({
-      ...msg,
-      id: msg.id || `loaded-${Date.now()}-${Math.random()}`
-    })) || []
+    page?.messages || []
   ) || [];
+
+  // Add local state for pending messages (optimistic updates)
+  const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([]);
   
+  // Combine server messages with pending messages
+  const allMessages = [...messages, ...pendingMessages];
+  
+  // Helper to sort messages by createddate ascending
+  const sortedMessages = [...allMessages].sort((a, b) => new Date(a.createddate).getTime() - new Date(b.createddate).getTime());
+
+  // Debug logging for message data
+  useEffect(() => {
+    console.log('🔍 [ChatScreen] Debug message data:', {
+      messagesData: messagesData,
+      pages: messagesData?.pages,
+      messages: messages,
+      pendingMessages: pendingMessages,
+      allMessages: allMessages,
+      sortedMessages: sortedMessages
+    });
+  }, [messagesData, messages, pendingMessages, allMessages, sortedMessages]);
+
+  // Check storage on mount for debugging
+  useEffect(() => {
+    if (self && otherUser) {
+      checkStorage();
+    }
+  }, [self, otherUser]);
+
+  // Test function to add a message to local storage
+  const addTestMessage = async () => {
+    if (!self) return;
+    
+    const key = `${CHAT_STORAGE_PREFIX}${self.id}_${otherUser.id}`;
+    const now = new Date().toISOString();
+    const testMsg = {
+      id: Date.now(),
+      sender: self.id,
+      receiver: otherUser.id,
+      message: `Test message at ${new Date().toLocaleTimeString()}`,
+      createddate: now,
+      is_seen: false,
+    };
+    
+    try {
+      const raw = await AsyncStorage.getItem(key);
+      let messages = raw ? JSON.parse(raw) : [];
+      messages.push(testMsg);
+      await AsyncStorage.setItem(key, JSON.stringify(messages));
+      console.log('✅ Test message added to storage:', testMsg);
+      refetchMessages();
+    } catch (error) {
+      console.error('❌ Error adding test message:', error);
+    }
+  };
+
+  // Function to check AsyncStorage contents
+  const checkStorage = async () => {
+    if (!self) return;
+    
+    try {
+      const key = `${CHAT_STORAGE_PREFIX}${self.id}_${otherUser.id}`;
+      const raw = await AsyncStorage.getItem(key);
+      console.log('🔍 [ChatScreen] Storage check:', {
+        key,
+        raw,
+        parsed: raw ? JSON.parse(raw) : null
+      });
+    } catch (error) {
+      console.error('❌ Error checking storage:', error);
+    }
+  };
+
+  // Function to clear chat storage
+  const clearStorage = async () => {
+    if (!self) return;
+    
+    try {
+      const key = `${CHAT_STORAGE_PREFIX}${self.id}_${otherUser.id}`;
+      await AsyncStorage.removeItem(key);
+      console.log('🗑️ [ChatScreen] Storage cleared for key:', key);
+      refetchMessages();
+    } catch (error) {
+      console.error('❌ Error clearing storage:', error);
+    }
+  };
+
+  // Function to manually trigger send message mutation
+  const testSendMessage = async () => {
+    if (!self) return;
+    
+    try {
+      await sendMessageMutation.mutateAsync({
+        userId: self.id,
+        receiverId: otherUser.id,
+        message: `Test mutation message at ${new Date().toLocaleTimeString()}`
+      });
+      console.log('✅ Test mutation message sent');
+    } catch (error) {
+      console.error('❌ Error sending test mutation message:', error);
+    }
+  };
+
+  // Function to manually save a message to storage (fallback)
+  const saveMessageToStorage = async (messageText: string) => {
+    if (!self) return;
+    
+    try {
+      const key = `${CHAT_STORAGE_PREFIX}${self.id}_${otherUser.id}`;
+      const now = new Date().toISOString();
+      const newMsg = {
+        id: Date.now(),
+        sender: self.id,
+        receiver: otherUser.id,
+        message: messageText,
+        createddate: now,
+        is_seen: false,
+      };
+      
+      const raw = await AsyncStorage.getItem(key);
+      let messages = raw ? JSON.parse(raw) : [];
+      messages.push(newMsg);
+      await AsyncStorage.setItem(key, JSON.stringify(messages));
+      console.log('✅ Message saved to storage manually:', newMsg);
+      refetchMessages();
+    } catch (error) {
+      console.error('❌ Error saving message to storage:', error);
+    }
+  };
+
+  // Function to test WebSocket connection
+  const testWebSocketConnection = () => {
+    console.log('🔍 [ChatScreen] WebSocket connection test:', {
+      wsExists: !!ws.current,
+      readyState: ws.current?.readyState,
+      isConnected,
+      isConnecting: isConnectingRef.current
+    });
+    
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      console.log('✅ WebSocket is open and ready');
+      // Send a test ping
+      ws.current.send(JSON.stringify({ type: 'ping' }));
+    } else {
+      console.log('❌ WebSocket is not ready, attempting to reconnect');
+      connectWebSocket();
+    }
+  };
+
+  // Function to check storage key consistency
+  const checkStorageKeys = async () => {
+    if (!self) return;
+    
+    try {
+      const key1 = `${CHAT_STORAGE_PREFIX}${self.id}_${otherUser.id}`;
+      const key2 = `${CHAT_STORAGE_PREFIX}${self.id}_${otherUser.id}`;
+      
+      console.log('🔍 [ChatScreen] Storage key check:', {
+        key1,
+        key2,
+        areEqual: key1 === key2,
+        selfId: self.id,
+        otherUserId: otherUser.id
+      });
+      
+      const raw1 = await AsyncStorage.getItem(key1);
+      const raw2 = await AsyncStorage.getItem(key2);
+      
+      console.log('🔍 [ChatScreen] Storage contents:', {
+        key1Content: raw1 ? JSON.parse(raw1) : null,
+        key2Content: raw2 ? JSON.parse(raw2) : null
+      });
+    } catch (error) {
+      console.error('❌ Error checking storage keys:', error);
+    }
+  };
+
+  // Function to manually test the pruneOldMessages function
+  const testPruneFunction = async () => {
+    if (!self) return;
+    
+    try {
+      const key = `${CHAT_STORAGE_PREFIX}${self.id}_${otherUser.id}`;
+      const raw = await AsyncStorage.getItem(key);
+      const messages = raw ? JSON.parse(raw) : [];
+      
+      console.log('🔍 [ChatScreen] Testing prune function with messages:', messages);
+      
+      // Import and test the prune function
+      const { pruneOldMessages } = require('../../hooks/useQueries');
+      const pruned = pruneOldMessages(messages);
+      
+      console.log('🔍 [ChatScreen] Prune test result:', {
+        before: messages.length,
+        after: pruned.length,
+        removed: messages.length - pruned.length
+      });
+    } catch (error) {
+      console.error('❌ Error testing prune function:', error);
+    }
+  };
+
+  const testStorageSave = async () => {
+    if (!self) return;
+    
+    try {
+      const key = `${CHAT_STORAGE_PREFIX}${self.id}_${otherUser.id}`;
+      const testMessage = {
+        id: Date.now(),
+        sender: self.id,
+        receiver: otherUser.id,
+        message: 'Test message from storage test',
+        createddate: new Date().toISOString(),
+        is_seen: false,
+      };
+      
+      console.log('🔍 [ChatScreen] Testing storage save with key:', key);
+      console.log('🔍 [ChatScreen] Test message:', testMessage);
+      
+      // Save test message
+      await AsyncStorage.setItem(key, JSON.stringify([testMessage]));
+      console.log('✅ Test message saved to storage');
+      
+      // Read back to verify
+      const raw = await AsyncStorage.getItem(key);
+      const messages = raw ? JSON.parse(raw) : [];
+      console.log('🔍 [ChatScreen] Verification - messages in storage:', messages);
+      
+      // Force refetch
+      refetchMessages();
+    } catch (error) {
+      console.error('❌ Error testing storage save:', error);
+    }
+  };
+
+  const testInstantMessage = async () => {
+    if (!self) return;
+    
+    try {
+      // Generate a unique test ID that won't conflict with existing messages
+      const testId = -Math.floor(Math.random() * 1000000) - 1000000; // Large negative number
+      
+      // Simulate an incoming message for instant delivery testing
+      const incomingMsg = {
+        id: testId,
+        sender: otherUser.id,
+        receiver: self.id,
+        message: `Instant message test from other user (${Date.now()})`,
+        createddate: new Date().toISOString(),
+        is_seen: false,
+      };
+      
+      console.log('🔍 [ChatScreen] Testing instant message delivery:', incomingMsg);
+      
+      // Add to pending messages for instant display (avoid duplicates)
+      setPendingMessages(prev => {
+        // Check if message already exists in pending
+        const exists = prev.some(msg => msg.id === incomingMsg.id);
+        if (exists) {
+          console.log('📝 [ChatScreen] Test message already in pending, skipping');
+          return prev;
+        }
+        const newPending = [...prev, incomingMsg];
+        console.log('📝 [ChatScreen] Added instant test message to pending:', newPending.length);
+        return newPending;
+      });
+      
+      // Save to storage
+      const key = `${CHAT_STORAGE_PREFIX}${self.id}_${otherUser.id}`;
+      const raw = await AsyncStorage.getItem(key);
+      let messages = raw ? JSON.parse(raw) : [];
+      messages.push(incomingMsg);
+      await AsyncStorage.setItem(key, JSON.stringify(messages));
+      console.log('✅ Instant test message saved to storage');
+      
+      // Remove from pending after a delay
+      setTimeout(() => {
+        setPendingMessages(prev => prev.filter(msg => msg.id !== incomingMsg.id));
+        refetchMessages();
+      }, 1000);
+      
+    } catch (error) {
+      console.error('❌ Error testing instant message:', error);
+    }
+  };
+
   const ws = useRef<WebSocket & { pingInterval?: NodeJS.Timeout } | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const messageQueueRef = useRef<string[]>([]);
   const isConnectingRef = useRef(false);
-
-  // Helper to sort messages by createddate ascending
-  const sortedMessages = [...messages].sort((a, b) => new Date(a.createddate).getTime() - new Date(b.createddate).getTime());
 
   // Auto-scroll to bottom function (simplified and reliable)
   const scrollToBottom = useCallback((animated: boolean = true) => {
@@ -136,17 +418,104 @@ const ChatScreen: React.FC = () => {
             // Incoming message from another user
             if (data.data && data.data.sender === otherUser.id && data.data.receiver === self.id) {
               LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-              // Refetch messages to get the latest data
-              refetchMessages();
-              // Auto-scroll after adding new message
-              setTimeout(() => scrollToBottom(true), 100);
+              
+              // Save incoming message to local storage
+              const key = `${CHAT_STORAGE_PREFIX}${self.id}_${otherUser.id}`;
+              const incomingMsg = {
+                id: data.data.id || Date.now(),
+                sender: data.data.sender,
+                receiver: data.data.receiver,
+                message: data.data.message,
+                createddate: data.data.createddate || new Date().toISOString(),
+                is_seen: false,
+              };
+              
+              AsyncStorage.getItem(key).then(raw => {
+                let messages = raw ? JSON.parse(raw) : [];
+                // Check if message already exists
+                const exists = messages.some((msg: any) => msg.id === incomingMsg.id);
+                if (!exists) {
+                  messages.push(incomingMsg);
+                  AsyncStorage.setItem(key, JSON.stringify(messages));
+                  console.log('✅ Incoming message saved to storage:', incomingMsg);
+                  
+                  // Add to pending messages for instant display
+                  setPendingMessages(prev => {
+                    const newPending = [...prev, incomingMsg];
+                    console.log('📝 [ChatScreen] Added incoming message to pending:', newPending.length);
+                    return newPending;
+                  });
+                }
+              });
+              
+              // Refetch messages to get the latest data with a small delay
+              setTimeout(() => {
+                refetchMessages();
+                // Auto-scroll after adding new message
+                setTimeout(() => scrollToBottom(true), 100);
+                
+                // Remove the pending message after a short delay
+                setTimeout(() => {
+                  setPendingMessages(prev => prev.filter(msg => msg.id !== incomingMsg.id));
+                }, 200);
+              }, 100);
             }
           } else if (data.type === 'message_sent') {
             // Confirmation that our message was saved successfully
             if (data.data && data.tempId) {
-              // Refetch messages to get the updated data
-              refetchMessages();
-              console.log('Message confirmed via WebSocket, refetching messages');
+                          // Remove the pending message smoothly
+            setPendingMessages(prev => {
+              const filtered = prev.filter(msg => msg.id !== data.tempId);
+              console.log('📝 [ChatScreen] Removed pending message, remaining:', filtered.length);
+              return filtered;
+            });
+              
+              // Save the confirmed message to local storage
+              if (self && data.data) {
+                // Use the same key format as useChatMessages hook
+                const key = `${CHAT_STORAGE_PREFIX}${self.id}_${otherUser.id}`;
+                const confirmedMsg = {
+                  id: data.data.id || Date.now(),
+                  sender: data.data.sender || self.id,
+                  receiver: data.data.receiver || otherUser.id,
+                  message: data.data.message,
+                  createddate: data.data.createddate || new Date().toISOString(),
+                  is_seen: false,
+                };
+                
+                // Use async/await instead of .then() for better error handling
+                (async () => {
+                  try {
+                    console.log('🔍 [ChatScreen] Storage key for confirmed message:', key);
+                    const raw = await AsyncStorage.getItem(key);
+                    let messages = raw ? JSON.parse(raw) : [];
+                    console.log('🔍 [ChatScreen] Before saving confirmed message, current messages:', messages);
+                    // Remove any existing message with the same tempId
+                    messages = messages.filter((msg: any) => msg.id !== data.tempId);
+                    // Add the confirmed message
+                    messages.push(confirmedMsg);
+                    console.log('🔍 [ChatScreen] Messages after adding confirmed message:', messages);
+                    await AsyncStorage.setItem(key, JSON.stringify(messages));
+                    console.log('✅ Message confirmed and saved to storage:', confirmedMsg);
+                    console.log('✅ Updated messages in storage:', messages);
+                    
+                    // Verify the save worked by reading back
+                    const verifyRaw = await AsyncStorage.getItem(key);
+                    const verifyMessages = verifyRaw ? JSON.parse(verifyRaw) : [];
+                    console.log('🔍 [ChatScreen] Verification - messages in storage after save:', verifyMessages);
+                    
+                    // Force a refetch after storage is updated, but with a small delay to avoid blinking
+                    setTimeout(() => {
+                      console.log('🔄 Forcing refetch after storage update');
+                      refetchMessages();
+                    }, 50);
+                  } catch (error) {
+                    console.error('❌ Error saving confirmed message:', error);
+                  }
+                })();
+              }
+              
+              console.log('Message confirmed via WebSocket, storage update in progress');
             }
           } else if (data.type === 'typing' && data.userId === otherUser.id && isUserInChat) {
             console.log('Received typing indicator from user:', data.userId);
@@ -234,7 +603,10 @@ const ChatScreen: React.FC = () => {
 
   // WebSocket send message event
   const sendMessageWS = useCallback((msg: string, tempId: number) => {
-    if (!self) return false;
+    if (!self) {
+      console.log('❌ Cannot send message - no self user');
+      return false;
+    }
 
     const payload = {
       type: 'message',
@@ -251,8 +623,14 @@ const ChatScreen: React.FC = () => {
 
     if (ws.current?.readyState === WebSocket.OPEN) {
       console.log('WebSocket is open, sending message');
-      ws.current.send(messageString);
-      return true;
+      try {
+        ws.current.send(messageString);
+        console.log('✅ Message sent via WebSocket successfully');
+        return true;
+      } catch (error) {
+        console.error('❌ Error sending WebSocket message:', error);
+        return false;
+      }
     } else if (ws.current?.readyState === WebSocket.CONNECTING) {
       console.log('WebSocket is connecting, queueing message');
       // Queue message if connecting
@@ -293,18 +671,33 @@ const ChatScreen: React.FC = () => {
     
     const now = new Date().toISOString();
     const tempId = -Date.now(); // Use negative number for temp ID to avoid conflicts
-    const msgPayload: ChatMessage = {
+    const messageText = input.trim();
+    
+    console.log('🎯 [ChatScreen] Sending message:', {
+      messageText,
+      tempId,
+      sender: self.id,
+      receiver: otherUser.id
+    });
+    
+    // Create optimistic message
+    const optimisticMessage: ChatMessage = {
       id: tempId,
       sender: self.id,
       receiver: otherUser.id,
-      message: input.trim(),
+      message: messageText,
       createddate: now,
       is_seen: false,
     };
 
-    // The mutation will handle optimistic updates automatically
+    // Add to pending messages immediately (optimistic update)
+    setPendingMessages(prev => {
+      const newPending = [...prev, optimisticMessage];
+      console.log('📝 [ChatScreen] Pending messages updated:', newPending.length);
+      return newPending;
+    });
     
-    const messageText = input.trim();
+    // Clear input immediately for better UX
     setInput('');
     setInputHeight(40);
     setTyping(false);
@@ -330,6 +723,20 @@ const ChatScreen: React.FC = () => {
     if (!wsSuccess) {
       console.log('WebSocket failed, using API fallback');
       await sendMessageAPI(messageText, tempId);
+    } else {
+      // Add timeout to handle cases where WebSocket confirmation doesn't come back
+      setTimeout(() => {
+        // Check if the message is still pending after 5 seconds
+        setPendingMessages(prev => {
+          const stillPending = prev.find(msg => msg.id === tempId);
+          if (stillPending) {
+            console.log('⚠️ WebSocket confirmation timeout, saving message manually');
+            saveMessageToStorage(messageText);
+            return prev.filter(msg => msg.id !== tempId);
+          }
+          return prev;
+        });
+      }, 5000);
     }
   }, [input, self, otherUser.id, sendMessageWS, sendMessageAPI, scrollToBottom]);
 
@@ -449,6 +856,16 @@ const ChatScreen: React.FC = () => {
       };
     }, [self, otherUser.id, scrollToBottom])
   );
+
+  // Debug effect to log message changes
+  useEffect(() => {
+    console.log('📊 [ChatScreen] Messages state updated:', {
+      serverMessages: messages.length,
+      pendingMessages: pendingMessages.length,
+      totalMessages: allMessages.length,
+      sortedMessages: sortedMessages.length
+    });
+  }, [messages.length, pendingMessages.length, allMessages.length, sortedMessages.length]);
 
   // Memoized message item component for better performance
   const MessageItem = React.memo(({ item, index, isDarkMode, self }: { 
@@ -602,6 +1019,177 @@ const ChatScreen: React.FC = () => {
           </>
         )}
         
+        {/* Test button for development */}
+        {__DEV__ && (
+          <>
+            <TouchableOpacity 
+              onPress={() => {
+                const testMessage: ChatMessage = {
+                  id: -Date.now(),
+                  sender: self.id,
+                  receiver: otherUser.id,
+                  message: 'Test message ' + new Date().toLocaleTimeString(),
+                  createddate: new Date().toISOString(),
+                  is_seen: false,
+                };
+                setPendingMessages(prev => [...prev, testMessage]);
+                setTimeout(() => scrollToBottom(true), 100);
+              }}
+              style={{
+                position: 'absolute',
+                top: 100,
+                left: 20,
+                backgroundColor: '#FF3040',
+                padding: 12,
+                borderRadius: 8,
+                zIndex: 1000,
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Test Message</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={addTestMessage}
+              style={{
+                position: 'absolute',
+                top: 150,
+                left: 20,
+                backgroundColor: '#4CAF50',
+                padding: 12,
+                borderRadius: 8,
+                zIndex: 1000,
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Add Test Message</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={checkStorage}
+              style={{
+                position: 'absolute',
+                top: 200,
+                left: 20,
+                backgroundColor: '#2196F3',
+                padding: 12,
+                borderRadius: 8,
+                zIndex: 1000,
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Check Storage</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={clearStorage}
+              style={{
+                position: 'absolute',
+                top: 250,
+                left: 20,
+                backgroundColor: '#9C27B0',
+                padding: 12,
+                borderRadius: 8,
+                zIndex: 1000,
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Clear Storage</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={testSendMessage}
+              style={{
+                position: 'absolute',
+                top: 300,
+                left: 20,
+                backgroundColor: '#FF9800',
+                padding: 12,
+                borderRadius: 8,
+                zIndex: 1000,
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Test Send Mutation</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={testWebSocketConnection}
+              style={{
+                position: 'absolute',
+                top: 350,
+                left: 20,
+                backgroundColor: '#007bff',
+                padding: 12,
+                borderRadius: 8,
+                zIndex: 1000,
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Test WebSocket</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={() => saveMessageToStorage('Manual save test message')}
+              style={{
+                position: 'absolute',
+                top: 400,
+                left: 20,
+                backgroundColor: '#607D8B',
+                padding: 12,
+                borderRadius: 8,
+                zIndex: 1000,
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Manual Save Message</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={checkStorageKeys}
+              style={{
+                position: 'absolute',
+                top: 450,
+                left: 20,
+                backgroundColor: '#E91E63',
+                padding: 12,
+                borderRadius: 8,
+                zIndex: 1000,
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Check Storage Keys</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={testPruneFunction}
+              style={{
+                position: 'absolute',
+                top: 500,
+                left: 20,
+                backgroundColor: '#4CAF50',
+                padding: 12,
+                borderRadius: 8,
+                zIndex: 1000,
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Test Prune Function</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={testStorageSave}
+              style={{
+                position: 'absolute',
+                top: 550,
+                left: 20,
+                backgroundColor: '#FF9800',
+                padding: 12,
+                borderRadius: 8,
+                zIndex: 1000,
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Test Storage Save</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={testInstantMessage}
+              style={{
+                position: 'absolute',
+                top: 600,
+                left: 20,
+                backgroundColor: '#9C27B0',
+                padding: 12,
+                borderRadius: 8,
+                zIndex: 1000,
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Test Instant Message</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
         <View style={[styles.inputRow, { backgroundColor: isDarkMode ? '#23272f' : '#fff', borderTopColor: isDarkMode ? '#23272f' : '#eee' }]}> 
           <TextInput
             style={[

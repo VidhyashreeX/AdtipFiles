@@ -306,7 +306,37 @@ const CHAT_EXPIRY_DAYS = 7;
 function pruneOldMessages(messages: any[]): any[] {
   const now = Date.now();
   const expiry = CHAT_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
-  return messages.filter(msg => now - new Date(msg.createddate).getTime() < expiry);
+  console.log('🔍 [pruneOldMessages] Processing messages:', {
+    totalMessages: messages.length,
+    now: new Date(now).toISOString(),
+    expiryDays: CHAT_EXPIRY_DAYS,
+    expiryMs: expiry
+  });
+  
+  const filtered = messages.filter(msg => {
+    const msgTime = new Date(msg.createddate).getTime();
+    const age = now - msgTime;
+    const isRecent = age < expiry;
+    
+    console.log('🔍 [pruneOldMessages] Message check:', {
+      id: msg.id,
+      createddate: msg.createddate,
+      msgTime: new Date(msgTime).toISOString(),
+      age: age,
+      ageInDays: age / (24 * 60 * 60 * 1000),
+      isRecent: isRecent
+    });
+    
+    return isRecent;
+  });
+  
+  console.log('🔍 [pruneOldMessages] Filtered messages:', {
+    before: messages.length,
+    after: filtered.length,
+    removed: messages.length - filtered.length
+  });
+  
+  return filtered;
 }
 
 export const useChatMessages = (userId: number, chattingUserId: number) => {
@@ -314,10 +344,18 @@ export const useChatMessages = (userId: number, chattingUserId: number) => {
     queryKey: ['chat', 'messages', userId, chattingUserId],
     queryFn: async () => {
       const key = `${CHAT_STORAGE_PREFIX}${userId}_${chattingUserId}`;
+      console.log('🔍 [useChatMessages] Loading messages for key:', key);
       const raw = await AsyncStorage.getItem(key);
       let messages = raw ? JSON.parse(raw) : [];
-      messages = pruneOldMessages(messages);
-      await AsyncStorage.setItem(key, JSON.stringify(messages));
+      console.log('🔍 [useChatMessages] Raw messages from storage:', messages);
+      console.log('🔍 [useChatMessages] Raw data type:', typeof raw, 'Raw data length:', raw?.length);
+      
+      // Temporarily disable pruning to test if that's causing the issue
+      // messages = pruneOldMessages(messages);
+      console.log('🔍 [useChatMessages] Messages after pruning (disabled):', messages);
+      
+      // Don't write back to storage here - this was causing issues
+      // await AsyncStorage.setItem(key, JSON.stringify(messages));
       return { messages };
     },
     initialPageParam: 1,
@@ -334,6 +372,7 @@ export const useSendChatMessage = () => {
   return useMutation({
     mutationFn: async (data: { userId: number; receiverId: number; message: string }) => {
       const key = `${CHAT_STORAGE_PREFIX}${data.userId}_${data.receiverId}`;
+      console.log('🔍 [useSendChatMessage] Saving message for key:', key);
       const now = new Date().toISOString();
       const newMsg = {
         id: Date.now(),
@@ -343,15 +382,21 @@ export const useSendChatMessage = () => {
         createddate: now,
         is_seen: false,
       };
+      console.log('🔍 [useSendChatMessage] New message:', newMsg);
       let messages: any[] = [];
       const raw = await AsyncStorage.getItem(key);
       if (raw) messages = JSON.parse(raw);
+      console.log('🔍 [useSendChatMessage] Existing messages:', messages);
       messages.push(newMsg);
-      messages = pruneOldMessages(messages);
+      // Temporarily disable pruning to test if that's causing the issue
+      // messages = pruneOldMessages(messages);
+      console.log('🔍 [useSendChatMessage] Messages after adding (pruning disabled):', messages);
       await AsyncStorage.setItem(key, JSON.stringify(messages));
+      console.log('🔍 [useSendChatMessage] Message saved to storage');
       return newMsg;
     },
     onSuccess: (data, variables) => {
+      console.log('🔍 [useSendChatMessage] Mutation success, invalidating queries');
       queryClient.invalidateQueries({ queryKey: ['chat', 'messages', variables.userId, variables.receiverId] });
       queryClient.invalidateQueries({ queryKey: ['chat', 'unread', variables.receiverId] });
     },
