@@ -23,8 +23,11 @@ export const useRewardedAd = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [reward, setReward] = useState<any>(null);
   const [hasEarnedReward, setHasEarnedReward] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log('RewardedAdEventType available values:', Object.keys(RewardedAdEventType));
+    
     // Create rewarded ad instance
     rewardedAd = RewardedAd.createForAdRequest(REWARDED_AD_UNIT_ID, {
       requestNonPersonalizedAdsOnly: true,
@@ -35,9 +38,8 @@ export const useRewardedAd = () => {
       console.log('Rewarded ad loaded successfully');
       setIsLoaded(true);
       setIsLoading(false);
+      setError(null);
     };
-
-
 
     const onEarnedReward = (rewardData: any) => {
       console.log('User earned reward:', rewardData);
@@ -53,18 +55,33 @@ export const useRewardedAd = () => {
       }, 1000);
     };
 
-    const unsubscribeLoaded = rewardedAd.addAdEventListener(RewardedAdEventType.LOADED, onLoaded);
-    const unsubscribeEarnedReward = rewardedAd.addAdEventListener(
-      RewardedAdEventType.EARNED_REWARD,
-      onEarnedReward
-    );
+    // Try to use the event types, with fallback to string literals if needed
+    let unsubscribeLoaded: (() => void) | null = null;
+    let unsubscribeEarnedReward: (() => void) | null = null;
+
+    try {
+      unsubscribeLoaded = rewardedAd.addAdEventListener(RewardedAdEventType.LOADED, onLoaded);
+      unsubscribeEarnedReward = rewardedAd.addAdEventListener(
+        RewardedAdEventType.EARNED_REWARD,
+        onEarnedReward
+      );
+    } catch (err) {
+      console.error('Error setting up ad event listeners:', err);
+      // Fallback to string literals if enum values don't work
+      try {
+        unsubscribeLoaded = rewardedAd.addAdEventListener('loaded' as any, onLoaded);
+        unsubscribeEarnedReward = rewardedAd.addAdEventListener('earned_reward' as any, onEarnedReward);
+      } catch (fallbackErr) {
+        console.error('Fallback ad event listeners also failed:', fallbackErr);
+      }
+    }
 
     // Load the initial ad
     loadAd();
 
     return () => {
-      unsubscribeLoaded();
-      unsubscribeEarnedReward();
+      if (unsubscribeLoaded) unsubscribeLoaded();
+      if (unsubscribeEarnedReward) unsubscribeEarnedReward();
     };
   }, []);
 
@@ -72,6 +89,7 @@ export const useRewardedAd = () => {
     if (rewardedAd && !isLoading && !isLoaded) {
       console.log('Loading rewarded ad...');
       setIsLoading(true);
+      setError(null);
       rewardedAd.load();
     }
   };
@@ -96,6 +114,7 @@ export const useRewardedAd = () => {
     loadAd,
     reward,
     hasEarnedReward,
+    error,
   };
 };
 

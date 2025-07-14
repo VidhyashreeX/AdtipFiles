@@ -2163,21 +2163,6 @@ static async createSubscriptionTest(plan_id: string, user_id: number): Promise<a
   static async getReferralDetails(userId: number): Promise<any> {
     return this.get(`/api/referral/details/${userId}`);
   }
-  static async fetchChatMessages(userId: number, chattinguserid: number) {
-    return this.get(`/api/messages?userId=${userId}&chattinguserid=${chattinguserid}`);
-  }
-
-  static async sendChatMessage(data: { userId: number; receiverId: number; message: string }) {
-    return this.post('/api/sendmessage', data);
-  }
-
-  static async getUnreadMessageCount(userId: number) {
-    return this.get(`/api/chat/unread-count/${userId}`);
-  }
-
-  static async markMessagesAsRead(userId: number, senderId: number) {
-    return this.post('/api/chat/mark-as-read', { userId, senderId });
-  }
 
   // ===== TIP-TUBE UPLOAD SERVICES =====
 
@@ -2597,5 +2582,13 @@ static async createSubscriptionTest(plan_id: string, user_id: number): Promise<a
       console.error('Error getting withdrawal stats:', error);
       throw error;
     }
+  }
+
+  /**
+   * Credit ad reward to user's wallet (no transaction record)
+   * @param { userId, amount }
+   */
+  static async creditAdReward({ userId, amount }: { userId: number, amount: number }) {
+    return this.post('/api/wallet/credit-ad-reward', { userId, amount });
   }
 }

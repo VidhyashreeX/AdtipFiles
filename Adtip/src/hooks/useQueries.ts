@@ -299,24 +299,80 @@ export const useCategories = () => {
   });
 };
 
-// Chat Messages Hook (Infinite Query)
+// Chat Messages Hook (Local Storage)
+const CHAT_STORAGE_PREFIX = '@chat_';
+const CHAT_EXPIRY_DAYS = 7;
+
+function pruneOldMessages(messages: any[]): any[] {
+  const now = Date.now();
+  const expiry = CHAT_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+  return messages.filter(msg => now - new Date(msg.createddate).getTime() < expiry);
+}
+
 export const useChatMessages = (userId: number, chattingUserId: number) => {
   return useInfiniteQuery({
     queryKey: ['chat', 'messages', userId, chattingUserId],
-    queryFn: async ({ pageParam }) => {
-      const page = pageParam as number;
-      return ApiService.fetchChatMessages(userId, chattingUserId);
+    queryFn: async () => {
+      const key = `${CHAT_STORAGE_PREFIX}${userId}_${chattingUserId}`;
+      const raw = await AsyncStorage.getItem(key);
+      let messages = raw ? JSON.parse(raw) : [];
+      messages = pruneOldMessages(messages);
+      await AsyncStorage.setItem(key, JSON.stringify(messages));
+      return { messages };
     },
     initialPageParam: 1,
-    getNextPageParam: (lastPage, allPages) => {
-      // Check if there are more messages
-      const hasMore = lastPage?.messages?.length === 20; // Assuming 20 messages per page
-      return hasMore ? allPages.length + 1 : undefined;
-    },
+    getNextPageParam: () => undefined,
     enabled: !!userId && !!chattingUserId,
-    staleTime: 0, // Always fresh for chat
+    staleTime: 0,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
+  });
+};
+
+export const useSendChatMessage = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { userId: number; receiverId: number; message: string }) => {
+      const key = `${CHAT_STORAGE_PREFIX}${data.userId}_${data.receiverId}`;
+      const now = new Date().toISOString();
+      const newMsg = {
+        id: Date.now(),
+        sender: data.userId,
+        receiver: data.receiverId,
+        message: data.message,
+        createddate: now,
+        is_seen: false,
+      };
+      let messages: any[] = [];
+      const raw = await AsyncStorage.getItem(key);
+      if (raw) messages = JSON.parse(raw);
+      messages.push(newMsg);
+      messages = pruneOldMessages(messages);
+      await AsyncStorage.setItem(key, JSON.stringify(messages));
+      return newMsg;
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['chat', 'messages', variables.userId, variables.receiverId] });
+      queryClient.invalidateQueries({ queryKey: ['chat', 'unread', variables.receiverId] });
+    },
+  });
+};
+
+export const useMarkMessagesAsRead = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, senderId }: { userId: number; senderId: number }) => {
+      const key = `${CHAT_STORAGE_PREFIX}${senderId}_${userId}`;
+      const raw = await AsyncStorage.getItem(key);
+      let messages: any[] = raw ? JSON.parse(raw) : [];
+      messages = messages.map(msg => ({ ...msg, is_seen: true }));
+      await AsyncStorage.setItem(key, JSON.stringify(messages));
+      return true;
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['chat', 'unread', variables.userId] });
+      queryClient.invalidateQueries({ queryKey: ['chat', 'messages', variables.userId, variables.senderId] });
+    },
   });
 };
 
@@ -324,7 +380,27 @@ export const useChatMessages = (userId: number, chattingUserId: number) => {
 export const useUnreadMessageCount = (userId: number) => {
   return useQuery({
     queryKey: ['chat', 'unread', userId],
-    queryFn: () => ApiService.getUnreadMessageCount(userId),
+    queryFn: async () => {
+      // Get all chat keys for this user
+      const keys = await AsyncStorage.getAllKeys();
+      const userChatKeys = keys.filter(key => 
+        key.startsWith(CHAT_STORAGE_PREFIX) && 
+        (key.includes(`_${userId}`) || key.includes(`${userId}_`))
+      );
+      
+      let totalUnread = 0;
+      for (const key of userChatKeys) {
+        const raw = await AsyncStorage.getItem(key);
+        if (raw) {
+          const messages = JSON.parse(raw);
+          const unreadCount = messages.filter((msg: any) => 
+            msg.receiver === userId && !msg.is_seen
+          ).length;
+          totalUnread += unreadCount;
+        }
+      }
+      return totalUnread;
+    },
     enabled: !!userId,
     staleTime: 30 * 1000, // 30 seconds
     refetchInterval: 30 * 1000, // Refetch every 30 seconds
@@ -397,8 +473,8 @@ export const useCreatePost = () => {
     mutationFn: (data: {
       user_id: number;
       title: string;
-      content?: string;
-      media_url?: string;
+      content: string; // Make content required
+      media_url: string; // Make media_url required
       media_type: 'video' | 'image' | 'audio';
       is_promoted: boolean;
       video_category_id?: number;
@@ -416,262 +492,6 @@ export const useCreatePost = () => {
     },
     onError: (error) => {
       console.error('Create post error:', error);
-    },
-  });
-};
-
-// Send Chat Message Mutation
-export const useSendChatMessage = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (data: { userId: number; receiverId: number; message: string }) => 
-      ApiService.sendChatMessage(data),
-    onMutate: async (newMessage) => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ 
-        queryKey: ['chat', 'messages', newMessage.userId, newMessage.receiverId] 
-      });
-
-      // Snapshot previous value
-      const previousMessages = queryClient.getQueryData([
-        'chat', 'messages', newMessage.userId, newMessage.receiverId
-      ]);
-
-      // Optimistically update
-      queryClient.setQueryData(
-        ['chat', 'messages', newMessage.userId, newMessage.receiverId],
-        (old: any) => {
-          if (!old) return old;
-          
-          const optimisticMessage = {
-            id: Date.now(),
-            sender: newMessage.userId,
-            receiver: newMessage.receiverId,
-            message: newMessage.message,
-            createddate: new Date().toISOString(),
-            is_seen: false,
-          };
-
-          return {
-            ...old,
-            pages: old.pages.map((page: any, index: number) => {
-              if (index === 0) {
-                return {
-                  ...page,
-                  messages: [optimisticMessage, ...(page.messages || [])],
-                };
-              }
-              return page;
-            }),
-          };
-        }
-      );
-
-      return { previousMessages };
-    },
-    onError: (err, variables, context) => {
-      // Rollback on error
-      if (context?.previousMessages) {
-        queryClient.setQueryData(
-          ['chat', 'messages', variables.userId, variables.receiverId],
-          context.previousMessages
-        );
-      }
-    },
-    onSettled: (data, error, variables) => {
-      // Refetch after error or success
-      queryClient.invalidateQueries({ 
-        queryKey: ['chat', 'messages', variables.userId, variables.receiverId] 
-      });
-      queryClient.invalidateQueries({ 
-        queryKey: ['chat', 'unread', variables.receiverId] 
-      });
-    },
-  });
-};
-
-// Mark Messages as Read Mutation
-export const useMarkMessagesAsRead = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: ({ userId, senderId }: { userId: number; senderId: number }) => 
-      ApiService.markMessagesAsRead(userId, senderId),
-    onSuccess: (data, variables) => {
-      // Invalidate related queries
-      queryClient.invalidateQueries({ 
-        queryKey: ['chat', 'unread', variables.userId] 
-      });
-      queryClient.invalidateQueries({ 
-        queryKey: ['chat', 'messages', variables.userId, variables.senderId] 
-      });
-    },
-    onError: (error) => {
-      console.error('Mark messages as read error:', error);
-    },
-  });
-};
-
-// Follow User Mutation
-export const useFollowUser = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (data: { followingId: number; followerId: number; action: 'follow' | 'unfollow' }) => 
-      ApiService.followUser(data),
-    onSuccess: (data, variables) => {
-      // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: ['followers', variables.followingId] });
-      queryClient.invalidateQueries({ queryKey: ['followings', variables.followerId] });
-      queryClient.invalidateQueries({ queryKey: ['profile', variables.followingId] });
-      queryClient.invalidateQueries({ queryKey: ['profile', variables.followerId] });
-    },
-    onError: (error) => {
-      console.error('Follow user error:', error);
-    },
-  });
-};
-
-// Save Video Like Mutation with optimistic updates
-export const useSaveVideoLike = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: { videoId: number; userId: number; like: number; videoCreatorId: number }) =>
-      ApiService.saveVideoLike(data.videoId, data.userId, data.like, data.videoCreatorId),
-    onMutate: async ({ videoId, like }) => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['videos'] });
-      await queryClient.cancelQueries({ queryKey: ['shorts'] });
-
-      // Snapshot previous values
-      const previousVideos = queryClient.getQueriesData({ queryKey: ['videos'] });
-      const previousShorts = queryClient.getQueriesData({ queryKey: ['shorts'] });
-
-      // Optimistically update video like count and status
-      const updateVideoData = (old: any) => {
-        if (!old) return old;
-
-        return {
-          ...old,
-          pages: old.pages?.map((page: any) => ({
-            ...page,
-            data: page.data?.map((video: any) => {
-              if (video.id === videoId) {
-                const currentLikeCount = video.likeCount || 0;
-                const isCurrentlyLiked = video.is_liked || false;
-
-                return {
-                  ...video,
-                  likeCount: like === 1
-                    ? (isCurrentlyLiked ? currentLikeCount : currentLikeCount + 1)
-                    : (isCurrentlyLiked ? currentLikeCount - 1 : currentLikeCount),
-                  is_liked: like === 1
-                };
-              }
-              return video;
-            })
-          }))
-        };
-      };
-
-      queryClient.setQueriesData({ queryKey: ['videos'] }, updateVideoData);
-      queryClient.setQueriesData({ queryKey: ['shorts'] }, updateVideoData);
-
-      return { previousVideos, previousShorts };
-    },
-    onError: (err, variables, context) => {
-      // Revert optimistic updates
-      if (context?.previousVideos) {
-        context.previousVideos.forEach(([queryKey, data]) => {
-          queryClient.setQueryData(queryKey, data);
-        });
-      }
-      if (context?.previousShorts) {
-        context.previousShorts.forEach(([queryKey, data]) => {
-          queryClient.setQueryData(queryKey, data);
-        });
-      }
-    },
-    onSettled: (data, error, variables) => {
-      // Always refetch to ensure consistency
-      queryClient.invalidateQueries({ queryKey: ['videos'] });
-      queryClient.invalidateQueries({ queryKey: ['channel', 'videos'] });
-      queryClient.invalidateQueries({ queryKey: ['shorts'] });
-    },
-  });
-};
-
-// Save Video Comment Mutation with optimistic updates
-export const useSaveVideoComment = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: { videoId: number; userId: number; comment: string }) =>
-      ApiService.saveVideoComment(data.videoId, data.userId, data.comment),
-    onMutate: async ({ videoId, userId, comment }) => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['videos'] });
-      await queryClient.cancelQueries({ queryKey: ['comments', 'video', videoId] });
-
-      // Snapshot previous values
-      const previousVideos = queryClient.getQueriesData({ queryKey: ['videos'] });
-      const previousComments = queryClient.getQueryData(['comments', 'video', videoId]);
-
-      // Optimistically update video comment count
-      queryClient.setQueriesData({ queryKey: ['videos'] }, (old: any) => {
-        if (!old) return old;
-
-        return {
-          ...old,
-          pages: old.pages?.map((page: any) => ({
-            ...page,
-            data: page.data?.map((video: any) =>
-              video.id === videoId
-                ? { ...video, commentCount: (video.commentCount || 0) + 1 }
-                : video
-            )
-          }))
-        };
-      });
-
-      // Optimistically add comment to comments list
-      const optimisticComment = {
-        id: Date.now(), // Temporary ID
-        video_id: videoId,
-        user_id: userId,
-        comment: comment,
-        created_at: new Date().toISOString(),
-        user_name: 'You', // Will be updated from server response
-      };
-
-      queryClient.setQueryData(['comments', 'video', videoId], (old: any) => {
-        if (!old) return { data: [optimisticComment] };
-        return {
-          ...old,
-          data: [optimisticComment, ...(old.data || [])]
-        };
-      });
-
-      return { previousVideos, previousComments };
-    },
-    onError: (err, variables, context) => {
-      // Revert optimistic updates
-      if (context?.previousVideos) {
-        context.previousVideos.forEach(([queryKey, data]) => {
-          queryClient.setQueryData(queryKey, data);
-        });
-      }
-      if (context?.previousComments) {
-        queryClient.setQueryData(['comments', 'video', variables.videoId], context.previousComments);
-      }
-    },
-    onSettled: (data, error, variables) => {
-      // Always refetch to ensure consistency
-      queryClient.invalidateQueries({ queryKey: ['videos'] });
-      queryClient.invalidateQueries({ queryKey: ['comments', 'video', variables.videoId] });
-      queryClient.invalidateQueries({ queryKey: ['channel', 'videos'] });
     },
   });
 };
