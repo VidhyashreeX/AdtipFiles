@@ -2589,6 +2589,40 @@ static async createSubscriptionTest(plan_id: string, user_id: number): Promise<a
    * @param { userId, amount }
    */
   static async creditAdReward({ userId, amount }: { userId: number, amount: number }) {
-    return this.post('/api/wallet/credit-ad-reward', { userId, amount });
+    try {
+      const response = await this.post('/api/credit-ad-reward', { userId, amount });
+      return response;
+    } catch (error) {
+      console.error('Error crediting ad reward:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  // Add missing getUnreadMessageCount method
+  static async getUnreadMessageCount(userId: number): Promise<number> {
+    try {
+      // Since we're using local storage for chat, we need to calculate unread count from local storage
+      const keys = await AsyncStorage.getAllKeys();
+      const userChatKeys = keys.filter(key => 
+        key.startsWith('@chat_') && 
+        (key.includes(`_${userId}`) || key.includes(`${userId}_`))
+      );
+      
+      let totalUnread = 0;
+      for (const key of userChatKeys) {
+        const raw = await AsyncStorage.getItem(key);
+        if (raw) {
+          const messages = JSON.parse(raw);
+          const unreadCount = messages.filter((msg: any) => 
+            msg.receiver === userId && !msg.is_seen
+          ).length;
+          totalUnread += unreadCount;
+        }
+      }
+      return totalUnread;
+    } catch (error) {
+      console.error('Error getting unread message count:', error);
+      return 0;
+    }
   }
 }
