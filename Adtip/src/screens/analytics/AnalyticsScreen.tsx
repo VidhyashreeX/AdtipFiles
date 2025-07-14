@@ -12,6 +12,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
 import {useAuth} from '../../contexts/AuthContext';
+import {useContentCreatorPremium} from '../../contexts/ContentCreatorPremiumContext';
 import Header from '../../components/common/Header';
 import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
 import ApiService from '../../services/ApiService';
@@ -39,8 +40,12 @@ type AnalyticsScreenRouteProp = RouteProp<RootStackParamList, 'Analytics'>;
 
 const AnalyticsScreen: React.FC = () => {
   const {colors} = useTheme();
-  const {user, premiumState} = useAuth();
-  const isPremium = premiumState.isPremium;
+  const {user} = useAuth();
+  const {
+    isContentCreatorPremium,
+    contentCreatorPremiumData,
+    isLoading: contentCreatorPremiumLoading
+  } = useContentCreatorPremium();
   const [showPremiumPopup, setShowPremiumPopup] = useState(false);
   const navigation = useNavigation();
   const route = useRoute<AnalyticsScreenRouteProp>();
@@ -58,9 +63,37 @@ const AnalyticsScreen: React.FC = () => {
     {id: '90d' as const, label: 'Last 3 months'},
   ];
 
+  // Check content creator premium access
   useEffect(() => {
-    loadAnalytics();
-  }, [selectedPeriod]);
+    if (!contentCreatorPremiumLoading && !isContentCreatorPremium) {
+      // User doesn't have content creator premium, show popup and navigate back
+      Alert.alert(
+        'Content Creator Premium Required',
+        'You need an active Content Creator Premium subscription to access analytics.',
+        [
+          {
+            text: 'Upgrade Now',
+            onPress: () => {
+              navigation.navigate('ContentCreatorPremium');
+            },
+          },
+          {
+            text: 'Go Back',
+            style: 'cancel',
+            onPress: () => {
+              navigation.goBack();
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    // User has premium access, load analytics
+    if (isContentCreatorPremium) {
+      loadAnalytics();
+    }
+  }, [selectedPeriod, isContentCreatorPremium, contentCreatorPremiumLoading]);
 
   const loadAnalytics = async () => {
     if (!channelId) {
@@ -129,7 +162,8 @@ const AnalyticsScreen: React.FC = () => {
     setIsWithdrawalModalVisible(true);
   };
 
-  if (loading) {
+  // Show loading while checking content creator premium status
+  if (contentCreatorPremiumLoading) {
     return (
       <View style={[styles.container, {backgroundColor: colors.background}]}>
         <Header
@@ -148,6 +182,42 @@ const AnalyticsScreen: React.FC = () => {
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
+            Checking premium access...
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Don't render anything if user doesn't have content creator premium
+  // The useEffect will handle showing the alert and navigation
+  if (!isContentCreatorPremium) {
+    return null;
+  }
+
+  if (loading) {
+    return (
+      <View style={[styles.container, {backgroundColor: colors.background}]}>
+        <Header
+          title="Analytics"
+          showWallet={false}
+          showSearch={false}
+          showPremium={false}
+          leftComponent={
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={{padding: 8}}
+            >
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
+        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
+            Loading analytics...
+          </Text>
         </View>
       </View>
     );
@@ -346,6 +416,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    textAlign: 'center',
   },
   periodSelector: {
     flexDirection: 'row',

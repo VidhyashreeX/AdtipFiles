@@ -575,15 +575,14 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
                 style={[
                   styles.callButton,
                   {
-                    backgroundColor: isBlocked ? colors.gray[400] : colors.primary,
                     opacity: isBlocked ? 0.5 : 1
                   }
                 ]}
                 onPress={() => handleStartCall('video')}
-                activeOpacity={0.8}
+                activeOpacity={0.6}
                 disabled={isBlocked}
               >
-                <Icon name="video" size={20} color={colors.white} />
+                <Icon name="video" size={20} color={isBlocked ? colors.text.secondary : colors.text.primary} />
               </TouchableOpacity>
 
               {/* Voice Call Button */}
@@ -591,15 +590,14 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
                 style={[
                   styles.callButton,
                   {
-                    backgroundColor: isBlocked ? colors.gray[400] : colors.success,
                     opacity: isBlocked ? 0.5 : 1
                   }
                 ]}
                 onPress={() => handleStartCall('voice')}
-                activeOpacity={0.8}
+                activeOpacity={0.6}
                 disabled={isBlocked}
               >
-                <Icon name="phone" size={20} color={colors.white} />
+                <Icon name="phone" size={20} color={isBlocked ? colors.text.secondary : colors.text.primary} />
               </TouchableOpacity>
 
               {/* Chat Button */}
@@ -607,16 +605,15 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
                 style={[
                   styles.callButton,
                   {
-                    backgroundColor: isBlocked ? colors.gray[400] : colors.info || '#3B82F6',
                     position: 'relative',
                     opacity: isBlocked ? 0.5 : 1
                   }
                 ]}
                 onPress={handleChatNavigation}
-                activeOpacity={0.8}
+                activeOpacity={0.6}
                 disabled={isBlocked}
               >
-                <Icon name="message-circle" size={20} color={colors.white} />
+                <Icon name="message-circle" size={20} color={isBlocked ? colors.text.secondary : colors.text.primary} />
                 {/* Unread messages indicator */}
                 {unreadCount > 0 && !isBlocked && (
                   <View style={styles.unreadDot}>
@@ -627,16 +624,11 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
 
               {/* Block/Unblock Button */}
               <TouchableOpacity
-                style={[
-                  styles.callButton,
-                  {
-                    backgroundColor: isBlocked ? colors.success : colors.error
-                  }
-                ]}
+                style={styles.callButton}
                 onPress={handleBlockUser}
-                activeOpacity={0.8}
+                activeOpacity={0.6}
               >
-                <Icon name={isBlocked ? "user-check" : "user-x"} size={20} color={colors.white} />
+                <Icon name={isBlocked ? "user-check" : "user-x"} size={20} color={colors.text.secondary} />
               </TouchableOpacity>
             </View>
 

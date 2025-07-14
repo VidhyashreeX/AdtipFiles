@@ -64,6 +64,13 @@ interface Post {
   media_url?: string;
   thumbnail?: string;
   media_type?: string;
+  is_premium?: boolean;
+  content?: string;
+  likeCount?: number;
+  commentCount?: number;
+  created_at?: string;
+  is_liked?: boolean;
+  user_id?: number;
 }
 
 interface ProfileData {
@@ -160,15 +167,47 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
     }
   }, [userId, user?.id]);
 
+  // Fetch posts data
+  const fetchPosts = useCallback(async () => {
+    if (!userId) return;
+
+    setPostsLoading(true);
+    try {
+      const response = await ApiService.getUserPosts(userId, 1, 20, user?.id || 0);
+      if (response?.data) {
+        const postsData = Array.isArray(response.data) ? response.data.map((post: any) => ({
+          id: post.id,
+          media_url: post.media_url,
+          thumbnail: post.thumbnail,
+          media_type: post.media_type,
+          is_premium: post.is_premium,
+          content: post.content,
+          likeCount: post.likeCount || post.like_count,
+          commentCount: post.commentCount || post.comment_count,
+          created_at: post.created_at,
+          is_liked: post.is_liked,
+          user_id: post.user_id,
+        })) : [];
+        setPosts(postsData);
+        console.log('[ProfileScreen] Posts fetched:', postsData.length);
+      }
+    } catch (error) {
+      console.error('[ProfileScreen] Error fetching posts:', error);
+    } finally {
+      setPostsLoading(false);
+    }
+  }, [userId, user?.id]);
+
   // Fetch social stats when userId changes
   useEffect(() => {
     fetchSocialStats();
-  }, [fetchSocialStats]);
+    fetchPosts();
+  }, [fetchSocialStats, fetchPosts]);
 
-  // Mock posts data for now - replace with actual query when available
-  const [posts] = useState<Post[]>([]);
-  const [postsLoading] = useState(false);
-  const [isLoadingMore] = useState(false);
+  // Posts data state
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTab, setSelectedTab] = useState<'posts' | 'saved'>('posts');
@@ -196,16 +235,17 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ userId: propUserId }) => 
         await refetchUserData();
       }
 
-      // Refresh social stats
-      await fetchSocialStats();
-
-      // Add posts refresh logic here when available
+      // Refresh social stats and posts
+      await Promise.all([
+        fetchSocialStats(),
+        fetchPosts()
+      ]);
     } catch (error) {
       console.error('Refresh error:', error);
     } finally {
       setRefreshing(false);
     }
-  }, [refreshProfile, refetchUserData, isOwnProfile, fetchSocialStats]);
+  }, [refreshProfile, refetchUserData, isOwnProfile, fetchSocialStats, fetchPosts]);
 
   // Handle load more posts
   const handleLoadMore = useCallback(() => {

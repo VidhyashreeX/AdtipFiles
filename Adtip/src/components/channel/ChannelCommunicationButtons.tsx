@@ -8,10 +8,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { Phone, Video, MessageCircle, Mail } from 'lucide-react-native';
+import { Phone, Video, MessageCircle, Mail, Ban } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
+import { useBlocklist } from '../../hooks/useBlocklist';
 
 interface CommunicationButtonsProps {
   channelInfo: {
@@ -30,7 +31,8 @@ const ChannelCommunicationButtons: React.FC<CommunicationButtonsProps> = ({
   const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
   const navigation = useNavigation<any>();
-  
+  const { blockUser, isUserBlocked } = useBlocklist();
+
   const [isLoading, setIsLoading] = useState<string | null>(null);
 
   // Handle voice call
@@ -142,6 +144,56 @@ const ChannelCommunicationButtons: React.FC<CommunicationButtonsProps> = ({
     );
   }, [user?.id, isMyChannel]);
 
+  // Handle block user
+  const handleBlockUser = useCallback(async () => {
+    if (!user?.id) {
+      Alert.alert('Login Required', 'Please login to block users');
+      return;
+    }
+
+    if (isMyChannel) {
+      Alert.alert('Invalid Action', 'You cannot block your own channel');
+      return;
+    }
+
+    const isBlocked = isUserBlocked(channelInfo.createdBy.toString());
+
+    Alert.alert(
+      isBlocked ? 'Unblock User' : 'Block User',
+      isBlocked
+        ? `Are you sure you want to unblock ${channelInfo.channelName}?`
+        : `Are you sure you want to block ${channelInfo.channelName}? They won't be able to call you anymore.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: isBlocked ? 'Unblock' : 'Block',
+          style: isBlocked ? 'default' : 'destructive',
+          onPress: async () => {
+            try {
+              setIsLoading('block');
+              await blockUser(
+                channelInfo.createdBy.toString(),
+                channelInfo.channelName
+              );
+              Alert.alert(
+                'Success',
+                `${channelInfo.channelName} has been ${isBlocked ? 'unblocked' : 'blocked'}.`
+              );
+            } catch (error) {
+              console.error('[ChannelCommunication] Failed to block/unblock user:', error);
+              Alert.alert('Error', `Failed to ${isBlocked ? 'unblock' : 'block'} user. Please try again.`);
+            } finally {
+              setIsLoading(null);
+            }
+          },
+        },
+      ]
+    );
+  }, [user?.id, isMyChannel, channelInfo, blockUser, isUserBlocked]);
+
   // Don't show communication buttons for own channel
   if (isMyChannel) {
     return null;
@@ -217,6 +269,28 @@ const ChannelCommunicationButtons: React.FC<CommunicationButtonsProps> = ({
             Message
           </Text>
         </TouchableOpacity>
+
+        {/* Block Button */}
+        <TouchableOpacity
+          style={[styles.communicationButton, styles.blockButton]}
+          onPress={handleBlockUser}
+          disabled={isLoading === 'block'}
+          activeOpacity={0.8}
+        >
+          {isLoading === 'block' ? (
+            <ActivityIndicator size="small" color={colors.error} />
+          ) : (
+            <Ban size={18} color={colors.error} />
+          )}
+          <Text style={[styles.blockButtonText, { color: colors.error }]}>
+            {isLoading === 'block'
+              ? 'Processing...'
+              : isUserBlocked(channelInfo.createdBy.toString())
+                ? 'Unblock'
+                : 'Block'
+            }
+          </Text>
+        </TouchableOpacity>
       </View>
       
       <Text style={styles.disclaimer}>
@@ -264,6 +338,7 @@ const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 20,
     minWidth: '48%',
+    flex: 1,
     gap: 6,
   },
   voiceCallButton: {
@@ -282,6 +357,11 @@ const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  blockButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.error,
+  },
   voiceCallButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
@@ -297,6 +377,10 @@ const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
     fontWeight: '600',
   },
   messageButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  blockButtonText: {
     fontSize: 14,
     fontWeight: '600',
   },

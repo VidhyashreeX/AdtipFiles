@@ -83,8 +83,6 @@ const VideoPlayerModalScreen: React.FC = () => {
   const videoPlayerRef = useRef<VideoRef | null>(null);
   const [showComments, setShowComments] = useState(false);
   const [isVideoLiked, setIsVideoLiked] = useState(false);
-  const [isFollowingChannel, setIsFollowingChannel] = useState(false);
-  const [isFollowLoading, setIsFollowLoading] = useState(false);
 
   // Get comment count for preview
   const { data: commentCount = 0 } = useCommentCount({ videoId: video.id });
@@ -240,49 +238,7 @@ const VideoPlayerModalScreen: React.FC = () => {
     }
   }, [video.id, video.title]);
 
-  // Check if user is following the channel
-  const checkChannelFollowStatus = useCallback(async () => {
-    if (!user?.id || !video?.channelId) return;
-    try {
-      const videoDetails = await ApiService.getVideoWithUserContext(Number(video.id), Number(user.id));
-      console.log('[VideoPlayerModal] Video details with user context:', videoDetails);
-      
-      // Check if the video data contains follow status
-      if (videoDetails && videoDetails.data) {
-        const videoData = Array.isArray(videoDetails.data) ? videoDetails.data[0] : videoDetails.data;
-        setIsFollowingChannel(videoData?.is_following || false);
-      }
-    } catch (error) {
-      console.error('[VideoPlayerModal] Error checking channel follow status:', error);
-    }
-  }, [user?.id, video?.id, video?.channelId]);
 
-  // Handle follow/unfollow channel
-  const handleFollowChannel = useCallback(async () => {
-    if (!user?.id || !video?.channelId) return;
-    try {
-      setIsFollowLoading(true);
-      const followAction = isFollowingChannel ? 0 : 1;
-      
-      await ApiService.saveChannelFollowers({
-        userId: Number(user.id),
-        channelId: Number(video.channelId),
-        follow: followAction
-      });
-      
-      setIsFollowingChannel(!isFollowingChannel);
-      console.log('[VideoPlayerModal] Channel follow status updated:', !isFollowingChannel);
-    } catch (error) {
-      console.error('[VideoPlayerModal] Error following/unfollowing channel:', error);
-    } finally {
-      setIsFollowLoading(false);
-    }
-  }, [user?.id, video?.channelId, isFollowingChannel]);
-
-  // Check channel follow status when component mounts
-  useEffect(() => {
-    checkChannelFollowStatus();
-  }, [checkChannelFollowStatus]);
 
   // Handle navigation to channel from channel section
   const handleNavigateToChannelFromSection = useCallback(() => {
@@ -408,63 +364,7 @@ const VideoPlayerModalScreen: React.FC = () => {
                 </Text>
               </View>
               
-              {/* Follow/Unfollow Channel Button */}
-              {user?.id && video?.channelId && user.id !== video.channelId && (
-                <TouchableOpacity 
-                  onPress={handleFollowChannel} 
-                  disabled={isFollowLoading}
-                  style={[
-                    styles.followChannelButton,
-                    isFollowingChannel ? styles.unfollowButton : styles.followButton
-                  ]}
-                >
-                  {isFollowLoading ? (
-                    <ActivityIndicator 
-                      size="small" 
-                      color={isFollowingChannel ? colors.text.primary : colors.white} 
-                    />
-                  ) : (
-                    <Text style={[
-                      styles.followChannelButtonText,
-                      isFollowingChannel ? styles.unfollowButtonText : styles.followButtonText
-                    ]}>
-                      {isFollowingChannel ? 'Unfollow Channel' : 'Follow Channel'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
 
-            {/* Action Buttons Section */}
-            <View style={styles.actionButtonsContainer}>
-              <View style={styles.actionButtonsRow}>
-                {/* Like Button */}
-                <TouchableOpacity onPress={handleLikeVideo} style={styles.actionButton}>
-                  <View style={styles.actionButtonContent}>
-                    <Heart 
-                      size={20} 
-                      color={isVideoLiked ? '#e53935' : colors.text.secondary}
-                      fill={isVideoLiked ? '#e53935' : 'transparent'}
-                    />
-                    <Text style={[styles.actionButtonText, isVideoLiked ? styles.liked : styles.notLiked]}>
-                      {isVideoLiked ? 'Liked' : 'Like'}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-                
-                {/* Share Button */}
-                <TouchableOpacity onPress={handleShareVideo} style={styles.actionButton}>
-                  <View style={styles.actionButtonContent}>
-                    <ShareIcon 
-                      size={20} 
-                      color={colors.text.secondary}
-                    />
-                    <Text style={[styles.actionButtonText, styles.notLiked]}>
-                      Share
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
             </View>
 
             {/* Channel Section - YouTube Style */}
@@ -478,10 +378,42 @@ const VideoPlayerModalScreen: React.FC = () => {
               }}
               onNavigateToChannel={handleNavigateToChannelFromSection}
               onSubscribe={() => {
-                // Refresh follow status after subscription change
-                checkChannelFollowStatus();
+                // VideoPlayerChannelSection handles its own follow status
+                console.log('[VideoPlayerModal] Channel follow status updated via VideoPlayerChannelSection');
               }}
             />
+
+            {/* Action Buttons Section */}
+            <View style={styles.actionButtonsContainer}>
+              <View style={styles.actionButtonsRow}>
+                {/* Like Button */}
+                <TouchableOpacity onPress={handleLikeVideo} style={styles.actionButton}>
+                  <View style={styles.actionButtonContent}>
+                    <Heart
+                      size={20}
+                      color={isVideoLiked ? '#e53935' : colors.text.secondary}
+                      fill={isVideoLiked ? '#e53935' : 'transparent'}
+                    />
+                    <Text style={[styles.actionButtonText, isVideoLiked ? styles.liked : styles.notLiked]}>
+                      {isVideoLiked ? 'Liked' : 'Like'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* Share Button */}
+                <TouchableOpacity onPress={handleShareVideo} style={styles.actionButton}>
+                  <View style={styles.actionButtonContent}>
+                    <ShareIcon
+                      size={20}
+                      color={colors.text.secondary}
+                    />
+                    <Text style={[styles.actionButtonText, styles.notLiked]}>
+                      Share
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
 
             {/* Comments Preview Section */}
             <TouchableOpacity
@@ -715,34 +647,7 @@ const createModalStyles = (colors: any, isDarkMode: boolean) => StyleSheet.creat
     fontWeight: '600',
     fontSize: 14,
   },
-  followChannelButton: {
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-    minWidth: 120,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  followButton: {
-    backgroundColor: colors.primary,
-  },
-  unfollowButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  followChannelButtonText: {
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  followButtonText: {
-    color: colors.white,
-  },
-  unfollowButtonText: {
-    color: colors.text.primary,
-  },
+
 });
 
 export default VideoPlayerModalScreen;
