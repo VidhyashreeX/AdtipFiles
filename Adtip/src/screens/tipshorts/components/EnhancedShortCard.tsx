@@ -21,6 +21,7 @@ interface EnhancedShortCardProps {
   index: number;
   isActive: boolean;
   onVideoLoad: (videoId: string) => void;
+  onVideoCompletion?: (videoId: string) => void; // Add video completion callback
   onLike: (shortId: string, creatorId: string, isCurrentlyLiked: boolean) => void;
   combinedGesture: any;
   showPlayPause: boolean;
@@ -43,6 +44,7 @@ const OptimizedVideoPlayer = memo(({
   onLoad,
   onProgress,
   style,
+  onVideoCompletion, // Add onVideoCompletion prop
 }: {
   source: { uri: string };
   isActive: boolean;
@@ -51,6 +53,7 @@ const OptimizedVideoPlayer = memo(({
   onLoad?: (data: any) => void;
   onProgress?: (data: any) => void;
   style?: any;
+  onVideoCompletion?: (videoId: string) => void; // Add onVideoCompletion prop
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -78,6 +81,12 @@ const OptimizedVideoPlayer = memo(({
     }
   }, [isActive, onProgress]);
 
+  const handleCompletion = useCallback(() => {
+    if (isActive && onVideoCompletion) {
+      onVideoCompletion(source.uri.split('/').pop() || ''); // Extract videoId from source.uri
+    }
+  }, [isActive, onVideoCompletion, source.uri]);
+
   return (
     <Video
       source={source}
@@ -89,6 +98,7 @@ const OptimizedVideoPlayer = memo(({
       onLoad={handleLoad}
       onProgress={handleProgress}
       onError={handleError}
+      onEnd={handleCompletion} // Add onEnd handler
       bufferConfig={{
         minBufferMs: 1500,
         maxBufferMs: 5000,
@@ -193,6 +203,7 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
   index,
   isActive,
   onVideoLoad,
+  onVideoCompletion, // Add onVideoCompletion prop
   onLike,
   combinedGesture,
   showPlayPause,
@@ -256,6 +267,7 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
             style={styles.video}
             onLoad={handleVideoLoadLocal}
             onProgress={handleVideoProgress}
+            onVideoCompletion={onVideoCompletion} // Pass onVideoCompletion
           />
 
           {/* Thumbnail overlay while loading */}

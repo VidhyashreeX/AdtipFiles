@@ -14,6 +14,7 @@ import {
   StyleSheet,
   ViewToken,
   Share,
+  Alert,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -50,6 +51,10 @@ import {
 import ShortsCardSkeleton from '../../components/skeletons/ShortsCardSkeleton';
 import EnhancedShortCard from './components/EnhancedShortCard';
 import LoginPromptModal from '../../components/modals/LoginPromptModal';
+import useSimpleRewardedAd from '../../googleads/SimpleRewardedAd';
+import ApiService from '../../services/ApiService';
+import { API_BASE_URL } from '../../constants/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -63,6 +68,10 @@ type TipShortsRouteParams = {
 };
 
 type TipShortsRouteProp = RouteProp<{ params: TipShortsRouteParams }, 'params'>;
+
+const REWARD_INTERVAL = 5;
+const NON_PREMIUM_REWARD = 0.03;
+const PREMIUM_REWARD = 0.06;
 
 // Optimized Video Player Component with fixed playback logic
 const OptimizedVideoPlayer = memo(({
@@ -348,6 +357,13 @@ const TipShortsEnhanced = () => {
     setGlobalPlayState 
   } = useShorts();
   const insets = useSafeAreaInsets();
+  const isPremium = user && typeof user.is_premium === 'boolean' ? user.is_premium : false;
+  const { showAd, hasEarnedReward } = useSimpleRewardedAd();
+  const [viewCount, setViewCount] = useState(0);
+  const [videoCount, setVideoCount] = useState(0);
+  const [showRewardPopup, setShowRewardPopup] = useState(false);
+  const [earnedAmount, setEarnedAmount] = useState(0);
+  const [isDevelopmentMode] = useState(__DEV__); // Development mode flag
 
   // Safe parameter destructuring to prevent undefined access
   const { shorts: passedShorts, startIndex = 0, shortId } = route.params || {};
@@ -422,13 +438,30 @@ const TipShortsEnhanced = () => {
 
     // Handle guest mode data structure
     if (isGuest && data?.pages) {
-      allShorts = data.pages.flatMap(page => page.data || []);
+      allShorts = data.pages.flatMap(page => {
+        if (Array.isArray(page)) {
+          return page;
+        } else if (page && typeof page === 'object' && 'data' in page) {
+          return page.data || [];
+        }
+        return [];
+      });
       // Limit guest users to first 5 shorts
       return allShorts.slice(0, 5);
     }
 
     // Handle authenticated user data structure
-    allShorts = data?.pages?.flat() || [];
+    if (data?.pages) {
+      allShorts = data.pages.flatMap(page => {
+        if (Array.isArray(page)) {
+          return page;
+        } else if (page && typeof page === 'object' && 'data' in page) {
+          return page.data || [];
+        }
+        return [];
+      });
+    }
+    
     return allShorts;
   }, [data?.pages, passedShorts, isGuest]);
 
@@ -439,6 +472,29 @@ const TipShortsEnhanced = () => {
     console.log('[TipShortsEnhanced] isLoading:', isLoading);
     console.log('[TipShortsEnhanced] error:', error);
   }, [shorts, isGuest, data, isLoading, error]);
+
+  // Handle video view for reward ads (triggered on scroll/view, not completion)
+  const handleVideoView = useCallback(() => {
+    setVideoCount(prev => {
+      const newCount = prev + 1;
+      console.log(`🎬 [TipShorts] Video viewed. Count: ${newCount}`);
+      // Only show reward ad after exactly 5th video
+      if (newCount === 5) {
+        console.log('🎁 [TipShorts] 5th video reached! Showing reward ad...');
+        // Check if we have ads available
+        const hasAds = shorts.length > 0;
+        if (hasAds) {
+          // Show reward ad immediately
+          showRewardAd();
+        } else {
+          console.log('⚠️ [TipShorts] No ads available, skipping reward');
+        }
+        // Reset counter after showing reward
+        return 0;
+      }
+      return newCount;
+    });
+  }, [shorts.length]);
 
   // Viewability config for video control
   const viewabilityConfig = useRef({
@@ -480,6 +536,7 @@ const TipShortsEnhanced = () => {
       if (newActiveIndex !== activeIndex) {
         console.log('[TipShortsEnhanced] Updating activeIndex from', activeIndex, 'to', newActiveIndex);
         setActiveIndex(newActiveIndex);
+        handleVideoView(); // Increment video count on view change
       }
     }
   }).current;
@@ -663,6 +720,134 @@ const TipShortsEnhanced = () => {
     }
   }, [shorts, isLoading, error, refetch]);
 
+  // Call this after a video is completed/skipped
+  const handleAdView = useCallback(() => {
+    setViewCount((prev) => {
+      const newCount = prev + 1;
+      console.log(`[TipShorts] Video viewed. Count: ${newCount}, Interval: ${REWARD_INTERVAL}`);
+      if (newCount % REWARD_INTERVAL === 0) {
+        console.log(`[TipShorts] Showing reward ad after ${newCount} videos`);
+        showAd();
+      }
+      return newCount;
+    });
+  }, [showAd]);
+
+  // Listen for reward
+  useEffect(() => {
+    if (hasEarnedReward) {
+      console.log('[TipShorts] User earned reward from ad');
+      const amount = isPremium ? PREMIUM_REWARD : NON_PREMIUM_REWARD;
+      setEarnedAmount(amount);
+      setShowRewardPopup(true);
+    }
+  }, [hasEarnedReward, isPremium]);
+
+  // Call handleAdView when a video is viewed (you can call this from your video component)
+  const handleVideoViewed = useCallback(() => {
+    if (!isGuest) {
+      handleAdView();
+    }
+  }, [handleAdView, isGuest]);
+
+  // Show reward ad
+  const showRewardAd = useCallback(() => {
+    console.log('🎁 [TipShorts] Showing reward ad...');
+    
+    // Determine reward amount based on premium status
+    const rewardAmount = isPremium ? 0.06 : 0.03;
+    setEarnedAmount(rewardAmount);
+    
+    // In development mode, just show popup without API call
+    if (isDevelopmentMode) {
+      console.log('🔧 [TipShorts] Development mode: Showing popup without API call');
+      setShowRewardPopup(true);
+      return;
+    }
+    
+    // In production, show actual reward ad
+    // For now, simulate reward ad completion
+    console.log('🎁 [TipShorts] Production mode: Would show actual reward ad');
+    setShowRewardPopup(true);
+  }, [isPremium, isDevelopmentMode]);
+
+  // Handle reward popup actions
+  const handleRewardPopupAction = useCallback(async (action: 'upgrade' | 'cancel' | 'gotit' | 'wallet') => {
+    console.log(`🎁 [TipShorts] Reward popup action: ${action}`);
+    
+    if (action === 'upgrade') {
+      // Navigate to premium upgrade
+      navigation.navigate('Packages' as never);
+    } else if (action === 'gotit') {
+      setShowRewardPopup(false);
+    } else if (action === 'wallet') {
+      // Navigate to wallet screen
+      navigation.navigate('Wallet' as never);
+    }
+    
+    // Close popup
+    setShowRewardPopup(false);
+    
+    // In production mode, credit wallet
+    if (!isDevelopmentMode) {
+      try {
+        console.log('💰 [TipShorts] Crediting wallet with amount:', earnedAmount);
+        const response = await fetch(`${API_BASE_URL}/wallet/credit-ad-reward`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${await AsyncStorage.getItem('accessToken')}`,
+          },
+          body: JSON.stringify({
+            amount: earnedAmount,
+            source: 'tipshorts_reward'
+          })
+        });
+        
+        const result = await response.json();
+        if (result.status) {
+          console.log('✅ [TipShorts] Wallet credited successfully');
+          // Update wallet balance in context if needed
+        } else {
+          console.log('❌ [TipShorts] Failed to credit wallet:', result.message);
+        }
+      } catch (error) {
+        console.error('❌ [TipShorts] Error crediting wallet:', error);
+      }
+    } else {
+      console.log('🔧 [TipShorts] Development mode: Skipping wallet credit');
+    }
+  }, [earnedAmount, isDevelopmentMode, navigation]);
+
+  const handleRewardConfirm = async () => {
+    setShowRewardPopup(false);
+    if (!user || !user.id) {
+      Alert.alert('Error', 'User not found.');
+      return;
+    }
+    try {
+      if (typeof ApiService.creditAdReward !== 'function') {
+        // Add a fallback if not defined
+        ApiService.creditAdReward = async ({ userId, amount }) => {
+          return fetch('/api/wallet/credit-ad-reward', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, amount }),
+          }).then(res => res.json());
+        };
+      }
+              await ApiService.creditAdReward({ userId: user.id, amount: earnedAmount });
+        Alert.alert('Credited Successfully', `₹${earnedAmount.toFixed(2)} added to your wallet!`);
+    } catch (err) {
+      Alert.alert('Error', 'Could not credit reward.');
+    }
+  };
+
+  const handleUpgradePremium = () => {
+    setShowRewardPopup(false);
+    navigation.navigate('Packages' as never);
+  };
+
   // Render loading state
   if (isLoading && shorts.length === 0) {
     return (
@@ -714,6 +899,7 @@ const TipShortsEnhanced = () => {
             index={index}
             isActive={index === activeIndex}
             onVideoLoad={handleVideoLoad}
+            onVideoCompletion={handleVideoView}
             onLike={handleLikeShort}
             combinedGesture={combinedGesture}
             showPlayPause={showPlayPause}
@@ -778,6 +964,21 @@ const TipShortsEnhanced = () => {
           <Text style={styles.debugText}>
             Active: {activeIndex + 1}/{shorts.length} | Loading: {isLoading.toString()}
           </Text>
+          {/* Test button for reward ads */}
+          <TouchableOpacity 
+            onPress={() => {
+              console.log('[TipShorts] Manual reward ad trigger');
+              handleAdView();
+            }}
+            style={{
+              backgroundColor: '#FF3040',
+              padding: 8,
+              borderRadius: 4,
+              marginTop: 8,
+            }}
+          >
+            <Text style={{ color: '#fff', fontSize: 12 }}>Test Reward Ad</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -787,6 +988,79 @@ const TipShortsEnhanced = () => {
         onClose={() => setShowLoginPrompt(false)}
         message={loginPromptMessage}
       />
+
+      {/* Reward Popup */}
+      {showRewardPopup && (
+        <View style={styles.rewardPopup}>
+          <View style={styles.rewardPopupContent}>
+            {isPremium ? (
+              // Premium user popup
+              <>
+                <Text style={styles.rewardPopupTitle}>🎉 Congratulations!</Text>
+                <Text style={styles.rewardPopupSubtitle}>
+                  You have earned ₹{earnedAmount.toFixed(2)} paise
+                </Text>
+                
+                <View style={styles.rewardPopupButtons}>
+                  <TouchableOpacity 
+                    style={[styles.rewardPopupButton, styles.primaryButton]}
+                    onPress={() => handleRewardPopupAction('gotit')}
+                  >
+                    <Text style={styles.primaryButtonText}>Got it, thanks</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.rewardPopupButton, styles.secondaryButton]}
+                    onPress={() => handleRewardPopupAction('wallet')}
+                  >
+                    <Text style={styles.secondaryButtonText}>Open wallet</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              // Non-premium user popup
+              <>
+                <Text style={styles.rewardPopupTitle}>Hurry! You earned ₹{earnedAmount.toFixed(2)} paise</Text>
+                <Text style={styles.rewardPopupSubtitle}>
+                  Congratulations you have earned ₹{earnedAmount.toFixed(2)} paise, you can earn upto ₹10 per ad.
+                </Text>
+                <Text style={styles.rewardPopupInfo}>
+                  Upgrade to premium now.. let's earning now
+                </Text>
+                
+                <View style={styles.rewardPopupButtons}>
+                  <TouchableOpacity 
+                    style={[styles.rewardPopupButton, styles.primaryButton]}
+                    onPress={() => handleRewardPopupAction('gotit')}
+                  >
+                    <Text style={styles.primaryButtonText}>Got it, thanks</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.rewardPopupButton, styles.secondaryButton]}
+                    onPress={() => handleRewardPopupAction('wallet')}
+                  >
+                    <Text style={styles.secondaryButtonText}>Open wallet</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.rewardPopupButton, styles.upgradeButton]}
+                    onPress={() => handleRewardPopupAction('upgrade')}
+                  >
+                    <Text style={styles.upgradeButtonText}>Upgrade premium now</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+            
+            {isDevelopmentMode && (
+              <Text style={styles.developmentModeText}>
+                🔧 Development Mode: No wallet credit
+              </Text>
+            )}
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -936,6 +1210,98 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 10,
     textAlign: 'center',
+  },
+
+  // Reward Popup Styles
+  rewardPopup: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  rewardPopupContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 30,
+    margin: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  rewardPopupTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  rewardPopupSubtitle: {
+    fontSize: 18,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  rewardPopupInfo: {
+    fontSize: 14,
+    color: '#888',
+    textAlign: 'center',
+    marginBottom: 25,
+  },
+  rewardPopupButtons: {
+    flexDirection: 'row',
+    gap: 15,
+  },
+  rewardPopupButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  upgradeButton: {
+    backgroundColor: '#FF6B35',
+  },
+  upgradeButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  cancelButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  developmentModeText: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 15,
+    fontStyle: 'italic',
+  },
+  primaryButton: {
+    backgroundColor: '#FF6B35',
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  secondaryButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  secondaryButtonText: {
+    color: '#666',
+    fontWeight: '600',
+    fontSize: 16,
   },
 });
 

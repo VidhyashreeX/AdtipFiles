@@ -15,6 +15,7 @@ import {
   SafeAreaView,
   Switch,
   Modal,
+  ViewToken,
 } from 'react-native';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -44,9 +45,12 @@ import {
 import BannerAdComponent from '../../googleads/BannerAdComponent';
 import RectangleAdComponent from '../../googleads/RectangleAdComponent';
 import ApiService from '../../services/ApiService';
+import { API_BASE_URL } from '../../constants/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import ContentCreatorPlanToggle from '../../components/common/ContentCreatorPlanToggle';
 import VideoCommentsModal from '../../components/tiptube/VideoCommentsModal';
 import LoginPromptModal from '../../components/modals/LoginPromptModal';
+import useSimpleRewardedAd from '../../googleads/SimpleRewardedAd';
 
 // Get screen dimensions and create constants
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -56,6 +60,11 @@ const HORIZONTAL_PADDING = 16;
 const VERTICAL_SPACING = 16;
 const CARD_WIDTH = SCREEN_WIDTH - (HORIZONTAL_PADDING * 2);
 const THUMBNAIL_HEIGHT = (CARD_WIDTH * 9) / 16; // 16:9 aspect ratio
+
+// Reward constants
+const REWARD_INTERVAL = 5;
+const NON_PREMIUM_REWARD = 0.03;
+const PREMIUM_REWARD = 0.06;
 
 // Define interfaces
 interface Video {
@@ -287,6 +296,12 @@ const TipTubeScreen = () => {
   // Fetch comments for a video
 
 
+  // Helper function to show login prompt for guest users
+  const showLoginPromptForAction = useCallback((action: string) => {
+    setLoginPromptMessage(`Login to ${action}`);
+    setShowLoginPrompt(true);
+  }, []);
+
   // Toggle comments section
   const toggleComments = useCallback((videoId: number) => {
     if (isGuest) {
@@ -295,12 +310,6 @@ const TipTubeScreen = () => {
     }
     setShowComments(!showComments);
   }, [showComments, isGuest, showLoginPromptForAction]);
-
-  // Helper function to show login prompt for guest users
-  const showLoginPromptForAction = useCallback((action: string) => {
-    setLoginPromptMessage(`Login to ${action}`);
-    setShowLoginPrompt(true);
-  }, []);
 
   // Handle liking a video
   const handleLikeVideo = useCallback(async (video: Video) => {
@@ -357,20 +366,24 @@ const TipTubeScreen = () => {
 
   // Transform videos data for compatibility and proper typing
   const videos = useMemo(() => {
-    let allVideos;
+    let allVideos: any[] = [];
 
     if (isGuest) {
       // Guest mode: videosData is a single response object
-      allVideos = videosData?.data || [];
+      allVideos = (videosData as any)?.data || [];
     } else {
       // Authenticated mode: videosData has pages for infinite query
-      allVideos = videosData?.pages?.flatMap(page => page?.data || []) || [];
+      if (videosData && 'pages' in videosData) {
+        allVideos = (videosData as any).pages?.flatMap((page: any) => page?.data || []) || [];
+      } else {
+        allVideos = (videosData as any)?.data || [];
+      }
     }
 
     console.log('[TipTubeScreen] Raw videos data:', {
       isGuest,
-      pagesCount: isGuest ? 1 : (videosData?.pages?.length || 0),
-      firstPage: isGuest ? videosData?.data?.slice(0, 2) : videosData?.pages?.[0]?.data?.slice(0, 2),
+      pagesCount: isGuest ? 1 : ((videosData as any)?.pages?.length || 0),
+      firstPage: isGuest ? (videosData as any)?.data?.slice(0, 2) : (videosData as any)?.pages?.[0]?.data?.slice(0, 2),
       allVideosCount: allVideos.length
     });
     
@@ -502,6 +515,103 @@ const TipTubeScreen = () => {
     navigation.navigate('TipShorts');
   }, [navigation]);
 
+  // Reward ads state
+  const isPremium = user && typeof user.is_premium === 'boolean' ? user.is_premium : false;
+  const [videoCount, setVideoCount] = useState(0);
+  const [showRewardPopup, setShowRewardPopup] = useState(false);
+  const [earnedAmount, setEarnedAmount] = useState(0);
+  const [isDevelopmentMode] = useState(__DEV__); // Development mode flag
+
+  // Handle video view for reward ads (triggered on scroll/view, not completion)
+  const handleVideoView = useCallback(() => {
+    setVideoCount(prev => {
+      const newCount = prev + 1;
+      console.log(`🎬 [TipTube] Video viewed. Count: ${newCount}`);
+      // Only show reward ad after exactly 5th video
+      if (newCount === 5) {
+        console.log('🎁 [TipTube] 5th video reached! Showing reward ad...');
+        // Check if we have ads available
+        const hasAds = videos.length > 0;
+        if (hasAds) {
+          // Show reward ad immediately
+          showRewardAd();
+        } else {
+          console.log('⚠️ [TipTube] No ads available, skipping reward');
+        }
+        // Reset counter after showing reward
+        return 0;
+      }
+      return newCount;
+    });
+  }, [videos.length]);
+
+  // Show reward ad
+  const showRewardAd = useCallback(() => {
+    console.log('🎁 [TipTube] Showing reward ad...');
+    
+    // Determine reward amount based on premium status
+    const rewardAmount = isPremium ? 0.06 : 0.03;
+    setEarnedAmount(rewardAmount);
+    
+    // In development mode, just show popup without API call
+    if (isDevelopmentMode) {
+      console.log('🔧 [TipTube] Development mode: Showing popup without API call');
+      setShowRewardPopup(true);
+      return;
+    }
+    
+    // In production, show actual reward ad
+    // For now, simulate reward ad completion
+    console.log('🎁 [TipTube] Production mode: Would show actual reward ad');
+    setShowRewardPopup(true);
+  }, [isPremium, isDevelopmentMode]);
+
+  // Handle reward popup actions
+  const handleRewardPopupAction = useCallback(async (action: 'upgrade' | 'cancel' | 'gotit' | 'wallet') => {
+    console.log(`🎁 [TipTube] Reward popup action: ${action}`);
+    
+    if (action === 'upgrade') {
+      // Navigate to premium upgrade
+      navigation.navigate('Packages' as never);
+    } else if (action === 'gotit') {
+      // Close popup
+      setShowRewardPopup(false);
+    } else if (action === 'wallet') {
+      // Navigate to wallet
+      navigation.navigate('Wallet');
+    }
+    
+    // In production mode, credit wallet
+    if (!isDevelopmentMode) {
+      try {
+        console.log('💰 [TipTube] Crediting wallet with amount:', earnedAmount);
+        const response = await fetch(`${API_BASE_URL}/wallet/credit-ad-reward`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${await AsyncStorage.getItem('accessToken')}`,
+          },
+          body: JSON.stringify({
+            amount: earnedAmount,
+            source: 'tiptube_reward'
+          })
+        });
+        
+        const result = await response.json();
+        if (result.status) {
+          console.log('✅ [TipTube] Wallet credited successfully');
+          // Update wallet balance in context if needed
+        } else {
+          console.log('❌ [TipTube] Failed to credit wallet:', result.message);
+        }
+      } catch (error) {
+        console.error('❌ [TipTube] Error crediting wallet:', error);
+      }
+    } else {
+      console.log('🔧 [TipTube] Development mode: Skipping wallet credit');
+    }
+  }, [earnedAmount, isDevelopmentMode, navigation]);
+
   // Handle video press with view API calls
   const handleVideoPress = useCallback(async (video: Video) => {
     console.log('[TipTubeScreen] Video pressed:', { id: video.id, title: video.title, isPaid: video.isPaidPromotional });
@@ -524,6 +634,7 @@ const TipTubeScreen = () => {
             video: { ...video, videoUrl },
             upNextVideos: shuffleArray(videos.filter((v: Video) => v.id !== video.id)).slice(0, 10)
           });
+          handleVideoView(); // Increment video count on view change
         } else {
           Alert.alert(
             'Insufficient Balance',
@@ -537,12 +648,19 @@ const TipTubeScreen = () => {
           video,
           upNextVideos: shuffleArray(videos.filter((v: Video) => v.id !== video.id)).slice(0, 10)
         });
+        handleVideoView(); // Increment video count on view change
       }
+      
+      // Simulate video completion after a delay (for reward ads)
+      setTimeout(() => {
+        handleVideoView();
+      }, 5000); // Simulate 5 seconds of video watching
+      
     } catch (error) {
       console.error('[TipTubeScreen] Error handling video press:', error);
       Alert.alert('Error', 'There was an issue accessing this video. Please try again later.');
     }
-  }, [videos, navigation, isGuest, showLoginPromptForAction]);
+  }, [videos, navigation, isGuest, showLoginPromptForAction, handleVideoView]);
 
   // Render helper functions
   const renderSkeletonLoading = useCallback(() => (
@@ -667,7 +785,7 @@ const TipTubeScreen = () => {
         isPreview={previewingVideoId === item.id}
         styles={styles}
         colors={colors}
-        onNavigateToChannel={() => handleNavigateToChannel(item.channelId)}
+        onNavigateToChannel={() => handleNavigateToChannel(String(item.channelId))}
         index={index}
         isYouTubeLayout={true} // Pass flag for YouTube-like layout
         onToggleComments={() => {
@@ -908,6 +1026,100 @@ const TipTubeScreen = () => {
           onClose={() => setShowLoginPrompt(false)}
           message={loginPromptMessage}
         />
+
+        {/* Reward Popup */}
+        {showRewardPopup && (
+          <View style={styles.rewardPopup}>
+            <View style={styles.rewardPopupContent}>
+              {isPremium ? (
+                // Premium user popup
+                <>
+                  <Text style={styles.rewardPopupTitle}>🎉 Congratulations!</Text>
+                  <Text style={styles.rewardPopupSubtitle}>
+                    You have earned ₹{earnedAmount.toFixed(2)} paise
+                  </Text>
+                  
+                  <View style={styles.rewardPopupButtons}>
+                    <TouchableOpacity 
+                      style={[styles.rewardPopupButton, styles.primaryButton]}
+                      onPress={() => handleRewardPopupAction('gotit')}
+                    >
+                      <Text style={styles.primaryButtonText}>Got it, thanks</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={[styles.rewardPopupButton, styles.secondaryButton]}
+                      onPress={() => handleRewardPopupAction('wallet')}
+                    >
+                      <Text style={styles.secondaryButtonText}>Open wallet</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                // Non-premium user popup
+                <>
+                  <Text style={styles.rewardPopupTitle}>Hurry! You earned ₹{earnedAmount.toFixed(2)} paise</Text>
+                  <Text style={styles.rewardPopupSubtitle}>
+                    Congratulations you have earned ₹{earnedAmount.toFixed(2)} paise, you can earn upto ₹10 per ad.
+                  </Text>
+                  <Text style={styles.rewardPopupInfo}>
+                    Upgrade to premium now.. let's earning now
+                  </Text>
+                  
+                  <View style={styles.rewardPopupButtons}>
+                    <TouchableOpacity 
+                      style={[styles.rewardPopupButton, styles.primaryButton]}
+                      onPress={() => handleRewardPopupAction('gotit')}
+                    >
+                      <Text style={styles.primaryButtonText}>Got it, thanks</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={[styles.rewardPopupButton, styles.secondaryButton]}
+                      onPress={() => handleRewardPopupAction('wallet')}
+                    >
+                      <Text style={styles.secondaryButtonText}>Open wallet</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={[styles.rewardPopupButton, styles.upgradeButton]}
+                      onPress={() => handleRewardPopupAction('upgrade')}
+                    >
+                      <Text style={styles.upgradeButtonText}>Upgrade premium now</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+              
+              {isDevelopmentMode && (
+                <Text style={styles.developmentModeText}>
+                  🔧 Development Mode: No wallet credit
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Test button for reward ads (DEV only) */}
+        {__DEV__ === true && (
+          <TouchableOpacity 
+            onPress={() => {
+              console.log('[TipTube] Manual reward ad trigger');
+              handleVideoView();
+            }}
+            style={{
+              position: 'absolute',
+              top: 100,
+              right: 20,
+              backgroundColor: '#FF3040',
+              padding: 12,
+              borderRadius: 8,
+              zIndex: 1000,
+            }}
+          >
+            <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Test Reward Ad</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </ScreenTransition>
   );
@@ -1312,6 +1524,96 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
   planCardHighlight: {
     color: '#ffd600',
     fontWeight: 'bold',
+  },
+  rewardPopup: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  rewardPopupContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 30,
+    margin: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  rewardPopupTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  rewardPopupSubtitle: {
+    fontSize: 18,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  rewardPopupInfo: {
+    fontSize: 14,
+    color: '#888',
+    textAlign: 'center',
+    marginBottom: 25,
+  },
+  rewardPopupButtons: {
+    flexDirection: 'row',
+    gap: 15,
+  },
+  rewardPopupButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  upgradeButton: {
+    backgroundColor: '#FF6B35',
+  },
+  upgradeButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  cancelButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  developmentModeText: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 15,
+    fontStyle: 'italic',
+  },
+  primaryButton: {
+    backgroundColor: '#007AFF',
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  secondaryButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  secondaryButtonText: {
+    color: '#666',
+    fontWeight: '600',
+    fontSize: 16,
   },
 });
 
