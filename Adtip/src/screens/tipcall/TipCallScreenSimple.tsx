@@ -457,15 +457,52 @@ const TipCallScreenSimple = () => {
 
   // Update languages when data changes
   useEffect(() => {
+    console.log('[TipCallScreen] Languages data received:', languagesData)
     if (languagesData?.data) {
-      setLanguages([{ id: 0, name: 'All' }, ...languagesData.data.map((l: any) => ({ id: l.id, name: l.name }))])
+      const mappedLanguages = [{ id: 0, name: 'All' }, ...languagesData.data.map((l: any) => ({ id: l.id, name: l.name }))]
+      console.log('[TipCallScreen] Setting languages:', mappedLanguages)
+      setLanguages(mappedLanguages)
+    } else {
+      console.log('[TipCallScreen] No languages data, using fallback')
+      // Fallback to static data if API fails
+      setLanguages([
+        { id: 0, name: 'All' },
+        { id: 1, name: 'English' },
+        { id: 2, name: 'Hindi' },
+        { id: 3, name: 'Bengali' },
+        { id: 4, name: 'Telugu' },
+        { id: 5, name: 'Marathi' },
+        { id: 6, name: 'Tamil' },
+        { id: 7, name: 'Gujarati' },
+        { id: 8, name: 'Kannada' },
+      ])
     }
   }, [languagesData])
 
   // Update categories when data changes
   useEffect(() => {
+    console.log('[TipCallScreen] Interests data received:', interestsData)
     if (interestsData?.data) {
-      setCategories([{ id: 0, name: 'All' }, ...interestsData.data.map((c: any) => ({ id: c.id, name: c.name }))])
+      const mappedCategories = [{ id: 0, name: 'All' }, ...interestsData.data.map((c: any) => ({ id: c.id, name: c.name }))]
+      console.log('[TipCallScreen] Setting categories:', mappedCategories)
+      setCategories(mappedCategories)
+    } else {
+      console.log('[TipCallScreen] No interests data, using fallback')
+      // Fallback to static data if API fails
+      setCategories([
+        { id: 0, name: 'All' },
+        { id: 2, name: 'Look for jobs' },
+        { id: 101, name: 'Prepare for govt job' },
+        { id: 3, name: 'Prepare for UPSC' },
+        { id: 11, name: 'Prepare for jobs' },
+        { id: 4, name: 'Learn new skills' },
+        { id: 5, name: 'Business & Startup' },
+        { id: 6, name: 'Health & Fitness' },
+        { id: 7, name: 'Entertainment' },
+        { id: 8, name: 'Technology' },
+        { id: 9, name: 'Education' },
+        { id: 10, name: 'Travel' },
+      ])
     }
   }, [interestsData])
   // --------------------------------------------------
@@ -547,8 +584,14 @@ const TipCallScreenSimple = () => {
   )
 
   // Handlers
-  const handleLanguageFilter = useCallback((id: number) => setLanguageFilter(id), [])
-  const handleCategoryFilter = useCallback((id: number) => setCategoryFilter(id), [])
+  const handleLanguageFilter = useCallback((id: number) => {
+    console.log('[TipCallScreen] Language filter changed to:', id)
+    setLanguageFilter(id)
+  }, [])
+  const handleCategoryFilter = useCallback((id: number) => {
+    console.log('[TipCallScreen] Category filter changed to:', id)
+    setCategoryFilter(id)
+  }, [])
 
   // Main contacts data
   const {
@@ -563,6 +606,16 @@ const TipCallScreenSimple = () => {
     },
     user?.id,
   )
+
+  // Debug: Log filter values when they change
+  useEffect(() => {
+    console.log('[TipCallScreen] Current filters:', {
+      languageFilter,
+      categoryFilter,
+      searchQuery: debouncedSearch,
+      userId: user?.id
+    })
+  }, [languageFilter, categoryFilter, debouncedSearch, user?.id])
 
   // Live search data (only when search is active)
   const {
@@ -583,6 +636,16 @@ const TipCallScreenSimple = () => {
 
   // Transform users data
   const contacts = usersData?.pages?.flatMap((page) => page?.data || []) || []
+
+  // Debug: Log the raw data from API
+  useEffect(() => {
+    if (usersData?.pages) {
+      console.log('[TipCallScreen] Raw API response pages:', usersData.pages.length)
+      console.log('[TipCallScreen] Total contacts from API:', contacts.length)
+      console.log('[TipCallScreen] Sample contacts:', contacts.slice(0, 3))
+    }
+  }, [usersData, contacts])
+
   const filteredContacts = contacts.filter(
     (contact) =>
       contact.id !== user?.id &&
@@ -1150,7 +1213,7 @@ const TipCallScreenSimple = () => {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filterScroll}
           >
-            {languages.map((lang) => (
+            {languages.length > 0 ? languages.map((lang) => (
               <FilterChip
                 key={lang.id}
                 label={lang.name}
@@ -1159,7 +1222,9 @@ const TipCallScreenSimple = () => {
                 colors={colors}
                 isDarkMode={isDarkMode}
               />
-            ))}
+            )) : (
+              <Text style={[styles.filterGroupTitle, { color: colors.text.secondary }]}>Loading languages...</Text>
+            )}
           </ScrollView>
         </View>
 
