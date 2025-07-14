@@ -106,7 +106,9 @@ const ChannelScreen: React.FC = () => {
   const channelId = isMyChannel ? user?.id : routeChannelId;
 
   // Use createdBy from passed data if available, otherwise use channelId
-  const userIdForApi = passedChannelData?.createdBy || channelId;
+  // Ensure we have a valid user ID for API calls
+  const userIdForApi = passedChannelData?.createdBy || channelId || user?.id;
+  const shouldFetchChannelData = !!userIdForApi && userIdForApi !== 0;
 
   console.log('[ChannelScreen] Route params and channel setup:', {
     routeParams: route.params,
@@ -115,6 +117,7 @@ const ChannelScreen: React.FC = () => {
     isMyChannel,
     channelId,
     userIdForApi,
+    shouldFetchChannelData,
     userId: user?.id
   });
 
@@ -187,6 +190,14 @@ const ChannelScreen: React.FC = () => {
     data: userData,
     isLoading: userDataLoading
   } = useUserData(Number(userIdForApi));
+
+  // Force refetch channel data when About tab is selected and we don't have data
+  useEffect(() => {
+    if (selectedTab === 'about' && shouldFetchChannelData && !channelData && !channelLoading) {
+      console.log('[ChannelScreen] About tab selected, refetching channel data for userIdForApi:', userIdForApi);
+      refetchChannel();
+    }
+  }, [selectedTab, shouldFetchChannelData, channelData, channelLoading, userIdForApi, refetchChannel]);
 
   // Transform videos data
   const videos: Video[] = videosData?.pages?.flatMap(page => 

@@ -18,6 +18,9 @@ import CallController from '../../services/calling/CallController';
 import CallBillingService from '../../services/calling/CallBillingService';
 import { CallType } from '../../stores/callStoreSimplified';
 import ApiService from '../../services/ApiService';
+import CallConfirmationAlert from '../alerts/CallConfirmationAlert';
+import PremiumCallRateAlert from '../alerts/PremiumCallRateAlert';
+import PremiumPopup from '../common/PremiumPopup';
 
 interface CommunicationButtonsProps {
   channelInfo: {
@@ -115,6 +118,96 @@ const ChannelCommunicationButtons: React.FC<CommunicationButtonsProps> = ({
   const handleVideoCall = useCallback(() => {
     handleStartCall('video');
   }, [handleStartCall]);
+
+  // Handle premium alert actions
+  const handlePremiumAlertUpgrade = useCallback(() => {
+    setShowPremiumCallRateAlert(false);
+    setPendingCallData(null);
+    navigation.navigate('PremiumUser' as never);
+  }, [navigation]);
+
+  const handlePremiumAlertContinue = useCallback(() => {
+    setShowPremiumCallRateAlert(false);
+    if (pendingCallData) {
+      const { recipientId, recipientName, callType } = pendingCallData;
+      setPendingCallData(null);
+      // Continue with the call at non-premium rates
+      initiateCall(recipientId, recipientName, callType);
+    }
+  }, [pendingCallData]);
+
+  const handlePremiumAlertClose = useCallback(() => {
+    setShowPremiumCallRateAlert(false);
+    setPendingCallData(null);
+  }, []);
+
+  // Handle call confirmation alert actions
+  const handleCallConfirmation = useCallback(async () => {
+    if (!pendingCallData) return;
+
+    setShowCallConfirmationAlert(false);
+
+    try {
+      const success = await callController.startCall(
+        pendingCallData.recipientId,
+        pendingCallData.recipientName,
+        pendingCallData.callType
+      );
+
+      if (!success) {
+        Alert.alert(
+          'Call Failed',
+          'Unable to start the call. The user may be unavailable.'
+        );
+      }
+    } catch (error) {
+      console.error('[ChannelCommunicationButtons] Call confirmation error:', error);
+      Alert.alert('Error', 'Failed to start call. Please try again.');
+    } finally {
+      setPendingCallData(null);
+    }
+  }, [pendingCallData, callController]);
+
+  const handleCallCancel = useCallback(() => {
+    setShowCallConfirmationAlert(false);
+    setPendingCallData(null);
+  }, []);
+
+  // Initiate call function (for non-premium users)
+  const initiateCall = useCallback(
+    async (recipientId: string, recipientName: string, callType: CallType) => {
+      try {
+        // Get current balance
+        const numericBalance = typeof balance === 'number' ? balance : parseFloat(balance?.toString() || '0');
+
+        // Calculate billing info to show user
+        const billingInfo = await billingService.calculateCallBilling(
+          user?.id?.toString() || '',
+          callType,
+          numericBalance,
+          isPremium
+        );
+
+        const maxMinutes = Math.floor(billingInfo.maxDurationSeconds / 60);
+        const rateText = billingService.formatCurrency(billingInfo.ratePerMinute);
+
+        // Show custom confirmation alert with billing information
+        setPendingCallData({
+          recipientId,
+          recipientName,
+          callType,
+          rateText,
+          maxMinutes,
+          currentBalance: billingService.formatCurrency(numericBalance)
+        });
+        setShowCallConfirmationAlert(true);
+      } catch (error) {
+        console.error('[ChannelCommunicationButtons] Initiate call error:', error);
+        Alert.alert('Error', 'Failed to start call. Please try again.');
+      }
+    },
+    [callController, billingService, balance, isPremium, user?.id]
+  );
 
   // Handle chat (same as TipCallScreenSimple)
   const handleChat = useCallback(() => {
@@ -285,6 +378,38 @@ const ChannelCommunicationButtons: React.FC<CommunicationButtonsProps> = ({
       <Text style={styles.disclaimer}>
         Communication features may have charges. Check your subscription for details.
       </Text>
+
+      {/* Premium Popup */}
+      <PremiumPopup
+        visible={showPremiumPopup}
+        onClose={() => setShowPremiumPopup(false)}
+        onUpgrade={() => {
+          setShowPremiumPopup(false);
+          navigation.navigate('SubscriptionScreen' as never);
+        }}
+      />
+
+      {/* Premium Call Rate Alert */}
+      <PremiumCallRateAlert
+        visible={showPremiumCallRateAlert}
+        onClose={handlePremiumAlertClose}
+        onUpgrade={handlePremiumAlertUpgrade}
+        onContinue={handlePremiumAlertContinue}
+        callType={pendingCallData?.callType}
+      />
+
+      {/* Call Confirmation Alert */}
+      <CallConfirmationAlert
+        visible={showCallConfirmationAlert}
+        onClose={handleCallCancel}
+        onConfirm={handleCallConfirmation}
+        callType={pendingCallData?.callType || 'voice'}
+        recipientName={pendingCallData?.recipientName || ''}
+        rateText={pendingCallData?.rateText || ''}
+        maxMinutes={pendingCallData?.maxMinutes || 0}
+        currentBalance={pendingCallData?.currentBalance || ''}
+        isPremium={isPremium}
+      />
     </View>
   );
 };
