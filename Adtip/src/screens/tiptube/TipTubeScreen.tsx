@@ -288,8 +288,20 @@ const TipTubeScreen = () => {
 
   // Update userChannelId when channel data changes
   useEffect(() => {
+    console.log('[TipTubeScreen] Channel data changed:', {
+      status: channelData?.status,
+      dataLength: channelData?.data?.length,
+      channelId: channelData?.data?.[0]?.channelId,
+      fullData: channelData?.data?.[0]
+    });
+
     if (channelData?.status === 200 && channelData?.data?.length > 0) {
-      setUserChannelId(String(channelData.data[0].channelId));
+      const newChannelId = String(channelData.data[0].channelId);
+      console.log('[TipTubeScreen] Setting userChannelId to:', newChannelId);
+      setUserChannelId(newChannelId);
+    } else {
+      console.log('[TipTubeScreen] No valid channel data found');
+      setUserChannelId(null);
     }
   }, [channelData]);
 
@@ -474,6 +486,14 @@ const TipTubeScreen = () => {
   }, [searchQuery, handleTipTubeSearch]);
 
   const handleMyChannel = useCallback(() => {
+    console.log('[TipTubeScreen] handleMyChannel called:', {
+      isGuest,
+      userChannelId,
+      userId: user?.id,
+      hasUserChannelId: !!userChannelId,
+      hasUserId: !!user?.id
+    });
+
     if (isGuest) {
       showLoginPromptForAction('access your channel');
       return;
@@ -481,9 +501,11 @@ const TipTubeScreen = () => {
     if (userChannelId && user?.id) {
       // Note: Despite the parameter name being 'channelId', we pass the userId
       // because the ChannelScreen API expects userId, not channelId
+      console.log('[TipTubeScreen] Navigating to Channel with userId:', String(user.id));
       navigation.navigate('Channel', { channelId: String(user.id) });
     } else {
       // If no channel found, redirect to create channel
+      console.log('[TipTubeScreen] No channel found, redirecting to CreateChannel');
       navigation.navigate('CreateChannel');
     }
   }, [userChannelId, user?.id, isGuest, navigation, showLoginPromptForAction]);

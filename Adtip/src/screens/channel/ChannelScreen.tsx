@@ -105,6 +105,14 @@ const ChannelScreen: React.FC = () => {
   const isMyChannel = !routeChannelId || String(routeChannelId) === String(user?.id);
   const channelId = isMyChannel ? user?.id : routeChannelId;
 
+  console.log('[ChannelScreen] Route params and channel setup:', {
+    routeParams: route.params,
+    routeChannelId,
+    isMyChannel,
+    channelId,
+    userId: user?.id
+  });
+
   // TanStack Query hooks
   const { 
     data: channelData, 
@@ -140,6 +148,14 @@ const ChannelScreen: React.FC = () => {
   const updateChannelMutation = useUpdateChannel();
 
   // Transform channel data
+  console.log('[ChannelScreen] Channel data received:', {
+    status: channelData?.status,
+    dataLength: channelData?.data?.length,
+    firstChannel: channelData?.data?.[0],
+    channelLoading,
+    channelError
+  });
+
   const channelInfo: ChannelInfo | null = channelData?.data?.[0] ? {
     channelId: String(channelData.data[0].channelId),
     channelName: channelData.data[0].channelName || 'Unknown Channel',
