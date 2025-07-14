@@ -88,6 +88,7 @@ const ChannelScreen: React.FC = () => {
   } = useContentCreatorPremium();
   const [selectedTab, setSelectedTab] = useState<'videos' | 'about'>('videos');
   const [isSubscribing, setIsSubscribing] = useState(false);
+  const [localFollowStatus, setLocalFollowStatus] = useState<boolean | null>(null);
   
   // Edit modal states
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -157,7 +158,7 @@ const ChannelScreen: React.FC = () => {
   });
 
   // Use passed channel data if available, otherwise use API data
-  const channelInfo: ChannelInfo | null = passedChannelData ? {
+  const baseChannelInfo = passedChannelData ? {
     channelId: String(passedChannelData.channelId),
     channelName: passedChannelData.channelName || 'Unknown Channel',
     description: passedChannelData.description || 'No description available',
@@ -183,6 +184,12 @@ const ChannelScreen: React.FC = () => {
     isVerified: Boolean(channelData.data[0].isVerified),
     createdDate: channelData.data[0].createddate || new Date().toISOString(),
     createdBy: Number(channelData.data[0].createdBy || channelId),
+  } : null;
+
+  // Apply local follow status override if available
+  const channelInfo: ChannelInfo | null = baseChannelInfo ? {
+    ...baseChannelInfo,
+    isSubscribed: localFollowStatus !== null ? localFollowStatus : baseChannelInfo.isSubscribed,
   } : null;
 
   // Fetch user data for About section
@@ -261,10 +268,47 @@ const ChannelScreen: React.FC = () => {
         follow: channelInfo.isSubscribed ? 0 : 1, // 1 for follow, 0 for unfollow
       };
 
-      await ApiService.saveChannelFollowers(followData);
+      console.log('[ChannelScreen] Sending follow request:', followData);
+      const response = await ApiService.saveChannelFollowers(followData);
+      console.log('[ChannelScreen] Follow response:', response);
 
-      // Refetch channel data to get updated follow status
-      refetchChannel();
+      // Check the response to determine the new follow status
+      let newFollowStatus = !channelInfo.isSubscribed; // Default toggle
+
+      if (response?.message) {
+        // Handle different response messages
+        const message = response.message.toLowerCase();
+        if (message.includes('followed') || message.includes('following') || message.includes('alreday followed')) {
+          newFollowStatus = true;
+        } else if (message.includes('unfollowed') || message.includes('unfollow')) {
+          newFollowStatus = false;
+        }
+      }
+
+      // Also check the response data for follow status
+      if (response?.data && Array.isArray(response.data) && response.data.length > 0) {
+        const followData = response.data[0];
+        if (followData.follow !== undefined) {
+          newFollowStatus = followData.follow === 1;
+        }
+      }
+
+      console.log('[ChannelScreen] Determined new follow status:', {
+        originalStatus: channelInfo.isSubscribed,
+        requestedAction: followData.follow,
+        responseMessage: response?.message,
+        newStatus: newFollowStatus
+      });
+
+      // Update local follow status immediately for better UX
+      setLocalFollowStatus(newFollowStatus);
+
+      // Also refetch channel data to get updated follow status from server
+      setTimeout(() => {
+        refetchChannel();
+        // Reset local status after refetch to use server data
+        setLocalFollowStatus(null);
+      }, 1000);
 
     } catch (error: any) {
       console.error('Error following/unfollowing:', error);
