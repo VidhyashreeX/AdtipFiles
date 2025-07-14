@@ -51,6 +51,7 @@ import EarnCard from '../../components/home/EarnCard';
 import BannerCarousel from '../../components/home/BannerCarousel';
 import PremiumPopup from '../../components/common/PremiumPopup';
 import LoginPromptModal from '../../components/modals/LoginPromptModal';
+import PubScaleCreditAlert from '../../components/common/PubScaleCreditAlert';
 
 
 
@@ -430,6 +431,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [isGloballyMuted, setIsGloballyMuted] = useState(true);
   const [offerwallLoading, setOfferwallLoading] = useState(false);
+  const [showPubScaleCreditAlert, setShowPubScaleCreditAlert] = useState(false);
 
   // Add premium state
   const [isPremium, setIsPremium] = useState<boolean>(false);
@@ -770,18 +772,28 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
       await PubScaleService.showOfferwall();
       console.log('Offerwall launched successfully');
 
-      // Show alert after user returns from PubScale
-      Alert.alert(
-        'PubScale Offers',
-        'If you completed any offers from PubScale, your earnings will be credited within 4-5 business days.',
-        [{ text: 'OK' }]
-      );
+      // Show enhanced credit alert after user returns from PubScale
+      setShowPubScaleCreditAlert(true);
     } catch (error) {
       console.error('Failed to show offerwall:', error);
       Alert.alert('Error', 'Failed to load offerwall. Please try again later.', [{ text: 'OK' }]);
     } finally {
       setOfferwallLoading(false);
     }
+  }, []);
+
+  // Handle PubScale credit alert actions
+  const handleViewWallet = useCallback(() => {
+    navigation.navigate('Wallet' as never);
+  }, [navigation]);
+
+  const handleViewHistory = useCallback(() => {
+    // Navigate to a history screen or show a placeholder
+    Alert.alert(
+      'Transaction History',
+      'Transaction history feature will be available soon!',
+      [{ text: 'OK' }]
+    );
   }, []);
 
   const handleBannerPress = useCallback((bannerId: number) => {
@@ -1096,6 +1108,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           visible={showLoginPrompt}
           onClose={() => setShowLoginPrompt(false)}
           message={loginPromptMessage}
+        />
+
+        {/* Enhanced PubScale Credit Alert */}
+        <PubScaleCreditAlert
+          visible={showPubScaleCreditAlert}
+          onClose={() => setShowPubScaleCreditAlert(false)}
+          onViewWallet={handleViewWallet}
+          onViewHistory={handleViewHistory}
         />
 
       </View>

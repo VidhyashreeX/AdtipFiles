@@ -32,6 +32,7 @@ import { Heart, Share as ShareIcon } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import MemoizedRelatedVideoCard from '../../components/tiptube/MemoizedRelatedVideoCard';
 import VideoCommentsModal from '../../components/tiptube/VideoCommentsModal';
+import VideoPlayerChannelSection from '../../components/tiptube/VideoPlayerChannelSection';
 import { createSecureVideoSource } from '../../utils/mediaUtils';
 import ApiService from '../../services/ApiService';
 import { useAuth } from '../../contexts/AuthContext';
@@ -283,6 +284,13 @@ const VideoPlayerModalScreen: React.FC = () => {
     checkChannelFollowStatus();
   }, [checkChannelFollowStatus]);
 
+  // Handle navigation to channel from channel section
+  const handleNavigateToChannelFromSection = useCallback(() => {
+    if (video?.channelId) {
+      navigation.navigate('Channel', { channelId: String(video.channelId) });
+    }
+  }, [navigation, video?.channelId]);
+
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: 'transparent' }}>
       <StatusBar backgroundColor="transparent" barStyle="light-content" translucent />
@@ -459,9 +467,25 @@ const VideoPlayerModalScreen: React.FC = () => {
               </View>
             </View>
 
+            {/* Channel Section - YouTube Style */}
+            <VideoPlayerChannelSection
+              video={{
+                id: video.id,
+                channelId: video.channelId,
+                creatorName: video.creatorName,
+                avatar: video.avatar,
+                isVerified: video.isVerified,
+              }}
+              onNavigateToChannel={handleNavigateToChannelFromSection}
+              onSubscribe={() => {
+                // Refresh follow status after subscription change
+                checkChannelFollowStatus();
+              }}
+            />
+
             {/* Comments Preview Section */}
-            <TouchableOpacity 
-              onPress={() => setShowComments(true)} 
+            <TouchableOpacity
+              onPress={() => setShowComments(true)}
               style={styles.commentsPreviewContainer}
             >
               <Text style={styles.commentsPreviewTitle}>

@@ -23,17 +23,18 @@ import { useContentCreatorPremium } from '../../contexts/ContentCreatorPremiumCo
 import Icon from 'react-native-vector-icons/Feather';
 import Header from '../../components/common/Header';
 import ContentCreatorPlanToggle from '../../components/common/ContentCreatorPlanToggle';
+import ChannelCommunicationButtons from '../../components/channel/ChannelCommunicationButtons';
 import ApiService from '../../services/ApiService';
 import CloudflareUploadService from '../../services/CloudflareUploadService';
 import { CheckCircle, Play, Calendar, Users, Eye, Bell, BellOff, Edit3, Camera, X } from 'lucide-react-native';
 import { MainNavigatorParamList } from '../../types/navigation';
 import { launchImageLibrary } from 'react-native-image-picker';
-import { 
-  useChannelData, 
-  useChannelVideos, 
-  usePopularContent, 
-  useFollowUser, 
-  useUpdateChannel 
+import {
+  useChannelData,
+  useChannelVideos,
+  usePopularContent,
+  useFollowUserMutation,
+  useUpdateChannel
 } from '../../hooks/useQueries';
 
 // Utility function to shuffle array
@@ -135,7 +136,7 @@ const ChannelScreen: React.FC = () => {
   } = usePopularContent(1, Number(channelId));
 
   // Mutations
-  const followUserMutation = useFollowUser();
+  const followUserMutation = useFollowUserMutation();
   const updateChannelMutation = useUpdateChannel();
 
   // Transform channel data
@@ -789,6 +790,17 @@ const ChannelScreen: React.FC = () => {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Communication Features */}
+        <ChannelCommunicationButtons
+          channelInfo={{
+            channelId: channelInfo.channelId,
+            channelName: channelInfo.channelName,
+            createdBy: channelInfo.createdBy,
+            isSubscribed: channelInfo.isSubscribed,
+          }}
+          isMyChannel={isMyChannel}
+        />
 
         {/* Tab Content */}
         {selectedTab === 'home' && (

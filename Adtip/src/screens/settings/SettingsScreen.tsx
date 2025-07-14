@@ -1,4 +1,4 @@
-import React, {useState, useCallback} from 'react';
+import React, {useState, useCallback, useEffect} from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import Header from '../../components/common/Header';
 import {useNavigation} from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import ScreenTransition from '../../components/common/ScreenTransition';
+import ApiService from '../../services/ApiService';
 // import {useUserSettings, useUpdateUserSettings} from '../../hooks/useQueries';
 
 interface SettingItem {
@@ -48,6 +49,11 @@ const SettingsScreen: React.FC = () => {
     analytics: true,
   });
 
+  // Subscription management state
+  const [subscriptionData, setSubscriptionData] = useState<any>(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
   // Update local settings when API data loads
   // React.useEffect(() => {
   //   if (userSettingsQuery.data) {
@@ -59,15 +65,104 @@ const SettingsScreen: React.FC = () => {
   //   }
   // }, [userSettingsQuery.data, isDarkMode]);
 
+  // Fetch subscription data on component mount
+  useEffect(() => {
+    console.log('🏠 [SettingsScreen] Component mounted for user:', user?.id);
+    fetchSubscriptionStatus();
+  }, [fetchSubscriptionStatus]);
+
   const updateSetting = useCallback((key: string, value: boolean) => {
     setLocalSettings(prev => ({...prev, [key]: value}));
-    
+
     // Update settings via API
     // updateSettingsMutation.mutate({
     //   user_id: userId,
     //   [key]: value
     // });
   }, []);
+
+  // Fetch subscription status
+  const fetchSubscriptionStatus = useCallback(async () => {
+    if (!user?.id) return;
+
+    try {
+      setSubscriptionLoading(true);
+      console.log('🔄 [SettingsScreen] Fetching subscription status for user:', user.id);
+
+      const response = await ApiService.getSubscriptionStatus(user.id);
+      console.log('📥 [SettingsScreen] Subscription status response:', response);
+
+      if (response && response.data) {
+        setSubscriptionData(response.data);
+        console.log('✅ [SettingsScreen] Subscription data loaded:', response.data);
+      } else {
+        console.log('ℹ️ [SettingsScreen] No active subscription found');
+        setSubscriptionData(null);
+      }
+    } catch (error: any) {
+      console.error('❌ [SettingsScreen] Error fetching subscription status:', error);
+      setSubscriptionData(null);
+    } finally {
+      setSubscriptionLoading(false);
+    }
+  }, [user?.id]);
+
+  // Handle subscription cancellation
+  const handleCancelSubscription = useCallback(async () => {
+    console.log('🔄 [SettingsScreen] Cancel subscription dialog opened');
+
+    Alert.alert(
+      'Cancel Subscription',
+      'Are you sure you want to cancel your premium subscription? You will lose access to premium features at the end of your current billing cycle.',
+      [
+        { text: 'Keep Subscription', style: 'cancel' },
+        {
+          text: 'Cancel Subscription',
+          style: 'destructive',
+          onPress: async () => {
+            console.log('🚀 [SettingsScreen] User confirmed subscription cancellation');
+
+            try {
+              if (!user?.id) {
+                console.error('❌ [SettingsScreen] User ID not available for cancellation');
+                Alert.alert('Error', 'User ID not available');
+                return;
+              }
+
+              console.log('📡 [SettingsScreen] Making API call to cancelSubscription...');
+              setCancelling(true);
+
+              const response = await ApiService.cancelSubscription(user.id);
+              console.log('📥 [SettingsScreen] Cancel subscription API response:', {
+                status: response.status,
+                message: response.message,
+                data: response.data
+              });
+
+              if (response.status) {
+                console.log('✅ [SettingsScreen] Subscription cancelled successfully');
+                Alert.alert('Success', response.message);
+                fetchSubscriptionStatus(); // Refresh data
+              } else {
+                console.log('❌ [SettingsScreen] Failed to cancel subscription:', response.message);
+                Alert.alert('Error', response.message || 'Failed to cancel subscription');
+              }
+            } catch (error: any) {
+              console.error('❌ [SettingsScreen] Error cancelling subscription:', {
+                error: error.message,
+                stack: error.stack,
+                response: error.response?.data
+              });
+              Alert.alert('Error', 'An error occurred while cancelling subscription');
+            } finally {
+              setCancelling(false);
+              console.log('🏁 [SettingsScreen] Cancel subscription process completed');
+            }
+          }
+        }
+      ]
+    );
+  }, [user?.id, fetchSubscriptionStatus]);
 
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -123,6 +218,28 @@ const SettingsScreen: React.FC = () => {
         },
       ] as SettingItem[],
     },
+    // Subscription Management Section - only show if user has subscription data
+    ...(subscriptionData ? [{
+      title: 'Subscription',
+      items: [
+        {
+          id: 'viewSubscription',
+          title: 'View Subscription',
+          subtitle: `${subscriptionData.plan_name || 'Premium Plan'} - ${subscriptionData.status}`,
+          type: 'navigation',
+          icon: 'award',
+          onPress: () => navigation.navigate('PremiumUser' as never),
+        },
+        ...(subscriptionData.status === 'active' ? [{
+          id: 'cancelSubscription',
+          title: 'Cancel Subscription',
+          subtitle: 'Cancel your premium subscription',
+          type: 'action',
+          icon: 'x-circle',
+          onPress: handleCancelSubscription,
+        }] : []),
+      ] as SettingItem[],
+    }] : []),
     {
       title: 'Preferences',
       items: [        {
@@ -290,8 +407,8 @@ const SettingsScreen: React.FC = () => {
                 }]}> 
                   {section.items.map((item, itemIndex) => {
                     const isLast = itemIndex === section.items.length - 1;
-                    const iconBg = item.id === 'logout' || item.id === 'delete' ? '#EF444415' : sectionColor + '15';
-                    const iconColor = item.id === 'logout' || item.id === 'delete' ? '#EF4444' : sectionColor;
+                    const iconBg = item.id === 'logout' || item.id === 'delete' || item.id === 'cancelSubscription' ? '#EF444415' : sectionColor + '15';
+                    const iconColor = item.id === 'logout' || item.id === 'delete' || item.id === 'cancelSubscription' ? '#EF4444' : sectionColor;
                     
                     return (
                       <TouchableOpacity
@@ -306,7 +423,7 @@ const SettingsScreen: React.FC = () => {
                           backgroundColor: 'transparent'
                         }} 
                         onPress={item.onPress}
-                        disabled={item.type === 'toggle'}
+                        disabled={item.type === 'toggle' || (item.id === 'cancelSubscription' && cancelling)}
                         activeOpacity={0.8}
                       >
                         {/* Icon Container */}
@@ -325,9 +442,9 @@ const SettingsScreen: React.FC = () => {
                         {/* Text Content */}
                         <View style={{flex: 1}}>
                           <Text style={{
-                            fontSize: 16, 
-                            fontWeight: '500', 
-                            color: item.id === 'delete' ? '#EF4444' : colors.text.primary
+                            fontSize: 16,
+                            fontWeight: '500',
+                            color: (item.id === 'delete' || item.id === 'cancelSubscription') ? '#EF4444' : colors.text.primary
                           }}>
                             {item.title}
                           </Text>
@@ -356,6 +473,12 @@ const SettingsScreen: React.FC = () => {
                             />
                           )}
                           {item.type === 'navigation' && (
+                            <Icon name="chevron-right" size={18} color={colors.text.tertiary} />
+                          )}
+                          {item.type === 'action' && item.id === 'cancelSubscription' && cancelling && (
+                            <ActivityIndicator size="small" color="#EF4444" />
+                          )}
+                          {item.type === 'action' && item.id !== 'cancelSubscription' && (
                             <Icon name="chevron-right" size={18} color={colors.text.tertiary} />
                           )}
                         </View>

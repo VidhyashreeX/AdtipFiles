@@ -259,13 +259,13 @@ const Sidebar: React.FC = () => {
 
   const menuItems: MenuItemProps[] = useMemo(() => [
     {icon: 'home', label: 'Home', screen: 'TabHome'},
+    {icon: 'user', label: 'View Profile', screen: 'Profile'},
     {icon: 'compass', label: 'Explore', screen: 'Explore'},
     {icon: 'credit-card', label: 'Wallet', screen: 'Wallet'},
     {icon: 'users', label: 'Refer & Earn', screen: 'Referral'},
     {icon: 'play', label: 'Play to Earn', screen: 'PlayToEarn'},
     {icon: 'film', label: 'Watch to Earn', screen: 'TipTube'},
     {icon: 'book-open', label: 'My Ad Passbook', screen: 'AdPassbook'},
-    {icon: 'user', label: 'View Profile', screen: 'Profile'},
     {icon: 'video', label: 'Tip Shorts', screen: 'TipShorts'},
     {icon: 'award', label: 'Premium Status', screen: 'PremiumUser'},
     {icon: 'award', label: 'Content Creator Premium Status', screen: 'ContentCreatorPremium'},

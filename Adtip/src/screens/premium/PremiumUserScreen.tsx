@@ -29,7 +29,6 @@ const PremiumUserScreen = () => {
 
   const [subscriptionData, setSubscriptionData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     console.log('🏠 [PremiumUserScreen] Component mounted for user:', user?.id);
@@ -87,61 +86,7 @@ const PremiumUserScreen = () => {
     }
   };
 
-  const handleCancelSubscription = async () => {
-    console.log('🔄 [PremiumUserScreen] Cancel subscription dialog opened');
-    
-    Alert.alert(
-      'Cancel Subscription',
-      'Are you sure you want to cancel your premium subscription? You will lose access to premium features at the end of your current billing cycle.',
-      [
-        { text: 'Keep Subscription', style: 'cancel' },
-        {
-          text: 'Cancel Subscription',
-          style: 'destructive',
-          onPress: async () => {
-            console.log('🚀 [PremiumUserScreen] User confirmed subscription cancellation');
-            
-            try {
-              if (!user?.id) {
-                console.error('❌ [PremiumUserScreen] User ID not available for cancellation');
-                Alert.alert('Error', 'User ID not available');
-                return;
-              }
-              
-              console.log('📡 [PremiumUserScreen] Making API call to cancelSubscription...');
-              setCancelling(true);
-              
-              const response = await ApiService.cancelSubscription(user.id);
-              console.log('📥 [PremiumUserScreen] Cancel subscription API response:', {
-                status: response.status,
-                message: response.message,
-                data: response.data
-              });
-              
-              if (response.status) {
-                console.log('✅ [PremiumUserScreen] Subscription cancelled successfully');
-                Alert.alert('Success', response.message);
-                fetchSubscriptionStatus(); // Refresh data
-              } else {
-                console.log('❌ [PremiumUserScreen] Failed to cancel subscription:', response.message);
-                Alert.alert('Error', response.message || 'Failed to cancel subscription');
-              }
-            } catch (error: any) {
-              console.error('❌ [PremiumUserScreen] Error cancelling subscription:', {
-                error: error.message,
-                stack: error.stack,
-                response: error.response?.data
-              });
-              Alert.alert('Error', 'An error occurred while cancelling subscription');
-            } finally {
-              setCancelling(false);
-              console.log('🏁 [PremiumUserScreen] Cancel subscription process completed');
-            }
-          }
-        }
-      ]
-    );
-  };
+
 
   const handleUpgradeSubscription = () => {
     console.log('🚀 [PremiumUserScreen] User clicked upgrade subscription, navigating to SubscriptionScreen');
@@ -353,28 +298,8 @@ const PremiumUserScreen = () => {
               </View>
             </View>
 
-            {/* Action Buttons */}
+            {/* Action Buttons - Cancel subscription moved to Settings */}
             <View style={styles.actionButtons}>
-              {subscriptionData.status === 'active' && (
-                <TouchableOpacity
-                  style={[styles.cancelButton, { opacity: cancelling ? 0.6 : 1 }]}
-                  onPress={handleCancelSubscription}
-                  disabled={cancelling}
-                  activeOpacity={0.8}
-                >
-                  {cancelling ? (
-                    <View style={styles.loadingButtonContent}>
-                      <ActivityIndicator color="#EF4444" size="small" />
-                      <Text style={styles.cancelButtonText}>Cancelling...</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.buttonContent}>
-                      <Icon name="x-circle" size={18} color="#EF4444" />
-                      <Text style={styles.cancelButtonText}>Cancel Subscription</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              )}
               
               {(subscriptionData.status === 'cancelled' || subscriptionData.status === 'expired') && (
                 <TouchableOpacity
@@ -530,14 +455,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     gap: 12,
   },
-  cancelButton: {
-    height: 56,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#EF4444',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+
   upgradeButton: {
     height: 56,
     borderRadius: 16,
@@ -558,11 +476,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  cancelButtonText: {
-    color: '#EF4444',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+
   upgradeButtonText: {
     color: '#FFFFFF',
     fontSize: 18,
