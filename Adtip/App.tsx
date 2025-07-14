@@ -63,7 +63,7 @@ import { COLORS } from './src/constants/colors';
 
 // Import required screens
 import UserDetailsScreen from './src/screens/auth/UserDetailsScreen';
-import ChatScreen from './src/screens/chat/ChatScreen';
+//import ChatScreen from './src/screens/chat/ChatScreen';
 
 // Ultra Fast Loader for instant app initialization
 import UltraFastLoader from './src/components/common/UltraFastLoader';
@@ -269,6 +269,18 @@ const AppNavigator = () => {
         }
       }, 1500); // Initialize after other services
     }
+
+    // Background Cloudflare cache cleanup initialization
+    setTimeout(async () => {
+      try {
+        console.log('[App] Background: Initializing Cloudflare cache cleanup...');
+        const { CloudflareUploadService } = await import('./src/services/CloudflareUploadService');
+        CloudflareUploadService.initializeCacheCleanup();
+        console.log('[App] Background: Cloudflare cache cleanup initialized successfully');
+      } catch (error) {
+        console.log('[App] Background: Cloudflare cache cleanup initialization failed (not critical):', error);
+      }
+    }, 2000); // Initialize after other services
   }, [isInitialized, isAuthenticated]);
 
   // Setup incoming call handling with Unified Call Service

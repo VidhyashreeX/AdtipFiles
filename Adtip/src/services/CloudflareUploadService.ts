@@ -47,9 +47,15 @@ export interface PresignedUrlInfo {
   expiresIn: number;
 }
 
+export interface CachedPresignedUrl {
+  url: string;
+  expiresAt: number;
+}
+
 class CloudflareUploadService {
   private s3Client: S3Client;
   private bucketName: string;
+  private static presignedUrlCache: Map<string, CachedPresignedUrl> = new Map();
 
   constructor() {
     // Initialize S3 client for Cloudflare R2
@@ -520,6 +526,93 @@ class CloudflareUploadService {
   }
 
   /**
+   * Extract object key from Cloudflare public URL
+   */
+  static extractKeyFromUrl(cloudflareUrl: string): string | null {
+    try {
+      const url = new URL(cloudflareUrl);
+
+      // Check if this is a Cloudflare R2 URL
+      if (!url.hostname.includes('r2.cloudflarestorage.com') &&
+          !url.hostname.includes(CLOUDFLARE_R2_CONFIG.accountId)) {
+        return null;
+      }
+
+      // Extract the key (path without leading slash)
+      const key = url.pathname.startsWith('/') ? url.pathname.slice(1) : url.pathname;
+
+      console.log('[CloudflareUpload] Extracted key from URL:', {
+        originalUrl: cloudflareUrl,
+        extractedKey: key
+      });
+
+      return key || null;
+    } catch (error) {
+      console.error('[CloudflareUpload] Failed to extract key from URL:', cloudflareUrl, error);
+      return null;
+    }
+  }
+
+  /**
+   * Generate presigned download URL from public Cloudflare URL with caching
+   */
+  static async generatePresignedUrlFromPublicUrl(
+    cloudflareUrl: string,
+    expiresIn: number = PRESIGNED_URL_EXPIRY
+  ): Promise<string | null> {
+    try {
+      const key = this.extractKeyFromUrl(cloudflareUrl);
+
+      if (!key) {
+        console.warn('[CloudflareUpload] Could not extract key from URL:', cloudflareUrl);
+        return null;
+      }
+
+      // Check cache first
+      const cacheKey = `${key}_${expiresIn}`;
+      const cached = this.presignedUrlCache.get(cacheKey);
+
+      if (cached && cached.expiresAt > Date.now()) {
+        console.log('[CloudflareUpload] Using cached presigned URL for key:', key);
+        return cached.url;
+      }
+
+      // Generate new presigned URL
+      const instance = new CloudflareUploadService();
+      const presignedUrl = await instance.generatePresignedDownloadUrl(key, expiresIn);
+
+      if (presignedUrl) {
+        // Cache the URL (expire 5 minutes before actual expiry for safety)
+        const expiresAt = Date.now() + (expiresIn - 300) * 1000;
+        this.presignedUrlCache.set(cacheKey, {
+          url: presignedUrl,
+          expiresAt
+        });
+
+        console.log('[CloudflareUpload] Generated and cached presigned URL for key:', key);
+      }
+
+      return presignedUrl;
+
+    } catch (error: any) {
+      console.error('[CloudflareUpload] Failed to generate presigned URL from public URL:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Clear expired entries from presigned URL cache
+   */
+  static clearExpiredCache(): void {
+    const now = Date.now();
+    for (const [key, cached] of this.presignedUrlCache.entries()) {
+      if (cached.expiresAt <= now) {
+        this.presignedUrlCache.delete(key);
+      }
+    }
+  }
+
+  /**
    * Delete file from R2
    */
   async deleteFile(key: string): Promise<boolean> {
@@ -569,7 +662,18 @@ class CloudflareUploadService {
       return false;
     }
   }
+
+  /**
+   * Initialize cache cleanup interval
+   */
+  static initializeCacheCleanup(): void {
+    // Clean expired cache entries every 10 minutes
+    setInterval(() => {
+      this.clearExpiredCache();
+    }, 10 * 60 * 1000);
+  }
 }
 
-// Export singleton instance
+// Export both the class and singleton instance
+export { CloudflareUploadService };
 export default new CloudflareUploadService();

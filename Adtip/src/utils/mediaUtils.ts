@@ -3,23 +3,54 @@
 
 import { API_BASE_URL } from '../constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CloudflareUploadService } from '../services/CloudflareUploadService';
+
+/**
+ * Check if URL is a Cloudflare R2 URL
+ */
+export const isCloudflareUrl = (url: string): boolean => {
+  try {
+    const urlObj = new URL(url);
+    return urlObj.hostname.includes('r2.cloudflarestorage.com') ||
+           urlObj.hostname.includes('94e2ffe1e7d5daf0d3de8d11c55dd2d6');
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Converts a relative or partial URL to a fully qualified URL with authentication
+ * Now handles Cloudflare URLs by generating presigned URLs
  */
 export const getSecureMediaUrl = async (mediaUrl?: string | null): Promise<string | undefined> => {
   if (!mediaUrl || mediaUrl === 'null' || mediaUrl === 'undefined') {
     return undefined;
   }
 
-  // If it's already a full URL, return as is
+  // If it's a Cloudflare URL, generate presigned URL
   if (mediaUrl.startsWith('http://') || mediaUrl.startsWith('https://')) {
+    if (isCloudflareUrl(mediaUrl)) {
+      console.log('[MediaUtils] Detected Cloudflare URL, generating presigned URL:', mediaUrl);
+      try {
+        const presignedUrl = await CloudflareUploadService.generatePresignedUrlFromPublicUrl(mediaUrl);
+        if (presignedUrl) {
+          console.log('[MediaUtils] Generated presigned URL successfully');
+          return presignedUrl;
+        } else {
+          console.warn('[MediaUtils] Failed to generate presigned URL, falling back to original');
+          return mediaUrl;
+        }
+      } catch (error) {
+        console.error('[MediaUtils] Error generating presigned URL:', error);
+        return mediaUrl;
+      }
+    }
     return mediaUrl;
   }
 
   // If it's a relative URL, prepend the API base URL
   const fullUrl = `${API_BASE_URL}${mediaUrl.startsWith('/') ? '' : '/'}${mediaUrl}`;
-  
+
   return fullUrl;
 };
 
@@ -65,6 +96,20 @@ export const validateAndFixVideoUrl = async (videoUrl?: string | null): Promise<
   if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
     try {
       const url = new URL(cleanUrl);
+
+      // If it's a Cloudflare URL, generate presigned URL
+      if (isCloudflareUrl(cleanUrl)) {
+        console.log('[MediaUtils] Cloudflare video URL detected, generating presigned URL');
+        const presignedUrl = await CloudflareUploadService.generatePresignedUrlFromPublicUrl(cleanUrl);
+        if (presignedUrl) {
+          console.log('[MediaUtils] Generated presigned video URL successfully');
+          return presignedUrl;
+        } else {
+          console.warn('[MediaUtils] Failed to generate presigned video URL, using original');
+          return url.href;
+        }
+      }
+
       console.log('[MediaUtils] Validated external video URL:', url.href);
       return url.href;
     } catch (error) {

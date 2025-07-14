@@ -85,7 +85,7 @@ export class CallKeepService {
       // Setup CallKeep with timeout
       const setupPromise = RNCallKeep.setup(options)
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('CallKeep setup timeout')), 3000)
+        setTimeout(() => reject(new Error('CallKeep setup timeout')), 7000)
       )
 
       await Promise.race([setupPromise, timeoutPromise])
