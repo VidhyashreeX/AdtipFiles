@@ -32,9 +32,8 @@ import { launchImageLibrary } from 'react-native-image-picker';
 import {
   useChannelData,
   useChannelVideos,
-  usePopularContent,
-  useFollowUserMutation,
-  useUpdateChannel
+  useUpdateChannel,
+  useUserData
 } from '../../hooks/useQueries';
 
 // Utility function to shuffle array
@@ -87,7 +86,7 @@ const ChannelScreen: React.FC = () => {
     contentCreatorPremiumData,
     isLoading: contentCreatorPremiumLoading
   } = useContentCreatorPremium();
-  const [selectedTab, setSelectedTab] = useState<'home' | 'videos' | 'about'>('home');
+  const [selectedTab, setSelectedTab] = useState<'videos' | 'about'>('videos');
   const [isSubscribing, setIsSubscribing] = useState(false);
   
   // Edit modal states
@@ -106,47 +105,42 @@ const ChannelScreen: React.FC = () => {
   const isMyChannel = !routeChannelId || String(routeChannelId) === String(user?.id);
   const channelId = isMyChannel ? user?.id : routeChannelId;
 
+  // Use createdBy from passed data if available, otherwise use channelId
+  const userIdForApi = passedChannelData?.createdBy || channelId;
+
   console.log('[ChannelScreen] Route params and channel setup:', {
     routeParams: route.params,
     routeChannelId,
     passedChannelData,
     isMyChannel,
     channelId,
+    userIdForApi,
     userId: user?.id
   });
 
   // TanStack Query hooks
-  const { 
-    data: channelData, 
-    isLoading: channelLoading, 
+  const {
+    data: channelData,
+    isLoading: channelLoading,
     refetch: refetchChannel,
-    error: channelError 
-  } = useChannelData(Number(channelId));
+    error: channelError
+  } = useChannelData(Number(userIdForApi));
 
-  const { 
-    data: videosData, 
-    isLoading: videosLoading, 
-    refetch: refetchVideos 
-  } = useChannelVideos(Number(channelId), Number(user?.id), 0);
+  const {
+    data: videosData,
+    isLoading: videosLoading,
+    refetch: refetchVideos
+  } = useChannelVideos(Number(userIdForApi), Number(user?.id), 0);
 
-  const { 
-    data: shortsData, 
-    isLoading: shortsLoading, 
-    refetch: refetchShorts 
-  } = useChannelVideos(Number(channelId), Number(user?.id), 1);
+  const {
+    data: shortsData,
+    isLoading: shortsLoading,
+    refetch: refetchShorts
+  } = useChannelVideos(Number(userIdForApi), Number(user?.id), 1);
 
-  const { 
-    data: popularVideosData, 
-    isLoading: popularVideosLoading 
-  } = usePopularContent(0, Number(channelId));
 
-  const { 
-    data: popularShortsData, 
-    isLoading: popularShortsLoading 
-  } = usePopularContent(1, Number(channelId));
 
   // Mutations
-  const followUserMutation = useFollowUserMutation();
   const updateChannelMutation = useUpdateChannel();
 
   // Transform channel data
@@ -188,6 +182,12 @@ const ChannelScreen: React.FC = () => {
     createdBy: Number(channelData.data[0].createdBy || channelId),
   } : null;
 
+  // Fetch user data for About section
+  const {
+    data: userData,
+    isLoading: userDataLoading
+  } = useUserData(Number(userIdForApi));
+
   // Transform videos data
   const videos: Video[] = videosData?.pages?.flatMap(page => 
     page?.data?.map((video: any) => ({
@@ -220,35 +220,7 @@ const ChannelScreen: React.FC = () => {
     })) || []
   ) || [];
 
-  // Transform home content (combine popular videos and shorts)
-  const homeContent: Video[] = [
-    ...(popularVideosData?.data?.map((video: any) => ({
-      id: String(video.id),
-      name: video.name || 'Untitled Video',
-      videoThumbnail: video.video_Thumbnail || 'https://via.placeholder.com/320x180',
-      playDuration: video.play_duration || '0:00',
-      views: Number(video.total_views || 0),
-      createdDate: video.createddate || new Date().toISOString(),
-      description: video.video_desciption || '',
-      videoType: 0,
-      videoLink: video.video_link || '',
-      is_shot: video.is_shot || 0,
-    })) || []),
-    ...(popularShortsData?.data?.map((video: any) => ({
-      id: String(video.id),
-      name: video.name || 'Untitled Short',
-      videoThumbnail: video.video_Thumbnail || 'https://via.placeholder.com/180x320',
-      playDuration: video.play_duration || '0:00',
-      views: Number(video.total_views || 0),
-      createdDate: video.createddate || new Date().toISOString(),
-      description: video.video_desciption || '',
-      videoType: 1,
-      videoLink: video.video_link || '',
-      is_shot: video.is_shot || 1,
-    })) || [])
-  ].sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime());
 
-    const homeLoading = popularVideosLoading || popularShortsLoading;
 
   // Handle channel error
   useEffect(() => {
@@ -266,26 +238,26 @@ const ChannelScreen: React.FC = () => {
     ]);
   }, [refetchChannel, refetchVideos, refetchShorts]);
 
-  const handleSubscribe = async () => {
+  const handleFollow = async () => {
     if (!channelInfo || !user) return;
 
     try {
       setIsSubscribing(true);
 
       const followData = {
-        followingId: channelInfo.createdBy,
-        followerId: Number(user.id),
-        action: channelInfo.isSubscribed ? 'unfollow' : 'follow' as 'follow' | 'unfollow',
+        userId: Number(user.id),
+        channelId: channelInfo.createdBy,
+        follow: channelInfo.isSubscribed ? 0 : 1, // 1 for follow, 0 for unfollow
       };
 
-      await followUserMutation.mutateAsync(followData);
-      
-      // The mutation will automatically invalidate and refetch the channel data
-      // so we don't need to manually update the state
-      
+      await ApiService.saveChannelFollowers(followData);
+
+      // Refetch channel data to get updated follow status
+      refetchChannel();
+
     } catch (error: any) {
-      console.error('Error subscribing/unsubscribing:', error);
-      Alert.alert('Error', 'Failed to update subscription');
+      console.error('Error following/unfollowing:', error);
+      Alert.alert('Error', 'Failed to update follow status');
     } finally {
       setIsSubscribing(false);
     }
@@ -353,7 +325,7 @@ const ChannelScreen: React.FC = () => {
       };
 
       // Get up next videos from current content
-      const currentContent = selectedTab === 'home' ? homeContent : videos;
+      const currentContent = videos;
       const upNextVideos = shuffleArray(currentContent.filter((v: Video) => v.id !== video.id))
         .slice(0, 10)
         .map((v: Video) => ({
@@ -382,7 +354,7 @@ const ChannelScreen: React.FC = () => {
       console.error('[ChannelScreen] Error handling video press:', error);
       Alert.alert('Error', 'There was an issue accessing this video. Please try again later.');
     }
-  }, [channelInfo, selectedTab, homeContent, videos, navigation]);
+  }, [channelInfo, selectedTab, videos, navigation]);
 
   const handleImageUpload = async (type: 'profile' | 'cover') => {
     if (!channelInfo || !user) return;
@@ -514,23 +486,57 @@ const ChannelScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
-  const renderHomeItem = ({ item }: { item: Video }) => {
-    if (item.is_shot === 1) {
-      return renderShortItem({ item });
-    } else {
-      return renderVideoItem({ item });
-    }
-  };
+
 
   const renderAboutTab = () => (
     <View style={styles.aboutContainer}>
       <Text style={[styles.aboutTitle, { color: colors.text.primary }]}>
         About {channelInfo?.channelName}
       </Text>
-      
+
+      {/* Channel Description */}
       <Text style={[styles.aboutDescription, { color: colors.text.secondary }]}>
         {channelInfo?.description}
       </Text>
+
+      {/* User Information Section */}
+      {userDataLoading ? (
+        <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 16 }} />
+      ) : userData && (
+        <View style={styles.userInfoSection}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+            Creator Information
+          </Text>
+
+          {userData.name && (
+            <View style={styles.infoRow}>
+              <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>Name:</Text>
+              <Text style={[styles.infoValue, { color: colors.text.primary }]}>{userData.name}</Text>
+            </View>
+          )}
+
+          {userData.address && (
+            <View style={styles.infoRow}>
+              <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>Location:</Text>
+              <Text style={[styles.infoValue, { color: colors.text.primary }]}>{userData.address}</Text>
+            </View>
+          )}
+
+          {userData.country && (
+            <View style={styles.infoRow}>
+              <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>Country:</Text>
+              <Text style={[styles.infoValue, { color: colors.text.primary }]}>{userData.country}</Text>
+            </View>
+          )}
+
+          {userData.bio && (
+            <View style={styles.infoRow}>
+              <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>Bio:</Text>
+              <Text style={[styles.infoValue, { color: colors.text.primary }]}>{userData.bio}</Text>
+            </View>
+          )}
+        </View>
+      )}
 
       <View style={styles.statsGrid}>
         <View style={styles.statItem}>
@@ -539,7 +545,7 @@ const ChannelScreen: React.FC = () => {
             {formatNumber(channelInfo?.totalSubscribers || 0)}
           </Text>
           <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
-            Subscribers
+            Followers
           </Text>
         </View>
         <View style={styles.statItem}>
@@ -743,7 +749,7 @@ const ChannelScreen: React.FC = () => {
                     borderColor: colors.border,
                   }
                 ]}
-                onPress={handleSubscribe}
+                onPress={handleFollow}
                 disabled={isSubscribing}
               >
                 {isSubscribing ? (
@@ -761,7 +767,7 @@ const ChannelScreen: React.FC = () => {
                         { color: channelInfo.isSubscribed ? colors.text.primary : '#FFFFFF', marginLeft: 8 }
                       ]}
                     >
-                      {channelInfo.isSubscribed ? 'Subscribed' : 'Subscribe'}
+                      {channelInfo.isSubscribed ? 'Following' : 'Follow'}
                     </Text>
                   </>
                 )}
@@ -772,22 +778,7 @@ const ChannelScreen: React.FC = () => {
 
         {/* Tab Container */}
         <View style={[styles.tabContainer, { borderBottomColor: colors.border }]}>
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              selectedTab === 'home' && { ...styles.activeTab, borderBottomColor: colors.primary }
-            ]}
-            onPress={() => setSelectedTab('home')}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                { color: selectedTab === 'home' ? colors.primary : colors.text.secondary }
-              ]}
-            >
-              Home
-            </Text>
-          </TouchableOpacity>
+
 
           <TouchableOpacity
             style={[
@@ -836,28 +827,6 @@ const ChannelScreen: React.FC = () => {
         />
 
         {/* Tab Content */}
-        {selectedTab === 'home' && (
-          <View style={styles.tabContent}>
-            {homeLoading ? (
-              <ActivityIndicator size="large" color={colors.primary} style={styles.tabLoading} />
-            ) : homeContent.length > 0 ? (
-              <FlatList
-                data={homeContent}
-                renderItem={renderHomeItem}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-                showsVerticalScrollIndicator={false}
-              />
-            ) : (
-              <View style={styles.emptyState}>
-                <Text style={[styles.emptyStateText, { color: colors.text.secondary }]}>
-                  No content available
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
-
         {selectedTab === 'videos' && (
           <View style={styles.tabContent}>
             {videosLoading ? (
@@ -1472,6 +1441,34 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  userInfoSection: {
+    marginVertical: 16,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    alignItems: 'flex-start',
+  },
+  infoLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    width: 80,
+    marginRight: 8,
+  },
+  infoValue: {
+    fontSize: 14,
+    flex: 1,
+    flexWrap: 'wrap',
   },
 
 });
