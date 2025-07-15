@@ -28,6 +28,38 @@ interface DeleteCommentParams {
   userId: number;
 }
 
+// Deduplicate comments based on their ID to handle duplicate API responses
+const deduplicateComments = (comments: any[]): any[] => {
+  if (!Array.isArray(comments) || comments.length === 0) {
+    return comments;
+  }
+
+  const seenIds = new Map<number, any>();
+  const deduplicatedComments: any[] = [];
+
+  for (const comment of comments) {
+    const commentId = comment.id || comment.comment_id;
+
+    // Only process comments with valid IDs
+    if (commentId && typeof commentId === 'number' && !seenIds.has(commentId)) {
+      seenIds.set(commentId, comment);
+      deduplicatedComments.push(comment);
+    } else if (!commentId) {
+      // Keep comments without IDs (shouldn't happen but safety first)
+      console.warn('[useComments] Comment without valid ID found:', comment);
+      deduplicatedComments.push(comment);
+    }
+  }
+
+  console.log('[useComments] Deduplication stats:', {
+    original: comments.length,
+    deduplicated: deduplicatedComments.length,
+    duplicatesRemoved: comments.length - deduplicatedComments.length,
+  });
+
+  return deduplicatedComments;
+};
+
 // Transform API response to our Comment interface
 const transformComment = (apiComment: any): Comment => ({
   id: apiComment.id || apiComment.comment_id,
@@ -42,7 +74,7 @@ const transformComment = (apiComment: any): Comment => ({
   reply_count: apiComment.reply_count || 0,
   is_liked: Boolean(apiComment.is_liked),
   created_at: apiComment.created_at,
-  parent_id: apiComment.parent_id,
+  parent_id: apiComment.parent_id || apiComment.parent_comment_id || null,
   replies: apiComment.replies ? apiComment.replies.map(transformComment) : undefined,
 });
 
@@ -66,10 +98,18 @@ export const useComments = ({ postId, videoId, userId }: CommentParams) => {
         throw new Error('Either postId or videoId must be provided');
       }
 
-      // Transform the response
-      const comments = Array.isArray(response.data) 
-        ? response.data.map(transformComment)
-        : [];
+      // Transform the response with deduplication for video comments
+      let comments: Comment[] = [];
+      if (Array.isArray(response.data)) {
+        if (videoId) {
+          // Apply deduplication for video comments to handle duplicate API responses
+          const deduplicatedData = deduplicateComments(response.data);
+          comments = deduplicatedData.map(transformComment);
+        } else {
+          // For post comments, use existing logic (no deduplication needed)
+          comments = response.data.map(transformComment);
+        }
+      }
 
       return {
         data: comments,
@@ -130,19 +170,29 @@ export const useAddComment = () => {
         });
       } else if (videoId) {
         // Add video comment
-        response = await ApiService.saveVideoComment(videoId, userId, content);
+        response = await ApiService.saveVideoComment(videoId, userId, content, parentId);
       } else {
         throw new Error('Either postId or videoId must be provided');
+      }
+
+      // Handle response based on whether it's a post or video comment
+      let commentData;
+      if (videoId && response.message === "Comment Added" && Array.isArray(response.data)) {
+        // Video comment response format
+        commentData = response.data[0];
+      } else {
+        // Post comment response format or fallback
+        commentData = response.data;
       }
 
       return {
         ...response,
         newComment: {
-          id: response.data?.id || Date.now(),
+          id: commentData?.id || Date.now(),
           post_id: postId,
           video_id: videoId,
           user_id: userId,
-          user_name: response.data?.user_name || 'You',
+          user_name: commentData?.user_name || 'You',
           content: content,
           comment: content,
           like_count: 0,

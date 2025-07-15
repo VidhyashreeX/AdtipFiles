@@ -1640,8 +1640,18 @@ export default class ApiService {
   /**
    * Save video comment
    */
-  static async saveVideoComment(videoId: number, userId: number, comment: string): Promise<any> {
-    const payload = { videoId, userId, comment };
+  static async saveVideoComment(
+    videoId: number,
+    userId: number,
+    comment: string,
+    parentCommetId: number | null = null
+  ): Promise<any> {
+    const payload = {
+      comment,
+      videoId,
+      createdBy: userId,
+      parentCommetId
+    };
     console.log('[ApiService] Saving video comment:', payload);
     try {
       const response = await this.post('/api/savevideocomment', payload);

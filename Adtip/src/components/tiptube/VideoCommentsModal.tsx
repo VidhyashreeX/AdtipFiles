@@ -35,8 +35,21 @@ const VideoCommentsModal: React.FC<VideoCommentsModalProps> = ({
   const likeCommentMutation = useLikeComment();
   const deleteCommentMutation = useDeleteComment();
 
-  // Flatten all comments from all pages
-  const comments = commentsData?.pages.flatMap(page => page.data) || [];
+  // Flatten all comments from all pages with additional deduplication safety check
+  const comments = React.useMemo(() => {
+    const flattenedComments = commentsData?.pages.flatMap(page => page.data) || [];
+
+    // Additional safety check: deduplicate in case any duplicates slip through pagination
+    const seenIds = new Set<number>();
+    return flattenedComments.filter(comment => {
+      if (seenIds.has(comment.id)) {
+        console.warn('[VideoCommentsModal] Duplicate comment detected and filtered:', comment.id);
+        return false;
+      }
+      seenIds.add(comment.id);
+      return true;
+    });
+  }, [commentsData?.pages]);
 
   // Handle refresh
   const handleRefresh = () => {
