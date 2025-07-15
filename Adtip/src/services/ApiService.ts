@@ -1996,6 +1996,11 @@ export default class ApiService {
     return this.get('/api/subscription-plans');
   }
 
+  // Get subscription plans with GST for Razorpay checkout
+  static async getSubscriptionPlansWithGST(): Promise<any> {
+    return this.get('/api/subscription-plans-with-gst');
+  }
+
   static async createSubscription(plan_id: string, user_id: number): Promise<any> {
     return this.post('/api/subscriptions/create', { plan_id, user_id });
   }
@@ -2023,14 +2028,24 @@ export default class ApiService {
     return this.get('/api/content-premium-plans');
   }
 
-    // ===== SUBSCRIPTION APIS TEST=====
-    static async getSubscriptionPlansTest(): Promise<any> {
-      return this.get('/api/subscription-plans-test');
-    }
-  
-static async createSubscriptionTest(plan_id: string, user_id: number): Promise<any> {
-  return this.post('/api/subscriptions/create-test', { plan_id, user_id });
-}
+  // Get content creator premium plans with GST for Razorpay checkout
+  static async getContentSubscriptionPlansWithGST(): Promise<any> {
+    return this.get('/api/content-premium-plans-with-gst');
+  }
+
+  // ===== SUBSCRIPTION APIS TEST=====
+  static async getSubscriptionPlansTest(): Promise<any> {
+    return this.get('/api/subscription-plans-test');
+  }
+
+  // Get test subscription plans with GST for Razorpay checkout
+  static async getSubscriptionPlansTestWithGST(): Promise<any> {
+    return this.get('/api/subscription-plans-test-with-gst');
+  }
+
+  static async createSubscriptionTest(plan_id: string, user_id: number): Promise<any> {
+    return this.post('/api/subscriptions/create-test', { plan_id, user_id });
+  }
 
   // ===== RAZORPAY INTEGRATION APIS =====
 
