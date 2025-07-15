@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -27,12 +28,14 @@ const LoginPromptModal: React.FC<LoginPromptModalProps> = ({
 }) => {
   const { colors } = useTheme();
   const { exitGuestMode } = useAuth();
+  const navigation = useNavigation();
 
   const handleLogin = async () => {
     try {
       await exitGuestMode();
       onClose();
-      // Navigation will be handled by UltraFastLoader
+      // Navigate directly to LoginScreen
+      navigation.navigate('Login');
     } catch (error) {
       console.error('Failed to exit guest mode:', error);
     }

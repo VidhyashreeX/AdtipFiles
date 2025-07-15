@@ -23,7 +23,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 // Import Lucide React Native icons
-import { PlayCircle, Gamepad2, WifiOff, Share2 } from 'lucide-react-native';
+import { PlayCircle, Gamepad2, WifiOff, Share2, HandCoins, Dices } from 'lucide-react-native';
 import PostWithComments from '../../components/home/PostWithComments';
 
 // Enhanced Contexts & Services
@@ -232,7 +232,7 @@ const ExternalLinkBanner: React.FC<ExternalLinkBannerProps> = ({ isPremium, onUp
               </LinearGradient>
             </View>
             <View style={styles.earnCardIconContainer}>
-              <Gamepad2 size={32} color="#FFFFFF" />
+              <Dices size={32} color="#FFFFFF" />
             </View>
           </View>
         </LinearGradient>
@@ -314,7 +314,7 @@ const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onInstallTo
       id: '3',
       title: 'Install to Earn',
       description: 'Complete tasks to earn rewards',
-      iconName: 'gamepad-2',
+      iconName: 'coins',
       onPress: onInstallToEarn,
       gradientColors: ['#FF6B35', '#FF8E53', '#E55A2B'],
     },

@@ -33,6 +33,9 @@ interface EnhancedShortCardProps {
   insets: any;
   isGuest: boolean;
   onGuestAction: (action: string) => void;
+  onChannelNavigation?: (channelData: { id: string; name: string; avatar?: string }) => void;
+  onComment?: (shortId: string) => void;
+  onFollow?: (channelId: string) => void;
 }
 
 // Optimized Video Player Component
@@ -215,6 +218,9 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
   insets,
   isGuest,
   onGuestAction,
+  onChannelNavigation,
+  onComment,
+  onFollow,
 }) => {
   const [showThumbnail, setShowThumbnail] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
@@ -253,6 +259,43 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
       onLike(item.id, item.channel.id, isLiked);
     }
   }, [item?.id, item?.channel?.id, isLiked, onLike, isGuest, onGuestAction]);
+
+  const handleChannelPress = useCallback(() => {
+    if (isGuest) {
+      onGuestAction('view channels');
+      return;
+    }
+
+    if (onChannelNavigation && item?.channel) {
+      onChannelNavigation({
+        id: item.channel.id,
+        name: item.channel.name,
+        avatar: item.channel.avatar
+      });
+    }
+  }, [isGuest, onGuestAction, onChannelNavigation, item?.channel]);
+
+  const handleComment = useCallback(() => {
+    if (isGuest) {
+      onGuestAction('comment on shorts');
+      return;
+    }
+
+    if (onComment && item?.id) {
+      onComment(item.id);
+    }
+  }, [isGuest, onGuestAction, onComment, item?.id]);
+
+  const handleFollow = useCallback(() => {
+    if (isGuest) {
+      onGuestAction('follow users');
+      return;
+    }
+
+    if (onFollow && item?.channel?.id) {
+      onFollow(item.channel.id);
+    }
+  }, [isGuest, onGuestAction, onFollow, item?.channel?.id]);
 
   return (
     <View style={styles.shortCardContainer}>
@@ -317,28 +360,31 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
           <View style={styles.leftContent}>
             {/* Channel info row */}
             <View style={styles.channelInfo}>
-              <Image
-                source={{ uri: item.channel.avatar }}
-                style={styles.channelAvatar}
-              />
-              <View style={styles.channelDetails}>
+              <TouchableOpacity
+                onPress={handleChannelPress}
+                activeOpacity={0.8}
+              >
+                <Image
+                  source={{ uri: item.channel.avatar }}
+                  style={styles.channelAvatar}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.channelDetails}
+                onPress={handleChannelPress}
+                activeOpacity={0.8}
+              >
                 <Text style={styles.channelName} numberOfLines={1}>
                   {item.channel.name}
                 </Text>
                 <Text style={styles.musicName} numberOfLines={1}>
                   ♪ {item.musicName || 'Original Sound'}
                 </Text>
-              </View>
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.followButton}
                 activeOpacity={0.8}
-                onPress={() => {
-                  if (isGuest) {
-                    onGuestAction('follow users');
-                    return;
-                  }
-                  // TODO: Add follow functionality for authenticated users
-                }}
+                onPress={handleFollow}
               >
                 <Text style={styles.followText}>Follow</Text>
               </TouchableOpacity>
@@ -362,13 +408,7 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
             <TouchableOpacity
               style={styles.actionButton}
               activeOpacity={0.7}
-              onPress={() => {
-                if (isGuest) {
-                  onGuestAction('comment on shorts');
-                  return;
-                }
-                // TODO: Add comment functionality for authenticated users
-              }}
+              onPress={handleComment}
             >
               <View style={styles.actionIconContainer}>
                 <Icon name="message-circle" size={24} color="#FFF" />

@@ -53,6 +53,7 @@ import VideoCommentsModal from '../../components/tiptube/VideoCommentsModal';
 import LoginPromptModal from '../../components/modals/LoginPromptModal';
 import PubScaleCreditAlert from '../../components/common/PubScaleCreditAlert';
 import useSimpleRewardedAd from '../../googleads/SimpleRewardedAd';
+import AnalyticsPremiumAlert from '../../components/alerts/AnalyticsPremiumAlertNew';
 
 // Get screen dimensions and create constants
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -207,6 +208,9 @@ const TipTubeScreen = () => {
   // PubScale state
   const [offerwallLoading, setOfferwallLoading] = useState(false);
   const [showPubScaleCreditAlert, setShowPubScaleCreditAlert] = useState(false);
+
+  // Analytics premium alert state
+  const [showAnalyticsPremiumAlert, setShowAnalyticsPremiumAlert] = useState(false);
 
   // Content Creator Premium State - Using shared context
   const { 
@@ -546,17 +550,33 @@ const TipTubeScreen = () => {
       return;
     }
 
+    // Check if user has content creator premium
+    if (!isContentCreatorPremium) {
+      setShowAnalyticsPremiumAlert(true);
+      return;
+    }
+
     if (userChannelId) {
       navigation.navigate('Analytics', { channelId: userChannelId });
     } else {
       // If no channel found, redirect to create channel
       navigation.navigate('CreateChannel');
     }
-  }, [userChannelId, navigation, isGuest, showLoginPromptForAction]);
+  }, [userChannelId, navigation, isGuest, showLoginPromptForAction, isContentCreatorPremium]);
 
   const handleNavigateToTipShorts = useCallback(() => {
     navigation.navigate('TipShorts');
   }, [navigation]);
+
+  // Handle analytics premium alert actions
+  const handleAnalyticsPremiumUpgrade = useCallback(() => {
+    setShowAnalyticsPremiumAlert(false);
+    navigation.navigate('ContentCreatorPremium');
+  }, [navigation]);
+
+  const handleAnalyticsPremiumGoBack = useCallback(() => {
+    setShowAnalyticsPremiumAlert(false);
+  }, []);
 
   // PubScale handlers
   const handleInstallToEarn = useCallback(async () => {
@@ -1157,6 +1177,14 @@ const TipTubeScreen = () => {
           onClose={() => setShowPubScaleCreditAlert(false)}
           onViewWallet={handleViewWallet}
           onViewHistory={handleViewHistory}
+        />
+
+        {/* Analytics Premium Alert */}
+        <AnalyticsPremiumAlert
+          visible={showAnalyticsPremiumAlert}
+          onClose={() => setShowAnalyticsPremiumAlert(false)}
+          onUpgrade={handleAnalyticsPremiumUpgrade}
+          onGoBack={handleAnalyticsPremiumGoBack}
         />
 
         {/* Reward Popup */}
@@ -1772,7 +1800,7 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
   earnCardRewardText: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: '#000000',
   },
   earnCardIconContainer: {
     width: 48,

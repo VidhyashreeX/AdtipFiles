@@ -579,6 +579,54 @@ const TipShortsEnhanced = () => {
     }
   }, [user?.id, isGuest, likeMutation, showLoginPromptForAction]);
 
+  // Handle channel navigation
+  const handleChannelNavigation = useCallback((channelData: { id: string; name: string; avatar?: string }) => {
+    if (isGuest) {
+      showLoginPromptForAction('view channels');
+      return;
+    }
+    navigation.navigate('Channel', {
+      channelId: channelData.id,
+      channelData: {
+        channelId: channelData.id,
+        channelName: channelData.name,
+        profileImage: channelData.avatar,
+        isVerified: false
+      }
+    });
+  }, [isGuest, navigation, showLoginPromptForAction]);
+
+  // Handle comment functionality
+  const handleCommentShort = useCallback((shortId: string) => {
+    if (isGuest) {
+      showLoginPromptForAction('comment on shorts');
+      return;
+    }
+    // TODO: Implement comment modal or navigation to comments screen
+    console.log('Comment functionality for short:', shortId);
+  }, [isGuest, showLoginPromptForAction]);
+
+  // Handle follow functionality
+  const handleFollowChannel = useCallback(async (channelId: string) => {
+    if (isGuest) {
+      showLoginPromptForAction('follow users');
+      return;
+    }
+    if (!user?.id) return;
+
+    try {
+      // Call follow API
+      const response = await ApiService.saveChannelFollowers({
+        channelId,
+        userId: user.id.toString(),
+        follow: 1 // 1 to follow, 0 to unfollow
+      });
+      console.log('Follow response:', response);
+    } catch (error) {
+      console.error('Error following channel:', error);
+    }
+  }, [user?.id, isGuest, showLoginPromptForAction]);
+
   // Refresh handler
   const handleRefresh = useCallback(() => {
     setActiveIndex(0);
@@ -911,6 +959,9 @@ const TipShortsEnhanced = () => {
             insets={insets}
             isGuest={isGuest}
             onGuestAction={showLoginPromptForAction}
+            onChannelNavigation={handleChannelNavigation}
+            onComment={handleCommentShort}
+            onFollow={handleFollowChannel}
           />
         )}
         pagingEnabled
