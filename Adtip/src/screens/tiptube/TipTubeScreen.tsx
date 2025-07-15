@@ -1179,7 +1179,7 @@ const TipTubeScreen = () => {
           onViewHistory={handleViewHistory}
         />
 
-        {/* Analytics Premium Alert */}
+        {/* Analytics Premium Alert - Positioned as overlay */}
         <AnalyticsPremiumAlert
           visible={showAnalyticsPremiumAlert}
           onClose={() => setShowAnalyticsPremiumAlert(false)}
