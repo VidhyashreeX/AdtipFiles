@@ -30,7 +30,6 @@ const ContentCreatorSubscriptionScreen = () => {
   const navigation = useNavigation<any>();
 
   const [plans, setPlans] = useState<any[]>([]);
-  const [plansWithGST, setPlansWithGST] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
@@ -38,21 +37,17 @@ const ContentCreatorSubscriptionScreen = () => {
   useEffect(() => {
     const fetchPlans = async () => {
       try {
-        // Fetch both regular plans (for UI display) and GST plans (for payment)
-        const [regularResponse, gstResponse] = await Promise.all([
-          ApiService.getContentSubscriptionPlans(),
-          ApiService.getContentSubscriptionPlansWithGST()
-        ]);
+        // Fetch plans (amounts already include GST)
+        const plansResponse = await ApiService.getContentSubscriptionPlans();
 
-        if (regularResponse.status && gstResponse.status) {
-          setPlans(regularResponse.plans);
-          setPlansWithGST(gstResponse.plans);
+        if (plansResponse.status) {
+          setPlans(plansResponse.plans);
           
           // Pre-select the middle plan
-          if (regularResponse.plans.length > 1) {
-            setSelectedPlanId(regularResponse.plans[1].id);
-          } else if (regularResponse.plans.length > 0) {
-            setSelectedPlanId(regularResponse.plans[0].id);
+          if (plansResponse.plans.length > 1) {
+            setSelectedPlanId(plansResponse.plans[1].id);
+          } else if (plansResponse.plans.length > 0) {
+            setSelectedPlanId(plansResponse.plans[0].id);
           }
         } else {
           Alert.alert('Error', 'Could not fetch subscription plans.');
@@ -142,7 +137,6 @@ const ContentCreatorSubscriptionScreen = () => {
 
   const renderPlan = (plan: any, index: number) => {
     const isSelected = selectedPlanId === plan.id;
-    const gstPlan = plansWithGST.find(gstPlan => gstPlan.id === plan.id);
     
     return (
       <TouchableOpacity
@@ -201,17 +195,15 @@ const ContentCreatorSubscriptionScreen = () => {
           </Text>
         </View>
 
-        {/* Show GST breakdown if available */}
-        {gstPlan && (
-          <View style={styles.gstBreakdown}>
-            <Text style={[styles.gstText, { color: isSelected ? '#FFFFFF' : colors.text.secondary }]}>
-              Base: ₹{gstPlan.amount} + GST (18%): ₹{gstPlan.gst_amount / 100}
-            </Text>
-            <Text style={[styles.totalText, { color: isSelected ? '#FFFFFF' : colors.primary }]}>
-              Total: ₹{gstPlan.amount_with_gst / 100}
-            </Text>
-          </View>
-        )}
+        {/* Show GST breakdown */}
+        <View style={styles.gstBreakdown}>
+          <Text style={[styles.gstText, { color: isSelected ? '#FFFFFF' : colors.text.secondary }]}>
+            Base: ₹{(plan.amount / 1.18).toFixed(0)} + GST (18%): ₹{(plan.amount - (plan.amount / 1.18)).toFixed(0)}
+          </Text>
+          <Text style={[styles.totalText, { color: isSelected ? '#FFFFFF' : colors.primary }]}>
+            Total: ₹{plan.amount}
+          </Text>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -231,7 +223,6 @@ const ContentCreatorSubscriptionScreen = () => {
   }
 
   const selectedPlan = plans.find(plan => plan.id === selectedPlanId);
-  const selectedGstPlan = plansWithGST.find(plan => plan.id === selectedPlanId);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -263,19 +254,19 @@ const ContentCreatorSubscriptionScreen = () => {
             <Text style={[styles.selectedPlanPrice, { color: colors.primary }]}>
               ₹{selectedPlan.amount} / {selectedPlan.billing_cycle}
             </Text>
-            {selectedGstPlan && (
+            {selectedPlan && (
               <View style={styles.selectedPlanGST}>
                 <Text style={[styles.gstBreakdownText, { color: colors.text.secondary }]}>
                   Price Breakdown:
                 </Text>
                 <Text style={[styles.gstBreakdownText, { color: colors.text.secondary }]}>
-                  Base Amount: ₹{selectedGstPlan.amount}
+                  Base Amount: ₹{(selectedPlan.amount / 1.18).toFixed(0)}
                 </Text>
                 <Text style={[styles.gstBreakdownText, { color: colors.text.secondary }]}>
-                  GST (18%): ₹{selectedGstPlan.gst_amount / 100}
+                  GST (18%): ₹{(selectedPlan.amount - (selectedPlan.amount / 1.18)).toFixed(0)}
                 </Text>
                 <Text style={[styles.gstTotalText, { color: colors.primary }]}>
-                  Total Amount: ₹{selectedGstPlan.amount_with_gst / 100}
+                  Total Amount: ₹{selectedPlan.amount}
                 </Text>
               </View>
             )}
