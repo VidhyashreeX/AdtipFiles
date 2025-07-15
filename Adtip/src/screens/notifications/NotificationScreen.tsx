@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import { IndianRupee } from 'lucide-react-native';
 import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 import {useNotifications, useUnreadNotificationCount, useMarkNotificationAsRead, useMarkAllNotificationsAsRead} from '../../hooks/useQueries';
@@ -45,7 +46,7 @@ const NotificationScreen: React.FC = () => {
       case 'follow':
         return 'user-plus';
       case 'reward':
-        return 'dollar-sign';
+        return 'indian-rupee';
       case 'system':
         return 'bell';
       default:

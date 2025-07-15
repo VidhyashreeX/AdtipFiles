@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
+import { IndianRupee } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 import LinearGradient from 'react-native-linear-gradient';
@@ -92,7 +93,7 @@ const WithdrawalAmountScreen: React.FC = () => {
         <View style={[styles.card, { backgroundColor: isDarkMode ? colors.card : '#FFFFFF' }]}>
           <View style={styles.cardHeader}>
             <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
-              <Icon name="dollar-sign" size={32} color={colors.primary} />
+              <IndianRupee size={32} color={colors.primary} />
             </View>
             <Text style={[styles.cardTitle, { color: colors.text.primary }]}>
               Withdraw Money

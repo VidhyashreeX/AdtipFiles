@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import {useNavigation, useRoute} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
+import { IndianRupee } from 'lucide-react-native';
 import Video from 'react-native-video';
 import Orientation from 'react-native-orientation-locker';
 //import { PubScale } from 'pubscale-sdk';
@@ -597,7 +598,7 @@ const VideoScreen = () => {
 
               {rewardShown && (
                 <View style={styles.rewardContainer}>
-                  <Icon name="dollar-sign" size={16} color={colors.success} />
+                  <IndianRupee size={16} color={colors.success} />
                   <Text style={[styles.rewardText, {color: colors.success}]}>
                     {rewardShown ? 'Coins earned' : ''}
                   </Text>

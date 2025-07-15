@@ -25,6 +25,7 @@ import type { RootStackParamList } from '../../types/navigation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../contexts/ThemeContext';
 import Icon from 'react-native-vector-icons/Feather';
+import { IndianRupee } from 'lucide-react-native';
 import Header from '../../components/common/Header';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import ApiService from '../../services/ApiService';
@@ -619,7 +620,7 @@ const CreateCampaignScreen: React.FC = () => {
                 // Reset form for another campaign
                 setTitle('');
                 setContent('');
-                setSelectedMediaUri(null);
+                setSelectedMediaUri('');
                 setMediaUrl('');
                 setUploadProgress(0);
               },
@@ -886,130 +887,7 @@ const CreateCampaignScreen: React.FC = () => {
           )}
         </View>
 
-        {/* Campaign Schedule Section */}
-        <View style={[styles.sectionCard, { backgroundColor: isDarkMode ? colors.card : '#FFFFFF' }]}>
-          <View style={styles.sectionHeader}>
-            <Icon name="calendar" size={20} color="#10B981" />
-            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Campaign Schedule</Text>
-          </View>
-          
-          {/* Start Date */}
-          <Text style={[styles.fieldLabel, { color: colors.text.secondary }]}>Start Date</Text>
-          <TouchableOpacity
-            style={[styles.inputContainer, { borderColor: isDarkMode ? colors.border : '#E5E7EB' }]}
-            onPress={showDatePickerModal}
-            disabled={isLoading}
-          >
-            <View style={styles.dateInputContent}>
-              <Text style={[styles.dateText, { color: colors.text.primary }]}>
-                {startDate}
-              </Text>
-              <Icon name="calendar" size={20} color={colors.text.tertiary} />
-            </View>
-          </TouchableOpacity>
 
-          {/* Date Picker Modal for iOS */}
-          {Platform.OS === 'ios' && showDatePicker && (
-            <Modal
-              transparent={true}
-              animationType="fade"
-              visible={showDatePicker}
-              onRequestClose={cancelDateSelection}
-            >
-              <View style={styles.modalOverlay}>
-                <View style={[styles.datePickerModal, { backgroundColor: isDarkMode ? colors.card : '#FFFFFF' }]}>
-                  <View style={[styles.datePickerHeader, { borderBottomColor: isDarkMode ? colors.border : '#E5E7EB' }]}>
-                    <Text style={[styles.datePickerTitle, { color: colors.text.primary }]}>
-                      Select Start Date
-                    </Text>
-                  </View>
-                  
-                  <DateTimePicker
-                    value={tempStartDate}
-                    mode="date"
-                    display="spinner"
-                    onChange={handleDateChange}
-                    minimumDate={new Date()}
-                    style={styles.datePicker}
-                    textColor={colors.text.primary}
-                  />
-                  
-                  <View style={styles.datePickerButtons}>
-                    <TouchableOpacity
-                      style={[styles.datePickerButton, styles.cancelButton, { borderColor: colors.border }]}
-                      onPress={cancelDateSelection}
-                    >
-                      <Text style={[styles.datePickerButtonText, { color: colors.text.secondary }]}>
-                        Cancel
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity
-                      style={[styles.datePickerButton, styles.confirmButton, { backgroundColor: colors.primary }]}
-                      onPress={confirmDateSelection}
-                    >
-                      <Text style={[styles.datePickerButtonText, { color: isDarkMode ? '#000' : '#FFFFFF' }]}>
-                        OK
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            </Modal>
-          )}
-
-          {/* Android Date Picker */}
-          {Platform.OS === 'android' && showDatePicker && (
-            <DateTimePicker
-              value={new Date(startDate)}
-              mode="date"
-              display="default"
-              onChange={handleDateChange}
-              minimumDate={new Date()}
-            />
-          )}
-
-          {/* Duration Days - Proper Slider */}
-          <Text style={[styles.fieldLabel, { color: colors.text.secondary }]}>Duration: {durationDays} days</Text>
-          <View style={styles.sliderContainer}>
-            <Text style={[styles.sliderLabel, { color: colors.text.tertiary }]}>1 day</Text>
-            <View style={styles.sliderWrapper}>
-              <View style={[styles.sliderTrack, { backgroundColor: isDarkMode ? '#374151' : '#E5E7EB' }]} />
-              <View 
-                style={[
-                  styles.sliderFill, 
-                  { 
-                    width: `${(durationDays / 30) * 100}%`,
-                    backgroundColor: colors.primary
-                  }
-                ]} 
-              />
-              <View
-                style={[
-                  styles.sliderThumb,
-                  {
-                    left: `${(durationDays / 30) * 100}%`,
-                    backgroundColor: '#FFFFFF',
-                    borderColor: colors.primary,
-                    transform: [{ translateX: -10 }]
-                  }
-                ]}
-                {...durationPanResponder.panHandlers}
-              />
-            </View>
-            <Text style={[styles.sliderLabel, { color: colors.text.tertiary }]}>30 days</Text>
-          </View>
-
-          {/* End Date (Read-only) */}
-          <Text style={[styles.fieldLabel, { color: colors.text.secondary }]}>End Date (Calculated)</Text>
-          <View style={[styles.inputContainer, { borderColor: isDarkMode ? colors.border : '#E5E7EB', backgroundColor: isDarkMode ? colors.gray[800] : '#F9FAFB' }]}>
-            <TextInput
-              style={[styles.input, { color: colors.text.secondary }]}
-              value={endDate}
-              editable={false}
-            />
-          </View>
-        </View>
 
         {/* Audience Targeting Section */}
         <View style={[styles.sectionCard, { backgroundColor: isDarkMode ? colors.card : '#FFFFFF' }]}>
@@ -1230,32 +1108,149 @@ const CreateCampaignScreen: React.FC = () => {
           </Modal>
         </View>
 
-        {/* Budget Configuration Section */}
+        {/* Campaign Budget & Schedule Section */}
         <View style={[styles.sectionCard, { backgroundColor: isDarkMode ? colors.card : '#FFFFFF' }]}>
           <View style={styles.sectionHeader}>
-            <Icon name="dollar-sign" size={20} color="#F59E0B" />
-            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Budget Configuration</Text>
+            <IndianRupee size={20} color="#F59E0B" />
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Campaign Budget & Schedule</Text>
           </View>
-          
+
+          {/* Start Date */}
+          <Text style={[styles.fieldLabel, { color: colors.text.secondary }]}>Start Date</Text>
+          <TouchableOpacity
+            style={[styles.inputContainer, { borderColor: isDarkMode ? colors.border : '#E5E7EB' }]}
+            onPress={showDatePickerModal}
+            disabled={isLoading}
+          >
+            <View style={styles.dateInputContent}>
+              <Text style={[styles.dateText, { color: colors.text.primary }]}>
+                {startDate}
+              </Text>
+              <Icon name="calendar" size={20} color={colors.text.tertiary} />
+            </View>
+          </TouchableOpacity>
+
+          {/* Date Picker Modal for iOS */}
+          {Platform.OS === 'ios' && showDatePicker && (
+            <Modal
+              transparent={true}
+              animationType="fade"
+              visible={showDatePicker}
+              onRequestClose={cancelDateSelection}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={[styles.datePickerModal, { backgroundColor: isDarkMode ? colors.card : '#FFFFFF' }]}>
+                  <View style={[styles.datePickerHeader, { borderBottomColor: isDarkMode ? colors.border : '#E5E7EB' }]}>
+                    <Text style={[styles.datePickerTitle, { color: colors.text.primary }]}>
+                      Select Start Date
+                    </Text>
+                  </View>
+
+                  <DateTimePicker
+                    value={tempStartDate}
+                    mode="date"
+                    display="spinner"
+                    onChange={handleDateChange}
+                    minimumDate={new Date()}
+                    style={styles.datePicker}
+                    textColor={colors.text.primary}
+                  />
+
+                  <View style={styles.datePickerButtons}>
+                    <TouchableOpacity
+                      style={[styles.datePickerButton, styles.cancelButton, { borderColor: colors.border }]}
+                      onPress={cancelDateSelection}
+                    >
+                      <Text style={[styles.datePickerButtonText, { color: colors.text.secondary }]}>
+                        Cancel
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.datePickerButton, styles.confirmButton, { backgroundColor: colors.primary }]}
+                      onPress={confirmDateSelection}
+                    >
+                      <Text style={[styles.datePickerButtonText, { color: isDarkMode ? '#000' : '#FFFFFF' }]}>
+                        OK
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </Modal>
+          )}
+
+          {/* Android Date Picker */}
+          {Platform.OS === 'android' && showDatePicker && (
+            <DateTimePicker
+              value={new Date(startDate)}
+              mode="date"
+              display="default"
+              onChange={handleDateChange}
+              minimumDate={new Date()}
+            />
+          )}
+
+          {/* Duration Days - Proper Slider */}
+          <Text style={[styles.fieldLabel, { color: colors.text.secondary }]}>Duration: {durationDays} days</Text>
+          <View style={styles.sliderContainer}>
+            <Text style={[styles.sliderLabel, { color: colors.text.tertiary }]}>1 day</Text>
+            <View style={styles.sliderWrapper}>
+              <View style={[styles.sliderTrack, { backgroundColor: isDarkMode ? '#374151' : '#E5E7EB' }]} />
+              <View
+                style={[
+                  styles.sliderFill,
+                  {
+                    width: `${(durationDays / 30) * 100}%`,
+                    backgroundColor: colors.primary
+                  }
+                ]}
+              />
+              <View
+                style={[
+                  styles.sliderThumb,
+                  {
+                    left: `${(durationDays / 30) * 100}%`,
+                    backgroundColor: '#FFFFFF',
+                    borderColor: colors.primary,
+                    transform: [{ translateX: -10 }]
+                  }
+                ]}
+                {...durationPanResponder.panHandlers}
+              />
+            </View>
+            <Text style={[styles.sliderLabel, { color: colors.text.tertiary }]}>30 days</Text>
+          </View>
+
+          {/* End Date (Read-only) */}
+          <Text style={[styles.fieldLabel, { color: colors.text.secondary }]}>End Date (Calculated)</Text>
+          <View style={[styles.inputContainer, { borderColor: isDarkMode ? colors.border : '#E5E7EB', backgroundColor: isDarkMode ? colors.gray[800] : '#F9FAFB' }]}>
+            <TextInput
+              style={[styles.input, { color: colors.text.secondary }]}
+              value={endDate}
+              editable={false}
+            />
+          </View>
+
           {/* Pay Per View */}
           <Text style={[styles.fieldLabel, { color: colors.text.secondary }]}>Pay Per View: ₹{payPerView.toFixed(1)}</Text>
           <View style={styles.sliderContainer}>
-            <Text style={styles.sliderLabel}>₹0.5</Text>
+            <Text style={[styles.sliderLabel, { color: colors.text.tertiary }]}>₹0.5</Text>
             <View style={styles.sliderWrapper}>
               <View style={[styles.sliderTrack, { backgroundColor: isDarkMode ? colors.gray[700] : '#E5E7EB' }]} />
-              <View 
+              <View
                 style={[
-                  styles.sliderFill, 
-                  { 
+                  styles.sliderFill,
+                  {
                     backgroundColor: colors.primary,
                     width: `${((payPerView - 0.5) / 4.5) * 100}%`
                   }
-                ]} 
+                ]}
               />
-              <View 
+              <View
                 style={[
                   styles.sliderThumb,
-                  { 
+                  {
                     left: `${((payPerView - 0.5) / 4.5) * 100}%`,
                     marginLeft: -10,
                     borderColor: colors.primary,
@@ -1265,7 +1260,7 @@ const CreateCampaignScreen: React.FC = () => {
                 {...payPerViewPanResponder.panHandlers}
               />
             </View>
-            <Text style={styles.sliderLabel}>₹5.0</Text>
+            <Text style={[styles.sliderLabel, { color: colors.text.tertiary }]}>₹5.0</Text>
           </View>
 
           {/* Reach Goal */}
@@ -1285,13 +1280,13 @@ const CreateCampaignScreen: React.FC = () => {
             />
           </View>
 
-          {/* Budget Breakdown */}
+          {/* Live Budget Calculation */}
           <View style={[styles.budgetBreakdown, { backgroundColor: isDarkMode ? colors.gray[800] : '#F9FAFB' }]}>
-            <Text style={[styles.fieldLabel, { color: colors.text.secondary, marginBottom: 12 }]}>Budget Breakdown</Text>
-            
+            <Text style={[styles.fieldLabel, { color: colors.text.secondary, marginBottom: 12 }]}>Live Budget Calculation</Text>
+
             <View style={styles.budgetBreakdownRow}>
               <Text style={[styles.budgetBreakdownLabel, { color: colors.text.secondary }]}>
-                Pay Per View × Reach Goal × Days
+                ₹{payPerView.toFixed(1)} × {reachGoal.toLocaleString()} people × {durationDays} days
               </Text>
               <Text style={[styles.budgetBreakdownValue, { color: colors.text.primary }]}>
                 ₹{(payPerView * reachGoal * durationDays).toFixed(2)}
@@ -1318,10 +1313,10 @@ const CreateCampaignScreen: React.FC = () => {
 
             <View style={styles.budgetBreakdownRow}>
               <Text style={[styles.budgetBreakdownLabel, { color: colors.text.secondary, fontSize: 12 }]}>
-                Daily Average
+                Daily Average: ₹{(totalPay / durationDays).toFixed(2)}/day
               </Text>
               <Text style={[styles.budgetBreakdownValue, { color: colors.text.secondary, fontSize: 12 }]}>
-                ₹{(totalPay / durationDays).toFixed(2)}/day
+                Per Person: ₹{(totalPay / reachGoal).toFixed(2)}
               </Text>
             </View>
           </View>

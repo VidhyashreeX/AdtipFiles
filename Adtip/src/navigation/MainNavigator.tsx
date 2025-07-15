@@ -40,6 +40,8 @@ import SearchScreen from '../screens/search/SearchScreen';
 import NotificationScreen from '../screens/notifications/NotificationScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import EarningsScreen from '../screens/earnings/EarningsScreen';
+import EarnMoneyUserScreen from '../screens/earnings/EarnMoneyUserScreen';
+import EarnMoneyCreatorScreen from '../screens/earnings/EarnMoneyCreatorScreen';
 import ReferralScreen from '../screens/referral/ReferralScreen';
 import ChooseGameScreen from '../screens/playtoEarn/ChooseGamesScreen';
 import LudoGameScreen from '../screens/playtoEarn/LudoGameScreen';
@@ -127,6 +129,8 @@ const EnhancedSearchScreen = withWalletBalance(SearchScreen);
 const EnhancedNotificationScreen = withWalletBalance(NotificationScreen);
 const EnhancedSettingsScreen = withWalletBalance(SettingsScreen);
 const EnhancedEarningsScreen = withWalletBalance(EarningsScreen);
+const EnhancedEarnMoneyUserScreen = withWalletBalance(EarnMoneyUserScreen);
+const EnhancedEarnMoneyCreatorScreen = withWalletBalance(EarnMoneyCreatorScreen);
 const EnhancedReferralScreen = withWalletBalance(ReferralScreen);
 const EnhancedPlayToEarnScreen = withWalletBalance(ChooseGameScreen);
 const EnhancedLudoGameScreen = withWalletBalance(LudoGameScreen);
@@ -508,6 +512,8 @@ const MainNavigator = () => {
       <Stack.Screen name="Settings" component={EnhancedSettingsScreen} />
       <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={standardFastTransitionConfig} />
       <Stack.Screen name="Earnings" component={EnhancedEarningsScreen} />
+      <Stack.Screen name="EarnMoneyUser" component={EnhancedEarnMoneyUserScreen} />
+      <Stack.Screen name="EarnMoneyCreator" component={EnhancedEarnMoneyCreatorScreen} />
       <Stack.Screen name="Referral" component={EnhancedReferralScreen} />
       <Stack.Screen name="WatchToEarn" component={EnhancedWatchToEarnScreen} />
       <Stack.Screen name="AdPassbook" component={EnhancedAdPassbookScreen} />

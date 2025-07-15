@@ -13,6 +13,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import Icon from 'react-native-vector-icons/Feather';
+import { IndianRupee } from 'lucide-react-native';
 import Header from '../../components/common/Header';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import LinearGradient from 'react-native-linear-gradient';
@@ -167,16 +168,20 @@ const AdPassbookScreen: React.FC = () => {
   };
 
   const renderStatCard = (title: string, value: string, color: string, iconName: string) => (
-    <View 
+    <View
       style={[
-        styles.statCard, 
-        { 
+        styles.statCard,
+        {
           borderLeftColor: color,
           backgroundColor: isDarkMode ? colors.card : '#fff'
         }
       ]}
     >
-      <Icon name={iconName} size={20} color={color} style={styles.statIcon} />
+      {iconName === 'indian-rupee' ? (
+        <IndianRupee size={20} color={color} style={styles.statIcon} />
+      ) : (
+        <Icon name={iconName} size={20} color={color} style={styles.statIcon} />
+      )}
       <Text style={[styles.statValue, { color: colors.text.primary }]}>{value}</Text>
       <Text style={[styles.statTitle, { color: colors.text.secondary }]}>{title}</Text>
     </View>
@@ -214,7 +219,7 @@ const AdPassbookScreen: React.FC = () => {
           {renderStatCard('Reach', campaign.reach, '#5467FF', 'users')}
           {renderStatCard('Clicks', campaign.clicks, '#10B981', 'mouse-pointer')}
           {renderStatCard('CTR', campaign.ctr, '#8B5CF6', 'target')}
-          {renderStatCard('Spent', `$${campaign.spent}`, '#F59E0B', 'dollar-sign')}
+          {renderStatCard('Spent', `₹${campaign.spent}`, '#F59E0B', 'indian-rupee')}
         </View>
         
         <View style={styles.actionsRow}>
@@ -244,18 +249,18 @@ const AdPassbookScreen: React.FC = () => {
         
         <View style={styles.budgetSection}>
           <View style={styles.sectionHeader}>
-            <Icon name="dollar-sign" size={16} color={colors.text.secondary} />
+            <IndianRupee size={16} color={colors.text.secondary} />
             <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Budget & Spend</Text>
           </View>
           
           <View style={styles.budgetRow}>
             <Text style={[styles.budgetLabel, { color: colors.text.secondary }]}>Budget:</Text>
-            <Text style={[styles.budgetValue, { color: colors.text.primary }]}>${campaign.budget}</Text>
+            <Text style={[styles.budgetValue, { color: colors.text.primary }]}>₹{campaign.budget}</Text>
           </View>
           
           <View style={styles.budgetRow}>
             <Text style={[styles.budgetLabel, { color: colors.text.secondary }]}>Spent:</Text>
-            <Text style={[styles.budgetValue, { color: colors.text.primary }]}>${campaign.spent}</Text>
+            <Text style={[styles.budgetValue, { color: colors.text.primary }]}>₹{campaign.spent}</Text>
           </View>
           
           <View style={[styles.progressBarContainer, { backgroundColor: isDarkMode ? '#374151' : '#E5E7EB' }]}>
@@ -464,7 +469,7 @@ const AdPassbookScreen: React.FC = () => {
                 {renderStatCard('Total', stats.total.toString(), '#5467FF', 'bar-chart-2')}
                 {renderStatCard('Active', stats.active.toString(), '#10B981', 'activity')}
                 {renderStatCard('Reach', stats.reach, '#8B5CF6', 'users')}
-                {renderStatCard('Spent', stats.spent, '#F59E0B', 'dollar-sign')}
+                {renderStatCard('Spent', stats.spent, '#F59E0B', 'indian-rupee')}
               </View>
               
               <FlatList

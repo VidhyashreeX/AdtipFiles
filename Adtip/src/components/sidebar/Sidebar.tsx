@@ -12,6 +12,7 @@ import {
   // StatusBar, // No longer directly used for padding logic here
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import { IndianRupee } from 'lucide-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -101,7 +102,11 @@ const AnimatedMenuItem: React.FC<{
           styles.iconContainer,
           { backgroundColor: isActive ? colors.primary : 'transparent', width: sizes.menuIconSize * 1.8, height: sizes.menuIconSize * 1.8 }
         ]}>
-          <Icon name={item.icon as any} size={sizes.menuIconSize} color={isActive ? (isDarkMode ? colors.text.primary : '#FFFFFF') : colors.text.primary} />
+          {item.icon === 'indian-rupee' ? (
+            <IndianRupee size={sizes.menuIconSize} color={isActive ? (isDarkMode ? colors.text.primary : '#FFFFFF') : colors.text.primary} />
+          ) : (
+            <Icon name={item.icon as any} size={sizes.menuIconSize} color={isActive ? (isDarkMode ? colors.text.primary : '#FFFFFF') : colors.text.primary} />
+          )}
         </View>
         <Text style={[
           styles.menuItemText,
@@ -161,7 +166,8 @@ const Sidebar: React.FC = () => {
       'CreateChannel': 'TabHome', 'Video': 'TabHome', 'VideoPreview': 'TabHome',
       'Shorts': 'TipShorts', 'Channel': 'Profile', 'Analytics': 'Profile',
       'Packages': 'Wallet', 'ChoosePackages': 'Wallet', 'Checkout': 'Wallet',
-      'TrackOrder': 'Wallet', 'Earnings': 'Earnings', 'SelectCategory': 'TabHome',
+      'TrackOrder': 'Wallet', 'Earnings': 'Earnings', 'EarnMoneyUser': 'EarnMoneyUser',
+      'EarnMoneyCreator': 'EarnMoneyCreator', 'SelectCategory': 'TabHome',
       'TipTubeUpload': 'TabHome', 'TipShortsUpload': 'TipShorts', 'PromotePost': 'TabHome',
       'PlayToEarn': 'PlayToEarn', 'WatchToEarn': 'WatchToEarn', 'AdPassbook': 'AdPassbook',
     };
@@ -267,10 +273,12 @@ const Sidebar: React.FC = () => {
     {icon: 'film', label: 'Watch to Earn', screen: 'TipTube'},
     {icon: 'book-open', label: 'My Ad Passbook', screen: 'AdPassbook'},
     {icon: 'video', label: 'Tip Shorts', screen: 'TipShorts'},
+    {icon: 'trending-up', label: 'Earn Money as a User', screen: 'EarnMoneyUser'},
+    {icon: 'star', label: 'Earn Money as a Content Creator', screen: 'EarnMoneyCreator'},
     {icon: 'award', label: 'Premium Status', screen: 'PremiumUser'},
     {icon: 'award', label: 'Content Creator Premium Status', screen: 'ContentCreatorPremium'},
     {icon: 'settings', label: 'Settings', screen: 'Settings'},
-    {icon: 'dollar-sign', label: 'My Earnings', screen: 'Earnings'},
+    {icon: 'indian-rupee', label: 'My Earnings', screen: 'Earnings'},
   ], []);
 
   const handleNavigate = useCallback((screenName: keyof MainNavigatorParamList) => {
@@ -287,6 +295,8 @@ const Sidebar: React.FC = () => {
         'ContentCreatorPremium': 'access content creator premium',
         'Settings': 'access settings',
         'Earnings': 'view your earnings',
+        'EarnMoneyUser': 'view earning opportunities',
+        'EarnMoneyCreator': 'view creator earning options',
       };
 
       // Allow navigation to Home, TipTube, and TipShorts for guest users

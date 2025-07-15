@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Feather';
+import { IndianRupee } from 'lucide-react-native';
 import {useTheme} from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 import {useNavigation} from '@react-navigation/native';
@@ -124,7 +125,7 @@ const EarningsScreen: React.FC = () => {
               start={{x: 0, y: 0}}
               end={{x: 1, y: 0}}
               style={styles.earningsIcon}>
-              <Icon name="dollar-sign" size={24} color="#FFFFFF" />
+              <IndianRupee size={24} color="#FFFFFF" />
             </LinearGradient>
             <Text style={[styles.earningsTitle, {color: colors.text.primary}]}>Earnings</Text>
           </View>

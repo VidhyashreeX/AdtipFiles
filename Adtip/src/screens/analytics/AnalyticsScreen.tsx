@@ -10,6 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import { IndianRupee } from 'lucide-react-native';
 import {useTheme} from '../../contexts/ThemeContext';
 import {useAuth} from '../../contexts/AuthContext';
 import {useContentCreatorPremium} from '../../contexts/ContentCreatorPremiumContext';
@@ -133,7 +134,11 @@ const AnalyticsScreen: React.FC = () => {
   }) => (
     <View style={[styles.statCard, {backgroundColor: colors.surface}]}>
       <View style={[styles.statIcon, {backgroundColor: color + '20'}]}>
-        <Icon name={icon} size={20} color={color} />
+        {icon === 'indian-rupee' ? (
+          <IndianRupee size={20} color={color} />
+        ) : (
+          <Icon name={icon} size={20} color={color} />
+        )}
       </View>
       <Text style={[styles.statTitle, {color: colors.text.secondary}]}>
         {title}
@@ -277,8 +282,8 @@ const AnalyticsScreen: React.FC = () => {
           />
           <StatCard
             title="Available Balance"
-            value={`$${parseFloat(analytics?.available_balance || '0').toFixed(2)}`}
-            icon="dollar-sign"
+            value={`₹${parseFloat(analytics?.available_balance || '0').toFixed(2)}`}
+            icon="indian-rupee"
             color="#00C851"
           />
           <StatCard
@@ -355,9 +360,9 @@ const AnalyticsScreen: React.FC = () => {
           <TouchableOpacity
             style={[styles.withdrawButton, {backgroundColor: colors.primary}]}
             onPress={handleWithdraw}>
-            <Icon name="dollar-sign" size={20} color={colors.white} />
+            <IndianRupee size={20} color={colors.white} />
             <Text style={[styles.withdrawButtonText, {color: colors.white}]}>
-              Withdraw Earnings (${parseFloat(analytics?.available_balance || '0').toFixed(2)})
+              Withdraw Earnings (₹{parseFloat(analytics?.available_balance || '0').toFixed(2)})
             </Text>
           </TouchableOpacity>
         )}

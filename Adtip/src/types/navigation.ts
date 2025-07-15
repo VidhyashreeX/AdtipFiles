@@ -85,6 +85,8 @@ export type MainNavigatorParamList = {
   WatchToEarn: undefined;
   AdPassbook: undefined;
   Earnings: undefined;
+  EarnMoneyUser: undefined;
+  EarnMoneyCreator: undefined;
   Analytics: undefined;
   Notifications: undefined;
   Packages: undefined; // Added if it was missing and PackagesScreen is a route

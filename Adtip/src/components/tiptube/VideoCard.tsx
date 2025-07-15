@@ -2,6 +2,7 @@
 import React, {useState} from 'react';
 import {View, Text, StyleSheet, Image, TouchableOpacity} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import { IndianRupee } from 'lucide-react-native';
 import {useTheme} from '../../contexts/ThemeContext';
 import Video from 'react-native-video';
 
@@ -100,8 +101,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
               {backgroundColor: colors.success},
               isPremium ? styles.priceBadgePremium : styles.priceBadgeRegular,
             ]}>
-            <Icon
-              name="dollar-sign"
+            <IndianRupee
               size={10}
               color={colors.white}
               style={styles.badgeIcon}
