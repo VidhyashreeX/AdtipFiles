@@ -613,6 +613,14 @@ class CallController {
     const store = useCallStore.getState()
     const session = store.session
 
+    if (!session) {
+      console.warn('[CallController] No session found in store on endCall');
+      return false;
+    }
+
+    // Debug: Log session object
+    console.log('[CallController] Session object on endCall:', session);
+
     if (!session) return false
 
     try {
@@ -689,7 +697,13 @@ class CallController {
           // Continue with call cleanup even if payment processing fails
         }
       } else {
-        console.warn('[CallController] No callId available for payment processing - call may not have been properly tracked')
+        if (!session.callId) {
+          console.warn('[CallController] No callId in session on endCall', session);
+        }
+        if (!session.peerId) {
+          console.warn('[CallController] No peerId in session on endCall', session);
+        }
+        console.warn('[CallController] No callId or peerId available for payment processing - call may not have been properly tracked')
       }
 
       // Notify server of ended call
