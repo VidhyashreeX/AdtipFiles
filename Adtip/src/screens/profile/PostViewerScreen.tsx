@@ -119,10 +119,11 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
     likeMutation.mutate({ postId, userId: currentUser.id, isLiked });
   }, [likeMutation, currentUser?.id, showLoginPromptForAction]);
 
-  // Handle like (wrapper for PostItem)
+  // Handle like (wrapper for PostItem) - fixed to match HomeScreen logic
   const handleLike = useCallback((postId: number) => {
-    // Find current like state and optimistically update
-    const post = posts.find(p => p.id === postId);
+    // Find current like state and pass it to the mutation
+    // The mutation will handle the toggle logic internally
+    const post = posts.find((p: any) => p.id === postId);
     if (post) {
       handleLikePost(postId, post.is_liked || false);
     }
@@ -195,8 +196,11 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
     return `${Math.floor(diffInSeconds / 86400)}d`;
   }, []);
 
-  // Render post item using PostItem component
+  // Render post item using PostItem component with proper visibility tracking
   const renderPostItem = useCallback(({ item, index }: { item: any; index: number }) => {
+    // Determine if this post is visible and screen is focused
+    const isVisible = visiblePostIds.includes(item.id) && isScreenFocused;
+
     return (
       <PostItem
         key={`post-${item.id}-${index}`}
@@ -212,10 +216,10 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
         isPremium={item.is_premium}
         isLiked={item.is_liked}
         userId={item.user_id}
-        isVisible={true}
+        isVisible={isVisible}
         last_active={item.last_active}
-        isGloballyMuted={false}
-        onToggleGlobalMute={() => {}}
+        isGloballyMuted={isGloballyMuted}
+        onToggleGlobalMute={handleToggleGlobalMute}
         onLike={handleLike}
         onComment={handleComment}
         onShare={handleShare}
@@ -224,7 +228,7 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
         onFollow={handleUserFollowWrapper}
       />
     );
-  }, [getTimeAgo, handleLike, handleComment, handleShare, handleUserProfilePress, handleUserFollowWrapper]);
+  }, [visiblePostIds, isScreenFocused, isGloballyMuted, getTimeAgo, handleLike, handleComment, handleShare, handleUserProfilePress, handleUserFollowWrapper, handleToggleGlobalMute]);
 
 
 
@@ -298,6 +302,8 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
             flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
           });
         }}
+        viewabilityConfig={viewabilityConfig}
+        onViewableItemsChanged={onViewableItemsChanged}
       />
 
       {/* Comments Modal */}
