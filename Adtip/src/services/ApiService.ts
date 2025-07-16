@@ -2650,4 +2650,28 @@ export default class ApiService {
       return 0;
     }
   }
+
+  static async viewSubscriptionPaidVideo(videoId: number): Promise<any> {
+    try {
+      const response = await this.post(
+        `/api/viewSubscriptionPaidVideo`,
+        { reelId: videoId }
+      );
+      return response;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  static async viewPaidVideoNoPremium(videoId: number): Promise<any> {
+    try {
+      const response = await this.post(
+        `/api/viewPaidVideoNoPremium`,
+        { reelId: videoId }
+      );
+      return response;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
 }
