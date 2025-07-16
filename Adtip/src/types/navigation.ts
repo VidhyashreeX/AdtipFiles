@@ -46,7 +46,7 @@ export type MainNavigatorParamList = {
   EditProfile: undefined;
   PostDetail: {postId: number; userId?: number};
   Video: {postId: number};
-  PostViewer: {posts: any[]; initialIndex: number; userId?: number};
+  PostViewer: {posts?: any[]; initialIndex?: number; userId?: number; postId?: number};
   Story: {storyId: string};
   CreatePost: undefined;
   WatchAndEarn: undefined;
@@ -169,7 +169,6 @@ export type RootStackParamList = {
     sessionId: string;
   };
   UserDetails: undefined;
-  InitialLoading: undefined;
   // REMOVE Meeting from the RootStack
   CameraRecording: {
     maxDuration?: number;

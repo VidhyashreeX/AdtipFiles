@@ -34,10 +34,11 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
 
-  const { posts: initialPosts = [], initialIndex = 0, userId } = route.params || {};
+  const { posts: initialPosts = [], initialIndex = 0, userId, postId } = route.params || {};
 
   // State
   const [posts, setPosts] = useState(initialPosts); // Local state for posts to handle optimistic updates
+  const [isLoadingSinglePost, setIsLoadingSinglePost] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCommentPostId, setSelectedCommentPostId] = useState<number | null>(null);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
@@ -50,6 +51,45 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
   useEffect(() => {
     setPosts(initialPosts);
   }, [initialPosts]);
+
+  // Fetch single post if only postId is provided (deep link scenario)
+  useEffect(() => {
+    const fetchSinglePost = async () => {
+      if (postId && (!initialPosts || initialPosts.length === 0)) {
+        setIsLoadingSinglePost(true);
+        try {
+          // Use the new single post API endpoint
+          const response = await fetch(`https://adtip.in/api/post/${postId}?loggined_user_id=${currentUser?.id || 0}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.status && data.data && data.data.length > 0) {
+              setPosts(data.data);
+            } else {
+              // Post not found, show error
+              Alert.alert('Post Not Found', 'The post you are looking for could not be found.');
+              navigation.goBack();
+            }
+          } else {
+            throw new Error('Failed to fetch post');
+          }
+        } catch (error) {
+          console.error('Error fetching single post:', error);
+          Alert.alert('Error', 'Failed to load the post. Please try again.');
+          navigation.goBack();
+        } finally {
+          setIsLoadingSinglePost(false);
+        }
+      }
+    };
+
+    fetchSinglePost();
+  }, [postId, initialPosts, currentUser, navigation]);
 
   // Refs
   const flatListRef = useRef<FlatList>(null);
@@ -251,6 +291,32 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
   }, [visiblePostIds, isScreenFocused, isGloballyMuted, getTimeAgo, handleLike, handleComment, handleShare, handleUserProfilePress, handleUserFollowWrapper, handleToggleGlobalMute]);
 
 
+
+  if (isLoadingSinglePost) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Header
+          title="Loading Post..."
+          showSearch={false}
+          showWallet={false}
+          showPremium={false}
+          leftComponent={
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={{ padding: 8 }}
+            >
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
+        />
+        <View style={styles.emptyContainer}>
+          <Text style={[styles.emptyText, { color: colors.text.primary }]}>
+            Loading post...
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   if (!posts || posts.length === 0) {
     return (

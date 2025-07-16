@@ -202,6 +202,7 @@ npx uri-scheme open "adtip://post/123" --ios
 - `POST /api/deeplink/generate` - Generate deep links
 - `POST /api/deeplink/validate` - Validate deep links
 - `GET /api/deeplink/metadata/:type/:id` - Get sharing metadata
+- `GET /api/post/:postId` - Get single post for deep linking
 
 ### Universal Link Handling
 - Automatic app/store redirection

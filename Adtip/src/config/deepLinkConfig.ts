@@ -129,17 +129,10 @@ export const DEEP_LINK_CONFIG: DeepLinkConfig = {
           },
           
           // Content Screens
-          PostDetail: {
+          PostViewer: {
             path: 'post/:postId',
             parse: {
               postId: (postId: string) => Number(postId),
-            },
-          },
-          
-          PostViewer: {
-            path: 'posts/:initialIndex',
-            parse: {
-              initialIndex: (index: string) => Number(index),
             },
           },
           
@@ -294,6 +287,7 @@ export interface DeepLinkParams {
   referralCode?: string;
   tab?: string;
   initialIndex?: number;
+  posts?: any[]; // For PostViewer screen
 }
 
 // Helper function to generate deep links

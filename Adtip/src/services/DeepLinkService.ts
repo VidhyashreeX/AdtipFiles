@@ -33,7 +33,7 @@ class DeepLinkService {
     this.getInitialURL();
 
     // Listen for incoming deep links when app is already open
-    const subscription = Linking.addEventListener('url', ({ url }) => {
+    Linking.addEventListener('url', ({ url }) => {
       this.handleDeepLink(url);
     });
 
@@ -182,9 +182,16 @@ class DeepLinkService {
             originalUrl: url,
           };
         }
+        // For post deep links, navigate to PostViewer with the specific post
+        // We'll need to fetch the post data or pass minimal required params
         return {
-          screen: 'PostDetail',
-          params: { postId },
+          screen: 'PostViewer',
+          params: {
+            posts: [], // Will be populated by the screen
+            initialIndex: 0,
+            postId, // Pass postId for the screen to fetch the specific post
+            userId: undefined
+          },
           isValid: true,
           originalUrl: url,
         };
@@ -332,24 +339,24 @@ class DeepLinkService {
    */
   private parseSimpleScreenLink(screen: string, url: string): ParsedDeepLink {
     const screenMap: Record<string, string> = {
-      'tiptube': 'TipTube',
-      'tipcall': 'TipCall',
-      'tipshop': 'TipShop',
+      'tiptube': 'TabHome', // Navigate to tab home, TipTube tab will be selected
+      'tipcall': 'TabHome', // Navigate to tab home, TipCall tab will be selected
+      'tipshop': 'TabHome', // Navigate to tab home, TipShop tab will be selected
       'wallet': 'Wallet',
       'earnings': 'Earnings',
       'settings': 'Settings',
-      'premium': 'Premium',
+      'premium': 'PremiumUser',
       'referral': 'Referral',
       'search': 'Search',
       'explore': 'Explore',
       'analytics': 'Analytics',
-      'support': 'Support',
+      'support': 'Settings', // Support is usually in settings
       'play-to-earn': 'PlayToEarn',
       'watch-to-earn': 'WatchAndEarn',
     };
 
     return {
-      screen: screenMap[screen] || 'Main',
+      screen: screenMap[screen] || 'TabHome',
       params: {},
       isValid: true,
       originalUrl: url,

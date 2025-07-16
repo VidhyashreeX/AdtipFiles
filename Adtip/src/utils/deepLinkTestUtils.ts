@@ -33,7 +33,7 @@ export const DEEP_LINK_TEST_CASES: TestCase[] = [
   {
     name: 'Post Detail',
     url: 'adtip://post/123',
-    expectedScreen: 'PostDetail',
+    expectedScreen: 'PostViewer',
     expectedParams: { postId: 123 },
     description: 'Navigate to specific post'
   },
@@ -143,7 +143,7 @@ export const DEEP_LINK_TEST_CASES: TestCase[] = [
   {
     name: 'Universal Link - Post',
     url: 'https://adtip.in/post/123',
-    expectedScreen: 'PostDetail',
+    expectedScreen: 'PostViewer',
     expectedParams: { postId: 123 },
     description: 'Universal link to post'
   },
