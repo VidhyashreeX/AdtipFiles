@@ -9,12 +9,13 @@ import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, List
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import RNFS from 'react-native-fs';
 import { Platform } from 'react-native';
-import { 
-  CLOUDFLARE_R2_CONFIG, 
-  UPLOAD_FOLDERS, 
-  FILE_SIZE_LIMITS, 
+import {
+  CLOUDFLARE_R2_CONFIG,
+  UPLOAD_FOLDERS,
+  FILE_SIZE_LIMITS,
   SUPPORTED_FORMATS,
-  PRESIGNED_URL_EXPIRY 
+  PRESIGNED_URL_EXPIRY,
+  CLOUDFLARE_PUBLIC_DOMAIN
 } from '../config/cloudflareConfig';
 
 // Upload interfaces
@@ -267,8 +268,8 @@ class CloudflareUploadService {
         onProgress({ loaded: fileInfo.size, total: fileInfo.size, percentage: 100 });
       }
 
-      // Generate public URL
-      const publicUrl = `${CLOUDFLARE_R2_CONFIG.publicUrl}/${key}`;
+      // Generate public URL using custom domain (matches backend ReelsService.js)
+      const publicUrl = `${CLOUDFLARE_PUBLIC_DOMAIN}/${key}`;
 
       console.log('[CloudflareUpload] Upload successful:', {
         key,
@@ -512,8 +513,8 @@ class CloudflareUploadService {
 
       const uploadUrl = await getSignedUrl(this.s3Client, putCommand, { expiresIn });
 
-      // Generate public download URL
-      const downloadUrl = `${CLOUDFLARE_R2_CONFIG.publicUrl}/${key}`;
+      // Generate public download URL using custom domain (matches backend ReelsService.js)
+      const downloadUrl = `${CLOUDFLARE_PUBLIC_DOMAIN}/${key}`;
 
       return {
         uploadUrl,
@@ -556,9 +557,10 @@ class CloudflareUploadService {
     try {
       const url = new URL(cloudflareUrl);
 
-      // Check if this is a Cloudflare R2 URL
+      // Check if this is a Cloudflare R2 URL or our custom domain
       if (!url.hostname.includes('r2.cloudflarestorage.com') &&
-          !url.hostname.includes(CLOUDFLARE_R2_CONFIG.accountId)) {
+          !url.hostname.includes(CLOUDFLARE_R2_CONFIG.accountId) &&
+          !url.hostname.includes('theadtip.in')) {
         return null;
       }
 

@@ -12,7 +12,8 @@ export const isCloudflareUrl = (url: string): boolean => {
   try {
     const urlObj = new URL(url);
     return urlObj.hostname.includes('r2.cloudflarestorage.com') ||
-           urlObj.hostname.includes('94e2ffe1e7d5daf0d3de8d11c55dd2d6');
+           urlObj.hostname.includes('94e2ffe1e7d5daf0d3de8d11c55dd2d6') ||
+           urlObj.hostname.includes('theadtip.in');
   } catch {
     return false;
   }

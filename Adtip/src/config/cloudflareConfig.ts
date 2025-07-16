@@ -21,7 +21,7 @@ export const CLOUDFLARE_R2_CONFIG: CloudflareR2Config = {
   secretAccessKey: '686b7a165aa944fbd641de53bbbb277a07e9a284ace18c84a83237b330b63c1d',
   bucketName: 'adtip',
   region: 'auto', // Cloudflare R2 uses 'auto' region
-  publicUrl: 'https://94e2ffe1e7d5daf0d3de8d11c55dd2d6.r2.cloudflarestorage.com', // Your custom domain or R2 public URL
+  publicUrl: 'https://94e2ffe1e7d5daf0d3de8d11c55dd2d6.r2.cloudflarestorage.com', // Raw R2 URL (used for S3 client operations only)
 };
 
 // Folder structure for organized uploads
@@ -48,6 +48,9 @@ export const SUPPORTED_FORMATS = {
 
 // Presigned URL expiration time (in seconds)
 export const PRESIGNED_URL_EXPIRY = 3600; // 1 hour - secure but enough time for uploads
+
+// Custom domain for publicly accessible URLs (matches backend ReelsService.js)
+export const CLOUDFLARE_PUBLIC_DOMAIN = "https://theadtip.in";
 
 // Setup Instructions:
 // 1. Create a Cloudflare R2 bucket at https://dash.cloudflare.com/
