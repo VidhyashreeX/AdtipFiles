@@ -230,6 +230,7 @@ export interface WalletBalanceResponse {
 }
 
 export interface PostListRequest {
+  post_id?: number;
   category: number;
   page: number;
   limit: number;

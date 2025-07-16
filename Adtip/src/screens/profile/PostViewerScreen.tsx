@@ -23,6 +23,8 @@ import { useLikeMutation, useFollowMutation } from '../../hooks/useQueries';
 import { getTimeAgo } from '../../utils/timeUtils';
 import PostWithComments from '../../components/home/PostWithComments';
 import UserProfileScreen from './UserProfileScreen';
+import { API_BASE_URL } from '../../constants/api';
+import ApiService from '../../services/ApiService';
 
 const { width } = Dimensions.get('window');
 
@@ -58,28 +60,30 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
       if (postId && (!initialPosts || initialPosts.length === 0)) {
         setIsLoadingSinglePost(true);
         try {
-          // Use the new single post API endpoint
-          const response = await fetch(`https://adtip.in/api/post/${postId}?loggined_user_id=${currentUser?.id || 0}`, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+          console.log('[PostViewer] Fetching single post with ID:', postId);
+          console.log('[PostViewer] Current User ID:', currentUser?.id);
+
+          // Use ApiService to fetch the post using the existing list-posts endpoint
+          const response = await ApiService.listPosts({
+            post_id: postId,
+            category: 0,
+            page: 1,
+            limit: 1,
+            loggined_user_id: currentUser?.id || 0,
           });
 
-          if (response.ok) {
-            const data = await response.json();
-            if (data.status && data.data && data.data.length > 0) {
-              setPosts(data.data);
-            } else {
-              // Post not found, show error
-              Alert.alert('Post Not Found', 'The post you are looking for could not be found.');
-              navigation.goBack();
-            }
+          console.log('[PostViewer] API Response:', response);
+
+          if (response.data && response.data.length > 0) {
+            console.log('[PostViewer] Setting posts:', response.data);
+            setPosts(response.data);
           } else {
-            throw new Error('Failed to fetch post');
+            console.log('[PostViewer] No post data found in response');
+            Alert.alert('Post Not Found', 'The post you are looking for could not be found.');
+            navigation.goBack();
           }
         } catch (error) {
-          console.error('Error fetching single post:', error);
+          console.error('[PostViewer] Error fetching single post:', error);
           Alert.alert('Error', 'Failed to load the post. Please try again.');
           navigation.goBack();
         } finally {
