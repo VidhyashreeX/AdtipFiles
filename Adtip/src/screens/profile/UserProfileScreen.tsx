@@ -27,6 +27,7 @@ import CallBillingService from '../../services/calling/CallBillingService';
 import { CallType } from '../../stores/callStoreSimplified';
 import Header from '../../components/common/Header';
 import { ProfileFastImage } from '../../utils/FastImageOptimizer';
+import VideoThumbnail from '../../components/common/VideoThumbnail';
 
 const AVATAR_SIZE = 80; // Reduced to match ProfileScreen
 const GRID_SPACING = 1;
@@ -680,11 +681,20 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
               });
             }}
           >
-            <Image
-              source={{ uri: getFullImageUrl(post.media_url) }}
-              style={styles.postImage}
-              resizeMode="cover"
-            />
+            {post.media_type === 'video' ? (
+              <VideoThumbnail
+                videoUrl={getFullImageUrl(post.media_url)}
+                style={styles.postImage}
+                resizeMode="cover"
+                thumbnailTime={1}
+              />
+            ) : (
+              <Image
+                source={{ uri: getFullImageUrl(post.media_url) }}
+                style={styles.postImage}
+                resizeMode="cover"
+              />
+            )}
             {post.media_type === 'video' && (
               <View style={styles.videoIndicator}>
                 <View style={styles.playIcon} />
