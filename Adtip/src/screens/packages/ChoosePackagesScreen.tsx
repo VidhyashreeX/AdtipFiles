@@ -182,7 +182,7 @@ const ChoosePackagesScreen: React.FC = () => {
                   <View style={styles.priceInfo}>
                     <Text
                       style={[styles.totalPrice, {color: colors.text.primary}]}>
-                      ${totalPrice.toFixed(2)}
+                      ₹{totalPrice.toFixed(2)}
                     </Text>
                     <Text
                       style={[

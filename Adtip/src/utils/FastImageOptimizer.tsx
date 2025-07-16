@@ -1,9 +1,19 @@
 import React from 'react';
 import FastImage, { FastImageProps } from '@d11/react-native-fast-image';
+import { getProfileImageUrl } from './ProfileImageUtils';
 
-// Helper to convert string/null/undefined to FastImage source
-function toSource(src: string | null | undefined) {
-  if (!src || src === 'null' || src === 'undefined') return undefined;
+// Helper to convert string/null/undefined to FastImage source with proper URL handling
+function toSource(src: string | null | undefined, isProfile: boolean = false) {
+  if (!src || src === 'null' || src === 'undefined') {
+    return undefined;
+  }
+
+  // For profile images, use the centralized utility
+  if (isProfile) {
+    const processedUrl = getProfileImageUrl(src, { enableCacheBusting: true });
+    return { uri: processedUrl };
+  }
+
   return { uri: src };
 }
 
@@ -16,7 +26,7 @@ export const ProfileFastImage: React.FC<ImgProps & { size?: number }> = ({
   source, style, size = 40, ...props
 }) => (
   <FastImage
-    source={toSource(source)}
+    source={toSource(source, true)} // Use profile image processing
     style={[{ width: size, height: size, borderRadius: size / 2 }, style]}
     resizeMode={FastImage.resizeMode.cover}
     {...props}

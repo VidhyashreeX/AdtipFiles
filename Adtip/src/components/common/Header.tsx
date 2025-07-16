@@ -150,12 +150,20 @@ const Header: React.FC<HeaderProps> = ({
 
   const handleCloseSearch = useCallback(() => {
     Keyboard.dismiss();
-    setIsSearchActive(false);
-    setSearchQueryLocal('');
-    if (onSearchQueryChange) {
-      onSearchQueryChange('');
+    // If there's text in the search, clear it first, otherwise close the search
+    if (searchQueryLocal.trim()) {
+      setSearchQueryLocal('');
+      if (onSearchQueryChange) {
+        onSearchQueryChange('');
+      }
+    } else {
+      setIsSearchActive(false);
+      setSearchQueryLocal('');
+      if (onSearchQueryChange) {
+        onSearchQueryChange('');
+      }
     }
-  }, [onSearchQueryChange]);
+  }, [onSearchQueryChange, searchQueryLocal]);
 
   const handleSearchQueryChangeInternal = useCallback((text: string) => {
     setSearchQueryLocal(text);
@@ -314,10 +322,10 @@ const Header: React.FC<HeaderProps> = ({
             <TextInput
               ref={searchInputRef}
               style={[
-                styles.searchInput, 
+                styles.searchInput,
                 {
-                  color: colors.text.primary, 
-                  borderColor: colors.border, 
+                  color: colors.text.primary,
+                  borderColor: colors.border,
                   backgroundColor: colors.background,
                   fontSize: sizes.titleSize > 16 ? sizes.titleSize - 2 : sizes.titleSize,
                 }
@@ -329,14 +337,7 @@ const Header: React.FC<HeaderProps> = ({
               returnKeyType="search"
               autoFocus={true}
             />
-            {searchQueryLocal.length > 0 && (
-              <TouchableOpacity onPress={() => {
-                setSearchQueryLocal('');
-                if (onSearchQueryChange) onSearchQueryChange('');
-              }} style={styles.searchClearIcon}>
-                <Icon name="x" size={sizes.iconSize * 0.8} color={colors.text.secondary} />
-              </TouchableOpacity>
-            )}
+            {/* Removed duplicate clear icon - the main close button in right section serves this purpose */}
           </>
         ) : centerComponent !== undefined ? (
           <View style={styles.centerComponent}>{renderNodeSafely(centerComponent, styles.title)}</View>
@@ -362,7 +363,11 @@ const Header: React.FC<HeaderProps> = ({
             {showSearch && (
               shouldShowBuiltInSearch ? (
                 <TouchableOpacity onPress={handleCloseSearch} style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}>
-                  <Icon name="x" size={sizes.iconSize} color={colors.text.primary} />
+                  <Icon
+                    name={searchQueryLocal.trim() ? "delete" : "x"}
+                    size={sizes.iconSize}
+                    color={colors.text.primary}
+                  />
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity onPress={handleSearchIconPress} style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}>

@@ -578,6 +578,15 @@ const TipShortsUploadScreen: React.FC = () => {
         throw new Error('User not authenticated');
       }
 
+      // Run diagnostics if upload fails repeatedly
+      const diagnostics = await CloudflareUploadService.diagnoseUploadIssues();
+      if (!diagnostics.connectionOk || !diagnostics.configValid) {
+        console.warn('[TipShortsUpload] Upload diagnostics found issues:', diagnostics.issues);
+        if (diagnostics.issues.length > 0) {
+          throw new Error(`Upload configuration issue: ${diagnostics.issues.join(', ')}`);
+        }
+      }
+
       // Use CloudflareUploadService for batch upload
       const uploadResult = await CloudflareUploadService.uploadTipShort(
         videoUri,

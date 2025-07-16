@@ -10,7 +10,7 @@ import {
   Easing,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { Gift, Clock, CheckCircle, DollarSign } from 'lucide-react-native';
+import { Gift, Clock, CheckCircle, IndianRupee } from 'lucide-react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -215,7 +215,7 @@ const PubScaleCreditAlert: React.FC<PubScaleCreditAlertProps> = ({
               </View>
 
               <View style={[styles.infoCard, { backgroundColor: isDarkMode ? colors.card : '#EFF6FF' }]}>
-                <DollarSign size={20} color="#3B82F6" />
+                <IndianRupee size={20} color="#3B82F6" />
                 <View style={styles.infoCardText}>
                   <Text style={[styles.infoCardTitle, { color: colors.text.primary }]}>
                     Reward Condition

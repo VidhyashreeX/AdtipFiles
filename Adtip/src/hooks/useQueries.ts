@@ -1131,6 +1131,16 @@ export const useUsers = (filters: {
       const currentPage = lastPage?.pagination?.page || 1;
       const limit = lastPage?.pagination?.limit || 20;
       const hasMore = currentPage * limit < totalRecords;
+
+      console.log('[useUsers] getNextPageParam:', {
+        totalRecords,
+        currentPage,
+        limit,
+        currentPageRecords: currentPage * limit,
+        hasMore,
+        nextPage: hasMore ? currentPage + 1 : undefined
+      });
+
       return hasMore ? currentPage + 1 : undefined;
     },
     enabled: !!userId,

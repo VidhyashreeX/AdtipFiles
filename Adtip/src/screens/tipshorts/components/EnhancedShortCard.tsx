@@ -20,6 +20,7 @@ interface EnhancedShortCardProps {
   item: ShortVideo;
   index: number;
   isActive: boolean;
+  isLiked: boolean; // Add isLiked prop
   onVideoLoad: (videoId: string) => void;
   onVideoCompletion?: (videoId: string) => void; // Add video completion callback
   onLike: (shortId: string, creatorId: string, isCurrentlyLiked: boolean) => void;
@@ -205,6 +206,7 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
   item,
   index,
   isActive,
+  isLiked, // Use the passed-in prop
   onVideoLoad,
   onVideoCompletion, // Add onVideoCompletion prop
   onLike,
@@ -223,13 +225,24 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
   onFollow,
 }) => {
   const [showThumbnail, setShowThumbnail] = useState(true);
-  const [isLiked, setIsLiked] = useState(false);
+  // REMOVED: const [isLiked, setIsLiked] = useState(false);
 
   // Safety check: Don't render if item is invalid
   if (!item || !item.id || !item.channel || !item.channel.id) {
     console.warn('[EnhancedShortCard] Invalid item data:', item);
     return null;
   }
+
+  // Higher-order function to handle guest action protection
+  const protectAction = useCallback((actionName: string, callback: () => void) => {
+    return () => {
+      if (isGuest) {
+        onGuestAction(actionName);
+        return;
+      }
+      callback();
+    };
+  }, [isGuest, onGuestAction]);
 
   const handleVideoLoadLocal = useCallback(() => {
     setShowThumbnail(false);
@@ -248,24 +261,15 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
     }
   }, [isActive, item?.id, setVideoProgress]);
 
-  const handleLike = useCallback(() => {
-    if (isGuest) {
-      onGuestAction('like shorts');
-      return;
-    }
-
+  const handleLike = protectAction('like shorts', () => {
     if (item?.id && item?.channel?.id) {
-      setIsLiked(!isLiked);
+      // Don't set local state. Just call the parent's handler.
+      // The `isLiked` prop already reflects the current state.
       onLike(item.id, item.channel.id, isLiked);
     }
-  }, [item?.id, item?.channel?.id, isLiked, onLike, isGuest, onGuestAction]);
+  });
 
-  const handleChannelPress = useCallback(() => {
-    if (isGuest) {
-      onGuestAction('view channels');
-      return;
-    }
-
+  const handleChannelPress = protectAction('view channels', () => {
     if (onChannelNavigation && item?.channel) {
       onChannelNavigation({
         id: item.channel.id,
@@ -273,29 +277,40 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
         avatar: item.channel.avatar
       });
     }
-  }, [isGuest, onGuestAction, onChannelNavigation, item?.channel]);
+  });
 
-  const handleComment = useCallback(() => {
-    if (isGuest) {
-      onGuestAction('comment on shorts');
-      return;
-    }
-
+  const handleComment = protectAction('comment on shorts', () => {
     if (onComment && item?.id) {
       onComment(item.id);
     }
-  }, [isGuest, onGuestAction, onComment, item?.id]);
+  });
 
-  const handleFollow = useCallback(() => {
-    if (isGuest) {
-      onGuestAction('follow users');
-      return;
-    }
-
+  const handleFollow = protectAction('follow users', () => {
     if (onFollow && item?.channel?.id) {
       onFollow(item.channel.id);
     }
-  }, [isGuest, onGuestAction, onFollow, item?.channel?.id]);
+  });
+
+  const handleShare = protectAction('share shorts', async () => {
+    if (!item?.id || !item?.channel?.name) return;
+    try {
+      const deepLink = `https://adtip.in/tipshorts/${item.id}`;
+      const shareContent = {
+        message: `Check out this amazing short video by ${item.channel.name}! ${deepLink}`,
+        url: deepLink,
+        title: `${item.channel.name} - Short Video`,
+      };
+
+      await Share.share(shareContent);
+      console.log('[EnhancedShortCard] Successfully shared deep link:', deepLink);
+    } catch (error) {
+      console.error('[EnhancedShortCard] Error sharing:', error);
+    }
+  });
+
+  const handleMoreOptions = protectAction('access more options', () => {
+    // TODO: Add more options functionality for authenticated users
+  });
 
   return (
     <View style={styles.shortCardContainer}>
@@ -421,27 +436,7 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
             <TouchableOpacity
               style={styles.actionButton}
               activeOpacity={0.7}
-              onPress={async () => {
-                if (isGuest) {
-                  onGuestAction('share shorts');
-                  return;
-                }
-
-                if (!item?.id || !item?.channel?.name) return;
-                try {
-                  const deepLink = `https://adtip.in/tipshorts/${item.id}`;
-                  const shareContent = {
-                    message: `Check out this amazing short video by ${item.channel.name}! ${deepLink}`,
-                    url: deepLink,
-                    title: `${item.channel.name} - Short Video`,
-                  };
-
-                  await Share.share(shareContent);
-                  console.log('[EnhancedShortCard] Successfully shared deep link:', deepLink);
-                } catch (error) {
-                  console.error('[EnhancedShortCard] Error sharing:', error);
-                }
-              }}
+              onPress={handleShare}
             >
               <View style={styles.actionIconContainer}>
                 <Share2 size={24} color="#FFF" />
@@ -452,13 +447,7 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
             <TouchableOpacity
               style={styles.actionButton}
               activeOpacity={0.7}
-              onPress={() => {
-                if (isGuest) {
-                  onGuestAction('access more options');
-                  return;
-                }
-                // TODO: Add more options functionality for authenticated users
-              }}
+              onPress={handleMoreOptions}
             >
               <View style={styles.actionIconContainer}>
                 <Icon name="more-horizontal" size={24} color="#FFF" />

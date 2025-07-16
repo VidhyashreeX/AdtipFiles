@@ -10,7 +10,7 @@ import {
   Easing,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { Phone, Video, Clock, DollarSign, User } from 'lucide-react-native';
+import { Phone, Video, Clock, IndianRupee, User } from 'lucide-react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -201,7 +201,7 @@ const CallConfirmationAlert: React.FC<CallConfirmationAlertProps> = ({
             {/* Billing info cards */}
             <View style={styles.infoCards}>
               <View style={[styles.infoCard, { backgroundColor: isDarkMode ? colors.card : '#F0FDF4' }]}>
-                <DollarSign size={18} color="#10B981" />
+                <IndianRupee size={18} color="#10B981" />
                 <View style={styles.infoCardText}>
                   <Text style={[styles.infoCardTitle, { color: colors.text.primary }]}>
                     Rate{isPremium ? ' (Premium)' : ''}

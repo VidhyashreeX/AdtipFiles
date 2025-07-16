@@ -436,6 +436,15 @@ const TipTubeUploadScreen: React.FC = () => {
         throw new Error('User not authenticated');
       }
 
+      // Run diagnostics if upload fails repeatedly
+      const diagnostics = await CloudflareUploadService.diagnoseUploadIssues();
+      if (!diagnostics.connectionOk || !diagnostics.configValid) {
+        console.warn('[TipTubeUpload] Upload diagnostics found issues:', diagnostics.issues);
+        if (diagnostics.issues.length > 0) {
+          throw new Error(`Upload configuration issue: ${diagnostics.issues.join(', ')}`);
+        }
+      }
+
       // Use CloudflareUploadService for batch upload
       const uploadResult = await CloudflareUploadService.uploadTipTube(
         videoUri,
@@ -489,6 +498,12 @@ const TipTubeUploadScreen: React.FC = () => {
         promotional_price: isPaidVideo ? parseFloat(promotionalPrice) : undefined,
       };
 
+      console.log('[TipTubeUpload] Creating video with data:', {
+        ...requestData,
+        isPaidVideo,
+        promotionalPrice: isPaidVideo ? promotionalPrice : 'N/A'
+      });
+
       console.log('[TipTubeUpload] Creating TipTube video with new API:', requestData);
 
       const response = await ApiService.uploadTipTubeVideo(requestData);
@@ -496,9 +511,14 @@ const TipTubeUploadScreen: React.FC = () => {
       console.log('[TipTubeUpload] TipTube video created:', response);
 
       if (response.status === 200) {
+        // Show different success messages for paid vs free videos
+        const successMessage = isPaidVideo
+          ? `Your paid video has been uploaded successfully! Price: ₹${promotionalPrice}`
+          : 'Your video has been uploaded successfully.';
+
         Alert.alert(
           'Success!',
-          'Your video has been uploaded successfully.',
+          successMessage,
           [
             {
               text: 'OK',
@@ -589,9 +609,12 @@ const TipTubeUploadScreen: React.FC = () => {
       } else if (error.message?.includes('User authentication required')) {
         errorTitle = 'Authentication Error';
         errorMessage = 'Your session has expired. Please log in again.';
-      } else if (error.message?.includes('promotional price')) {
+      } else if (error.message?.includes('promotional price') || error.message?.includes('paid_promotional')) {
         errorTitle = 'Pricing Error';
         errorMessage = 'Please enter a valid promotional price for paid videos.';
+      } else if (error.message?.includes('payment') || error.message?.includes('billing')) {
+        errorTitle = 'Payment Error';
+        errorMessage = 'There was an issue with the payment setup for your paid video. Please try again.';
       } else if (error.message?.includes('Upload failed')) {
         errorTitle = 'Upload Error';
         errorMessage = 'Failed to upload video. Please check your internet connection and try again.';

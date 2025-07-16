@@ -23,6 +23,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 
 // Import API service
 import ApiService from '../../services/ApiService';
+import CloudflareUploadService from '../../services/CloudflareUploadService';
+import { handleProfileImageUploadResult, createFreshProfileImageUrl } from '../../utils/ProfileImageUtils';
 
 // Define navigation param list
 type RootStackParamList = {
