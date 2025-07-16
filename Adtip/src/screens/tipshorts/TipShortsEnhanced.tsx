@@ -46,11 +46,14 @@ import {
   useGuestShortsQuery,
   useLikeShortMutation,
   useShortsQueryActions,
+  SHORTS_QUERY_KEY,
   type ShortVideo as TanStackShortVideo
 } from '../../hooks/useShortsQuery';
+import { useQueryClient } from '@tanstack/react-query';
 import ShortsCardSkeleton from '../../components/skeletons/ShortsCardSkeleton';
 import EnhancedShortCard from './components/EnhancedShortCard';
 import LoginPromptModal from '../../components/modals/LoginPromptModal';
+import VideoCommentsModal from '../../components/tiptube/VideoCommentsModal';
 import useSimpleRewardedAd from '../../googleads/SimpleRewardedAd';
 import useVideoRewardAd from '../../hooks/useVideoRewardAd';
 import ApiService from '../../services/ApiService';
@@ -106,6 +109,7 @@ const TipShortsEnhanced = () => {
   const navigation = useNavigation();
   const route = useRoute<TipShortsRouteProp>();
   const { user, isGuest } = useAuth();
+  const queryClient = useQueryClient();
   const { 
     isGloballyMuted, 
     isGloballyPlaying, 
@@ -191,6 +195,10 @@ const TipShortsEnhanced = () => {
   // Login prompt modal state
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [loginPromptMessage, setLoginPromptMessage] = useState('Login to unlock all features');
+
+  // Comment modal state
+  const [commentModalVisible, setCommentModalVisible] = useState(false);
+  const [selectedCommentShortId, setSelectedCommentShortId] = useState<string | null>(null);
 
   // Refs
   const flatListRef = useRef<FlatList>(null);
@@ -353,9 +361,30 @@ const TipShortsEnhanced = () => {
       showLoginPromptForAction('comment on shorts');
       return;
     }
-    // TODO: Implement comment modal or navigation to comments screen
-    console.log('Comment functionality for short:', shortId);
+    setSelectedCommentShortId(shortId);
+    setCommentModalVisible(true);
   }, [isGuest, showLoginPromptForAction]);
+
+  // Handle comment added - update comment count in shorts data
+  const handleCommentAdded = useCallback(() => {
+    if (!selectedCommentShortId || !user?.id) return;
+
+    // Update the shorts data to increment comment count
+    queryClient.setQueryData([SHORTS_QUERY_KEY, user.id.toString()], (oldData: any) => {
+      if (!oldData) return oldData;
+
+      return {
+        ...oldData,
+        pages: oldData.pages.map((page: any[]) =>
+          page.map((short: any) =>
+            short.id === selectedCommentShortId
+              ? { ...short, comments: short.comments + 1 }
+              : short
+          )
+        ),
+      };
+    });
+  }, [selectedCommentShortId, user?.id, queryClient]);
 
   // Handle follow functionality
   const handleFollowChannel = useCallback(async (channelId: string) => {
@@ -693,6 +722,20 @@ const TipShortsEnhanced = () => {
         onClose={() => setShowLoginPrompt(false)}
         message={loginPromptMessage}
       />
+
+      {/* Comments Modal */}
+      {selectedCommentShortId && (
+        <VideoCommentsModal
+          visible={commentModalVisible}
+          onClose={() => {
+            setCommentModalVisible(false);
+            setSelectedCommentShortId(null);
+          }}
+          videoId={parseInt(selectedCommentShortId)}
+          userId={user?.id ? Number(user.id) : 0}
+          onCommentAdded={handleCommentAdded}
+        />
+      )}
 
       {/* Reward Popup */}
       {showRewardPopup && (

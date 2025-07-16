@@ -8,6 +8,7 @@ interface VideoCommentsModalProps {
   userId: number;
   visible: boolean;
   onClose: () => void;
+  onCommentAdded?: () => void; // Callback when a comment is added
 }
 
 const VideoCommentsModal: React.FC<VideoCommentsModalProps> = ({
@@ -15,6 +16,7 @@ const VideoCommentsModal: React.FC<VideoCommentsModalProps> = ({
   userId,
   visible,
   onClose,
+  onCommentAdded,
 }) => {
   // Use TanStack Query hooks
   const {
@@ -72,6 +74,10 @@ const VideoCommentsModal: React.FC<VideoCommentsModalProps> = ({
         content,
         parentId,
       });
+      // Call the callback to update parent component
+      if (onCommentAdded) {
+        onCommentAdded();
+      }
     } catch (error) {
       console.error('Error adding comment:', error);
       throw error;

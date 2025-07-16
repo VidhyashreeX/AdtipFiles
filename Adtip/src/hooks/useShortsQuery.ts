@@ -48,7 +48,7 @@ export interface PublicShot {
   total_channel_followers: number;
 }
 
-const SHORTS_QUERY_KEY = 'shorts';
+export const SHORTS_QUERY_KEY = 'shorts';
 const PAGE_SIZE = 10;
 
 async function fetchShortsPage(pageParam: number, userId: string): Promise<ShortVideo[]> {
@@ -207,15 +207,16 @@ export function useLikeShortMutation() {
       // Optimistically update
       queryClient.setQueryData([SHORTS_QUERY_KEY, userId], (oldData: any) => {
         if (!oldData) return oldData;
-        
+
         return {
           ...oldData,
           pages: oldData.pages.map((page: ShortVideo[]) =>
             page.map((short: ShortVideo) =>
-              short.id === shortId 
-                ? { 
-                    ...short, 
-                    likes: short.likes + (isLiked ? 1 : -1)
+              short.id === shortId
+                ? {
+                    ...short,
+                    likes: short.likes + (isLiked ? 1 : -1),
+                    isLiked: isLiked
                   }
                 : short
             )
@@ -230,10 +231,6 @@ export function useLikeShortMutation() {
       if (context?.previousShorts) {
         queryClient.setQueryData([SHORTS_QUERY_KEY, variables.userId], context.previousShorts);
       }
-    },
-    onSettled: (data, error, variables) => {
-      // Refetch after error or success
-      queryClient.invalidateQueries({ queryKey: [SHORTS_QUERY_KEY, variables.userId] });
     },
   });
 }

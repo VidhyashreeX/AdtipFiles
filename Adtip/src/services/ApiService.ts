@@ -1143,7 +1143,7 @@ export default class ApiService {
     console.log('[API] Sending short like request:', JSON.stringify(data, null, 2));
     try {
       const response = await this.post<LikeShortResponse>(
-        '/saveVideoLike',
+        '/api/saveVideoLike',
         data,
       );
       console.log('[API] Short like response:', JSON.stringify(response, null, 2));
@@ -1644,13 +1644,17 @@ export default class ApiService {
     videoId: number,
     userId: number,
     comment: string,
-    parentCommetId: number | null = null
+    parentCommetId: number | null = null,
+    commentatorName: string = 'User',
+    commentatorImage: string = ''
   ): Promise<any> {
     const payload = {
       comment,
       videoId,
       createdBy: userId,
-      parentCommetId
+      parentCommetId,
+      commentatorName,
+      commentatorImage
     };
     console.log('[ApiService] Saving video comment:', payload);
     try {

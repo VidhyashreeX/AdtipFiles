@@ -12,7 +12,7 @@ import {
 import { GestureDetector } from 'react-native-gesture-handler';
 import Icon from 'react-native-vector-icons/Feather';
 import { type ShortVideo } from '../../../hooks/useShortsQuery';
-import { Share2 } from 'lucide-react-native';
+import { Share2, Heart, MessageCircle } from 'lucide-react-native';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -174,26 +174,18 @@ const AnimatedLikeButton = memo(({
   disabled?: boolean;
 }) => {
   return (
-    <TouchableOpacity 
-      style={styles.actionButton} 
+    <TouchableOpacity
+      style={styles.actionButton}
       onPress={onPress}
       disabled={disabled}
       activeOpacity={0.7}
     >
-      <View style={[
-        styles.actionIconContainer,
-        {
-          backgroundColor: isLiked ? '#FF3040' : 'rgba(255,255,255,0.2)',
-          borderColor: isLiked ? '#FF3040' : 'rgba(255,255,255,0.3)',
-        }
-      ]}>
-        <Icon 
-          name="heart" 
-          size={24} 
-          color={isLiked ? "#FFFFFF" : "#FFFFFF"}
-        />
-      </View>
-      
+      <Heart
+        size={30}
+        color={isLiked ? "#FF3040" : "#FFFFFF"}
+        fill={isLiked ? "#FF3040" : "transparent"}
+      />
+
       <Text style={styles.actionText}>
         {likeCount > 999 ? `${(likeCount / 1000).toFixed(1)}K` : likeCount}
       </Text>
@@ -308,9 +300,7 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
     }
   });
 
-  const handleMoreOptions = protectAction('access more options', () => {
-    // TODO: Add more options functionality for authenticated users
-  });
+
 
   return (
     <View style={styles.shortCardContainer}>
@@ -425,33 +415,19 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
               activeOpacity={0.7}
               onPress={handleComment}
             >
-              <View style={styles.actionIconContainer}>
-                <Icon name="message-circle" size={24} color="#FFF" />
-              </View>
+              <MessageCircle size={30} color="#FFF" />
               <Text style={styles.actionText}>
                 {item.comments > 999 ? `${(item.comments / 1000).toFixed(1)}K` : item.comments}
               </Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity
               style={styles.actionButton}
               activeOpacity={0.7}
               onPress={handleShare}
             >
-              <View style={styles.actionIconContainer}>
-                <Share2 size={24} color="#FFF" />
-              </View>
+              <Share2 size={30} color="#FFF" />
               <Text style={styles.actionText}>Share</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.actionButton}
-              activeOpacity={0.7}
-              onPress={handleMoreOptions}
-            >
-              <View style={styles.actionIconContainer}>
-                <Icon name="more-horizontal" size={24} color="#FFF" />
-              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -617,16 +593,6 @@ const styles = StyleSheet.create({
   actionButton: {
     alignItems: 'center',
     marginBottom: 20,
-  },
-  actionIconContainer: {
-    width: 48,
-    height: 48,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   actionText: {
     color: '#FFF',
