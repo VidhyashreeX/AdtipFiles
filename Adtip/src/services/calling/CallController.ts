@@ -644,17 +644,25 @@ class CallController {
       const { userId } = await this.getUserInfo();
       
       try {
+        // Always use the original caller and receiver from when call started
+        // For outgoing calls: current user is caller, peer is receiver
+        // For incoming calls: peer is caller, current user is receiver
+        const isOutgoingCall = session.direction === 'outgoing';
+        const originalCallerId = isOutgoingCall ? parseInt(userId) : parseInt(session.peerId);
+        const originalReceiverId = isOutgoingCall ? parseInt(session.peerId) : parseInt(userId);
+        
         const payload = {
-          callerId: parseInt(userId),
-          receiverId: parseInt(session.peerId),
+          callerId: originalCallerId,
+          receiverId: originalReceiverId,
           action: 'end' as const,
           callId: callIdToUse
         };
         
         console.log('[CallController] 🚀 Calling end API with payload:', payload);
         console.log('[CallController] 📞 Call type:', session.type);
-        console.log('[CallController] 👤 Current user ID:', userId);
-        console.log('[CallController] 👥 Receiver ID:', session.peerId);
+        console.log('[CallController] 📤 Call direction:', session.direction);
+        console.log('[CallController] 👤 Original caller ID:', originalCallerId);
+        console.log('[CallController] 👥 Original receiver ID:', originalReceiverId);
         console.log('[CallController] 🆔 Call ID:', callIdToUse);
         
         if (session.type === 'video') {
@@ -673,12 +681,13 @@ class CallController {
         console.error('[CallController] 📋 Error details:', {
           error: err,
           payload: {
-            callerId: parseInt(userId),
-            receiverId: parseInt(session.peerId),
+            callerId: session.direction === 'outgoing' ? parseInt(userId) : parseInt(session.peerId),
+            receiverId: session.direction === 'outgoing' ? parseInt(session.peerId) : parseInt(userId),
             action: 'end',
             callId: callIdToUse
           },
-          sessionType: session.type
+          sessionType: session.type,
+          sessionDirection: session.direction
         });
       }
     }
