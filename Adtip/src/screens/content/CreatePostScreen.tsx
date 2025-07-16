@@ -14,6 +14,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Switch,
+  PermissionsAndroid,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import type {NavigationProp} from '@react-navigation/native';
@@ -82,73 +83,213 @@ const CreatePostScreen = () => {
     return () => clearTimeout(timer);
   }, []);
 
+  // Permission handling for image picker
+  const requestStoragePermission = async (): Promise<boolean> => {
+    try {
+      if (Platform.OS === 'android') {
+        console.log('[CreatePost] Requesting Android storage permission');
+
+        const permission = Platform.Version >= 33
+          ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES
+          : PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE;
+
+        const result = await PermissionsAndroid.request(permission, {
+          title: 'Storage Permission Required',
+          message: 'This app needs access to your storage to select images for posts.',
+          buttonNeutral: 'Ask Me Later',
+          buttonNegative: 'Cancel',
+          buttonPositive: 'OK',
+        });
+
+        const granted = result === PermissionsAndroid.RESULTS.GRANTED;
+        console.log('[CreatePost] Storage permission result:', granted);
+
+        if (!granted) {
+          Alert.alert(
+            'Permission Required',
+            'Storage permission is required to select images. Please enable it in app settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Settings', onPress: () => {
+                // You can add logic to open app settings here if needed
+              }}
+            ]
+          );
+        }
+
+        return granted;
+      }
+
+      // iOS permissions are handled automatically by the image picker
+      return true;
+    } catch (error) {
+      console.error('[CreatePost] Error requesting storage permission:', error);
+      Alert.alert('Error', 'Failed to request permission. Please try again.');
+      return false;
+    }
+  };
+
+  const requestCameraPermission = async (): Promise<boolean> => {
+    try {
+      if (Platform.OS === 'android') {
+        console.log('[CreatePost] Requesting Android camera permission');
+
+        const result = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.CAMERA,
+          {
+            title: 'Camera Permission Required',
+            message: 'This app needs access to your camera to take photos for posts.',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          }
+        );
+
+        const granted = result === PermissionsAndroid.RESULTS.GRANTED;
+        console.log('[CreatePost] Camera permission result:', granted);
+
+        if (!granted) {
+          Alert.alert(
+            'Permission Required',
+            'Camera permission is required to take photos. Please enable it in app settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Settings', onPress: () => {
+                // You can add logic to open app settings here if needed
+              }}
+            ]
+          );
+        }
+
+        return granted;
+      }
+
+      // iOS permissions are handled automatically by the image picker
+      return true;
+    } catch (error) {
+      console.error('[CreatePost] Error requesting camera permission:', error);
+      Alert.alert('Error', 'Failed to request permission. Please try again.');
+      return false;
+    }
+  };
+
   // Handle image picking
-  const handlePickImage = () => {
-    ImagePicker.openPicker({
-      width: 1200,
-      height: 1200,
-      multiple: true,
-      cropping: false,
-      compressImageQuality: 0.8,
-      mediaType: 'photo',
-      maxFiles: 5 - images.length,
-    })
-      .then(selectedImages => {
-        // Limit to 5 images total
-        if (images.length + selectedImages.length > 5) {
-          Alert.alert('Limit Exceeded', 'You can upload maximum 5 images');
-          return;
-        }
+  const handlePickImage = async () => {
+    try {
+      // Request permission first
+      const hasPermission = await requestStoragePermission();
+      if (!hasPermission) {
+        return;
+      }
 
-        const newImages = selectedImages.map(img => ({
-          uri: Platform.OS === 'ios' ? img.sourceURL || img.path : img.path,
-          type: img.mime,
-          name: img.path.split('/').pop(),
-          width: img.width,
-          height: img.height,
-        }));
+      console.log('[CreatePost] Launching image picker');
 
-        setImages([...images, ...newImages]);
+      ImagePicker.openPicker({
+        width: 1200,
+        height: 1200,
+        multiple: true,
+        cropping: false,
+        compressImageQuality: 0.8,
+        mediaType: 'photo',
+        maxFiles: 5 - images.length,
       })
-      .catch(err => {
-        if (err.code !== 'E_PICKER_CANCELLED') {
-          Alert.alert('Error', 'Failed to pick image');
-          console.error(err);
-        }
-      });
+        .then(selectedImages => {
+          // Limit to 5 images total
+          if (images.length + selectedImages.length > 5) {
+            Alert.alert('Limit Exceeded', 'You can upload maximum 5 images');
+            return;
+          }
+
+          const newImages = selectedImages.map(img => ({
+            uri: Platform.OS === 'ios' ? img.sourceURL || img.path : img.path,
+            type: img.mime,
+            name: img.path.split('/').pop(),
+            width: img.width,
+            height: img.height,
+          }));
+
+          console.log('[CreatePost] Selected images:', newImages.length);
+          setImages([...images, ...newImages]);
+        })
+        .catch(err => {
+          if (err.code !== 'E_PICKER_CANCELLED') {
+            console.error('[CreatePost] Image picker error:', err);
+
+            // Provide more specific error messages
+            let errorMessage = 'Failed to pick image';
+            if (err.code === 'E_PERMISSION_MISSING') {
+              errorMessage = 'Permission denied. Please enable photo library access in settings.';
+            } else if (err.code === 'E_NO_IMAGE_DATA') {
+              errorMessage = 'No image data found. Please try selecting a different image.';
+            } else if (err.message) {
+              errorMessage = err.message;
+            }
+
+            Alert.alert('Error', errorMessage);
+          }
+        });
+    } catch (error) {
+      console.error('[CreatePost] Error in handlePickImage:', error);
+      Alert.alert('Error', 'Failed to open image picker. Please try again.');
+    }
   };
 
   // Handle take photo
-  const handleTakePhoto = () => {
-    ImagePicker.openCamera({
-      width: 1200,
-      height: 1200,
-      cropping: false,
-      compressImageQuality: 0.8,
-    })
-      .then(image => {
-        if (images.length >= 5) {
-          Alert.alert('Limit Exceeded', 'You can upload maximum 5 images');
-          return;
-        }
+  const handleTakePhoto = async () => {
+    try {
+      // Request camera permission first
+      const hasPermission = await requestCameraPermission();
+      if (!hasPermission) {
+        return;
+      }
 
-        const newImage = {
-          uri:
-            Platform.OS === 'ios' ? image.sourceURL || image.path : image.path,
-          type: image.mime,
-          name: image.path.split('/').pop(),
-          width: image.width,
-          height: image.height,
-        };
+      console.log('[CreatePost] Launching camera');
 
-        setImages([...images, newImage]);
+      ImagePicker.openCamera({
+        width: 1200,
+        height: 1200,
+        cropping: false,
+        compressImageQuality: 0.8,
       })
-      .catch(err => {
-        if (err.code !== 'E_PICKER_CANCELLED') {
-          Alert.alert('Error', 'Failed to take photo');
-          console.error(err);
-        }
-      });
+        .then(image => {
+          if (images.length >= 5) {
+            Alert.alert('Limit Exceeded', 'You can upload maximum 5 images');
+            return;
+          }
+
+          const newImage = {
+            uri:
+              Platform.OS === 'ios' ? image.sourceURL || image.path : image.path,
+            type: image.mime,
+            name: image.path.split('/').pop(),
+            width: image.width,
+            height: image.height,
+          };
+
+          console.log('[CreatePost] Photo taken successfully');
+          setImages([...images, newImage]);
+        })
+        .catch(err => {
+          if (err.code !== 'E_PICKER_CANCELLED') {
+            console.error('[CreatePost] Camera error:', err);
+
+            // Provide more specific error messages
+            let errorMessage = 'Failed to take photo';
+            if (err.code === 'E_PERMISSION_MISSING') {
+              errorMessage = 'Camera permission denied. Please enable camera access in settings.';
+            } else if (err.code === 'E_NO_CAMERA') {
+              errorMessage = 'Camera not available on this device.';
+            } else if (err.message) {
+              errorMessage = err.message;
+            }
+
+            Alert.alert('Error', errorMessage);
+          }
+        });
+    } catch (error) {
+      console.error('[CreatePost] Error in handleTakePhoto:', error);
+      Alert.alert('Error', 'Failed to open camera. Please try again.');
+    }
   };
 
   // Handle remove image

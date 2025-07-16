@@ -59,24 +59,31 @@ const SearchScreen: React.FC = () => {
     if (userSearchQuery.data?.data?.users) {
       const users = userSearchQuery.data.data.users;
       const pagination = userSearchQuery.data.data.pagination;
-      
+
       console.log('[SearchScreen] Search results:', {
+        query: debouncedQuery,
         usersCount: users.length,
         pagination,
-        page
+        page,
+        status: userSearchQuery.data.status
       });
-      
+
       // Use the pagination data from API response
       setHasMore(pagination?.has_next || false);
-      
+
       // Accumulate users for pagination
       if (page === 1) {
         setAllUsers(users);
       } else {
         setAllUsers(prev => [...prev, ...users]);
       }
+    } else if (userSearchQuery.data && !userSearchQuery.data.status) {
+      // Handle API error responses
+      console.warn('[SearchScreen] Search API returned error:', userSearchQuery.data.message);
+      setAllUsers([]);
+      setHasMore(false);
     }
-  }, [userSearchQuery.data, page]);
+  }, [userSearchQuery.data, page, debouncedQuery]);
 
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
@@ -205,6 +212,21 @@ const SearchScreen: React.FC = () => {
             onEndReachedThreshold={0.3}
             ListFooterComponent={renderFooter}
           />
+        ) : userSearchQuery.isError ? (
+          <View style={styles.noResultsContainer}>
+            <Icon name="alert-circle" size={48} color={colors.error} />
+            <Text
+              style={[styles.noResultsText, {color: colors.text.secondary}]}>
+              Search failed. Please check your connection and try again.
+            </Text>
+            <TouchableOpacity
+              style={[styles.retryButton, { backgroundColor: colors.primary }]}
+              onPress={() => userSearchQuery.refetch()}>
+              <Text style={[styles.retryButtonText, { color: colors.surface }]}>
+                Retry Search
+              </Text>
+            </TouchableOpacity>
+          </View>
         ) : searchQuery.length > 0 ? (
           <View style={styles.noResultsContainer}>
             <Icon name="search" size={48} color={colors.text.tertiary} />
@@ -335,6 +357,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 16,
     textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   emptyContainer: {
     flex: 1,

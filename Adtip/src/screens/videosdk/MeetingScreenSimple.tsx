@@ -18,7 +18,7 @@ import {
   RTCView,
   MediaStream
 } from '@videosdk.live/react-native-sdk'
-import { ParticipantView } from '../../components/videosdk'
+import { ParticipantView, VideoSDKCallTimer } from '../../components/videosdk'
 import { 
   Mic, MicOff, Camera, CameraOff, Phone, 
   Speaker
@@ -561,11 +561,17 @@ const MeetingContent = () => {
           {session?.peerName || 'Connecting...'}
         </Text>
         <Text style={styles.headerSubtitle}>
-          {status === 'outgoing' ? 'Calling...' : 
+          {status === 'outgoing' ? 'Calling...' :
            status === 'connecting' ? 'Connecting...' :
            status === 'in_call' ? `${session?.type} call` :
            'Call'}
         </Text>
+        {/* Show timer when call is active */}
+        {status === 'in_call' && (
+          <View style={styles.timerContainer}>
+            <VideoSDKCallTimer />
+          </View>
+        )}
       </View>
       
       {/* Video content for video calls */}
@@ -824,6 +830,10 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     color: '#aaa',
     fontSize: 14,
+  },
+  timerContainer: {
+    marginTop: 8,
+    alignItems: 'center',
   },
   participantsContainer: {
     flex: 1,

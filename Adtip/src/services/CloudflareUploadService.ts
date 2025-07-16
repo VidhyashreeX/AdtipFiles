@@ -287,13 +287,37 @@ class CloudflareUploadService {
 
     } catch (error: any) {
       console.error('[CloudflareUpload] Upload failed:', error);
+
+      // Enhanced error handling with specific error types
+      let errorMessage = 'Upload failed';
+
+      if (error.code === 'NetworkingError') {
+        errorMessage = 'Network connection failed. Please check your internet connection and try again.';
+      } else if (error.code === 'CredentialsError') {
+        errorMessage = 'Authentication failed. Please contact support.';
+      } else if (error.code === 'NoSuchBucket') {
+        errorMessage = 'Storage configuration error. Please contact support.';
+      } else if (error.code === 'AccessDenied') {
+        errorMessage = 'Access denied. Please contact support.';
+      } else if (error.code === 'EntityTooLarge') {
+        errorMessage = 'File size too large. Please compress your video and try again.';
+      } else if (error.message?.includes('timeout')) {
+        errorMessage = 'Upload timeout. Please check your connection and try again.';
+      } else if (error.message?.includes('ENOENT')) {
+        errorMessage = 'File not found. Please select the file again.';
+      } else if (error.message?.includes('EACCES')) {
+        errorMessage = 'Permission denied. Please check file permissions.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
       return {
         success: false,
         url: '',
         key: '',
         size: 0,
         contentType: '',
-        error: error.message || 'Upload failed',
+        error: errorMessage,
       };
     }
   }
@@ -649,18 +673,68 @@ class CloudflareUploadService {
   /**
    * Test connection to Cloudflare R2
    */
-  async testConnection(): Promise<boolean> {
+  async testConnection(): Promise<{ success: boolean; error?: string }> {
     try {
-      // Try to list buckets (this will validate our credentials)
-      await this.s3Client.send(new ListBucketsCommand({}));
+      console.log('[CloudflareUpload] Testing connection to Cloudflare R2...');
 
-      console.log('[CloudflareUpload] Connection test successful');
-      return true;
+      // Try to list buckets (this will validate our credentials)
+      const result = await this.s3Client.send(new ListBucketsCommand({}));
+
+      console.log('[CloudflareUpload] Connection test successful. Buckets found:', result.Buckets?.length || 0);
+      return { success: true };
 
     } catch (error: any) {
       console.error('[CloudflareUpload] Connection test failed:', error);
-      return false;
+
+      let errorMessage = 'Connection test failed';
+      if (error.code === 'CredentialsError') {
+        errorMessage = 'Invalid Cloudflare R2 credentials';
+      } else if (error.code === 'NetworkingError') {
+        errorMessage = 'Network connection failed';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      return { success: false, error: errorMessage };
     }
+  }
+
+  /**
+   * Diagnose upload issues
+   */
+  async diagnoseUploadIssues(): Promise<{
+    connectionOk: boolean;
+    configValid: boolean;
+    issues: string[];
+  }> {
+    const issues: string[] = [];
+    let connectionOk = false;
+    let configValid = true;
+
+    // Check configuration
+    if (!CLOUDFLARE_R2_CONFIG.accessKeyId) {
+      issues.push('Missing access key ID');
+      configValid = false;
+    }
+    if (!CLOUDFLARE_R2_CONFIG.secretAccessKey) {
+      issues.push('Missing secret access key');
+      configValid = false;
+    }
+    if (!CLOUDFLARE_R2_CONFIG.bucketName) {
+      issues.push('Missing bucket name');
+      configValid = false;
+    }
+
+    // Test connection if config is valid
+    if (configValid) {
+      const connectionTest = await this.testConnection();
+      connectionOk = connectionTest.success;
+      if (!connectionOk && connectionTest.error) {
+        issues.push(`Connection failed: ${connectionTest.error}`);
+      }
+    }
+
+    return { connectionOk, configValid, issues };
   }
 
   /**

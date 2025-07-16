@@ -143,7 +143,29 @@ class NotificationService {
       }
     }
 
-    try { await notifee.cancelNotification(id) } catch {}
+    try {
+      // Cancel the specific notification
+      await notifee.cancelNotification(id)
+      console.log('[NotificationService] Cancelled notification:', id)
+    } catch (error) {
+      console.warn('[NotificationService] Failed to cancel notification:', error)
+    }
+
+    // Also try to stop any ongoing foreground service
+    try {
+      await notifee.stopForegroundService()
+      console.log('[NotificationService] Stopped foreground service')
+    } catch (error) {
+      console.warn('[NotificationService] Failed to stop foreground service:', error)
+    }
+
+    // Clear all notifications for this app as a fallback for persistent notifications
+    try {
+      await notifee.cancelAllNotifications()
+      console.log('[NotificationService] Cleared all notifications as fallback')
+    } catch (error) {
+      console.warn('[NotificationService] Failed to clear all notifications:', error)
+    }
   }
 
   /**

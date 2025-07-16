@@ -17,6 +17,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useAuth } from '../../contexts/AuthContext'
+import { useTabNavigator } from '../../contexts/TabNavigatorContext'
 import { useUsers } from '../../hooks/useQueries'
 import { Contact } from '../../types/api'
 import Header from '../../components/common/Header'
@@ -356,6 +357,9 @@ const TipCallScreenSimple = () => {
   const { blockUser, isUserBlocked } = useBlocklist()
   const queryClient = useQueryClient()
 
+  // Get tab navigator context for proper bottom padding
+  const { contentPaddingBottom } = useTabNavigator()
+
   // -------------------- Premium --------------------
   const [premiumActive, setPremiumActive] = useState(false)
   const [showPremiumPopup, setShowPremiumPopup] = useState(false)
@@ -604,6 +608,9 @@ const TipCallScreenSimple = () => {
   const {
     data: usersData,
     isLoading: usersLoading,
+    isFetchingNextPage: usersLoadingMore,
+    hasNextPage: hasMoreUsers,
+    fetchNextPage: loadMoreUsers,
     refetch: refreshUsers,
   } = useUsers(
     {
@@ -628,6 +635,9 @@ const TipCallScreenSimple = () => {
   const {
     data: liveSearchData,
     isLoading: liveSearchLoading,
+    isFetchingNextPage: liveSearchLoadingMore,
+    hasNextPage: hasMoreLiveSearchResults,
+    fetchNextPage: loadMoreLiveSearchResults,
   } = useUsers(
     {
       languageFilter,
@@ -650,8 +660,13 @@ const TipCallScreenSimple = () => {
       console.log('[TipCallScreen] Raw API response pages:', usersData.pages.length)
       console.log('[TipCallScreen] Total contacts from API:', contacts.length)
       console.log('[TipCallScreen] Sample contacts:', contacts.slice(0, 3))
+      console.log('[TipCallScreen] Pagination info:', {
+        hasMoreUsers,
+        usersLoadingMore,
+        lastPagePagination: usersData.pages[usersData.pages.length - 1]?.pagination
+      })
     }
-  }, [usersData, contacts])
+  }, [usersData, contacts, hasMoreUsers, usersLoadingMore])
 
   const filteredContacts = contacts.filter(
     (contact) =>
@@ -987,6 +1002,45 @@ const TipCallScreenSimple = () => {
     handleProfilePress(contact.id)
   }, [handleProfilePress])
 
+  // Handle load more contacts (pagination)
+  const handleLoadMore = useCallback(() => {
+    console.log('[TipCallScreen] Load more triggered:', {
+      hasMoreUsers,
+      usersLoadingMore,
+      currentContactsCount: contacts.length
+    })
+
+    if (hasMoreUsers && !usersLoadingMore) {
+      loadMoreUsers()
+    }
+  }, [hasMoreUsers, usersLoadingMore, loadMoreUsers, contacts.length])
+
+  // Handle load more live search results
+  const handleLiveSearchLoadMore = useCallback(() => {
+    console.log('[TipCallScreen] Live search load more triggered:', {
+      hasMoreLiveSearchResults,
+      liveSearchLoadingMore,
+      currentLiveSearchCount: liveSearchContacts.length
+    })
+
+    if (hasMoreLiveSearchResults && !liveSearchLoadingMore) {
+      loadMoreLiveSearchResults()
+    }
+  }, [hasMoreLiveSearchResults, liveSearchLoadingMore, loadMoreLiveSearchResults, liveSearchContacts.length])
+
+  // Handle load more live search results
+  const handleLoadMoreLiveSearch = useCallback(() => {
+    console.log('[TipCallScreen] Load more live search triggered:', {
+      hasMoreLiveSearchResults,
+      liveSearchLoadingMore,
+      currentLiveSearchCount: liveSearchContacts.length
+    })
+
+    if (hasMoreLiveSearchResults && !liveSearchLoadingMore) {
+      loadMoreLiveSearchResults()
+    }
+  }, [hasMoreLiveSearchResults, liveSearchLoadingMore, loadMoreLiveSearchResults, liveSearchContacts.length])
+
   // Render contact item
   const renderContactItem = ({ item }: { item: Contact | { ad: true; key: string } }) => {
     if ('ad' in item) return <RectangleAdComponent key={item.key} />
@@ -1023,6 +1077,32 @@ const TipCallScreenSimple = () => {
       onBlockUser={() => handleBlockUser(item)}
     />
   )
+
+  // Render footer for pagination loading
+  const renderFooter = () => {
+    if (!usersLoadingMore) return null
+    return (
+      <View style={styles.loadingFooter}>
+        <ActivityIndicator size="small" color={colors.primary} />
+        <Text style={[styles.paginationLoadingText, { color: colors.text.secondary }]}>
+          Loading more contacts...
+        </Text>
+      </View>
+    )
+  }
+
+  // Render footer for live search pagination loading
+  const renderLiveSearchFooter = () => {
+    if (!liveSearchLoadingMore) return null
+    return (
+      <View style={styles.loadingFooter}>
+        <ActivityIndicator size="small" color={colors.primary} />
+        <Text style={[styles.paginationLoadingText, { color: colors.text.secondary }]}>
+          Loading more results...
+        </Text>
+      </View>
+    )
+  }
 
   // Missed calls count
   const { count: missedCallsCount } = useMissedCallsCount(user?.id ? String(user.id) : undefined)
@@ -1177,6 +1257,8 @@ const TipCallScreenSimple = () => {
           data={liveSearchQuery.trim() ? liveSearchContacts : []}
           keyExtractor={(item) => `live-search-user-${item.id}`}
           renderItem={renderLiveSearchItem}
+          onEndReached={handleLiveSearchLoadMore}
+          onEndReachedThreshold={0.8}
           ListEmptyComponent={liveSearchQuery.trim() && !liveSearchLoading ? (
             <View style={styles.emptySearchState}>
               <Icon name="search" size={40} color={colors.text.tertiary} />
@@ -1195,7 +1277,7 @@ const TipCallScreenSimple = () => {
                 Searching...
               </Text>
             </View>
-          ) : null}
+          ) : liveSearchLoadingMore ? renderLiveSearchFooter() : null}
           keyboardShouldPersistTaps="handled"
           removeClippedSubviews={false}
           showsVerticalScrollIndicator={false}
@@ -1320,9 +1402,15 @@ const TipCallScreenSimple = () => {
             data={contactsWithAds}
             renderItem={renderContactItem}
             keyExtractor={(item) => ('ad' in item ? item.key : item.id.toString())}
-            contentContainerStyle={styles.contactList}
+            contentContainerStyle={[
+              styles.contactList,
+              { paddingBottom: contentPaddingBottom + 20 }
+            ]}
             onRefresh={refreshUsers}
             refreshing={usersLoading}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.8}
+            ListFooterComponent={renderFooter}
             showsVerticalScrollIndicator={false}
             removeClippedSubviews={true}
             maxToRenderPerBatch={10}
@@ -1899,6 +1987,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 8,
     marginHorizontal: 16,
+  },
+
+  // Pagination loading footer styles
+  loadingFooter: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+  },
+  paginationLoadingText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '500',
   },
 })
 

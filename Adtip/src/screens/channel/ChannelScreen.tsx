@@ -26,6 +26,7 @@ import ContentCreatorPlanToggle from '../../components/common/ContentCreatorPlan
 import ChannelCommunicationButtons from '../../components/channel/ChannelCommunicationButtons';
 import ApiService from '../../services/ApiService';
 import CloudflareUploadService from '../../services/CloudflareUploadService';
+import { createFreshProfileImageUrl } from '../../utils/ProfileImageUtils';
 import { CheckCircle, Play, Calendar, Users, Eye, Bell, BellOff, Edit3, Camera, X } from 'lucide-react-native';
 import { MainNavigatorParamList } from '../../types/navigation';
 import { launchImageLibrary } from 'react-native-image-picker';
@@ -443,6 +444,8 @@ const ChannelScreen: React.FC = () => {
         throw new Error(uploadResult.error || 'Upload failed');
       }
 
+      console.log('[ChannelScreen] Image uploaded successfully:', uploadResult.url);
+
       // Update channel with new image URL
       const updateData = {
         id: Number(channelInfo.channelId),
@@ -455,8 +458,9 @@ const ChannelScreen: React.FC = () => {
       const response = await ApiService.updateChannel(updateData);
 
       if (response.status === 200) {
-        // The image upload is handled by the mutation, no need to manually update state
-        // The channel data will be refetched automatically
+        // Force refresh of channel data to show updated image
+        await refetch();
+
         Alert.alert('Success', `${type === 'profile' ? 'Profile' : 'Cover'} image updated successfully`);
       } else {
         throw new Error(response.message || 'Failed to update image');
@@ -760,7 +764,7 @@ const ChannelScreen: React.FC = () => {
               onPress={() => isMyChannel && handleImageUpload('profile')}
               disabled={!isMyChannel || uploadingImage}
             >
-              <Image source={{ uri: channelInfo.profileImage }} style={styles.avatar} />
+              <Image source={{ uri: createFreshProfileImageUrl(channelInfo.profileImage) }} style={styles.avatar} />
               {isMyChannel && (
                 <View style={[styles.avatarEditOverlay, { backgroundColor: colors.primary }]}>
                   <Camera size={16} color="#FFFFFF" />
