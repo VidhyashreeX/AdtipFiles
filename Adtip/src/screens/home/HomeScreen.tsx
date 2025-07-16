@@ -22,6 +22,7 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
+import { InfiniteData } from '@tanstack/react-query';
 // Import Lucide React Native icons
 import { PlayCircle, Gamepad2, WifiOff, Share2, HandCoins, Dices } from 'lucide-react-native';
 import PostWithComments from '../../components/home/PostWithComments';
@@ -41,6 +42,7 @@ import { useNetInfo } from '@react-native-community/netinfo';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
 import PubScaleService from '../../services/PubScaleService';
 import VersionCheckService from '../../services/VersionCheckService';
+import axios from 'axios';
 
 // Components
 import Header from '../../components/common/Header';
@@ -89,6 +91,17 @@ interface Post {
   is_liked?: boolean; last_active?: string | null;
 }
 interface HomeScreenProps { walletBalance?: string; }
+
+interface PostListResponse {
+  status: boolean;
+  message: string;
+  data: Post[];
+  pagination: {
+    current_page: number;
+    total_page: number;
+    total_count: number;
+  };
+}
 
 // Helper Components
 interface StoriesRowProps { 
@@ -601,11 +614,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   // Transform posts data for compatibility
   const posts = useMemo(() => {
     if (isGuest) {
-      // Guest mode: postsData is a single response object
-      return postsData?.data || [];
+      return (postsData as { data: Post[] })?.data || [];
+    } else if (postsData && 'pages' in postsData) {
+      return (postsData as InfiniteData<PostListResponse>)?.pages?.flatMap((page: unknown) => (page as PostListResponse)?.data || []) || [];
     } else {
-      // Authenticated mode: postsData has pages for infinite query
-      return postsData?.pages?.flatMap(page => page?.data || []) || [];
+      return [];
     }
   }, [postsData, isGuest]);
 
@@ -893,6 +906,33 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     setIsGloballyMuted(prev => !prev);
   }, []);
 
+  // Rewarded posts state
+  const [rewardedPosts, setRewardedPosts] = useState<Set<number>>(new Set());
+
+  // Function to handle view of promoted posts
+  const handlePromotedPostView = useCallback(async (postId: number) => {
+    if (!user?.id || rewardedPosts.has(postId)) return;
+    setRewardedPosts(prev => new Set(prev).add(postId));
+    try {
+      const response = await axios.post('/api/view-promoted-post', { user_id: user.id, post_id: postId });
+      if (response.data.status && response.data.earned_amount > 0) {
+        const isPremium = response.data.earned_amount > 0.03;
+        Alert.alert(
+          'Congratulations!',
+          isPremium
+            ? `You earned ₹${response.data.earned_amount.toFixed(2)}!`
+            : 'You earned ₹0.03. Upgrade to premium to earn more per ad.'
+        );
+      } else if (response.data.message === 'Already rewarded for this post') {
+        // Optionally, do nothing or show a message
+      } else if (response.data.message === 'Ad budget exhausted') {
+        Alert.alert('Ad budget exhausted', 'No more rewards available for this ad.');
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Could not process your view.');
+    }
+  }, [user?.id, rewardedPosts]);
+
   // Render post item with enhanced data handling
   const renderPostItem = useCallback(({ item, index }: { item: Post; index: number }) => {
     const isVisible = visiblePostIds.includes(item.id);
@@ -930,6 +970,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           onPostPress={(postId: number) => console.log('Post pressed:', postId)}
           onUserPress={handleUserProfilePress}
           onFollow={handleUserFollow}
+          isPromoted={item.is_promoted === 1}
+          onPromotedView={handlePromotedPostView}
         />
         
         {/* Rectangle ad after every 3rd post (starting from post 2) */}
@@ -940,7 +982,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
         )}
       </>
     );
-  }, [visiblePostIds, getTimeAgo, handlePostLike, handleCommentPress, handleSharePost, handleUserProfilePress, handleUserFollow, styles, isGloballyMuted, handleToggleGlobalMute]);
+  }, [visiblePostIds, getTimeAgo, handlePostLike, handleCommentPress, handleSharePost, handleUserProfilePress, handleUserFollow, styles, isGloballyMuted, handleToggleGlobalMute, handlePromotedPostView]);
 
   // Render empty state
   const renderEmptyState = useCallback(() => {

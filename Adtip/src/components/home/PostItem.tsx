@@ -56,6 +56,8 @@ interface PostItemProps {
   last_active?: string | null;
   isGloballyMuted?: boolean;
   onToggleGlobalMute?: () => void;
+  onPromotedView?: (postId: number) => void;
+  isPromoted?: boolean;
 }
 
 const PostItem: React.FC<PostItemProps> = ({
@@ -81,6 +83,8 @@ const PostItem: React.FC<PostItemProps> = ({
   last_active,
   isGloballyMuted = false,
   onToggleGlobalMute,
+  onPromotedView,
+  isPromoted = false,
 }) => {
   const { colors } = useTheme();
   const [secureProfileImage, setSecureProfileImage] = useState<any>(null);
@@ -92,6 +96,7 @@ const PostItem: React.FC<PostItemProps> = ({
   const [videoError, setVideoError] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [hasRewarded, setHasRewarded] = useState(false);
 
   // Enhanced video URL testing and validation
   const testAndValidateVideoUrl = useCallback(async (url: string) => {
@@ -164,6 +169,18 @@ const PostItem: React.FC<PostItemProps> = ({
     }
   }, [isVisible, wasManuallyPaused, media_type, videoError]);
 
+  // For image: reward after 5 seconds of being visible
+  useEffect(() => {
+    let timer: any;
+    if (media_type === 'image' && isPromoted && isVisible && !hasRewarded && onPromotedView) {
+      timer = setTimeout(() => {
+        setHasRewarded(true);
+        onPromotedView(id);
+      }, 5000); // 5 seconds
+    }
+    return () => clearTimeout(timer);
+  }, [media_type, isPromoted, isVisible, hasRewarded, onPromotedView, id]);
+
   const handlePostPress = useCallback(() => {
     onPostPress(id);
   }, [onPostPress, id]);
@@ -220,8 +237,12 @@ const PostItem: React.FC<PostItemProps> = ({
   }, []);
 
   const handleVideoEnd = useCallback(() => {
+    if (isPromoted && !hasRewarded && onPromotedView) {
+      setHasRewarded(true);
+      onPromotedView(id);
+    }
     // Video ended, could restart or show replay button
-  }, []);
+  }, [isPromoted, hasRewarded, onPromotedView, id]);
 
   const handleVideoError = useCallback((error: any) => {
     console.error(`[PostItem ${id}] Video error:`, error);
