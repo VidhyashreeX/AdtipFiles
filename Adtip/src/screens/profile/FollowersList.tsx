@@ -41,13 +41,16 @@ const FollowersList: React.FC<FollowersListProps> = (props) => {
   // Use props first, then route params as fallback
   const { followers: routeFollowers, userId: routeUserId, onUserPress: routeOnUserPress } = (route.params || {}) as { followers?: Follower[]; userId?: number; onUserPress?: (userId: number) => void };
   const initialFollowers = props.followers || routeFollowers;
-  const userId = props.currentUserId || routeUserId;
+  const profileUserId = routeUserId; // The user whose followers we're viewing
+  const currentUserId = props.currentUserId; // The logged-in user
   const onUserPress = props.onUserPress || routeOnUserPress;
   const showHeader = props.showHeader !== false; // Default to true
 
   // State for fetched followers and loading
   const [followers, setFollowers] = useState<Follower[]>(initialFollowers || []);
   const [loading, setLoading] = useState(!initialFollowers); // Only show loading if no initial data
+  // State to track logged-in user's follow status for each user in the list
+  const [loggedInUserFollowStatus, setLoggedInUserFollowStatus] = useState<Record<string, boolean>>({});
 
   // Default profile image
   const DEFAULT_PROFILE_IMAGE = 'https://via.placeholder.com/150';
@@ -63,9 +66,39 @@ const FollowersList: React.FC<FollowersListProps> = (props) => {
     return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
+  // Fetch logged-in user's following list to determine follow status
+  const fetchLoggedInUserFollowStatus = async () => {
+    if (!currentUserId) return;
+
+    try {
+      const token = await AsyncStorage.getItem('accessToken');
+      const response = await fetch(`${API_BASE_URL}/api/follow/followings/${currentUserId}`, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.status && result.type === 'followings' && Array.isArray(result.data)) {
+          const followStatusMap: Record<string, boolean> = {};
+          result.data.forEach((following: any) => {
+            followStatusMap[following.id.toString()] = true;
+          });
+          setLoggedInUserFollowStatus(followStatusMap);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching logged-in user follow status:', error);
+    }
+  };
+
   // Fetch followers data from API
   const fetchFollowers = async () => {
-    if (!userId) {
+    if (!profileUserId) {
       setFollowers([]);
       setLoading(false);
       return;
@@ -74,7 +107,7 @@ const FollowersList: React.FC<FollowersListProps> = (props) => {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem('accessToken');
-      const response = await fetch(`${API_BASE_URL}/api/follow/followers/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/follow/followers/${profileUserId}`, {
         method: 'GET',
         headers: {
           Accept: 'application/json',
@@ -109,22 +142,72 @@ const FollowersList: React.FC<FollowersListProps> = (props) => {
   };
 
   // Handler for follow/unfollow button
-  const handleFollowToggle = (followerId: string | number, currentIsFollowed: number) => {
-    setFollowers((prevFollowers) =>
-      prevFollowers.map((follower) =>
-        follower.id === followerId ? { ...follower, is_followed: currentIsFollowed ? 0 : 1 } : follower
-      )
-    );
-    // In a real app, you'd also make an API call here to update the follow status on the server
-    console.log(`Toggled follow status for user ${followerId}`);
+  const handleFollowToggle = async (targetUserId: string | number) => {
+    if (!currentUserId) return;
+
+    const isCurrentlyFollowing = loggedInUserFollowStatus[targetUserId.toString()] || false;
+    const action = isCurrentlyFollowing ? 'unfollow' : 'follow';
+
+    // Optimistically update the UI
+    setLoggedInUserFollowStatus(prev => ({
+      ...prev,
+      [targetUserId.toString()]: !isCurrentlyFollowing
+    }));
+
+    try {
+      const token = await AsyncStorage.getItem('accessToken');
+      const response = await fetch(`${API_BASE_URL}/api/follow-user`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          followingId: Number(targetUserId),
+          followerId: currentUserId,
+          action: action,
+        }),
+      });
+
+      if (!response.ok) {
+        // Revert the optimistic update on error
+        setLoggedInUserFollowStatus(prev => ({
+          ...prev,
+          [targetUserId.toString()]: isCurrentlyFollowing
+        }));
+        console.error('Error toggling follow status:', await response.text());
+      }
+    } catch (error) {
+      // Revert the optimistic update on error
+      setLoggedInUserFollowStatus(prev => ({
+        ...prev,
+        [targetUserId.toString()]: isCurrentlyFollowing
+      }));
+      console.error('Error toggling follow status:', error);
+    }
   };
 
   // Fetch data on component mount or when userId changes - only if no props data provided
   useEffect(() => {
-    if (!initialFollowers && userId) {
+    if (!initialFollowers && profileUserId) {
       fetchFollowers();
     }
-  }, [userId, initialFollowers]);
+  }, [profileUserId, initialFollowers]);
+
+  // Fetch logged-in user's follow status when component mounts or currentUserId changes
+  useEffect(() => {
+    if (currentUserId) {
+      fetchLoggedInUserFollowStatus();
+    }
+  }, [currentUserId]);
+
+  // Update follow status when followers list changes
+  useEffect(() => {
+    if (currentUserId && followers.length > 0) {
+      fetchLoggedInUserFollowStatus();
+    }
+  }, [followers.length, currentUserId]);
 
   // Render item for FlatList
   const renderFollowerItem = ({ item }: { item: Follower }) => (
@@ -144,11 +227,23 @@ const FollowersList: React.FC<FollowersListProps> = (props) => {
       <Text style={[styles.username, { color: colors.text.primary }]}>
         {item.name || 'Unknown'}
       </Text>
-      <TouchableOpacity onPress={() => handleFollowToggle(item.id, item.is_followed)}>
-        <Text style={styles.followText}>
-          {item.is_followed ? 'Following' : 'Follow'}
-        </Text>
-      </TouchableOpacity>
+      {currentUserId && Number(item.id) !== currentUserId && (
+        <TouchableOpacity
+          onPress={() => handleFollowToggle(item.id)}
+          style={[
+            styles.followButton,
+            {
+              backgroundColor: loggedInUserFollowStatus[item.id.toString()]
+                ? colors.error || '#ff4444'
+                : colors.primary || '#007bff'
+            }
+          ]}
+        >
+          <Text style={[styles.followButtonText, { color: '#ffffff' }]}>
+            {loggedInUserFollowStatus[item.id.toString()] ? 'Following' : 'Follow'}
+          </Text>
+        </TouchableOpacity>
+      )}
     </TouchableOpacity>
   );
 
@@ -246,6 +341,18 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '500',
+  },
+  followButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    minWidth: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  followButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   followText: {
     fontSize: 14,
