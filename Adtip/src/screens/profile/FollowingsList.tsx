@@ -46,7 +46,7 @@ const FollowingsList: React.FC<FollowingsListProps> = (props) => {
 
   // State for fetched followings and loading
   const [followings, setFollowings] = useState<Following[]>(initialFollowings || []);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!initialFollowings); // Only show loading if no initial data
 
   // Default profile image
   const DEFAULT_PROFILE_IMAGE = 'https://via.placeholder.com/150';
@@ -107,10 +107,12 @@ const FollowingsList: React.FC<FollowingsListProps> = (props) => {
     }
   };
 
-  // Fetch data on component mount or when userId changes
+  // Fetch data on component mount or when userId changes - only if no props data provided
   useEffect(() => {
-    fetchFollowings();
-  }, [userId]);
+    if (!initialFollowings && userId) {
+      fetchFollowings();
+    }
+  }, [userId, initialFollowings]);
 
   // Render item for FlatList
   const renderFollowingItem = ({ item }: { item: Following }) => (

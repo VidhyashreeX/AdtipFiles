@@ -47,7 +47,7 @@ const FollowersList: React.FC<FollowersListProps> = (props) => {
 
   // State for fetched followers and loading
   const [followers, setFollowers] = useState<Follower[]>(initialFollowers || []);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!initialFollowers); // Only show loading if no initial data
 
   // Default profile image
   const DEFAULT_PROFILE_IMAGE = 'https://via.placeholder.com/150';
@@ -119,10 +119,12 @@ const FollowersList: React.FC<FollowersListProps> = (props) => {
     console.log(`Toggled follow status for user ${followerId}`);
   };
 
-  // Fetch data on component mount or when userId changes
+  // Fetch data on component mount or when userId changes - only if no props data provided
   useEffect(() => {
-    fetchFollowers();
-  }, [userId]);
+    if (!initialFollowers && userId) {
+      fetchFollowers();
+    }
+  }, [userId, initialFollowers]);
 
   // Render item for FlatList
   const renderFollowerItem = ({ item }: { item: Follower }) => (
