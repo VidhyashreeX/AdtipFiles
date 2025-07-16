@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
+import { Play } from 'lucide-react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -697,7 +698,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
             )}
             {post.media_type === 'video' && (
               <View style={styles.videoIndicator}>
-                <View style={styles.playIcon} />
+                <Play size={16} color="#fff" />
               </View>
             )}
             {post.is_premium && (
@@ -902,12 +903,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 4,
   },
-  playIcon: {
-    width: 16,
-    height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    borderRadius: 8,
-  },
+
   premiumBadge: {
     position: 'absolute',
     top: 8,

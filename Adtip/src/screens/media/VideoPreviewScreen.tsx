@@ -11,6 +11,7 @@ import {
 import {useNavigation, useRoute} from '@react-navigation/native';
 import Video from 'react-native-video';
 import Icon from 'react-native-vector-icons/Feather';
+import { Play, Pause } from 'lucide-react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Orientation from 'react-native-orientation-locker';
 
@@ -222,11 +223,11 @@ const VideoPreviewScreen = () => {
               <TouchableOpacity
                 onPress={togglePlayPause}
                 style={styles.playPauseButton}>
-                <Icon
-                  name={isPlaying ? 'pause' : 'play'}
-                  size={40}
-                  color="#fff"
-                />
+                {isPlaying ? (
+                  <Pause size={40} color="#fff" />
+                ) : (
+                  <Play size={40} color="#fff" />
+                )}
               </TouchableOpacity>
             </View>
 

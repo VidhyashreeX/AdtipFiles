@@ -12,7 +12,7 @@ import {
 import { GestureDetector } from 'react-native-gesture-handler';
 import Icon from 'react-native-vector-icons/Feather';
 import { type ShortVideo } from '../../../hooks/useShortsQuery';
-import { Share2, Heart, MessageCircle } from 'lucide-react-native';
+import { Share2, Heart, MessageCircle, Play, Pause, VolumeX, Volume2 } from 'lucide-react-native';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -133,11 +133,11 @@ const PlayPauseOverlay = memo(({
   return (
     <View style={styles.playPauseOverlay}>
       <View style={styles.playPauseBackground}>
-        <Icon 
-          name={isPlaying ? "pause" : "play"} 
-          size={48} 
-          color="#FFFFFF" 
-        />
+        {isPlaying ? (
+          <Pause size={48} color="#FFFFFF" />
+        ) : (
+          <Play size={48} color="#FFFFFF" />
+        )}
       </View>
     </View>
   );
@@ -349,7 +349,11 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
           style={styles.muteButton}
           activeOpacity={0.7}
         >
-          <Icon name={isGloballyMuted ? "volume-x" : "volume-2"} size={20} color="#FFF" />
+          {isGloballyMuted ? (
+            <VolumeX size={20} color="#FFF" />
+          ) : (
+            <Volume2 size={20} color="#FFF" />
+          )}
         </TouchableOpacity>
 
         {/* Fixed bottom content positioning */}

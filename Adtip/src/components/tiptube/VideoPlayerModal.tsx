@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import Video from 'react-native-video';
 import Icon from 'react-native-vector-icons/Feather';
+import { VolumeX, Volume2, Play, Pause } from 'lucide-react-native';
 import {useTheme} from '../../contexts/ThemeContext';
 // Removing unused import
 // import ApiService from '../../services/ApiService';
@@ -237,21 +238,21 @@ const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                   <TouchableOpacity
                     onPress={handleToggleMute}
                     style={styles.controlButton}>
-                    <Icon
-                      name={isMuted ? 'volume-x' : 'volume-2'}
-                      size={24}
-                      color={colors.white}
-                    />
+                    {isMuted ? (
+                      <VolumeX size={24} color={colors.white} />
+                    ) : (
+                      <Volume2 size={24} color={colors.white} />
+                    )}
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     onPress={handlePlayPause}
                     style={styles.playPauseButton}>
-                    <Icon
-                      name={isPlaying ? 'pause' : 'play'}
-                      size={32}
-                      color={colors.white}
-                    />
+                    {isPlaying ? (
+                      <Pause size={32} color={colors.white} />
+                    ) : (
+                      <Play size={32} color={colors.white} />
+                    )}
                   </TouchableOpacity>
 
                   <TouchableOpacity

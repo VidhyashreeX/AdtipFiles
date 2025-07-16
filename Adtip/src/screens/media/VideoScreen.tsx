@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import {useNavigation, useRoute} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import { IndianRupee } from 'lucide-react-native';
+import { IndianRupee, VolumeX, Volume2, Play, Pause } from 'lucide-react-native';
 import Video from 'react-native-video';
 import Orientation from 'react-native-orientation-locker';
 //import { PubScale } from 'pubscale-sdk';
@@ -483,11 +483,11 @@ const VideoScreen = () => {
               <TouchableOpacity
                 style={styles.playPauseButton}
                 onPress={handleTogglePlay}>
-                <Icon
-                  name={paused ? 'play' : 'pause'}
-                  size={40}
-                  color={colors.white}
-                />
+                {paused ? (
+                  <Play size={40} color={colors.white} />
+                ) : (
+                  <Pause size={40} color={colors.white} />
+                )}
               </TouchableOpacity>
             </View>
 
@@ -520,11 +520,11 @@ const VideoScreen = () => {
 
               <View style={styles.actionControls}>
                 <TouchableOpacity onPress={() => setMuted(!muted)}>
-                  <Icon
-                    name={muted ? 'volume-x' : 'volume-2'}
-                    size={20}
-                    color={colors.white}
-                  />
+                  {muted ? (
+                    <VolumeX size={20} color={colors.white} />
+                  ) : (
+                    <Volume2 size={20} color={colors.white} />
+                  )}
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={handleToggleFullscreen}>
