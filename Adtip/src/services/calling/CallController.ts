@@ -390,8 +390,10 @@ class CallController {
               action: 'start'
             })
 
-        if (paymentResponse.status && paymentResponse.call_id) {
-          callId = paymentResponse.call_id
+        // Fix: Support both callId and call_id from backend
+        const callId = paymentResponse.callId || paymentResponse.call_id;
+        if (paymentResponse.status && callId) {
+          // use callId everywhere
           console.log(`[CallController] Payment tracking started, callId: ${callId}`)
         } else {
           console.warn('[CallController] Payment API call succeeded but no callId returned:', paymentResponse)
@@ -530,13 +532,15 @@ class CallController {
                 action: 'start'
               })
 
-          if (paymentResponse.status && paymentResponse.call_id) {
+          // Fix: Support both callId and call_id from backend
+          const callId = paymentResponse.callId || paymentResponse.call_id;
+          if (paymentResponse.status && callId) {
             // Update session with callId
             store.actions.setSession({
               ...session,
-              callId: paymentResponse.call_id
+              callId
             })
-            console.log(`[CallController] Payment tracking started for accepted call, callId: ${paymentResponse.call_id}`)
+            console.log(`[CallController] Payment tracking started for accepted call, callId: ${callId}`)
           } else {
             console.warn('[CallController] Payment API call succeeded but no callId returned:', paymentResponse)
           }
