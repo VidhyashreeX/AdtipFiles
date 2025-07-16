@@ -10,7 +10,6 @@ import {
   Modal,
   FlatList,
   Dimensions,
-  ScrollView,
   Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -489,8 +488,12 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
         }
       />
 
-      <ScrollView
-        style={styles.scrollView}
+      {/* Main Content with FlatList */}
+      <FlatList
+        data={posts}
+        numColumns={3}
+        keyExtractor={(item) => item.id.toString()}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -499,214 +502,210 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
             tintColor={colors.primary}
           />
         }
-      >
-        {/* Profile Header */}
-        <View style={styles.profileHeader}>
-          <View style={styles.profileInfo}>
-            <ProfileFastImage
-              source={getFullImageUrl(user?.profile_image)}
-              size={AVATAR_SIZE}
-              style={styles.profileImage}
-            />
-            <View style={styles.profileDetails}>
-              <Text style={[styles.username, { color: colors.text.primary }]}>
-                {user?.name || 'User'}
-              </Text>
-              {user?.bio && (
-                <Text style={[styles.bio, { color: colors.text.secondary }]}>
-                  {user.bio}
-                </Text>
+        ListHeaderComponent={() => (
+          <View>
+            {/* Profile Header */}
+            <View style={styles.profileHeader}>
+              <View style={styles.profileInfo}>
+                <ProfileFastImage
+                  source={getFullImageUrl(user?.profile_image)}
+                  size={AVATAR_SIZE}
+                  style={styles.profileImage}
+                />
+                <View style={styles.profileDetails}>
+                  <Text style={[styles.username, { color: colors.text.primary }]}>
+                    {user?.name || 'User'}
+                  </Text>
+                  {user?.bio && (
+                    <Text style={[styles.bio, { color: colors.text.secondary }]}>
+                      {user.bio}
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {/* Stats Container */}
+              <View style={styles.statsContainer}>
+                <View style={styles.statItem}>
+                  <Text style={[styles.statNumber, { color: colors.text.primary }]}>
+                    {posts.length}
+                  </Text>
+                  <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
+                    Posts
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.statItem}
+                  onPress={handleFollowersPress}
+                >
+                  <Text style={[styles.statNumber, { color: colors.text.primary }]}>
+                    {followersCount}
+                  </Text>
+                  <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
+                    Followers
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.statItem}
+                  onPress={handleFollowingPress}
+                >
+                  <Text style={[styles.statNumber, { color: colors.text.primary }]}>
+                    {followingCount}
+                  </Text>
+                  <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
+                    Following
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Follow Button */}
+              {!isOwnProfile && (
+                <TouchableOpacity
+                  style={[styles.followButton, { backgroundColor: isFollowing ? colors.gray[400] : colors.primary }]}
+                  onPress={handleFollowToggle}
+                >
+                  <Text style={[styles.followButtonText, { color: colors.white }]}>
+                    {isFollowing ? 'Following' : 'Follow'}
+                  </Text>
+                </TouchableOpacity>
               )}
             </View>
-          </View>
 
-          {/* Stats Container */}
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statNumber, { color: colors.text.primary }]}>
-                {posts.length}
-              </Text>
-              <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
-                Posts
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.statItem}
-              onPress={handleFollowersPress}
-            >
-              <Text style={[styles.statNumber, { color: colors.text.primary }]}>
-                {followersCount}
-              </Text>
-              <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
-                Followers
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.statItem}
-              onPress={handleFollowingPress}
-            >
-              <Text style={[styles.statNumber, { color: colors.text.primary }]}>
-                {followingCount}
-              </Text>
-              <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
-                Following
-              </Text>
-            </TouchableOpacity>
-          </View>
+            {/* Action Buttons Section */}
+            {!isOwnProfile && (
+              <View style={styles.actionButtonsContainer}>
+                {/* Call Buttons Row */}
+                <View style={styles.callButtonsRow}>
+                  {/* Video Call Button */}
+                  <TouchableOpacity
+                    style={[
+                      styles.callButton,
+                      {
+                        opacity: isBlocked ? 0.5 : 1
+                      }
+                    ]}
+                    onPress={() => handleStartCall('video')}
+                    activeOpacity={0.6}
+                    disabled={isBlocked}
+                  >
+                    <Icon name="video" size={20} color={isBlocked ? colors.text.secondary : colors.text.primary} />
+                  </TouchableOpacity>
 
-          {/* Follow Button */}
-          {!isOwnProfile && (
-            <TouchableOpacity
-              style={[styles.followButton, { backgroundColor: isFollowing ? colors.gray[400] : colors.primary }]}
-              onPress={handleFollowToggle}
-            >
-              <Text style={[styles.followButtonText, { color: colors.white }]}>
-                {isFollowing ? 'Following' : 'Follow'}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+                  {/* Voice Call Button */}
+                  <TouchableOpacity
+                    style={[
+                      styles.callButton,
+                      {
+                        opacity: isBlocked ? 0.5 : 1
+                      }
+                    ]}
+                    onPress={() => handleStartCall('voice')}
+                    activeOpacity={0.6}
+                    disabled={isBlocked}
+                  >
+                    <Icon name="phone" size={20} color={isBlocked ? colors.text.secondary : colors.text.primary} />
+                  </TouchableOpacity>
 
-        {/* Action Buttons Section */}
-        {!isOwnProfile && (
-          <View style={styles.actionButtonsContainer}>
-            {/* Call Buttons Row */}
-            <View style={styles.callButtonsRow}>
-              {/* Video Call Button */}
-              <TouchableOpacity
-                style={[
-                  styles.callButton,
-                  {
-                    opacity: isBlocked ? 0.5 : 1
-                  }
-                ]}
-                onPress={() => handleStartCall('video')}
-                activeOpacity={0.6}
-                disabled={isBlocked}
-              >
-                <Icon name="video" size={20} color={isBlocked ? colors.text.secondary : colors.text.primary} />
-              </TouchableOpacity>
+                  {/* Chat Button */}
+                  <TouchableOpacity
+                    style={[
+                      styles.callButton,
+                      {
+                        position: 'relative',
+                        opacity: isBlocked ? 0.5 : 1
+                      }
+                    ]}
+                    onPress={handleChatNavigation}
+                    activeOpacity={0.6}
+                    disabled={isBlocked}
+                  >
+                    <Icon name="message-circle" size={20} color={isBlocked ? colors.text.secondary : colors.text.primary} />
+                    {/* Unread messages indicator */}
+                    {unreadCount > 0 && !isBlocked && (
+                      <View style={styles.unreadDot}>
+                        <Text style={styles.unreadCount}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
 
-              {/* Voice Call Button */}
-              <TouchableOpacity
-                style={[
-                  styles.callButton,
-                  {
-                    opacity: isBlocked ? 0.5 : 1
-                  }
-                ]}
-                onPress={() => handleStartCall('voice')}
-                activeOpacity={0.6}
-                disabled={isBlocked}
-              >
-                <Icon name="phone" size={20} color={isBlocked ? colors.text.secondary : colors.text.primary} />
-              </TouchableOpacity>
+                  {/* Block/Unblock Button */}
+                  <TouchableOpacity
+                    style={styles.callButton}
+                    onPress={handleBlockUser}
+                    activeOpacity={0.6}
+                  >
+                    <Icon name={isBlocked ? "user-check" : "user-x"} size={20} color={colors.text.secondary} />
+                  </TouchableOpacity>
+                </View>
 
-              {/* Chat Button */}
-              <TouchableOpacity
-                style={[
-                  styles.callButton,
-                  {
-                    position: 'relative',
-                    opacity: isBlocked ? 0.5 : 1
-                  }
-                ]}
-                onPress={handleChatNavigation}
-                activeOpacity={0.6}
-                disabled={isBlocked}
-              >
-                <Icon name="message-circle" size={20} color={isBlocked ? colors.text.secondary : colors.text.primary} />
-                {/* Unread messages indicator */}
-                {unreadCount > 0 && !isBlocked && (
-                  <View style={styles.unreadDot}>
-                    <Text style={styles.unreadCount}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-
-              {/* Block/Unblock Button */}
-              <TouchableOpacity
-                style={styles.callButton}
-                onPress={handleBlockUser}
-                activeOpacity={0.6}
-              >
-                <Icon name={isBlocked ? "user-check" : "user-x"} size={20} color={colors.text.secondary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Availability Status Text */}
-            <View style={styles.availabilityContainer}>
-              <Text style={[
-                styles.availabilityText,
-                { color: isUserAvailable ? colors.success : colors.text.secondary }
-              ]}>
-                {isUserAvailable ? '🟢 Available for calls' : '⚫ Currently unavailable'}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Tab Navigation */}
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[
-              styles.tabButton,
-              selectedTab === 'posts' && { borderBottomColor: colors.primary }
-            ]}
-            onPress={() => setSelectedTab('posts')}
-          >
-            <Icon
-              name="grid"
-              size={24}
-              color={selectedTab === 'posts' ? colors.primary : colors.text.secondary}
-            />
-          </TouchableOpacity>
-        </View>
-
-        {/* Posts Grid */}
-        {selectedTab === 'posts' && (
-          <View style={styles.postsContainer}>
-            <View style={styles.postsGrid}>
-              {posts.map((post: Post, index) => (
-                <TouchableOpacity
-                  key={post.id}
-                  style={styles.postItem}
-                  onPress={() => {
-                    (navigation as any).navigate('PostViewer', {
-                      posts: posts,
-                      initialIndex: index,
-                      userId: userId,
-                    });
-                  }}
-                >
-                  <Image
-                    source={{ uri: getFullImageUrl(post.media_url) }}
-                    style={styles.postImage}
-                    resizeMode="cover"
-                  />
-                  {post.media_type === 'video' && (
-                    <View style={styles.videoIndicator}>
-                      <View style={styles.playIcon} />
-                    </View>
-                  )}
-                  {post.is_premium && (
-                    <View style={styles.premiumBadge}>
-                      <Text style={styles.premiumText}>★</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-            {posts.length === 0 && (
-              <View style={styles.emptyContainer}>
-                <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
-                  No posts yet.
-                </Text>
+                {/* Availability Status Text */}
+                <View style={styles.availabilityContainer}>
+                  <Text style={[
+                    styles.availabilityText,
+                    { color: isUserAvailable ? colors.success : colors.text.secondary }
+                  ]}>
+                    {isUserAvailable ? '🟢 Available for calls' : '⚫ Currently unavailable'}
+                  </Text>
+                </View>
               </View>
             )}
+
+            {/* Tab Navigation */}
+            <View style={styles.tabContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.tabButton,
+                  selectedTab === 'posts' && { borderBottomColor: colors.primary }
+                ]}
+                onPress={() => setSelectedTab('posts')}
+              >
+                <Icon
+                  name="grid"
+                  size={24}
+                  color={selectedTab === 'posts' ? colors.primary : colors.text.secondary}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
-      </ScrollView>
+        renderItem={({ item: post, index }) => (
+          <TouchableOpacity
+            key={post.id}
+            style={styles.postItem}
+            onPress={() => {
+              (navigation as any).navigate('PostViewer', {
+                posts: posts,
+                initialIndex: index,
+                userId: userId,
+              });
+            }}
+          >
+            <Image
+              source={{ uri: getFullImageUrl(post.media_url) }}
+              style={styles.postImage}
+              resizeMode="cover"
+            />
+            {post.media_type === 'video' && (
+              <View style={styles.videoIndicator}>
+                <View style={styles.playIcon} />
+              </View>
+            )}
+            {post.is_premium && (
+              <View style={styles.premiumBadge}>
+                <Text style={styles.premiumText}>★</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
+        ListEmptyComponent={() => (
+          <View style={styles.emptyContainer}>
+            <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
+              No posts yet.
+            </Text>
+          </View>
+        )}
+        contentContainerStyle={styles.postsGrid}
+      />
 
       {/* Removed followers/following modals - now using separate screen */}
       {/* Image Viewer Modal */}
@@ -737,9 +736,6 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
-  scrollView: {
     flex: 1,
   },
   profileHeader: {
@@ -832,13 +828,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   postsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    paddingHorizontal: GRID_SPACING / 2,
   },
   postItem: {
-    width: width / 3,
+    flex: 1,
     aspectRatio: 1,
-    padding: GRID_SPACING,
+    margin: GRID_SPACING / 2,
+    maxWidth: (width - GRID_SPACING * 4) / 3, // Ensure proper 3-column layout
   },
   postImage: {
     width: '100%',

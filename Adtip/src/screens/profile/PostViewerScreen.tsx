@@ -34,9 +34,10 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
 
-  const { posts = [], initialIndex = 0, userId } = route.params || {};
+  const { posts: initialPosts = [], initialIndex = 0, userId } = route.params || {};
 
   // State
+  const [posts, setPosts] = useState(initialPosts); // Local state for posts to handle optimistic updates
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCommentPostId, setSelectedCommentPostId] = useState<number | null>(null);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
@@ -44,6 +45,11 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
   const [isGloballyMuted, setIsGloballyMuted] = useState(false);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
   // Removed modal states - now using direct navigation to Profile screen
+
+  // Update local posts when route params change
+  useEffect(() => {
+    setPosts(initialPosts);
+  }, [initialPosts]);
 
   // Refs
   const flatListRef = useRef<FlatList>(null);
@@ -110,19 +116,33 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
     Alert.alert('Login Required', `Please login to ${action}`);
   }, []);
 
-  // Handle like with proper API call (matching HomeScreen)
+  // Handle like with proper API call and local state update
   const handleLikePost = useCallback((postId: number, isLiked: boolean) => {
     if (!currentUser?.id) {
       showLoginPromptForAction('like posts');
       return;
     }
+
+    // Optimistically update local state immediately
+    setPosts((prevPosts: any[]) =>
+      prevPosts.map((post: any) =>
+        post.id === postId
+          ? {
+              ...post,
+              is_liked: !isLiked,
+              likeCount: post.likeCount + (isLiked ? -1 : 1)
+            }
+          : post
+      )
+    );
+
+    // Then call the mutation
     likeMutation.mutate({ postId, userId: currentUser.id, isLiked });
   }, [likeMutation, currentUser?.id, showLoginPromptForAction]);
 
-  // Handle like (wrapper for PostItem) - fixed to match HomeScreen logic
+  // Handle like (wrapper for PostItem)
   const handleLike = useCallback((postId: number) => {
     // Find current like state and pass it to the mutation
-    // The mutation will handle the toggle logic internally
     const post = posts.find((p: any) => p.id === postId);
     if (post) {
       handleLikePost(postId, post.is_liked || false);

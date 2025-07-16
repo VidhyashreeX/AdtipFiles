@@ -136,13 +136,15 @@ const FollowingsList: React.FC<FollowingsListProps> = (props) => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text.primary }]}>Following</Text>
-      </View>
+      {/* Header - only show if showHeader is true */}
+      {showHeader && (
+        <View style={[styles.header, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Icon name="arrow-left" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text.primary }]}>Following</Text>
+        </View>
+      )}
 
       {/* List of followings */}
       {loading ? (
@@ -154,7 +156,9 @@ const FollowingsList: React.FC<FollowingsListProps> = (props) => {
           data={followings}
           renderItem={renderFollowingItem}
           keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={styles.listContent}
+          style={styles.list}
+          contentContainerStyle={[styles.listContent, followings.length === 0 && styles.emptyListContent]}
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
@@ -186,9 +190,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginLeft: 16,
   },
+  list: {
+    flex: 1,
+  },
   listContent: {
     paddingVertical: 8,
     paddingHorizontal: 16,
+  },
+  emptyListContent: {
+    flex: 1,
   },
   itemContainer: {
     flexDirection: 'row',
