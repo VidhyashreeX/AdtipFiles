@@ -917,9 +917,9 @@ const TipCallScreenSimple = () => {
 
   // Handle profile press
   const handleProfilePress = useCallback((userId: number) => {
-    // TODO: Navigate to user profile
-    console.log('Navigate to profile for user:', userId)
-  }, [])
+    // Navigate to user profile
+    (navigation as any).navigate('Profile', { userId });
+  }, [navigation])
 
   // Handle blocking a user
   const handleBlockUser = useCallback(

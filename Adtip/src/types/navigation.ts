@@ -94,6 +94,7 @@ export type MainNavigatorParamList = {
   Checkout: { package: { id: string; name: string; price: number; bestValue?: boolean }, billing: any, totalPrice: number }; // Ensure Checkout is correctly typed
   FollowersList: { followers: any[]; userId?: number };
   FollowingsList: { followings: any[]; userId?: number };
+  FollowersFollowing: { userId: number; initialTab?: 'followers' | 'following'; userName?: string };
   CreateChannel: undefined;
   PromotePost: undefined;
   VideoPreview: undefined;

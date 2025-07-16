@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,10 @@ import {
   Share,
   Alert,
   Modal,
+  ViewabilityConfig,
+  ViewToken,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -38,8 +40,10 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCommentPostId, setSelectedCommentPostId] = useState<number | null>(null);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
-  const [showUserProfileModal, setShowUserProfileModal] = useState(false);
+  const [visiblePostIds, setVisiblePostIds] = useState<number[]>([]);
+  const [isGloballyMuted, setIsGloballyMuted] = useState(false);
+  const [isScreenFocused, setIsScreenFocused] = useState(true);
+  // Removed modal states - now using direct navigation to Profile screen
 
   // Refs
   const flatListRef = useRef<FlatList>(null);
@@ -59,6 +63,36 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
       }, 100);
     }
   }, [initialIndex]);
+
+  // Handle screen focus/blur to pause videos when screen is not active
+  useFocusEffect(
+    useCallback(() => {
+      setIsScreenFocused(true);
+      return () => {
+        setIsScreenFocused(false);
+      };
+    }, [])
+  );
+
+  // Optimized viewability config for video playback control
+  const viewabilityConfig = useMemo<ViewabilityConfig>(() => ({
+    itemVisiblePercentThreshold: 50,
+    minimumViewTime: 100,
+    waitForInteraction: false,
+  }), []);
+
+  // Handle viewable items changed for video playback control
+  const onViewableItemsChanged = useCallback(({viewableItems}: {viewableItems: ViewToken[]}) => {
+    const currentVisibleIds = viewableItems
+      .filter(item => item.isViewable && item.item)
+      .map(viewToken => viewToken.item.id as number);
+    setVisiblePostIds(currentVisibleIds);
+  }, []);
+
+  // Handle global mute toggle
+  const handleToggleGlobalMute = useCallback(() => {
+    setIsGloballyMuted(prev => !prev);
+  }, []);
 
   // Handle refresh
   const handleRefresh = useCallback(() => {
@@ -145,9 +179,9 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
       showLoginPromptForAction('view user profiles');
       return;
     }
-    setSelectedUserId(userId);
-    setShowUserProfileModal(true);
-  }, [currentUser?.id, showLoginPromptForAction]);
+    // Navigate directly to Profile screen instead of using modal
+    (navigation as any).navigate('Profile', { userId });
+  }, [currentUser?.id, showLoginPromptForAction, navigation]);
 
   // Get time ago helper
   const getTimeAgo = useCallback((dateString: string) => {
@@ -283,21 +317,7 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
         />
       )}
 
-      {/* User Profile Modal */}
-      <Modal
-        visible={showUserProfileModal}
-        animationType="slide"
-        onRequestClose={() => {
-          setShowUserProfileModal(false);
-          setSelectedUserId(null);
-        }}
-      >
-        {selectedUserId && (
-          <UserProfileScreen
-            userId={selectedUserId}
-          />
-        )}
-      </Modal>
+      {/* Removed User Profile Modal - now using direct navigation */}
     </View>
   );
 };

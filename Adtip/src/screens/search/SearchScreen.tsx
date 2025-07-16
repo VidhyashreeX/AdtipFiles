@@ -9,7 +9,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Image,
-  Modal,
+
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
@@ -19,7 +19,7 @@ import {useAuth} from '../../contexts/AuthContext';
 import {useNavigation} from '@react-navigation/native';
 import {getUserProfileColor, getInitials} from '../../utils/colorUtils';
 import {API_BASE_URL} from '../../constants/api';
-import UserProfileScreen from '../profile/UserProfileScreen';
+
 
 interface User {
   id: number;
@@ -36,8 +36,7 @@ const SearchScreen: React.FC = () => {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [showUserProfileModal, setShowUserProfileModal] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  // Removed modal states - now using direct navigation to Profile screen
 
   // TanStack Query hooks
   const userSearchQuery = useSearchUsers(debouncedQuery, page, 20);
@@ -103,10 +102,10 @@ const SearchScreen: React.FC = () => {
   }, [hasMore, userSearchQuery.isFetching]);
 
   const handleUserPress = useCallback((userId: number) => {
-    console.log('[SearchScreen] Opening UserProfileModal with userId:', userId);
-    setSelectedUserId(userId);
-    setShowUserProfileModal(true);
-  }, []);
+    console.log('[SearchScreen] Navigating to Profile with userId:', userId);
+    // Navigate directly to Profile screen instead of using modal
+    (navigation as any).navigate('Profile', { userId });
+  }, [navigation]);
 
   const getFullImageUrl = (url?: string | null) => {
     if (!url || url === 'null' || url === 'undefined') return null;
@@ -244,21 +243,7 @@ const SearchScreen: React.FC = () => {
           </View>
         )}
 
-        {/* User Profile Modal */}
-        <Modal
-          visible={showUserProfileModal}
-          animationType="slide"
-          onRequestClose={() => {
-            setShowUserProfileModal(false);
-            setSelectedUserId(null);
-          }}
-        >
-          {selectedUserId && (
-            <UserProfileScreen
-              userId={selectedUserId}
-            />
-          )}
-        </Modal>
+        {/* Removed User Profile Modal - now using direct navigation */}
       </View>
     </SafeAreaView>
   );

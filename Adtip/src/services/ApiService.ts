@@ -1727,6 +1727,20 @@ export default class ApiService {
   }
 
   /**
+   * Get followers list for a user
+   */
+  static async getFollowers(userId: number): Promise<any> {
+    return this.get(`/api/follow/followers/${userId}`);
+  }
+
+  /**
+   * Get following list for a user
+   */
+  static async getFollowing(userId: number): Promise<any> {
+    return this.get(`/api/follow/followings/${userId}`);
+  }
+
+  /**
    * Get user followers
    */
   static async getUserFollowers(userId: number): Promise<any> {

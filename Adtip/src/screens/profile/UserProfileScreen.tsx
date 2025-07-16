@@ -21,7 +21,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useWallet } from '../../hooks/useWallet';
 import { API_BASE_URL } from '../../constants/api';
 import ImageViewer from '@react-native-oh-tpl/react-native-image-zoom-viewer';
-//import UnifiedCallService from '../../services/calling/UnifiedCallService';
 import ApiService from '../../services/ApiService';
 import BlocklistService from '../../services/BlocklistService';
 import CallController from '../../services/calling/CallController';
@@ -58,20 +57,25 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
   const navigation = useNavigation();
   const route = useRoute();
   const userIdFromParams = route.params && typeof route.params === 'object' && 'userId' in route.params ? Number(route.params.userId) : undefined;
-  const [userId, setUserId] = useState<number>(userIdFromParams ?? props.userId ?? 0);
+  // Fix NaN issue: if userIdFromParams is undefined (own profile), use currentUser.id
+  const [userId, setUserId] = useState<number>(
+    userIdFromParams && !isNaN(userIdFromParams)
+      ? userIdFromParams
+      : props.userId && !isNaN(props.userId)
+        ? props.userId
+        : currentUser?.id ?? 0
+  );
   const [user, setUser] = useState<any>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showFollowersModal, setShowFollowersModal] = useState(false);
-  const [showFollowingModal, setShowFollowingModal] = useState(false);
+  // Removed modal states - now using separate screen navigation
   const [showImageViewer, setShowImageViewer] = useState(false);
   const [imageViewerIndex, setImageViewerIndex] = useState(0);
   const [isFollowing, setIsFollowing] = useState(false);
-  const [followersList, setFollowersList] = useState<any[]>([]);
-  const [followingList, setFollowingList] = useState<any[]>([]);
+  // Removed followersList and followingList - now handled in separate screen
   const [unreadCount, setUnreadCount] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
   const [selectedTab, setSelectedTab] = useState<'posts'>('posts'); // Instagram-style tab navigation
@@ -88,10 +92,14 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
   const isOwnProfile = currentUser?.id === userId;
 
   useEffect(() => {
-    if (userIdFromParams && userIdFromParams !== userId) {
+    // Handle userId updates from navigation params
+    if (userIdFromParams && !isNaN(userIdFromParams) && userIdFromParams !== userId) {
       setUserId(userIdFromParams);
+    } else if (!userIdFromParams && currentUser?.id && userId !== currentUser.id) {
+      // If no userId in params (own profile), use currentUser.id
+      setUserId(currentUser.id);
     }
-  }, [userIdFromParams]);
+  }, [userIdFromParams, currentUser?.id, userId]);
 
   // Handle call initiation with billing check (from TipCallScreenSimple)
   const handleStartCall = useCallback(
@@ -331,9 +339,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
         setFollowersCount(profileData.social_stats.followers_count);
         setFollowingCount(profileData.social_stats.following_count);
 
-        // Set followers and followings lists
-        setFollowersList(profileData.followers || []);
-        setFollowingList(profileData.followings || []);
+        // Followers and followings lists are now handled in separate screen
 
         // Set following status
         setIsFollowing(profileData.is_following || false);
@@ -372,14 +378,14 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
         if (followersResponse.status === 'fulfilled' && followersResponse.value?.data) {
           const followers = followersResponse.value.data;
           setFollowersCount(followers.length);
-          setFollowersList(followers);
+          // Followers list now handled in separate screen
           setIsFollowing(currentUser?.id ? followers.some((f: any) => f.id === currentUser.id) : false);
         }
 
         if (followingsResponse.status === 'fulfilled' && followingsResponse.value?.data) {
           const followings = followingsResponse.value.data;
           setFollowingCount(followings.length);
-          setFollowingList(followings);
+          // Following list now handled in separate screen
         }
       } catch (fallbackError) {
         console.error('[UserProfile] Fallback API calls also failed:', fallbackError);
@@ -402,34 +408,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
     checkBlockStatus();
   }, [checkBlockStatus]);
 
-  // Fetch followers/following list on modal open
-  const fetchFollowersList = async () => {
-    setLoading(true);
-    try {
-      const response = await ApiService.getUserFollowers(userId);
-      if (response?.data) {
-        setFollowersList(response.data);
-        setFollowersCount(response.data.length);
-      }
-    } catch (error) {
-      console.error('[UserProfile] Error fetching followers:', error);
-    }
-    setLoading(false);
-  };
-
-  const fetchFollowingList = async () => {
-    setLoading(true);
-    try {
-      const response = await ApiService.getUserFollowings(userId);
-      if (response?.data) {
-        setFollowingList(response.data);
-        setFollowingCount(response.data.length);
-      }
-    } catch (error) {
-      console.error('[UserProfile] Error fetching followings:', error);
-    }
-    setLoading(false);
-  };
+  // Removed fetchFollowersList and fetchFollowingList - now handled in separate screen
 
   const handleFollowToggle = async () => {
     if (!currentUser?.id) return;
@@ -452,16 +431,26 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
       });
       setIsFollowing(!isFollowing);
       setFollowersCount((prev) => prev + (isFollowing ? -1 : 1));
-      fetchFollowersList(); // Refresh followers list
+      // Followers list refresh now handled in separate screen
     } catch (e) {}
   };
 
-  // Followers/Following modal recursive navigation
-  const handleUserPressInModal = (id: number) => {
-    setShowFollowersModal(false);
-    setShowFollowingModal(false);
-    setTimeout(() => setUserId(id), 300);
-  };
+  // Navigate to followers/following screen
+  const handleFollowersPress = useCallback(() => {
+    (navigation as any).navigate('FollowersFollowing', {
+      userId,
+      initialTab: 'followers',
+      userName: user?.name
+    });
+  }, [navigation, userId, user?.name]);
+
+  const handleFollowingPress = useCallback(() => {
+    (navigation as any).navigate('FollowersFollowing', {
+      userId,
+      initialTab: 'following',
+      userName: user?.name
+    });
+  }, [navigation, userId, user?.name]);
 
   // Handle refresh
   const handleRefresh = useCallback(() => {
@@ -543,7 +532,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
             </View>
             <TouchableOpacity
               style={styles.statItem}
-              onPress={() => { fetchFollowersList(); setShowFollowersModal(true); }}
+              onPress={handleFollowersPress}
             >
               <Text style={[styles.statNumber, { color: colors.text.primary }]}>
                 {followersCount}
@@ -554,7 +543,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.statItem}
-              onPress={() => { fetchFollowingList(); setShowFollowingModal(true); }}
+              onPress={handleFollowingPress}
             >
               <Text style={[styles.statNumber, { color: colors.text.primary }]}>
                 {followingCount}
@@ -719,30 +708,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
         )}
       </ScrollView>
 
-      {/* Followers Modal */}
-      <Modal visible={showFollowersModal} transparent animationType="slide" onRequestClose={() => setShowFollowersModal(false)}>
-        <View style={[styles.modalOverlay, { backgroundColor: isDarkMode ? 'rgba(15,23,42,0.7)' : 'rgba(0,0,0,0.3)' }] }>
-          <View style={[styles.modalContent, { backgroundColor: colors.card }] }>
-            <TouchableOpacity style={{ alignSelf: 'flex-end', marginBottom: 8 }} onPress={() => setShowFollowersModal(false)}>
-              <Icon name="x" size={28} color={colors.text.primary} />
-            </TouchableOpacity>
-            <Text style={[styles.modalTitle, { color: colors.text.primary }]}>Followers</Text>
-            <UserListModal users={followersList} currentUserId={currentUser?.id || 0} onUserPress={handleUserPressInModal} />
-          </View>
-        </View>
-      </Modal>
-      {/* Following Modal */}
-      <Modal visible={showFollowingModal} transparent animationType="slide" onRequestClose={() => setShowFollowingModal(false)}>
-        <View style={[styles.modalOverlay, { backgroundColor: isDarkMode ? 'rgba(15,23,42,0.7)' : 'rgba(0,0,0,0.3)' }] }>
-          <View style={[styles.modalContent, { backgroundColor: colors.card }] }>
-            <TouchableOpacity style={{ alignSelf: 'flex-end', marginBottom: 8 }} onPress={() => setShowFollowingModal(false)}>
-              <Icon name="x" size={28} color={colors.text.primary} />
-            </TouchableOpacity>
-            <Text style={[styles.modalTitle, { color: colors.text.primary }]}>Following</Text>
-            <UserListModal users={followingList} currentUserId={currentUser?.id || 0} onUserPress={handleUserPressInModal} />
-          </View>
-        </View>
-      </Modal>
+      {/* Removed followers/following modals - now using separate screen */}
       {/* Image Viewer Modal */}
       {showImageViewer && (
         <Modal visible={showImageViewer} transparent={true} onRequestClose={() => setShowImageViewer(false)}>
@@ -954,51 +920,6 @@ const styles = StyleSheet.create({
   },
 });
 
-const UserListModal = ({ users, currentUserId, onUserPress }: { users: any[], currentUserId: number, onUserPress: (id: number) => void }) => {
-  const { colors } = useTheme();
-  const [followState, setFollowState] = useState<{ [id: number]: boolean }>({});
-
-  useEffect(() => {
-    const state: { [id: number]: boolean } = {};
-    users.forEach((u: any) => { state[u.id] = !!u.is_followed; });
-    setFollowState(state);
-  }, [users]);
-
-  const handleFollowToggle = async (targetId: number, isFollowed: boolean) => {
-    setFollowState(prev => ({ ...prev, [targetId]: !isFollowed }));
-    await fetch(`${API_BASE_URL}/api/follow-user`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        followingId: targetId,
-        followerId: currentUserId,
-        action: isFollowed ? 'unfollow' : 'follow',
-      }),
-    });
-  };
-
-  if (!users.length) return <Text style={{ color: colors.text.secondary, alignSelf: 'center', marginTop: 32 }}>No users found.</Text>;
-
-  return (
-    <ScrollView style={{ maxHeight: 320 }}>
-      {users.map((u: any) => (
-        <View key={u.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14, paddingHorizontal: 4 }}>
-          <TouchableOpacity onPress={() => onUserPress(u.id)} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-            <Image source={{ uri: u.profile_image || 'https://via.placeholder.com/150' }} style={{ width: 38, height: 38, borderRadius: 19, marginRight: 12, backgroundColor: colors.skeleton.background, borderWidth: 1, borderColor: colors.border }} />
-            <Text style={{ color: colors.text.primary, fontWeight: '500', fontSize: 16 }}>{u.name || 'User'}</Text>
-          </TouchableOpacity>
-          {u.id !== currentUserId && (
-            <TouchableOpacity
-              style={{ backgroundColor: followState[u.id] ? colors.gray[400] : colors.primary, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 6, marginLeft: 8 }}
-              onPress={() => handleFollowToggle(u.id, followState[u.id])}
-            >
-              <Text style={{ color: colors.white, fontWeight: '600' }}>{followState[u.id] ? 'Unfollow' : 'Follow'}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      ))}
-    </ScrollView>
-  );
-};
+// Removed UserListModal - functionality moved to separate FollowersFollowingScreen
 
 export default UserProfileScreen;

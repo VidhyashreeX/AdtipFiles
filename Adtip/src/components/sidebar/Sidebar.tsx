@@ -123,7 +123,7 @@ const Sidebar: React.FC = () => {
   const {colors, isDarkMode} = useTheme();
   const {isSidebarOpen, closeSidebar, openSidebar} = useSidebar(); // Assuming openSidebar exists
   const navigation = useNavigation();
-  const { isGuest } = useAuth();
+  const { isGuest, user } = useAuth();
   const [activeScreen, setActiveScreen] = useState<keyof MainNavigatorParamList>('TabHome');
   const {width: windowWidth} = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -340,7 +340,8 @@ const Sidebar: React.FC = () => {
           // Navigate to the parent tab navigator, then to the specific screen
           NavigationService.navigate('Main', { screen: 'TabHome', params: { screen: 'TipTube' } } as any);
         } else if (screenName === 'Profile') {
-          NavigationService.navigate('Main', { screen: 'Profile', params: { userId: undefined } } as any); // Current user profile
+          // Pass current user's ID for own profile to avoid NaN issue
+          NavigationService.navigate('Main', { screen: 'Profile', params: { userId: user?.id } } as any);
         } else {
           // Direct navigation for other screens
           NavigationService.navigate('Main', { screen: screenName } as any);

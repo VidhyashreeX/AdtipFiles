@@ -12,7 +12,7 @@ import {
   ViewabilityConfig,
   ViewToken,
   TouchableOpacity,
-  Modal,
+
   Dimensions,
   Image,
   Alert,
@@ -58,7 +58,7 @@ import PubScaleCreditAlert from '../../components/common/PubScaleCreditAlert';
 
 
 import ScreenTransition from '../../components/common/ScreenTransition';
-import UserProfileScreen from '../profile/UserProfileScreen';
+
 
 // Skeleton Components
 import StoryItemSkeleton from '../../components/skeletons/StoryItemSkeleton';
@@ -440,8 +440,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const [visiblePostIds, setVisiblePostIds] = useState<number[]>([]);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [selectedCommentPostId, setSelectedCommentPostId] = useState<number | null>(null);
-  const [showUserProfileModal, setShowUserProfileModal] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  // Removed modal states - now using direct navigation to Profile screen
   const [isGloballyMuted, setIsGloballyMuted] = useState(true);
   const [offerwallLoading, setOfferwallLoading] = useState(false);
   const [showPubScaleCreditAlert, setShowPubScaleCreditAlert] = useState(false);
@@ -859,9 +858,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
       showLoginPromptForAction('view user profiles');
       return;
     }
-    setSelectedUserId(userId);
-    setShowUserProfileModal(true);
-  }, [isGuest, showLoginPromptForAction]);
+    // Navigate directly to Profile screen instead of using modal
+    (navigation as any).navigate('Profile', { userId });
+  }, [isGuest, showLoginPromptForAction, navigation]);
 
   const handleSharePost = useCallback((postId: number) => {
     if (isGuest) {
@@ -1119,21 +1118,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           />
         )}
 
-        {/* User Profile Modal */}
-        <Modal
-          visible={showUserProfileModal}
-          animationType="slide"
-          onRequestClose={() => {
-            setShowUserProfileModal(false);
-            setSelectedUserId(null);
-          }}
-        >
-          {selectedUserId && (
-            <UserProfileScreen
-              userId={selectedUserId}
-            />
-          )}
-        </Modal>
+        {/* Removed User Profile Modal - now using direct navigation */}
 
         {/* Premium Popup */}
         <PremiumPopup

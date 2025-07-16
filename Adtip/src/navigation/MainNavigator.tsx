@@ -102,6 +102,7 @@ import PermissionsScreen from '../screens/settings/PermissionsScreen';
 // Import new Instagram-style screens
 import InstagramProfileScreen from '../screens/profile/InstagramProfileScreen';
 import PostViewerScreen from '../screens/profile/PostViewerScreen';
+import FollowersFollowingScreen from '../screens/profile/FollowersFollowingScreen';
 
 // Create stack navigator with proper typing
 const Stack = createNativeStackNavigator<MainNavigatorParamList>();
@@ -489,6 +490,7 @@ const MainNavigator = () => {
       <Stack.Screen name="Analytics" component={EnhancedAnalyticsScreen} />
       <Stack.Screen name="Profile" component={EnhancedUserProfileScreen} />
       <Stack.Screen name="InstagramProfile" component={EnhancedInstagramProfileScreen} />
+      <Stack.Screen name="FollowersFollowing" component={FollowersFollowingScreen} />
       <Stack.Screen
         name="PostViewer"
         component={EnhancedPostViewerScreen}

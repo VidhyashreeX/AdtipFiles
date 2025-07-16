@@ -26,7 +26,10 @@ interface Follower {
 }
 
 interface FollowersListProps {
+  followers?: Follower[];
+  currentUserId?: number;
   onUserPress?: (userId: number) => void;
+  showHeader?: boolean;
 }
 
 // Component
@@ -34,8 +37,13 @@ const FollowersList: React.FC<FollowersListProps> = (props) => {
   const { colors, isDarkMode } = useTheme();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute();
-  const { followers: initialFollowers, userId, onUserPress: routeOnUserPress } = (route.params || {}) as { followers?: Follower[]; userId?: number; onUserPress?: (userId: number) => void };
+
+  // Use props first, then route params as fallback
+  const { followers: routeFollowers, userId: routeUserId, onUserPress: routeOnUserPress } = (route.params || {}) as { followers?: Follower[]; userId?: number; onUserPress?: (userId: number) => void };
+  const initialFollowers = props.followers || routeFollowers;
+  const userId = props.currentUserId || routeUserId;
   const onUserPress = props.onUserPress || routeOnUserPress;
+  const showHeader = props.showHeader !== false; // Default to true
 
   // State for fetched followers and loading
   const [followers, setFollowers] = useState<Follower[]>(initialFollowers || []);
