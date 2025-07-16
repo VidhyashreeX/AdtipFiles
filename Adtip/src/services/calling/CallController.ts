@@ -39,6 +39,7 @@ class CallController {
   private videoSDK: VideoSDKService
   
   private vibrateInterval: NodeJS.Timeout | null = null
+  private lastCallId?: number; // <-- Store last callId for bulletproof end call
 
   static getInstance() {
     if (!CallController._instance) CallController._instance = new CallController()
@@ -391,9 +392,20 @@ class CallController {
             })
 
         // Fix: Support both callId and call_id from backend
-        const callId = paymentResponse.callId || paymentResponse.call_id;
+        callId = paymentResponse.callId || paymentResponse.call_id;
         if (!callId) {
           console.warn('[CallController] No callId returned from payment API', paymentResponse);
+        } else {
+          this.lastCallId = callId; // <-- Store callId for later use
+          // Always update session with callId after payment API
+          const store = useCallStore.getState();
+          if (!store.session?.callId) {
+            store.actions.setSession({
+              ...store.session!,
+              callId,
+            });
+            console.log('[CallController] callId set in session after payment API:', callId);
+          }
         }
       } catch (paymentError) {
         console.error('[CallController] Failed to start payment tracking:', paymentError)
@@ -532,6 +544,7 @@ class CallController {
           // Fix: Support both callId and call_id from backend
           const callId = paymentResponse.callId || paymentResponse.call_id;
           if (paymentResponse.status && callId) {
+            this.lastCallId = callId; // <-- Store callId for later use
             // Update session with callId
             store.actions.setSession({
               ...session,
@@ -622,36 +635,51 @@ class CallController {
     // Debug: Log session object
     console.log('[CallController] Session object on endCall:', session);
 
-    // Try to get callId, retry for up to 1 second if missing
-    let retries = 0;
-    while (!session?.callId && retries < 10) {
-      await new Promise(res => setTimeout(res, 100));
-      session = useCallStore.getState().session;
-      retries++;
-      if (session?.callId) break;
-    }
-
-    if (!session || !session.callId) {
-      console.warn('[CallController] No callId in session on endCall after retry', session);
-      // Optionally show a toast or UI warning here
+    // Use lastCallId if available, otherwise session.callId
+    const callIdToUse = this.lastCallId || session.callId;
+    if (!callIdToUse) {
+      console.warn('[CallController] No callId available for end call', session);
     } else {
       // Call the end API (voice or video)
       const { userId } = await this.getUserInfo();
-      const apiFn = session.type === 'video' ? ApiService.initiateVideoCall : ApiService.initiateVoiceCall;
-      const req = {
-        callerId: parseInt(userId),
-        receiverId: parseInt(session.peerId),
-        action: 'end' as const,
-        callId: session.callId
-      };
+      
       try {
-        apiFn(req).then(res => {
-          console.log('[CallController] End call API called, response:', res);
-        }).catch(err => {
-          console.warn('[CallController] End call API error:', err);
-        });
+        const payload = {
+          callerId: parseInt(userId),
+          receiverId: parseInt(session.peerId),
+          action: 'end' as const,
+          callId: callIdToUse
+        };
+        
+        console.log('[CallController] 🚀 Calling end API with payload:', payload);
+        console.log('[CallController] 📞 Call type:', session.type);
+        console.log('[CallController] 👤 Current user ID:', userId);
+        console.log('[CallController] 👥 Receiver ID:', session.peerId);
+        console.log('[CallController] 🆔 Call ID:', callIdToUse);
+        
+        if (session.type === 'video') {
+          console.log('[CallController] 📹 Making video call end API call...');
+          await ApiService.initiateVideoCall(payload);
+          console.log('[CallController] ✅ Video call end API called successfully');
+        } else {
+          console.log('[CallController] 📞 Making voice call end API call...');
+          await ApiService.initiateVoiceCall(payload);
+          console.log('[CallController] ✅ Voice call end API called successfully');
+        }
+        
+        console.log('[CallController] 🎉 End call API completed successfully');
       } catch (err) {
-        console.warn('[CallController] End call API error (sync):', err);
+        console.error('[CallController] ❌ End call API error:', err);
+        console.error('[CallController] 📋 Error details:', {
+          error: err,
+          payload: {
+            callerId: parseInt(userId),
+            receiverId: parseInt(session.peerId),
+            action: 'end',
+            callId: callIdToUse
+          },
+          sessionType: session.type
+        });
       }
     }
 
