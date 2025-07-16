@@ -392,11 +392,8 @@ class CallController {
 
         // Fix: Support both callId and call_id from backend
         const callId = paymentResponse.callId || paymentResponse.call_id;
-        if (paymentResponse.status && callId) {
-          // use callId everywhere
-          console.log(`[CallController] Payment tracking started, callId: ${callId}`)
-        } else {
-          console.warn('[CallController] Payment API call succeeded but no callId returned:', paymentResponse)
+        if (!callId) {
+          console.warn('[CallController] No callId returned from payment API', paymentResponse);
         }
       } catch (paymentError) {
         console.error('[CallController] Failed to start payment tracking:', paymentError)
