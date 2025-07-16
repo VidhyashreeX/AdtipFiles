@@ -52,9 +52,8 @@ import ShortsCardSkeleton from '../../components/skeletons/ShortsCardSkeleton';
 import EnhancedShortCard from './components/EnhancedShortCard';
 import LoginPromptModal from '../../components/modals/LoginPromptModal';
 import useSimpleRewardedAd from '../../googleads/SimpleRewardedAd';
+import useVideoRewardAd from '../../hooks/useVideoRewardAd';
 import ApiService from '../../services/ApiService';
-import { API_BASE_URL } from '../../constants/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -69,257 +68,15 @@ type TipShortsRouteParams = {
 
 type TipShortsRouteProp = RouteProp<{ params: TipShortsRouteParams }, 'params'>;
 
-const REWARD_INTERVAL = 5;
-const NON_PREMIUM_REWARD = 0.03;
-const PREMIUM_REWARD = 0.06;
+const REWARD_INTERVAL = 5; // Keep this for handleAdView function
 
-// Optimized Video Player Component with fixed playback logic
-const OptimizedVideoPlayer = memo(({
-  source,
-  isActive,
-  isPaused,
-  isMuted,
-  onLoad,
-  onProgress,
-  onEnd,
-  style,
-}: {
-  source: { uri: string };
-  isActive: boolean;
-  isPaused: boolean;
-  isMuted: boolean;
-  onLoad?: (data: any) => void;
-  onProgress?: (data: any) => void;
-  onEnd?: () => void;
-  style?: any;
-}) => {
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
 
-  // Fixed logic: play when active, not paused, loaded, and no error
-  const shouldPlay = isActive && !isPaused && isLoaded && !hasError;
 
-  const handleLoad = useCallback((data: any) => {
-    console.log('[OptimizedVideoPlayer] Video loaded successfully for:', source.uri.split('/').pop());
-    setIsLoaded(true);
-    setHasError(false);
-    onLoad?.(data);
-  }, [onLoad, source.uri]);
 
-  const handleError = useCallback((error: any) => {
-    console.warn('[OptimizedVideoPlayer] Video error for:', source.uri.split('/').pop(), error);
-    setHasError(true);
-    setIsLoaded(false);
-  }, [source.uri]);
 
-  const handleProgress = useCallback((data: any) => {
-    if (isActive && onProgress) {
-      onProgress(data);
-    }
-  }, [isActive, onProgress]);
 
-  // Reset states when source changes
-  useEffect(() => {
-    setIsLoaded(false);
-    setHasError(false);
-  }, [source.uri]);
 
-  // Debug logging
-  useEffect(() => {
-    if (__DEV__) {
-      console.log('[OptimizedVideoPlayer] State:', {
-        isActive,
-        isPaused,
-        isLoaded,
-        hasError,
-        shouldPlay,
-        fileName: source.uri.split('/').pop()
-      });
-    }
-  }, [isActive, isPaused, isLoaded, hasError, shouldPlay, source.uri]);
 
-  return (
-    <Video
-      source={source}
-      paused={!shouldPlay}
-      muted={isMuted}
-      repeat={true}
-      resizeMode="cover"
-      style={[StyleSheet.absoluteFill, style]}
-      onLoad={handleLoad}
-      onProgress={handleProgress}
-      onError={handleError}
-      onEnd={onEnd}
-      bufferConfig={{
-        minBufferMs: 1500,
-        maxBufferMs: 5000,
-        bufferForPlaybackMs: 1000,
-        bufferForPlaybackAfterRebufferMs: 1500,
-      }}
-      ignoreSilentSwitch="ignore"
-      playInBackground={false}
-      playWhenInactive={false}
-      mixWithOthers="duck"
-      controls={false}
-      disableFocus={true}
-      fullscreen={false}
-      hideShutterView={true}
-    />
-  );
-});
-
-// Enhanced Play/Pause Overlay Indicator
-const PlayPauseOverlay = memo(({
-  isPlaying,
-  isVisible,
-}: {
-  isPlaying: boolean;
-  isVisible: boolean;
-}) => {
-  const scale = useSharedValue(0);
-  const opacity = useSharedValue(0);
-
-  useEffect(() => {
-    if (isVisible) {
-      // Show play/pause indicator
-      scale.value = withSequence(
-        withTiming(1.2, { duration: 150 }),
-        withSpring(1, { damping: 8, stiffness: 100 })
-      );
-      opacity.value = withTiming(1, { duration: 150 });
-
-      // Hide after delay
-      const timer = setTimeout(() => {
-        opacity.value = withTiming(0, { duration: 300 });
-        scale.value = withTiming(0.8, { duration: 300 });
-      }, 800);
-
-      return () => clearTimeout(timer);
-    }
-  }, [isVisible, isPlaying]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
-  }));
-
-  if (!isVisible) return null;
-
-  return (
-    <Animated.View style={[styles.playPauseOverlay, animatedStyle]}>
-      <View style={styles.playPauseBackground}>
-        <Icon 
-          name={isPlaying ? "pause" : "play"} 
-          size={48} 
-          color="#FFFFFF" 
-        />
-      </View>
-    </Animated.View>
-  );
-});
-
-// Enhanced Animated Like Button with improved response
-const AnimatedLikeButton = memo(({
-  isLiked,
-  onPress,
-  likeCount,
-  disabled = false,
-}: {
-  isLiked: boolean;
-  onPress: () => void;
-  likeCount: number;
-  disabled?: boolean;
-}) => {
-  const scale = useSharedValue(1);
-  const heartScale = useSharedValue(1);
-
-  const buttonAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const heartAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: heartScale.value }],
-  }));
-
-  const handlePress = useCallback(() => {
-    if (disabled) return;
-
-    // Instant feedback - no delay
-    scale.value = withSequence(
-      withTiming(0.85, { duration: 50 }), // Faster response
-      withSpring(1.05, { damping: 8, stiffness: 150 }),
-      withSpring(1, { damping: 8, stiffness: 150 })
-    );
-
-    if (!isLiked) {
-      // Heart burst animation for new likes
-      heartScale.value = withSequence(
-        withTiming(1.5, { duration: 100 }),
-        withSpring(1, { damping: 6, stiffness: 100 })
-      );
-    }
-
-    runOnJS(onPress)();
-  }, [disabled, isLiked, onPress]);
-
-  return (
-    <TouchableOpacity 
-      style={styles.actionButton} 
-      onPress={handlePress}
-      disabled={disabled}
-      activeOpacity={0.7} // Faster visual feedback
-    >
-      <Animated.View style={[
-        {
-          width: 48,
-          height: 48,
-          backgroundColor: isLiked ? '#FF3040' : 'rgba(255,255,255,0.2)',
-          borderRadius: 24,
-          justifyContent: 'center',
-          alignItems: 'center',
-          borderWidth: 1,
-          borderColor: isLiked ? '#FF3040' : 'rgba(255,255,255,0.3)',
-        },
-        buttonAnimatedStyle
-      ]}>
-        <Animated.View style={heartAnimatedStyle}>
-          <Icon 
-            name="heart" 
-            size={24} 
-            color="#FFFFFF"
-            style={{
-              textShadowColor: 'rgba(0,0,0,0.3)',
-              textShadowOffset: { width: 0, height: 1 },
-              textShadowRadius: 2,
-            }}
-          />
-        </Animated.View>
-      </Animated.View>
-      
-      <Text style={styles.actionText}>
-        {likeCount > 999 ? `${(likeCount / 1000).toFixed(1)}K` : likeCount}
-      </Text>
-    </TouchableOpacity>
-  );
-});
-
-// Progress Bar Component
-const VideoProgressBar = memo(({ 
-  progress = 0, 
-  isActive = false,
-}: { 
-  progress: number; 
-  isActive: boolean;
-}) => {
-  if (!isActive || progress <= 0) return null;
-
-  return (
-    <View style={styles.progressContainer}>
-      <View style={styles.progressBackground} />
-      <View style={[styles.progressFill, { width: `${Math.min(progress * 100, 100)}%` }]} />
-    </View>
-  );
-});
 
 // Skeleton Loading Component
 const ShortsSkeleton = memo(() => {
@@ -360,10 +117,22 @@ const TipShortsEnhanced = () => {
   const isPremium = user && typeof user.is_premium === 'boolean' ? user.is_premium : false;
   const { showAd, hasEarnedReward } = useSimpleRewardedAd();
   const [viewCount, setViewCount] = useState(0);
-  const [videoCount, setVideoCount] = useState(0);
-  const [showRewardPopup, setShowRewardPopup] = useState(false);
-  const [earnedAmount, setEarnedAmount] = useState(0);
-  const [isDevelopmentMode] = useState(__DEV__); // Development mode flag
+
+  // Use the custom reward hook
+  const {
+    videoCount,
+    showRewardPopup,
+    earnedAmount,
+    handleVideoViewed,
+    handleRewardPopupAction,
+    closeRewardPopup,
+    showRewardAd,
+  } = useVideoRewardAd({
+    isPremium,
+    isGuest,
+    userId: user?.id,
+    hasEarnedReward,
+  });
 
   // Safe parameter destructuring to prevent undefined access
   const { shorts: passedShorts, startIndex = 0, shortId } = route.params || {};
@@ -473,28 +242,10 @@ const TipShortsEnhanced = () => {
     console.log('[TipShortsEnhanced] error:', error);
   }, [shorts, isGuest, data, isLoading, error]);
 
-  // Handle video view for reward ads (triggered on scroll/view, not completion)
+  // Handle video view for reward ads (now using custom hook)
   const handleVideoView = useCallback(() => {
-    setVideoCount(prev => {
-      const newCount = prev + 1;
-      console.log(`🎬 [TipShorts] Video viewed. Count: ${newCount}`);
-      // Only show reward ad after exactly 5th video
-      if (newCount === 5) {
-        console.log('🎁 [TipShorts] 5th video reached! Showing reward ad...');
-        // Check if we have ads available
-        const hasAds = shorts.length > 0;
-        if (hasAds) {
-          // Show reward ad immediately
-          showRewardAd();
-        } else {
-          console.log('⚠️ [TipShorts] No ads available, skipping reward');
-        }
-        // Reset counter after showing reward
-        return 0;
-      }
-      return newCount;
-    });
-  }, [shorts.length]);
+    handleVideoViewed();
+  }, [handleVideoViewed]);
 
   // Viewability config for video control
   const viewabilityConfig = useRef({
@@ -781,120 +532,22 @@ const TipShortsEnhanced = () => {
     });
   }, [showAd]);
 
-  // Listen for reward
-  useEffect(() => {
-    if (hasEarnedReward) {
-      console.log('[TipShorts] User earned reward from ad');
-      const amount = isPremium ? PREMIUM_REWARD : NON_PREMIUM_REWARD;
-      setEarnedAmount(amount);
-      setShowRewardPopup(true);
-    }
-  }, [hasEarnedReward, isPremium]);
+  // Reward logic is now handled by useVideoRewardAd hook
 
-  // Call handleAdView when a video is viewed (you can call this from your video component)
-  const handleVideoViewed = useCallback(() => {
-    if (!isGuest) {
-      handleAdView();
-    }
-  }, [handleAdView, isGuest]);
+  // Old reward popup actions are now handled by useVideoRewardAd hook
 
-  // Show reward ad
-  const showRewardAd = useCallback(() => {
-    console.log('🎁 [TipShorts] Showing reward ad...');
-    
-    // Determine reward amount based on premium status
-    const rewardAmount = isPremium ? 0.06 : 0.03;
-    setEarnedAmount(rewardAmount);
-    
-    // In development mode, just show popup without API call
-    if (isDevelopmentMode) {
-      console.log('🔧 [TipShorts] Development mode: Showing popup without API call');
-      setShowRewardPopup(true);
-      return;
-    }
-    
-    // In production, show actual reward ad
-    // For now, simulate reward ad completion
-    console.log('🎁 [TipShorts] Production mode: Would show actual reward ad');
-    setShowRewardPopup(true);
-  }, [isPremium, isDevelopmentMode]);
+  // Handle navigation actions for reward popup
+  const handleRewardNavigation = useCallback(async (action: 'upgrade' | 'cancel' | 'gotit' | 'wallet') => {
+    // Call the hook's handler first
+    await handleRewardPopupAction(action);
 
-  // Handle reward popup actions
-  const handleRewardPopupAction = useCallback(async (action: 'upgrade' | 'cancel' | 'gotit' | 'wallet') => {
-    console.log(`🎁 [TipShorts] Reward popup action: ${action}`);
-    
+    // Then handle navigation
     if (action === 'upgrade') {
-      // Navigate to premium upgrade
       navigation.navigate('Packages' as never);
-    } else if (action === 'gotit') {
-      setShowRewardPopup(false);
     } else if (action === 'wallet') {
-      // Navigate to wallet screen
       navigation.navigate('Wallet' as never);
     }
-    
-    // Close popup
-    setShowRewardPopup(false);
-    
-    // In production mode, credit wallet
-    if (!isDevelopmentMode) {
-      try {
-        console.log('💰 [TipShorts] Crediting wallet with amount:', earnedAmount);
-        const response = await fetch(`${API_BASE_URL}/wallet/credit-ad-reward`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${await AsyncStorage.getItem('accessToken')}`,
-          },
-          body: JSON.stringify({
-            amount: earnedAmount,
-            source: 'tipshorts_reward'
-          })
-        });
-        
-        const result = await response.json();
-        if (result.status) {
-          console.log('✅ [TipShorts] Wallet credited successfully');
-          // Update wallet balance in context if needed
-        } else {
-          console.log('❌ [TipShorts] Failed to credit wallet:', result.message);
-        }
-      } catch (error) {
-        console.error('❌ [TipShorts] Error crediting wallet:', error);
-      }
-    } else {
-      console.log('🔧 [TipShorts] Development mode: Skipping wallet credit');
-    }
-  }, [earnedAmount, isDevelopmentMode, navigation]);
-
-  const handleRewardConfirm = async () => {
-    setShowRewardPopup(false);
-    if (!user || !user.id) {
-      Alert.alert('Error', 'User not found.');
-      return;
-    }
-    try {
-      if (typeof ApiService.creditAdReward !== 'function') {
-        // Add a fallback if not defined
-        ApiService.creditAdReward = async ({ userId, amount }) => {
-          return fetch('/api/wallet/credit-ad-reward', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, amount }),
-          }).then(res => res.json());
-        };
-      }
-              await ApiService.creditAdReward({ userId: user.id, amount: earnedAmount });
-        Alert.alert('Credited Successfully', `₹${earnedAmount.toFixed(2)} added to your wallet!`);
-    } catch (err) {
-      Alert.alert('Error', 'Could not credit reward.');
-    }
-  };
-
-  const handleUpgradePremium = () => {
-    setShowRewardPopup(false);
-    navigation.navigate('Packages' as never);
-  };
+  }, [handleRewardPopupAction, navigation]);
 
   // Render loading state
   if (isLoading && shorts.length === 0) {
@@ -946,6 +599,7 @@ const TipShortsEnhanced = () => {
             item={item}
             index={index}
             isActive={index === activeIndex}
+            isLiked={item.isLiked || false} // Pass isLiked status from item data
             onVideoLoad={handleVideoLoad}
             onVideoCompletion={handleVideoView}
             onLike={handleLikeShort}
@@ -1102,12 +756,6 @@ const TipShortsEnhanced = () => {
                   </TouchableOpacity>
                 </View>
               </>
-            )}
-            
-            {isDevelopmentMode && (
-              <Text style={styles.developmentModeText}>
-                🔧 Development Mode: No wallet credit
-              </Text>
             )}
           </View>
         </View>

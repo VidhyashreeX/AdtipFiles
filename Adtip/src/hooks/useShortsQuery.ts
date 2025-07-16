@@ -26,6 +26,7 @@ export interface ShortVideo {
   videoUrl: string;
   comments: number;
   musicName?: string;
+  isLiked?: boolean; // Add isLiked field to track like status
 }
 
 export interface PublicShot {
