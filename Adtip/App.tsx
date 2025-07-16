@@ -92,28 +92,9 @@ const ThemeAwareStatusBar = () => {
   );
 };
 
-// Define deep linking config
-const linking = {
-  prefixes: ['adtip://', 'https://adtip.com'],
-  config: {
-    screens: {
-      Main: {
-        screens: {
-          TipTube: 'tiptube',
-          TipShorts: {
-            path: 'tipshorts/:shortId',
-            parse: { shortId: (id: string) => id },
-          },
-          Profile: {
-            path: 'user/:userId',
-            parse: { userId: (id: string) => Number(id) },
-          },
-          // Add more screens as needed
-        },
-      },
-    },
-  },
-};
+// Import comprehensive deep linking configuration
+import { DEEP_LINK_CONFIG } from './src/config/deepLinkConfig';
+import deepLinkService from './src/services/DeepLinkService';
 
 // AppNavigator with Services - Ultra Fast with Authentication-aware UltraFastLoader
 const AppNavigator = () => {
@@ -130,41 +111,16 @@ const AppNavigator = () => {
     console.log('[App] Ultra-fast initialization complete');
   }, []);
 
-  // Ultra-fast deep linking setup
-  useEffect(() => {    const handleDeepLink = (url: string | null) => {
-      if (url) {
-        const route = url.replace(/.*?:\/\//g, '');
-        const host = route.split('/')[0];
+  // Initialize comprehensive deep linking service
+  useEffect(() => {
+    // Initialize the deep link service
+    deepLinkService.initialize();
 
-        if (host === 'call' && activeSession) {
-          (navigationRef as any).navigate('Main', {
-            screen: 'Meeting',
-            params: {
-              meetingId: activeSession.meetingId,
-              token: activeSession.token,
-              callType: activeSession.type,
-              displayName: activeSession.direction === 'outgoing' ? (user?.name || 'You') : activeSession.peerName,
-              recipientName: activeSession.peerName,
-              isInitiator: activeSession.direction === 'outgoing',
-            }
-          });
-        }
-      }
+    // Cleanup on unmount
+    return () => {
+      deepLinkService.cleanup();
     };
-
-    const getUrlAsync = async () => {
-      const initialUrl = await Linking.getInitialURL();
-      handleDeepLink(initialUrl);
-    };
-
-    getUrlAsync();
-
-    const subscription = Linking.addEventListener('url', ({ url }) => {
-      handleDeepLink(url);
-    });    return () => {
-      subscription.remove();
-    };
-  }, [activeSession]);
+  }, []);
 
   // Set all services as ready immediately - they'll initialize in background
   useEffect(() => {
@@ -341,7 +297,7 @@ const AppNavigator = () => {
 
   // Only show UserDetails screen if authenticated but missing user name
   return (
-    <NavigationContainer ref={navigationRef} linking={linking} fallback={<Text>Loading...</Text>}>
+    <NavigationContainer ref={navigationRef} linking={DEEP_LINK_CONFIG} fallback={<Text>Loading...</Text>}>
       <RootStack.Navigator screenOptions={{ headerShown: false }}>
         <RootStack.Screen name="UserDetails" component={UserDetailsScreen} />
         <RootStack.Screen name="Main" component={MainNavigator} />

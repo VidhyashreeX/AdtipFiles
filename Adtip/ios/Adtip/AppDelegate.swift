@@ -33,12 +33,29 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     return true
   }
 
-  // MARK: - CallKeep Integration
+  // MARK: - Deep Linking Support
+  func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey : Any] = [:]
+  ) -> Bool {
+    return RCTLinkingManager.application(app, open: url, options: options)
+  }
+
+  // MARK: - Universal Links Support
   func application(
     _ application: UIApplication,
     continue userActivity: NSUserActivity,
     restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
   ) -> Bool {
+    // Handle Universal Links
+    if userActivity.activityType == NSUserActivityTypeBrowsingWeb {
+      if let url = userActivity.webpageURL {
+        return RCTLinkingManager.application(application, continue: userActivity, restorationHandler: restorationHandler)
+      }
+    }
+
+    // Handle CallKeep Integration
     return RNCallKeep.application(application, continue: userActivity, restorationHandler: restorationHandler)
   }
 }
