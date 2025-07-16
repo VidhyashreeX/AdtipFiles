@@ -39,6 +39,7 @@ class CallController {
   private videoSDK: VideoSDKService
   
   private vibrateInterval: NodeJS.Timeout | null = null
+  private lastCallId?: number; // <-- Store last callId for bulletproof end call
 
   static getInstance() {
     if (!CallController._instance) CallController._instance = new CallController()
@@ -390,11 +391,21 @@ class CallController {
               action: 'start'
             })
 
-        if (paymentResponse.status && paymentResponse.call_id) {
-          callId = paymentResponse.call_id
-          console.log(`[CallController] Payment tracking started, callId: ${callId}`)
+        // Fix: Support both callId and call_id from backend
+        callId = paymentResponse.callId || paymentResponse.call_id;
+        if (!callId) {
+          console.warn('[CallController] No callId returned from payment API', paymentResponse);
         } else {
-          console.warn('[CallController] Payment API call succeeded but no callId returned:', paymentResponse)
+          this.lastCallId = callId; // <-- Store callId for later use
+          // Always update session with callId after payment API
+          const store = useCallStore.getState();
+          if (!store.session?.callId) {
+            store.actions.setSession({
+              ...store.session!,
+              callId,
+            });
+            console.log('[CallController] callId set in session after payment API:', callId);
+          }
         }
       } catch (paymentError) {
         console.error('[CallController] Failed to start payment tracking:', paymentError)
@@ -530,13 +541,16 @@ class CallController {
                 action: 'start'
               })
 
-          if (paymentResponse.status && paymentResponse.call_id) {
+          // Fix: Support both callId and call_id from backend
+          const callId = paymentResponse.callId || paymentResponse.call_id;
+          if (paymentResponse.status && callId) {
+            this.lastCallId = callId; // <-- Store callId for later use
             // Update session with callId
             store.actions.setSession({
               ...session,
-              callId: paymentResponse.call_id
+              callId
             })
-            console.log(`[CallController] Payment tracking started for accepted call, callId: ${paymentResponse.call_id}`)
+            console.log(`[CallController] Payment tracking started for accepted call, callId: ${callId}`)
           } else {
             console.warn('[CallController] Payment API call succeeded but no callId returned:', paymentResponse)
           }
@@ -611,129 +625,115 @@ class CallController {
    */
   async endCall() {
     const store = useCallStore.getState()
-    const session = store.session
+    let session = store.session
 
-    if (!session) return false
+    if (!session) {
+      console.warn('[CallController] No session found in store on endCall');
+      return false;
+    }
 
+    // Debug: Log session object
+    console.log('[CallController] Session object on endCall:', session);
+
+    // Use lastCallId if available, otherwise session.callId
+    const callIdToUse = this.lastCallId || session.callId;
+    if (!callIdToUse) {
+      console.warn('[CallController] No callId available for end call', session);
+    } else {
+      // Call the end API (voice or video)
+      const { userId } = await this.getUserInfo();
+      
+      try {
+        // Always use the original caller and receiver from when call started
+        // For outgoing calls: current user is caller, peer is receiver
+        // For incoming calls: peer is caller, current user is receiver
+        const isOutgoingCall = session.direction === 'outgoing';
+        const originalCallerId = isOutgoingCall ? parseInt(userId) : parseInt(session.peerId);
+        const originalReceiverId = isOutgoingCall ? parseInt(session.peerId) : parseInt(userId);
+        
+        const payload = {
+          callerId: originalCallerId,
+          receiverId: originalReceiverId,
+          action: 'end' as const,
+          callId: callIdToUse
+        };
+        
+        console.log('[CallController] 🚀 Calling end API with payload:', payload);
+        console.log('[CallController] 📞 Call type:', session.type);
+        console.log('[CallController] 📤 Call direction:', session.direction);
+        console.log('[CallController] 👤 Original caller ID:', originalCallerId);
+        console.log('[CallController] 👥 Original receiver ID:', originalReceiverId);
+        console.log('[CallController] 🆔 Call ID:', callIdToUse);
+        
+        if (session.type === 'video') {
+          console.log('[CallController] 📹 Making video call end API call...');
+          await ApiService.initiateVideoCall(payload);
+          console.log('[CallController] ✅ Video call end API called successfully');
+        } else {
+          console.log('[CallController] 📞 Making voice call end API call...');
+          await ApiService.initiateVoiceCall(payload);
+          console.log('[CallController] ✅ Voice call end API called successfully');
+        }
+        
+        console.log('[CallController] 🎉 End call API completed successfully');
+      } catch (err) {
+        console.error('[CallController] ❌ End call API error:', err);
+        console.error('[CallController] 📋 Error details:', {
+          error: err,
+          payload: {
+            callerId: session.direction === 'outgoing' ? parseInt(userId) : parseInt(session.peerId),
+            receiverId: session.direction === 'outgoing' ? parseInt(session.peerId) : parseInt(userId),
+            action: 'end',
+            callId: callIdToUse
+          },
+          sessionType: session.type,
+          sessionDirection: session.direction
+        });
+      }
+    }
+
+    // Proceed with UI cleanup immediately
     try {
       // Stop vibrating
       this.stopVibrate()
 
       // Update status
       store.actions.setStatus('ended')
-      
       // Clear active meeting session in VideoSDK service
-      if (session.sessionId) {
+      if (session && session.sessionId) {
         this.videoSDK.clearActiveMeetingSession(session.sessionId)
       }
-
       // Send end signal
       try {
-        await this.signaling.sendEnd(session.peerId, session.sessionId)
+        if (session && session.peerId && session.sessionId) {
+          await this.signaling.sendEnd(session.peerId, session.sessionId)
+        }
       } catch (signalError) {
         console.error('[CallController] Failed to send end signal:', signalError)
       }
-
       // Leave meeting
       try {
         await this.media.leaveMeeting()
       } catch (mediaError) {
         console.error('[CallController] Failed to leave meeting:', mediaError)
       }
-
       // Hide notifications and stop foreground service
       try {
-        this.notification.hideNotification(session.sessionId)
-
-        // Resolve the foreground service promise first
+        if (session && session.sessionId) {
+          this.notification.hideNotification(session.sessionId)
+        }
         if (global.resolveForegroundService) {
           global.resolveForegroundService()
         }
-
-        // Then stop the foreground service
         await notifee.stopForegroundService()
       } catch (notificationError) {
         console.error('[CallController] Failed to cleanup notifications:', notificationError)
       }
-
-      // CallManagerService removed - billing handled by CallBillingService
       console.log('ℹ️ [CallController] Call cleanup completed')
-
-      // Process payment for ended call
-      if (session.callId && session.peerId) {
-        try {
-          console.log(`[CallController] Processing payment for ended ${session.type} call, callId: ${session.callId}`)
-          const { userId } = await this.getUserInfo()
-
-          const paymentResponse = session.type === 'video'
-            ? await ApiService.initiateVideoCall({
-                callerId: parseInt(userId),
-                receiverId: parseInt(session.peerId),
-                action: 'end',
-                callId: session.callId
-              })
-            : await ApiService.initiateVoiceCall({
-                callerId: parseInt(userId),
-                receiverId: parseInt(session.peerId),
-                action: 'end',
-                callId: session.callId
-              })
-
-          if (paymentResponse.status) {
-            console.log('[CallController] Payment processed successfully:', paymentResponse)
-          } else {
-            console.warn('[CallController] Payment processing failed:', paymentResponse)
-          }
-        } catch (paymentError) {
-          console.error('[CallController] Failed to process payment for ended call:', paymentError)
-          // Continue with call cleanup even if payment processing fails
-        }
-      } else {
-        console.warn('[CallController] No callId available for payment processing - call may not have been properly tracked')
-      }
-
-      // Notify server of ended call
-      try {
-        await this.sendCallStatusUpdate('CALL_ENDED')
-      } catch (statusError) {
-        console.error('[CallController] Failed to send call status update:', statusError)
-      }
-
-      // Reset call state
-      store.actions.reset()
-
-      // Reset navigation state to prevent conflicts with next call
-      const NavigationService = await import('../../navigation/NavigationService')
-      NavigationService.resetMeetingNavigationState()
-
-      // Force comprehensive cleanup to ensure state isolation
-      try {
-        const cleanupService = CallStateCleanup.getInstance()
-        await cleanupService.performComprehensiveCleanup()
-      } catch (cleanupError) {
-        console.error('[CallController] Cleanup error during endCall:', cleanupError)
-      }
-
-      return true
-    } catch (error) {
-      console.error('[CallController] endCall error', error)
-
-      // Force cleanup even on error to prevent state bleeding
-      try {
-        const store = useCallStore.getState()
-        store.actions.reset()
-
-        const NavigationService = await import('../../navigation/NavigationService')
-        NavigationService.resetMeetingNavigationState()
-
-        const cleanupService = CallStateCleanup.getInstance()
-        cleanupService.emergencyCleanup()
-      } catch (emergencyError) {
-        console.error('[CallController] Emergency cleanup error:', emergencyError)
-      }
-
-      return false
+    } catch (cleanupError) {
+      console.error('[CallController] Error during call cleanup:', cleanupError)
     }
+    return true;
   }
   
   /**
