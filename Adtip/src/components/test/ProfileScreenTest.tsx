@@ -5,6 +5,7 @@ import { useProfile } from '../../hooks/useQueries';
 import { useUserDataContext } from '../../contexts/UserDataContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserDisplayName, isPremiumUser } from '../../utils/userDataUtils';
+import ApiService from '../../services/ApiService';
 
 /**
  * Test component to verify ProfileScreen data loading
@@ -43,6 +44,39 @@ const ProfileScreenTest: React.FC = () => {
       Alert.alert('Success', 'Profile data refreshed successfully');
     } catch (error) {
       Alert.alert('Error', 'Failed to refresh profile data');
+    }
+  };
+
+  // Test the new consolidated API
+  const testConsolidatedAPI = async () => {
+    try {
+      console.log('[ProfileTest] Testing consolidated API for user:', testUserId);
+      const response = await ApiService.getConsolidatedProfile(
+        parseInt(testUserId),
+        user?.id
+      );
+
+      if (response?.data) {
+        Alert.alert(
+          'Consolidated API Test Success',
+          `✅ API Response received!\n\n` +
+          `User: ${response.data.user.name}\n` +
+          `Posts: ${response.data.posts.length}\n` +
+          `Followers: ${response.data.social_stats.followers_count}\n` +
+          `Following: ${response.data.social_stats.following_count}\n` +
+          `Is Following: ${response.data.is_following ? 'Yes' : 'No'}\n` +
+          `Is Blocked: ${response.data.is_blocked ? 'Yes' : 'No'}`
+        );
+        console.log('[ProfileTest] Consolidated API response:', response.data);
+      } else {
+        Alert.alert('API Test Failed', 'No data received from consolidated API');
+      }
+    } catch (error) {
+      console.error('[ProfileTest] Consolidated API error:', error);
+      Alert.alert(
+        'API Test Error',
+        `❌ Error testing consolidated API:\n${error.message || 'Unknown error'}`
+      );
     }
   };
 
@@ -102,6 +136,10 @@ const ProfileScreenTest: React.FC = () => {
         <TouchableOpacity style={styles.button} onPress={handleRefresh}>
           <Text style={styles.buttonText}>Refresh Profile Data</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity style={styles.button} onPress={testConsolidatedAPI}>
+          <Text style={styles.buttonText}>Test Consolidated API</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Loading States */}
@@ -122,7 +160,7 @@ const ProfileScreenTest: React.FC = () => {
         <Text style={styles.text}>API Source: {normalizedData?.api_source || 'Unknown'}</Text>
         <Text style={styles.text}>Has Profile Data: {profileData ? 'Yes' : 'No'}</Text>
         <Text style={styles.text}>Has User Data: {userData ? 'Yes' : 'No'}</Text>
-        <Text style={styles.text}>Social Stats: Separate API calls for followers/following/posts</Text>
+        <Text style={styles.text}>Social Stats: Now available via consolidated API (/api/users/:userId/profile)</Text>
       </View>
 
       {/* Profile Data Display */}

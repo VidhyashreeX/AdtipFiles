@@ -10,7 +10,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 
 // Import screens to test
-import ProfileScreen from '../screens/profile/ProfileScreen';
+import UserProfileScreen from '../screens/profile/UserProfileScreen';
 import WalletScreen from '../screens/wallet/WalletScreen';
 import HomeScreen from '../screens/home/HomeScreen';
 import TipCallScreen from '../screens/tipcall/TipCallScreen';

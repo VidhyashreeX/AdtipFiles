@@ -31,7 +31,7 @@ import PackagesScreen from '../screens/packages/PackagesScreen';
 import ChoosePackagesScreen from '../screens/packages/ChoosePackagesScreen';
 import CheckoutScreen from '../screens/packages/CheckoutScreen';
 import AnalyticsScreen from '../screens/analytics/AnalyticsScreen';
-import ProfileScreen from '../screens/profile/ProfileScreen';
+import UserProfileScreen from '../screens/profile/UserProfileScreen';
 import EditProfile from '../screens/profile/EditProfile';
 import WalletScreen from '../screens/wallet/WalletScreen';
 import PromotePostScreen from '../screens/content/PromotePostScreen';
@@ -122,7 +122,7 @@ const EnhancedPackagesScreen = withWalletBalance(PackagesScreen);
 const EnhancedChoosePackagesScreen = withWalletBalance(ChoosePackagesScreen);
 const EnhancedCheckoutScreen = withWalletBalance(CheckoutScreen);
 const EnhancedAnalyticsScreen = withWalletBalance(AnalyticsScreen);
-const EnhancedProfileScreen = withWalletBalance(ProfileScreen);
+const EnhancedUserProfileScreen = withWalletBalance(UserProfileScreen);
 const EnhancedEditProfileScreen = withWalletBalance(EditProfile);
 const EnhancedTrackOrderScreen = withWalletBalance(TrackOrderScreen);
 const EnhancedSearchScreen = withWalletBalance(SearchScreen);
@@ -487,7 +487,7 @@ const MainNavigator = () => {
       
       {/* Other screens with standard transition */}
       <Stack.Screen name="Analytics" component={EnhancedAnalyticsScreen} />
-      <Stack.Screen name="Profile" component={EnhancedProfileScreen} />
+      <Stack.Screen name="Profile" component={EnhancedUserProfileScreen} />
       <Stack.Screen name="InstagramProfile" component={EnhancedInstagramProfileScreen} />
       <Stack.Screen
         name="PostViewer"

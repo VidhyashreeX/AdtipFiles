@@ -294,74 +294,96 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
   const fetchUserProfile = useCallback(async () => {
     setLoading(true);
     try {
-      const token = await AsyncStorage.getItem('accessToken');
-      // Get posts (and user info from first post)
-      const postsRes = await fetch(`${API_BASE_URL}/api/users/${userId}/posts?page=1&limit=100&loggined_user_id=${currentUser?.id}`,
-        {
-          method: 'GET',
-          headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
+      // Use the new consolidated API for better performance
+      const response = await ApiService.getConsolidatedProfile(userId, currentUser?.id);
+
+      if (response?.data) {
+        const profileData = response.data;
+
+        // Set user info
+        setUser({
+          name: profileData.user.name,
+          profile_image: profileData.user.profile_image,
+          bio: profileData.user.bio,
+          emailId: profileData.user.emailId,
+          online_status: profileData.user.online_status,
+          last_seen: profileData.user.last_seen,
+          is_available: profileData.user.is_available,
+          dnd: profileData.user.dnd,
         });
-      let userInfo = null;
-      let postsData: Post[] = [];
-      if (postsRes.ok) {
-        const postsJson = await postsRes.json();
-        if (postsJson.data && postsJson.data.length > 0) {
-          postsData = postsJson.data.map((p: any) => ({
+
+        // Set posts with proper image URLs
+        const postsData: Post[] = (profileData.posts || []).map((p: any) => ({
+          id: p.id,
+          media_url: getFullImageUrl(p.media_url),
+          media_type: p.media_type,
+          is_premium: p.is_premium,
+          content: p.content,
+          likeCount: p.likeCount || p.like_count,
+          commentCount: p.commentCount || p.comment_count,
+          created_at: p.created_at,
+          is_liked: p.is_liked,
+          user_id: p.user_id,
+        }));
+        setPosts(postsData);
+
+        // Set social stats
+        setFollowersCount(profileData.social_stats.followers_count);
+        setFollowingCount(profileData.social_stats.following_count);
+
+        // Set followers and followings lists
+        setFollowersList(profileData.followers || []);
+        setFollowingList(profileData.followings || []);
+
+        // Set following status
+        setIsFollowing(profileData.is_following || false);
+
+        // Set blocked status
+        setIsBlocked(profileData.is_blocked || false);
+      }
+    } catch (error) {
+      console.error('[UserProfile] Error fetching consolidated profile:', error);
+      // Fallback to individual API calls if consolidated API fails
+      try {
+        const postsResponse = await ApiService.getUserPosts(userId, 1, 100, currentUser?.id || 0);
+        if (postsResponse?.data) {
+          const postsData: Post[] = postsResponse.data.map((p: any) => ({
             id: p.id,
             media_url: getFullImageUrl(p.media_url),
             media_type: p.media_type,
+            is_premium: p.is_premium,
           }));
-          userInfo = {
-            name: postsJson.data[0].name,
-            profile_image: postsJson.data[0].user_profile_image,
-          };
+          setPosts(postsData);
+
+          if (postsResponse.data.length > 0) {
+            setUser({
+              name: postsResponse.data[0].name,
+              profile_image: postsResponse.data[0].user_profile_image,
+            });
+          }
         }
-      }
-      setPosts(postsData);
-      setUser(userInfo);
-      // Get followers
-      const followersRes = await fetch(`${API_BASE_URL}/api/follow/followers/${userId}`, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      let isUserFollowing = false;
-      let followersArr: any[] = [];
-      if (followersRes.ok) {
-        const followersJson = await followersRes.json();
-        followersArr = followersJson.data || [];
-        setFollowersCount(followersArr.length);
-        setFollowersList(followersArr);
-        if (followersArr && currentUser?.id) {
-          isUserFollowing = followersArr.some((f: any) => f.id === currentUser.id);
+
+        // Get followers and followings as fallback
+        const [followersResponse, followingsResponse] = await Promise.allSettled([
+          ApiService.getUserFollowers(userId),
+          ApiService.getUserFollowings(userId)
+        ]);
+
+        if (followersResponse.status === 'fulfilled' && followersResponse.value?.data) {
+          const followers = followersResponse.value.data;
+          setFollowersCount(followers.length);
+          setFollowersList(followers);
+          setIsFollowing(currentUser?.id ? followers.some((f: any) => f.id === currentUser.id) : false);
         }
+
+        if (followingsResponse.status === 'fulfilled' && followingsResponse.value?.data) {
+          const followings = followingsResponse.value.data;
+          setFollowingCount(followings.length);
+          setFollowingList(followings);
+        }
+      } catch (fallbackError) {
+        console.error('[UserProfile] Fallback API calls also failed:', fallbackError);
       }
-      setIsFollowing(isUserFollowing);
-      // Get followings
-      const followingsRes = await fetch(`${API_BASE_URL}/api/follow/followings/${userId}`, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      let followingArr: any[] = [];
-      if (followingsRes.ok) {
-        const followingsJson = await followingsRes.json();
-        followingArr = followingsJson.data || [];
-        setFollowingCount(followingArr.length);
-        setFollowingList(followingArr);
-      }
-    } catch (e) {
-      // Optionally handle error
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -383,37 +405,28 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
   // Fetch followers/following list on modal open
   const fetchFollowersList = async () => {
     setLoading(true);
-    const token = await AsyncStorage.getItem('accessToken');
-    const res = await fetch(`${API_BASE_URL}/api/follow/followers/${userId}`, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (res.ok) {
-      const json = await res.json();
-      setFollowersList(json.data || []);
-      setFollowersCount((json.data || []).length);
+    try {
+      const response = await ApiService.getUserFollowers(userId);
+      if (response?.data) {
+        setFollowersList(response.data);
+        setFollowersCount(response.data.length);
+      }
+    } catch (error) {
+      console.error('[UserProfile] Error fetching followers:', error);
     }
     setLoading(false);
   };
+
   const fetchFollowingList = async () => {
     setLoading(true);
-    const token = await AsyncStorage.getItem('accessToken');
-    const res = await fetch(`${API_BASE_URL}/api/follow/followings/${userId}`, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (res.ok) {
-      const json = await res.json();
-      setFollowingList(json.data || []);
-      setFollowingCount((json.data || []).length);
+    try {
+      const response = await ApiService.getUserFollowings(userId);
+      if (response?.data) {
+        setFollowingList(response.data);
+        setFollowingCount(response.data.length);
+      }
+    } catch (error) {
+      console.error('[UserProfile] Error fetching followings:', error);
     }
     setLoading(false);
   };

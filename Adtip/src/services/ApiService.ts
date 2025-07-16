@@ -1747,6 +1747,15 @@ export default class ApiService {
     return this.get(`/api/users/${userId}/posts?page=${page}&limit=${limit}&loggined_user_id=${loggedUserId}`);
   }
 
+  /**
+   * Get consolidated profile data (user info, posts, followers, following, social stats)
+   * This replaces multiple API calls with a single efficient call
+   */
+  static async getConsolidatedProfile(userId: number, loggedUserId?: number): Promise<any> {
+    const params = loggedUserId ? `?loggined_user_id=${loggedUserId}` : '';
+    return this.get(`/api/users/${userId}/profile${params}`);
+  }
+
   // ===== UPLOAD APIS =====
 
   /**
