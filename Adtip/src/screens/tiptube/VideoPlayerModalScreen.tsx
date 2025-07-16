@@ -37,6 +37,7 @@ import { createSecureVideoSource } from '../../utils/mediaUtils';
 import ApiService from '../../services/ApiService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCommentCount } from '../../hooks/useComments';
+import shareService from '../../services/ShareService';
 
 // Get screen dimensions
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -220,21 +221,28 @@ const VideoPlayerModalScreen: React.FC = () => {
     }
   }, [user?.id, video?.id, video?.channelId, isVideoLiked]);
 
-  // Handle sharing the video
+  // Handle sharing the video using ShareService
   const handleShareVideo = useCallback(async () => {
     try {
-      const deepLink = `https://adtip.in/tiptube?videoId=${video.id}`;
-      const shareMessage = `Check out this video: ${video.title}\n\n${deepLink}`;
-      
-      await Share.share({
-        message: shareMessage,
-        url: deepLink,
-        title: video.title,
+      // Use ShareService for proper deep link generation
+      await shareService.shareVideo(video.id, video.title, {
+        useUniversalLink: true,
+        includeAppName: true
       });
-      
+
       console.log('[VideoPlayerModal] Video shared successfully');
     } catch (error) {
       console.error('[VideoPlayerModal] Error sharing video:', error);
+      // Fallback to basic share
+      try {
+        const shareMessage = `Check out this video: ${video.title}\n\nhttps://adtip.in/video/${video.id}`;
+        await Share.share({
+          message: shareMessage,
+          title: video.title,
+        });
+      } catch (fallbackError) {
+        console.error('[VideoPlayerModal] Fallback share also failed:', fallbackError);
+      }
     }
   }, [video.id, video.title]);
 

@@ -35,6 +35,7 @@ import {useDataContext} from '../../providers/DataProvider';
 import ApiService from '../../services/ApiService';
 import {API_BASE_URL} from '../../constants/api';
 import {HOME_ENDPOINTS} from '../../constants/apiEndpoints';
+import shareService from '../../services/ShareService';
 import { usePosts, useGuestPosts, useLikeMutation, useFollowMutation, usePrefetchData, useSubscriptionStatus, useCategories } from '../../hooks/useQueries';
 import { useUserDataContext, useUserPremiumStatus, useUserWallet } from '../../contexts/UserDataContext';
 import { getUserDisplayName, isPremiumUser } from '../../utils/userDataUtils';
@@ -862,14 +863,26 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     (navigation as any).navigate('Profile', { userId });
   }, [isGuest, showLoginPromptForAction, navigation]);
 
-  const handleSharePost = useCallback((postId: number) => {
+  const handleSharePost = useCallback(async (postId: number) => {
     if (isGuest) {
       showLoginPromptForAction('share posts');
       return;
     }
-    const deepLink = `https://adtip.in/tiptube?videoId=${postId}`;
-    Share.share({ message: `Check out this video: ${deepLink}` });
-  }, [isGuest, showLoginPromptForAction]);
+    try {
+      // Find the post to get its title/content for better sharing
+      const post = posts.find(p => p.id === postId);
+      const postTitle = post?.content || post?.title || 'Check out this amazing post!';
+
+      await shareService.sharePost(postId, postTitle, {
+        useUniversalLink: true,
+        includeAppName: true
+      });
+    } catch (error) {
+      console.error('[HomeScreen] Error sharing post:', error);
+      // Fallback to basic share
+      Share.share({ message: `Check out this post on Adtip: https://adtip.in/post/${postId}` });
+    }
+  }, [isGuest, showLoginPromptForAction, posts]);
 
   const handleSearchIconPress = useCallback(() => {
     (navigation as any).navigate('Search');

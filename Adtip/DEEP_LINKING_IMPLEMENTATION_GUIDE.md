@@ -196,7 +196,84 @@ npx uri-scheme open "adtip://post/123" --ios
 - ✅ Parameter parsing
 - ✅ Error handling
 
+## Updated Share Functionality
+
+### ✅ Screens with Updated Share Buttons
+
+#### HomeScreen
+- **Location**: PostItem component share button
+- **Implementation**: Uses `shareService.sharePost()` with proper deep link generation
+- **Deep Link Pattern**: `adtip://post/:postId` or `https://adtip.in/post/:postId`
+- **Features**: Universal links, app name inclusion, fallback handling
+
+#### PostViewerScreen
+- **Location**: PostItem component share button
+- **Implementation**: Uses `shareService.sharePost()` with post title extraction
+- **Deep Link Pattern**: `adtip://post/:postId` or `https://adtip.in/post/:postId`
+- **Features**: Dynamic post title, universal links, error handling
+
+#### VideoPlayerModalScreen
+- **Location**: Action buttons section
+- **Implementation**: Uses `shareService.shareVideo()` with VIDEO_PLAYER pattern
+- **Deep Link Pattern**: `adtip://watch/:videoId` or `https://adtip.in/watch/:videoId`
+- **Features**: Video title inclusion, proper video player navigation
+
+#### TipShortsEnhancedScreen (EnhancedShortCard)
+- **Location**: Right-side action buttons
+- **Implementation**: Uses `shareService.shareShort()` with channel name
+- **Deep Link Pattern**: `adtip://short/:shortId` or `https://adtip.in/short/:shortId`
+- **Features**: Channel name inclusion, short video specific handling
+
+#### UserProfileScreen
+- **Location**: Action buttons (for others) and main button (for own profile)
+- **Implementation**: Uses `shareService.shareProfile()` with user name
+- **Deep Link Pattern**: `adtip://user/:userId` or `https://adtip.in/user/:userId`
+- **Features**: User name inclusion, separate buttons for own/other profiles
+
+#### TipTubeScreen
+- **Note**: Shares through VideoPlayerModal (no direct share buttons)
+- **Implementation**: Inherits VideoPlayerModal share functionality
+- **Deep Link Reception**: Can receive video deep links through VideoPlayerModal
+
 ## Backend Support
+
+## Enhanced Deep Link Reception
+
+### ✅ Screen Deep Link Support
+
+#### PostViewerScreen
+- **Receives**: `adtip://post/:postId` or `https://adtip.in/post/:postId`
+- **Parameters**: `postId` (number)
+- **Behavior**: Fetches single post data and displays in full-screen viewer
+- **API Integration**: Uses `ApiService.listPosts()` with specific post_id
+
+#### VideoPlayerModalScreen
+- **Receives**: `adtip://watch/:videoId` or `https://adtip.in/watch/:videoId`
+- **Parameters**: `videoId` (number)
+- **Behavior**: Opens video in full-screen modal player
+- **Navigation**: Direct navigation to VideoPlayerModal screen
+
+#### TipShortsEnhancedScreen
+- **Receives**: `adtip://short/:shortId` or `https://adtip.in/short/:shortId`
+- **Parameters**: `shortId` (string)
+- **Behavior**: Navigates to TipShorts screen with specific short video
+- **Features**: Auto-play specific short video
+
+#### UserProfileScreen
+- **Receives**: `adtip://user/:userId` or `https://adtip.in/user/:userId`
+- **Parameters**: `userId` (number)
+- **Behavior**: Opens user profile with all user data
+- **Features**: Shows posts, followers, following, and action buttons
+
+#### HomeScreen
+- **Receives**: `adtip://` or `https://adtip.in/`
+- **Behavior**: Navigates to main home feed
+- **Features**: Default landing screen for app deep links
+
+### Deep Link Patterns Added
+- `VIDEO_PLAYER: '/watch/:videoId'` - For VideoPlayerModal navigation
+- Enhanced parsing in DeepLinkService for 'watch' URLs
+- Proper parameter passing for all screen types
 
 ### API Endpoints
 - `POST /api/deeplink/generate` - Generate deep links
@@ -240,6 +317,42 @@ const link = generateDeepLink('PROFILE', { userId: '789' });
 const universalLink = generateUniversalLink('POST', { postId: '123' });
 ```
 
+## Testing and Validation
+
+### Test Files Created
+- `DEEP_LINK_TESTING_GUIDE.md` - Comprehensive testing instructions
+- `src/utils/testDeepLinks.ts` - Utility functions for testing deep link generation and parsing
+
+### Validation Commands
+```typescript
+// Test deep link generation
+import { runAllDeepLinkTests, validateResults } from './src/utils/testDeepLinks';
+
+// Run comprehensive tests
+await runAllDeepLinkTests();
+
+// Validate expected results
+validateResults();
+```
+
+### Manual Testing
+```bash
+# Android
+adb shell am start -W -a android.intent.action.VIEW -d "adtip://post/123" com.adtip.app.adtip_app
+
+# iOS
+xcrun simctl openurl booted "adtip://post/123"
+```
+
+### Success Criteria
+- ✅ All share buttons use ShareService
+- ✅ All screens can receive appropriate deep links
+- ✅ Deep links generate correctly formatted URLs
+- ✅ Navigation works properly for all link types
+- ✅ Error handling works for edge cases
+- ✅ Universal links work alongside custom schemes
+- ✅ Fallback mechanisms work when ShareService fails
+
 ## Troubleshooting
 
 ### Common Issues
@@ -258,6 +371,16 @@ const universalLink = generateUniversalLink('POST', { postId: '123' });
    - Verify domain verification
    - Check HTTPS configuration
    - Ensure proper server setup
+
+4. **Share buttons not working**
+   - Check ShareService import
+   - Verify function parameters
+   - Check console logs for errors
+
+5. **Wrong screen navigation**
+   - Verify DeepLinkService parsing logic
+   - Check deep link patterns in config
+   - Ensure screen names match navigation structure
 
 ### Debug Tools
 ```typescript

@@ -11,6 +11,7 @@ import {
   FlatList,
   Dimensions,
   Alert,
+  Share,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
@@ -21,6 +22,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useWallet } from '../../hooks/useWallet';
 import { API_BASE_URL } from '../../constants/api';
 import ImageViewer from '@react-native-oh-tpl/react-native-image-zoom-viewer';
+import shareService from '../../services/ShareService';
 import ApiService from '../../services/ApiService';
 import BlocklistService from '../../services/BlocklistService';
 import CallController from '../../services/calling/CallController';
@@ -453,6 +455,28 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
     });
   }, [navigation, userId, user?.name]);
 
+  // Handle profile sharing
+  const handleShareProfile = useCallback(async () => {
+    if (!user?.name || !userId) return;
+    try {
+      await shareService.shareProfile(userId, user.name, {
+        useUniversalLink: true,
+        includeAppName: true
+      });
+    } catch (error) {
+      console.error('[UserProfile] Error sharing profile:', error);
+      // Fallback to basic share
+      try {
+        await Share.share({
+          message: `Check out ${user.name}'s profile on Adtip: https://adtip.in/user/${userId}`,
+          title: `${user.name} - Profile`,
+        });
+      } catch (fallbackError) {
+        console.error('[UserProfile] Fallback share also failed:', fallbackError);
+      }
+    }
+  }, [user?.name, userId]);
+
   // Handle refresh
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
@@ -571,6 +595,18 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
                   </Text>
                 </TouchableOpacity>
               )}
+
+              {/* Share Profile Button for own profile */}
+              {isOwnProfile && (
+                <TouchableOpacity
+                  style={[styles.followButton, { backgroundColor: colors.gray[600] }]}
+                  onPress={handleShareProfile}
+                >
+                  <Text style={[styles.followButtonText, { color: colors.white }]}>
+                    Share Profile
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Action Buttons Section */}
@@ -637,6 +673,15 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
                     activeOpacity={0.6}
                   >
                     <Icon name={isBlocked ? "user-check" : "user-x"} size={20} color={colors.text.secondary} />
+                  </TouchableOpacity>
+
+                  {/* Share Profile Button */}
+                  <TouchableOpacity
+                    style={styles.callButton}
+                    onPress={handleShareProfile}
+                    activeOpacity={0.6}
+                  >
+                    <Icon name="share" size={20} color={colors.text.secondary} />
                   </TouchableOpacity>
                 </View>
 

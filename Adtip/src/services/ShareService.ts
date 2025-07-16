@@ -75,12 +75,12 @@ class ShareService {
     shortTitle?: string,
     options: ShareOptions = {}
   ): Promise<void> {
-    const url = options.useUniversalLink 
+    const url = options.useUniversalLink
       ? generateUniversalLink('SHORT', { shortId })
       : generateDeepLink('SHORT', { shortId });
 
     const title = shortTitle || 'Watch this amazing short video!';
-    const message = options.customMessage || 
+    const message = options.customMessage ||
       `${title}\n\n${options.includeAppName ? `Watch on ${this.APP_NAME}\n` : ''}${url}`;
 
     await this.shareContent({
@@ -99,12 +99,12 @@ class ShareService {
     videoTitle?: string,
     options: ShareOptions = {}
   ): Promise<void> {
-    const url = options.useUniversalLink 
-      ? generateUniversalLink('VIDEO', { videoId: videoId.toString() })
-      : generateDeepLink('VIDEO', { videoId: videoId.toString() });
+    const url = options.useUniversalLink
+      ? generateUniversalLink('VIDEO_PLAYER', { videoId: videoId.toString() })
+      : generateDeepLink('VIDEO_PLAYER', { videoId: videoId.toString() });
 
     const title = videoTitle || 'Watch this amazing video!';
-    const message = options.customMessage || 
+    const message = options.customMessage ||
       `${title}\n\n${options.includeAppName ? `Watch on ${this.APP_NAME}\n` : ''}${url}`;
 
     await this.shareContent({

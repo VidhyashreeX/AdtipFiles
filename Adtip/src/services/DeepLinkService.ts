@@ -1,6 +1,6 @@
 // Deep Link Service for handling incoming deep links
 import { Linking } from 'react-native';
-import { navigationRef } from '../navigation/NavigationService';
+import { navigationRef, navigateWithRetry, resetTo } from '../navigation/NavigationService';
 import { DEEP_LINK_PREFIXES, DeepLinkParams } from '../config/deepLinkConfig';
 
 export interface ParsedDeepLink {
@@ -57,7 +57,7 @@ class DeepLinkService {
   }
 
   /**
-   * Handle incoming deep link
+   * Handle incoming deep link with app readiness check
    */
   public handleDeepLink(url: string): void {
     console.log('[DeepLinkService] Handling deep link:', url);
@@ -73,7 +73,10 @@ class DeepLinkService {
       return;
     }
 
-    this.navigateToScreen(parsedLink);
+    // Add a small delay to ensure the app is fully initialized
+    setTimeout(() => {
+      this.navigateToScreen(parsedLink);
+    }, 150);
   }
 
   /**
@@ -126,6 +129,8 @@ class DeepLinkService {
           return this.parseShortLink(segments, url);
         case 'video':
           return this.parseVideoLink(segments, url);
+        case 'watch':
+          return this.parseWatchLink(segments, url);
         case 'call':
           return this.parseCallLink(segments, url);
         case 'chat':
@@ -270,6 +275,24 @@ class DeepLinkService {
   }
 
   /**
+   * Parse watch video deep links (for VideoPlayerModal)
+   */
+  private parseWatchLink(segments: string[], url: string): ParsedDeepLink {
+    if (segments.length >= 2) {
+      const videoId = parseInt(segments[1], 10);
+      if (!isNaN(videoId)) {
+        return {
+          screen: 'VideoPlayerModal',
+          params: { videoId },
+          isValid: true,
+          originalUrl: url,
+        };
+      }
+    }
+    return { screen: 'Main', params: {}, isValid: false, originalUrl: url };
+  }
+
+  /**
    * Parse call-related deep links
    */
   private parseCallLink(segments: string[], url: string): ParsedDeepLink {
@@ -364,31 +387,93 @@ class DeepLinkService {
   }
 
   /**
-   * Navigate to the parsed screen
+   * Navigate to the parsed screen with enhanced retry logic and UltraFastLoader awareness
    */
-  private navigateToScreen(parsedLink: ParsedDeepLink): void {
+  private navigateToScreen(parsedLink: ParsedDeepLink, retryCount: number = 0): void {
+    const maxRetries = 8;
+    const retryDelay = 300;
+
     if (!navigationRef.isReady()) {
-      console.warn('[DeepLinkService] Navigation not ready, queuing navigation');
-      setTimeout(() => this.navigateToScreen(parsedLink), 100);
-      return;
+      if (retryCount < maxRetries) {
+        console.warn(`[DeepLinkService] Navigation not ready, retry ${retryCount + 1}/${maxRetries}`);
+        setTimeout(() => this.navigateToScreen(parsedLink, retryCount + 1), retryDelay);
+        return;
+      } else {
+        console.error('[DeepLinkService] Navigation failed after max retries - navigation not ready');
+        return;
+      }
     }
 
     try {
-      console.log('[DeepLinkService] Navigating to:', parsedLink.screen, parsedLink.params);
-      
+      console.log('[DeepLinkService] Navigating to:', parsedLink.screen, 'with params:', parsedLink.params);
+
+      // Get current navigation state for debugging
+      const currentState = navigationRef.getCurrentRoute();
+      console.log('[DeepLinkService] Current route:', currentState?.name);
+
+      // Check if we're in the right navigation context
+      const currentRouteName = currentState?.name;
+
+      // If we're on InitialLoading, wait a bit more for the app to initialize
+      if (currentRouteName === 'InitialLoading' && retryCount < 6) {
+        console.log('[DeepLinkService] App still initializing, waiting...');
+        setTimeout(() => this.navigateToScreen(parsedLink, retryCount + 1), 500);
+        return;
+      }
+
       // Navigate to the appropriate screen
       if (parsedLink.screen === 'Meeting' || parsedLink.screen === 'MeetingSimple') {
-        // Direct navigation for call screens
+        // Direct navigation for call screens (these are at root level)
+        console.log('[DeepLinkService] Direct navigation to call screen:', parsedLink.screen);
         (navigationRef as any).navigate(parsedLink.screen, parsedLink.params);
       } else {
-        // Navigate through Main navigator for other screens
-        (navigationRef as any).navigate('Main', {
-          screen: parsedLink.screen,
-          params: parsedLink.params,
-        });
+        // Check if Main navigator is available
+        if (currentRouteName === 'Main' || currentRouteName === 'Guest') {
+          // We're in the right context, navigate through the nested navigator
+          console.log('[DeepLinkService] Navigating through nested navigator to:', parsedLink.screen);
+
+          const targetNavigator = currentRouteName === 'Guest' ? 'Guest' : 'Main';
+          (navigateWithRetry as any)(targetNavigator, {
+            screen: parsedLink.screen,
+            params: parsedLink.params,
+          });
+        } else {
+          // We might be in Auth or other state, try to navigate to Main first
+          console.log('[DeepLinkService] Not in Main/Guest context, navigating to Main first');
+          (navigateWithRetry as any)('Main', {
+            screen: parsedLink.screen,
+            params: parsedLink.params,
+          });
+        }
       }
     } catch (error) {
       console.error('[DeepLinkService] Navigation error:', error);
+
+      // Enhanced fallback: try different approaches
+      if (retryCount < 3) {
+        console.log('[DeepLinkService] Trying fallback navigation approach');
+        setTimeout(() => {
+          try {
+            // Try direct navigation to the screen
+            (navigationRef as any).navigate(parsedLink.screen, parsedLink.params);
+          } catch (fallbackError) {
+            console.error('[DeepLinkService] Direct navigation fallback failed:', fallbackError);
+
+            // Last resort: try to reset to Main and then navigate
+            try {
+              resetTo('Main');
+              setTimeout(() => {
+                (navigationRef as any).navigate('Main', {
+                  screen: parsedLink.screen,
+                  params: parsedLink.params,
+                });
+              }, 300);
+            } catch (resetError) {
+              console.error('[DeepLinkService] Reset navigation fallback also failed:', resetError);
+            }
+          }
+        }, 500);
+      }
     }
   }
 

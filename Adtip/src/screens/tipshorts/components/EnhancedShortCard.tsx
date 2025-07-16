@@ -13,6 +13,7 @@ import { GestureDetector } from 'react-native-gesture-handler';
 import Icon from 'react-native-vector-icons/Feather';
 import { type ShortVideo } from '../../../hooks/useShortsQuery';
 import { Share2, Heart, MessageCircle, Play, Pause, VolumeX, Volume2 } from 'lucide-react-native';
+import shareService from '../../../services/ShareService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -286,17 +287,26 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
   const handleShare = protectAction('share shorts', async () => {
     if (!item?.id || !item?.channel?.name) return;
     try {
-      const deepLink = `https://adtip.in/tipshorts/${item.id}`;
-      const shareContent = {
-        message: `Check out this amazing short video by ${item.channel.name}! ${deepLink}`,
-        url: deepLink,
-        title: `${item.channel.name} - Short Video`,
-      };
+      // Use ShareService for proper deep link generation
+      const shortTitle = `${item.channel.name} - Short Video`;
+      await shareService.shareShort(item.id.toString(), shortTitle, {
+        useUniversalLink: true,
+        includeAppName: true
+      });
 
-      await Share.share(shareContent);
-      console.log('[EnhancedShortCard] Successfully shared deep link:', deepLink);
+      console.log('[EnhancedShortCard] Successfully shared short video:', item.id);
     } catch (error) {
       console.error('[EnhancedShortCard] Error sharing:', error);
+      // Fallback to basic share
+      try {
+        const shareContent = {
+          message: `Check out this amazing short video by ${item.channel.name}! https://adtip.in/short/${item.id}`,
+          title: `${item.channel.name} - Short Video`,
+        };
+        await Share.share(shareContent);
+      } catch (fallbackError) {
+        console.error('[EnhancedShortCard] Fallback share also failed:', fallbackError);
+      }
     }
   });
 

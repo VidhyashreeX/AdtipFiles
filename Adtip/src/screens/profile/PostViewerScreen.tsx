@@ -25,6 +25,7 @@ import PostWithComments from '../../components/home/PostWithComments';
 import UserProfileScreen from './UserProfileScreen';
 import { API_BASE_URL } from '../../constants/api';
 import ApiService from '../../services/ApiService';
+import shareService from '../../services/ShareService';
 
 const { width } = Dimensions.get('window');
 
@@ -203,19 +204,27 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
     setCommentModalVisible(true);
   }, [currentUser?.id, showLoginPromptForAction]);
 
-  // Handle share (matching HomeScreen)
+  // Handle share using ShareService
   const handleShare = useCallback(async (postId: number) => {
     if (!currentUser?.id) {
       showLoginPromptForAction('share posts');
       return;
     }
     try {
-      const deepLink = `https://adtip.in/tiptube?videoId=${postId}`;
-      await Share.share({ message: `Check out this video: ${deepLink}` });
+      // Find the post to get its title/content for better sharing
+      const post = posts.find((p: any) => p.id === postId);
+      const postTitle = post?.content || post?.title || 'Check out this amazing post!';
+
+      await shareService.sharePost(postId, postTitle, {
+        useUniversalLink: true,
+        includeAppName: true
+      });
     } catch (error) {
-      console.error('Share error:', error);
+      console.error('[PostViewer] Error sharing post:', error);
+      // Fallback to basic share
+      Share.share({ message: `Check out this post on Adtip: https://adtip.in/post/${postId}` });
     }
-  }, [currentUser?.id, showLoginPromptForAction]);
+  }, [currentUser?.id, showLoginPromptForAction, posts]);
 
 
 

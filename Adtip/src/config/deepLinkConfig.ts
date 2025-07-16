@@ -29,6 +29,7 @@ export const DEEP_LINK_PATTERNS = {
   POST: '/post/:postId',
   SHORT: '/short/:shortId',
   VIDEO: '/video/:videoId',
+  VIDEO_PLAYER: '/watch/:videoId',
   STORY: '/story/:storyId',
   
   // User Profiles
@@ -149,7 +150,14 @@ export const DEEP_LINK_CONFIG: DeepLinkConfig = {
               videoId: (videoId: string) => Number(videoId),
             },
           },
-          
+
+          VideoPlayerModal: {
+            path: 'watch/:videoId',
+            parse: {
+              videoId: (videoId: string) => Number(videoId),
+            },
+          },
+
           Story: {
             path: 'story/:storyId',
             parse: {
@@ -288,6 +296,8 @@ export interface DeepLinkParams {
   tab?: string;
   initialIndex?: number;
   posts?: any[]; // For PostViewer screen
+  video?: any; // For VideoPlayerModal screen
+  upNextVideos?: any[]; // For VideoPlayerModal screen
 }
 
 // Helper function to generate deep links

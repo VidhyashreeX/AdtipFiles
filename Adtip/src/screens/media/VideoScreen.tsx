@@ -105,32 +105,61 @@ const VideoScreen = () => {
 
     try {
       setLoading(true);
+      // Pass userId as query parameter for the new endpoint
       const response = await ApiService.get(
         `${ENDPOINTS.GET_VIDEO}/${videoId}`,
+        { userId: user?.id || 0 }
       );
       setVideo(response.data);
 
-      // Check if user has already liked the video
+      // Check if user has already liked the video and other interactions
       if (user) {
-        const likeResponse = await ApiService.get(
-          `${ENDPOINTS.CHECK_LIKE}/${videoId}`,
-        );
-        setLiked(likeResponse.data.liked);
+        try {
+          // Check if user has liked this video using getUserVideoViewLikeDetails
+          const likeDetailsResponse = await ApiService.get(
+            `/api/getUserVideoViewLikeDetails/${user.id}/1`
+          );
 
-        // Check if user has already subscribed to the channel
-        const subscribeResponse = await ApiService.get(
-          `${ENDPOINTS.CHECK_SUBSCRIBE}/${response.data.user.id}`,
-        );
-        setSubscribed(subscribeResponse.data.subscribed);
+          if (likeDetailsResponse.data && Array.isArray(likeDetailsResponse.data)) {
+            const videoLikeInfo = likeDetailsResponse.data.find(
+              (item: any) => item.videoId === Number(videoId) || item.reelId === Number(videoId)
+            );
+            if (videoLikeInfo) {
+              setLiked(videoLikeInfo.is_like === 1);
+            }
+          }
 
-        // Check if user has already earned from this video
-        if (response.data.isMonetized) {
-          setRewardShown(response.data.hasEarned);
+          // Check if user follows the channel (if video has channel info)
+          if (response.data.channelId) {
+            const followedChannelsResponse = await ApiService.get(
+              `/api/getlistoffollowedchannelbyuser/${user.id}`
+            );
+
+            if (followedChannelsResponse.data && Array.isArray(followedChannelsResponse.data)) {
+              const isFollowingChannel = followedChannelsResponse.data.some(
+                (channel: any) => channel.channelId === response.data.channelId
+              );
+              setSubscribed(isFollowingChannel);
+            }
+          }
+
+          // Check if user has already earned from this video
+          if (response.data.isMonetized) {
+            setRewardShown(response.data.hasEarned);
+          }
+        } catch (error) {
+          console.log('[VideoScreen] Error checking user interactions:', error);
+          // Don't show error to user, just log it
         }
       }
 
-      // Track video view
-      ApiService.post(`${ENDPOINTS.TRACK_VIEW}/${videoId}`);
+      // Track video view using the existing viewNormalVideo method
+      try {
+        await ApiService.viewNormalVideo(Number(videoId));
+        console.log('[VideoScreen] Video view tracked successfully');
+      } catch (error) {
+        console.log('[VideoScreen] Error tracking video view:', error);
+      }
       setLoading(false);
     } catch (err) {
       console.error('Error fetching video:', err);
@@ -297,12 +326,19 @@ const VideoScreen = () => {
       return;
     }
 
-    try {
-      const endpoint = liked
-        ? `${ENDPOINTS.UNLIKE_VIDEO}/${video?.id}`
-        : `${ENDPOINTS.LIKE_VIDEO}/${video?.id}`;
+    if (!video?.id) {
+      Alert.alert('Error', 'Video information not available');
+      return;
+    }
 
-      await ApiService.post(endpoint);
+    try {
+      // Use the same method as VideoPlayerModalScreen and TipTubeScreen
+      await ApiService.saveVideoLike(
+        Number(video.id),
+        Number(user.id),
+        liked ? 0 : 1, // Toggle like status
+        Number(video.createdBy || video.userId || user.id) // Use video creator ID
+      );
 
       setLiked(!liked);
       if (video) {
@@ -313,6 +349,7 @@ const VideoScreen = () => {
       }
     } catch (err) {
       console.error('Error liking video:', err);
+      Alert.alert('Error', 'Failed to like video. Please try again.');
     }
   };
 
@@ -325,31 +362,31 @@ const VideoScreen = () => {
       return;
     }
 
-    if (!video || !video.user) {
+    if (!video || !video.channelId) {
+      Alert.alert('Error', 'Channel information not available');
       return;
     }
 
     try {
-      const endpoint = subscribed
-        ? `${ENDPOINTS.UNSUBSCRIBE}/${video.user.id}`
-        : `${ENDPOINTS.SUBSCRIBE}/${video.user.id}`;
-
-      await ApiService.post(endpoint);
+      // Use the existing saveChannelFollowers endpoint
+      await ApiService.saveChannelFollowers({
+        userId: Number(user.id),
+        channelId: Number(video.channelId),
+        follow: subscribed ? 0 : 1, // Toggle subscription status
+      });
 
       setSubscribed(!subscribed);
-      if (video) {
+
+      // Update video data if it has follower count
+      if (video && video.followers !== undefined) {
         setVideo({
           ...video,
-          user: {
-            ...video.user,
-            followers: subscribed
-              ? video.user.followers - 1
-              : video.user.followers + 1,
-          },
+          followers: subscribed ? video.followers - 1 : video.followers + 1,
         });
       }
     } catch (err) {
-      console.error('Error subscribing:', err);
+      console.error('Error subscribing to channel:', err);
+      Alert.alert('Error', 'Failed to update subscription. Please try again.');
     }
   };
 
