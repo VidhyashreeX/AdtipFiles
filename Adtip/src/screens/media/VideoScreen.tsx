@@ -35,28 +35,45 @@ import {ENDPOINTS} from '../../constants/api';
 const {width} = Dimensions.get('window');
 
 interface VideoProps {
-  id: string;
-  title: string;
-  description: string;
-  videoUrl: string;
-  thumbnailUrl: string;
-  views: number;
-  likes: number;
-  createdAt: string;
-  user: {
-    id: string;
+  id: string | number;
+  title?: string;
+  name?: string; // Alternative title field
+  description?: string;
+  videoDesciption?: string; // Alternative description field
+  videoUrl?: string;
+  videoLink?: string; // Alternative video URL field
+  thumbnailUrl?: string;
+  video_Thumbnail?: string; // Alternative thumbnail field
+  views?: number;
+  likes?: number;
+  createdAt?: string;
+  createdby?: number;
+  userId?: number;
+  channelId?: number;
+  channelName?: string;
+  channel_profile?: string;
+  total_followers?: number;
+  user?: {
+    id: string | number;
     name: string;
-    avatarUrl: string;
-    followers: number;
+    avatarUrl?: string;
+    followers?: number;
   };
-  category: {
-    id: string;
+  channel?: {
+    id: string | number;
+    name: string;
+    followers?: number;
+  };
+  category?: {
+    id: string | number;
     name: string;
     color?: string;
   };
-  isMonetized: boolean;
-  hasEarned: boolean;
-  duration: number; // in seconds
+  isMonetized?: boolean;
+  hasEarned?: boolean;
+  duration?: number; // in seconds
+  play_duration?: string; // Alternative duration field
+  followers?: number; // For channel followers
 }
 
 const VideoScreen = () => {
@@ -105,12 +122,23 @@ const VideoScreen = () => {
 
     try {
       setLoading(true);
+      console.log('[VideoScreen] Fetching video details for videoId:', videoId, 'userId:', user?.id || 0);
+
       // Pass userId as query parameter for the new endpoint
       const response = await ApiService.get(
         `${ENDPOINTS.GET_VIDEO}/${videoId}`,
         { userId: user?.id || 0 }
       );
-      setVideo(response.data);
+
+      console.log('[VideoScreen] API response:', response);
+
+      if (response && response.data && Array.isArray(response.data) && response.data.length > 0) {
+        setVideo(response.data[0]); // Take first video from array
+      } else if (response && response.data && !Array.isArray(response.data)) {
+        setVideo(response.data); // Single video object
+      } else {
+        throw new Error('Video not found or invalid response format');
+      }
 
       // Check if user has already liked the video and other interactions
       if (user) {
@@ -337,14 +365,14 @@ const VideoScreen = () => {
         Number(video.id),
         Number(user.id),
         liked ? 0 : 1, // Toggle like status
-        Number(video.createdBy || video.userId || user.id) // Use video creator ID
+        Number(video.createdby || video.userId || user.id) // Use video creator ID
       );
 
       setLiked(!liked);
       if (video) {
         setVideo({
           ...video,
-          likes: liked ? video.likes - 1 : video.likes + 1,
+          likes: liked ? (video.likes || 0) - 1 : (video.likes || 0) + 1,
         });
       }
     } catch (err) {
@@ -474,7 +502,7 @@ const VideoScreen = () => {
     <SafeAreaView style={containerStyles}>
       {!isFullscreen && (
         <Header
-          title={video.title}
+          title={video.title || video.name || 'Video'}
           leftComponent={
             <TouchableOpacity onPress={() => navigation.goBack()}>
               <Icon name="arrow-left" size={24} color={colors.text.primary} />
@@ -489,7 +517,7 @@ const VideoScreen = () => {
         style={videoContainerStyles}>
         <Video
           ref={videoRef}
-          source={localVideoPath ? {uri: localVideoPath} : (secureVideoSource || {uri: video?.videoUrl || ''})}
+          source={localVideoPath ? {uri: localVideoPath} : (secureVideoSource || {uri: video?.videoUrl || video?.videoLink || ''})}
           style={styles.videoPlayer}
           resizeMode="contain"
           paused={paused}
@@ -589,13 +617,13 @@ const VideoScreen = () => {
           {/* Video information */}
           <View style={styles.videoInfo}>
             <Text style={[styles.videoTitle, {color: colors.text.primary}]}>
-              {video.title}
+              {video.title || video.name || 'Untitled Video'}
             </Text>
 
             <View style={styles.videoStats}>
               <Text style={[styles.statsText, {color: colors.text.secondary}]}>
-                {(video.views || 0).toLocaleString()} views •{' '}
-                {new Date(video.createdAt).toLocaleDateString()}
+                {(video.views || 0).toLocaleString()} views
+                {video.createdAt && ` • ${new Date(video.createdAt).toLocaleDateString()}`}
               </Text>
 
               {video.category && (
@@ -648,20 +676,20 @@ const VideoScreen = () => {
           <View style={[styles.channelContainer, {borderColor: colors.border}]}>
             <View style={styles.channelInfo}>
               <Image
-                source={{uri: video.user.avatarUrl}}
+                source={{uri: video.user?.avatarUrl || video.channel_profile || 'https://via.placeholder.com/40'}}
                 style={styles.channelImage}
               />
               <View style={styles.channelText}>
                 <Text
                   style={[styles.channelName, {color: colors.text.primary}]}>
-                  {video.user.name}
+                  {video.user?.name || video.channelName || 'Unknown Channel'}
                 </Text>
                 <Text
                   style={[
                     styles.subscriberCount,
                     {color: colors.text.secondary},
                   ]}>
-                  {(video.user.followers || 0).toLocaleString()} followers
+                  {((video.user?.followers || video.total_followers || video.followers || 0)).toLocaleString()} followers
                 </Text>
               </View>
             </View>
@@ -685,14 +713,14 @@ const VideoScreen = () => {
           </View>
 
           {/* Video description */}
-          {video.description ? (
+          {(video.description || video.videoDesciption) ? (
             <View style={styles.descriptionContainer}>
               <Text
                 style={[
                   styles.descriptionText,
                   {color: colors.text.secondary},
                 ]}>
-                {video.description}
+                {video.description || video.videoDesciption}
               </Text>
             </View>
           ) : null}
