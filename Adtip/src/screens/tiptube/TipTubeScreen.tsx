@@ -85,6 +85,7 @@ interface Video {
   price?: number;
   isPaidPromotional: number;
   contentCreatorPlanId: number;
+  has_content_creator_premium?: number; // Added for new logic
 }
 
 interface CardLayout {
@@ -424,7 +425,8 @@ const TipTubeScreen = () => {
       channelId: apiVideo.video_channel || apiVideo.channelId || apiVideo.createdby || 0,
       price: apiVideo.promotional_price ? parseFloat(apiVideo.promotional_price) : 0,
       isPaidPromotional: apiVideo.is_paid_promotional || 0,
-      contentCreatorPlanId: apiVideo.content_creator_plan_id || 0
+      contentCreatorPlanId: apiVideo.content_creator_plan_id || 0,
+      has_content_creator_premium: apiVideo.has_content_creator_premium || 0 // Added for new logic
     }));
     
     console.log('[TipTubeScreen] Transformed videos:', {
@@ -714,38 +716,54 @@ const TipTubeScreen = () => {
 
     setSelectedVideoId(video.id);
     try {
-      if (video.isPaidPromotional && video.contentCreatorPlanId > 0) {
-        // Paid video: call viewPaidVideo
-        const response = await ApiService.viewPaidVideo(video.id);
-        if (response.status === true) {
-          // Use the video_link from the response if present
-          const videoUrl = response.data?.video_link || video.videoUrl;
-          navigation.navigate('VideoPlayerModal', {
-            video: { ...video, videoUrl },
-            upNextVideos: shuffleArray(videos.filter((v: Video) => v.id !== video.id)).slice(0, 10)
-          });
-          handleVideoView(); // Increment video count on view change
+      // --- NEW LOGIC: Three cases for paid/normal videos ---
+      if (video.isPaidPromotional === 1) {
+        if (video.has_content_creator_premium === 1) {
+          // Case 1: Paid video, owner has content creator premium
+          const response = await ApiService.viewSubscriptionPaidVideo(video.id);
+          if (response.status === true) {
+            const videoUrl = response.data?.video_link || video.videoUrl;
+            navigation.navigate('VideoPlayerModal', {
+              video: { ...video, videoUrl },
+              upNextVideos: shuffleArray(videos.filter((v: Video) => v.id !== video.id)).slice(0, 10)
+            });
+            handleVideoView();
+          } else {
+            Alert.alert(
+              'Insufficient Balance',
+              'You do not have enough balance to watch this video.'
+            );
+          }
         } else {
-          Alert.alert(
-            'Insufficient Balance',
-            'You do not have enough balance to watch this video.'
-          );
+          // Case 2: Paid video, owner does NOT have content creator premium
+          const response = await ApiService.viewPaidVideoNoPremium(video.id);
+          if (response.status === true) {
+            const videoUrl = response.data?.video_link || video.videoUrl;
+            navigation.navigate('VideoPlayerModal', {
+              video: { ...video, videoUrl },
+              upNextVideos: shuffleArray(videos.filter((v: Video) => v.id !== video.id)).slice(0, 10)
+            });
+            handleVideoView();
+          } else {
+            Alert.alert(
+              'Insufficient Balance',
+              'You do not have enough balance to watch this video.'
+            );
+          }
         }
       } else {
-        // Normal video: call viewNormalVideo and navigate
+        // Case 3: Normal video
         await ApiService.viewNormalVideo(video.id);
         navigation.navigate('VideoPlayerModal', {
           video,
           upNextVideos: shuffleArray(videos.filter((v: Video) => v.id !== video.id)).slice(0, 10)
         });
-        handleVideoView(); // Increment video count on view change
+        handleVideoView();
       }
-      
       // Simulate video completion after a delay (for reward ads)
       setTimeout(() => {
         handleVideoView();
-      }, 5000); // Simulate 5 seconds of video watching
-      
+      }, 5000);
     } catch (error) {
       console.error('[TipTubeScreen] Error handling video press:', error);
       Alert.alert('Error', 'There was an issue accessing this video. Please try again later.');
@@ -1000,7 +1018,8 @@ const TipTubeScreen = () => {
       channelId: apiVideo.video_channel || apiVideo.channelId || apiVideo.createdby || 0,
       price: apiVideo.promotional_price ? parseFloat(apiVideo.promotional_price) : 0,
       isPaidPromotional: apiVideo.is_paid_promotional || 0,
-      contentCreatorPlanId: apiVideo.content_creator_plan_id || 0
+      contentCreatorPlanId: apiVideo.content_creator_plan_id || 0,
+      has_content_creator_premium: apiVideo.has_content_creator_premium || 0 // Added for new logic
     }));
   }, [liveSearchData]);
 
