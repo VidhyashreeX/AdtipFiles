@@ -100,6 +100,23 @@ export const EXPLORE_ENDPOINTS = {
   GET_EXPLORE_CONTENT: '/api/explore',
 };
 
+// Chat endpoints
+export const CHAT_ENDPOINTS = {
+  // Test endpoint
+  TEST: '/api/chat/test',
+
+  // Conversations
+  GET_CONVERSATIONS: '/api/chat/conversations',
+  CREATE_CONVERSATION: '/api/chat/conversations',
+
+  // Messages
+  GET_MESSAGES: '/api/chat/conversations', // + '/:conversationId/messages'
+  SEND_MESSAGE: '/api/chat/conversations', // + '/:conversationId/messages'
+
+  // Mark as read
+  MARK_AS_READ: '/api/chat/conversations', // + '/:conversationId/read'
+};
+
 // Additional endpoints from CSV analysis
 export const ADDITIONAL_ENDPOINTS = {
   // Guest endpoints (no login required)

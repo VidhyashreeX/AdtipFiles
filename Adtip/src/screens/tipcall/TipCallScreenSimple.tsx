@@ -959,19 +959,31 @@ const TipCallScreenSimple = () => {
     [blockUser]
   )
 
-  // Handle chat
-  const handleChatNavigation = useCallback((contact: Contact) => {
-    if (!isPremium) {
+  // Handle chat - Updated to use new chat system
+  const handleChatNavigation = useCallback(async (contact: Contact) => {
+    //Testing Chat
+    /*if (!isPremium) {
       setShowPremiumPopup(true)
       return
-    }
-    navigation.navigate('Chat', { user: contact })
+    }*/
 
-    // Mark messages as read in background
-    if (user?.id && unreadCounts[contact.id] > 0) {
-      ApiService.markMessagesAsRead(user.id, contact.id).finally(() => {
-        setUnreadCounts(prev => ({ ...prev, [contact.id]: 0 }))
-      })
+    try {
+      // Navigate to new chat system - create conversation with the contact
+      navigation.navigate('NewChat', {
+        participantId: contact.id.toString(),
+        participantName: contact.name || 'Unknown User'
+      });
+
+      // Mark messages as read in background
+      if (user?.id && unreadCounts[contact.id] > 0) {
+        ApiService.markMessagesAsRead(user.id, contact.id).finally(() => {
+          setUnreadCounts(prev => ({ ...prev, [contact.id]: 0 }))
+        })
+      }
+    } catch (error) {
+      console.error('Failed to navigate to chat:', error);
+      // Fallback to conversations screen
+      navigation.navigate('Conversations');
     }
   }, [navigation, isPremium, unreadCounts, user?.id])
 

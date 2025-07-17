@@ -226,13 +226,11 @@ const ChannelCommunicationButtons: React.FC<CommunicationButtonsProps> = ({
       return;
     }
 
-    // Create contact object for navigation
-    const contact = {
-      id: channelInfo.createdBy,
-      name: channelInfo.channelName,
-    };
-
-    navigation.navigate('Chat', { user: contact });
+    // Navigate to new chat system
+    navigation.navigate('NewChat', {
+      participantId: channelInfo.createdBy.toString(),
+      participantName: channelInfo.channelName || 'Channel Owner'
+    });
   }, [user?.id, isMyChannel, isPremium, channelInfo, navigation]);
 
 

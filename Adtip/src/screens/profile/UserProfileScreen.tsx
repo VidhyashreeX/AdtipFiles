@@ -201,20 +201,11 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
       return
     }
 
-    // Create contact object similar to TipCallScreenSimple
-    const contact = {
-      id: userId,
-      name: user.name,
-      profile_image: user.profile_image,
-      emailId: user.emailId,
-      online_status: user.online_status,
-      last_seen: user.last_seen,
-      is_available: user.is_available,
-      dnd: user.dnd
-    }
-
-    // @ts-ignore
-    navigation.navigate('Chat', { user: contact })
+    // Navigate to new chat system
+    navigation.navigate('NewChat', {
+      participantId: userId.toString(),
+      participantName: user.name || 'Unknown User'
+    });
 
     // Mark messages as read in background
     if (currentUser?.id && unreadCount > 0) {

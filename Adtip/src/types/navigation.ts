@@ -39,7 +39,13 @@ export type MainNavigatorParamList = {
   TipCall: { initialCallNotificationData?: CallNotificationData }; // TipCall now takes params
   TipCallSimple: undefined;
   TipShop: undefined;
-  Chat: { user: Contact }; // Add this line
+  Chat: { user: Contact }; // Legacy chat screen
+  Conversations: undefined; // New conversations list screen
+  NewChat: {
+    conversationId?: string;
+    participantId?: string;
+    participantName?: string;
+  }; // New chat screen
   MissedCalls: undefined;
   Profile: {userId?: number};
   InstagramProfile: {userId?: number};

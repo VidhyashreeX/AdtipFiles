@@ -41,6 +41,7 @@ import { useTabNavigator, TabNavigatorProvider } from './src/contexts/TabNavigat
 //import { CallProvider, useCall, ActiveCall } from './src/contexts/CallProvider';
 import { ContentCreatorPremiumProvider } from './src/contexts/ContentCreatorPremiumContext';
 import { UserDataProvider } from './src/contexts/UserDataContext';
+import { ChatProvider } from './src/contexts/ChatContext';
 import { DataProvider } from './src/providers/DataProvider';
 import { EnhancedQueryProvider } from './src/providers/QueryProvider';
 
@@ -436,9 +437,10 @@ function App(): React.JSX.Element {
             <AuthProvider>
               <EnhancedQueryProvider>
                 <UserDataProvider>
-                  <WalletProvider>
-                    <ContentCreatorPremiumProvider>
-                      <DataProvider>
+                  <ChatProvider>
+                    <WalletProvider>
+                      <ContentCreatorPremiumProvider>
+                        <DataProvider>
                         <ShortsProvider>
                           <TabNavigatorProvider>
                             <SidebarProvider>
@@ -453,9 +455,10 @@ function App(): React.JSX.Element {
                             </SidebarProvider>
                           </TabNavigatorProvider>
                         </ShortsProvider>
-                      </DataProvider>
-                    </ContentCreatorPremiumProvider>
-                  </WalletProvider>
+                        </DataProvider>
+                      </ContentCreatorPremiumProvider>
+                    </WalletProvider>
+                  </ChatProvider>
                 </UserDataProvider>
               </EnhancedQueryProvider>
             </AuthProvider>

@@ -84,8 +84,9 @@ import SubscriptionScreen from '../screens/packages/SubscriptionScreen';
 
 import ContentCreatorSubscriptionScreen from '../screens/packages/ContentCreatorSubscriptionScreen';
 
-// Import ChatScreen
-import ChatScreen from '../screens/chat/ChatScreen';
+// Import New Chat Screens
+import NewChatScreen from '../screens/chat/NewChatScreen';
+import ConversationsScreen from '../screens/chat/ConversationsScreen';
 
 // Import PrivacyPolicyScreen
 import PrivacyPolicyScreen from '../screens/Privacy/PrivacyPolicyScreen';
@@ -418,12 +419,33 @@ const MainNavigator = () => {
          }}
        />
 
-      {/* Add Chat screen */}
-      <Stack.Screen 
-        name="Chat" 
-        component={ChatScreen}
+      {/* Chat Screens */}
+      <Stack.Screen
+        name="Conversations"
+        component={ConversationsScreen}
         options={{
-          headerShown: false,
+          headerShown: true,
+          title: 'Chats',
+          animation: 'slide_from_right',
+          gestureEnabled: true,
+        }}
+      />
+      <Stack.Screen
+        name="NewChat"
+        component={NewChatScreen}
+        options={{
+          headerShown: true,
+          animation: 'slide_from_right',
+          gestureEnabled: true,
+        }}
+      />
+      {/* Legacy Chat screen for backward compatibility */}
+      <Stack.Screen
+        name="Chat"
+        component={ConversationsScreen}
+        options={{
+          headerShown: true,
+          title: 'Chats',
           animation: 'slide_from_right',
           gestureEnabled: true,
         }}

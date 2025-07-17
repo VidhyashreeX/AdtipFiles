@@ -256,6 +256,10 @@ export const DEEP_LINK_CONFIG: DeepLinkConfig = {
           CreatePost: 'create',
           CameraRecording: 'camera',
           VideoPreview: 'video-preview',
+
+          // Chat
+          Conversations: 'chats',
+          NewChat: 'chat/:conversationId?',
         },
       },
       
