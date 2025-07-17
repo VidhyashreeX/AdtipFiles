@@ -215,11 +215,19 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
   // Load messages for a conversation
   const loadMessages = useCallback(async (conversationId: string) => {
-    if (!isInitialized) return;
+    if (!isInitialized) {
+      console.log('[ChatContext] Cannot load messages - not initialized');
+      return;
+    }
 
     try {
+      console.log('[ChatContext] Loading messages for conversation:', conversationId);
       setLoadingMessages(true);
       const result = await NewChatService.getMessages(conversationId);
+      console.log('[ChatContext] Messages loaded:', {
+        count: result.messages?.length || 0,
+        messages: result.messages?.slice(0, 3).map(m => ({ id: m.id, content: m.content.substring(0, 20) }))
+      });
       setCurrentMessages(result.messages);
     } catch (error) {
       console.error('[ChatContext] Failed to load messages:', error);

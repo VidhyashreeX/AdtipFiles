@@ -25,6 +25,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 
 import { useChat } from '../../contexts/ChatContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { Message } from '../../services/NewChatService';
 import { COLORS } from '../../constants/colors';
 
@@ -45,6 +46,7 @@ interface MessageBubbleProps {
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isOwn, showStatus }) => {
+  const { colors } = useTheme();
   const getStatusIcon = () => {
     switch (message.status) {
       case 'sending':
@@ -78,23 +80,23 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isOwn, showStatu
   return (
     <View style={[
       styles.messageBubble,
-      isOwn ? styles.ownMessage : styles.otherMessage
+      isOwn ? [styles.ownMessage, { backgroundColor: COLORS.primary }] : [styles.otherMessage, { backgroundColor: colors.surface }]
     ]}>
       <Text style={[
         styles.messageText,
-        { color: isOwn ? COLORS.white : COLORS.black }
+        { color: isOwn ? COLORS.white : colors.text.primary }
       ]}>
         {message.content}
       </Text>
-      
+
       <View style={styles.messageFooter}>
         <Text style={[
           styles.messageTime,
-          { color: isOwn ? COLORS.white : COLORS.gray[500] }
+          { color: isOwn ? COLORS.white : colors.text.secondary }
         ]}>
-          {new Date(message.createdAt).toLocaleTimeString([], { 
-            hour: '2-digit', 
-            minute: '2-digit' 
+          {new Date(message.createdAt).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit'
           })}
         </Text>
         
@@ -115,6 +117,7 @@ const NewChatScreen: React.FC = () => {
   const route = useRoute<ChatScreenRouteProp>();
   const navigation = useNavigation<ChatScreenNavigationProp>();
   const { user } = useAuth();
+  const { colors } = useTheme();
 
   const {
     currentConversationId,
@@ -163,6 +166,7 @@ const NewChatScreen: React.FC = () => {
           console.log('[NewChatScreen] Joining conversation:', convId);
           setConversationId(convId);
           joinConversation(convId);
+          console.log('[NewChatScreen] Conversation setup complete, conversationId:', convId);
         } else {
           console.warn('[NewChatScreen] No conversation ID available');
           Alert.alert('Error', 'Unable to load conversation');
@@ -193,14 +197,23 @@ const NewChatScreen: React.FC = () => {
     };
   }, [routeConversationId, participantId, isInitialized, createOrGetConversation, joinConversation, leaveConversation]);
 
-  // Set navigation title
+  // Set navigation title and header styling
   useEffect(() => {
     if (conversationId) {
       const conversation = getConversationById(conversationId);
       const title = conversation?.other_user_name || participantName || 'Chat';
-      navigation.setOptions({ title });
+      navigation.setOptions({
+        title,
+        headerStyle: {
+          backgroundColor: colors.background,
+        },
+        headerTintColor: colors.text.primary,
+        headerTitleStyle: {
+          color: colors.text.primary,
+        },
+      });
     }
-  }, [conversationId, getConversationById, participantName, navigation]);
+  }, [conversationId, getConversationById, participantName, navigation, colors]);
 
   // Mark messages as read when conversation changes
   useEffect(() => {
@@ -276,15 +289,25 @@ const NewChatScreen: React.FC = () => {
   const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
     const isOwn = item.senderId === user?.id?.toString();
     const showStatus = isOwn && index === currentMessages.length - 1;
-    
+    //Debug Noisy Console, comment out when not needed
+    /*
+    console.log('[NewChatScreen] Message ownership check:', {
+      messageId: item.id,
+      messageSenderId: item.senderId,
+      currentUserId: user?.id?.toString(),
+      isOwn,
+      senderName: item.senderName,
+      content: item.content.substring(0, 20) + '...'
+    });*/
+
     return (
-      <MessageBubble 
-        message={item} 
-        isOwn={isOwn} 
+      <MessageBubble
+        message={item}
+        isOwn={isOwn}
         showStatus={showStatus}
       />
     );
-  }, [currentConversationId, currentMessages.length]);
+  }, [user?.id, currentMessages.length]);
 
   // Render typing indicator
   const renderTypingIndicator = () => {
@@ -294,9 +317,9 @@ const NewChatScreen: React.FC = () => {
 
     return (
       <View style={styles.typingIndicator}>
-        <Text style={styles.typingText}>
-          {typingUsers[conversationId].length === 1 
-            ? 'Typing...' 
+        <Text style={[styles.typingText, { color: colors.text.secondary }]}>
+          {typingUsers[conversationId].length === 1
+            ? 'Typing...'
             : `${typingUsers[conversationId].length} people typing...`}
         </Text>
       </View>
@@ -318,48 +341,71 @@ const NewChatScreen: React.FC = () => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         {/* Connection status */}
         {!isConnected && (
-          <View style={styles.connectionStatus}>
-            <Text style={styles.connectionText}>Connecting...</Text>
+          <View style={[styles.connectionStatus, { backgroundColor: COLORS.warning }]}>
+            <Text style={[styles.connectionText, { color: COLORS.white }]}>Connecting...</Text>
           </View>
         )}
 
         {/* Messages list */}
-        <FlatList
-          ref={flatListRef}
-          data={currentMessages}
-          renderItem={renderMessage}
-          keyExtractor={(item) => item.id}
-          style={styles.messagesList}
-          contentContainerStyle={styles.messagesContainer}
-          showsVerticalScrollIndicator={false}
-        />
+        {loadingMessages ? (
+          <View style={styles.loadingContainer}>
+            <Text style={[styles.loadingText, { color: colors.text.primary }]}>Loading messages...</Text>
+          </View>
+        ) : currentMessages.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={[styles.emptyText, { color: colors.text.primary }]}>No messages yet</Text>
+            <Text style={[styles.emptySubtext, { color: colors.text.secondary }]}>Start the conversation!</Text>
+          </View>
+        ) : (
+          <View style={[styles.chatBackground, { backgroundColor: colors.background }]}>
+            <FlatList
+              ref={flatListRef}
+              data={currentMessages}
+              renderItem={renderMessage}
+              keyExtractor={(item) => item.id}
+              style={styles.messagesList}
+              contentContainerStyle={styles.messagesContainer}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+        )}
 
         {/* Typing indicator */}
         {renderTypingIndicator()}
 
         {/* Message input */}
-        <View style={styles.inputContainer}>
+        <View style={[styles.inputContainer, {
+          backgroundColor: colors.background,
+          borderTopColor: colors.border
+        }]}>
           <TextInput
-            style={styles.textInput}
+            style={[styles.textInput, {
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+              color: colors.text.primary
+            }]}
             value={messageText}
             onChangeText={handleTextChange}
             placeholder="Type a message..."
-            placeholderTextColor={COLORS.gray[400]}
+            placeholderTextColor={colors.text.secondary}
             multiline
             maxLength={1000}
           />
-          
+
           <TouchableOpacity
             style={[
               styles.sendButton,
-              { opacity: messageText.trim() && !sending ? 1 : 0.5 }
+              {
+                backgroundColor: messageText.trim() ? COLORS.primary : colors.text.secondary,
+                opacity: messageText.trim() && !sending ? 1 : 0.5
+              }
             ]}
             onPress={handleSendMessage}
             disabled={!messageText.trim() || sending}
@@ -379,7 +425,6 @@ const NewChatScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
   loadingContainer: {
     flex: 1,
@@ -392,12 +437,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   connectionStatus: {
-    backgroundColor: COLORS.warning,
     padding: 8,
     alignItems: 'center',
   },
   connectionText: {
-    color: COLORS.white,
     fontSize: 14,
     fontWeight: '500',
   },
@@ -444,7 +487,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   typingText: {
-    color: COLORS.gray[500],
     fontSize: 14,
     fontStyle: 'italic',
   },
@@ -452,29 +494,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     padding: 16,
-    backgroundColor: COLORS.white,
     borderTopWidth: 1,
-    borderTopColor: COLORS.gray[200],
   },
   textInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: COLORS.gray[300],
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginRight: 12,
     maxHeight: 100,
     fontSize: 16,
-    color: COLORS.black,
   },
   sendButton: {
-    backgroundColor: COLORS.primary,
     width: 44,
     height: 44,
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    textAlign: 'center',
+    opacity: 0.7,
+  },
+  chatBackground: {
+    flex: 1,
+    position: 'relative',
   },
 });
 

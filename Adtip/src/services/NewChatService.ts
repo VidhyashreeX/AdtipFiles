@@ -83,11 +83,13 @@ class NewChatService {
     try {
       this.currentUserId = userId;
       this.authToken = authToken;
-      
+
+      console.log('[NewChatService] Initializing with user ID:', userId);
+
       await this.connect();
       await this.setupFCMForChat();
-      
-      console.log('[NewChatService] Initialized successfully');
+
+      console.log('[NewChatService] Initialized successfully with user ID:', this.currentUserId);
     } catch (error) {
       console.error('[NewChatService] Initialization failed:', error);
       throw error;
@@ -257,7 +259,7 @@ class NewChatService {
    */
   async sendMessage(conversationId: string, content: string, replyTo?: string): Promise<void> {
     const tempId = `temp_${Date.now()}_${Math.random()}`;
-    
+
     const message: Message = {
       id: tempId,
       conversationId,
@@ -270,6 +272,14 @@ class NewChatService {
       status: 'sending',
       replyTo
     };
+
+    console.log('[NewChatService] Sending message:', {
+      tempId,
+      conversationId,
+      senderId: this.currentUserId,
+      content: content.substring(0, 20) + '...',
+      isConnected: this.isConnected
+    });
 
     // Add to queue for offline support
     this.messageQueue.push(message);
@@ -286,6 +296,7 @@ class NewChatService {
         replyTo,
         tempId
       });
+      console.log('[NewChatService] Message sent via socket');
     } else {
       console.log('[NewChatService] Message queued for when connection is restored');
     }
@@ -333,9 +344,13 @@ class NewChatService {
   async getConversations(page = 1, limit = 20): Promise<{ conversations: Conversation[], pagination: any }> {
     try {
       const response = await ApiService.get(`${CHAT_ENDPOINTS.GET_CONVERSATIONS}?page=${page}&limit=${limit}`);
+      console.log('[NewChatService] Raw conversations API response:', response);
+
+      // Backend returns: { status, message, data: [...], pagination: {...} }
+      // ApiService.get returns response.data, so we access response.data directly
       return {
-        conversations: response.data.data || [],
-        pagination: response.data.pagination || {}
+        conversations: response.data || [],
+        pagination: response.pagination || {}
       };
     } catch (error) {
       console.error('[NewChatService] Failed to get conversations:', error);
@@ -349,11 +364,23 @@ class NewChatService {
   async getMessages(conversationId: string, page = 1, limit = 50): Promise<{ messages: Message[], pagination: any }> {
     try {
       const response = await ApiService.get(`${CHAT_ENDPOINTS.GET_MESSAGES}/${conversationId}/messages?page=${page}&limit=${limit}`);
-      const messages = (response.data.data.messages || []).map(this.formatMessage);
+      console.log('[NewChatService] Raw API response:', response);
+
+      // Backend returns: { status, message, data: { messages: [...], pagination: {...} } }
+      // ApiService.get returns response.data, so we access response.data.messages directly
+      console.log('[NewChatService] Response structure:', {
+        hasData: !!response.data,
+        hasMessages: !!response.data?.messages,
+        hasDataData: !!response.data?.data,
+        messagesCount: response.data?.messages?.length || 0,
+        dataDataMessagesCount: response.data?.data?.messages?.length || 0
+      });
+
+      const messages = (response.data?.messages || []).map(this.formatMessage);
 
       return {
         messages,
-        pagination: response.data.data.pagination || {}
+        pagination: response.data?.pagination || {}
       };
     } catch (error) {
       console.error('[NewChatService] Failed to get messages:', error);
@@ -371,7 +398,11 @@ class NewChatService {
         type: 'direct'
       });
 
-      return { conversationId: response.data.data.conversationId };
+      console.log('[NewChatService] Create conversation response:', response);
+
+      // Backend returns: { status, message, data: { conversationId: ... } }
+      // ApiService.post returns response.data, so we access response.data.conversationId
+      return { conversationId: response.data?.conversationId };
     } catch (error) {
       console.error('[NewChatService] Failed to create conversation:', error);
       throw error;
@@ -401,10 +432,10 @@ class NewChatService {
    * Helper: Format message from server response
    */
   private formatMessage(messageData: any): Message {
-    return {
+    const formattedMessage = {
       id: messageData.id?.toString() || messageData.tempId,
       conversationId: messageData.conversation_id || messageData.conversationId,
-      senderId: messageData.sender_id || messageData.senderId,
+      senderId: (messageData.sender_id || messageData.senderId)?.toString(),
       senderName: messageData.sender_name || messageData.senderName || 'Unknown',
       senderAvatar: messageData.sender_avatar || messageData.senderAvatar,
       content: messageData.content || '',
@@ -414,6 +445,17 @@ class NewChatService {
       status: messageData.status || 'sent',
       replyTo: messageData.reply_to_message_id || messageData.replyTo
     };
+
+    console.log('[NewChatService] Formatted message:', {
+      id: formattedMessage.id,
+      senderId: formattedMessage.senderId,
+      senderName: formattedMessage.senderName,
+      content: formattedMessage.content,
+      currentUserId: this.currentUserId,
+      isOwnMessage: formattedMessage.senderId === this.currentUserId
+    });
+
+    return formattedMessage;
   }
 
   /**
