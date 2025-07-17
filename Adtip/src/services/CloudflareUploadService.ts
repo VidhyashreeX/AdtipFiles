@@ -15,7 +15,8 @@ import {
   FILE_SIZE_LIMITS,
   SUPPORTED_FORMATS,
   PRESIGNED_URL_EXPIRY,
-  CLOUDFLARE_PUBLIC_DOMAIN
+  CLOUDFLARE_PUBLIC_DOMAIN,
+  UPLOAD_CONFIG
 } from '../config/cloudflareConfig';
 
 // Upload interfaces
@@ -142,56 +143,83 @@ class CloudflareUploadService {
   }
 
   /**
-   * Read file as Uint8Array for upload (React Native compatible)
+   * Read file as proper format for upload (React Native compatible)
+   * Uses different strategies for images vs videos to handle large files
    */
-  private async readFileAsUint8Array(filePath: string): Promise<Uint8Array> {
+  private async readFileForUpload(filePath: string, isVideo: boolean = false): Promise<any> {
     try {
       // For React Native, we need to handle file URIs properly
       let normalizedPath = filePath;
-      
+
       if (Platform.OS === 'android' && !filePath.startsWith('file://')) {
         normalizedPath = `file://${filePath}`;
       }
 
-      // Read file as base64 first, then convert to Uint8Array
-      const base64Data = await RNFS.readFile(normalizedPath, 'base64');
-      
-      // Convert base64 to Uint8Array (React Native compatible)
-      // Use global atob if available, otherwise use a polyfill
-      let binaryString: string;
-      if (typeof atob !== 'undefined') {
-        binaryString = atob(base64Data);
-      } else {
-        // Simple base64 decode polyfill for React Native
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-        let str = base64Data.replace(/[^A-Za-z0-9+/]/g, '');
-        let output = '';
-        
-        for (let i = 0; i < str.length; i += 4) {
-          const encoded1 = chars.indexOf(str.charAt(i));
-          const encoded2 = chars.indexOf(str.charAt(i + 1));
-          const encoded3 = chars.indexOf(str.charAt(i + 2));
-          const encoded4 = chars.indexOf(str.charAt(i + 3));
-          
-          const bitmap = (encoded1 << 18) | (encoded2 << 12) | (encoded3 << 6) | encoded4;
-          
-          output += String.fromCharCode((bitmap >> 16) & 255);
-          if (encoded3 !== 64) output += String.fromCharCode((bitmap >> 8) & 255);
-          if (encoded4 !== 64) output += String.fromCharCode(bitmap & 255);
+      if (isVideo) {
+        // For videos, use the file URI directly to avoid memory issues
+        // This works with AWS SDK v3 and React Native
+        console.log('[CloudflareUpload] Using direct file URI for video upload:', normalizedPath);
+
+        // For React Native, we can use the file URI directly with fetch
+        // which handles large files better than reading into memory
+        const response = await fetch(normalizedPath);
+        if (!response.ok) {
+          throw new Error(`Failed to read video file: ${response.statusText}`);
         }
-        binaryString = output;
+
+        // Get the blob/arrayBuffer for upload
+        const arrayBuffer = await response.arrayBuffer();
+        return new Uint8Array(arrayBuffer);
+      } else {
+        // For images, use the existing base64 method (smaller files)
+        const base64Data = await RNFS.readFile(normalizedPath, 'base64');
+
+        // Convert base64 to Uint8Array (React Native compatible)
+        // Use global atob if available, otherwise use a polyfill
+        let binaryString: string;
+        if (typeof atob !== 'undefined') {
+          binaryString = atob(base64Data);
+        } else {
+          // Simple base64 decode polyfill for React Native
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+          let str = base64Data.replace(/[^A-Za-z0-9+/]/g, '');
+          let output = '';
+
+          for (let i = 0; i < str.length; i += 4) {
+            const encoded1 = chars.indexOf(str.charAt(i));
+            const encoded2 = chars.indexOf(str.charAt(i + 1));
+            const encoded3 = chars.indexOf(str.charAt(i + 2));
+            const encoded4 = chars.indexOf(str.charAt(i + 3));
+
+            const bitmap = (encoded1 << 18) | (encoded2 << 12) | (encoded3 << 6) | encoded4;
+
+            output += String.fromCharCode((bitmap >> 16) & 255);
+            if (encoded3 !== 64) output += String.fromCharCode((bitmap >> 8) & 255);
+            if (encoded4 !== 64) output += String.fromCharCode(bitmap & 255);
+          }
+          binaryString = output;
+        }
+
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        return bytes;
       }
-      
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      
-      return bytes;
     } catch (error) {
       console.error('[CloudflareUpload] Error reading file:', error);
-      throw new Error('Failed to read file for upload');
+      throw new Error(`Failed to read file for upload: ${error.message}`);
     }
+  }
+
+  /**
+   * @deprecated Use readFileForUpload instead
+   * Read file as Uint8Array for upload (React Native compatible)
+   */
+  private async readFileAsUint8Array(filePath: string): Promise<Uint8Array> {
+    console.warn('[CloudflareUpload] readFileAsUint8Array is deprecated, use readFileForUpload instead');
+    return this.readFileForUpload(filePath, false) as Promise<Uint8Array>;
   }
 
   /**
@@ -230,9 +258,34 @@ class CloudflareUploadService {
       // Validate file
       await this.validateFile(filePath, maxSize, allowedFormats);
 
-      // Get file info
+      // Get file info and validate
+      console.log('[CloudflareUpload] Checking file before upload:', filePath);
+      const fileExists = await RNFS.exists(filePath);
+      if (!fileExists) {
+        throw new Error(`File does not exist: ${filePath}`);
+      }
+
       const fileInfo = await RNFS.stat(filePath);
+      console.log('[CloudflareUpload] File info from RNFS.stat:', {
+        path: filePath,
+        size: fileInfo.size,
+        isFile: fileInfo.isFile(),
+        isDirectory: fileInfo.isDirectory(),
+        mtime: fileInfo.mtime,
+        ctime: fileInfo.ctime
+      });
+
+      if (fileInfo.size === 0) {
+        throw new Error(`File is empty (0 bytes): ${filePath}`);
+      }
+
       const originalName = fileName || filePath.split('/').pop() || 'unknown';
+
+      // For large videos, use presigned URL upload method
+      if (isVideo && fileInfo.size > UPLOAD_CONFIG.VIDEO_PRESIGNED_THRESHOLD) {
+        console.log('[CloudflareUpload] Large video detected, using presigned URL method');
+        return this.uploadVideoWithPresignedUrl(filePath, folder, fileName, userId, onProgress);
+      }
       
       // Generate unique key
       const key = this.generateFileKey(folder, originalName, userId);
@@ -240,13 +293,25 @@ class CloudflareUploadService {
       // Get content type
       const contentType = this.getContentType(filePath);
 
-      // Read file as Uint8Array
-      const fileData = await this.readFileAsUint8Array(filePath);
+      // Read file using appropriate method for file type
+      console.log('[CloudflareUpload] Reading file data, isVideo:', isVideo, 'fileSize:', fileInfo.size);
+      const fileData = await this.readFileForUpload(filePath, isVideo);
 
       // Simulate progress if callback provided
       if (onProgress) {
         onProgress({ loaded: 0, total: fileInfo.size, percentage: 0 });
       }
+
+      // Log upload details for debugging
+      console.log('[CloudflareUpload] Preparing upload command:', {
+        bucket: this.bucketName,
+        key,
+        contentType,
+        dataSize: fileData.byteLength || fileData.length,
+        originalFileSize: fileInfo.size,
+        isVideo,
+        originalName
+      });
 
       // Upload to R2
       const command = new PutObjectCommand({
@@ -254,14 +319,19 @@ class CloudflareUploadService {
         Key: key,
         Body: fileData,
         ContentType: contentType,
+        ContentLength: fileData.byteLength || fileData.length, // Explicitly set content length
         Metadata: {
           originalName: originalName,
           uploadedBy: userId?.toString() || 'anonymous',
           uploadedAt: new Date().toISOString(),
+          fileType: isVideo ? 'video' : 'image',
+          originalSize: fileInfo.size.toString(),
         },
       });
 
+      console.log('[CloudflareUpload] Sending upload command to R2...');
       const response = await this.s3Client.send(command);
+      console.log('[CloudflareUpload] R2 response:', response);
 
       // Simulate progress completion
       if (onProgress) {
@@ -319,6 +389,87 @@ class CloudflareUploadService {
         size: 0,
         contentType: '',
         error: errorMessage,
+      };
+    }
+  }
+
+  /**
+   * Upload large video file using presigned URL (alternative method for large files)
+   */
+  async uploadVideoWithPresignedUrl(
+    filePath: string,
+    folder: string,
+    fileName?: string,
+    userId?: number,
+    onProgress?: (progress: UploadProgress) => void
+  ): Promise<UploadResult> {
+    try {
+      console.log('[CloudflareUpload] Starting presigned URL upload for video:', filePath);
+
+      // Get file info
+      const fileInfo = await RNFS.stat(filePath);
+      const originalName = fileName || filePath.split('/').pop() || 'unknown';
+      const contentType = this.getContentType(filePath);
+
+      // Generate presigned URL
+      const presignedInfo = await this.generatePresignedUploadUrl(
+        folder,
+        originalName,
+        contentType,
+        userId
+      );
+
+      console.log('[CloudflareUpload] Generated presigned URL for upload');
+
+      // Normalize file path for React Native
+      let normalizedPath = filePath;
+      if (Platform.OS === 'android' && !filePath.startsWith('file://')) {
+        normalizedPath = `file://${filePath}`;
+      }
+
+      // Read file data for presigned URL upload
+      if (onProgress) {
+        onProgress({ loaded: 0, total: fileInfo.size, percentage: 0 });
+      }
+
+      // For presigned URLs, we need to upload the raw file data
+      const fileData = await this.readFileForUpload(normalizedPath, true);
+
+      const uploadResponse = await fetch(presignedInfo.uploadUrl, {
+        method: 'PUT',
+        body: fileData,
+        headers: {
+          'Content-Type': contentType,
+          'Content-Length': fileData.byteLength.toString(),
+        },
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`);
+      }
+
+      if (onProgress) {
+        onProgress({ loaded: fileInfo.size, total: fileInfo.size, percentage: 100 });
+      }
+
+      console.log('[CloudflareUpload] Presigned URL upload successful');
+
+      return {
+        success: true,
+        url: presignedInfo.downloadUrl,
+        key: presignedInfo.key,
+        size: fileInfo.size,
+        contentType,
+      };
+    } catch (error) {
+      console.error('[CloudflareUpload] Presigned URL upload failed:', error);
+      return {
+        success: false,
+        url: '',
+        key: '',
+        size: 0,
+        contentType: '',
+        error: error instanceof Error ? error.message : 'Upload failed',
       };
     }
   }
@@ -670,6 +821,85 @@ class CloudflareUploadService {
       maxRetries: 3,
       timeout: 300000, // 5 minutes
     };
+  }
+
+  /**
+   * Test file reading capabilities
+   */
+  async testFileReading(filePath: string): Promise<{ success: boolean; error?: string; details?: any }> {
+    try {
+      console.log('[CloudflareUpload] Testing file reading for:', filePath);
+
+      // Check if file exists
+      const exists = await RNFS.exists(filePath);
+      if (!exists) {
+        return { success: false, error: 'File does not exist' };
+      }
+
+      // Get file stats
+      const stats = await RNFS.stat(filePath);
+      console.log('[CloudflareUpload] File stats:', stats);
+
+      // Test different reading methods
+      const results: any = {
+        fileExists: exists,
+        fileSize: stats.size,
+        isFile: stats.isFile(),
+        readMethods: {}
+      };
+
+      // Test base64 reading (for small files only)
+      if (stats.size < 10 * 1024 * 1024) { // Only test base64 for files < 10MB
+        try {
+          const base64Data = await RNFS.readFile(filePath, 'base64');
+          results.readMethods.base64 = {
+            success: true,
+            dataLength: base64Data.length,
+            estimatedSize: (base64Data.length * 3) / 4 // Approximate original size
+          };
+        } catch (error) {
+          results.readMethods.base64 = {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          };
+        }
+      }
+
+      // Test fetch reading
+      try {
+        let normalizedPath = filePath;
+        if (Platform.OS === 'android' && !filePath.startsWith('file://')) {
+          normalizedPath = `file://${filePath}`;
+        }
+
+        const response = await fetch(normalizedPath);
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          results.readMethods.fetch = {
+            success: true,
+            dataSize: arrayBuffer.byteLength,
+            matchesFileSize: arrayBuffer.byteLength === stats.size
+          };
+        } else {
+          results.readMethods.fetch = {
+            success: false,
+            error: `HTTP ${response.status}: ${response.statusText}`
+          };
+        }
+      } catch (error) {
+        results.readMethods.fetch = {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+
+      return { success: true, details: results };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
   }
 
   /**

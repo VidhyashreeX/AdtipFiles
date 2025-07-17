@@ -46,6 +46,16 @@ export const SUPPORTED_FORMATS = {
   IMAGE: ['jpg', 'jpeg', 'png', 'webp'],
 } as const;
 
+// Upload configuration
+export const UPLOAD_CONFIG = {
+  // Use presigned URLs for videos larger than this size (in bytes)
+  VIDEO_PRESIGNED_THRESHOLD: 20 * 1024 * 1024, // 20MB
+  // Maximum retries for failed uploads
+  MAX_UPLOAD_RETRIES: 3,
+  // Timeout for upload operations (in milliseconds)
+  UPLOAD_TIMEOUT: 300000, // 5 minutes
+} as const;
+
 // Presigned URL expiration time (in seconds)
 export const PRESIGNED_URL_EXPIRY = 3600; // 1 hour - secure but enough time for uploads
 
