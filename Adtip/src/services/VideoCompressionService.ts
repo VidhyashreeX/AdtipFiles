@@ -1,175 +1,147 @@
-import {Video} from 'react-native-compressor';
-import {Platform} from 'react-native';
+import { Video } from 'react-native-compressor';
+import { Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 
 export interface VideoCompressionOptions {
   quality?: 'low' | 'medium' | 'high';
-  bitrate?: number;
-  maxSize?: number; // in MB
-  outputFormat?: 'mp4' | 'mov';
   compressionMethod?: 'auto' | 'manual';
-}
-
-export interface VideoQuality {
-  resolution: string;
-  bitrate: number;
-  suffix: string;
-  maxWidth: number;
-  maxHeight: number;
+  maxSize?: number; // Maximum dimension (width or height)
+  bitrate?: number; // Only used with manual compression
+  minimumFileSizeForCompress?: number; // Minimum file size in MB to compress
 }
 
 export interface CompressedVideoResult {
   originalUri: string;
   compressedUri: string;
-  hlsManifestUri?: string;
-  qualities: {
-    [key: string]: {
-      uri: string;
-      size: number;
-      bitrate: number;
-      resolution: string;
-    };
-  };
-  totalSize: number;
+  originalSize: number;
+  compressedSize: number;
   compressionRatio: number;
-  duration?: number;
+  success: boolean;
+  error?: string;
 }
 
 class VideoCompressionService {
-  // Define quality presets for adaptive streaming
-  private readonly QUALITY_PRESETS: VideoQuality[] = [
-    {
-      resolution: '240p',
-      bitrate: 400000, // 400 kbps
-      suffix: '_240p',
-      maxWidth: 426,
-      maxHeight: 240,
+  // Quality presets based on react-native-compressor documentation
+  private readonly QUALITY_SETTINGS = {
+    low: {
+      maxSize: 480, // 480p max dimension
+      bitrate: 500000, // 500 kbps
+      minimumFileSizeForCompress: 5, // 5MB
     },
-    {
-      resolution: '360p',
-      bitrate: 800000, // 800 kbps
-      suffix: '_360p',
-      maxWidth: 640,
-      maxHeight: 360,
+    medium: {
+      maxSize: 720, // 720p max dimension
+      bitrate: 1000000, // 1 Mbps
+      minimumFileSizeForCompress: 10, // 10MB
     },
-    {
-      resolution: '480p',
-      bitrate: 1200000, // 1.2 Mbps
-      suffix: '_480p',
-      maxWidth: 854,
-      maxHeight: 480,
+    high: {
+      maxSize: 1080, // 1080p max dimension
+      bitrate: 2000000, // 2 Mbps
+      minimumFileSizeForCompress: 20, // 20MB
     },
-    {
-      resolution: '720p',
-      bitrate: 2500000, // 2.5 Mbps
-      suffix: '_720p',
-      maxWidth: 1280,
-      maxHeight: 720,
-    },
-    {
-      resolution: '1080p',
-      bitrate: 5000000, // 5 Mbps
-      suffix: '_1080p',
-      maxWidth: 1920,
-      maxHeight: 1080,
-    },
-  ];
+  };
 
   /**
-   * Get video information
+   * Get video file information
    */
-  private async getVideoInfo(uri: string): Promise<any> {
+  private async getVideoInfo(uri: string): Promise<{ size: number; path: string; exists: boolean }> {
     try {
+      const exists = await RNFS.exists(uri);
+      if (!exists) {
+        throw new Error(`Video file does not exist: ${uri}`);
+      }
+
       const stats = await RNFS.stat(uri);
       return {
         size: stats.size,
         path: uri,
+        exists: true,
       };
     } catch (error) {
-      console.error('Error getting video info:', error);
+      console.error('[VideoCompression] Error getting video info:', error);
       throw error;
     }
   }
 
   /**
-   * Compress video to single quality
+   * Compress video using react-native-compressor (CORRECT IMPLEMENTATION)
    */
-  async compressSingleVideo(
+  async compressVideo(
     uri: string,
     options: VideoCompressionOptions = {},
-  ): Promise<string> {
+    onProgress?: (progress: number) => void
+  ): Promise<CompressedVideoResult> {
     try {
+      console.log('[VideoCompression] Starting compression for:', uri);
+
+      // Get original video info
+      const originalInfo = await this.getVideoInfo(uri);
+      console.log('[VideoCompression] Original video info:', originalInfo);
+
       const {
         quality = 'medium',
-        bitrate,
+        compressionMethod = 'auto', // Use 'auto' for WhatsApp-like compression
         maxSize,
-        outputFormat = 'mp4',
-        compressionMethod = 'auto',
+        bitrate,
+        minimumFileSizeForCompress = 0, // Always compress by default
       } = options;
 
+      // Get quality settings
+      const qualitySettings = this.QUALITY_SETTINGS[quality];
+
+      // Prepare compression options according to react-native-compressor docs
       let compressionOptions: any = {
         compressionMethod,
-        minimumFileSizeForCompress: 1, // Always compress
+        minimumFileSizeForCompress, // in MB
       };
 
-      if (compressionMethod === 'manual' && bitrate) {
-        compressionOptions.bitrate = bitrate;
-      } else {
-        // Use preset quality
-        switch (quality) {
-          case 'low':
-            compressionOptions.compressionMethod = 'manual';
-            compressionOptions.bitrate = 500000; // 500 kbps
-            break;
-          case 'medium':
-            compressionOptions.compressionMethod = 'manual';
-            compressionOptions.bitrate = 1000000; // 1 Mbps
-            break;
-          case 'high':
-            compressionOptions.compressionMethod = 'manual';
-            compressionOptions.bitrate = 2000000; // 2 Mbps
-            break;
-        }
+      // Only add manual settings if using manual compression
+      if (compressionMethod === 'manual') {
+        compressionOptions.maxSize = maxSize || qualitySettings.maxSize;
+        compressionOptions.bitrate = bitrate || qualitySettings.bitrate;
       }
 
-      const compressedUri = await Video.compress(uri, compressionOptions);
+      console.log('[VideoCompression] Compression options:', compressionOptions);
 
-      // Check if we need to compress further due to size constraint
-      if (maxSize) {
-        const compressedInfo = await this.getVideoInfo(compressedUri);
-        const sizeInMB = compressedInfo.size / (1024 * 1024);
+      // Compress video using react-native-compressor
+      const compressedUri = await Video.compress(
+        uri,
+        compressionOptions,
+        onProgress // Progress callback
+      );
 
-        if (sizeInMB > maxSize) {
-          // Compress again with lower bitrate
-          const lowerBitrate = Math.floor(
-            (compressionOptions.bitrate || 1000000) * 0.7,
-          );
-          const secondCompressionOptions = {
-            ...compressionOptions,
-            bitrate: lowerBitrate,
-            compressionMethod: 'manual',
-          };
+      console.log('[VideoCompression] Compression completed:', compressedUri);
 
-          const finalCompressedUri = await Video.compress(
-            compressedUri,
-            secondCompressionOptions,
-          );
+      // Get compressed video info
+      const compressedInfo = await this.getVideoInfo(compressedUri);
+      console.log('[VideoCompression] Compressed video info:', compressedInfo);
 
-          // Clean up intermediate file
-          try {
-            await RNFS.unlink(compressedUri);
-          } catch (e) {
-            console.warn('Failed to clean up intermediate file:', e);
-          }
+      const result: CompressedVideoResult = {
+        originalUri: uri,
+        compressedUri,
+        originalSize: originalInfo.size,
+        compressedSize: compressedInfo.size,
+        compressionRatio: originalInfo.size / compressedInfo.size,
+        success: true,
+      };
 
-          return finalCompressedUri;
-        }
-      }
+      console.log('[VideoCompression] Compression result:', result);
+      return result;
 
-      return compressedUri;
     } catch (error) {
-      console.error('Error compressing video:', error);
-      throw error;
+      console.error('[VideoCompression] Compression failed:', error);
+
+      // Return error result
+      const originalInfo = await this.getVideoInfo(uri).catch(() => ({ size: 0, path: uri, exists: false }));
+
+      return {
+        originalUri: uri,
+        compressedUri: uri, // Fallback to original
+        originalSize: originalInfo.size,
+        compressedSize: originalInfo.size,
+        compressionRatio: 1,
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown compression error',
+      };
     }
   }
 
@@ -219,16 +191,36 @@ class VideoCompressionService {
         }
       }
 
+      // Ensure we have at least one quality
+      if (Object.keys(qualities).length === 0) {
+        console.warn('[VideoCompression] No qualities were successfully compressed');
+        throw new Error('Video compression failed for all target qualities');
+      }
+
       // Create HLS manifest
       const hlsManifestUri = await this.createHLSManifest(qualities);
 
+      // Select the best available quality as the main compressed URI
+      const compressedUri = qualities['480p']?.uri ||
+                           qualities['360p']?.uri ||
+                           qualities['720p']?.uri ||
+                           Object.values(qualities)[0]?.uri ||
+                           uri;
+
+      console.log('[VideoCompression] Adaptive compression complete:', {
+        originalSize: originalInfo.size,
+        totalCompressedSize,
+        qualitiesCreated: Object.keys(qualities),
+        selectedCompressedUri: compressedUri
+      });
+
       return {
         originalUri: uri,
-        compressedUri: qualities['480p']?.uri || qualities['360p']?.uri || uri,
+        compressedUri,
         hlsManifestUri,
         qualities,
         totalSize: totalCompressedSize,
-        compressionRatio: originalInfo.size / totalCompressedSize,
+        compressionRatio: totalCompressedSize > 0 ? originalInfo.size / totalCompressedSize : 1,
       };
     } catch (error) {
       console.error('Error creating adaptive versions:', error);
@@ -299,28 +291,45 @@ class VideoCompressionService {
   }
 
   /**
-   * Compress video for TipTube (longer videos with adaptive streaming)
+   * Compress video for TipTube (longer videos) - CORRECTED IMPLEMENTATION
    */
   async compressForTipTube(
     uri: string,
     options: VideoCompressionOptions = {},
+    onProgress?: (progress: number) => void
   ): Promise<CompressedVideoResult> {
-    const targetQualities = ['360p', '480p', '720p', '1080p'];
-    return this.createAdaptiveVersions(uri, targetQualities);
+    console.log('[VideoCompression] Starting TipTube compression for:', uri);
+
+    // TipTube videos should be high quality but compressed
+    const tipTubeOptions: VideoCompressionOptions = {
+      quality: 'high',
+      compressionMethod: 'auto', // Use WhatsApp-like auto compression
+      minimumFileSizeForCompress: 0, // Always compress
+      ...options, // Allow overrides
+    };
+
+    return this.compressVideo(uri, tipTubeOptions, onProgress);
   }
 
   /**
-   * Compress video for TipShorts (short videos, single quality optimized)
+   * Compress video for TipShorts (short videos) - CORRECTED IMPLEMENTATION
    */
   async compressForTipShorts(
     uri: string,
     options: VideoCompressionOptions = {},
-  ): Promise<string> {
-    return this.compressSingleVideo(uri, {
+    onProgress?: (progress: number) => void
+  ): Promise<CompressedVideoResult> {
+    console.log('[VideoCompression] Starting TipShorts compression for:', uri);
+
+    // TipShorts should be medium quality and smaller size
+    const tipShortsOptions: VideoCompressionOptions = {
       quality: 'medium',
-      maxSize: 50, // 50MB max for shorts
-      ...options,
-    });
+      compressionMethod: 'auto', // Use WhatsApp-like auto compression
+      minimumFileSizeForCompress: 0, // Always compress
+      ...options, // Allow overrides
+    };
+
+    return this.compressVideo(uri, tipShortsOptions, onProgress);
   }
 
   /**
@@ -346,19 +355,33 @@ class VideoCompressionService {
   }
 
   /**
-   * Get compression progress (mock implementation)
+   * Test compression with a simple auto compression
    */
-  onCompressionProgress(callback: (progress: number) => void): void {
-    // This is a mock implementation as react-native-compressor doesn't provide progress
-    // You might need to implement this differently or use a different library
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += 10;
-      callback(progress);
-      if (progress >= 100) {
-        clearInterval(interval);
-      }
-    }, 500);
+  async testCompression(uri: string, onProgress?: (progress: number) => void): Promise<CompressedVideoResult> {
+    console.log('[VideoCompression] Testing compression with auto method for:', uri);
+
+    return this.compressVideo(uri, {
+      compressionMethod: 'auto',
+      minimumFileSizeForCompress: 0,
+    }, onProgress);
+  }
+
+  /**
+   * Simple compression without any custom options (for debugging)
+   */
+  async simpleCompress(uri: string, onProgress?: (progress: number) => void): Promise<string> {
+    try {
+      console.log('[VideoCompression] Simple compression for:', uri);
+
+      // Use the most basic compression options
+      const result = await Video.compress(uri, {}, onProgress);
+
+      console.log('[VideoCompression] Simple compression result:', result);
+      return result;
+    } catch (error) {
+      console.error('[VideoCompression] Simple compression failed:', error);
+      throw error;
+    }
   }
 }
 

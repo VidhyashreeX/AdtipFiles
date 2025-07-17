@@ -387,38 +387,102 @@ const TipTubeUploadScreen: React.FC = () => {
       setIsCompressing(true);
       setCompressionProgress(0);
 
-      console.log('[TipTubeUpload] Starting video compression');
+      console.log('[TipTubeUpload] Starting video compression for:', videoUri);
 
-      const compressionOptions: VideoCompressionOptions = {
-        quality: selectedQuality,
-        maxSize: selectedQuality === 'high' ? 100 : selectedQuality === 'medium' ? 50 : 25,
-        outputFormat: 'mp4',
-        compressionMethod: 'manual',
-      };
+      // TEMPORARY DEBUG: Check original file before compression
+      const originalStats = await RNFS.stat(videoUri);
+      console.log('[TipTubeUpload] Original video stats before compression:', {
+        path: videoUri,
+        size: originalStats.size,
+        exists: await RNFS.exists(videoUri)
+      });
 
-      // Simulate compression progress
-      const progressInterval = setInterval(() => {
-        setCompressionProgress(prev => {
-          const newProgress = prev + 10;
-          if (newProgress >= 90) {
-            clearInterval(progressInterval);
+      // TEMPORARY DEBUG OPTIONS
+      const SKIP_COMPRESSION_FOR_DEBUG = false; // Set to true to test without compression
+      const USE_SIMPLE_COMPRESSION = true; // Set to true to use basic compression
+
+      if (SKIP_COMPRESSION_FOR_DEBUG) {
+        console.log('[TipTubeUpload] SKIPPING COMPRESSION FOR DEBUG - using original file');
+        setCompressionProgress(100);
+        setIsCompressing(false);
+        return videoUri;
+      }
+
+      let compressedResult;
+
+      if (USE_SIMPLE_COMPRESSION) {
+        console.log('[TipTubeUpload] Using simple compression method');
+
+        // Use the simplest compression method for debugging
+        const simpleCompressedUri = await VideoCompressionService.simpleCompress(
+          videoUri,
+          (progress) => {
+            console.log('[TipTubeUpload] Simple compression progress:', progress);
+            setCompressionProgress(progress);
           }
-          return Math.min(newProgress, 90);
-        });
-      }, 500);
+        );
 
-      const compressedUri = await VideoCompressionService.compressForTipTube(videoUri, compressionOptions);
+        // Create a result object manually
+        const originalStats = await RNFS.stat(videoUri);
+        const compressedStats = await RNFS.stat(simpleCompressedUri);
 
-      clearInterval(progressInterval);
+        compressedResult = {
+          originalUri: videoUri,
+          compressedUri: simpleCompressedUri,
+          originalSize: originalStats.size,
+          compressedSize: compressedStats.size,
+          compressionRatio: originalStats.size / compressedStats.size,
+          success: true,
+        };
+      } else {
+        console.log('[TipTubeUpload] Using TipTube compression method');
+
+        const compressionOptions: VideoCompressionOptions = {
+          quality: selectedQuality,
+          compressionMethod: 'auto', // Use auto compression like WhatsApp
+          minimumFileSizeForCompress: 0, // Always compress
+        };
+
+        compressedResult = await VideoCompressionService.compressForTipTube(
+          videoUri,
+          compressionOptions,
+          (progress) => {
+            console.log('[TipTubeUpload] Compression progress:', progress);
+            setCompressionProgress(progress);
+          }
+        );
+      }
+
       setCompressionProgress(100);
 
-      console.log('[TipTubeUpload] Video compressed successfully:', compressedUri);
+      console.log('[TipTubeUpload] Video compression result:', {
+        originalUri: compressedResult.originalUri,
+        compressedUri: compressedResult.compressedUri,
+        originalSize: compressedResult.originalSize,
+        compressedSize: compressedResult.compressedSize,
+        compressionRatio: compressedResult.compressionRatio,
+        success: compressedResult.success,
+        error: compressedResult.error
+      });
+
+      // Validate that we have a valid compressed URI
+      if (!compressedResult.success || !compressedResult.compressedUri) {
+        throw new Error(`Video compression failed: ${compressedResult.error || 'Unknown error'}`);
+      }
 
       // Update video size after compression
-      const stats = await RNFS.stat(compressedUri.compressedUri);
+      const stats = await RNFS.stat(compressedResult.compressedUri);
+      console.log('[TipTubeUpload] Compressed video file stats:', {
+        path: compressedResult.compressedUri,
+        size: stats.size,
+        exists: await RNFS.exists(compressedResult.compressedUri),
+        expectedSize: compressedResult.compressedSize,
+        sizesMatch: stats.size === compressedResult.compressedSize
+      });
+
       setVideoSize(stats.size);
 
-      return compressedUri.compressedUri;
+      return compressedResult.compressedUri;
     } catch (error) {
       console.error('[TipTubeUpload] Error compressing video:', error);
       throw new Error('Failed to compress video. Please try again.');

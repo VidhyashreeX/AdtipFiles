@@ -549,18 +549,46 @@ const TipShortsUploadScreen: React.FC = () => {
         });
       }, 300);
 
-      const compressedUri = await VideoCompressionService.compressForTipShorts(videoUri, compressionOptions);
+      const compressedResult = await VideoCompressionService.compressForTipShorts(
+        videoUri,
+        compressionOptions,
+        (progress) => {
+          console.log('[TipShortsUpload] Compression progress:', progress);
+          setCompressionProgress(progress);
+        }
+      );
 
       clearInterval(progressInterval);
       setCompressionProgress(100);
 
-      console.log('[TipShortsUpload] Video compressed successfully:', compressedUri);
+      console.log('[TipShortsUpload] Video compression result:', {
+        originalUri: compressedResult.originalUri,
+        compressedUri: compressedResult.compressedUri,
+        originalSize: compressedResult.originalSize,
+        compressedSize: compressedResult.compressedSize,
+        compressionRatio: compressedResult.compressionRatio,
+        success: compressedResult.success,
+        error: compressedResult.error
+      });
+
+      // Validate that we have a valid compressed URI
+      if (!compressedResult.success || !compressedResult.compressedUri) {
+        throw new Error(`Video compression failed: ${compressedResult.error || 'Unknown error'}`);
+      }
 
       // Update video size after compression
-      const stats = await RNFS.stat(compressedUri);
+      const stats = await RNFS.stat(compressedResult.compressedUri);
+      console.log('[TipShortsUpload] Compressed video file stats:', {
+        path: compressedResult.compressedUri,
+        size: stats.size,
+        exists: await RNFS.exists(compressedResult.compressedUri),
+        expectedSize: compressedResult.compressedSize,
+        sizesMatch: stats.size === compressedResult.compressedSize
+      });
+
       setVideoSize(stats.size);
 
-      return compressedUri;
+      return compressedResult.compressedUri;
     } catch (error) {
       console.error('[TipShortsUpload] Error compressing video:', error);
       throw new Error('Failed to compress video. Please try again.');
