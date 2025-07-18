@@ -17,6 +17,7 @@ import {useNavigation} from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import ScreenTransition from '../../components/common/ScreenTransition';
 import ApiService from '../../services/ApiService';
+import { getSetting, setSetting, getSettings } from '../../utils/settingsStorage';
 // import {useUserSettings, useUpdateUserSettings} from '../../hooks/useQueries';
 
 interface SettingItem {
@@ -47,6 +48,7 @@ const SettingsScreen: React.FC = () => {
     autoPlay: true,
     cellularData: false,
     analytics: true,
+    autoRotation: true,
   });
 
   // Subscription management state
@@ -66,13 +68,42 @@ const SettingsScreen: React.FC = () => {
   // }, [userSettingsQuery.data, isDarkMode]);
 
   // Fetch subscription data on component mount
+  // Load settings from storage on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const settings = await getSettings(['AUTO_ROTATION', 'AUTO_PLAY', 'CELLULAR_DATA', 'PUSH_NOTIFICATIONS', 'EMAIL_NOTIFICATIONS', 'ANALYTICS']);
+        setLocalSettings(prev => ({
+          ...prev,
+          autoRotation: settings.AUTO_ROTATION,
+          autoPlay: settings.AUTO_PLAY,
+          cellularData: settings.CELLULAR_DATA,
+          pushNotifications: settings.PUSH_NOTIFICATIONS,
+          emailNotifications: settings.EMAIL_NOTIFICATIONS,
+          analytics: settings.ANALYTICS,
+        }));
+      } catch (error) {
+        console.error('[SettingsScreen] Error loading settings:', error);
+      }
+    };
+
+    loadSettings();
+  }, []);
+
   useEffect(() => {
     console.log('🏠 [SettingsScreen] Component mounted for user:', user?.id);
     fetchSubscriptionStatus();
   }, [fetchSubscriptionStatus]);
 
-  const updateSetting = useCallback((key: string, value: boolean) => {
+  const updateSetting = useCallback(async (key: string, value: boolean) => {
     setLocalSettings(prev => ({...prev, [key]: value}));
+
+    // Persist to AsyncStorage
+    try {
+      await setSetting(key as any, value);
+    } catch (error) {
+      console.error('[SettingsScreen] Error saving setting:', error);
+    }
 
     // Update settings via API
     // updateSettingsMutation.mutate({
@@ -271,6 +302,15 @@ const SettingsScreen: React.FC = () => {
           icon: 'smartphone',
           value: localSettings.cellularData,
           onToggle: (value: boolean) => updateSetting('cellularData', value),
+        },
+        {
+          id: 'autoRotation',
+          title: 'Auto-Rotation',
+          subtitle: 'Automatically rotate to landscape for videos',
+          type: 'toggle',
+          icon: 'rotate-cw',
+          value: localSettings.autoRotation,
+          onToggle: (value: boolean) => updateSetting('autoRotation', value),
         },
       ] as SettingItem[],
     },

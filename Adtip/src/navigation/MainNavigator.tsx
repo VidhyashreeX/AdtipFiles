@@ -48,6 +48,7 @@ import LudoGameScreen from '../screens/playtoEarn/LudoGameScreen';
 import WatchToEarnScreen from '../screens/watchToEarn/WatchToEarnScreen';
 import AdPassbookScreen from '../screens/adPassbook/AdPassbookScreen';
 import SupportScreen from '../screens/support/SupportScreen';
+import ContactFormScreen from '../screens/support/ContactFormScreen';
 import CreateCampaignScreen from '../screens/adPassbook/CreateCampaignScreen';
 import CommentsScreen from '../screens/home/CommentScreen';
 import FollowersList from '../screens/profile/FollowersList';
@@ -140,6 +141,7 @@ const EnhancedLudoGameScreen = withWalletBalance(LudoGameScreen);
 const EnhancedWatchToEarnScreen = withWalletBalance(WatchToEarnScreen);
 const EnhancedAdPassbookScreen = withWalletBalance(AdPassbookScreen);
 const EnhancedSupportScreen = withWalletBalance(SupportScreen);
+const EnhancedContactFormScreen = withWalletBalance(ContactFormScreen);
 const EnhancedCreateCampaignScreen = withWalletBalance(CreateCampaignScreen);
 const EnhancedCommentsScreen = withWalletBalance(CommentsScreen);
 const EnhancedFollowersList = withWalletBalance(FollowersList);
@@ -552,8 +554,9 @@ const MainNavigator = () => {
       <Stack.Screen name="WatchToEarn" component={EnhancedWatchToEarnScreen} />
       <Stack.Screen name="AdPassbook" component={EnhancedAdPassbookScreen} />
       <Stack.Screen name="Support" component={EnhancedSupportScreen} />
-      <Stack.Screen 
-        name="CreateCampaign" 
+      <Stack.Screen name="ContactForm" component={EnhancedContactFormScreen} />
+      <Stack.Screen
+        name="CreateCampaign"
         component={EnhancedCreateCampaignScreen}
         options={slideUpTransitionConfig}
       />

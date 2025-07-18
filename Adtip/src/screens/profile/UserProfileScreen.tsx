@@ -468,6 +468,84 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
     }
   }, [user?.name, userId]);
 
+  // Handle video edit
+  const handleEditVideo = useCallback((post: Post) => {
+    Alert.alert(
+      'Edit Video',
+      'Choose what you want to edit',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Edit Details',
+          onPress: () => {
+            // Navigate to edit video screen or show edit modal
+            Alert.prompt(
+              'Edit Video Title',
+              'Enter new title for your video',
+              [
+                {
+                  text: 'Cancel',
+                  style: 'cancel',
+                },
+                {
+                  text: 'Save',
+                  onPress: async (newTitle) => {
+                    if (newTitle && newTitle.trim()) {
+                      try {
+                        await ApiService.editVideo({
+                          id: post.id,
+                          name: newTitle.trim(),
+                        });
+                        Alert.alert('Success', 'Video title updated successfully');
+                        handleRefresh();
+                      } catch (error) {
+                        console.error('Error editing video:', error);
+                        Alert.alert('Error', 'Failed to update video title');
+                      }
+                    }
+                  },
+                },
+              ],
+              'plain-text',
+              post.content || ''
+            );
+          },
+        },
+      ]
+    );
+  }, []);
+
+  // Handle video delete
+  const handleDeleteVideo = useCallback((post: Post) => {
+    Alert.alert(
+      'Delete Video',
+      'Are you sure you want to delete this video? This action cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await ApiService.deleteVideo(post.id);
+              Alert.alert('Success', 'Video deleted successfully');
+              handleRefresh();
+            } catch (error) {
+              console.error('Error deleting video:', error);
+              Alert.alert('Error', 'Failed to delete video');
+            }
+          },
+        },
+      ]
+    );
+  }, []);
+
   // Handle refresh
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
@@ -742,6 +820,30 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
                 <Text style={styles.premiumText}>★</Text>
               </View>
             )}
+
+            {/* Video Management Buttons - Only show for own profile and videos */}
+            {isOwnProfile && post.media_type === 'video' && (
+              <View style={styles.videoManagementOverlay}>
+                <TouchableOpacity
+                  style={[styles.managementButton, styles.editButton]}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleEditVideo(post);
+                  }}
+                >
+                  <Icon name="edit-2" size={14} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.managementButton, styles.deleteButton]}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleDeleteVideo(post);
+                  }}
+                >
+                  <Icon name="trash-2" size={14} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            )}
           </TouchableOpacity>
         )}
         ListEmptyComponent={() => (
@@ -887,6 +989,27 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 4,
+  },
+  videoManagementOverlay: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    flexDirection: 'row',
+    gap: 4,
+  },
+  managementButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  editButton: {
+    backgroundColor: 'rgba(59, 130, 246, 0.9)', // Blue
+  },
+  deleteButton: {
+    backgroundColor: 'rgba(239, 68, 68, 0.9)', // Red
   },
   emptyContainer: {
     flex: 1,

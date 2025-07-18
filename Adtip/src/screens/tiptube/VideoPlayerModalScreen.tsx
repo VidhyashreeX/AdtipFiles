@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import Video, { VideoRef } from 'react-native-video';
+import Orientation from 'react-native-orientation-locker';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -38,6 +39,7 @@ import ApiService from '../../services/ApiService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCommentCount } from '../../hooks/useComments';
 import shareService from '../../services/ShareService';
+import { getSetting } from '../../utils/settingsStorage';
 
 // Get screen dimensions
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -84,6 +86,8 @@ const VideoPlayerModalScreen: React.FC = () => {
   const videoPlayerRef = useRef<VideoRef | null>(null);
   const [showComments, setShowComments] = useState(false);
   const [isVideoLiked, setIsVideoLiked] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [autoRotationEnabled, setAutoRotationEnabled] = useState(true);
 
   // Get comment count for preview
   const { data: commentCount = 0 } = useCommentCount({ videoId: video.id });
@@ -108,6 +112,21 @@ const VideoPlayerModalScreen: React.FC = () => {
     loadVideoSource();
   }, [video.videoUrl]);
 
+  // Load auto-rotation setting from storage
+  useEffect(() => {
+    const loadAutoRotationSetting = async () => {
+      try {
+        const autoRotation = await getSetting('AUTO_ROTATION', true);
+        setAutoRotationEnabled(autoRotation);
+        console.log('[VideoPlayerModal] Auto-rotation setting loaded:', autoRotation);
+      } catch (error) {
+        console.error('[VideoPlayerModal] Error loading auto-rotation setting:', error);
+      }
+    };
+
+    loadAutoRotationSetting();
+  }, []);
+
   // Animation values - separate backdrop and content opacity
   const backdropOpacity = useSharedValue(0);
   const contentOpacity = useSharedValue(0);
@@ -131,13 +150,32 @@ const VideoPlayerModalScreen: React.FC = () => {
       duration: 200,
       easing: Easing.out(Easing.quad),
     });
-    
+
     // Content fades in slightly after
     contentOpacity.value = withDelay(100, withTiming(1, {
       duration: 300,
       easing: Easing.bezier(0.25, 0.1, 0.25, 1),
     }));
   }, []);
+
+  // Handle orientation changes for auto-rotation
+  useEffect(() => {
+    if (!autoRotationEnabled) return;
+
+    if (isFullscreen) {
+      console.log('[VideoPlayerModal] Switching to landscape mode');
+      Orientation.lockToLandscape();
+    } else {
+      console.log('[VideoPlayerModal] Switching to portrait mode');
+      Orientation.lockToPortrait();
+    }
+
+    // Cleanup: Always return to portrait when component unmounts
+    return () => {
+      console.log('[VideoPlayerModal] Component unmounting - returning to portrait');
+      Orientation.lockToPortrait();
+    };
+  }, [isFullscreen, autoRotationEnabled]);
 
   // Fixed fade-out on close - backdrop stays visible until navigation completes
   const handleClose = useCallback(() => {
@@ -146,7 +184,7 @@ const VideoPlayerModalScreen: React.FC = () => {
       duration: 200,
       easing: Easing.bezier(0.4, 0.0, 1, 1),
     });
-    
+
     // Keep backdrop visible longer to prevent white flash
     backdropOpacity.value = withDelay(150, withTiming(0, {
       duration: 200,
@@ -156,6 +194,12 @@ const VideoPlayerModalScreen: React.FC = () => {
       runOnJS(navigation.goBack)();
     }));
   }, [navigation, backdropOpacity, contentOpacity]);
+
+  // Toggle fullscreen mode
+  const toggleFullscreen = useCallback(() => {
+    console.log('[VideoPlayerModal] Toggling fullscreen:', !isFullscreen);
+    setIsFullscreen(prev => !prev);
+  }, [isFullscreen]);
 
   // Drag gesture for video area
   const dragY = useSharedValue(0);
@@ -276,36 +320,51 @@ const VideoPlayerModalScreen: React.FC = () => {
         {/* Video Player */}        <GestureDetector gesture={dragGesture}>
           <View style={styles.videoContainer}>
             {videoSource && !videoError ? (
-              <Video
-                key={video.id}
-                source={videoSource}
-                style={StyleSheet.absoluteFillObject}
-                controls={true}
-                paused={false}
-                resizeMode="contain"
-                onReadyForDisplay={() => setIsVideoReady(true)}
-                onError={(error) => {
-                  console.error('[VideoPlayerModal] Video playback error:', error);
-                  setVideoError('Video playback failed');
-                }}
-                onLoadStart={() => {
-                  console.log('[VideoPlayerModal] Video loading started');
-                  setIsVideoReady(false);
-                }}
-                onLoad={(data) => {
-                  console.log('[VideoPlayerModal] Video loaded successfully:', data);
-                }}
-                repeat={false}
-                playInBackground={false}
-                playWhenInactive={false}
-                bufferConfig={{
-                  minBufferMs: 1500,
-                  maxBufferMs: 6000,
-                  bufferForPlaybackMs: 800,
-                  bufferForPlaybackAfterRebufferMs: 1500
-                }}
-                ref={videoPlayerRef}
-              />
+              <>
+                <Video
+                  key={video.id}
+                  source={videoSource}
+                  style={StyleSheet.absoluteFillObject}
+                  controls={true}
+                  paused={false}
+                  resizeMode="contain"
+                  onReadyForDisplay={() => setIsVideoReady(true)}
+                  onError={(error) => {
+                    console.error('[VideoPlayerModal] Video playback error:', error);
+                    setVideoError('Video playback failed');
+                  }}
+                  onLoadStart={() => {
+                    console.log('[VideoPlayerModal] Video loading started');
+                    setIsVideoReady(false);
+                  }}
+                  onLoad={(data) => {
+                    console.log('[VideoPlayerModal] Video loaded successfully:', data);
+                  }}
+                  repeat={false}
+                  playInBackground={false}
+                  playWhenInactive={false}
+                  bufferConfig={{
+                    minBufferMs: 1500,
+                    maxBufferMs: 6000,
+                    bufferForPlaybackMs: 800,
+                    bufferForPlaybackAfterRebufferMs: 1500
+                  }}
+                  ref={videoPlayerRef}
+                />
+
+                {/* Fullscreen Toggle Button */}
+                {autoRotationEnabled && (
+                  <TouchableOpacity
+                    style={styles.fullscreenButton}
+                    onPress={toggleFullscreen}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.fullscreenButtonText}>
+                      {isFullscreen ? '⤢' : '⤡'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </>
             ) : (
               <View style={styles.loadingOverlay}>
                 {videoError ? (
@@ -663,6 +722,23 @@ const createModalStyles = (colors: any, isDarkMode: boolean) => StyleSheet.creat
     color: colors.white,
     fontWeight: '600',
     fontSize: 14,
+  },
+  fullscreenButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  fullscreenButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 
 });

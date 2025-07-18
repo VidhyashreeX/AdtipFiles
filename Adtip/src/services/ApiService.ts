@@ -1971,6 +1971,70 @@ export default class ApiService {
     return this.get(`/api/getlistoffollowedchannelbyuser/${userId}`);
   }
 
+  // ===== VIDEO MANAGEMENT APIS =====
+
+  /**
+   * Edit video metadata (title, description, thumbnail)
+   */
+  static async editVideo(data: {
+    id: number;
+    name?: string;
+    description?: string;
+    thumbnail?: string;
+  }): Promise<any> {
+    console.log('[ApiService] Editing video:', data);
+    try {
+      const response = await this.post('/api/editVideo', data);
+      console.log('[ApiService] Video edited successfully:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error editing video:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Delete video
+   */
+  static async deleteVideo(videoId: number): Promise<any> {
+    console.log('[ApiService] Deleting video:', videoId);
+    try {
+      const response = await this.get(`/api/deleteVideo/${videoId}`);
+      console.log('[ApiService] Video deleted successfully:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error deleting video:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  // ===== CONTACT FORM APIS =====
+
+  /**
+   * Submit contact form
+   */
+  static async submitContactForm(data: {
+    name: string;
+    email: string;
+    phone?: string | null;
+    subject: string;
+    message: string;
+    category?: string;
+    priority?: string;
+    app_version?: string;
+    device_info?: any;
+  }): Promise<any> {
+    console.log('[ApiService] Submitting contact form:', data);
+    try {
+      const response = await this.post('/api/contact/submit', data);
+      console.log('[ApiService] Contact form submitted successfully:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error submitting contact form:', error);
+      throw this.handleError(error);
+    }
+  }
+
   // ===== PREMIUM PLAN APIS =====
 
   /**

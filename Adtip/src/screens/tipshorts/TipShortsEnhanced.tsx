@@ -15,6 +15,7 @@ import {
   ViewToken,
   Share,
   Alert,
+  AppState,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -481,19 +482,49 @@ const TipShortsEnhanced = () => {
   // Set initial play state and handle cleanup
   useEffect(() => {
     const unsubscribeFocus = navigation.addListener('focus', () => {
+      console.log('[TipShorts] Screen focused - resuming playback');
       setGlobalPlayState(true);
     });
 
     const unsubscribeBlur = navigation.addListener('blur', () => {
+      console.log('[TipShorts] Screen blurred - pausing playback');
       setGlobalPlayState(false);
     });
 
+    // Component unmount cleanup - ensure audio stops completely
     return () => {
+      console.log('[TipShorts] Component unmounting - stopping all audio');
+      setGlobalPlayState(false);
       unsubscribeFocus();
       unsubscribeBlur();
       if (playPauseTimeoutRef.current) {
         clearTimeout(playPauseTimeoutRef.current);
       }
+    };
+  }, [navigation, setGlobalPlayState]);
+
+  // Handle app state changes (background/foreground)
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: string) => {
+      console.log('[TipShorts] App state changed to:', nextAppState);
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        console.log('[TipShorts] App backgrounded - pausing audio');
+        setGlobalPlayState(false);
+      } else if (nextAppState === 'active') {
+        console.log('[TipShorts] App foregrounded - checking if should resume');
+        // Only resume if the TipShorts screen is currently focused
+        const currentRoute = navigation.getState()?.routes[navigation.getState()?.index || 0];
+        if (currentRoute?.name === 'TipShorts') {
+          console.log('[TipShorts] Resuming audio as TipShorts is active');
+          setGlobalPlayState(true);
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      subscription?.remove();
     };
   }, [navigation, setGlobalPlayState]);
 

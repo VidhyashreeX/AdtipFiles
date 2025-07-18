@@ -24,6 +24,15 @@ const SupportScreen: React.FC = () => {
 
   const contactMethods = [
     {
+      id: 'contact-form',
+      icon: 'edit-3',
+      title: 'Contact Form',
+      subtitle: 'Send us a detailed message',
+      onPress: () => navigation.navigate('ContactForm' as never),
+      iconBgColor: '#F0FDF4',
+      iconColor: '#16A34A',
+    },
+    {
       id: 'email',
       icon: 'mail',
       title: 'Email Us',

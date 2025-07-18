@@ -54,12 +54,16 @@ const ExploreScreen: React.FC = () => {
 
   const renderItem = useCallback(({ item, index }: { item: ExploreItem, index: number }) => {
     const imageUrl = item.content_type === 'post' ? item.media_url : item.thumbnail;
-    
+
     const handleItemPress = () => {
       if (item.content_type === 'post') {
         navigation.navigate('Comments', { postId: item.id });
       } else if (item.content_type === 'shot') {
-        navigation.navigate('TipShorts', { shortId: item.id });
+        // Ensure shortId is passed as string for proper deep linking
+        console.log('[ExploreScreen] Navigating to TipShorts with shortId:', item.id.toString());
+        navigation.navigate('TipShorts', { shortId: item.id.toString() });
+      } else {
+        console.warn('[ExploreScreen] Unknown content type:', item.content_type);
       }
     };
 

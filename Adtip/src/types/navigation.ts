@@ -111,6 +111,7 @@ export type MainNavigatorParamList = {
   Shorts: { videoId?: number, shortId?: number };
   TrackOrder: undefined;
   Support: undefined;
+  ContactForm: undefined;
   CreateCampaign: undefined;
   Explore: undefined;
   VideoPlayerModal: {
