@@ -60,9 +60,36 @@ const ExploreScreen: React.FC = () => {
         // Navigate directly to PostViewerScreen with postId param
         navigation.navigate('PostViewer', { postId: item.id });
       } else if (item.content_type === 'shot') {
-        // Ensure shortId is passed as string for proper deep linking
-        console.log('[ExploreScreen] Navigating to TipShorts with shortId:', item.id.toString());
-        navigation.navigate('TipShorts', { shortId: item.id.toString() });
+        // Map ExploreItem to ShortVideo shape for TipShorts
+        const mappedShort = {
+          id: item.id.toString(),
+          title: item.title || '',
+          thumbnail: item.thumbnail || item.media_url || null,
+          channel: {
+            id: (item.channelId || item.user_id || item.id).toString(),
+            name: item.user_name || item.name || '',
+            avatar: item.user_profile_image || '',
+            verified: false,
+            subscribers: 0,
+          },
+          views: item.total_views || 0,
+          likes: item.total_likes || item.likeCount || 0,
+          duration: '',
+          createdAt: '',
+          category: '',
+          isPaidPromotional: false,
+          postedAt: '',
+          description: item.content || '',
+          videoUrl: typeof item.media_url === 'string' ? item.media_url : '',
+          comments: item.total_comments || item.commentCount || 0,
+          musicName: '',
+          isLiked: item.is_liked || false,
+        };
+        navigation.navigate('TipShorts', {
+          shorts: [mappedShort],
+          startIndex: 0,
+          shortId: mappedShort.id,
+        });
       } else {
         console.warn('[ExploreScreen] Unknown content type:', item.content_type);
       }

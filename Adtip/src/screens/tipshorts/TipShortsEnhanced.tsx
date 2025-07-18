@@ -187,7 +187,7 @@ const TipShortsEnhanced = () => {
   } : authenticatedShortsQuery;
 
   // Single short query for deep linking
-  const singleShortQuery = useSingleShortQuery(shortId, user?.id?.toString());
+  const singleShortQuery = useSingleShortQuery(shortId ?? null, user?.id?.toString() ?? undefined);
 
   const likeMutation = useLikeShortMutation();
   const { updateShortLikes } = useShortsQueryActions();
@@ -212,51 +212,53 @@ const TipShortsEnhanced = () => {
 
   // Flatten data from TanStack Query with deep link handling
   const shorts: ShortVideo[] = useMemo(() => {
-    if (passedShorts && passedShorts.length > 0) {
-      // For guest users, limit to first 5 shorts even if more are passed
-      return isGuest ? passedShorts.slice(0, 5) : passedShorts;
+    let apiShorts: ShortVideo[] = [];
+    // Get shorts from API (paginated)
+    if (isGuest && data?.pages) {
+      apiShorts = data.pages.flatMap(page => {
+        if (Array.isArray(page)) {
+          return page;
+        } else if (page && typeof page === 'object' && 'data' in page) {
+          return page.data || [];
+        }
+        return [];
+      });
+      apiShorts = apiShorts.slice(0, 5);
+    } else if (data?.pages) {
+      apiShorts = data.pages.flatMap(page => {
+        if (Array.isArray(page)) {
+          return page;
+        } else if (page && typeof page === 'object' && 'data' in page) {
+          return page.data || [];
+        }
+        return [];
+      });
     }
 
-    let allShorts: ShortVideo[] = [];
-
-    // Handle guest mode data structure
-    if (isGuest && data?.pages) {
-      allShorts = data.pages.flatMap(page => {
-        if (Array.isArray(page)) {
-          return page;
-        } else if (page && typeof page === 'object' && 'data' in page) {
-          return page.data || [];
-        }
-        return [];
-      });
-      // Limit guest users to first 5 shorts
-      allShorts = allShorts.slice(0, 5);
-    } else if (data?.pages) {
-      // Handle authenticated user data structure
-      allShorts = data.pages.flatMap(page => {
-        if (Array.isArray(page)) {
-          return page;
-        } else if (page && typeof page === 'object' && 'data' in page) {
-          return page.data || [];
-        }
-        return [];
-      });
+    // Merge passedShorts (from navigation) with API shorts, deduplicating by id
+    let mergedShorts: ShortVideo[] = [];
+    if (passedShorts && passedShorts.length > 0) {
+      // Remove any apiShorts that are already in passedShorts (by id)
+      const passedIds = new Set(passedShorts.map(s => s.id));
+      const filteredApiShorts = apiShorts.filter(s => !passedIds.has(s.id));
+      mergedShorts = [...passedShorts, ...filteredApiShorts];
+      // For guest users, limit to first 5 shorts
+      if (isGuest) mergedShorts = mergedShorts.slice(0, 5);
+    } else {
+      mergedShorts = apiShorts;
     }
 
     // Handle deep link: if we have a specific short from deep link and it's not in the current list
     if (shortId && singleShortQuery.data && !singleShortQuery.isLoading) {
       const deepLinkedShort = singleShortQuery.data;
-      const isShortInList = allShorts.some(short => short.id === deepLinkedShort.id);
-
+      const isShortInList = mergedShorts.some(short => short.id === deepLinkedShort.id);
       if (!isShortInList) {
-        console.log('[TipShortsEnhanced] Prepending deep-linked short to list:', deepLinkedShort.id);
-        // Prepend the deep-linked short to the beginning of the list
-        allShorts = [deepLinkedShort, ...allShorts];
+        mergedShorts = [deepLinkedShort, ...mergedShorts];
       }
     }
 
     // Filter out shorts with invalid video URLs to prevent URI errors
-    const validShorts = allShorts.filter(short => {
+    const validShorts = mergedShorts.filter(short => {
       const hasValidVideoUrl = short?.videoUrl &&
                               typeof short.videoUrl === 'string' &&
                               short.videoUrl.trim().length > 0 &&
@@ -274,7 +276,7 @@ const TipShortsEnhanced = () => {
       return hasValidVideoUrl;
     });
 
-    console.log(`[TipShortsEnhanced] Filtered ${allShorts.length - validShorts.length} shorts with invalid video URLs`);
+    console.log(`[TipShortsEnhanced] Filtered ${mergedShorts.length - validShorts.length} shorts with invalid video URLs`);
 
     return validShorts;
   }, [data?.pages, passedShorts, isGuest, shortId, singleShortQuery.data, singleShortQuery.isLoading]);
@@ -432,10 +434,10 @@ const TipShortsEnhanced = () => {
     if (!user?.id) return;
 
     try {
-      // Call follow API
+      // Call follow API, ensure channelId and userId are numbers
       const response = await ApiService.saveChannelFollowers({
-        channelId,
-        userId: user.id.toString(),
+        channelId: Number(channelId),
+        userId: Number(user.id),
         follow: 1 // 1 to follow, 0 to unfollow
       });
       console.log('Follow response:', response);
