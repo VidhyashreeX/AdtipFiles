@@ -162,19 +162,25 @@ const MyChannelScreen: React.FC = () => {
 
   // Fetch channel content (videos and shorts)
   const fetchChannelContent = async (channelId: string) => {
-    try {      const videosResponse = await ApiService.getVideoByChannel(0, Number(channelId), Number(user?.id));
+    try {
+      // Use correct videoType: 1 for videos, 2 for shorts (as per working logic in other channel screens)
+      const videosResponse = await ApiService.getVideoByChannel(1, Number(channelId), Number(user?.id));
       if (videosResponse.status === 200 && videosResponse.data) {
-        const allVideos = videosResponse.data;
-        setVideos(allVideos.filter((video: any) => video.videoType === 0)); // TipTube videos
-        
-        // Fetch shorts separately
-        const shortsResponse = await ApiService.getVideoByChannel(1, Number(channelId), Number(user?.id));
-        if (shortsResponse.status === 200 && shortsResponse.data) {
-          setShorts(shortsResponse.data);
-        }
+        setVideos(videosResponse.data);
+      } else {
+        setVideos([]);
+      }
+      // Fetch shorts separately
+      const shortsResponse = await ApiService.getVideoByChannel(2, Number(channelId), Number(user?.id));
+      if (shortsResponse.status === 200 && shortsResponse.data) {
+        setShorts(shortsResponse.data);
+      } else {
+        setShorts([]);
       }
     } catch (err) {
       console.error('Error fetching channel content:', err);
+      setVideos([]);
+      setShorts([]);
     }
   };
 
