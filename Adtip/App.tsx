@@ -42,6 +42,7 @@ import { useTabNavigator, TabNavigatorProvider } from './src/contexts/TabNavigat
 import { ContentCreatorPremiumProvider } from './src/contexts/ContentCreatorPremiumContext';
 import { UserDataProvider } from './src/contexts/UserDataContext';
 import { ChatProvider } from './src/contexts/ChatContext';
+import { FCMChatProvider } from './src/contexts/FCMChatContext';
 import { DataProvider } from './src/providers/DataProvider';
 import { EnhancedQueryProvider } from './src/providers/QueryProvider';
 
@@ -438,7 +439,8 @@ function App(): React.JSX.Element {
               <EnhancedQueryProvider>
                 <UserDataProvider>
                   <ChatProvider>
-                    <WalletProvider>
+                    <FCMChatProvider>
+                      <WalletProvider>
                       <ContentCreatorPremiumProvider>
                         <DataProvider>
                         <ShortsProvider>
@@ -458,6 +460,7 @@ function App(): React.JSX.Element {
                         </DataProvider>
                       </ContentCreatorPremiumProvider>
                     </WalletProvider>
+                    </FCMChatProvider>
                   </ChatProvider>
                 </UserDataProvider>
               </EnhancedQueryProvider>

@@ -46,6 +46,10 @@ export type MainNavigatorParamList = {
     participantId?: string;
     participantName?: string;
   }; // New chat screen
+  FCMChat: {
+    participantId: string;
+    participantName: string;
+  }; // FCM chat screen
   MissedCalls: undefined;
   Profile: {userId?: number};
   InstagramProfile: {userId?: number};

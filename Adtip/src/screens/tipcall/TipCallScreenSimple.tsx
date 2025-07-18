@@ -959,7 +959,7 @@ const TipCallScreenSimple = () => {
     [blockUser]
   )
 
-  // Handle chat - Updated to use new chat system
+  // Handle chat - Updated to use FCM chat system
   const handleChatNavigation = useCallback(async (contact: Contact) => {
     //Testing Chat
     /*if (!isPremium) {
@@ -968,8 +968,8 @@ const TipCallScreenSimple = () => {
     }*/
 
     try {
-      // Navigate to new chat system - create conversation with the contact
-      navigation.navigate('NewChat', {
+      // Navigate to FCM chat system - create conversation with the contact
+      navigation.navigate('FCMChat', {
         participantId: contact.id.toString(),
         participantName: contact.name || 'Unknown User'
       });
@@ -981,7 +981,7 @@ const TipCallScreenSimple = () => {
         })
       }
     } catch (error) {
-      console.error('Failed to navigate to chat:', error);
+      console.error('Failed to navigate to FCM chat:', error);
       // Fallback to conversations screen
       navigation.navigate('Conversations');
     }

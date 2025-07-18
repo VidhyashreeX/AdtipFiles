@@ -87,6 +87,7 @@ import ContentCreatorSubscriptionScreen from '../screens/packages/ContentCreator
 // Import New Chat Screens
 import NewChatScreen from '../screens/chat/NewChatScreen';
 import ConversationsScreen from '../screens/chat/ConversationsScreen';
+import FCMChatScreen from '../screens/chat/FCMChatScreen';
 
 // Import PrivacyPolicyScreen
 import PrivacyPolicyScreen from '../screens/Privacy/PrivacyPolicyScreen';
@@ -433,6 +434,15 @@ const MainNavigator = () => {
       <Stack.Screen
         name="NewChat"
         component={NewChatScreen}
+        options={{
+          headerShown: true,
+          animation: 'slide_from_right',
+          gestureEnabled: true,
+        }}
+      />
+      <Stack.Screen
+        name="FCMChat"
+        component={FCMChatScreen}
         options={{
           headerShown: true,
           animation: 'slide_from_right',

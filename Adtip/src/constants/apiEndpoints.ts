@@ -117,6 +117,24 @@ export const CHAT_ENDPOINTS = {
   MARK_AS_READ: '/api/chat/conversations', // + '/:conversationId/read'
 };
 
+// FCM Chat endpoints (high priority notifications)
+export const FCM_CHAT_ENDPOINTS = {
+  // FCM messaging
+  SEND_MESSAGE: '/api/chat/fcm/send-message',
+  SEND_MESSAGE_MULTICAST: '/api/chat/fcm/send-message-multicast',
+
+  // FCM token management
+  UPDATE_TOKEN: '/api/chat/fcm/update-token',
+
+  // Message status and queue management
+  QUEUE_STATS: '/api/chat/fcm/queue-stats',
+  MESSAGE_STATUS: '/api/chat/fcm/message-status', // + '/:messageId'
+  RETRY_FAILED: '/api/chat/fcm/retry-failed',
+
+  // Test FCM
+  TEST_FCM: '/api/chat/test-fcm',
+};
+
 // Additional endpoints from CSV analysis
 export const ADDITIONAL_ENDPOINTS = {
   // Guest endpoints (no login required)

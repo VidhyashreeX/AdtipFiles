@@ -19,8 +19,8 @@ import {
 // Import the storage prefix constant
 const CHAT_STORAGE_PREFIX = '@chat_';
 
-// WebSocket URL (update to your backend ws endpoint)
-const WS_URL = 'wss://api.adtip.in/chat';
+// DISABLED: WebSocket URL (replaced with FCM + API approach)
+// const WS_URL = 'wss://api.adtip.in/chat';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -185,7 +185,8 @@ const ChatScreen: React.FC = () => {
     }
   };
 
-  // Function to test WebSocket connection
+  // DISABLED: Function to test WebSocket connection (replaced with FCM + API)
+  /*
   const testWebSocketConnection = () => {
     console.log('🔍 [ChatScreen] WebSocket connection test:', {
       wsExists: !!ws.current,
@@ -193,7 +194,7 @@ const ChatScreen: React.FC = () => {
       isConnected,
       isConnecting: isConnectingRef.current
     });
-    
+
     if (ws.current?.readyState === WebSocket.OPEN) {
       console.log('✅ WebSocket is open and ready');
       // Send a test ping
@@ -203,6 +204,7 @@ const ChatScreen: React.FC = () => {
       connectWebSocket();
     }
   };
+  */
 
   // Function to check storage key consistency
   const checkStorageKeys = async () => {
@@ -341,12 +343,13 @@ const ChatScreen: React.FC = () => {
     }
   };
 
-  const ws = useRef<WebSocket & { pingInterval?: NodeJS.Timeout } | null>(null);
+  // DISABLED: WebSocket refs (replaced with FCM + API)
+  // const ws = useRef<WebSocket & { pingInterval?: NodeJS.Timeout } | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const messageQueueRef = useRef<string[]>([]);
-  const isConnectingRef = useRef(false);
+  // const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // const messageQueueRef = useRef<string[]>([]);
+  // const isConnectingRef = useRef(false);
 
   // Auto-scroll to bottom function (simplified and reliable)
   const scrollToBottom = useCallback((animated: boolean = true) => {
@@ -360,13 +363,14 @@ const ChatScreen: React.FC = () => {
     }
   }, [sortedMessages.length]);
 
-  // WebSocket connection management
+  // DISABLED: WebSocket connection management (replaced with FCM + API)
+  /*
   const connectWebSocket = useCallback(async () => {
     if (!self || ws.current || isConnectingRef.current) {
-      console.log('Skipping WebSocket connection:', { 
-        self: !!self, 
-        wsExists: !!ws.current, 
-        isConnecting: isConnectingRef.current 
+      console.log('Skipping WebSocket connection:', {
+        self: !!self,
+        wsExists: !!ws.current,
+        isConnecting: isConnectingRef.current
       });
       return;
     }
@@ -382,12 +386,12 @@ const ChatScreen: React.FC = () => {
       }
 
       ws.current = new WebSocket(`${WS_URL}?token=${token}`);
-      
+
       ws.current.onopen = () => {
         console.log('WebSocket connected');
         setIsConnected(true);
         isConnectingRef.current = false;
-        
+
         // Send queued messages
         while (messageQueueRef.current.length > 0) {
           const queuedMessage = messageQueueRef.current.shift();
@@ -395,7 +399,7 @@ const ChatScreen: React.FC = () => {
             ws.current.send(queuedMessage);
           }
         }
-        
+
         // Start ping interval to keep connection alive
         if (ws.current) {
           ws.current.pingInterval = setInterval(() => {
@@ -586,14 +590,16 @@ const ChatScreen: React.FC = () => {
       isConnectingRef.current = false;
     }
   }, [self, otherUser.id, isUserInChat, scrollToBottom]);
+  */
 
-  // WebSocket send typing event
+  // DISABLED: WebSocket send typing event (replaced with FCM + API)
+  /*
   const sendTyping = useCallback(() => {
     if (ws.current?.readyState === WebSocket.OPEN && self) {
-      const message = JSON.stringify({ 
-        type: 'typing', 
-        receiverId: otherUser.id, 
-        userId: self.id 
+      const message = JSON.stringify({
+        type: 'typing',
+        receiverId: otherUser.id,
+        userId: self.id
       });
       console.log('Sending typing indicator:', message);
       ws.current.send(message);
@@ -610,8 +616,10 @@ const ChatScreen: React.FC = () => {
       }
     }
   }, [self, otherUser.id, connectWebSocket]);
+  */
 
-  // WebSocket send message event
+  // DISABLED: WebSocket send message event (replaced with FCM + API)
+  /*
   const sendMessageWS = useCallback((msg: string, tempId: number) => {
     if (!self) {
       console.log('❌ Cannot send message - no self user');
@@ -655,6 +663,7 @@ const ChatScreen: React.FC = () => {
       return false;
     }
   }, [self, otherUser.id, connectWebSocket]);
+  */
 
   // API fallback for sending messages
   const sendMessageAPI = useCallback(async (msg: string, tempId: number) => {
@@ -675,21 +684,21 @@ const ChatScreen: React.FC = () => {
     }
   }, [self, otherUser.id, sendMessageMutation]);
 
-  // Send message via WebSocket with API fallback
+  // Send message via API (WebSocket disabled, replaced with FCM + API)
   const handleSend = useCallback(async () => {
     if (!input.trim() || !self) return;
-    
+
     const now = new Date().toISOString();
     const tempId = -Date.now(); // Use negative number for temp ID to avoid conflicts
     const messageText = input.trim();
-    
+
     console.log('🎯 [ChatScreen] Sending message:', {
       messageText,
       tempId,
       sender: self.id,
       receiver: otherUser.id
     });
-    
+
     // Create optimistic message
     const optimisticMessage: ChatMessage = {
       id: tempId,
@@ -706,21 +715,23 @@ const ChatScreen: React.FC = () => {
       console.log('📝 [ChatScreen] Pending messages updated:', newPending.length);
       return newPending;
     });
-    
+
     // Clear input immediately for better UX
     setInput('');
     setInputHeight(40);
     setTyping(false);
-    
+
     // Auto-scroll after sending
     setTimeout(() => scrollToBottom(true), 100);
 
+    // DISABLED: WebSocket connection logic (replaced with FCM + API)
+    /*
     // If WebSocket is connecting, wait a bit for it to open
     if (isConnectingRef.current && !ws.current) {
       console.log('WebSocket is connecting, waiting 800ms...');
       await new Promise(resolve => setTimeout(resolve, 800));
     }
-    
+
     // If still no WebSocket, try to connect before sending
     if (!ws.current && !isConnectingRef.current) {
       console.log('No WebSocket connection, attempting to connect...');
@@ -734,6 +745,14 @@ const ChatScreen: React.FC = () => {
       console.log('WebSocket failed, using API fallback');
       await sendMessageAPI(messageText, tempId);
     } else {
+    */
+
+    // Send via API directly (FCM will handle real-time notifications)
+    console.log('Sending message via API...');
+    await sendMessageAPI(messageText, tempId);
+
+    // DISABLED: WebSocket confirmation timeout (no longer needed with API approach)
+    /*
       // Add timeout to handle cases where WebSocket confirmation doesn't come back
       setTimeout(() => {
         // Check if the message is still pending after 5 seconds
@@ -748,7 +767,8 @@ const ChatScreen: React.FC = () => {
         });
       }, 5000);
     }
-  }, [input, self, otherUser.id, sendMessageWS, sendMessageAPI, scrollToBottom]);
+    */
+  }, [input, self, otherUser.id, sendMessageAPI, scrollToBottom]);
 
   // Enhanced typing handler with multiline support
   const handleTyping = useCallback((text: string) => {
@@ -760,22 +780,23 @@ const ChatScreen: React.FC = () => {
     setInputHeight(newHeight);
     
     if (!typing && self && text.trim()) {
-      console.log('User started typing, sending typing indicator');
+      console.log('User started typing');
       setTyping(true);
-      sendTyping();
-      
+      // DISABLED: WebSocket typing indicator (replaced with FCM + API)
+      // sendTyping();
+
       // Clear previous timeout
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
-      
+
       // Set new timeout
       typingTimeoutRef.current = setTimeout(() => {
         console.log('User stopped typing');
         setTyping(false);
       }, 2000);
     }
-  }, [typing, self, sendTyping]);
+  }, [typing, self]);
 
   // Handle Enter key press
   const handleKeyPress = useCallback(({ nativeEvent }: any) => {
@@ -804,6 +825,8 @@ const ChatScreen: React.FC = () => {
     }
   }, [messages.length, isLoadingMessages, scrollToBottom]);
 
+  // DISABLED: WebSocket connection setup (replaced with FCM + API)
+  /*
   // Setup WebSocket connection immediately when component mounts
   useEffect(() => {
     if (self?.id) {
@@ -820,7 +843,7 @@ const ChatScreen: React.FC = () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
-      
+
       // Close WebSocket and clear ping interval
       if (ws.current) {
         const pingInterval = ws.current.pingInterval;
@@ -840,6 +863,17 @@ const ChatScreen: React.FC = () => {
       connectWebSocket();
     }
   }, [self?.id, connectWebSocket]);
+  */
+
+  // Cleanup effect for typing timeouts
+  useEffect(() => {
+    return () => {
+      // Clear timeouts
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Handle screen focus/blur for chat state management
   useFocusEffect(
@@ -1116,7 +1150,8 @@ const ChatScreen: React.FC = () => {
             >
               <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Test Send Mutation</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            {/* DISABLED: WebSocket test button (replaced with FCM + API)
+            <TouchableOpacity
               onPress={testWebSocketConnection}
               style={{
                 position: 'absolute',
@@ -1130,6 +1165,7 @@ const ChatScreen: React.FC = () => {
             >
               <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Test WebSocket</Text>
             </TouchableOpacity>
+            */}
             <TouchableOpacity 
               onPress={() => saveMessageToStorage('Manual save test message')}
               style={{
