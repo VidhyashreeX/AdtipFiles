@@ -54,6 +54,106 @@
 # REACT NATIVE THIRD-PARTY LIBRARIES
 # ================================================================================================
 
+# ================================================================================================
+# CAMERA AND MEDIA MODULES
+# ================================================================================================
+
+# React Native Vision Camera
+-keep class com.mrousavy.camera.** { *; }
+-keep class com.mrousavy.camera.core.** { *; }
+-keep class com.mrousavy.camera.frameprocessor.** { *; }
+-dontwarn com.mrousavy.camera.**
+
+# React Native Image Picker
+-keep class com.imagepicker.** { *; }
+-keep class com.reactnative.imagepicker.** { *; }
+-dontwarn com.imagepicker.**
+-dontwarn com.reactnative.imagepicker.**
+
+# React Native Image Crop Picker
+-keep class com.reactnative.ivpusic.imagepicker.** { *; }
+-keep class com.theartofdev.edmodo.cropper.** { *; }
+-dontwarn com.reactnative.ivpusic.imagepicker.**
+-dontwarn com.theartofdev.edmodo.cropper.**
+
+# React Native Camera Roll
+-keep class com.reactnativecommunity.cameraroll.** { *; }
+-dontwarn com.reactnativecommunity.cameraroll.**
+
+# React Native Compressor
+-keep class com.reactnativecompressor.** { *; }
+-dontwarn com.reactnativecompressor.**
+
+# React Native Create Thumbnail
+-keep class com.createthumbnail.** { *; }
+-dontwarn com.createthumbnail.**
+
+# ================================================================================================
+# WEBRTC AND VIDEO CALLING MODULES
+# ================================================================================================
+
+# VideoSDK.live
+-keep class live.videosdk.** { *; }
+-keep class com.videosdk.** { *; }
+-keep class live.videosdk.rtc.** { *; }
+-keep class live.videosdk.rtc.android.** { *; }
+-dontwarn live.videosdk.**
+-dontwarn com.videosdk.**
+
+# WebRTC
+-keep class org.webrtc.** { *; }
+-keep class com.oney.WebRTCModule.** { *; }
+-dontwarn org.webrtc.**
+-dontwarn com.oney.WebRTCModule.**
+
+# React Native WebRTC
+-keep class com.reactnativewebrtc.** { *; }
+-dontwarn com.reactnativewebrtc.**
+
+# ================================================================================================
+# REACT NATIVE SCREENS
+# ================================================================================================
+
+# React Native Screens - Fix for IllegalStateException crashes
+-keep class com.swmansion.rnscreens.** { *; }
+-keep class com.swmansion.rnscreens.ScreenFragment { *; }
+-keep class com.swmansion.rnscreens.ScreenStackFragment { *; }
+-keep class com.swmansion.rnscreens.Screen { *; }
+-keep class com.swmansion.rnscreens.ScreenStack { *; }
+-dontwarn com.swmansion.rnscreens.**
+
+# Keep all constructors for Screen fragments
+-keepclassmembers class com.swmansion.rnscreens.ScreenFragment {
+    <init>(...);
+}
+-keepclassmembers class com.swmansion.rnscreens.ScreenStackFragment {
+    <init>(...);
+}
+
+# ================================================================================================
+# NATIVE MODULE REGISTRATION
+# ================================================================================================
+
+# Keep native module registration methods
+-keep class com.facebook.react.NativeModuleRegistryBuilder { *; }
+-keep class com.facebook.react.ReactPackage { *; }
+-keep class com.facebook.react.bridge.NativeModule { *; }
+-keep class com.facebook.react.bridge.ReactMethod { *; }
+
+# Keep all classes that implement ReactPackage
+-keep class * implements com.facebook.react.ReactPackage {
+    public <methods>;
+}
+
+# Keep all classes that extend ReactContextBaseJavaModule
+-keep class * extends com.facebook.react.bridge.ReactContextBaseJavaModule {
+    public <methods>;
+}
+
+# Prevent obfuscation of native module names
+-keepnames class * extends com.facebook.react.bridge.ReactContextBaseJavaModule
+-keepnames class * implements com.facebook.react.ReactPackage
+
 # React Native Vector Icons
 -keep class com.oblador.vectoricons.** { *; }
 

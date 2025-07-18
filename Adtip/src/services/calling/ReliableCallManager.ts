@@ -17,6 +17,7 @@ class ReliableCallManager {
   private isInitialized = false
   private fcmUnsubscribe: (() => void) | null = null
   private notifeeUnsubscribe: (() => void) | null = null
+  private appStateSubscription: any = null
   private currentCallSession: CallSession | null = null
   private processingMessage = false
 
@@ -83,6 +84,11 @@ class ReliableCallManager {
     if (this.notifeeUnsubscribe) {
       this.notifeeUnsubscribe()
       this.notifeeUnsubscribe = null
+    }
+
+    if (this.appStateSubscription) {
+      this.appStateSubscription.remove()
+      this.appStateSubscription = null
     }
 
     // Clear current session
@@ -251,9 +257,9 @@ class ReliableCallManager {
    * Set up app state listeners for proper cleanup
    */
   private setupAppStateListeners(): void {
-    AppState.addEventListener('change', (nextAppState) => {
+    this.appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
       console.log('[ReliableCallManager] App state changed to:', nextAppState)
-      
+
       if (nextAppState === 'background' && this.currentCallSession) {
         // Ensure ongoing call notification is shown when app goes to background
         this.showOngoingCallNotification()

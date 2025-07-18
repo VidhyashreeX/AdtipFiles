@@ -360,7 +360,7 @@ const SettingsScreen: React.FC = () => {
           subtitle: 'Report bugs or suggest features',
           type: 'navigation',
           icon: 'message-square',
-          onPress: () => console.log('Navigate to Feedback'),
+          onPress: () => navigation.navigate('ContactForm' as never),
         },
         {
           id: 'about',

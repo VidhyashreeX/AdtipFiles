@@ -49,6 +49,7 @@ export interface PublicShot {
 }
 
 export const SHORTS_QUERY_KEY = 'shorts';
+export const SINGLE_SHORT_QUERY_KEY = 'single-short';
 const PAGE_SIZE = 10;
 
 async function fetchShortsPage(pageParam: number, userId: string): Promise<ShortVideo[]> {
@@ -303,5 +304,64 @@ export const useGuestShortsQuery = () => {
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnMount: false,
+  });
+};
+
+// Hook to fetch a single short by ID (for deep linking)
+export const useSingleShortQuery = (shortId: string | null, userId?: string) => {
+  return useQuery({
+    queryKey: [SINGLE_SHORT_QUERY_KEY, shortId, userId],
+    queryFn: async () => {
+      if (!shortId) {
+        throw new Error('Short ID is required');
+      }
+
+      console.log('[useSingleShortQuery] Fetching short by ID:', shortId, 'for user:', userId);
+
+      try {
+        // Use the getShortById endpoint
+        const response = await ApiService.get(`/api/getShortById/${userId || '0'}/${shortId}`);
+
+        if (response.status === 200 && response.data && response.data.length > 0) {
+          const rawShort = response.data[0];
+
+          // Transform the raw data to match ShortVideo interface
+          const transformedShort: ShortVideo = {
+            id: rawShort.id.toString(),
+            title: rawShort.name || '',
+            thumbnail: rawShort.video_Thumbnail ? getSecureMediaUrl(rawShort.video_Thumbnail) : null,
+            channel: {
+              id: rawShort.channelId?.toString() || '',
+              name: rawShort.channelName || 'Unknown Channel',
+              avatar: rawShort.channel_profile ? getSecureMediaUrl(rawShort.channel_profile) : getFallbackAvatarUrl(),
+              verified: false,
+              subscribers: rawShort.total_channel_followers || 0,
+            },
+            views: rawShort.total_views || 0,
+            likes: rawShort.total_likes || 0,
+            duration: rawShort.play_duration || '0:00',
+            createdAt: rawShort.createddate || new Date().toISOString(),
+            category: rawShort.category_id?.toString() || 'general',
+            isPaidPromotional: rawShort.is_paid_promotional === 1,
+            postedAt: rawShort.createddate || new Date().toISOString(),
+            description: rawShort.video_desciption || '',
+            videoUrl: rawShort.video_link ? getSecureMediaUrl(rawShort.video_link) : '',
+            comments: rawShort.total_comments || 0,
+            isLiked: rawShort.is_like === 1,
+          };
+
+          console.log('[useSingleShortQuery] Transformed short:', transformedShort);
+          return transformedShort;
+        } else {
+          throw new Error('Short not found');
+        }
+      } catch (error) {
+        console.error('[useSingleShortQuery] Failed to fetch short:', error);
+        throw error;
+      }
+    },
+    enabled: !!shortId, // Only run query if shortId is provided
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 2,
   });
 };

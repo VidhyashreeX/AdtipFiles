@@ -48,7 +48,7 @@ interface FCMChatProviderProps {
 }
 
 export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) => {
-  const { user, authToken } = useAuth();
+  const { user } = useAuth();
   const [isInitialized, setIsInitialized] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(false);
@@ -61,13 +61,20 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
 
   // Initialize chat service
   const initializeChat = useCallback(async () => {
-    if (!user?.id || !authToken || isInitialized) {
+    if (!user?.id || isInitialized) {
       return;
     }
 
     try {
       console.log('[FCMChatContext] Initializing FCM chat service...');
-      
+
+      // Get auth token from AsyncStorage
+      const authToken = await AsyncStorage.getItem('accessToken');
+      if (!authToken) {
+        console.error('[FCMChatContext] No auth token available');
+        return;
+      }
+
       // Setup event handlers
       const eventHandlers: FCMChatEventHandlers = {
         onMessageReceived: handleMessageReceived,
@@ -77,20 +84,20 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
       };
 
       fcmChatService.setEventHandlers(eventHandlers);
-      
+
       // Initialize the service
       await fcmChatService.initialize(user.id.toString(), authToken);
-      
+
       setIsInitialized(true);
       console.log('[FCMChatContext] FCM chat service initialized successfully');
-      
+
       // Load initial conversations
       await loadConversations();
-      
+
     } catch (error) {
       console.error('[FCMChatContext] Failed to initialize chat service:', error);
     }
-  }, [user?.id, authToken, isInitialized]);
+  }, [user?.id, isInitialized]);
 
   // Load conversations
   const loadConversations = useCallback(async () => {
@@ -145,6 +152,20 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
       throw error;
     }
   }, [isInitialized]);
+
+  // Update message status
+  const updateMessageStatus = useCallback((messageId: string, status: 'sending' | 'sent' | 'delivered' | 'read') => {
+    setCurrentMessages(prev => prev.map(message =>
+      message.id === messageId || message.tempId === messageId
+        ? { ...message, status, deliveryStatus: status }
+        : message
+    ));
+  }, []);
+
+  // Remove failed message
+  const removeFailedMessage = useCallback((tempId: string) => {
+    setCurrentMessages(prev => prev.filter(message => message.tempId !== tempId));
+  }, []);
 
   // Create or get conversation
   const createOrGetConversation = useCallback(async (participantId: string): Promise<string> => {
@@ -243,26 +264,31 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
 
   const handleMessageSent = useCallback((message: Message) => {
     console.log('[FCMChatContext] Message sent:', message);
-    
+
     // Add to current messages if it's for the current conversation
     if (message.conversationId === currentConversationId) {
       setCurrentMessages(prev => {
         // Check if message already exists (by tempId or id)
-        const exists = prev.some(m => 
-          m.id === message.id || 
-          (m.tempId && m.tempId === message.tempId)
+        const existingIndex = prev.findIndex(m =>
+          m.id === message.id ||
+          (m.tempId && m.tempId === message.tempId) ||
+          (message.tempId && m.tempId === message.tempId)
         );
-        if (exists) {
-          // Update existing message
-          return prev.map(m => 
-            (m.id === message.id || (m.tempId && m.tempId === message.tempId))
-              ? message 
-              : m
-          );
+
+        if (existingIndex !== -1) {
+          // Update existing message with server response
+          const updated = [...prev];
+          updated[existingIndex] = {
+            ...updated[existingIndex],
+            ...message,
+            status: 'sent',
+            deliveryStatus: 'sent'
+          };
+          return updated.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         }
-        
+
         // Add new message and sort by creation time
-        const updated = [...prev, message];
+        const updated = [...prev, { ...message, status: 'sent', deliveryStatus: 'sent' }];
         return updated.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
       });
     }
@@ -316,10 +342,27 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
 
   // Initialize when user and token are available
   useEffect(() => {
-    if (user?.id && authToken && !isInitialized) {
-      initializeChat();
-    }
-  }, [user?.id, authToken, initializeChat, isInitialized]);
+    const checkAndInitialize = async () => {
+      const token = await AsyncStorage.getItem('accessToken');
+
+      console.log('[FCMChatContext] Initialization check:', {
+        userId: user?.id,
+        hasToken: !!token,
+        isInitialized
+      });
+
+      if (user?.id && token && !isInitialized) {
+        console.log('[FCMChatContext] Starting FCM chat initialization...');
+        initializeChat();
+      } else if (!user?.id) {
+        console.log('[FCMChatContext] No user ID available for FCM chat initialization');
+      } else if (!token) {
+        console.log('[FCMChatContext] No auth token available for FCM chat initialization');
+      }
+    };
+
+    checkAndInitialize();
+  }, [user?.id, isInitialized, initializeChat]);
 
   // Cleanup on unmount
   useEffect(() => {

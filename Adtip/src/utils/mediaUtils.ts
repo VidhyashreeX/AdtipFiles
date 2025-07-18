@@ -146,11 +146,14 @@ export const createSecureVideoSource = async (videoUrl?: string | null) => {
     return { uri: '' };
   }
 
+  // Ensure validatedUrl is always a string
+  const safeUri = String(validatedUrl || '');
+
   // Check if this is a Cloudflare presigned URL (contains signature parameters)
-  const isPresignedUrl = validatedUrl.includes('X-Amz-Signature') || validatedUrl.includes('Signature=');
+  const isPresignedUrl = safeUri.includes('X-Amz-Signature') || safeUri.includes('Signature=');
 
   let source: any = {
-    uri: validatedUrl,
+    uri: safeUri,
   };
 
   // Only add headers for non-presigned URLs (API-based media)

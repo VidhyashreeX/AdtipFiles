@@ -68,10 +68,11 @@ class FCMChatService {
   private isInitialized = false;
   private fcmUnsubscribe: (() => void) | null = null;
   private syncInterval: NodeJS.Timeout | null = null;
+  private appStateSubscription: any = null;
 
   private constructor() {
-    // Monitor app state changes
-    AppState.addEventListener('change', this.handleAppStateChange);
+    // Monitor app state changes using the new subscription-based API
+    this.appStateSubscription = AppState.addEventListener('change', this.handleAppStateChange);
   }
 
   public static getInstance(): FCMChatService {
@@ -540,9 +541,13 @@ class FCMChatService {
       this.fcmUnsubscribe();
       this.fcmUnsubscribe = null;
     }
-    
+
+    if (this.appStateSubscription) {
+      this.appStateSubscription.remove();
+      this.appStateSubscription = null;
+    }
+
     this.stopPeriodicSync();
-    AppState.removeEventListener('change', this.handleAppStateChange);
     this.isInitialized = false;
   }
 

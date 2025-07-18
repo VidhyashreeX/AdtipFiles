@@ -437,3 +437,44 @@
 # functionality. All optimizations are based on ProGuard documentation.
 -dontwarn proguard.annotation.Keep
 -dontwarn proguard.annotation.KeepClassMembers
+
+# ================================================================================================
+# CRITICAL MODULES - PREVENT AGGRESSIVE R8 OPTIMIZATION
+# ================================================================================================
+
+# Camera and Media Modules - prevent crashes
+-keep class com.mrousavy.camera.** { *; }
+-keep class com.imagepicker.** { *; }
+-keep class com.reactnative.imagepicker.** { *; }
+-keep class com.reactnative.ivpusic.imagepicker.** { *; }
+-keep class com.theartofdev.edmodo.cropper.** { *; }
+-keep class com.reactnativecommunity.cameraroll.** { *; }
+
+# WebRTC and VideoSDK - prevent crashes
+-keep class live.videosdk.** { *; }
+-keep class com.videosdk.** { *; }
+-keep class org.webrtc.** { *; }
+-keep class com.oney.WebRTCModule.** { *; }
+-keep class com.reactnativewebrtc.** { *; }
+
+# React Native Screens - CRITICAL for preventing IllegalStateException
+-keep class com.swmansion.rnscreens.** { *; }
+-keepclassmembers class com.swmansion.rnscreens.ScreenFragment {
+    <init>(...);
+    public <methods>;
+}
+-keepclassmembers class com.swmansion.rnscreens.ScreenStackFragment {
+    <init>(...);
+    public <methods>;
+}
+
+# Native Module Registration - prevent obfuscation issues
+-keep class com.facebook.react.NativeModuleRegistryBuilder { *; }
+-keep class * implements com.facebook.react.ReactPackage {
+    public <methods>;
+}
+-keep class * extends com.facebook.react.bridge.ReactContextBaseJavaModule {
+    public <methods>;
+}
+-keepnames class * extends com.facebook.react.bridge.ReactContextBaseJavaModule
+-keepnames class * implements com.facebook.react.ReactPackage

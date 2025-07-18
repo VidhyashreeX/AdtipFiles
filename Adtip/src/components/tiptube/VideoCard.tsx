@@ -60,7 +60,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
       <View style={styles.thumbnailContainer}>
         {isHovering && videoUrl ? (
           <Video
-            source={{uri: videoUrl}}
+            source={{uri: String(videoUrl || '')}}
             style={styles.thumbnail}
             resizeMode="cover"
             muted={true}

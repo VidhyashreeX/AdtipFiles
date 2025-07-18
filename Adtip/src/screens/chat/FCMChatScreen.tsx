@@ -64,15 +64,15 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isOwn, showStatu
   const getStatusColor = () => {
     switch (message.status) {
       case 'sending':
-        return COLORS.gray;
+        return typeof COLORS.gray === 'string' ? COLORS.gray : COLORS.gray[500];
       case 'sent':
-        return COLORS.white;
+        return typeof COLORS.white === 'string' ? COLORS.white : COLORS.white[500];
       case 'delivered':
-        return COLORS.white;
+        return typeof COLORS.white === 'string' ? COLORS.white : COLORS.white[500];
       case 'read':
-        return COLORS.success;
+        return typeof COLORS.success === 'string' ? COLORS.success : COLORS.success[500];
       default:
-        return COLORS.gray;
+        return typeof COLORS.gray === 'string' ? COLORS.gray : COLORS.gray[500];
     }
   };
 

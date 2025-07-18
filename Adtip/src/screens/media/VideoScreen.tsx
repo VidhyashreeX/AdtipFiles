@@ -517,7 +517,7 @@ const VideoScreen = () => {
         style={videoContainerStyles}>
         <Video
           ref={videoRef}
-          source={localVideoPath ? {uri: localVideoPath} : (secureVideoSource || {uri: video?.videoUrl || video?.videoLink || ''})}
+          source={localVideoPath ? {uri: localVideoPath} : (secureVideoSource || {uri: String(video?.videoUrl || video?.videoLink || '')})}
           style={styles.videoPlayer}
           resizeMode="contain"
           paused={paused}

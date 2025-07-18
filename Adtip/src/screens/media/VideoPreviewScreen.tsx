@@ -183,7 +183,7 @@ const VideoPreviewScreen = () => {
         {uri ? (
           <Video
             ref={videoRef}
-            source={{uri}}
+            source={{uri: String(uri || '')}}
             style={styles.video}
             resizeMode="contain"
             onLoad={handleLoad}

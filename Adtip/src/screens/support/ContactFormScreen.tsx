@@ -37,7 +37,7 @@ const ContactFormScreen: React.FC = () => {
   const [formData, setFormData] = useState<ContactFormData>({
     name: user?.name || '',
     email: user?.emailId || '',
-    phone: user?.phone || '',
+    phone: user?.mobile_number || '',
     subject: '',
     message: '',
     category: 'general',
@@ -93,44 +93,77 @@ const ContactFormScreen: React.FC = () => {
   }, [formData]);
 
   const handleSubmit = useCallback(async () => {
+    console.log('[ContactForm] 🚀 Starting form submission process');
+    console.log('[ContactForm] 📝 Form validation check...');
+
     if (!validateForm()) {
+      console.log('[ContactForm] ❌ Form validation failed');
       return;
     }
 
+    console.log('[ContactForm] ✅ Form validation passed');
     setIsSubmitting(true);
 
+    const submissionData = {
+      name: formData.name.trim(),
+      email: formData.email.trim(),
+      phone: formData.phone.trim() || null,
+      subject: formData.subject.trim(),
+      message: formData.message.trim(),
+      category: formData.category,
+      priority: formData.priority,
+      app_version: '1.0.0', // You can get this from app config
+      device_info: {
+        platform: Platform.OS,
+        version: Platform.Version,
+      },
+    };
+
+    console.log('[ContactForm] 📤 Submitting contact form with data:', {
+      ...submissionData,
+      message: submissionData.message.substring(0, 100) + '...', // Truncate message for logging
+    });
+
     try {
-      const response = await ApiService.submitContactForm({
-        name: formData.name.trim(),
-        email: formData.email.trim(),
-        phone: formData.phone.trim() || null,
-        subject: formData.subject.trim(),
-        message: formData.message.trim(),
-        category: formData.category,
-        priority: formData.priority,
-        app_version: '1.0.0', // You can get this from app config
-        device_info: {
-          platform: Platform.OS,
-          version: Platform.Version,
-        },
+      console.log('[ContactForm] 🌐 Calling ApiService.submitContactForm...');
+      const response = await ApiService.submitContactForm(submissionData);
+
+      console.log('[ContactForm] 📥 Received response:', {
+        status: response.status,
+        message: response.message,
+        hasData: !!response.data,
+        referenceNumber: response.data?.reference_number,
       });
 
       if (response.status === 200) {
+        console.log('[ContactForm] ✅ Contact form submitted successfully');
+        console.log('[ContactForm] 📋 Reference number:', response.data?.reference_number);
+
         Alert.alert(
           'Success!',
           `Your message has been submitted successfully. Reference: ${response.data.reference_number}`,
           [
             {
               text: 'OK',
-              onPress: () => navigation.goBack(),
+              onPress: () => {
+                console.log('[ContactForm] 🔙 Navigating back after successful submission');
+                navigation.goBack();
+              },
             },
           ]
         );
       } else {
+        console.log('[ContactForm] ⚠️ Unexpected response status:', response.status);
         throw new Error(response.message || 'Failed to submit contact form');
       }
     } catch (error: any) {
-      console.error('[ContactForm] Error submitting form:', error);
+      console.error('[ContactForm] ❌ Error submitting form:', error);
+      console.error('[ContactForm] 🔍 Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        response: error.response,
+      });
       Alert.alert(
         'Error',
         error.message || 'Failed to submit your message. Please try again.',
@@ -152,7 +185,7 @@ const ContactFormScreen: React.FC = () => {
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background.primary,
+      backgroundColor: colors.background,
     },
     scrollContainer: {
       flexGrow: 1,
@@ -181,13 +214,19 @@ const ContactFormScreen: React.FC = () => {
     },
     input: {
       borderWidth: 1,
-      borderColor: colors.border.primary,
+      borderColor: colors.border,
       borderRadius: 8,
       padding: 12,
       fontSize: 16,
       color: colors.text.primary,
-      backgroundColor: colors.background.secondary,
+      backgroundColor: colors.background,
       minHeight: 48,
+      // Ensure good contrast in dark mode
+      ...(isDarkMode && {
+        backgroundColor: '#1a1a1a',
+        borderColor: '#444444',
+        color: '#ffffff',
+      }),
     },
     inputError: {
       borderColor: colors.error,
@@ -211,8 +250,13 @@ const ContactFormScreen: React.FC = () => {
       paddingVertical: 8,
       borderRadius: 20,
       borderWidth: 1,
-      borderColor: colors.border.primary,
-      backgroundColor: colors.background.secondary,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+      // Better contrast in dark mode
+      ...(isDarkMode && {
+        backgroundColor: '#1a1a1a',
+        borderColor: '#444444',
+      }),
     },
     pickerOptionSelected: {
       backgroundColor: colors.primary,
@@ -221,6 +265,10 @@ const ContactFormScreen: React.FC = () => {
     pickerOptionText: {
       fontSize: 14,
       color: colors.text.secondary,
+      // Better contrast in dark mode
+      ...(isDarkMode && {
+        color: '#e2e8f0',
+      }),
     },
     pickerOptionTextSelected: {
       color: colors.white,
@@ -235,7 +283,7 @@ const ContactFormScreen: React.FC = () => {
       marginBottom: 32,
     },
     submitButtonDisabled: {
-      backgroundColor: colors.text.disabled,
+      backgroundColor: colors.gray?.[400] || '#ccc',
     },
     submitButtonText: {
       fontSize: 16,
@@ -255,9 +303,24 @@ const ContactFormScreen: React.FC = () => {
     },
   });
 
+  const BackButton = () => (
+    <TouchableOpacity
+      onPress={() => navigation.goBack()}
+      style={{ padding: 8, marginRight: 8 }}
+    >
+      <Icon name="arrow-left" size={24} color={colors.text.primary} />
+    </TouchableOpacity>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
-      <Header title="Contact Us" showBackButton />
+      <Header
+        title="Contact Us"
+        leftComponent={<BackButton />}
+        showWallet={false}
+        showSearch={false}
+        showPremium={false}
+      />
       
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
@@ -281,7 +344,7 @@ const ContactFormScreen: React.FC = () => {
                 value={formData.name}
                 onChangeText={(value) => updateFormData('name', value)}
                 placeholder="Enter your full name"
-                placeholderTextColor={colors.text.disabled}
+                placeholderTextColor={colors.gray?.[400] || '#ccc'}
                 autoCapitalize="words"
               />
               {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
@@ -296,7 +359,7 @@ const ContactFormScreen: React.FC = () => {
                 value={formData.email}
                 onChangeText={(value) => updateFormData('email', value)}
                 placeholder="Enter your email address"
-                placeholderTextColor={colors.text.disabled}
+                placeholderTextColor={colors.gray?.[400] || '#ccc'}
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
@@ -310,7 +373,7 @@ const ContactFormScreen: React.FC = () => {
                 value={formData.phone}
                 onChangeText={(value) => updateFormData('phone', value)}
                 placeholder="Enter your phone number"
-                placeholderTextColor={colors.text.disabled}
+                placeholderTextColor={colors.gray?.[400] || '#ccc'}
                 keyboardType="phone-pad"
               />
             </View>
@@ -379,7 +442,7 @@ const ContactFormScreen: React.FC = () => {
                 value={formData.subject}
                 onChangeText={(value) => updateFormData('subject', value)}
                 placeholder="Brief description of your inquiry"
-                placeholderTextColor={colors.text.disabled}
+                placeholderTextColor={colors.gray?.[400] || '#ccc'}
                 maxLength={200}
               />
               {errors.subject && <Text style={styles.errorText}>{errors.subject}</Text>}
@@ -394,12 +457,12 @@ const ContactFormScreen: React.FC = () => {
                 value={formData.message}
                 onChangeText={(value) => updateFormData('message', value)}
                 placeholder="Please provide detailed information about your inquiry..."
-                placeholderTextColor={colors.text.disabled}
+                placeholderTextColor={colors.gray?.[400] || '#ccc'}
                 multiline
                 maxLength={2000}
               />
               {errors.message && <Text style={styles.errorText}>{errors.message}</Text>}
-              <Text style={[styles.errorText, { color: colors.text.disabled }]}>
+              <Text style={[styles.errorText, { color: colors.gray?.[400] || '#ccc' }]}>
                 {formData.message.length}/2000 characters
               </Text>
             </View>

@@ -2024,13 +2024,33 @@ export default class ApiService {
     app_version?: string;
     device_info?: any;
   }): Promise<any> {
-    console.log('[ApiService] Submitting contact form:', data);
+    console.log('[ApiService] 🚀 submitContactForm - Starting submission');
+    console.log('[ApiService] 📝 Contact form data:', {
+      ...data,
+      message: data.message?.substring(0, 100) + '...', // Truncate for logging
+    });
+
     try {
+      console.log('[ApiService] 🌐 Making POST request to /api/contact/submit');
       const response = await this.post('/api/contact/submit', data);
-      console.log('[ApiService] Contact form submitted successfully:', response);
+
+      console.log('[ApiService] ✅ Contact form submitted successfully');
+      console.log('[ApiService] 📥 Response details:', {
+        status: response.status,
+        message: response.message,
+        hasData: !!response.data,
+        dataKeys: response.data ? Object.keys(response.data) : [],
+      });
+
       return response;
     } catch (error) {
-      console.error('[ApiService] Error submitting contact form:', error);
+      console.error('[ApiService] ❌ Error submitting contact form:', error);
+      console.error('[ApiService] 🔍 Error details:', {
+        name: (error as any)?.name,
+        message: (error as any)?.message,
+        status: (error as any)?.status,
+        response: (error as any)?.response,
+      });
       throw this.handleError(error);
     }
   }

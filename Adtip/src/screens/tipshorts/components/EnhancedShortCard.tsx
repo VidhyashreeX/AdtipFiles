@@ -1,4 +1,4 @@
-import React, { memo, useState, useCallback } from 'react';
+import React, { memo, useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { type ShortVideo } from '../../../hooks/useShortsQuery';
 import { Share2, Heart, MessageCircle, Play, Pause, VolumeX, Volume2 } from 'lucide-react-native';
 import shareService from '../../../services/ShareService';
+import VideoErrorBoundary from '../../../components/common/VideoErrorBoundary';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -66,7 +67,21 @@ const OptimizedVideoPlayer = memo(({
   // Import Video component dynamically
   const Video = require('react-native-video').default;
 
-  const shouldPlay = isActive && !isPaused && isLoaded && !hasError;
+  // Validate source URI
+  const isValidUri = source?.uri && typeof source.uri === 'string' && source.uri.trim().length > 0;
+
+  // Set error state if URI is invalid
+  useEffect(() => {
+    if (!isValidUri) {
+      console.warn('[OptimizedVideoPlayer] Invalid or missing video URI:', source);
+      setHasError(true);
+      setIsLoaded(false);
+    } else {
+      setHasError(false);
+    }
+  }, [isValidUri, source]);
+
+  const shouldPlay = isActive && !isPaused && isLoaded && !hasError && isValidUri;
 
   const handleLoad = useCallback((data: any) => {
     setIsLoaded(true);
@@ -75,7 +90,7 @@ const OptimizedVideoPlayer = memo(({
   }, [onLoad]);
 
   const handleError = useCallback((error: any) => {
-    console.warn('[Video Error]:', error);
+    console.warn('[OptimizedVideoPlayer] Video Error:', error);
     setHasError(true);
     setIsLoaded(false);
   }, []);
@@ -87,10 +102,25 @@ const OptimizedVideoPlayer = memo(({
   }, [isActive, onProgress]);
 
   const handleCompletion = useCallback(() => {
-    if (isActive && onVideoCompletion) {
-      onVideoCompletion(source.uri.split('/').pop() || ''); // Extract videoId from source.uri
+    if (isActive && onVideoCompletion && isValidUri) {
+      // Safely extract videoId from source.uri with proper validation
+      try {
+        const videoId = source.uri.split('/').pop() || '';
+        onVideoCompletion(videoId);
+      } catch (error) {
+        console.warn('[OptimizedVideoPlayer] Error extracting video ID:', error);
+      }
     }
-  }, [isActive, onVideoCompletion, source.uri]);
+  }, [isActive, onVideoCompletion, source.uri, isValidUri]);
+
+  // Return error placeholder if URI is invalid
+  if (!isValidUri) {
+    return (
+      <View style={[StyleSheet.absoluteFill, style, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ color: '#fff', fontSize: 16 }}>Video not available</Text>
+      </View>
+    );
+  }
 
   return (
     <Video
@@ -312,21 +342,32 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
 
 
 
+  // Validate video URL before rendering
+  const videoUri = item?.videoUrl || '';
+  const isValidVideoUrl = videoUri && typeof videoUri === 'string' && videoUri.trim().length > 0;
+
   return (
     <View style={styles.shortCardContainer}>
       {/* Video Player with tap gesture */}
       <GestureDetector gesture={combinedGesture}>
         <View style={styles.videoContainer}>
-          <OptimizedVideoPlayer
-            source={{ uri: item.videoUrl }}
-            isActive={isActive}
-            isPaused={!isGloballyPlaying}
-            isMuted={isGloballyMuted}
-            style={styles.video}
-            onLoad={handleVideoLoadLocal}
-            onProgress={handleVideoProgress}
-            onVideoCompletion={onVideoCompletion} // Pass onVideoCompletion
-          />
+          <VideoErrorBoundary
+            onError={(error, errorInfo) => {
+              console.error('[EnhancedShortCard] Video error boundary caught:', error);
+              console.error('[EnhancedShortCard] Error info:', errorInfo);
+            }}
+          >
+            <OptimizedVideoPlayer
+              source={{ uri: isValidVideoUrl ? videoUri : '' }}
+              isActive={isActive}
+              isPaused={!isGloballyPlaying}
+              isMuted={isGloballyMuted}
+              style={styles.video}
+              onLoad={handleVideoLoadLocal}
+              onProgress={handleVideoProgress}
+              onVideoCompletion={onVideoCompletion} // Pass onVideoCompletion
+            />
+          </VideoErrorBoundary>
 
           {/* Thumbnail overlay while loading */}
           {showThumbnail && item.thumbnail && (

@@ -47,6 +47,7 @@ import {
   useGuestShortsQuery,
   useLikeShortMutation,
   useShortsQueryActions,
+  useSingleShortQuery,
   SHORTS_QUERY_KEY,
   type ShortVideo as TanStackShortVideo
 } from '../../hooks/useShortsQuery';
@@ -57,6 +58,7 @@ import LoginPromptModal from '../../components/modals/LoginPromptModal';
 import VideoCommentsModal from '../../components/tiptube/VideoCommentsModal';
 import useSimpleRewardedAd from '../../googleads/SimpleRewardedAd';
 import useVideoRewardAd from '../../hooks/useVideoRewardAd';
+import VideoErrorBoundary from '../../components/common/VideoErrorBoundary';
 import ApiService from '../../services/ApiService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -184,6 +186,9 @@ const TipShortsEnhanced = () => {
     isRefetching: guestShortsQuery.isRefetching,
   } : authenticatedShortsQuery;
 
+  // Single short query for deep linking
+  const singleShortQuery = useSingleShortQuery(shortId, user?.id?.toString());
+
   const likeMutation = useLikeShortMutation();
   const { updateShortLikes } = useShortsQueryActions();
 
@@ -205,7 +210,7 @@ const TipShortsEnhanced = () => {
   const flatListRef = useRef<FlatList>(null);
   const scrollY = useSharedValue(0);
 
-  // Flatten data from TanStack Query
+  // Flatten data from TanStack Query with deep link handling
   const shorts: ShortVideo[] = useMemo(() => {
     if (passedShorts && passedShorts.length > 0) {
       // For guest users, limit to first 5 shorts even if more are passed
@@ -225,11 +230,9 @@ const TipShortsEnhanced = () => {
         return [];
       });
       // Limit guest users to first 5 shorts
-      return allShorts.slice(0, 5);
-    }
-
-    // Handle authenticated user data structure
-    if (data?.pages) {
+      allShorts = allShorts.slice(0, 5);
+    } else if (data?.pages) {
+      // Handle authenticated user data structure
       allShorts = data.pages.flatMap(page => {
         if (Array.isArray(page)) {
           return page;
@@ -239,9 +242,42 @@ const TipShortsEnhanced = () => {
         return [];
       });
     }
-    
-    return allShorts;
-  }, [data?.pages, passedShorts, isGuest]);
+
+    // Handle deep link: if we have a specific short from deep link and it's not in the current list
+    if (shortId && singleShortQuery.data && !singleShortQuery.isLoading) {
+      const deepLinkedShort = singleShortQuery.data;
+      const isShortInList = allShorts.some(short => short.id === deepLinkedShort.id);
+
+      if (!isShortInList) {
+        console.log('[TipShortsEnhanced] Prepending deep-linked short to list:', deepLinkedShort.id);
+        // Prepend the deep-linked short to the beginning of the list
+        allShorts = [deepLinkedShort, ...allShorts];
+      }
+    }
+
+    // Filter out shorts with invalid video URLs to prevent URI errors
+    const validShorts = allShorts.filter(short => {
+      const hasValidVideoUrl = short?.videoUrl &&
+                              typeof short.videoUrl === 'string' &&
+                              short.videoUrl.trim().length > 0 &&
+                              short.videoUrl !== 'null' &&
+                              short.videoUrl !== 'undefined';
+
+      if (!hasValidVideoUrl) {
+        console.warn('[TipShortsEnhanced] Filtering out short with invalid videoUrl:', {
+          id: short?.id,
+          videoUrl: short?.videoUrl,
+          title: short?.title || 'Unknown'
+        });
+      }
+
+      return hasValidVideoUrl;
+    });
+
+    console.log(`[TipShortsEnhanced] Filtered ${allShorts.length - validShorts.length} shorts with invalid video URLs`);
+
+    return validShorts;
+  }, [data?.pages, passedShorts, isGuest, shortId, singleShortQuery.data, singleShortQuery.isLoading]);
 
   useEffect(() => {
     console.log('[TipShortsEnhanced] shorts array:', shorts);
@@ -553,23 +589,33 @@ const TipShortsEnhanced = () => {
         });
       }
     } else {
-      console.warn(`[TipShortsEnhanced] Deep linked short with id ${id} not found in the current list.`);
-      // If the specific short isn't in the current list, we could potentially
-      // implement a search or fetch specific short functionality here
+      console.warn(`[TipShortsEnhanced] Short with id ${id} not found in the current list.`);
+      // This should not happen anymore since we prepend deep-linked shorts to the list
     }
   }, [shorts]);
 
   // Enhanced deep link handling with better timing
   useEffect(() => {
     if (shortId && shorts.length > 0) {
-      // Add a small delay to ensure the list is fully rendered
-      const timer = setTimeout(() => {
-        scrollToShort(shortId);
-      }, 100);
-      
-      return () => clearTimeout(timer);
+      // Check if the deep-linked short is in the list
+      const shortIndex = shorts.findIndex(s => s.id === shortId);
+
+      if (shortIndex !== -1) {
+        // If found, scroll to it with a small delay to ensure the list is fully rendered
+        const timer = setTimeout(() => {
+          console.log(`[TipShortsEnhanced] Deep link found at index ${shortIndex}, scrolling to short ${shortId}`);
+          scrollToShort(shortId);
+        }, 100);
+
+        return () => clearTimeout(timer);
+      } else if (singleShortQuery.isLoading) {
+        // Still loading the specific short, wait for it
+        console.log('[TipShortsEnhanced] Still loading deep-linked short, waiting...');
+      } else if (singleShortQuery.error) {
+        console.warn('[TipShortsEnhanced] Failed to load deep-linked short:', singleShortQuery.error);
+      }
     }
-  }, [shortId, scrollToShort, shorts.length]);
+  }, [shortId, scrollToShort, shorts.length, shorts, singleShortQuery.isLoading, singleShortQuery.error]);
 
   // Defensive: If shorts is empty after deep link, trigger a refetch
   useEffect(() => {
@@ -655,28 +701,36 @@ const TipShortsEnhanced = () => {
         data={shorts}
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => (
-          <EnhancedShortCard
-            item={item}
-            index={index}
-            isActive={index === activeIndex}
-            isLiked={item.isLiked || false} // Pass isLiked status from item data
-            onVideoLoad={handleVideoLoad}
-            onVideoCompletion={handleVideoView}
-            onLike={handleLikeShort}
-            combinedGesture={combinedGesture}
-            showPlayPause={showPlayPause}
-            videoProgress={videoProgress}
-            setVideoProgress={setVideoProgress}
-            isGloballyPlaying={isGloballyPlaying}
-            isGloballyMuted={isGloballyMuted}
-            toggleGlobalMute={toggleGlobalMute}
-            insets={insets}
-            isGuest={isGuest}
+          <VideoErrorBoundary
+            key={`video-error-boundary-${item.id}`}
+            onError={(error, errorInfo) => {
+              console.error(`[TipShortsEnhanced] Video error for short ${item.id}:`, error);
+              console.error('[TipShortsEnhanced] Error info:', errorInfo);
+            }}
+          >
+            <EnhancedShortCard
+              item={item}
+              index={index}
+              isActive={index === activeIndex}
+              isLiked={item.isLiked || false} // Pass isLiked status from item data
+              onVideoLoad={handleVideoLoad}
+              onVideoCompletion={handleVideoView}
+              onLike={handleLikeShort}
+              combinedGesture={combinedGesture}
+              showPlayPause={showPlayPause}
+              videoProgress={videoProgress}
+              setVideoProgress={setVideoProgress}
+              isGloballyPlaying={isGloballyPlaying}
+              isGloballyMuted={isGloballyMuted}
+              toggleGlobalMute={toggleGlobalMute}
+              insets={insets}
+              isGuest={isGuest}
             onGuestAction={showLoginPromptForAction}
             onChannelNavigation={handleChannelNavigation}
             onComment={handleCommentShort}
             onFollow={handleFollowChannel}
           />
+          </VideoErrorBoundary>
         )}
         pagingEnabled
         showsVerticalScrollIndicator={false}

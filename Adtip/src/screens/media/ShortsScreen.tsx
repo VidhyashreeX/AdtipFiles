@@ -17,6 +17,7 @@ import Icon from 'react-native-vector-icons/Feather';
 
 // Components and services
 import {useTheme} from '../../contexts/ThemeContext';
+import {useShorts} from '../../contexts/ShortsContext';
 import ApiService from '../../services/ApiService';
 import {ENDPOINTS} from '../../constants/api';
 import { createSecureVideoSource } from '../../utils/mediaUtils';
@@ -68,6 +69,7 @@ interface PublicShot {
 const ShortsScreen = () => {
   const {colors} = useTheme();
   const navigation = useNavigation();
+  const {setGlobalPlayState} = useShorts();
 
   // State variables
   const [activeIndex, setActiveIndex] = useState(0);
@@ -157,6 +159,27 @@ const ShortsScreen = () => {
     fetchShorts();
   }, []);
 
+  // Handle screen focus/blur for video playback control
+  useEffect(() => {
+    const unsubscribeFocus = navigation.addListener('focus', () => {
+      console.log('[ShortsScreen] Screen focused - resuming playback');
+      setGlobalPlayState(true);
+    });
+
+    const unsubscribeBlur = navigation.addListener('blur', () => {
+      console.log('[ShortsScreen] Screen blurred - pausing playback');
+      setGlobalPlayState(false);
+    });
+
+    // Component unmount cleanup
+    return () => {
+      console.log('[ShortsScreen] Component unmounting - stopping all audio');
+      setGlobalPlayState(false);
+      unsubscribeFocus();
+      unsubscribeBlur();
+    };
+  }, [navigation, setGlobalPlayState]);
+
   const handleGoBack = () => {
     navigation.goBack();
   };
@@ -169,6 +192,7 @@ const ShortsScreen = () => {
     item: ShortVideo;
     isActive: boolean;
   }) => {
+    const {isGloballyPlaying} = useShorts();
     const videoRef = useRef<any>(null);
     const [isPlaying, setIsPlaying] = useState(true);
     const [liked, setLiked] = useState(false);
@@ -243,7 +267,7 @@ const ShortsScreen = () => {
               poster={item.thumbnail || undefined}
               posterResizeMode="cover"
               repeat
-              paused={!isPlaying || !isActive}
+              paused={!isPlaying || !isActive || !isGloballyPlaying}
               muted={false}
               volume={1.0}
             />
