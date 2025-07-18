@@ -57,7 +57,8 @@ const ExploreScreen: React.FC = () => {
 
     const handleItemPress = () => {
       if (item.content_type === 'post') {
-        navigation.navigate('Comments', { postId: item.id });
+        // Navigate directly to PostViewerScreen with postId param
+        navigation.navigate('PostViewer', { postId: item.id });
       } else if (item.content_type === 'shot') {
         // Ensure shortId is passed as string for proper deep linking
         console.log('[ExploreScreen] Navigating to TipShorts with shortId:', item.id.toString());

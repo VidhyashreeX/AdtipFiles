@@ -37,10 +37,11 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
 
-  const { posts: initialPosts = [], initialIndex = 0, userId, postId } = route.params || {};
+  const { posts: initialPosts, initialIndex = 0, userId, postId } = route.params || {};
 
   // State
-  const [posts, setPosts] = useState(initialPosts); // Local state for posts to handle optimistic updates
+  // If initialPosts is a non-empty array, use it, else start with empty array
+  const [posts, setPosts] = useState(Array.isArray(initialPosts) && initialPosts.length > 0 ? initialPosts : []);
   const [isLoadingSinglePost, setIsLoadingSinglePost] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCommentPostId, setSelectedCommentPostId] = useState<number | null>(null);
@@ -50,21 +51,27 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
   const [isScreenFocused, setIsScreenFocused] = useState(true);
   // Removed modal states - now using direct navigation to Profile screen
 
-  // Update local posts when route params change
+  // If initialPosts changes and is non-empty, update posts (for multi-post view)
   useEffect(() => {
-    setPosts(initialPosts);
+    if (Array.isArray(initialPosts) && initialPosts.length > 0) {
+      setPosts(initialPosts);
+    }
   }, [initialPosts]);
 
-  // Fetch single post if only postId is provided (deep link scenario)
+  // Prevent infinite fetches by tracking last fetched postId
+  const lastFetchedPostId = useRef<number | null>(null);
   useEffect(() => {
     const fetchSinglePost = async () => {
-      if (postId && (!initialPosts || initialPosts.length === 0)) {
+      if (
+        postId &&
+        posts.length === 0 &&
+        lastFetchedPostId.current !== postId
+      ) {
         setIsLoadingSinglePost(true);
         try {
+          lastFetchedPostId.current = postId;
           console.log('[PostViewer] Fetching single post with ID:', postId);
           console.log('[PostViewer] Current User ID:', currentUser?.id);
-
-          // Use ApiService to fetch the post using the existing list-posts endpoint
           const response = await ApiService.listPosts({
             post_id: postId,
             category: 0,
@@ -72,9 +79,7 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
             limit: 1,
             loggined_user_id: currentUser?.id || 0,
           });
-
           console.log('[PostViewer] API Response:', response);
-
           if (response.data && response.data.length > 0) {
             console.log('[PostViewer] Setting posts:', response.data);
             setPosts(response.data);
@@ -92,9 +97,8 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
         }
       }
     };
-
     fetchSinglePost();
-  }, [postId, initialPosts, currentUser, navigation]);
+  }, [postId, posts.length, currentUser?.id, navigation]);
 
   // Refs
   const flatListRef = useRef<FlatList>(null);
