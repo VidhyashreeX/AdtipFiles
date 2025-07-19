@@ -78,12 +78,45 @@ const EditProfile: React.FC = () => {
   const [selectedInterests, setSelectedInterests] = useState<number[]>([]);
   const [selectedLanguages, setSelectedLanguages] = useState<number[]>([]);
 
+  // Helper function to parse date safely
+  const parseDateSafely = (dateValue: any): Date | null => {
+    if (!dateValue) return null;
+
+    try {
+      if (typeof dateValue === 'string') {
+        if (dateValue.includes('/')) {
+          // Format: DD/MM/YYYY
+          const [day, month, year] = dateValue.split('/').map(Number);
+          return new Date(year, month - 1, day);
+        } else if (dateValue.includes('-')) {
+          // Format: DD-MM-YYYY or YYYY-MM-DD
+          const parts = dateValue.split('-');
+          if (parts[0].length === 4) {
+            // YYYY-MM-DD format
+            return new Date(dateValue);
+          } else {
+            // DD-MM-YYYY format
+            const [day, month, year] = parts.map(Number);
+            return new Date(year, month - 1, day);
+          }
+        } else {
+          return new Date(dateValue);
+        }
+      } else {
+        return new Date(dateValue);
+      }
+    } catch (error) {
+      console.error('[EditProfile] Error parsing date:', error, dateValue);
+      return null;
+    }
+  };
+
   // Track original values for change detection
   const [originalValues, setOriginalValues] = useState({
     name: user?.name || '',
     email: user?.emailId || '',
     bio: user?.bio || '',
-    dob: user?.dob ? new Date(user.dob) : null,
+    dob: parseDateSafely(user?.dob),
     gender: user?.gender || '',
     profession: user?.profession || '',
     maternalStatus: user?.maternal_status || '',
@@ -103,7 +136,13 @@ const EditProfile: React.FC = () => {
   // Initialize DOB from user data
   useEffect(() => {
     if (user?.dob) {
-      setDob(new Date(user.dob));
+      const parsedDate = parseDateSafely(user.dob);
+      if (parsedDate) {
+        console.log('[EditProfile] Setting DOB:', parsedDate);
+        setDob(parsedDate);
+      } else {
+        console.warn('[EditProfile] Could not parse DOB:', user.dob);
+      }
     }
   }, [user?.dob]);
 
@@ -113,7 +152,7 @@ const EditProfile: React.FC = () => {
       name: user?.name || '',
       email: user?.emailId || '',
       bio: user?.bio || '',
-      dob: user?.dob ? new Date(user.dob) : null,
+      dob: parseDateSafely(user?.dob),
       gender: user?.gender || '',
       profession: user?.profession || '',
       maternalStatus: user?.maternal_status || '',
@@ -129,17 +168,26 @@ const EditProfile: React.FC = () => {
 
   // Initialize selected interests and languages from user data
   useEffect(() => {
+    console.log('[EditProfile] Initializing interests and languages:', {
+      userInterests: user?.interests,
+      userLanguages: user?.languages,
+      availableInterests: interests.length,
+      availableLanguages: languages.length
+    });
+
     if (user?.interests && interests.length > 0) {
-      const userInterestIds = user.interests.map((interest: any) => 
+      const userInterestIds = user.interests.map((interest: any) =>
         typeof interest === 'object' ? interest.id : interest
       );
+      console.log('[EditProfile] Setting user interest IDs:', userInterestIds);
       setSelectedInterests(userInterestIds);
     }
-    
+
     if (user?.languages && languages.length > 0) {
-      const userLanguageIds = user.languages.map((language: any) => 
+      const userLanguageIds = user.languages.map((language: any) =>
         typeof language === 'object' ? language.id : language
       );
+      console.log('[EditProfile] Setting user language IDs:', userLanguageIds);
       setSelectedLanguages(userLanguageIds);
     }
   }, [user?.interests, user?.languages, interests, languages]);
@@ -213,10 +261,15 @@ const EditProfile: React.FC = () => {
 
   // Toggle interest selection
   const toggleInterest = (interestId: number): void => {
+    console.log('[EditProfile] Toggling interest:', interestId);
     if (selectedInterests.includes(interestId)) {
-      setSelectedInterests(selectedInterests.filter(id => id !== interestId));
+      const newInterests = selectedInterests.filter(id => id !== interestId);
+      console.log('[EditProfile] Removing interest, new list:', newInterests);
+      setSelectedInterests(newInterests);
     } else {
-      setSelectedInterests([...selectedInterests, interestId]);
+      const newInterests = [...selectedInterests, interestId];
+      console.log('[EditProfile] Adding interest, new list:', newInterests);
+      setSelectedInterests(newInterests);
     }
   };
 
@@ -280,10 +333,20 @@ const EditProfile: React.FC = () => {
       
       if (hasFieldChanged('interests', selectedInterests)) {
         updateData.interests = selectedInterests;
+        console.log('[EditProfile] Interests changed:', {
+          original: originalValues.interests,
+          current: selectedInterests,
+          sending: updateData.interests
+        });
       }
-      
+
       if (hasFieldChanged('languages', selectedLanguages)) {
         updateData.languages = selectedLanguages;
+        console.log('[EditProfile] Languages changed:', {
+          original: originalValues.languages,
+          current: selectedLanguages,
+          sending: updateData.languages
+        });
       }
 
       // Check if any fields were actually changed
@@ -297,14 +360,14 @@ const EditProfile: React.FC = () => {
 
       // Call the update API
       const response = await ApiService.updateUser(updateData);
-      
-      if (response.status === true) {
+    
+      if (response.data.status === 200) {
         // Update local user context
         await updateUserDetails(updateData);
       Alert.alert('Success', 'Profile updated successfully');
       navigation.goBack();
       } else {
-        Alert.alert('Error', response.message || 'Failed to update profile');
+        Alert.alert('Updated', response.message || 'Failed to update profile');
       }
     } catch (error) {
       console.error('Error updating profile:', error);

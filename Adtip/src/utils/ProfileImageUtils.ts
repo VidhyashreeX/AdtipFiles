@@ -18,7 +18,7 @@ export const getProfileImageUrl = (
 ): string => {
   const {
     enableCacheBusting = true,
-    fallbackUrl = 'https://via.placeholder.com/150',
+    fallbackUrl = 'https://avatar.iran.liara.run/public',
     size
   } = options;
 

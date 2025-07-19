@@ -1012,21 +1012,11 @@ const ChatScreen: React.FC = () => {
           </View>
         ) : (
           <>
-            <FlatList
+            <ChatFlatList
               ref={flatListRef}
               data={sortedMessages}
               renderItem={renderItem}
-              keyExtractor={(item, index) => {
-                // Create unique keys to avoid duplicates between server and pending messages
-                if (item.id !== undefined && item.id !== null) {
-                  // Check if this is a pending message (negative ID)
-                  const isPending = item.id < 0;
-                  const prefix = isPending ? 'pending' : 'server';
-                  return `${prefix}-${Math.abs(item.id)}`;
-                } else {
-                  return `message-${index}-${item.createddate || Date.now()}`;
-                }
-              }}
+              debugName="ChatMessages"
               style={styles.list}
               contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
               onContentSizeChange={() => {
@@ -1037,16 +1027,26 @@ const ChatScreen: React.FC = () => {
                 // Initial layout scroll
                 setTimeout(() => scrollToBottom(false), 200);
               }}
-              removeClippedSubviews={false}
-              maxToRenderPerBatch={15}
-              updateCellsBatchingPeriod={50}
-              initialNumToRender={25}
-              windowSize={15}
               showsVerticalScrollIndicator={true}
-              scrollEventThrottle={16}
               scrollEnabled={true}
               nestedScrollEnabled={true}
               bounces={true}
+              customOptimizations={{
+                // Chat-specific optimizations
+                removeClippedSubviews: false, // Keep false for chat to maintain scroll position
+                initialNumToRender: 25, // Show more messages initially
+                keyExtractor: (item, index) => {
+                  // Create unique keys to avoid duplicates between server and pending messages
+                  if (item.id !== undefined && item.id !== null) {
+                    // Check if this is a pending message (negative ID)
+                    const isPending = item.id < 0;
+                    const prefix = isPending ? 'pending' : 'server';
+                    return `${prefix}-${Math.abs(item.id)}`;
+                  } else {
+                    return `message-${index}-${item.createddate || Date.now()}`;
+                  }
+                },
+              }}
             />
             
             {isOtherTyping && isUserInChat && (

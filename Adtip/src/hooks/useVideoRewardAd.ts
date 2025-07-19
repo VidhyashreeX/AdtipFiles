@@ -3,12 +3,12 @@ import { Alert } from 'react-native';
 import ApiService from '../services/ApiService';
 import { useNavigation } from '@react-navigation/native';
 import { useRewardedAd } from '../googleads';
+import { useUserPremiumStatus } from '../contexts/UserDataContext';
 
 const NON_PREMIUM_REWARD = 0.03;
 const PREMIUM_REWARD = 0.10;
 
 interface UseVideoRewardAdProps {
-  isPremium: boolean;
   isGuest: boolean;
   userId?: number;
 }
@@ -24,14 +24,17 @@ interface UseVideoRewardAdReturn {
 }
 
 export const useVideoRewardAd = ({
-  isPremium,
   isGuest,
   userId
 }: UseVideoRewardAdProps): UseVideoRewardAdReturn => {
   const [videoCount, setVideoCount] = useState(0);
   const [showRewardPopup, setShowRewardPopup] = useState(false);
   const [earnedAmount, setEarnedAmount] = useState(0);
+  const [hasBeenCredited, setHasBeenCredited] = useState(false);
   const navigation = useNavigation();
+
+  // Get premium status using the same logic as the header toggle
+  const { isPremium } = useUserPremiumStatus();
 
   // Initialize rewarded ad
   const { isLoaded, showAd, hasEarnedReward, reward } = useRewardedAd();
@@ -43,7 +46,7 @@ export const useVideoRewardAd = ({
       const rewardAmount = isPremium ? PREMIUM_REWARD : NON_PREMIUM_REWARD;
       setEarnedAmount(rewardAmount);
       setShowRewardPopup(true);
-      creditWallet(rewardAmount);
+      // Note: creditWallet will be called when user interacts with popup, not immediately
     }
   }, [hasEarnedReward, reward, isPremium]);
 
@@ -63,9 +66,10 @@ export const useVideoRewardAd = ({
       const newCount = prev + 1;
       console.log(`🎬 [useVideoRewardAd] Video viewed. Count: ${newCount}/5 (User: ${userId}, Premium: ${isPremium})`);
 
-      // Only show reward ad after exactly 5th video
-      if (newCount === 5) {
-        console.log('🎁 [useVideoRewardAd] 5th video reached! Showing reward ad...');
+      // Only show reward ad after exactly 10th video
+      if (newCount === 10) {
+        console.log('🎁 [useVideoRewardAd] 10th video reached! Showing reward ad...');
+        setHasBeenCredited(false); // Reset credit tracking for new reward cycle
         showRewardAd();
         // Reset count after showing ad
         return 0;
@@ -84,12 +88,12 @@ export const useVideoRewardAd = ({
       console.log('📺 [useVideoRewardAd] Displaying Google AdMob rewarded ad');
       showAd();
     } else {
-      // Fallback: Show reward popup directly if ad is not loaded
+
       console.log('⚠️ [useVideoRewardAd] Ad not loaded, showing direct reward');
       const rewardAmount = isPremium ? PREMIUM_REWARD : NON_PREMIUM_REWARD;
       setEarnedAmount(rewardAmount);
       setShowRewardPopup(true);
-      creditWallet(rewardAmount);
+      // Note: creditWallet will be called when user interacts with popup, not immediately
     }
   }, [isPremium, isLoaded, showAd]);
 
@@ -131,10 +135,11 @@ export const useVideoRewardAd = ({
     // Close popup first
     setShowRewardPopup(false);
 
-    // Credit wallet for all actions except cancel
-    if (action !== 'cancel') {
+    // Credit wallet for all actions except cancel, but only if not already credited
+    if (action !== 'cancel' && !hasBeenCredited) {
       try {
         await creditWallet();
+        setHasBeenCredited(true);
       } catch (error) {
         Alert.alert('Error', 'Failed to credit reward to wallet.');
       }
@@ -145,11 +150,12 @@ export const useVideoRewardAd = ({
       console.log('🚀 [useVideoRewardAd] Navigating to wallet screen');
       navigation.navigate('Wallet' as never);
     }
-  }, [creditWallet, navigation]);
+  }, [creditWallet, navigation, hasBeenCredited]);
 
   // Simple close function
   const closeRewardPopup = useCallback(() => {
     setShowRewardPopup(false);
+    setHasBeenCredited(false); // Reset credit tracking when popup is closed
   }, []);
 
   return {

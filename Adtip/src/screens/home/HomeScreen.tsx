@@ -26,6 +26,7 @@ import { InfiniteData } from '@tanstack/react-query';
 // Import Lucide React Native icons
 import { PlayCircle, Gamepad2, WifiOff, Share2, HandCoins, Dices } from 'lucide-react-native';
 import PostWithComments from '../../components/home/PostWithComments';
+import { FeedFlatList, useOptimizedRenderItem } from '../../components/common/OptimizedFlatList';
 
 // Enhanced Contexts & Services
 import {useTheme} from '../../contexts/ThemeContext';
@@ -44,6 +45,7 @@ import { formatPremiumExpiryDate } from '../../utils/dateUtils';
 import PubScaleService from '../../services/PubScaleService';
 import VersionCheckService from '../../services/VersionCheckService';
 import axios from 'axios';
+import Logger from '../../utils/logger';
 
 // Components
 import Header from '../../components/common/Header';
@@ -214,7 +216,7 @@ const ExternalLinkBanner: React.FC<ExternalLinkBannerProps> = ({ isPremium, onUp
         Alert.alert('Error', 'Cannot open the link. Please try again later.');
       }
     } catch (error) {
-      console.error('Error opening external link:', error);
+      Logger.error('HomeScreen', 'Error opening external link:', error);
       Alert.alert('Error', 'Failed to open the link. Please try again.');
     }
   };
@@ -277,7 +279,7 @@ const RushPlayGamesBanner: React.FC<RushPlayGamesBannerProps> = ({ isPremium, on
         Alert.alert('Error', 'Cannot open the link. Please try again later.');
       }
     } catch (error) {
-      console.error('Error opening external link:', error);
+      Logger.error('HomeScreen', 'Error opening external link:', error);
       Alert.alert('Error', 'Failed to open the link. Please try again.');
     }
   };
@@ -467,7 +469,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
   // Log when HomeScreen mounts
   useEffect(() => {
-    console.log('🏠 [HomeScreen] Component mounted with user:', user?.id);
+    Logger.debug('HomeScreen', 'Component mounted with user:', user?.id);
   }, [user?.id]);
 
   // Banner state
@@ -511,7 +513,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
   // Log subscription API calls and responses
   useEffect(() => {
-    console.log('🔍 [HomeScreen] Subscription API Response:', {
+    Logger.debug('HomeScreen', 'Subscription API Response:', {
       userId: user?.id,
       response: subscriptionResponse,
       isLoading: subscriptionLoading,
@@ -521,12 +523,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
   // Update premium state based on query result
   useEffect(() => {
-    console.log('🔄 [HomeScreen] Processing subscription response:', subscriptionResponse);
-    
+    Logger.debug('HomeScreen', 'Processing subscription response:', subscriptionResponse);
+
     if (subscriptionResponse && subscriptionResponse.status && subscriptionResponse.data) {
       // User has an active subscription
       const isPremiumActive = subscriptionResponse.data.is_active === true;
-      console.log('✅ [HomeScreen] User has active premium:', {
+      Logger.debug('HomeScreen', 'User has active premium:', {
         isPremiumActive,
         planName: subscriptionResponse.data.plan_name,
         amount: subscriptionResponse.data.amount,
@@ -536,7 +538,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
       setPremiumData(isPremiumActive ? subscriptionResponse.data : null);
     } else {
       // No subscription found or inactive
-      console.log('❌ [HomeScreen] No active subscription found');
+      Logger.debug('HomeScreen', 'No active subscription found');
       setIsPremium(false);
       setPremiumData(null);
     }
@@ -974,7 +976,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
                 }}
               >
                 <Image
-                  source={{ uri: item.profile_picture || 'https://via.placeholder.com/50' }}
+                  source={{ uri: item.profile_picture || 'https://avatar.iran.liara.run/public' }}
                   style={{
                     width: 50,
                     height: 50,
@@ -1216,23 +1218,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             onSearchSubmit={handleSearchSubmit}
           />
           {SearchResults}
-          <FlatList
+          <FeedFlatList
           data={displayPosts}
           renderItem={renderPostItem}
-          keyExtractor={(item, index) => `post-${item.id}-${index}`}
+          idField="id"
+          debugName="HomeScreenFeed"
           style={styles.content}
           contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}
-          showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[colors.primary]} />}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.3}
-          removeClippedSubviews={false}
-          maxToRenderPerBatch={10}
-          updateCellsBatchingPeriod={50}
-          initialNumToRender={8}
-          windowSize={15}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
+          customOptimizations={{
+            removeClippedSubviews: false, // Keep false for complex post items
+            initialNumToRender: 8,
+          }}
           ListHeaderComponent={() => (
             <>
               <StoriesRow stories={displayStories} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} />

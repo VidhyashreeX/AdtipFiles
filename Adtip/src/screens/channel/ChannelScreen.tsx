@@ -30,6 +30,7 @@ import { createFreshProfileImageUrl } from '../../utils/ProfileImageUtils';
 import { CheckCircle, Play, Calendar, Users, Eye, Bell, BellOff, Edit3, Camera, X } from 'lucide-react-native';
 import { MainNavigatorParamList } from '../../types/navigation';
 import { launchImageLibrary } from 'react-native-image-picker';
+import { ChannelLogger } from '../../utils/logger';
 import {
   useChannelData,
   useChannelVideos,
@@ -90,7 +91,7 @@ const ChannelScreen: React.FC = () => {
     contentCreatorPremiumData,
     isLoading: contentCreatorPremiumLoading
   } = useContentCreatorPremium();
-  const [selectedTab, setSelectedTab] = useState<'videos' | 'about'>('videos');
+  const [selectedTab, setSelectedTab] = useState<'videos' | 'shorts' | 'analytics' | 'about'>('videos');
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [localFollowStatus, setLocalFollowStatus] = useState<boolean | null>(null);
   
@@ -107,7 +108,12 @@ const ChannelScreen: React.FC = () => {
   // Get channel ID and data from route params
   const routeChannelId = (route.params as any)?.channelId || (route.params as any)?.userId;
   const passedChannelData = (route.params as any)?.channelData;
-  const isMyChannel = !routeChannelId || String(routeChannelId) === String(user?.id);
+
+  // Enhanced isMyChannel detection - check both channelId and createdBy
+  const isMyChannelByChannelId = !routeChannelId || String(routeChannelId) === String(user?.id);
+  const isMyChannelByCreatedBy = passedChannelData?.createdBy && String(passedChannelData.createdBy) === String(user?.id);
+  const isMyChannel = isMyChannelByChannelId || isMyChannelByCreatedBy;
+
   const channelId = isMyChannel ? user?.id : routeChannelId;
 
   // Use createdBy from passed data if available, otherwise use channelId
@@ -115,10 +121,12 @@ const ChannelScreen: React.FC = () => {
   const userIdForApi = passedChannelData?.createdBy || channelId || user?.id;
   const shouldFetchChannelData = !!userIdForApi && userIdForApi !== 0;
 
-  console.log('[ChannelScreen] Route params and channel setup:', {
+  ChannelLogger.debug('Route params and channel setup:', {
     routeParams: route.params,
     routeChannelId,
     passedChannelData,
+    isMyChannelByChannelId,
+    isMyChannelByCreatedBy,
     isMyChannel,
     channelId,
     userIdForApi,
@@ -152,7 +160,7 @@ const ChannelScreen: React.FC = () => {
   const updateChannelMutation = useUpdateChannel();
 
   // Transform channel data
-  console.log('[ChannelScreen] Channel data received:', {
+  ChannelLogger.debug('Channel data received:', {
     status: channelData?.status,
     dataLength: channelData?.data?.length,
     firstChannel: channelData?.data?.[0],
@@ -205,7 +213,7 @@ const ChannelScreen: React.FC = () => {
   // Force refetch channel data when About tab is selected and we don't have data
   useEffect(() => {
     if (selectedTab === 'about' && shouldFetchChannelData && !channelData && !channelLoading) {
-      console.log('[ChannelScreen] About tab selected, refetching channel data for userIdForApi:', userIdForApi);
+      ChannelLogger.debug('About tab selected, refetching channel data for userIdForApi:', userIdForApi);
       refetchChannel();
     }
   }, [selectedTab, shouldFetchChannelData, channelData, channelLoading, userIdForApi, refetchChannel]);
@@ -278,9 +286,9 @@ const ChannelScreen: React.FC = () => {
         follow: channelInfo.isSubscribed ? 0 : 1, // 1 for follow, 0 for unfollow
       };
 
-      console.log('[ChannelScreen] Sending follow request:', followData);
+      ChannelLogger.debug('Sending follow request:', followData);
       const response = await ApiService.saveChannelFollowers(followData);
-      console.log('[ChannelScreen] Follow response:', response);
+      ChannelLogger.debug('Follow response:', response);
 
       // Check the response to determine the new follow status
       let newFollowStatus = !channelInfo.isSubscribed; // Default toggle
@@ -303,7 +311,7 @@ const ChannelScreen: React.FC = () => {
         }
       }
 
-      console.log('[ChannelScreen] Determined new follow status:', {
+      ChannelLogger.debug('Determined new follow status:', {
         originalStatus: channelInfo.isSubscribed,
         requestedAction: followData.follow,
         responseMessage: response?.message,
@@ -321,7 +329,7 @@ const ChannelScreen: React.FC = () => {
       }, 1000);
 
     } catch (error: any) {
-      console.error('Error following/unfollowing:', error);
+      ChannelLogger.error('Error following/unfollowing:', error);
       Alert.alert('Error', 'Failed to update follow status');
     } finally {
       setIsSubscribing(false);
@@ -356,7 +364,7 @@ const ChannelScreen: React.FC = () => {
       Alert.alert('Success', 'Channel updated successfully');
       
     } catch (error: any) {
-      console.error('Error updating channel:', error);
+      ChannelLogger.error('Error updating channel:', error);
       Alert.alert('Error', 'Failed to update channel');
     } finally {
       setIsUpdating(false);
@@ -364,7 +372,7 @@ const ChannelScreen: React.FC = () => {
   };
 
   const handleVideoPress = useCallback(async (video: Video) => {
-    console.log('[ChannelScreen] Video pressed:', {
+    ChannelLogger.debug('Video pressed:', {
       id: video.id,
       name: video.name,
       isPaid: video.isPaidPromotional,
@@ -526,7 +534,7 @@ const ChannelScreen: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error('[ChannelScreen] Error handling video press:', error);
+      ChannelLogger.error('Error handling video press:', error);
       Alert.alert('Error', 'There was an issue accessing this video. Please try again later.');
     }
   }, [channelInfo, selectedTab, videos, navigation]);
@@ -563,7 +571,7 @@ const ChannelScreen: React.FC = () => {
         throw new Error(uploadResult.error || 'Upload failed');
       }
 
-      console.log('[ChannelScreen] Image uploaded successfully:', uploadResult.url);
+      ChannelLogger.debug('Image uploaded successfully:', uploadResult.url);
 
       // Update channel with new image URL
       const updateData = {
@@ -578,14 +586,14 @@ const ChannelScreen: React.FC = () => {
 
       if (response.status === 200) {
         // Force refresh of channel data to show updated image
-        await refetch();
+        await refetchChannel();
 
         Alert.alert('Success', `${type === 'profile' ? 'Profile' : 'Cover'} image updated successfully`);
       } else {
         throw new Error(response.message || 'Failed to update image');
       }
     } catch (error: any) {
-      console.error('Error uploading image:', error);
+      ChannelLogger.error('Error uploading image:', error);
       Alert.alert('Error', 'Failed to upload image');
     } finally {
       setUploadingImage(false);
@@ -619,12 +627,18 @@ const ChannelScreen: React.FC = () => {
       style={styles.videoItem}
       onPress={() => handleVideoPress(item)}
     >
-      <Image source={{ uri: item.videoThumbnail }} style={styles.videoThumbnail} />
-      <View style={styles.videoDuration}>
-        <Text style={styles.videoDurationText}>{item.playDuration}</Text>
-      </View>
-      <View style={styles.playButton}>
-        <Play size={16} color="#FFFFFF" fill="#FFFFFF" />
+      <View style={styles.videoThumbnailContainer}>
+        <Image
+          source={{ uri: item.videoThumbnail }}
+          style={styles.videoThumbnail}
+          onError={() => ChannelLogger.warn('Failed to load thumbnail:', item.videoThumbnail)}
+        />
+        <View style={styles.videoDuration}>
+          <Text style={styles.videoDurationText}>{item.playDuration}</Text>
+        </View>
+        <View style={styles.playButton}>
+          <Play size={16} color="#FFFFFF" fill="#FFFFFF" />
+        </View>
       </View>
       <View style={styles.videoInfo}>
         <Text
@@ -645,12 +659,18 @@ const ChannelScreen: React.FC = () => {
       style={styles.shortItem}
       onPress={() => handleVideoPress(item)}
     >
-      <Image source={{ uri: item.videoThumbnail }} style={styles.shortThumbnail} />
-      <View style={styles.shortDuration}>
-        <Text style={styles.videoDurationText}>{item.playDuration}</Text>
-      </View>
-      <View style={styles.shortPlayButton}>
-        <Play size={20} color="#FFFFFF" fill="#FFFFFF" />
+      <View style={styles.shortThumbnailContainer}>
+        <Image
+          source={{ uri: item.videoThumbnail }}
+          style={styles.shortThumbnail}
+          onError={() => ChannelLogger.warn('Failed to load short thumbnail:', item.videoThumbnail)}
+        />
+        <View style={styles.shortDuration}>
+          <Text style={styles.videoDurationText}>{item.playDuration}</Text>
+        </View>
+        <View style={styles.shortPlayButton}>
+          <Play size={20} color="#FFFFFF" fill="#FFFFFF" />
+        </View>
       </View>
       <Text
         style={[styles.shortTitle, { color: colors.text.primary }]}
@@ -761,8 +781,8 @@ const ChannelScreen: React.FC = () => {
 
   // Content Creator Premium Toggle Handler
   const handleTogglePremium = useCallback(() => {
-    console.log('🚀 [ChannelScreen] User clicked content creator premium toggle');
-    console.log('📊 [ChannelScreen] Current content creator premium status:', {
+    ChannelLogger.debug('User clicked content creator premium toggle');
+    ChannelLogger.debug('Current content creator premium status:', {
       isContentCreatorPremium,
       hasData: !!contentCreatorPremiumData
     });
@@ -956,8 +976,6 @@ const ChannelScreen: React.FC = () => {
 
         {/* Tab Container */}
         <View style={[styles.tabContainer, { borderBottomColor: colors.border }]}>
-
-
           <TouchableOpacity
             style={[
               styles.tab,
@@ -974,6 +992,46 @@ const ChannelScreen: React.FC = () => {
               Videos
             </Text>
           </TouchableOpacity>
+
+          {/* Show Shorts tab only for own channel */}
+          {isMyChannel && (
+            <TouchableOpacity
+              style={[
+                styles.tab,
+                selectedTab === 'shorts' && { ...styles.activeTab, borderBottomColor: colors.primary }
+              ]}
+              onPress={() => setSelectedTab('shorts')}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  { color: selectedTab === 'shorts' ? colors.primary : colors.text.secondary }
+                ]}
+              >
+                Shorts
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Show Analytics tab only for own channel */}
+          {isMyChannel && (
+            <TouchableOpacity
+              style={[
+                styles.tab,
+                selectedTab === 'analytics' && { ...styles.activeTab, borderBottomColor: colors.primary }
+              ]}
+              onPress={() => setSelectedTab('analytics')}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  { color: selectedTab === 'analytics' ? colors.primary : colors.text.secondary }
+                ]}
+              >
+                Analytics
+              </Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={[
@@ -1024,6 +1082,26 @@ const ChannelScreen: React.FC = () => {
                 </Text>
               </View>
             )}
+          </View>
+        )}
+
+        {selectedTab === 'shorts' && (
+          <View style={styles.tabContent}>
+            <View style={styles.emptyState}>
+              <Text style={[styles.emptyStateText, { color: colors.text.secondary }]}>
+                Shorts feature coming soon
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {selectedTab === 'analytics' && (
+          <View style={styles.tabContent}>
+            <View style={styles.emptyState}>
+              <Text style={[styles.emptyStateText, { color: colors.text.secondary }]}>
+                Analytics feature coming soon
+              </Text>
+            </View>
           </View>
         )}
 
@@ -1213,10 +1291,12 @@ const styles = StyleSheet.create({
   },
   channelHeader: {
     padding: 16,
+    paddingTop: 20, // Add extra top padding for better spacing
   },
   channelInfoRow: {
     flexDirection: 'row',
     marginBottom: 16,
+    alignItems: 'flex-start', // Proper alignment for channel info
   },
   avatarContainer: {
     position: 'relative',
@@ -1239,16 +1319,19 @@ const styles = StyleSheet.create({
   },
   channelDetails: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start', // Align to top instead of center
+    paddingLeft: 4, // Add small left padding for better spacing
   },
   channelNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 4, // Add margin for better spacing
   },
   channelName: {
     fontSize: 20,
     fontWeight: 'bold',
     marginRight: 8,
+    flexShrink: 1, // Allow text to shrink if needed
   },
   verifiedIcon: {
     marginLeft: 4,
@@ -1321,12 +1404,17 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
+    alignItems: 'flex-start', // Proper alignment for video items
+  },
+  videoThumbnailContainer: {
+    position: 'relative',
+    marginRight: 12,
   },
   videoThumbnail: {
     width: 120,
     height: 68,
     borderRadius: 8,
-    marginRight: 12,
+    backgroundColor: '#F0F0F0', // Fallback background for loading thumbnails
   },
   videoDuration: {
     position: 'absolute',
@@ -1344,14 +1432,21 @@ const styles = StyleSheet.create({
   },
   playButton: {
     position: 'absolute',
-    top: 24,
-    left: 64,
+    top: '50%',
+    left: '50%',
+    marginTop: -16, // Half of height for perfect centering
+    marginLeft: -16, // Half of width for perfect centering
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)', // Slightly more opaque for better visibility
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 2, // Add shadow on Android
+    shadowColor: '#000', // Add shadow on iOS
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
   },
   videoInfo: {
     flex: 1,
@@ -1368,16 +1463,21 @@ const styles = StyleSheet.create({
   shortsRow: {
     justifyContent: 'space-between',
     paddingHorizontal: 16,
+    gap: 12, // Add gap between items for better spacing
   },
   shortItem: {
     width: (width - 48) / 2,
     marginBottom: 16,
   },
+  shortThumbnailContainer: {
+    position: 'relative',
+    marginBottom: 8,
+  },
   shortThumbnail: {
     width: '100%',
     height: 180,
     borderRadius: 8,
-    marginBottom: 8,
+    backgroundColor: '#F0F0F0', // Fallback background for loading thumbnails
   },
   shortDuration: {
     position: 'absolute',
@@ -1390,15 +1490,21 @@ const styles = StyleSheet.create({
   },
   shortPlayButton: {
     position: 'absolute',
-    top: 70,
+    top: '50%',
     left: '50%',
-    marginLeft: -20,
+    marginTop: -20, // Half of height for perfect centering
+    marginLeft: -20, // Half of width for perfect centering
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)', // Slightly more opaque for better visibility
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 2, // Add shadow on Android
+    shadowColor: '#000', // Add shadow on iOS
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
   },
   shortTitle: {
     fontSize: 14,
@@ -1423,15 +1529,18 @@ const styles = StyleSheet.create({
   },
   statsGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-evenly', // Better distribution than space-around
     marginBottom: 24,
     paddingVertical: 20,
+    paddingHorizontal: 16, // Add horizontal padding for better alignment
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: '#EEEEEE',
   },
   statItem: {
     alignItems: 'center',
+    flex: 1, // Ensure equal width distribution
+    minWidth: 80, // Minimum width for proper alignment
   },
   statNumber: {
     fontSize: 18,
@@ -1619,6 +1728,7 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingRight: 8, // Fix header padding issue
   },
   userInfoSection: {
     marginVertical: 16,

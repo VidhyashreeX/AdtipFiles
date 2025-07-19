@@ -44,6 +44,7 @@ import ApiService from '../../services/ApiService'
 // Import our new call controller and billing service
 import CallController from '../../services/calling/CallController'
 import CallBillingService from '../../services/calling/CallBillingService'
+import TipCallLogger  from '../../utils/logger'
 
 /**
  * Elegant and minimalistic ContactCard with professional design
@@ -74,12 +75,16 @@ const ContactCard = ({
   const avatarColor = colors.success // Always use success color
 
   // Debug log for status checking
-  console.log(`[ContactCard] ${contact.name} status:`, {
-    is_available: contact.is_available,
-    dnd: contact.dnd,
-    online_status: contact.online_status,
-    isOnline: 'forced_online'
-  })
+  TipCallLogger.debug(
+    `ContactCard`,
+    `${contact.name} status:`,
+    {
+      is_available: contact.is_available,
+      dnd: contact.dnd,
+      online_status: contact.online_status,
+      isOnline: 'forced_online'
+    }
+  )
 
   return (
     <TouchableOpacity
@@ -530,7 +535,7 @@ const TipCallScreenSimple = () => {
     try {
       const response = await ApiService.getUnreadMessageCount(user.id)
       const counts: { [key: number]: number } = {}
-      if (response?.data?.conversations) {
+      if (typeof response === 'object' && response !== null && 'data' in response && response.data?.conversations) {
         response.data.conversations.forEach((conv: any) => {
           counts[conv.peerId] = conv.unread || 0
         })
@@ -662,10 +667,10 @@ const TipCallScreenSimple = () => {
   // Debug: Log the raw data from API
   useEffect(() => {
     if (usersData?.pages) {
-      console.log('[TipCallScreen] Raw API response pages:', usersData.pages.length)
-      console.log('[TipCallScreen] Total contacts from API:', contacts.length)
-      console.log('[TipCallScreen] Sample contacts:', contacts.slice(0, 3))
-      console.log('[TipCallScreen] Pagination info:', {
+      TipCallLogger.debug('Raw API response pages:', usersData.pages.length)
+      TipCallLogger.debug('Total contacts from API:', contacts.length)
+      TipCallLogger.debug('Sample contacts:', contacts.slice(0, 3))
+      TipCallLogger.debug('Pagination info:', {
         hasMoreUsers,
         usersLoadingMore,
         lastPagePagination: usersData.pages[usersData.pages.length - 1]?.pagination
@@ -694,7 +699,7 @@ const TipCallScreenSimple = () => {
       try {
         // Check if user is premium - if not, show premium rate alert first
         if (!isPremium) {
-          console.log('[TipCallScreen] Non-premium user, showing rate comparison alert')
+          TipCallLogger.debug('Non-premium user, showing rate comparison alert')
           setPendingCallData({ recipientId, recipientName, callType })
           setShowPremiumCallRateAlert(true)
           return
@@ -723,7 +728,7 @@ const TipCallScreenSimple = () => {
           return
         }
 
-        console.log('[TipCallScreen] Call permissions granted:', permissionResult)
+        TipCallLogger.debug('Call permissions granted:', permissionResult)
 
         // Convert balance to number for calculations
         const numericBalance = parseFloat(balance || '0')
@@ -763,7 +768,7 @@ const TipCallScreenSimple = () => {
         })
         setShowCallConfirmationAlert(true)
       } catch (error) {
-        console.error('[TipCallScreen] Start call error:', error)
+        TipCallLogger.error('Start call error:', error)
         Alert.alert('Error', 'Failed to start call. Please try again.')
       }
     },
@@ -837,7 +842,7 @@ const TipCallScreenSimple = () => {
         })
         setShowCallConfirmationAlert(true)
       } catch (error) {
-        console.error('[TipCallScreen] Start call error:', error)
+        TipCallLogger.error('Start call error:', error)
         Alert.alert('Error', 'Failed to start call. Please try again.')
       }
     },
@@ -893,7 +898,7 @@ const TipCallScreenSimple = () => {
         )
       }
     } catch (error) {
-      console.error('[TipCallScreen] Call confirmation error:', error)
+      TipCallLogger.error('Call confirmation error:', error)
       Alert.alert('Error', 'Failed to start call. Please try again.')
     } finally {
       setPendingCallData(null)
@@ -986,7 +991,7 @@ const TipCallScreenSimple = () => {
         })
       }
     } catch (error) {
-      console.error('Failed to navigate to FCM chat:', error);
+      TipCallLogger.error('Failed to navigate to FCM chat:', error);
       // Fallback to conversations screen
       navigation.navigate('Conversations');
     }

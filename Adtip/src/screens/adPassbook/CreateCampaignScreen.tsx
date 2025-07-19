@@ -24,6 +24,7 @@ import type { NavigationProp, RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../../types/navigation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import Icon from 'react-native-vector-icons/Feather';
 import { IndianRupee } from 'lucide-react-native';
 import Header from '../../components/common/Header';
@@ -93,6 +94,7 @@ const CreateCampaignScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<{ params: RouteParams }, 'params'>>();
   const { colors, isDarkMode } = useTheme();
+  const { user } = useAuth();
   
   // Get post data from navigation params
   const postData = route.params?.postData;
@@ -514,6 +516,55 @@ const CreateCampaignScreen: React.FC = () => {
     }
   };
 
+  // Upload media and return both URL and key for cleanup purposes
+  const uploadMediaWithKey = async (mediaUri: string): Promise<{ url: string; key: string }> => {
+    try {
+      console.log('[CreateCampaign] Starting Cloudflare upload for:', mediaUri);
+
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+
+      const folder = mediaType === 'video' ? 'videos' : 'images';
+      const fileName = `campaign_${Date.now()}.${mediaType === 'video' ? 'mp4' : 'jpg'}`;
+
+      const uploadResult = await CloudflareUploadService.uploadFile(
+        mediaUri,
+        folder,
+        fileName,
+        parseInt(userId),
+        (progress) => {
+          setUploadProgress(progress.percentage);
+        }
+      );
+
+      if (!uploadResult.success || !uploadResult.url || !uploadResult.key) {
+        throw new Error(uploadResult.error || 'Upload failed');
+      }
+
+      console.log('[CreateCampaign] Cloudflare upload successful:', uploadResult.url);
+      return { url: uploadResult.url, key: uploadResult.key };
+    } catch (error) {
+      console.error('[CreateCampaign] Error uploading media:', error);
+      throw new Error('Failed to upload media file. Please check your connection and try again.');
+    }
+  };
+
+  // Cleanup uploaded media from Cloudflare
+  const cleanupUploadedMedia = async (mediaKey: string) => {
+    try {
+      console.log('[CreateCampaign] Cleaning up uploaded media:', mediaKey);
+      const deleted = await CloudflareUploadService.deleteFile(mediaKey);
+      if (deleted) {
+        console.log('[CreateCampaign] Successfully deleted uploaded media from Cloudflare');
+      } else {
+        console.warn('[CreateCampaign] Failed to delete uploaded media from Cloudflare');
+      }
+    } catch (error) {
+      console.error('[CreateCampaign] Error cleaning up uploaded media:', error);
+    }
+  };
+
   const handleCategorySelect = (category: typeof categories[0]) => {
     setVideoCategoryId(category.id);
     setCategoryDropdownVisible(false);
@@ -543,6 +594,168 @@ const CreateCampaignScreen: React.FC = () => {
     return category?.name || 'Select Category';
   };
 
+  // Reset form function
+  const resetForm = () => {
+    setTitle('');
+    setContent('');
+    setSelectedMediaUri('');
+    setMediaUrl('');
+    setUploadProgress(0);
+    setIsPromoted(false);
+    setPayPerView(2.0);
+    setReachGoal(10000);
+    setDurationDays(7);
+    setTotalPay(0);
+    setPlatformFee(0);
+    setPostTargetLocations([]);
+    setPostTargetGenders([1, 2]);
+  };
+
+  // Create campaign after successful payment
+  const createCampaignAfterPayment = async (campaignData: any, paymentData: any) => {
+    try {
+      console.log('[CreateCampaign] Creating campaign after successful payment');
+
+      // Create campaign using updated API method
+      const response = await ApiService.uploadPost(campaignData);
+      console.log('Campaign creation response:', response);
+
+      if (response.status && response.statusCode === 201) {
+        // Verify payment with backend
+        const verificationData = {
+          amount: totalPay,
+          currency: 'INR',
+          order_id: paymentData.razorpay_order_id,
+          payment_status: 'success',
+          razorpay_payment_id: paymentData.razorpay_payment_id,
+          razorpay_signature: paymentData.razorpay_signature,
+          transaction_for: 'campaign_promotion',
+          user_id: parseInt(userId),
+        };
+
+        await ApiService.verifyRazorpayPayment(verificationData);
+
+        Alert.alert(
+          'Campaign Created & Payment Successful!',
+          `Your promoted campaign "${title.trim()}" has been created and payment processed successfully! It will reach up to ${reachGoal} people over ${durationDays} days.`,
+          [
+            {
+              text: 'View Campaign',
+              onPress: () => navigation.goBack(),
+            },
+            {
+              text: 'Create Another',
+              onPress: () => resetForm(),
+            },
+          ]
+        );
+      } else {
+        throw new Error('Campaign creation failed after payment');
+      }
+    } catch (error) {
+      console.error('[CreateCampaign] Error creating campaign after payment:', error);
+      Alert.alert(
+        'Campaign Creation Failed',
+        'Payment was successful but campaign creation failed. Please contact support.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    }
+  };
+
+  // Handle payment for promoted campaigns
+  const handlePromotedCampaignPayment = async (campaignData: any, mediaKey?: string) => {
+    try {
+      console.log('[CreateCampaign] Initiating Razorpay payment for campaign');
+
+      // Step 1: Get Razorpay key
+      const razorpayDetails = await ApiService.getRazorpayDetails();
+      const razorpayKey = razorpayDetails.api_key;
+      if (!razorpayKey) {
+        throw new Error('Could not fetch Razorpay key.');
+      }
+
+      // Step 2: Create Razorpay order
+      const orderResponse = await ApiService.createRazorpayOrder({
+        amount: totalPay,
+        currency: 'INR',
+        user_id: parseInt(userId),
+      });
+
+      if (!orderResponse.status || !orderResponse.data?.id) {
+        throw new Error('Failed to create payment order.');
+      }
+
+      const { id: orderId, amount: orderAmount } = orderResponse.data;
+
+      // Step 3: Open Razorpay Checkout
+      const options = {
+        key: razorpayKey,
+        amount: orderAmount,
+        currency: 'INR',
+        name: 'Adtip Campaign',
+        description: `Promoted Campaign: ${title.trim()}`,
+        order_id: orderId,
+        prefill: {
+          email: user?.emailId || '',
+          contact: user?.mobile_number || '',
+          name: user?.name || '',
+        },
+        theme: { color: colors.primary },
+      };
+
+      console.log('[CreateCampaign] Opening Razorpay checkout with options:', options);
+
+      const RazorpayCheckout = require('react-native-razorpay').default;
+
+      RazorpayCheckout.open(options)
+        .then(async (data: any) => {
+          console.log('[CreateCampaign] Payment successful:', data);
+          // Create campaign ONLY after successful payment
+          await createCampaignAfterPayment(campaignData, data);
+        })
+        .catch(async (error: any) => {
+          console.error('[CreateCampaign] Payment failed:', error);
+
+          // Cleanup uploaded media when payment fails
+          if (mediaKey) {
+            console.log('[CreateCampaign] Payment failed, cleaning up uploaded media');
+            await cleanupUploadedMedia(mediaKey);
+          }
+
+          if (
+            error?.code === 'BAD_REQUEST_ERROR' &&
+            (error?.reason === 'payment_cancelled' || error?.description?.toLowerCase().includes('cancel'))
+          ) {
+            Alert.alert(
+              'Payment Cancelled',
+              'Payment was cancelled. The uploaded content has been removed and no campaign was created.',
+              [{ text: 'OK', onPress: () => navigation.goBack() }]
+            );
+          } else {
+            Alert.alert(
+              'Payment Failed',
+              'Payment failed. The uploaded content has been removed and no campaign was created. Please try again.',
+              [{ text: 'OK', onPress: () => navigation.goBack() }]
+            );
+          }
+        });
+    } catch (error) {
+      console.error('[CreateCampaign] Payment setup failed:', error);
+
+      // Cleanup uploaded media when payment setup fails
+      if (mediaKey) {
+        console.log('[CreateCampaign] Payment setup failed, cleaning up uploaded media');
+        await cleanupUploadedMedia(mediaKey);
+      }
+
+      Alert.alert(
+        'Payment Setup Failed',
+        'Payment setup failed. The uploaded content has been removed and no campaign was created. Please try again.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    }
+  };
+
   const handleLaunchCampaign = async () => {
     // Use validation helper function
     const validationError = validateCampaignData();
@@ -551,18 +764,21 @@ const CreateCampaignScreen: React.FC = () => {
       return;
     }
 
+    let uploadedMediaUrl: string | null = null;
+    let uploadedMediaKey: string | null = null;
+
     try {
       setIsLoading(true);
       setIsUploading(true);
       setUploadProgress(0);
 
       console.log('[CreateCampaign] Step 1: Uploading media file');
-      const uploadedMediaUrl = await uploadMedia(selectedMediaUri);
+      const uploadResult = await uploadMediaWithKey(selectedMediaUri);
+      uploadedMediaUrl = uploadResult.url;
+      uploadedMediaKey = uploadResult.key;
       setMediaUrl(uploadedMediaUrl);
 
-      console.log('[CreateCampaign] Step 2: Creating campaign');
-
-      // Validate campaign data before sending
+      // Validate campaign data before proceeding
       if (!uploadedMediaUrl) {
         throw new Error('Media upload failed - no URL received');
       }
@@ -589,85 +805,87 @@ const CreateCampaignScreen: React.FC = () => {
         post_target_genders: isPromoted ? postTargetGenders : undefined,
       };
 
-      console.log('Creating campaign with data:', campaignData);
+      console.log('Prepared campaign data:', campaignData);
 
-      // Create campaign using updated API method
-      const response = await ApiService.uploadPost(campaignData);
-
-      console.log('Campaign creation response:', response);
-
-      if (response.status && response.statusCode === 201) {
-        // Show success message with more details
-        const campaignType = isPromoted ? 'promoted campaign' : 'post';
-        const successMessage = isPromoted
-          ? `Your promoted campaign "${title.trim()}" has been created successfully! It will reach up to ${reachGoal} people over ${durationDays} days.`
-          : `Your post "${title.trim()}" has been created successfully!`;
-
-        Alert.alert(
-          'Campaign Created!',
-          successMessage,
-          [
-            {
-              text: 'View Campaign',
-              onPress: () => {
-                // Navigate to campaign details or posts list
-                navigation.goBack();
-              },
-            },
-            {
-              text: 'Create Another',
-              onPress: () => {
-                // Reset form for another campaign
-                setTitle('');
-                setContent('');
-                setSelectedMediaUri('');
-                setMediaUrl('');
-                setUploadProgress(0);
-              },
-            },
-          ]
-        );
+      // NEW FLOW: For promoted campaigns, process payment FIRST, then create campaign
+      if (isPromoted && totalPay > 0) {
+        console.log('[CreateCampaign] Step 2: Processing payment for promoted campaign');
+        await handlePromotedCampaignPayment(campaignData, uploadedMediaKey);
       } else {
-        throw new Error(response.message || 'Failed to create campaign');
+        // For non-promoted posts, create campaign directly
+        console.log('[CreateCampaign] Step 2: Creating non-promoted campaign');
+        const response = await ApiService.uploadPost(campaignData);
+        console.log('Campaign creation response:', response);
+
+        if (response.status && response.statusCode === 201) {
+          // Show success message for non-promoted posts
+          const successMessage = `Your post "${title.trim()}" has been created successfully!`;
+          Alert.alert(
+            'Post Created!',
+            successMessage,
+            [
+              {
+                text: 'View Post',
+                onPress: () => {
+                  navigation.goBack();
+                },
+              },
+              {
+                text: 'Create Another',
+                onPress: () => {
+                  resetForm();
+                },
+              },
+            ]
+          );
+        } else {
+          throw new Error(response.message || 'Failed to create campaign');
+        }
       }
     } catch (error: any) {
       console.error('Error creating campaign:', error);
 
+      // Cleanup uploaded media when campaign creation fails
+      if (uploadedMediaKey) {
+        console.log('[CreateCampaign] Campaign creation failed, cleaning up uploaded media');
+        await cleanupUploadedMedia(uploadedMediaKey);
+      }
+
       // Enhanced error handling with specific messages
       let errorTitle = 'Campaign Creation Failed';
-      let errorMessage = 'Failed to create your campaign. Please try again.';
+      let errorMessage = 'Failed to create your campaign. The uploaded content has been removed. Please try again.';
 
       if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
+        errorMessage = `${error.response.data.message} The uploaded content has been removed.`;
       } else if (error.message?.includes('Media upload failed')) {
         errorTitle = 'Upload Error';
         errorMessage = 'Failed to upload your video. Please check your internet connection and try again.';
       } else if (error.message?.includes('Missing required fields')) {
         errorTitle = 'Validation Error';
-        errorMessage = 'Please fill in all required fields: title, content, and media file.';
+        errorMessage = 'Please fill in all required fields: title, content, and media file. The uploaded content has been removed.';
       } else if (error.message?.includes('Missing required promotional fields')) {
         errorTitle = 'Promotional Settings Error';
-        errorMessage = 'Please complete all promotional settings: budget, reach goal, and duration.';
+        errorMessage = 'Please complete all promotional settings: budget, reach goal, and duration. The uploaded content has been removed.';
       } else if (error.message?.includes('Missing targeting information')) {
         errorTitle = 'Targeting Error';
-        errorMessage = 'Please select target locations and genders for your promotional campaign.';
+        errorMessage = 'Please select target locations and genders for your promotional campaign. The uploaded content has been removed.';
       } else if (error.message?.includes('Invalid media_type')) {
         errorTitle = 'Media Type Error';
-        errorMessage = 'Invalid media type. Please select a valid video, image, or audio file.';
+        errorMessage = 'Invalid media type. Please select a valid video, image, or audio file. The uploaded content has been removed.';
       } else if (error.message?.includes('Network')) {
         errorTitle = 'Network Error';
-        errorMessage = 'Network connection failed. Please check your internet connection and try again.';
+        errorMessage = 'Network connection failed. Please check your internet connection and try again. The uploaded content has been removed.';
       } else if (error.message?.includes('Authentication')) {
         errorTitle = 'Authentication Error';
-        errorMessage = 'Your session has expired. Please log in again.';
+        errorMessage = 'Your session has expired. Please log in again. The uploaded content has been removed.';
       } else if (error.message?.includes('Budget Error')) {
         errorTitle = 'Budget Error';
-        errorMessage = error.message;
+        errorMessage = `${error.message} The uploaded content has been removed.`;
       } else if (error.message?.includes('Duration Error')) {
         errorTitle = 'Duration Error';
-        errorMessage = error.message;
+        errorMessage = `${error.message} The uploaded content has been removed.`;
       } else if (error.message) {
-        errorMessage = error.message;
+        errorMessage = `${error.message} The uploaded content has been removed.`;
       }
 
       Alert.alert(errorTitle, errorMessage, [

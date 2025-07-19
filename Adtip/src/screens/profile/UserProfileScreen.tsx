@@ -285,7 +285,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
 
   const getFullImageUrl = (url?: string | null): string => {
     if (!url || url === 'null' || url === 'undefined') {
-      return 'https://via.placeholder.com/150';
+      return 'https://avatar.iran.liara.run/public';
     }
     if (url.startsWith('http')) {
       return url;

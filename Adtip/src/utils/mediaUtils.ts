@@ -31,11 +31,11 @@ export const getSecureMediaUrl = async (mediaUrl?: string | null): Promise<strin
   // If it's a Cloudflare URL, generate presigned URL
   if (mediaUrl.startsWith('http://') || mediaUrl.startsWith('https://')) {
     if (isCloudflareUrl(mediaUrl)) {
-      console.log('[MediaUtils] Detected Cloudflare URL, generating presigned URL:', mediaUrl);
+      //console.log('[MediaUtils] Detected Cloudflare URL, generating presigned URL:', mediaUrl);
       try {
         const presignedUrl = await CloudflareUploadService.generatePresignedUrlFromPublicUrl(mediaUrl);
         if (presignedUrl) {
-          console.log('[MediaUtils] Generated presigned URL successfully');
+          //console.log('[MediaUtils] Generated presigned URL successfully');
           return presignedUrl;
         } else {
           console.warn('[MediaUtils] Failed to generate presigned URL, falling back to original');
@@ -102,10 +102,10 @@ export const validateAndFixVideoUrl = async (videoUrl?: string | null): Promise<
 
       // If it's a Cloudflare URL, generate presigned URL
       if (isCloudflareUrl(cleanUrl)) {
-        console.log('[MediaUtils] Cloudflare video URL detected, generating presigned URL');
+        //console.log('[MediaUtils] Cloudflare video URL detected, generating presigned URL');
         const presignedUrl = await CloudflareUploadService.generatePresignedUrlFromPublicUrl(cleanUrl);
         if (presignedUrl) {
-          console.log('[MediaUtils] Generated presigned video URL successfully');
+          //console.log('[MediaUtils] Generated presigned video URL successfully');
           return presignedUrl;
         } else {
           console.warn('[MediaUtils] Failed to generate presigned video URL, using original');
@@ -113,7 +113,7 @@ export const validateAndFixVideoUrl = async (videoUrl?: string | null): Promise<
         }
       }
 
-      console.log('[MediaUtils] Validated external video URL:', url.href);
+      //console.log('[MediaUtils] Validated external video URL:', url.href);
       return url.href;
     } catch (error) {
       console.error('[MediaUtils] Invalid URL format:', cleanUrl, error);
@@ -125,7 +125,7 @@ export const validateAndFixVideoUrl = async (videoUrl?: string | null): Promise<
   try {
     const fullUrl = `${API_BASE_URL}${cleanUrl.startsWith('/') ? '' : '/'}${cleanUrl}`;
     const url = new URL(fullUrl);
-    console.log('[MediaUtils] Constructed video URL:', url.href);
+    //console.log('[MediaUtils] Constructed video URL:', url.href);
     return url.href;
   } catch (error) {
     console.error('[MediaUtils] Failed to construct valid URL:', cleanUrl, error);
@@ -137,7 +137,7 @@ export const validateAndFixVideoUrl = async (videoUrl?: string | null): Promise<
  * Creates a secure video source object for react-native-video with enhanced validation
  */
 export const createSecureVideoSource = async (videoUrl?: string | null) => {
-  console.log('[MediaUtils] Creating secure video source for:', videoUrl);
+  //console.log('[MediaUtils] Creating secure video source for:', videoUrl);
 
   const validatedUrl = await validateAndFixVideoUrl(videoUrl);
 

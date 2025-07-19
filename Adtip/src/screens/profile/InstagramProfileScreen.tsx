@@ -43,7 +43,7 @@ const InstagramProfileScreen: React.FC<InstagramProfileScreenProps> = ({ userId:
   // Helper function for full image URLs
   const getFullImageUrl = useCallback((url?: string | null): string => {
     if (!url || url === 'null' || url === 'undefined') {
-      return 'https://via.placeholder.com/150';
+      return 'https://avatar.iran.liara.run/public';
     }
     if (url.startsWith('http')) {
       return url;

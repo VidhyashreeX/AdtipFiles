@@ -31,6 +31,7 @@ import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataContext } from '../../providers/DataProvider';
 import { useContentCreatorPremium } from '../../contexts/ContentCreatorPremiumContext';
+import { useUserPremiumStatus } from '../../contexts/UserDataContext';
 import { useVideos, useGuestVideos, useSearchVideos, useChannelData } from '../../hooks/useQueries';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { useGuestGuard } from '../../hooks/useGuestGuard';
@@ -55,6 +56,7 @@ import PubScaleCreditAlert from '../../components/common/PubScaleCreditAlert';
 import useSimpleRewardedAd from '../../googleads/SimpleRewardedAd';
 import AnalyticsPremiumAlert from '../../components/alerts/AnalyticsPremiumAlertNew';
 import ModernRewardPopup from '../../components/common/ModernRewardPopup';
+import { TipTubeLogger } from '../../utils/logger';
 
 // Get screen dimensions and create constants
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -473,21 +475,21 @@ const TipTubeScreen = () => {
 
 
   const handleTipTubeSearch = useCallback((query: string) => {
-    console.log('[TipTubeScreen] TipTube search submitted:', query);
+    TipTubeLogger.debug('TipTube search submitted:', query);
     setSearchQuery(query);
     setIsTipTubeSearchActive(false);
     // Clear cache to force fresh search results
     if (query.trim()) {
-      console.log('[TipTubeScreen] Using search API for query:', query.trim());
+      TipTubeLogger.debug('Using search API for query:', query.trim());
       clearCache(`searchVideos-${query.trim()}`);
     } else {
-      console.log('[TipTubeScreen] Using regular videos API');
+      TipTubeLogger.debug('Using regular videos API');
       clearCache(`videos-${categoryId}`);
     }
   }, [categoryId, clearCache]);
 
   const handleTipTubeSearchChange = useCallback((query: string) => {
-    console.log('[TipTubeScreen] TipTube search query changed:', query);
+    TipTubeLogger.debug('TipTube search query changed:', query);
     setSearchQuery(query || '');
   }, []);
 
@@ -503,7 +505,8 @@ const TipTubeScreen = () => {
       userChannelId,
       userId: user?.id,
       hasUserChannelId: !!userChannelId,
-      hasUserId: !!user?.id
+      hasUserId: !!user?.id,
+      channelData: channelData?.data?.[0]
     });
 
     if (isGuest) {
@@ -511,15 +514,31 @@ const TipTubeScreen = () => {
       return;
     }
     if (userChannelId && user?.id) {
-      // Navigate to MyChannel screen for user's own channel
-      console.log('[TipTubeScreen] Navigating to MyChannel for user:', user.id);
-      navigation.navigate('MyChannel');
+      // Navigate to ChannelScreen for user's own channel - use the actual channel name from API
+      const actualChannelData = channelData?.data?.[0];
+      const channelName = actualChannelData?.channelName || user.name || 'My Channel';
+
+      TipTubeLogger.debug('Navigating to ChannelScreen for user', { channelId: userChannelId, channelName });
+      navigation.navigate('Channel', {
+        channelId: userChannelId,
+        channelData: {
+          channelId: userChannelId,
+          channelName: channelName, // Use actual channel name from API
+          profileImage: actualChannelData?.profileImage || user.profile_image,
+          isVerified: actualChannelData?.isVerified || false,
+          createdBy: user.id,
+          description: actualChannelData?.description,
+          totalSubscribers: actualChannelData?.totalSubscribers || 0,
+          totalViews: actualChannelData?.total_ads_view || 0,
+          totalVideos: (actualChannelData?.totalVideos || 0) + (actualChannelData?.totalShorts || 0) + (actualChannelData?.totalReels || 0)
+        }
+      });
     } else {
       // If no channel found, redirect to create channel
-      console.log('[TipTubeScreen] No channel found, redirecting to CreateChannel');
+      TipTubeLogger.debug('No channel found, redirecting to CreateChannel');
       navigation.navigate('CreateChannel');
     }
-  }, [userChannelId, user?.id, isGuest, navigation, showLoginPromptForAction]);
+  }, [userChannelId, user?.id, user?.name, user?.profile_image, channelData, isGuest, navigation, showLoginPromptForAction]);
 
   const handleNavigateToChannel = useCallback((channelData: {
     channelId: string;
@@ -585,12 +604,12 @@ const TipTubeScreen = () => {
     try {
       setOfferwallLoading(true);
       await PubScaleService.showOfferwall();
-      console.log('Offerwall launched successfully');
+      TipTubeLogger.debug('Offerwall launched successfully');
 
       // Show enhanced credit alert after user returns from PubScale
       setShowPubScaleCreditAlert(true);
     } catch (error) {
-      console.error('Failed to show offerwall:', error);
+      TipTubeLogger.error('Failed to show offerwall:', error);
       Alert.alert('Error', 'Failed to load offerwall. Please try again later.', [{ text: 'OK' }]);
     } finally {
       setOfferwallLoading(false);
@@ -606,8 +625,10 @@ const TipTubeScreen = () => {
     navigation.navigate('Wallet' as never);
   }, [navigation]);
 
+  // Get premium status using the same logic as the header toggle
+  const { isPremium } = useUserPremiumStatus();
+
   // Reward ads state
-  const isPremium = user && typeof user.is_premium === 'boolean' ? user.is_premium : false;
   const [videoCount, setVideoCount] = useState(0);
   const [showRewardPopup, setShowRewardPopup] = useState(false);
   const [earnedAmount, setEarnedAmount] = useState(0);
@@ -616,17 +637,17 @@ const TipTubeScreen = () => {
   const handleVideoView = useCallback(() => {
     setVideoCount(prev => {
       const newCount = prev + 1;
-      console.log(`🎬 [TipTube] Video viewed. Count: ${newCount}`);
+      TipTubeLogger.debug(`Video viewed. Count: ${newCount}`);
       // Only show reward ad after exactly 5th video
       if (newCount === 5) {
-        console.log('🎁 [TipTube] 5th video reached! Showing reward ad...');
+        TipTubeLogger.debug('5th video reached! Showing reward ad...');
         // Check if we have ads available
         const hasAds = videos.length > 0;
         if (hasAds) {
           // Show reward ad immediately
           showRewardAd();
         } else {
-          console.log('⚠️ [TipTube] No ads available, skipping reward');
+          TipTubeLogger.warn('No ads available, skipping reward');
         }
         // Reset counter after showing reward
         return 0;
@@ -637,14 +658,14 @@ const TipTubeScreen = () => {
 
   // Show reward ad
   const showRewardAd = useCallback(() => {
-    console.log('🎁 [TipTube] Showing reward ad...');
+    TipTubeLogger.debug('Showing reward ad...');
 
     // Determine reward amount based on premium status
     const rewardAmount = isPremium ? 0.10 : 0.03;
     setEarnedAmount(rewardAmount);
 
     // Show reward popup (production mode)
-    console.log('🎁 [TipTube] Production mode: Showing reward popup');
+    TipTubeLogger.debug('Production mode: Showing reward popup');
     setShowRewardPopup(true);
   }, [isPremium]);
 
@@ -747,7 +768,7 @@ const TipTubeScreen = () => {
         handleVideoView();
       }, 5000);
     } catch (error) {
-      console.error('[TipTubeScreen] Error handling video press:', error);
+      TipTubeLogger.error('Error handling video press:', error);
       Alert.alert('Error', 'There was an issue accessing this video. Please try again later.');
     }
   }, [videos, navigation, isGuest, showLoginPromptForAction, handleVideoView]);
@@ -952,7 +973,7 @@ const TipTubeScreen = () => {
       const selectedVideo = videos.find(v => v.id === selectedVideoId);
       if (selectedVideo && selectedVideo.isPaidPromotional && selectedVideo.contentCreatorPlanId > 0) {
         // Do not autoplay paid videos, wait for user confirmation
-        console.log('[TipTubeScreen] Paid video selected, preventing autoplay until confirmation');
+        TipTubeLogger.debug('Paid video selected, preventing autoplay until confirmation');
         setOpenPlayer(false);
       }
     }
@@ -1201,7 +1222,7 @@ const TipTubeScreen = () => {
         {__DEV__ === true && (
           <TouchableOpacity 
             onPress={() => {
-              console.log('[TipTube] Manual reward ad trigger');
+              TipTubeLogger.debug('Manual reward ad trigger');
               handleVideoView();
             }}
             style={{

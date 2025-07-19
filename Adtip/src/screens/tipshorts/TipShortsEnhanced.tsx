@@ -10,10 +10,8 @@ import {
   SafeAreaView,
   TouchableOpacity,
   ActivityIndicator,
-  Image,
   StyleSheet,
   ViewToken,
-  Share,
   Alert,
   AppState,
 } from 'react-native';
@@ -22,37 +20,31 @@ import Animated, {
   useAnimatedScrollHandler,
   useAnimatedStyle,
   withTiming,
-  withSpring,
   interpolate,
-  Extrapolate,
   runOnJS,
   withSequence,
 } from 'react-native-reanimated';
 import {
   Gesture,
-  GestureDetector,
 } from 'react-native-gesture-handler';
 import { useNavigation, useRoute, RouteProp, useIsFocused } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import Video from 'react-native-video';
-import { Share2 } from 'lucide-react-native';
 
 // Contexts and hooks
 import { useAuth } from '../../contexts/AuthContext';
-import { useTheme } from '../../contexts/ThemeContext';
 import { useShorts } from '../../contexts/ShortsContext';
 import {
   useShortsInfiniteQuery,
   useGuestShortsQuery,
   useLikeShortMutation,
-  useShortsQueryActions,
   useSingleShortQuery,
   SHORTS_QUERY_KEY,
   type ShortVideo as TanStackShortVideo
 } from '../../hooks/useShortsQuery';
 import { useQueryClient } from '@tanstack/react-query';
-import ShortsCardSkeleton from '../../components/skeletons/ShortsCardSkeleton';
+
 import EnhancedShortCard from './components/EnhancedShortCard';
 import LoginPromptModal from '../../components/modals/LoginPromptModal';
 import VideoCommentsModal from '../../components/tiptube/VideoCommentsModal';
@@ -60,6 +52,8 @@ import useVideoRewardAd from '../../hooks/useVideoRewardAd';
 import VideoErrorBoundary from '../../components/common/VideoErrorBoundary';
 import ApiService from '../../services/ApiService';
 import ModernRewardPopup from '../../components/common/ModernRewardPopup';
+import { useUserPremiumStatus } from '../../contexts/UserDataContext';
+import { TipShortsLogger } from '../../utils/logger';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -88,7 +82,7 @@ const ShortsSkeleton = memo(() => {
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(pulseAnimation.value, [0, 1], [0.3, 0.8], Extrapolate.CLAMP),
+    opacity: interpolate(pulseAnimation.value, [0, 1], [0.3, 0.8], 'clamp'),
   }));
 
   return (
@@ -100,8 +94,8 @@ const ShortsSkeleton = memo(() => {
 
 // Main TipShorts Enhanced Component with TanStack Query
 const TipShortsEnhanced = () => {
-  const { colors } = useTheme();
-  const navigation = useNavigation();
+  // const { colors } = useTheme(); // Unused for now
+  const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const route = useRoute<TipShortsRouteProp>();
   const isFocused = useIsFocused(); // ✅ ADDED: Use the hook to track screen focus.
   const { user, isGuest } = useAuth();
@@ -114,11 +108,11 @@ const TipShortsEnhanced = () => {
     setGlobalPlayState
   } = useShorts();
   const insets = useSafeAreaInsets();
-  const isPremium = user && typeof user.is_premium === 'boolean' ? user.is_premium : false;
 
+  // Get premium status using the same logic as the header toggle
+  const { isPremium } = useUserPremiumStatus();
   // Use the custom reward hook
   const {
-    videoCount,
     showRewardPopup,
     earnedAmount,
     handleVideoViewed,
@@ -126,7 +120,6 @@ const TipShortsEnhanced = () => {
     closeRewardPopup,
     showRewardAd,
   } = useVideoRewardAd({
-    isPremium,
     isGuest,
     userId: user?.id,
   });
@@ -137,7 +130,7 @@ const TipShortsEnhanced = () => {
   // Debug logging for route params
   useEffect(() => {
     if (__DEV__) {
-      console.log('[TipShortsEnhanced] Route params:', {
+      TipShortsLogger.debug('Route params:', {
         passedShorts: passedShorts?.length || 0,
         startIndex,
         shortId,
@@ -146,7 +139,7 @@ const TipShortsEnhanced = () => {
 
       // Additional deep link logging
       if (shortId) {
-        console.log('[TipShortsEnhanced] Deep link detected for shortId:', shortId);
+        TipShortsLogger.debug('Deep link detected for shortId:', shortId);
       }
     }
   }, [route.params, passedShorts, startIndex, shortId]);
@@ -180,7 +173,7 @@ const TipShortsEnhanced = () => {
   const singleShortQuery = useSingleShortQuery(shortId ?? null, user?.id?.toString() ?? undefined);
 
   const likeMutation = useLikeShortMutation();
-  const { updateShortLikes } = useShortsQueryActions();
+  // const { updateShortLikes } = useShortsQueryActions(); // Unused for now
 
   // Local states
   const [activeIndex, setActiveIndex] = useState(startIndex);
@@ -256,7 +249,7 @@ const TipShortsEnhanced = () => {
                               short.videoUrl !== 'undefined';
 
       if (!hasValidVideoUrl) {
-        console.warn('[TipShortsEnhanced] Filtering out short with invalid videoUrl:', {
+        TipShortsLogger.warn('Filtering out short with invalid videoUrl:', {
           id: short?.id,
           videoUrl: short?.videoUrl,
           title: short?.title || 'Unknown'
@@ -266,28 +259,29 @@ const TipShortsEnhanced = () => {
       return hasValidVideoUrl;
     });
 
-    console.log(`[TipShortsEnhanced] Filtered ${mergedShorts.length - validShorts.length} shorts with invalid video URLs`);
+    TipShortsLogger.debug(`Filtered ${mergedShorts.length - validShorts.length} shorts with invalid video URLs`);
 
     return validShorts;
   }, [data?.pages, passedShorts, isGuest, shortId, singleShortQuery.data, singleShortQuery.isLoading]);
 
   useEffect(() => {
-    console.log('[TipShortsEnhanced] shorts array:', shorts);
-    console.log('[TipShortsEnhanced] isGuest:', isGuest);
-    console.log('[TipShortsEnhanced] data structure:', data);
-    console.log('[TipShortsEnhanced] isLoading:', isLoading);
-    console.log('[TipShortsEnhanced] error:', error);
+    TipShortsLogger.debug('shorts array:', shorts);
+    TipShortsLogger.debug('isGuest:', isGuest);
+    TipShortsLogger.debug('data structure:', data);
+    TipShortsLogger.debug('isLoading:', isLoading);
+    TipShortsLogger.debug('error:', error);
   }, [shorts, isGuest, data, isLoading, error]);
 
   // Handle video view for reward ads (now using custom hook)
   const handleVideoView = useCallback(() => {
+    TipShortsLogger.debug('Video completed, triggering reward ad check');
     handleVideoViewed();
   }, [handleVideoViewed]);
 
-  // Viewability config for video control
+  // Enhanced viewability config for strict video control
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 50, // Reduced threshold for better responsiveness
-    minimumViewTime: 100,
+    itemVisiblePercentThreshold: 75, // Increased threshold for stricter control
+    minimumViewTime: 50, // Reduced for faster response
     waitForInteraction: false,
   }).current;
 
@@ -299,7 +293,7 @@ const TipShortsEnhanced = () => {
 
       // Debug logging for guest mode
       if (isGuest && __DEV__) {
-        console.log('[TipShortsEnhanced] Guest mode - viewable item changed:', {
+        TipShortsLogger.debug('Guest mode - viewable item changed:', {
           newActiveIndex,
           currentActiveIndex: activeIndex,
           totalShorts: shorts.length,
@@ -309,7 +303,7 @@ const TipShortsEnhanced = () => {
 
       // For guest users, prevent viewing beyond the 5th video (index 4)
       if (isGuest && newActiveIndex >= 5) {
-        console.log('[TipShortsEnhanced] Guest user reached limit, showing login prompt');
+        TipShortsLogger.debug('Guest user reached limit, showing login prompt');
         showLoginPromptForAction('watch more shorts');
         // Scroll back to the 4th video (index 4)
         if (flatListRef.current) {
@@ -322,16 +316,17 @@ const TipShortsEnhanced = () => {
       }
 
       if (newActiveIndex !== activeIndex) {
-        console.log('[TipShortsEnhanced] Updating activeIndex from', activeIndex, 'to', newActiveIndex);
+        TipShortsLogger.debug(`Updating activeIndex from ${activeIndex} to ${newActiveIndex}`);
         setActiveIndex(newActiveIndex);
-        handleVideoView(); // Increment video count on view change
+        // Note: Video view counting is now handled only on video completion, not on scroll
+        // This prevents double counting when user scrolls and video completes
       }
     }
   }).current;
 
   // Handle video load
   const handleVideoLoad = useCallback((videoId: string) => {
-    console.log('[TipShorts] Video loaded:', videoId);
+    TipShortsLogger.debug('Video loaded:', videoId);
   }, []);
 
   // Optimized scroll handler
@@ -363,7 +358,7 @@ const TipShortsEnhanced = () => {
         isLiked: !isCurrentlyLiked,
       });
     } catch (error) {
-      console.error('Error liking short:', error);
+      TipShortsLogger.error('Error liking short:', error);
     }
   }, [user?.id, isGuest, likeMutation, showLoginPromptForAction]);
 
@@ -378,7 +373,7 @@ const TipShortsEnhanced = () => {
       channelData: {
         channelId: channelData.id,
         channelName: channelData.name,
-        profileImage: channelData.avatar,
+        profileImage: channelData.avatar || 'https://avatar.iran.liara.run/public',
         isVerified: false
       }
     });
@@ -430,9 +425,17 @@ const TipShortsEnhanced = () => {
         userId: Number(user.id),
         follow: 1 // 1 to follow, 0 to unfollow
       });
-      console.log('Follow response:', response);
+      TipShortsLogger.debug('Follow response:', response);
+
+      // Show success message based on response
+      if (response?.message) {
+        TipShortsLogger.debug('Follow action completed:', response.message);
+        // You can add a toast notification here if needed
+      }
     } catch (error) {
-      console.error('Error following channel:', error);
+      TipShortsLogger.error('Error following channel:', error);
+      // Show error message to user
+      Alert.alert('Error', 'Failed to follow channel. Please try again.');
     }
   }, [user?.id, isGuest, showLoginPromptForAction]);
 
@@ -510,10 +513,10 @@ const TipShortsEnhanced = () => {
   // ✅ REPLACED: Use `useIsFocused` for reliable playback control.
   useEffect(() => {
     if (isFocused) {
-      console.log('[TipShorts] Screen is focused - resuming playback.');
+      TipShortsLogger.debug('Screen is focused - resuming playback.');
       setGlobalPlayState(true);
     } else {
-      console.log('[TipShorts] Screen is NOT focused - pausing playback.');
+      TipShortsLogger.debug('Screen is NOT focused - pausing playback.');
       setGlobalPlayState(false);
     }
   }, [isFocused, setGlobalPlayState]);
@@ -521,13 +524,13 @@ const TipShortsEnhanced = () => {
   // Handle app state changes (background/foreground)
   useEffect(() => {
     const handleAppStateChange = (nextAppState: string) => {
-      console.log('[TipShorts] App state changed to:', nextAppState);
+      TipShortsLogger.debug('App state changed to:', nextAppState);
       if (nextAppState === 'background' || nextAppState === 'inactive') {
-        console.log('[TipShorts] App backgrounded - pausing audio');
+        TipShortsLogger.debug('App backgrounded - pausing audio');
         setGlobalPlayState(false);
       } else if (nextAppState === 'active' && isFocused) {
         // Only resume if the app is active AND this screen is focused.
-        console.log('[TipShorts] App foregrounded and screen focused - resuming audio');
+        TipShortsLogger.debug('App foregrounded and screen focused - resuming audio');
         setGlobalPlayState(true);
       }
     };
@@ -539,17 +542,25 @@ const TipShortsEnhanced = () => {
     };
   }, [isFocused, setGlobalPlayState]);
 
+  // Cleanup effect to ensure audio stops when component unmounts
+  useEffect(() => {
+    return () => {
+      TipShortsLogger.debug('Component unmounting - stopping all audio');
+      setGlobalPlayState(false);
+    };
+  }, [setGlobalPlayState]);
+
 
   // Implement scroll to specific short for deep linking
   const scrollToShort = useCallback((id: string) => {
     if (!id || !shorts || shorts.length === 0 || !flatListRef.current) {
-      console.warn('[TipShortsEnhanced] Cannot scroll to short: missing data or refs');
+      TipShortsLogger.warn('Cannot scroll to short: missing data or refs');
       return;
     }
 
     const index = shorts.findIndex(s => s.id === id);
     if (index !== -1) {
-      console.log(`[TipShortsEnhanced] Scrolling to short ${id} at index ${index}`);
+      TipShortsLogger.debug(`Scrolling to short ${id} at index ${index}`);
       setActiveIndex(index);
       try {
         flatListRef.current.scrollToIndex({
@@ -557,7 +568,7 @@ const TipShortsEnhanced = () => {
           animated: true, // Changed to true for better UX
         });
       } catch (error) {
-        console.warn('[TipShortsEnhanced] Error scrolling to index:', error);
+        TipShortsLogger.warn('Error scrolling to index:', error);
         // Fallback to offset-based scrolling
         flatListRef.current.scrollToOffset({
           offset: index * SCREEN_HEIGHT,
@@ -565,7 +576,7 @@ const TipShortsEnhanced = () => {
         });
       }
     } else {
-      console.warn(`[TipShortsEnhanced] Short with id ${id} not found in the current list.`);
+      TipShortsLogger.warn(`Short with id ${id} not found in the current list.`);
       // This should not happen anymore since we prepend deep-linked shorts to the list
     }
   }, [shorts]);
@@ -579,16 +590,16 @@ const TipShortsEnhanced = () => {
       if (shortIndex !== -1) {
         // If found, scroll to it with a small delay to ensure the list is fully rendered
         const timer = setTimeout(() => {
-          console.log(`[TipShortsEnhanced] Deep link found at index ${shortIndex}, scrolling to short ${shortId}`);
+          TipShortsLogger.debug(`Deep link found at index ${shortIndex}, scrolling to short ${shortId}`);
           scrollToShort(shortId);
         }, 100);
 
         return () => clearTimeout(timer);
       } else if (singleShortQuery.isLoading) {
         // Still loading the specific short, wait for it
-        console.log('[TipShortsEnhanced] Still loading deep-linked short, waiting...');
+        TipShortsLogger.debug('Still loading deep-linked short, waiting...');
       } else if (singleShortQuery.error) {
-        console.warn('[TipShortsEnhanced] Failed to load deep-linked short:', singleShortQuery.error);
+        TipShortsLogger.warn('Failed to load deep-linked short:', singleShortQuery.error);
       }
     }
   }, [shortId, scrollToShort, shorts.length, shorts, singleShortQuery.isLoading, singleShortQuery.error]);
@@ -596,7 +607,7 @@ const TipShortsEnhanced = () => {
   // Defensive: If shorts is empty after deep link, trigger a refetch
   useEffect(() => {
     if ((!shorts || shorts.length === 0) && !isLoading && !error) {
-      console.log('[TipShortsEnhanced] No shorts available, triggering refetch');
+      TipShortsLogger.debug('No shorts available, triggering refetch');
       refetch();
     }
   }, [shorts, isLoading, error, refetch]);
@@ -651,8 +662,8 @@ const TipShortsEnhanced = () => {
           <VideoErrorBoundary
             key={`video-error-boundary-${item.id}`}
             onError={(error, errorInfo) => {
-              console.error(`[TipShortsEnhanced] Video error for short ${item.id}:`, error);
-              console.error('[TipShortsEnhanced] Error info:', errorInfo);
+              TipShortsLogger.error(`Video error for short ${item.id}:`, error);
+              TipShortsLogger.error('Error info:', errorInfo);
             }}
           >
             <EnhancedShortCard
@@ -733,7 +744,7 @@ const TipShortsEnhanced = () => {
           {/* Test button for reward ads */}
           <TouchableOpacity
             onPress={() => {
-              console.log('[TipShorts] Manual reward ad trigger');
+              TipShortsLogger.debug('Manual reward ad trigger');
               showRewardAd();
             }}
             style={{

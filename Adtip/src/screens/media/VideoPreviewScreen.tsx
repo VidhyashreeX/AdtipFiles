@@ -14,6 +14,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { Play, Pause } from 'lucide-react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Orientation from 'react-native-orientation-locker';
+import ApiService from '../../services/ApiService';
 
 const VideoPreviewScreen = () => {
   const navigation = useNavigation();
@@ -44,23 +45,26 @@ const VideoPreviewScreen = () => {
         return;
       }
       try {
-        // This is a placeholder for your actual API call to get post details
-        // You should replace this with a call to your ApiService
-        // For example: const response = await ApiService.get(`/posts/${postId}`);
-        // const videoUrl = response.data.videoUrl;
-        
-        // Using a placeholder API for demonstration
-        const response = await fetch(`https://api.adtip.in/api/getpostdetails/${postId}`);
-        const data = await response.json();
+        // Use the correct API endpoint that exists in the backend
+        console.log('[VideoPreview] Fetching post details for postId:', postId);
+        const response = await ApiService.getSinglePost(postId);
+        console.log('[VideoPreview] API response:', response);
 
-        if (data && data.data && data.data.media_url) {
-          let videoUrl = data.data.media_url;
-          if (!videoUrl.startsWith('http')) {
-            videoUrl = `https://api.adtip.in${videoUrl}`;
+        if (response && response.data && response.data.length > 0) {
+          const post = response.data[0];
+          if (post.media_url) {
+            let videoUrl = post.media_url;
+            // Handle both relative and absolute URLs
+            if (!videoUrl.startsWith('http')) {
+              videoUrl = `https://api.adtip.in${videoUrl}`;
+            }
+            console.log('[VideoPreview] Setting video URL:', videoUrl);
+            setUri(videoUrl);
+          } else {
+            throw new Error('Video URL not found in post data.');
           }
-          setUri(videoUrl);
         } else {
-          throw new Error('Video URL not found in API response.');
+          throw new Error('Post not found or no data returned.');
         }
       } catch (error) {
         console.error('Failed to fetch video details:', error);

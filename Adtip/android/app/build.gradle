@@ -55,7 +55,7 @@ react {
     /* Production Bundle Optimization */
     bundleCommand = "bundle"
     extraPackagerArgs = [
-        "--minify",
+        //"--minify",
         "--reset-cache"
     ]
 

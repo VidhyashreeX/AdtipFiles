@@ -283,7 +283,7 @@ class CloudflareUploadService {
 
       // For large videos, use presigned URL upload method
       if (isVideo && fileInfo.size > UPLOAD_CONFIG.VIDEO_PRESIGNED_THRESHOLD) {
-        console.log('[CloudflareUpload] Large video detected, using presigned URL method');
+        //console.log('[CloudflareUpload] Large video detected, using presigned URL method');
         return this.uploadVideoWithPresignedUrl(filePath, folder, fileName, userId, onProgress);
       }
       
@@ -718,10 +718,10 @@ class CloudflareUploadService {
       // Extract the key (path without leading slash)
       const key = url.pathname.startsWith('/') ? url.pathname.slice(1) : url.pathname;
 
-      console.log('[CloudflareUpload] Extracted key from URL:', {
+      /* console.log('[CloudflareUpload] Extracted key from URL:', {
         originalUrl: cloudflareUrl,
         extractedKey: key
-      });
+      });*/
 
       return key || null;
     } catch (error) {
@@ -750,7 +750,7 @@ class CloudflareUploadService {
       const cached = this.presignedUrlCache.get(cacheKey);
 
       if (cached && cached.expiresAt > Date.now()) {
-        console.log('[CloudflareUpload] Using cached presigned URL for key:', key);
+        //console.log('[CloudflareUpload] Using cached presigned URL for key:', key);
         return cached.url;
       }
 
@@ -766,7 +766,7 @@ class CloudflareUploadService {
           expiresAt
         });
 
-        console.log('[CloudflareUpload] Generated and cached presigned URL for key:', key);
+        //console.log('[CloudflareUpload] Generated and cached presigned URL for key:', key);
       }
 
       return presignedUrl;

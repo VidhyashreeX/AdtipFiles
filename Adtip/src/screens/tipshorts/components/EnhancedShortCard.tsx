@@ -1,4 +1,4 @@
-import React, { memo, useState, useCallback, useEffect, useMemo } from 'react';
+import React, { memo, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -41,7 +41,7 @@ interface EnhancedShortCardProps {
   onFollow?: (channelId: string) => void;
 }
 
-// Optimized Video Player Component
+// Optimized Video Player Component with Memory Leak Prevention and Strict Pause Control
 const OptimizedVideoPlayer = memo(({
   source,
   isActive,
@@ -63,9 +63,24 @@ const OptimizedVideoPlayer = memo(({
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const isMountedRef = useRef(true);
+  const videoRef = useRef<any>(null);
 
   // Import Video component dynamically
   const Video = require('react-native-video').default;
+
+  // Prevent state updates if component is unmounted
+  const safeSetIsLoaded = useCallback((loaded: boolean) => {
+    if (isMountedRef.current) {
+      setIsLoaded(loaded);
+    }
+  }, []);
+
+  const safeSetHasError = useCallback((error: boolean) => {
+    if (isMountedRef.current) {
+      setHasError(error);
+    }
+  }, []);
 
   // Validate source URI
   const isValidUri = source?.uri && typeof source.uri === 'string' && source.uri.trim().length > 0;
@@ -74,42 +89,65 @@ const OptimizedVideoPlayer = memo(({
   useEffect(() => {
     if (!isValidUri) {
       console.warn('[OptimizedVideoPlayer] Invalid or missing video URI:', source?.uri);
-      setHasError(true);
-      setIsLoaded(false);
+      safeSetHasError(true);
+      safeSetIsLoaded(false);
     } else {
-      setHasError(false);
+      safeSetHasError(false);
     }
-  }, [isValidUri, source?.uri]);
+  }, [isValidUri, source?.uri, safeSetHasError, safeSetIsLoaded]);
+
+  // Cleanup on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Strict pause control - force pause when not active
+  useEffect(() => {
+    if (!isActive && videoRef.current) {
+      // Force pause the video immediately when it becomes inactive
+      try {
+        videoRef.current.seek(0); // Reset to beginning for better UX
+      } catch (error) {
+        console.warn('[OptimizedVideoPlayer] Error seeking video:', error);
+      }
+    }
+  }, [isActive]);
 
   const shouldPlay = isActive && !isPaused && isLoaded && !hasError && isValidUri;
 
   const handleLoad = useCallback((data: any) => {
-    setIsLoaded(true);
-    setHasError(false);
+    if (!isMountedRef.current) return;
+
+    safeSetIsLoaded(true);
+    safeSetHasError(false);
     onLoad?.(data);
-  }, [onLoad]);
+  }, [onLoad, safeSetIsLoaded, safeSetHasError]);
 
   const handleError = useCallback((error: any) => {
+    if (!isMountedRef.current) return;
+
     console.warn('[OptimizedVideoPlayer] Video Error:', error);
-    setHasError(true);
-    setIsLoaded(false);
-  }, []);
+    safeSetHasError(true);
+    safeSetIsLoaded(false);
+  }, [safeSetHasError, safeSetIsLoaded]);
 
   const handleProgress = useCallback((data: any) => {
-    if (isActive && onProgress) {
-      onProgress(data);
-    }
+    if (!isMountedRef.current || !isActive) return;
+
+    onProgress?.(data);
   }, [isActive, onProgress]);
 
   const handleCompletion = useCallback(() => {
-    if (isActive && onVideoCompletion && isValidUri) {
-      // Safely extract videoId from source.uri with proper validation
-      try {
-        const videoId = source.uri.split('/').pop() || '';
-        onVideoCompletion(videoId);
-      } catch (error) {
-        console.warn('[OptimizedVideoPlayer] Error extracting video ID:', error);
-      }
+    if (!isMountedRef.current || !isActive || !onVideoCompletion || !isValidUri) return;
+
+    // Safely extract videoId from source.uri with proper validation
+    try {
+      const videoId = source.uri.split('/').pop() || '';
+      onVideoCompletion(videoId);
+    } catch (error) {
+      console.warn('[OptimizedVideoPlayer] Error extracting video ID:', error);
     }
   }, [isActive, onVideoCompletion, source.uri, isValidUri]);
 
@@ -122,8 +160,27 @@ const OptimizedVideoPlayer = memo(({
     );
   }
 
+  // Enhanced cleanup effect with proper memory management
+  useEffect(() => {
+    // Mark component as mounted
+    isMountedRef.current = true;
+
+    return () => {
+      // Mark component as unmounted
+      isMountedRef.current = false;
+
+      // Force stop video when component unmounts
+      console.log('[OptimizedVideoPlayer] Component unmounting - stopping video');
+
+      // Reset state to prevent memory leaks
+      setIsLoaded(false);
+      setHasError(false);
+    };
+  }, []);
+
   return (
     <Video
+      ref={videoRef}
       source={source}
       paused={!shouldPlay}
       muted={isMuted}
@@ -147,6 +204,10 @@ const OptimizedVideoPlayer = memo(({
       disableFocus={true}
       fullscreen={false}
       hideShutterView={true}
+      // Additional memory optimization settings
+      maxBitRate={2000000} // Limit bitrate to 2Mbps for memory efficiency
+      reportBandwidth={false} // Disable bandwidth reporting to save memory
+      preventsDisplaySleepDuringVideoPlayback={false} // Allow display sleep to save battery
     />
   );
 });

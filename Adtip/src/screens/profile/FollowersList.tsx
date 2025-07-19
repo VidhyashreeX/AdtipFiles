@@ -53,7 +53,7 @@ const FollowersList: React.FC<FollowersListProps> = (props) => {
   const [loggedInUserFollowStatus, setLoggedInUserFollowStatus] = useState<Record<string, boolean>>({});
 
   // Default profile image
-  const DEFAULT_PROFILE_IMAGE = 'https://via.placeholder.com/150';
+  const DEFAULT_PROFILE_IMAGE = 'https://avatar.iran.liara.run/public';
 
   // Helper function for full image URLs
   const getFullImageUrl = (url?: string | null): string => {

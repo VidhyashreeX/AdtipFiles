@@ -50,6 +50,26 @@ const VideoCard: React.FC<VideoCardProps> = ({
     return count.toString();
   };
 
+  // Format duration from seconds to MM:SS or HH:MM:SS format
+  const formatDuration = (durationInSeconds: number | string): string => {
+    const totalSeconds = typeof durationInSeconds === 'string'
+      ? parseInt(durationInSeconds, 10)
+      : durationInSeconds;
+
+    if (isNaN(totalSeconds) || totalSeconds <= 0) {
+      return '0:00';
+    }
+
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
   return (
     <TouchableOpacity
       style={[styles.container, {backgroundColor: colors.white}]}
@@ -80,7 +100,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
           />
         )}
         <View style={styles.durationContainer}>
-          <Text style={styles.duration}>{String(duration)}</Text>
+          <Text style={styles.duration}>{formatDuration(duration)}</Text>
         </View>
         {isPremium && (
           <View

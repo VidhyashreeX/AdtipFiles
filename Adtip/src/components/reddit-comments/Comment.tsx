@@ -73,7 +73,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
         {/* Profile Image */}
         <Image
           source={{ 
-            uri: profileImage || 'https://via.placeholder.com/32x32.png?text=U' 
+            uri: profileImage || 'https://avatar.iran.liara.run/public' 
           }}
           style={[styles.profileImage, depth > 0 && styles.replyProfileImage]}
         />

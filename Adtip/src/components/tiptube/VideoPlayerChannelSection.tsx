@@ -103,9 +103,33 @@ const VideoPlayerChannelSection: React.FC<ChannelSectionProps> = ({
 
   useEffect(() => {
     checkFollowStatus();
-    // Set a placeholder subscriber count
-    setSubscriberCount(Math.floor(Math.random() * 10000) + 100);
-  }, [checkFollowStatus]);
+    // Get real subscriber count from video data or API
+    if (video?.subscriberCount !== undefined) {
+      setSubscriberCount(video.subscriberCount);
+    } else if (video?.channelId) {
+      // Fetch real subscriber count from channel API
+      fetchChannelSubscriberCount();
+    } else {
+      // Fallback to 0 if no data available
+      setSubscriberCount(0);
+    }
+  }, [checkFollowStatus, video?.subscriberCount, video?.channelId]);
+
+  // Fetch real subscriber count from channel API
+  const fetchChannelSubscriberCount = useCallback(async () => {
+    if (!video?.channelId) return;
+
+    try {
+      const response = await ApiService.get(`/api/channel/${video.channelId}/${user?.id || 0}`);
+      if (response?.data) {
+        const channelData = Array.isArray(response.data) ? response.data[0] : response.data;
+        setSubscriberCount(channelData?.totalSubscribers || 0);
+      }
+    } catch (error) {
+      console.error('[VideoPlayerChannelSection] Error fetching subscriber count:', error);
+      setSubscriberCount(0);
+    }
+  }, [video?.channelId, user?.id]);
 
   const styles = createStyles(colors, isDarkMode);
 
@@ -118,7 +142,7 @@ const VideoPlayerChannelSection: React.FC<ChannelSectionProps> = ({
         activeOpacity={0.8}
       >
         <Image
-          source={{ uri: video.avatar || "https://via.placeholder.com/48.png?text=CH" }}
+          source={{ uri: video.avatar || "https://avatar.iran.liara.run/public" }}
           style={styles.channelAvatar}
         />
 

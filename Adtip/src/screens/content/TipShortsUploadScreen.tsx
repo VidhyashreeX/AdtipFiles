@@ -704,9 +704,47 @@ const TipShortsUploadScreen: React.FC = () => {
     return null;
   };
 
+  // Check all required permissions before upload
+  const checkAllPermissions = async (): Promise<boolean> => {
+    try {
+      console.log('[TipShortsUpload] Checking all required permissions before upload');
+
+      // Check storage permission (required for video access)
+      const hasStoragePermission = await requestStoragePermission();
+      if (!hasStoragePermission) {
+        Alert.alert(
+          'Storage Permission Required',
+          'Storage access is required to upload videos. Please grant permission and try again.',
+          [{ text: 'OK' }]
+        );
+        return false;
+      }
+
+      // If user wants to record new video, check camera/mic permissions
+      // This is optional since they might only upload existing videos
+      console.log('[TipShortsUpload] All required permissions granted');
+      return true;
+    } catch (error) {
+      console.error('[TipShortsUpload] Error checking permissions:', error);
+      Alert.alert(
+        'Permission Error',
+        'Failed to check permissions. Please try again.',
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+  };
+
   // Main upload function
   const handleUpload = async () => {
     try {
+      // Step 0: Check all required permissions
+      console.log('[TipShortsUpload] Step 0: Checking permissions');
+      const hasPermissions = await checkAllPermissions();
+      if (!hasPermissions) {
+        return;
+      }
+
       // Enhanced validation
       const validationError = validateUploadData();
       if (validationError) {

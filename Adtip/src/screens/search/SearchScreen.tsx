@@ -18,6 +18,7 @@ import {useSearchUsers} from '../../hooks/useQueries';
 import {useAuth} from '../../contexts/AuthContext';
 import {useNavigation} from '@react-navigation/native';
 import {getUserProfileColor, getInitials} from '../../utils/colorUtils';
+import { SearchFlatList } from '../../components/common/OptimizedFlatList';
 import {API_BASE_URL} from '../../constants/api';
 
 
@@ -201,12 +202,12 @@ const SearchScreen: React.FC = () => {
             </Text>
           </View>
         ) : users.length > 0 ? (
-          <FlatList
+          <SearchFlatList
             data={users}
             renderItem={renderUserItem}
-            keyExtractor={(item) => `user-${item.id}`}
+            idField="id"
+            debugName="SearchUsers"
             style={styles.usersList}
-            showsVerticalScrollIndicator={false}
             onEndReached={loadMoreUsers}
             onEndReachedThreshold={0.3}
             ListFooterComponent={renderFooter}

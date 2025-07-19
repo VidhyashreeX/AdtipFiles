@@ -676,7 +676,7 @@ const VideoScreen = () => {
           <View style={[styles.channelContainer, {borderColor: colors.border}]}>
             <View style={styles.channelInfo}>
               <Image
-                source={{uri: video.user?.avatarUrl || video.channel_profile || 'https://via.placeholder.com/40'}}
+                source={{uri: video.user?.avatarUrl || video.channel_profile || 'https://avatar.iran.liara.run/public'}}
                 style={styles.channelImage}
               />
               <View style={styles.channelText}>

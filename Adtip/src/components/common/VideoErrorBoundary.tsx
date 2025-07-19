@@ -1,6 +1,7 @@
 import React, { Component, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import Logger from '../../utils/logger';
 
 interface Props {
   children: ReactNode;
@@ -26,8 +27,8 @@ class VideoErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: any) {
     // Log the error
-    console.error('[VideoErrorBoundary] Video component error:', error);
-    console.error('[VideoErrorBoundary] Error info:', errorInfo);
+    Logger.error('VideoErrorBoundary', 'Video component error:', error);
+    Logger.error('VideoErrorBoundary', 'Error info:', errorInfo);
     
     // Call optional error handler
     this.props.onError?.(error, errorInfo);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 import AdRotationService from '../services/AdRotationService';
 
@@ -27,10 +27,10 @@ const RectangleAdComponent = () => {
 
     // Enhanced error logging for debugging
     if (error.code === 'no-fill') {
-      console.log('🎯 [RectangleAd] No-fill error - this is normal for new ad units');
-      console.log('📊 [RectangleAd] Ad inventory will improve over time');
+      //console.log('🎯 [RectangleAd] No-fill error - this is normal for new ad units');
+      //console.log('📊 [RectangleAd] Ad inventory will improve over time');
     } else {
-      console.log('❌ [RectangleAd] Other ad error:', error.code, error.message);
+      //console.log('❌ [RectangleAd] Other ad error:', error.code, error.message);
     }
 
     // If we've tried the current network enough times, switch to next network

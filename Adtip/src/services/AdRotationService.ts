@@ -1,5 +1,3 @@
-import { Platform } from 'react-native';
-
 // Ad Network Configuration
 export interface AdNetwork {
   name: string;

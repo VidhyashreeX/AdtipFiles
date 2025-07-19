@@ -3,23 +3,15 @@
  */
 
 // Base URL for API calls
-export const API_BASE_URL = 'https://api.adtip.in';   // Your production URL   // local URL : http://localhost:7082  //PROD
-//export const API_BASE_URL = 'http://192.168.1.178:7082';   // Development URL   // local URL : http://localhost:7082  //PROD
-//export const API_BASE_URL = 'http://192.168.0.104:7082';   // Your production URL   // local URL : http://localhost:7082  //PROD
-
-
-
+//export const API_BASE_URL = 'https://api.adtip.in';   // Production URL
+export const API_BASE_URL = 'http://192.168.1.178:7082';   // DEV URL
+//export const API_BASE_URL = 'http://192.168.0.104:7082';   // DEV URL
 
 // Firebase Cloud Functions URL for call notifications
 export const FCM_SERVER_URL = "https://us-central1-adtip-3873c.cloudfunctions.net/callApi";
 
 // Timeout for API calls (in milliseconds)
 export const API_TIMEOUT = 30000;
-
-// External service URLs
-// Commented out PubScale integration - June 2, 2025
-// export const PUBSCALE_BASE_URL = 'https://wow.pubscale.com';
-// export const PUBSCALE_APP_ID = '39604779';
 
 // PubScale integration
 export const PUBSCALE_APP_ID = '39604779';
