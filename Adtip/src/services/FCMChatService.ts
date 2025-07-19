@@ -137,17 +137,10 @@ class FCMChatService {
         await this.updateFCMToken(fcmToken);
       }
 
-      // Handle foreground messages
-      this.fcmUnsubscribe = messaging().onMessage(async (remoteMessage) => {
-        console.log('[FCMChatService] Foreground FCM message:', remoteMessage);
-        await this.handleFCMMessage(remoteMessage);
-      });
-
-      // Handle background messages (app in background but not killed)
-      messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-        console.log('[FCMChatService] Background FCM message:', remoteMessage);
-        await this.handleFCMMessage(remoteMessage);
-      });
+      // FCM message handling is now centralized in FCMMessageRouter
+      // Foreground and background handlers are disabled to prevent conflicts
+      // Messages will be routed to this service via handleFCMMessageFromRouter()
+      console.log('[FCMChatService] FCM message handling delegated to FCMMessageRouter');
 
       // Handle notification opened app
       messaging().onNotificationOpenedApp((remoteMessage) => {
@@ -556,6 +549,25 @@ class FCMChatService {
    */
   isServiceInitialized(): boolean {
     return this.isInitialized;
+  }
+
+  /**
+   * Public method to handle FCM messages (called by FCMMessageRouter)
+   * This enables the router to delegate chat messages to this service
+   */
+  public async handleFCMMessageFromRouter(remoteMessage: FirebaseMessagingTypes.RemoteMessage): Promise<void> {
+    if (!this.isInitialized) {
+      console.warn('[FCMChatService] Service not initialized, cannot handle FCM message');
+      return;
+    }
+
+    try {
+      console.log('[FCMChatService] Handling FCM message via router:', remoteMessage.data);
+      await this.handleFCMMessage(remoteMessage);
+    } catch (error) {
+      console.error('[FCMChatService] Error handling FCM message via router:', error);
+      // Don't throw to prevent breaking the router
+    }
   }
 }
 

@@ -132,16 +132,16 @@ class ReliableCallManager {
 
   /**
    * Set up FCM message listeners with proper error handling
+   * Note: Foreground handler is now managed by FCMMessageRouter to prevent conflicts
    */
   private async setupFCMListeners(): Promise<void> {
     try {
-      // Foreground message handler
-      this.fcmUnsubscribe = messaging().onMessage(async (remoteMessage) => {
-        await this.handleFCMMessage(remoteMessage, 'foreground')
-      })
+      // Foreground message handler is now managed by FCMMessageRouter
+      // This prevents conflicts with chat FCM handling
+      // Messages will be routed to this service via FCMMessageRouter
 
       // Background message handler is set in index.js
-      console.log('[ReliableCallManager] FCM listeners set up')
+      console.log('[ReliableCallManager] FCM listeners delegated to FCMMessageRouter')
     } catch (error) {
       console.error('[ReliableCallManager] Failed to set up FCM listeners:', error)
     }

@@ -63,50 +63,24 @@ global.resolveForegroundService = () => {
 
 // CallEventTask removed - using simplified calling flow
 
-// Enhanced background message handler with centralized call management
+// Enhanced background message handler with centralized FCM routing
+// Uses FCMMessageRouter to coordinate between call and chat messages
 messaging().setBackgroundMessageHandler(async remoteMessage => {
   console.log('[Index] Background message received:', remoteMessage);
 
   try {
-    // Check if this is a call-related message
-    // Handle both new format (info field) and legacy format (direct type)
-    let isCallMessage = false;
-    let messageType = null;
-    let callData = null;
+    // Use FCMMessageRouter to handle all FCM messages
+    // This preserves existing call functionality while adding chat support
+    const { FCMMessageRouter } = await import('./src/services/FCMMessageRouter');
+    const router = FCMMessageRouter.getInstance();
 
-    if (remoteMessage.data?.info) {
-      try {
-        const parsedInfo = JSON.parse(remoteMessage.data.info);
-        messageType = parsedInfo.type;
-        callData = parsedInfo;
-        isCallMessage = ['CALL_INITIATED', 'CALL_INITIATE', 'CALL_ACCEPT', 'CALL_ACCEPTED', 'CALL_END', 'CALL_ENDED'].includes(messageType);
-      } catch (e) {
-        console.warn('[Index] Failed to parse info field:', e);
-      }
-    } else if (remoteMessage.data?.type) {
-      messageType = remoteMessage.data.type;
-      callData = remoteMessage.data;
-      isCallMessage = ['CALL_INITIATE', 'CALL_ACCEPT', 'CALL_END'].includes(messageType);
-    }
+    // Initialize router if needed
+    await router.initialize();
 
-    console.log('[Index] Message analysis:', { isCallMessage, messageType });
+    // Route message to appropriate handler (call or chat)
+    await router.routeMessage(remoteMessage, 'background');
+    console.log('[Index] Background message routed successfully');
 
-    if (isCallMessage) {
-      // Use existing ReliableCallManager (temporarily disabled new services)
-      const { ReliableCallManager } = await import('./src/services/calling/ReliableCallManager');
-      const callManager = ReliableCallManager.getInstance();
-
-      if (!callManager.isReady()) {
-        await callManager.initialize();
-      }
-
-      await callManager.handleFCMMessage(remoteMessage, 'background');
-      console.log('[Index] Background call message processed');
-
-      return Promise.resolve();
-    }
-
-    console.log('[Index] Non-call background message ignored');
     return Promise.resolve();
   } catch (error) {
     console.error('[Index] Error processing background message:', error);

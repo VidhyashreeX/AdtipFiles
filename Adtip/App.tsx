@@ -73,6 +73,7 @@ import AppErrorBoundary from './src/components/common/AppErrorBoundary';
 
 import { RootStackParamList } from 'src/types/navigation';
 import useReliableCallManager from './src/hooks/useReliableCallManager';
+import useFCMMessageRouter from './src/hooks/useFCMMessageRouter';
 
 // Import call store (simplified)
 import { useCallStore } from './src/stores/callStoreSimplified';
@@ -325,6 +326,9 @@ function App(): React.JSX.Element {
 
   // Add reliable call manager for FCM call handling
   useReliableCallManager();
+
+  // Add centralized FCM message router for both call and chat messages
+  useFCMMessageRouter();
 
   // Initialize background call handler and CallKeep (non-blocking) - RE-ENABLED WITH FIXES
   useEffect(() => {
