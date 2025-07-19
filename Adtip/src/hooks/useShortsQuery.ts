@@ -143,13 +143,7 @@ export function useShortsQueryActions() {
     });
   }, [queryClient]);
 
-  const prefetchNextPage = useCallback((userId: string, currentPage: number) => {
-    return queryClient.prefetchQuery({
-      queryKey: [SHORTS_QUERY_KEY, userId, currentPage + 1],
-      queryFn: () => fetchShortsPage(currentPage + 1, userId),
-      staleTime: 5 * 60 * 1000,
-    });
-  }, [queryClient]);
+
 
   const updateShortLikes = useCallback((userId: string, shortId: string, newLikes: number) => {
     queryClient.setQueryData([SHORTS_QUERY_KEY, userId], (oldData: any) => {
@@ -170,7 +164,6 @@ export function useShortsQueryActions() {
 
   return {
     invalidateShorts,
-    prefetchNextPage,
     updateShortLikes,
   };
 }

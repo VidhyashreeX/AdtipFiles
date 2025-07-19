@@ -1074,33 +1074,7 @@ export const useFollowUserMutation = () => {
   });
 };
 
-// Prefetch data for better performance
-export const usePrefetchData = () => {
-  const prefetchPosts = (category: number, userId?: number) => {
-    queryClient.prefetchInfiniteQuery({
-      queryKey: ['posts', category, userId],
-      queryFn: async ({ pageParam }) => {
-        const page = pageParam as number;
-        return ApiService.listPosts({
-          category,
-          page,
-          limit: 10,
-          loggined_user_id: userId || 0
-        });
-      },
-      initialPageParam: 1,
-    });
-  };
 
-  const prefetchProfile = (userId: number) => {
-    queryClient.prefetchQuery({
-      queryKey: ['profile', userId],
-      queryFn: () => ApiService.get(`/api/user/${userId}`),
-    });
-  };
-
-  return { prefetchPosts, prefetchProfile };
-};
 
 // Enhanced Users hook with filters
 export const useUsers = (filters: {

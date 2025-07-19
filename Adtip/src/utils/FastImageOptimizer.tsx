@@ -69,13 +69,7 @@ export const StoryFastImage: React.FC<ImgProps> = ({ source, style, ...props }) 
   />
 );
 
-export const preloadImages = (urls: (string | null | undefined)[]) => {
-  FastImage.preload(
-    urls
-      .filter((u): u is string => !!u && u !== 'null' && u !== 'undefined')
-      .map(uri => ({ uri }))
-  );
-};
+
 
 export const clearImageCache = () => {
   FastImage.clearMemoryCache();

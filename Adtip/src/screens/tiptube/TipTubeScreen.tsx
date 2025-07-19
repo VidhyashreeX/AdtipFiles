@@ -31,7 +31,7 @@ import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataContext } from '../../providers/DataProvider';
 import { useContentCreatorPremium } from '../../contexts/ContentCreatorPremiumContext';
-import { useVideos, useGuestVideos, useSearchVideos, usePrefetchData, useChannelData } from '../../hooks/useQueries';
+import { useVideos, useGuestVideos, useSearchVideos, useChannelData } from '../../hooks/useQueries';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { useGuestGuard } from '../../hooks/useGuestGuard';
 import Header from '../../components/common/Header';
@@ -255,8 +255,7 @@ const TipTubeScreen = () => {
     hasNextPage: false,
   } : authenticatedVideosQuery;
 
-  // Prefetch data for better performance
-  const { prefetchProfile } = usePrefetchData();
+
 
   // Define or use existing fetch logic
   const fetchVideoById = async (id: string | number) => {

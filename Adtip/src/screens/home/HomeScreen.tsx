@@ -36,7 +36,7 @@ import ApiService from '../../services/ApiService';
 import {API_BASE_URL} from '../../constants/api';
 import {HOME_ENDPOINTS} from '../../constants/apiEndpoints';
 import shareService from '../../services/ShareService';
-import { usePosts, useGuestPosts, useLikeMutation, useFollowMutation, usePrefetchData, useSubscriptionStatus, useCategories, useSearchUsers } from '../../hooks/useQueries';
+import { usePosts, useGuestPosts, useLikeMutation, useFollowMutation, useSubscriptionStatus, useCategories, useSearchUsers } from '../../hooks/useQueries';
 import { useUserDataContext, useUserPremiumStatus, useUserWallet } from '../../contexts/UserDataContext';
 import { getUserDisplayName, isPremiumUser } from '../../utils/userDataUtils';
 import { useNetInfo } from '@react-native-community/netinfo';
@@ -631,8 +631,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const likeMutation = useLikeMutation();
   const followMutation = useFollowMutation();
 
-  // Prefetch data for better performance
-  const { prefetchPosts, prefetchProfile } = usePrefetchData();
+
 
   // Network state for offline handling
   const netInfo = useNetInfo();
@@ -670,15 +669,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     followMutation.mutate({ userId, isFollowing });
   }, [followMutation, isGuest, showLoginPromptForAction]);
 
-  // Prefetch posts and profile data
+  // Handle post press
   const handlePostPress = useCallback((postId: number, userId: number) => {
     // Navigate to post details - use 'as any' to handle navigation typing
     navigation.navigate('PostDetail' as any, { postId, userId });
-    
-    // Prefetch post and author profile - fix type mismatch
-    prefetchPosts(postId);
-    prefetchProfile(userId);
-  }, [navigation, prefetchPosts, prefetchProfile]);
+  }, [navigation]);
 
   // Network-aware retry logic
   const handleRetry = useCallback(async () => {
