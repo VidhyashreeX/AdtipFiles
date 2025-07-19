@@ -32,7 +32,14 @@ class NotificationService {
   async showIncomingCall(sessionId: string, callerName: string, type: CallType, meetingId?: string, token?: string) {
     console.log('[NotificationService] Showing incoming call notification:', { sessionId, callerName, type })
 
-    // Add to persistence queue for reliability
+    // Check if CallKeep is handling the call first
+    const callKeepService = await this.getCallKeepService()
+    if (callKeepService && callKeepService.isAvailable()) {
+      console.log('[NotificationService] CallKeep is available, skipping custom notification')
+      return // Let CallKeep handle the call UI
+    }
+
+    // Add to persistence queue for reliability only if CallKeep is not available
     const persistenceService = NotificationPersistenceService.getInstance()
     await persistenceService.addPendingCall({
       sessionId,
@@ -44,7 +51,7 @@ class NotificationService {
 
     let notificationShown = false
 
-    // Handle iOS CallKit integration
+    // Handle iOS CallKit integration (fallback when CallKeep unavailable)
     if (Platform.OS === 'ios') {
       const callKitService = CallKitService.getInstance()
       if (callKitService.isAvailable()) {
@@ -99,7 +106,13 @@ class NotificationService {
             sound: 'default',
             vibrationPattern: [300, 1000, 300, 1000],
           },
-          data: { sessionId, callerName, type, meetingId, token },
+          data: {
+            sessionId,
+            callerName,
+            type,
+            meetingId: meetingId || '',
+            token: token || ''
+          },
         })
 
         console.log('[NotificationService] Notifee notification displayed successfully')
@@ -194,6 +207,20 @@ class NotificationService {
 
     console.log('[NotificationService] Enhanced notification channels created')
   }
+
+  /**
+   * Get CallKeepService instance to check availability
+   */
+  private async getCallKeepService() {
+    try {
+      const CallKeepServiceModule = await import('./CallKeepService')
+      const CallKeepService = CallKeepServiceModule.CallKeepService
+      return CallKeepService.getInstance()
+    } catch (error) {
+      console.warn('[NotificationService] CallKeepService not available:', error)
+      return null
+    }
+  }
 }
 
-export default NotificationService 
+export default NotificationService

@@ -75,7 +75,7 @@ export class FCMMessageRouter {
    */
   private extractMessageType(remoteMessage: FirebaseMessagingTypes.RemoteMessage): string | null {
     // Check new format (info field)
-    if (remoteMessage.data?.info) {
+    if (remoteMessage.data?.info && typeof remoteMessage.data.info === 'string') {
       try {
         const parsedInfo = JSON.parse(remoteMessage.data.info);
         return parsedInfo.type || null;
@@ -85,7 +85,7 @@ export class FCMMessageRouter {
     }
 
     // Check legacy format (direct type)
-    if (remoteMessage.data?.type) {
+    if (remoteMessage.data?.type && typeof remoteMessage.data.type === 'string') {
       return remoteMessage.data.type;
     }
 
@@ -124,29 +124,58 @@ export class FCMMessageRouter {
   }
 
   /**
-   * Route message to call handler (ReliableCallManager)
-   * Preserves existing call handling logic completely
+   * Route message to call handler (Enhanced CallFCMHandler)
+   * Uses new VideoSDK CallKeep integration best practices
    */
   private async routeToCallHandler(
     remoteMessage: FirebaseMessagingTypes.RemoteMessage,
     context: 'foreground' | 'background'
   ): Promise<void> {
     try {
-      console.log('[FCMMessageRouter] Routing to call handler...');
+      console.log('[FCMMessageRouter] Routing to enhanced call handler...');
 
-      // Use existing ReliableCallManager (preserving exact implementation)
-      const { ReliableCallManager } = await import('./calling/ReliableCallManager');
-      const callManager = ReliableCallManager.getInstance();
+      // Use enhanced CallFCMHandler for better CallKeep integration
+      const { CallFCMHandler } = await import('./calling/CallFCMHandler');
+      const callHandler = new CallFCMHandler();
 
-      if (!callManager.isReady()) {
-        await callManager.initialize();
+      // Check if handler can process this message
+      if (!callHandler.canHandle(remoteMessage)) {
+        console.warn('[FCMMessageRouter] CallFCMHandler cannot handle message, falling back to ReliableCallManager');
+
+        // Fallback to existing ReliableCallManager
+        const ReliableCallManagerModule = await import('./calling/ReliableCallManager');
+        const callManager = ReliableCallManagerModule.default.getInstance();
+
+        if (!callManager.isReady()) {
+          await callManager.initialize();
+        }
+
+        await callManager.handleFCMMessage(remoteMessage, context);
+        return;
       }
 
-      await callManager.handleFCMMessage(remoteMessage, context);
-      console.log('[FCMMessageRouter] Call message processed successfully');
+      // Use enhanced handler
+      await callHandler.handle(remoteMessage, context);
+      console.log('[FCMMessageRouter] Enhanced call message processed successfully');
     } catch (error) {
       console.error('[FCMMessageRouter] Error routing to call handler:', error);
-      throw error;
+
+      // Fallback to existing system on error
+      try {
+        console.log('[FCMMessageRouter] Attempting fallback to ReliableCallManager...');
+        const ReliableCallManagerModule = await import('./calling/ReliableCallManager');
+        const callManager = ReliableCallManagerModule.default.getInstance();
+
+        if (!callManager.isReady()) {
+          await callManager.initialize();
+        }
+
+        await callManager.handleFCMMessage(remoteMessage, context);
+        console.log('[FCMMessageRouter] Fallback call processing successful');
+      } catch (fallbackError) {
+        console.error('[FCMMessageRouter] Fallback call processing failed:', fallbackError);
+        throw error; // Throw original error
+      }
     }
   }
 
@@ -191,3 +220,10 @@ export class FCMMessageRouter {
 }
 
 export default FCMMessageRouter;
+
+// Export the handler interface for implementations
+export interface FCMHandler {
+  canHandle(message: FirebaseMessagingTypes.RemoteMessage): boolean
+  handle(message: FirebaseMessagingTypes.RemoteMessage, context: 'foreground' | 'background'): Promise<void>
+  priority: number
+}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ interface IncomingCallOverlayProps {
   onAccept: () => void;
   onDecline: () => void;
   onMessage?: () => void;
+  forceShow?: boolean; // Force show even if CallKeep is available (for testing)
 }
 
 const IncomingCallOverlay: React.FC<IncomingCallOverlayProps> = ({
@@ -33,7 +34,42 @@ const IncomingCallOverlay: React.FC<IncomingCallOverlayProps> = ({
   onAccept,
   onDecline,
   onMessage,
+  forceShow = false,
 }) => {
+  const [shouldShow, setShouldShow] = useState(forceShow);
+
+  useEffect(() => {
+    const checkCallKeepAvailability = async () => {
+      if (forceShow) {
+        setShouldShow(true);
+        return;
+      }
+
+      try {
+        // Check if CallKeep is handling the call
+        const { CallKeepService } = await import('../../services/calling/CallKeepService');
+        const callKeepService = CallKeepService.getInstance();
+
+        if (callKeepService.isAvailable()) {
+          console.log('[IncomingCallOverlay] CallKeep is available, hiding custom overlay');
+          setShouldShow(false);
+        } else {
+          console.log('[IncomingCallOverlay] CallKeep not available, showing custom overlay');
+          setShouldShow(true);
+        }
+      } catch (error) {
+        console.warn('[IncomingCallOverlay] Error checking CallKeep availability:', error);
+        setShouldShow(true); // Show as fallback
+      }
+    };
+
+    checkCallKeepAvailability();
+  }, [forceShow]);
+
+  // Don't render if CallKeep is handling the call
+  if (!shouldShow) {
+    return null;
+  }
   // Animation for the swipe to accept
   const pan = React.useRef(new Animated.ValueXY()).current;
   const acceptButtonOpacity = React.useRef(new Animated.Value(1)).current;

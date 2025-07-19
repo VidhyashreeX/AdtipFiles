@@ -3,11 +3,18 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "test": "node ../testing/scripts/runAllTests.js",
+    "test:unit": "jest ../testing/unit --config ../testing/jest.config.js",
+    "test:integration": "jest ../testing/integration --config ../testing/jest.config.js",
+    "test:performance": "jest ../testing/performance --config ../testing/jest.config.js",
+    "test:e2e": "detox test --configuration ios.sim.debug",
+    "test:coverage": "jest ../testing/unit ../testing/integration --coverage --config ../testing/jest.config.js",
+    "test:watch": "jest ../testing/unit --watch --config ../testing/jest.config.js",
+    "test:ci": "node ../testing/scripts/runAllTests.js --ci",
     "android": "react-native run-android",
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest",
     "postinstall": "patch-package"
   },
   "dependencies": {

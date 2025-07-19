@@ -72,13 +72,16 @@ export class CallKeepService {
           includesCallsInRecents: true
         },
         android: {
-          alertTitle: 'Permissions required',
-          alertDescription: 'This application needs to access your phone accounts',
+          alertTitle: 'Phone Account Permission Required',
+          alertDescription: 'Adtip needs access to your phone accounts to provide native call experience with VideoSDK integration',
           cancelButton: 'Cancel',
-          okButton: 'OK',
-          imageName: 'phone_account_icon',
-          additionalPermissions: [],
-          selfManaged: false
+          okButton: 'Allow',
+          imageName: 'ic_launcher', // Use app icon
+          additionalPermissions: [
+            'android.permission.CAMERA',
+            'android.permission.RECORD_AUDIO'
+          ],
+          selfManaged: true // Enable self-managed for better VideoSDK integration
         }
       }
 
@@ -304,28 +307,29 @@ export class CallKeepService {
   }
 
   /**
-   * Setup CallKeep event listeners
+   * Setup CallKeep event listeners with enhanced VideoSDK integration
    */
   private setupEventListeners(): void {
-    console.log('[CallKeepService] Setting up event listeners')
+    console.log('[CallKeepService] Setting up enhanced event listeners for VideoSDK integration')
 
-    // Answer call event
+    // Core call events
     RNCallKeep.addEventListener('answerCall', this.onAnswerCallAction)
-    
-    // End call event
     RNCallKeep.addEventListener('endCall', this.onEndCallAction)
-    
-    // Incoming call displayed event
+
+    // Call state events
     RNCallKeep.addEventListener('didDisplayIncomingCall', this.onIncomingCallDisplayed)
-    
-    // Call timed out event
     RNCallKeep.addEventListener('didPerformSetMutedCallAction', this.onToggleMute)
-    
-    // Hold call event
     RNCallKeep.addEventListener('didToggleHoldCallAction', this.onToggleHold)
-    
-    // DTMF event
     RNCallKeep.addEventListener('didPerformDTMFAction', this.onDTMFAction)
+
+    // Enhanced events for better integration
+    RNCallKeep.addEventListener('didActivateAudioSession', this.onAudioSessionActivated)
+    RNCallKeep.addEventListener('didDeactivateAudioSession', this.onAudioSessionDeactivated)
+    RNCallKeep.addEventListener('didChangeAudioRoute', this.onAudioRouteChanged)
+
+    // Connection events
+    RNCallKeep.addEventListener('didReceiveStartCallAction', this.onStartCallAction)
+    RNCallKeep.addEventListener('didLoadWithEvents', this.onLoadWithEvents)
     
     // Audio session activated
     RNCallKeep.addEventListener('didActivateAudioSession', this.onAudioSessionActivated)
@@ -335,7 +339,7 @@ export class CallKeepService {
   }
 
   /**
-   * Handle answer call action from CallKeep
+   * Handle answer call action from CallKeep with enhanced VideoSDK integration
    */
   private onAnswerCallAction = async ({ callUUID }: { callUUID: string }) => {
     console.log('[CallKeepService] Answer call action:', callUUID)
@@ -350,6 +354,9 @@ export class CallKeepService {
         sessionId: callUUID,
         source: 'CALLKEEP'
       })
+
+      // Trigger deep link navigation for call acceptance
+      await this.handleCallAcceptance(callUUID)
     } catch (error) {
       console.error('[CallKeepService] Error handling answer call action:', error)
     }
@@ -422,19 +429,93 @@ export class CallKeepService {
   }
 
   /**
+   * Handle audio route changes
+   */
+  private onAudioRouteChanged = ({ callUUID, output }: { callUUID: string; output: string }) => {
+    console.log('[CallKeepService] Audio route changed for call:', callUUID, 'to:', output)
+  }
+
+  /**
+   * Handle start call action (outgoing calls)
+   */
+  private onStartCallAction = ({ callUUID, handle }: { callUUID: string; handle: string }) => {
+    console.log('[CallKeepService] Start call action:', callUUID, handle)
+  }
+
+  /**
+   * Handle load with events (app startup with pending calls)
+   */
+  private onLoadWithEvents = (events: any[]) => {
+    console.log('[CallKeepService] Load with events:', events)
+  }
+
+  /**
+   * Handle call acceptance with deep linking
+   */
+  private async handleCallAcceptance(callUUID: string): Promise<void> {
+    try {
+      console.log('[CallKeepService] Handling call acceptance for:', callUUID)
+
+      // Try to retrieve call data from AsyncStorage
+      const AsyncStorage = await import('@react-native-async-storage/async-storage')
+      const callDataStr = await AsyncStorage.default.getItem(`pending_call_${callUUID}`)
+
+      if (callDataStr) {
+        const callData = JSON.parse(callDataStr)
+
+        // Create deep link for navigation
+        const deepLink = this.createCallDeepLink(callData)
+
+        // Navigate using Linking
+        const { Linking } = await import('react-native')
+        await Linking.openURL(deepLink)
+
+        console.log('[CallKeepService] Call acceptance navigation triggered')
+      } else {
+        console.warn('[CallKeepService] No call data found for UUID:', callUUID)
+      }
+    } catch (error) {
+      console.error('[CallKeepService] Error handling call acceptance:', error)
+    }
+  }
+
+  /**
+   * Create deep link for call navigation
+   */
+  private createCallDeepLink(callData: any): string {
+    const baseUrl = 'adtip://call/active'
+    const path = `${baseUrl}/${callData.sessionId}/${callData.meetingId}/${encodeURIComponent(callData.token)}`
+
+    const params = new URLSearchParams({
+      callerName: callData.callerName || 'Unknown',
+      callType: callData.callType || 'video'
+    })
+
+    return `${path}?${params.toString()}`
+  }
+
+  /**
    * Cleanup event listeners
    */
   cleanup(): void {
     console.log('[CallKeepService] Cleaning up event listeners')
-    
+
+    if (!RNCallKeep) return
+
+    // Core events
     RNCallKeep.removeEventListener('answerCall')
     RNCallKeep.removeEventListener('endCall')
     RNCallKeep.removeEventListener('didDisplayIncomingCall')
     RNCallKeep.removeEventListener('didPerformSetMutedCallAction')
     RNCallKeep.removeEventListener('didToggleHoldCallAction')
     RNCallKeep.removeEventListener('didPerformDTMFAction')
+
+    // Enhanced events
     RNCallKeep.removeEventListener('didActivateAudioSession')
     RNCallKeep.removeEventListener('didDeactivateAudioSession')
+    RNCallKeep.removeEventListener('didChangeAudioRoute')
+    RNCallKeep.removeEventListener('didReceiveStartCallAction')
+    RNCallKeep.removeEventListener('didLoadWithEvents')
   }
 }
 

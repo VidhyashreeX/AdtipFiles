@@ -98,6 +98,11 @@ export const DEEP_LINK_PATTERNS = {
   LIVE_STREAM: '/live/:streamId',
   EVENT: '/event/:eventId',
   CHALLENGE: '/challenge/:challengeId',
+
+  // Call-specific routes for FCM deep linking
+  INCOMING_CALL: '/call/incoming/:sessionId/:meetingId/:token',
+  OUTGOING_CALL: '/call/outgoing/:sessionId/:meetingId/:token',
+  CALL_SCREEN: '/call/active/:sessionId/:meetingId/:token',
 } as const;
 
 // React Navigation Deep Link Configuration
@@ -270,11 +275,39 @@ export const DEEP_LINK_CONFIG: DeepLinkConfig = {
           meetingId: (meetingId: string) => meetingId,
         },
       },
-      
+
       MeetingSimple: {
         path: 'call/simple/:sessionId',
         parse: {
           sessionId: (sessionId: string) => sessionId,
+        },
+      },
+
+      // Enhanced call routes for FCM deep linking
+      IncomingCall: {
+        path: 'call/incoming/:sessionId/:meetingId/:token',
+        parse: {
+          sessionId: (sessionId: string) => sessionId,
+          meetingId: (meetingId: string) => meetingId,
+          token: (token: string) => token,
+        },
+      },
+
+      OutgoingCall: {
+        path: 'call/outgoing/:sessionId/:meetingId/:token',
+        parse: {
+          sessionId: (sessionId: string) => sessionId,
+          meetingId: (meetingId: string) => meetingId,
+          token: (token: string) => token,
+        },
+      },
+
+      CallScreen: {
+        path: 'call/active/:sessionId/:meetingId/:token',
+        parse: {
+          sessionId: (sessionId: string) => sessionId,
+          meetingId: (meetingId: string) => meetingId,
+          token: (token: string) => token,
         },
       },
       
