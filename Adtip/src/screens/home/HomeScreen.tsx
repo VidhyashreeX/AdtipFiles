@@ -1076,7 +1076,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
         Alert.alert('Ad budget exhausted', 'No more rewards available for this ad.');
       }
     } catch (err) {
-      Alert.alert('Error', 'Could not process your view.');
+      console.log("PromotedPostViewFailed!!!")
+      //Alert.alert('Error', 'Could not process your view.');
     }
   }, [user?.id, rewardedPosts]);
 

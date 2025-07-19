@@ -266,19 +266,20 @@ const Sidebar: React.FC = () => {
   const menuItems: MenuItemProps[] = useMemo(() => [
     {icon: 'home', label: 'Home', screen: 'TabHome'},
     {icon: 'user', label: 'View Profile', screen: 'Profile'},
+    {icon: 'indian-rupee', label: 'My Earnings', screen: 'Earnings'},
     {icon: 'compass', label: 'Explore', screen: 'Explore'},
-    {icon: 'credit-card', label: 'Wallet', screen: 'Wallet'},
+    //{icon: 'credit-card', label: 'Wallet', screen: 'Wallet'},
     {icon: 'users', label: 'Refer & Earn', screen: 'Referral'},
     {icon: 'download', label: 'Install to Earn', screen: 'PlayToEarn'},
-    {icon: 'film', label: 'Watch to Earn', screen: 'TipTube'},
+    //{icon: 'film', label: 'Watch to Earn', screen: 'TipTube'},
     {icon: 'book-open', label: 'My Ad Passbook', screen: 'AdPassbook'},
-    {icon: 'video', label: 'Tip Shorts', screen: 'TipShorts'},
-    {icon: 'trending-up', label: 'Earn Money as a User', screen: 'EarnMoneyUser'},
-    {icon: 'star', label: 'Earn Money as a Content Creator', screen: 'EarnMoneyCreator'},
-    {icon: 'award', label: 'Premium Status', screen: 'PremiumUser'},
-    {icon: 'award', label: 'Content Creator Premium Status', screen: 'ContentCreatorPremium'},
+    //{icon: 'video', label: 'Tip Shorts', screen: 'TipShorts'},
+    {icon: 'trending-up', label: 'Earn as a User', screen: 'EarnMoneyUser'},
+    {icon: 'star', label: 'Earn as a Content Creator', screen: 'EarnMoneyCreator'},
+    {icon: 'award', label: 'User Premium', screen: 'PremiumUser'},
+    {icon: 'award', label: 'Content Creator Premium', screen: 'ContentCreatorPremium'},
     {icon: 'settings', label: 'Settings', screen: 'Settings'},
-    {icon: 'indian-rupee', label: 'My Earnings', screen: 'Earnings'},
+    
   ], []);
 
   const handleNavigate = useCallback((screenName: keyof MainNavigatorParamList) => {

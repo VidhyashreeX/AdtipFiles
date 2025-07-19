@@ -66,18 +66,18 @@ react {
 /**
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
-def enableProguardInReleaseBuilds = true
+def enableProguardInReleaseBuilds = false
 
 /**
  * Enable R8 full mode with safer optimization rules
  * Uses safer configuration in proguard-rules-r8.pro to avoid unstable optimizations
  */
-def enableR8FullMode = true
+def enableR8FullMode = false
 
 /**
  * Enable bundle splitting by ABI to reduce APK size
  */
-def enableSeparateBuildPerCPUArchitecture = true
+def enableSeparateBuildPerCPUArchitecture = false
 
 
 
@@ -144,8 +144,8 @@ android {
         release {
             // Production release configuration
             signingConfig signingConfigs.release
-            minifyEnabled enableProguardInReleaseBuilds
-            shrinkResources enableProguardInReleaseBuilds
+            //minifyEnabled enableProguardInReleaseBuilds
+            //shrinkResources enableProguardInReleaseBuilds
             debuggable false
             jniDebuggable false
             renderscriptDebuggable false

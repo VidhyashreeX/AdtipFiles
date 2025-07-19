@@ -363,9 +363,9 @@ const PostItem: React.FC<PostItemProps> = ({
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity onPress={() => {}} style={styles.bookmarkButton}>
+        {/*<TouchableOpacity onPress={() => {}} style={styles.bookmarkButton}>
           <Bookmark size={24} color={colors.text.primary} />
-        </TouchableOpacity>
+        </TouchableOpacity>*/}
       </View>
 
       {/* Likes Count */}

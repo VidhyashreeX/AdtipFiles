@@ -32,7 +32,7 @@ import {
   Gesture,
   GestureDetector,
 } from 'react-native-gesture-handler';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import Video from 'react-native-video';
@@ -76,14 +76,6 @@ type TipShortsRouteProp = RouteProp<{ params: TipShortsRouteParams }, 'params'>;
 
 // Reward logic is now handled by useVideoRewardAd hook
 
-
-
-
-
-
-
-
-
 // Skeleton Loading Component
 const ShortsSkeleton = memo(() => {
   const pulseAnimation = useSharedValue(0);
@@ -111,14 +103,15 @@ const TipShortsEnhanced = () => {
   const { colors } = useTheme();
   const navigation = useNavigation();
   const route = useRoute<TipShortsRouteProp>();
+  const isFocused = useIsFocused(); // ✅ ADDED: Use the hook to track screen focus.
   const { user, isGuest } = useAuth();
   const queryClient = useQueryClient();
-  const { 
-    isGloballyMuted, 
-    isGloballyPlaying, 
-    toggleGlobalPlayPause, 
+  const {
+    isGloballyMuted,
+    isGloballyPlaying,
+    toggleGlobalPlayPause,
     toggleGlobalMute,
-    setGlobalPlayState 
+    setGlobalPlayState
   } = useShorts();
   const insets = useSafeAreaInsets();
   const isPremium = user && typeof user.is_premium === 'boolean' ? user.is_premium : false;
@@ -150,7 +143,7 @@ const TipShortsEnhanced = () => {
         shortId,
         hasParams: !!route.params
       });
-      
+
       // Additional deep link logging
       if (shortId) {
         console.log('[TipShortsEnhanced] Deep link detected for shortId:', shortId);
@@ -468,8 +461,8 @@ const TipShortsEnhanced = () => {
       // We need to track the current like state properly
       // For now, assume false until we implement proper like state tracking
       handleLikeShort(
-        currentShort.id, 
-        currentShort.channel.id, 
+        currentShort.id,
+        currentShort.channel.id,
         false // This should be the actual current like state
       );
     }
@@ -514,29 +507,16 @@ const TipShortsEnhanced = () => {
     return () => backHandler.remove();
   }, [navigation]);
 
-  // Set initial play state and handle cleanup
+  // ✅ REPLACED: Use `useIsFocused` for reliable playback control.
   useEffect(() => {
-    const unsubscribeFocus = navigation.addListener('focus', () => {
-      console.log('[TipShorts] Screen focused - resuming playback');
+    if (isFocused) {
+      console.log('[TipShorts] Screen is focused - resuming playback.');
       setGlobalPlayState(true);
-    });
-
-    const unsubscribeBlur = navigation.addListener('blur', () => {
-      console.log('[TipShorts] Screen blurred - pausing playback');
+    } else {
+      console.log('[TipShorts] Screen is NOT focused - pausing playback.');
       setGlobalPlayState(false);
-    });
-
-    // Component unmount cleanup - ensure audio stops completely
-    return () => {
-      console.log('[TipShorts] Component unmounting - stopping all audio');
-      setGlobalPlayState(false);
-      unsubscribeFocus();
-      unsubscribeBlur();
-      if (playPauseTimeoutRef.current) {
-        clearTimeout(playPauseTimeoutRef.current);
-      }
-    };
-  }, [navigation, setGlobalPlayState]);
+    }
+  }, [isFocused, setGlobalPlayState]);
 
   // Handle app state changes (background/foreground)
   useEffect(() => {
@@ -545,14 +525,10 @@ const TipShortsEnhanced = () => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
         console.log('[TipShorts] App backgrounded - pausing audio');
         setGlobalPlayState(false);
-      } else if (nextAppState === 'active') {
-        console.log('[TipShorts] App foregrounded - checking if should resume');
-        // Only resume if the TipShorts screen is currently focused
-        const currentRoute = navigation.getState()?.routes[navigation.getState()?.index || 0];
-        if (currentRoute?.name === 'TipShorts') {
-          console.log('[TipShorts] Resuming audio as TipShorts is active');
-          setGlobalPlayState(true);
-        }
+      } else if (nextAppState === 'active' && isFocused) {
+        // Only resume if the app is active AND this screen is focused.
+        console.log('[TipShorts] App foregrounded and screen focused - resuming audio');
+        setGlobalPlayState(true);
       }
     };
 
@@ -561,7 +537,8 @@ const TipShortsEnhanced = () => {
     return () => {
       subscription?.remove();
     };
-  }, [navigation, setGlobalPlayState]);
+  }, [isFocused, setGlobalPlayState]);
+
 
   // Implement scroll to specific short for deep linking
   const scrollToShort = useCallback((id: string) => {
@@ -624,13 +601,6 @@ const TipShortsEnhanced = () => {
     }
   }, [shorts, isLoading, error, refetch]);
 
-  // Reward logic is now handled by useVideoRewardAd hook
-
-  // Reward logic is now handled by useVideoRewardAd hook
-
-  // Old reward popup actions are now handled by useVideoRewardAd hook
-
-  // Navigation is now handled by useVideoRewardAd hook
 
   // Render loading state
   if (isLoading && shorts.length === 0) {
@@ -672,7 +642,7 @@ const TipShortsEnhanced = () => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" translucent />
-      
+
       <Animated.FlatList
         ref={flatListRef}
         data={shorts}
@@ -816,7 +786,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
-  
+
   // Skeleton Loading Styles
   skeletonContainer: {
     width: SCREEN_WIDTH,
