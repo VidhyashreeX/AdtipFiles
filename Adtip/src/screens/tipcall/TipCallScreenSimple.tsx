@@ -206,66 +206,6 @@ const ContactCard = ({
 interface LanguageOption { id: number; name: string }
 interface CategoryOption { id: number; name: string }
 
-const LANGUAGES: LanguageOption[] = [
-  { id: 0, name: 'All' },
-  { id: 1, name: 'English' },
-  { id: 2, name: 'Hindi' },
-  { id: 3, name: 'Bengali' },
-  { id: 4, name: 'Telugu' },
-  { id: 5, name: 'Marathi' },
-  { id: 6, name: 'Tamil' },
-  { id: 7, name: 'Gujarati' },
-  { id: 8, name: 'Kannada' },
-]
-
-const CATEGORIES: CategoryOption[] = [
-  { id: 0, name: 'All' },
-  { id: 2, name: 'Look for jobs' },
-  { id: 101, name: 'Prepare for govt job' },
-  { id: 3, name: 'Prepare for UPSC' },
-  { id: 11, name: 'Prepare for jobs' },
-  { id: 5, name: 'To learn English' },
-  { id: 6, name: 'To learn Hindi' },
-  { id: 7, name: 'To learn software' },
-  { id: 8, name: 'To learn AI' },
-  { id: 13, name: 'To learn something new' },
-  { id: 20, name: 'Sports' },
-  { id: 29, name: 'Spirituality & Religion' },
-  { id: 48, name: 'Astrology' },
-]
-
-// Premium Banner Component
-const PremiumBanner = ({ colors, isDarkMode, onUpgradePress }: { 
-  colors: any, 
-  isDarkMode: boolean, 
-  onUpgradePress: () => void 
-}) => (
-  <LinearGradient
-    colors={isDarkMode ? ['#1F2937', '#374151'] : ['#FEF3C7', '#FDE68A']}
-    style={styles.premiumContainer}
-  >
-    <View style={styles.premiumBanner}>
-      <Text style={styles.crownIcon}>👑</Text>
-      <View style={styles.premiumTextContainer}>
-        <Text style={[styles.premiumTitle, { color: isDarkMode ? '#F9FAFB' : '#000000' }]}>
-          Upgrade to Premium
-        </Text>
-        <Text style={[styles.premiumSubtitle, { color: isDarkMode ? '#D1D5DB' : '#000000' }]}>
-          Unlimited calls, priority support & more
-        </Text>
-      </View>
-      <TouchableOpacity 
-        style={[styles.upgradeButton, { borderColor: isDarkMode ? '#F9FAFB' : '#000000' }]}
-        onPress={onUpgradePress}
-      >
-        <Text style={[styles.upgradeButtonText, { color: isDarkMode ? '#F9FAFB' : '#000000' }]}>
-          Upgrade
-        </Text>
-      </TouchableOpacity>
-    </View>
-  </LinearGradient>
-)
-
 const FilterChip = ({
   label,
   isSelected,
@@ -371,7 +311,6 @@ const TipCallScreenSimple = () => {
   const { contentPaddingBottom } = useTabNavigator()
 
   // -------------------- Premium --------------------
-  const [premiumActive, setPremiumActive] = useState(false)
   const [showPremiumPopup, setShowPremiumPopup] = useState(false)
   const [showPremiumCallRateModal, setShowPremiumCallRateModal] = useState(false)
   const [showPremiumCallRateAlert, setShowPremiumCallRateAlert] = useState(false)
@@ -384,7 +323,7 @@ const TipCallScreenSimple = () => {
     maxMinutes?: number;
     currentBalance?: string;
   } | null>(null)
-  const { data: premiumData, isLoading: premiumLoading } = useQuery({
+  const { data: premiumData } = useQuery({
     queryKey: ['premium', user?.id],
     queryFn: () => (user?.id ? ApiService.checkPremium(user.id) : null),
     enabled: !!user?.id,
@@ -394,8 +333,7 @@ const TipCallScreenSimple = () => {
   // Update premium state when data changes
   useEffect(() => {
     if (premiumData) {
-      const active = !premiumData.is_premium_expired
-      setPremiumActive(active)
+      // Premium data loaded, can be used for UI updates if needed
     }
   }, [premiumData])
   // --------------------------------------------------
@@ -1050,18 +988,7 @@ const TipCallScreenSimple = () => {
     }
   }, [hasMoreLiveSearchResults, liveSearchLoadingMore, loadMoreLiveSearchResults, liveSearchContacts.length])
 
-  // Handle load more live search results
-  const handleLoadMoreLiveSearch = useCallback(() => {
-    console.log('[TipCallScreen] Load more live search triggered:', {
-      hasMoreLiveSearchResults,
-      liveSearchLoadingMore,
-      currentLiveSearchCount: liveSearchContacts.length
-    })
 
-    if (hasMoreLiveSearchResults && !liveSearchLoadingMore) {
-      loadMoreLiveSearchResults()
-    }
-  }, [hasMoreLiveSearchResults, liveSearchLoadingMore, loadMoreLiveSearchResults, liveSearchContacts.length])
 
   // Render contact item
   const renderContactItem = ({ item }: { item: Contact | { ad: true; key: string } }) => {
@@ -1129,28 +1056,7 @@ const TipCallScreenSimple = () => {
   // Missed calls count
   const { count: missedCallsCount } = useMissedCallsCount(user?.id ? String(user.id) : undefined)
 
-  // ---------- Premium Banner renderer ---------------
-  const renderPremiumBanner = () => {
-    if (premiumLoading) return null
-    if (!isPremium) {
-      return (
-        <View style={{ marginHorizontal: 16, marginTop: 8 }}>
-          <LinearGradient colors={['#FFD700', '#FFB300']} style={{ borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ fontSize: 20, marginRight: 12 }}>👑</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: '700' }}>Upgrade to Premium</Text>
-              <Text>Lower call rates & ₹2 per call acceptance</Text>
-            </View>
-            <TouchableOpacity onPress={() => navigation.navigate('SubscriptionScreen' as never)} style={{ backgroundColor: 'rgba(0,0,0,0.1)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}>
-              <Text style={{ fontWeight: '600' }}>Upgrade</Text>
-            </TouchableOpacity>
-          </LinearGradient>
-        </View>
-      )
-    }
-    return null
-  }
-  // --------------------------------------------------
+
 
   // ------------------ Header Menu State -------------
   const [showDropdown, setShowDropdown] = useState(false)
@@ -1449,7 +1355,7 @@ const TipCallScreenSimple = () => {
         ]}>
           <Icon name="search" size={16} color={colors.primary} />
           <Text style={[styles.searchIndicatorText, { color: colors.primary }]}>
-            Searching for "{debouncedSearch}"
+            Searching for &quot;{debouncedSearch}&quot;
           </Text>
           <TouchableOpacity
             onPress={() => setSearchQuery('')}
@@ -1470,7 +1376,7 @@ const TipCallScreenSimple = () => {
         onRequestClose={() => setShowUserProfileModal(false)}
       >
         {selectedUserId && (
-          <UserProfileScreen userId={selectedUserId} onClose={() => setShowUserProfileModal(false)} />
+          <UserProfileScreen userId={selectedUserId} />
         )}
       </Modal>
 

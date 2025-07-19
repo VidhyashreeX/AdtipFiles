@@ -31,6 +31,7 @@ import { CheckCircle, Play, Calendar, Users, Eye, Bell, BellOff, Edit3, Camera, 
 import { MainNavigatorParamList } from '../../types/navigation';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { ChannelLogger } from '../../utils/logger';
+import AnalyticsPremiumAlert from '../../components/alerts/AnalyticsPremiumAlertNew';
 import {
   useChannelData,
   useChannelVideos,
@@ -105,6 +106,9 @@ const ChannelScreen: React.FC = () => {
   // New state for plan modal
   const [showPlanModal, setShowPlanModal] = useState(false);
 
+  // Analytics premium alert state
+  const [showAnalyticsPremiumAlert, setShowAnalyticsPremiumAlert] = useState(false);
+
   // Get channel ID and data from route params
   const routeChannelId = (route.params as any)?.channelId || (route.params as any)?.userId;
   const passedChannelData = (route.params as any)?.channelData;
@@ -142,17 +146,20 @@ const ChannelScreen: React.FC = () => {
     error: channelError
   } = useChannelData(Number(userIdForApi));
 
+  // Get the actual channel ID from channel data or passed data
+  const actualChannelId = passedChannelData?.channelId || channelData?.data?.[0]?.channelId;
+
   const {
     data: videosData,
     isLoading: videosLoading,
     refetch: refetchVideos
-  } = useChannelVideos(Number(userIdForApi), Number(user?.id), 0);
+  } = useChannelVideos(Number(actualChannelId), Number(user?.id), 0);
 
   const {
     data: shortsData,
     isLoading: shortsLoading,
     refetch: refetchShorts
-  } = useChannelVideos(Number(userIdForApi), Number(user?.id), 1);
+  } = useChannelVideos(Number(actualChannelId), Number(user?.id), 1);
 
 
 
@@ -659,28 +666,22 @@ const ChannelScreen: React.FC = () => {
       style={styles.shortItem}
       onPress={() => handleVideoPress(item)}
     >
-      <View style={styles.shortThumbnailContainer}>
-        <Image
-          source={{ uri: item.videoThumbnail }}
-          style={styles.shortThumbnail}
-          onError={() => ChannelLogger.warn('Failed to load short thumbnail:', item.videoThumbnail)}
-        />
-        <View style={styles.shortDuration}>
-          <Text style={styles.videoDurationText}>{item.playDuration}</Text>
-        </View>
-        <View style={styles.shortPlayButton}>
-          <Play size={20} color="#FFFFFF" fill="#FFFFFF" />
-        </View>
+      <Image
+        source={{ uri: item.videoThumbnail }}
+        style={styles.shortThumbnail}
+        onError={() => ChannelLogger.warn('Failed to load short thumbnail:', item.videoThumbnail)}
+      />
+      <View style={styles.shortOverlay}>
+        <Text
+          style={styles.shortTitle}
+          numberOfLines={2}
+        >
+          {item.name}
+        </Text>
+        <Text style={styles.shortViews}>
+          {formatNumber(item.views)} views
+        </Text>
       </View>
-      <Text
-        style={[styles.shortTitle, { color: colors.text.primary }]}
-        numberOfLines={2}
-      >
-        {item.name}
-      </Text>
-      <Text style={[styles.shortViews, { color: colors.text.secondary }]}>
-        {formatNumber(item.views)} views
-      </Text>
     </TouchableOpacity>
   );
 
@@ -788,6 +789,33 @@ const ChannelScreen: React.FC = () => {
     });
     navigation.navigate('ContentCreatorPremium');
   }, [isContentCreatorPremium, contentCreatorPremiumData, navigation]);
+
+  // Handle analytics tab click
+  const handleAnalyticsTab = useCallback(() => {
+    // Check if user has content creator premium
+    if (!isContentCreatorPremium) {
+      setShowAnalyticsPremiumAlert(true);
+      return;
+    }
+
+    // User has premium access, switch to analytics tab
+    setSelectedTab('analytics');
+
+    // Navigate to analytics screen if needed
+    if (actualChannelId) {
+      (navigation as any).navigate('Analytics', { channelId: actualChannelId });
+    }
+  }, [isContentCreatorPremium, actualChannelId, navigation]);
+
+  // Handle analytics premium alert actions
+  const handleAnalyticsPremiumUpgrade = useCallback(() => {
+    setShowAnalyticsPremiumAlert(false);
+    navigation.navigate('ContentCreatorPremium');
+  }, [navigation]);
+
+  const handleAnalyticsPremiumGoBack = useCallback(() => {
+    setShowAnalyticsPremiumAlert(false);
+  }, []);
 
   if (channelLoading) {
     return (
@@ -1020,7 +1048,7 @@ const ChannelScreen: React.FC = () => {
                 styles.tab,
                 selectedTab === 'analytics' && { ...styles.activeTab, borderBottomColor: colors.primary }
               ]}
-              onPress={() => setSelectedTab('analytics')}
+              onPress={handleAnalyticsTab}
             >
               <Text
                 style={[
@@ -1087,11 +1115,25 @@ const ChannelScreen: React.FC = () => {
 
         {selectedTab === 'shorts' && (
           <View style={styles.tabContent}>
-            <View style={styles.emptyState}>
-              <Text style={[styles.emptyStateText, { color: colors.text.secondary }]}>
-                Shorts feature coming soon
-              </Text>
-            </View>
+            {shortsLoading ? (
+              <ActivityIndicator size="large" color={colors.primary} style={styles.tabLoading} />
+            ) : shorts.length > 0 ? (
+              <FlatList
+                data={shorts}
+                renderItem={renderShortItem}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                showsVerticalScrollIndicator={false}
+                numColumns={2}
+                columnWrapperStyle={styles.shortsRow}
+              />
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={[styles.emptyStateText, { color: colors.text.secondary }]}>
+                  No shorts available
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -1230,6 +1272,14 @@ const ChannelScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Analytics Premium Alert */}
+      <AnalyticsPremiumAlert
+        visible={showAnalyticsPremiumAlert}
+        onClose={() => setShowAnalyticsPremiumAlert(false)}
+        onUpgrade={handleAnalyticsPremiumUpgrade}
+        onGoBack={handleAnalyticsPremiumGoBack}
+      />
     </View>
   );
 };
@@ -1746,6 +1796,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 8,
     alignItems: 'flex-start',
+  },
+  shortsRow: {
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+  },
+  shortItem: {
+    width: '48%',
+    aspectRatio: 9/16,
+    backgroundColor: '#000',
+    borderRadius: 8,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  shortThumbnail: {
+    width: '100%',
+    height: '100%',
+  },
+  shortOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    padding: 8,
+  },
+  shortTitle: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  shortViews: {
+    color: '#ccc',
+    fontSize: 10,
+    marginTop: 2,
   },
   infoLabel: {
     fontSize: 14,

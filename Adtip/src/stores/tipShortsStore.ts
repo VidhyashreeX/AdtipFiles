@@ -26,6 +26,11 @@ interface TipShortsState {
   showRewardPopup: boolean;
   earnedAmount: number;
   hasBeenCredited: boolean;
+  lastRewardTime: number;
+
+  // Video pause control
+  pausedVideos: Set<string>;
+  forceGlobalPause: boolean;
 }
 
 interface TipShortsActions {
@@ -49,6 +54,16 @@ interface TipShortsActions {
   showRewardModal: (amount: number) => void;
   hideRewardModal: () => void;
   setCredited: (credited: boolean) => void;
+
+  // Enhanced video pause control
+  pauseVideo: (videoId: string) => void;
+  resumeVideo: (videoId: string) => void;
+  pauseAllVideos: () => void;
+  resumeAllVideos: () => void;
+  setForceGlobalPause: (pause: boolean) => void;
+
+  // Reset store
+  resetStore: () => void;
   
   // Reset actions
   resetState: () => void;
@@ -63,18 +78,23 @@ const initialState: TipShortsState = {
   isGloballyPlaying: true,
   isGloballyMuted: false,
   showPlayPause: false,
-  
+
   // UI state
   showLoginPrompt: false,
   loginPromptMessage: 'Login to unlock all features',
   commentModalVisible: false,
   selectedCommentShortId: null,
-  
+
   // Video reward state
   videoCount: 0,
   showRewardPopup: false,
   earnedAmount: 0,
   hasBeenCredited: false,
+  lastRewardTime: 0,
+
+  // Video pause control
+  pausedVideos: new Set<string>(),
+  forceGlobalPause: false,
 };
 
 export const useTipShortsStore = create<TipShortsStore>()(
@@ -175,14 +195,50 @@ export const useTipShortsStore = create<TipShortsStore>()(
         });
       },
       
-      setCredited: (credited: boolean) => {
+      setCreditedStatus: (credited: boolean) => {
         set((state) => {
           state.hasBeenCredited = credited;
         });
       },
-      
+
+      // Enhanced video pause control
+      pauseVideo: (videoId: string) => {
+        set((state) => {
+          state.pausedVideos.add(videoId);
+        });
+      },
+
+      resumeVideo: (videoId: string) => {
+        set((state) => {
+          state.pausedVideos.delete(videoId);
+        });
+      },
+
+      pauseAllVideos: () => {
+        set((state) => {
+          state.forceGlobalPause = true;
+          state.isGloballyPlaying = false;
+        });
+      },
+
+      resumeAllVideos: () => {
+        set((state) => {
+          state.forceGlobalPause = false;
+          state.isGloballyPlaying = true;
+        });
+      },
+
+      setForceGlobalPause: (pause: boolean) => {
+        set((state) => {
+          state.forceGlobalPause = pause;
+          if (pause) {
+            state.isGloballyPlaying = false;
+          }
+        });
+      },
+
       // Reset actions
-      resetState: () => {
+      resetStore: () => {
         set((state) => {
           Object.assign(state, initialState);
         });

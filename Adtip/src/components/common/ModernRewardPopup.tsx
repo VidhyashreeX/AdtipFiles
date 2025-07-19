@@ -31,7 +31,11 @@ const ModernRewardPopup: React.FC<ModernRewardPopupProps> = ({
 }) => {
   const { colors, isDarkMode } = useTheme();
 
+  // Debug logging
+  console.log('🎁 [ModernRewardPopup] Rendered with props:', { visible, isPremium, earnedAmount });
+
   const handleAction = (action: 'upgrade' | 'cancel' | 'gotit' | 'wallet') => {
+    console.log('🎁 [ModernRewardPopup] Action triggered:', action);
     onAction(action);
     onClose();
   };

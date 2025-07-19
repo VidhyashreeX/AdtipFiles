@@ -111,7 +111,7 @@ const TipShortsEnhanced = () => {
 
   // Get premium status using the same logic as the header toggle
   const { isPremium } = useUserPremiumStatus();
-  // Use the custom reward hook
+  // Use the reward hook
   const {
     showRewardPopup,
     earnedAmount,
@@ -119,10 +119,23 @@ const TipShortsEnhanced = () => {
     handleRewardPopupAction,
     closeRewardPopup,
     showRewardAd,
+    videoCount,
   } = useVideoRewardAd({
     isGuest,
     userId: user?.id,
   });
+
+  // Debug reward ad state changes
+  useEffect(() => {
+    console.log('🎁 [TipShortsEnhanced] Reward state changed:', {
+      showRewardPopup,
+      earnedAmount,
+      videoCount,
+      isPremium,
+      userId: user?.id,
+      isGuest
+    });
+  }, [showRewardPopup, earnedAmount, videoCount, isPremium, user?.id, isGuest]);
 
   // Safe parameter destructuring to prevent undefined access
   const { shorts: passedShorts, startIndex = 0, shortId } = route.params || {};
@@ -280,12 +293,11 @@ const TipShortsEnhanced = () => {
 
   // Enhanced viewability config for strict video control
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 75, // Increased threshold for stricter control
-    minimumViewTime: 50, // Reduced for faster response
+    itemVisiblePercentThreshold: 80, // Higher threshold for stricter control
+    minimumViewTime: 0, // Immediate response
     waitForInteraction: false,
   }).current;
-
-  // Handle viewability changes
+  // Enhanced viewability change handler with aggressive pause control
   const onViewableItemsChanged = useRef(({viewableItems}: {viewableItems: ViewToken[]}) => {
     const mostVisibleItem = viewableItems.find(item => item.isViewable);
     if (mostVisibleItem && mostVisibleItem.index !== null) {
@@ -318,8 +330,8 @@ const TipShortsEnhanced = () => {
       if (newActiveIndex !== activeIndex) {
         TipShortsLogger.debug(`Updating activeIndex from ${activeIndex} to ${newActiveIndex}`);
         setActiveIndex(newActiveIndex);
-        // Note: Video view counting is now handled only on video completion, not on scroll
-        // This prevents double counting when user scrolls and video completes
+        // ADD THIS LINE to count every short viewed:
+        handleVideoViewed();
       }
     }
   }).current;

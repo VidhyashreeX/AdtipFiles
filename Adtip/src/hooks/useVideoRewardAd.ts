@@ -37,7 +37,7 @@ export const useVideoRewardAd = ({
   const { isPremium } = useUserPremiumStatus();
 
   // Initialize rewarded ad
-  const { isLoaded, showAd, hasEarnedReward, reward } = useRewardedAd();
+  const { hasEarnedReward, reward } = useRewardedAd();
 
   // Handle reward earned from actual ad
   useEffect(() => {
@@ -50,8 +50,22 @@ export const useVideoRewardAd = ({
     }
   }, [hasEarnedReward, reward, isPremium]);
 
+  // Show reward ad
+  const showRewardAd = useCallback(() => {
+    console.log('🎁 [useVideoRewardAd] Showing reward ad...');
+
+    // Always show direct reward for now (can be enhanced with AdMob later)
+    const rewardAmount = isPremium ? PREMIUM_REWARD : NON_PREMIUM_REWARD;
+    console.log('💰 [useVideoRewardAd] Setting reward amount:', rewardAmount, 'isPremium:', isPremium);
+    setEarnedAmount(rewardAmount);
+    setShowRewardPopup(true);
+    console.log('🎁 [useVideoRewardAd] Reward popup should now be visible');
+  }, [isPremium]);
+
   // Handle video view for reward ads (triggered on scroll/view, not completion)
   const handleVideoViewed = useCallback(() => {
+    console.log('🎬 [useVideoRewardAd] handleVideoViewed called', { isGuest, userId, isPremium });
+
     if (isGuest) {
       console.log('🚫 [useVideoRewardAd] Guest user - skipping video count');
       return;
@@ -64,9 +78,9 @@ export const useVideoRewardAd = ({
 
     setVideoCount(prev => {
       const newCount = prev + 1;
-      console.log(`🎬 [useVideoRewardAd] Video viewed. Count: ${newCount}/5 (User: ${userId}, Premium: ${isPremium})`);
+      console.log(`🎬 [useVideoRewardAd] Video viewed. Count: ${newCount}/10 (User: ${userId}, Premium: ${isPremium})`);
 
-      // Only show reward ad after exactly 10th video
+      // Show reward ad after 10 videos
       if (newCount === 10) {
         console.log('🎁 [useVideoRewardAd] 10th video reached! Showing reward ad...');
         setHasBeenCredited(false); // Reset credit tracking for new reward cycle
@@ -77,25 +91,7 @@ export const useVideoRewardAd = ({
 
       return newCount;
     });
-  }, [isGuest, userId, isPremium]);
-
-  // Show reward ad
-  const showRewardAd = useCallback(() => {
-    console.log('🎁 [useVideoRewardAd] Showing reward ad...');
-
-    if (isLoaded) {
-      // Show the actual rewarded ad
-      console.log('📺 [useVideoRewardAd] Displaying Google AdMob rewarded ad');
-      showAd();
-    } else {
-
-      console.log('⚠️ [useVideoRewardAd] Ad not loaded, showing direct reward');
-      const rewardAmount = isPremium ? PREMIUM_REWARD : NON_PREMIUM_REWARD;
-      setEarnedAmount(rewardAmount);
-      setShowRewardPopup(true);
-      // Note: creditWallet will be called when user interacts with popup, not immediately
-    }
-  }, [isPremium, isLoaded, showAd]);
+  }, [isGuest, userId, isPremium, showRewardAd]);
 
   // Reward system is self-contained - no external ad system integration needed
 
@@ -117,7 +113,7 @@ export const useVideoRewardAd = ({
 
       // Use ApiService instead of direct fetch
       await ApiService.creditAdReward({
-        userId,
+        userId: Number(userId),
         amount: amountToCredit
       });
 

@@ -115,6 +115,18 @@ const OptimizedVideoPlayer = memo(({
     }
   }, [isActive]);
 
+  // Additional pause control based on global play state
+  useEffect(() => {
+    if (!isPaused && !isActive && videoRef.current) {
+      // Force pause if this video is not active but global state says it should play
+      try {
+        videoRef.current.seek(0);
+      } catch (error) {
+        console.warn('[OptimizedVideoPlayer] Error in global pause control:', error);
+      }
+    }
+  }, [isPaused, isActive]);
+
   const shouldPlay = isActive && !isPaused && isLoaded && !hasError && isValidUri;
 
   const handleLoad = useCallback((data: any) => {
