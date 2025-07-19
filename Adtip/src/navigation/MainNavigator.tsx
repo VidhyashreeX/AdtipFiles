@@ -45,6 +45,7 @@ import EarnMoneyCreatorScreen from '../screens/earnings/EarnMoneyCreatorScreen';
 import ReferralScreen from '../screens/referral/ReferralScreen';
 import ChooseGameScreen from '../screens/playtoEarn/ChooseGamesScreen';
 import LudoGameScreen from '../screens/playtoEarn/LudoGameScreen';
+import InstallToEarnScreen from '../screens/installToEarn/InstallToEarnScreen';
 import WatchToEarnScreen from '../screens/watchToEarn/WatchToEarnScreen';
 import AdPassbookScreen from '../screens/adPassbook/AdPassbookScreen';
 import SupportScreen from '../screens/support/SupportScreen';
@@ -136,7 +137,7 @@ const EnhancedEarningsScreen = withWalletBalance(EarningsScreen);
 const EnhancedEarnMoneyUserScreen = withWalletBalance(EarnMoneyUserScreen);
 const EnhancedEarnMoneyCreatorScreen = withWalletBalance(EarnMoneyCreatorScreen);
 const EnhancedReferralScreen = withWalletBalance(ReferralScreen);
-const EnhancedPlayToEarnScreen = withWalletBalance(ChooseGameScreen);
+const EnhancedPlayToEarnScreen = withWalletBalance(InstallToEarnScreen);
 const EnhancedLudoGameScreen = withWalletBalance(LudoGameScreen);
 const EnhancedWatchToEarnScreen = withWalletBalance(WatchToEarnScreen);
 const EnhancedAdPassbookScreen = withWalletBalance(AdPassbookScreen);
@@ -291,7 +292,7 @@ const slideUpTransitionConfig = {
 };
 
 // Enhanced screens with fast loading
-const FastPlayToEarnScreen = withFastLoading(ChooseGameScreen, { 
+const FastPlayToEarnScreen = withFastLoading(InstallToEarnScreen, {
   skipAnimation: true, // Skip animation for faster loading
   priority: 'high' // High priority screen
 });

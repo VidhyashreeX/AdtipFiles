@@ -269,7 +269,7 @@ const Sidebar: React.FC = () => {
     {icon: 'compass', label: 'Explore', screen: 'Explore'},
     {icon: 'credit-card', label: 'Wallet', screen: 'Wallet'},
     {icon: 'users', label: 'Refer & Earn', screen: 'Referral'},
-    {icon: 'play', label: 'Play to Earn', screen: 'PlayToEarn'},
+    {icon: 'download', label: 'Install to Earn', screen: 'PlayToEarn'},
     {icon: 'film', label: 'Watch to Earn', screen: 'TipTube'},
     {icon: 'book-open', label: 'My Ad Passbook', screen: 'AdPassbook'},
     {icon: 'video', label: 'Tip Shorts', screen: 'TipShorts'},

@@ -2008,6 +2008,21 @@ export default class ApiService {
     }
   }
 
+  /**
+   * Delete post
+   */
+  static async deletePost(postId: number): Promise<any> {
+    console.log('[ApiService] Deleting post:', postId);
+    try {
+      const response = await this.post('/api/post/delete', { post_id: postId });
+      console.log('[ApiService] Post deleted successfully:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error deleting post:', error);
+      throw this.handleError(error);
+    }
+  }
+
   // ===== CONTACT FORM APIS =====
 
   /**
@@ -2726,10 +2741,42 @@ export default class ApiService {
    */
   static async creditAdReward({ userId, amount }: { userId: number, amount: number }) {
     try {
-      const response = await this.post('/api/credit-ad-reward', { userId, amount });
+      const response = await this.post('/api/wallet/credit-ad-reward', { userId, amount });
       return response;
     } catch (error) {
       console.error('Error crediting ad reward:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Get withdrawal history for a user
+   * @param userId - User ID
+   * @param type - Type of withdrawals (default: 'all')
+   * @param page - Page number (default: 1)
+   * @param limit - Items per page (default: 10)
+   */
+  static async getWithdrawalHistory(userId: number, type: string = 'all', page: number = 1, limit: number = 10) {
+    try {
+      const response = await this.get(`/api/withdrawal-history/${userId}?type=${type}&page=${page}&limit=${limit}`);
+      return response;
+    } catch (error) {
+      console.error('Error getting withdrawal history:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Get reward history for a user
+   * @param page - Page number (default: 1)
+   * @param limit - Items per page (default: 20)
+   */
+  static async getRewardHistory(page: number = 1, limit: number = 20) {
+    try {
+      const response = await this.get(`/api/reward/history?page=${page}&limit=${limit}`);
+      return response;
+    } catch (error) {
+      console.error('Error getting reward history:', error);
       throw this.handleError(error);
     }
   }

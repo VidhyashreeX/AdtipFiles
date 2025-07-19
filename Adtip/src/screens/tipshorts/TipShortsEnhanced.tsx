@@ -60,6 +60,7 @@ import useSimpleRewardedAd from '../../googleads/SimpleRewardedAd';
 import useVideoRewardAd from '../../hooks/useVideoRewardAd';
 import VideoErrorBoundary from '../../components/common/VideoErrorBoundary';
 import ApiService from '../../services/ApiService';
+import ModernRewardPopup from '../../components/common/ModernRewardPopup';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -824,72 +825,14 @@ const TipShortsEnhanced = () => {
         />
       )}
 
-      {/* Reward Popup */}
-      {showRewardPopup && (
-        <View style={styles.rewardPopup}>
-          <View style={styles.rewardPopupContent}>
-            {isPremium ? (
-              // Premium user popup
-              <>
-                <Text style={styles.rewardPopupTitle}>🎉 Congratulations!</Text>
-                <Text style={styles.rewardPopupSubtitle}>
-                  You have earned ₹{earnedAmount.toFixed(2)} paise
-                </Text>
-                
-                <View style={styles.rewardPopupButtons}>
-                  <TouchableOpacity 
-                    style={[styles.rewardPopupButton, styles.primaryButton]}
-                    onPress={() => handleRewardPopupAction('gotit')}
-                  >
-                    <Text style={styles.primaryButtonText}>Got it, thanks</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.rewardPopupButton, styles.secondaryButton]}
-                    onPress={() => handleRewardPopupAction('wallet')}
-                  >
-                    <Text style={styles.secondaryButtonText}>Open wallet</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            ) : (
-              // Non-premium user popup
-              <>
-                <Text style={styles.rewardPopupTitle}>Hurry! You earned ₹{earnedAmount.toFixed(2)} paise</Text>
-                <Text style={styles.rewardPopupSubtitle}>
-                  Congratulations you have earned ₹{earnedAmount.toFixed(2)} paise, you can earn upto ₹10 per ad.
-                </Text>
-                <Text style={styles.rewardPopupInfo}>
-                  Upgrade to premium now.. let's earning now
-                </Text>
-                
-                <View style={styles.rewardPopupButtons}>
-                  <TouchableOpacity 
-                    style={[styles.rewardPopupButton, styles.primaryButton]}
-                    onPress={() => handleRewardPopupAction('gotit')}
-                  >
-                    <Text style={styles.primaryButtonText}>Got it, thanks</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.rewardPopupButton, styles.secondaryButton]}
-                    onPress={() => handleRewardPopupAction('wallet')}
-                  >
-                    <Text style={styles.secondaryButtonText}>Open wallet</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.rewardPopupButton, styles.upgradeButton]}
-                    onPress={() => handleRewardPopupAction('upgrade')}
-                  >
-                    <Text style={styles.upgradeButtonText}>Upgrade premium now</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-        </View>
-      )}
+      {/* Modern Reward Popup */}
+      <ModernRewardPopup
+        visible={showRewardPopup}
+        onClose={closeRewardPopup}
+        isPremium={isPremium}
+        earnedAmount={earnedAmount}
+        onAction={handleRewardPopupAction}
+      />
     </SafeAreaView>
   );
 };

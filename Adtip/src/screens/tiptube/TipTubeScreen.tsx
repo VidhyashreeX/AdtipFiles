@@ -54,6 +54,7 @@ import LoginPromptModal from '../../components/modals/LoginPromptModal';
 import PubScaleCreditAlert from '../../components/common/PubScaleCreditAlert';
 import useSimpleRewardedAd from '../../googleads/SimpleRewardedAd';
 import AnalyticsPremiumAlert from '../../components/alerts/AnalyticsPremiumAlertNew';
+import ModernRewardPopup from '../../components/common/ModernRewardPopup';
 
 // Get screen dimensions and create constants
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -642,7 +643,7 @@ const TipTubeScreen = () => {
     console.log('🎁 [TipTube] Showing reward ad...');
     
     // Determine reward amount based on premium status
-    const rewardAmount = isPremium ? 0.06 : 0.03;
+    const rewardAmount = isPremium ? 0.10 : 0.03;
     setEarnedAmount(rewardAmount);
     
     // In development mode, just show popup without API call
@@ -661,41 +662,30 @@ const TipTubeScreen = () => {
   // Handle reward popup actions
   const handleRewardPopupAction = useCallback(async (action: 'upgrade' | 'cancel' | 'gotit' | 'wallet') => {
     console.log(`🎁 [TipTube] Reward popup action: ${action}`);
-    
+
+    // Close popup first
+    setShowRewardPopup(false);
+
     if (action === 'upgrade') {
       // Navigate to premium upgrade
       navigation.navigate('Packages' as never);
-    } else if (action === 'gotit') {
-      // Close popup
-      setShowRewardPopup(false);
     } else if (action === 'wallet') {
       // Navigate to wallet
       navigation.navigate('Wallet');
     }
     
     // In production mode, credit wallet
-    if (!isDevelopmentMode) {
+    if (!isDevelopmentMode && user?.id) {
       try {
         console.log('💰 [TipTube] Crediting wallet with amount:', earnedAmount);
-        const response = await fetch(`${API_BASE_URL}/wallet/credit-ad-reward`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${await AsyncStorage.getItem('accessToken')}`,
-          },
-          body: JSON.stringify({
-            amount: earnedAmount,
-            source: 'tiptube_reward'
-          })
+
+        // Use ApiService instead of direct fetch
+        await ApiService.creditAdReward({
+          userId: Number(user.id),
+          amount: earnedAmount
         });
-        
-        const result = await response.json();
-        if (result.status) {
-          console.log('✅ [TipTube] Wallet credited successfully');
-          // Update wallet balance in context if needed
-        } else {
-          console.log('❌ [TipTube] Failed to credit wallet:', result.message);
-        }
+
+        console.log('✅ [TipTube] Wallet credited successfully');
       } catch (error) {
         console.error('❌ [TipTube] Error crediting wallet:', error);
       }
@@ -703,6 +693,11 @@ const TipTubeScreen = () => {
       console.log('🔧 [TipTube] Development mode: Skipping wallet credit');
     }
   }, [earnedAmount, isDevelopmentMode, navigation]);
+
+  // Close reward popup
+  const closeRewardPopup = useCallback(() => {
+    setShowRewardPopup(false);
+  }, []);
 
   // Handle video press with view API calls
   const handleVideoPress = useCallback(async (video: Video) => {
@@ -1206,78 +1201,14 @@ const TipTubeScreen = () => {
           onGoBack={handleAnalyticsPremiumGoBack}
         />
 
-        {/* Reward Popup */}
-        {showRewardPopup && (
-          <View style={styles.rewardPopup}>
-            <View style={styles.rewardPopupContent}>
-              {isPremium ? (
-                // Premium user popup
-                <>
-                  <Text style={styles.rewardPopupTitle}>🎉 Congratulations!</Text>
-                  <Text style={styles.rewardPopupSubtitle}>
-                    You have earned ₹{earnedAmount.toFixed(2)} paise
-                  </Text>
-                  
-                  <View style={styles.rewardPopupButtons}>
-                    <TouchableOpacity 
-                      style={[styles.rewardPopupButton, styles.primaryButton]}
-                      onPress={() => handleRewardPopupAction('gotit')}
-                    >
-                      <Text style={styles.primaryButtonText}>Got it, thanks</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={[styles.rewardPopupButton, styles.secondaryButton]}
-                      onPress={() => handleRewardPopupAction('wallet')}
-                    >
-                      <Text style={styles.secondaryButtonText}>Open wallet</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              ) : (
-                // Non-premium user popup
-                <>
-                  <Text style={styles.rewardPopupTitle}>Hurry! You earned ₹{earnedAmount.toFixed(2)} paise</Text>
-                  <Text style={styles.rewardPopupSubtitle}>
-                    Congratulations you have earned ₹{earnedAmount.toFixed(2)} paise, you can earn upto ₹10 per ad.
-                  </Text>
-                  <Text style={styles.rewardPopupInfo}>
-                    Upgrade to premium now.. let's earning now
-                  </Text>
-                  
-                  <View style={styles.rewardPopupButtons}>
-                    <TouchableOpacity 
-                      style={[styles.rewardPopupButton, styles.primaryButton]}
-                      onPress={() => handleRewardPopupAction('gotit')}
-                    >
-                      <Text style={styles.primaryButtonText}>Got it, thanks</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={[styles.rewardPopupButton, styles.secondaryButton]}
-                      onPress={() => handleRewardPopupAction('wallet')}
-                    >
-                      <Text style={styles.secondaryButtonText}>Open wallet</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={[styles.rewardPopupButton, styles.upgradeButton]}
-                      onPress={() => handleRewardPopupAction('upgrade')}
-                    >
-                      <Text style={styles.upgradeButtonText}>Upgrade premium now</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-              
-              {isDevelopmentMode && (
-                <Text style={styles.developmentModeText}>
-                  🔧 Development Mode: No wallet credit
-                </Text>
-              )}
-            </View>
-          </View>
-        )}
+        {/* Modern Reward Popup */}
+        <ModernRewardPopup
+          visible={showRewardPopup}
+          onClose={closeRewardPopup}
+          isPremium={isPremium}
+          earnedAmount={earnedAmount}
+          onAction={handleRewardPopupAction}
+        />
 
         {/* Test button for reward ads (DEV only) */}
         {__DEV__ === true && (

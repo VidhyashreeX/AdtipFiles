@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const REWARD_INTERVAL = 5;
 const NON_PREMIUM_REWARD = 0.03;
-const PREMIUM_REWARD = 0.06;
+const PREMIUM_REWARD = 0.10;
 
 interface UseVideoRewardAdProps {
   isPremium: boolean;

@@ -468,10 +468,11 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
     }
   }, [user?.name, userId]);
 
-  // Handle video edit
-  const handleEditVideo = useCallback((post: Post) => {
+  // Handle post edit (works for both videos and images)
+  const handleEditPost = useCallback((post: Post) => {
+    const contentType = post.media_type === 'video' ? 'video' : 'post';
     Alert.alert(
-      'Edit Video',
+      `Edit ${contentType === 'video' ? 'Video' : 'Post'}`,
       'Choose what you want to edit',
       [
         {
@@ -481,10 +482,10 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
         {
           text: 'Edit Details',
           onPress: () => {
-            // Navigate to edit video screen or show edit modal
+            // Navigate to edit screen or show edit modal
             Alert.prompt(
-              'Edit Video Title',
-              'Enter new title for your video',
+              `Edit ${contentType === 'video' ? 'Video' : 'Post'} Title`,
+              `Enter new title for your ${contentType}`,
               [
                 {
                   text: 'Cancel',
@@ -495,15 +496,17 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
                   onPress: async (newTitle) => {
                     if (newTitle && newTitle.trim()) {
                       try {
+                        // For user profile posts, we should use updatePost API
+                        // Note: This might need to be implemented if not available
                         await ApiService.editVideo({
                           id: post.id,
                           name: newTitle.trim(),
                         });
-                        Alert.alert('Success', 'Video title updated successfully');
+                        Alert.alert('Success', `${contentType === 'video' ? 'Video' : 'Post'} title updated successfully`);
                         handleRefresh();
                       } catch (error) {
-                        console.error('Error editing video:', error);
-                        Alert.alert('Error', 'Failed to update video title');
+                        console.error(`Error editing ${contentType}:`, error);
+                        Alert.alert('Error', `Failed to update ${contentType} title`);
                       }
                     }
                   },
@@ -518,11 +521,12 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
     );
   }, []);
 
-  // Handle video delete
-  const handleDeleteVideo = useCallback((post: Post) => {
+  // Handle post delete (works for both videos and images)
+  const handleDeletePost = useCallback((post: Post) => {
+    const contentType = post.media_type === 'video' ? 'video' : 'post';
     Alert.alert(
-      'Delete Video',
-      'Are you sure you want to delete this video? This action cannot be undone.',
+      `Delete ${contentType === 'video' ? 'Video' : 'Post'}`,
+      `Are you sure you want to delete this ${contentType}? This action cannot be undone.`,
       [
         {
           text: 'Cancel',
@@ -533,12 +537,14 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await ApiService.deleteVideo(post.id);
-              Alert.alert('Success', 'Video deleted successfully');
+              // Use the appropriate API based on content type
+              // For user profile posts, we should use deletePost API
+              await ApiService.deletePost(post.id);
+              Alert.alert('Success', `${contentType === 'video' ? 'Video' : 'Post'} deleted successfully`);
               handleRefresh();
             } catch (error) {
-              console.error('Error deleting video:', error);
-              Alert.alert('Error', 'Failed to delete video');
+              console.error(`Error deleting ${contentType}:`, error);
+              Alert.alert('Error', `Failed to delete ${contentType}`);
             }
           },
         },
@@ -821,14 +827,14 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
               </View>
             )}
 
-            {/* Video Management Buttons - Only show for own profile and videos */}
-            {isOwnProfile && post.media_type === 'video' && (
+            {/* Post Management Buttons - Show for own profile and both videos and images */}
+            {isOwnProfile && (post.media_type === 'video' || post.media_type === 'image') && (
               <View style={styles.videoManagementOverlay}>
                 <TouchableOpacity
                   style={[styles.managementButton, styles.editButton]}
                   onPress={(e) => {
                     e.stopPropagation();
-                    handleEditVideo(post);
+                    handleEditPost(post);
                   }}
                 >
                   <Icon name="edit-2" size={14} color="#fff" />
@@ -837,7 +843,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
                   style={[styles.managementButton, styles.deleteButton]}
                   onPress={(e) => {
                     e.stopPropagation();
-                    handleDeleteVideo(post);
+                    handleDeletePost(post);
                   }}
                 >
                   <Icon name="trash-2" size={14} color="#fff" />

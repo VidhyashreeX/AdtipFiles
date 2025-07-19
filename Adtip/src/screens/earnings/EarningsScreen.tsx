@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,60 +6,224 @@ import {
   TouchableOpacity,
   ScrollView,
   SafeAreaView,
+  ActivityIndicator,
+  RefreshControl,
+  Alert,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Feather';
-import { IndianRupee } from 'lucide-react-native';
+import { IndianRupee, TrendingUp, Calendar, Target, Gift } from 'lucide-react-native';
 import {useTheme} from '../../contexts/ThemeContext';
+import {useAuth} from '../../contexts/AuthContext';
 import Header from '../../components/common/Header';
 import {useNavigation} from '@react-navigation/native';
+import ApiService from '../../services/ApiService';
+import WalletService from '../../services/WalletService';
+
+interface EarningsData {
+  totalEarned: number;
+  thisMonth: number;
+  thisWeek: number;
+  todayEarnings: number;
+  withdrawalTotal: number;
+  availableBalance: number;
+  rewardHistory: any[];
+  withdrawalHistory: any[];
+  transactionHistory: any[];
+}
 
 const EarningsScreen: React.FC = () => {
   const {colors, isDarkMode} = useTheme();
+  const {user} = useAuth();
   const navigation = useNavigation();
-  
-  // Mock data
-  const earningsData = {
-    totalEarned: 1247.50,
-    thisMonth: 183.25,
-    progress: 7.5,
-    progressTarget: 50
-  };
-  
-  // Menu items
+
+  // State management
+  const [earningsData, setEarningsData] = useState<EarningsData>({
+    totalEarned: 0,
+    thisMonth: 0,
+    thisWeek: 0,
+    todayEarnings: 0,
+    withdrawalTotal: 0,
+    availableBalance: 0,
+    rewardHistory: [],
+    withdrawalHistory: [],
+    transactionHistory: []
+  });
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch earnings data from APIs
+  const fetchEarningsData = useCallback(async () => {
+    if (!user?.id) {
+      setError('User not authenticated');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setError(null);
+
+      // Fetch data from multiple APIs in parallel
+      const [
+        walletBalance,
+        transactionHistory,
+        withdrawalHistory,
+        rewardHistory
+      ] = await Promise.allSettled([
+        WalletService.getWalletBalance(user.id),
+        WalletService.getTransactionHistory(user.id),
+        ApiService.getWithdrawalHistory(Number(user.id)),
+        ApiService.getRewardHistory(1, 50) // Get more records for calculations
+      ]);
+
+      // Process wallet balance
+      const balance = walletBalance.status === 'fulfilled' ? parseFloat(walletBalance.value || '0') : 0;
+
+      // Process transaction history
+      const transactions = transactionHistory.status === 'fulfilled' ? transactionHistory.value : [];
+
+      // Process withdrawal history
+      const withdrawals = withdrawalHistory.status === 'fulfilled' ? withdrawalHistory.value?.data || [] : [];
+
+      // Process reward history
+      const rewards = rewardHistory.status === 'fulfilled' ? rewardHistory.value?.data || [] : [];
+
+      // Calculate earnings metrics
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      // Calculate total earned from transactions (credit transactions)
+      const creditTransactions = transactions.filter((t: any) =>
+        t.transaction_type === 'credit' || t.transaction_type === 'Credit' || t.amount > 0
+      );
+
+      const totalEarned = creditTransactions.reduce((sum: number, t: any) =>
+        sum + parseFloat(t.amount || 0), 0
+      );
+
+      // Calculate this month's earnings
+      const thisMonthEarnings = creditTransactions
+        .filter((t: any) => new Date(t.created_at) >= startOfMonth)
+        .reduce((sum: number, t: any) => sum + parseFloat(t.amount || 0), 0);
+
+      // Calculate this week's earnings
+      const thisWeekEarnings = creditTransactions
+        .filter((t: any) => new Date(t.created_at) >= startOfWeek)
+        .reduce((sum: number, t: any) => sum + parseFloat(t.amount || 0), 0);
+
+      // Calculate today's earnings
+      const todayEarnings = creditTransactions
+        .filter((t: any) => new Date(t.created_at) >= startOfDay)
+        .reduce((sum: number, t: any) => sum + parseFloat(t.amount || 0), 0);
+
+      // Calculate total withdrawals
+      const totalWithdrawals = withdrawals.reduce((sum: number, w: any) =>
+        sum + parseFloat(w.amount || 0), 0
+      );
+
+      setEarningsData({
+        totalEarned,
+        thisMonth: thisMonthEarnings,
+        thisWeek: thisWeekEarnings,
+        todayEarnings,
+        withdrawalTotal: totalWithdrawals,
+        availableBalance: balance,
+        rewardHistory: rewards,
+        withdrawalHistory: withdrawals,
+        transactionHistory: transactions
+      });
+
+    } catch (error) {
+      console.error('Error fetching earnings data:', error);
+      setError('Failed to load earnings data. Please try again.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [user?.id]);
+
+  // Load data on component mount
+  useEffect(() => {
+    fetchEarningsData();
+  }, [fetchEarningsData]);
+
+  // Handle refresh
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchEarningsData();
+  }, [fetchEarningsData]);
+
+  // Handle navigation to different sections
+  const handleNavigation = useCallback((section: string) => {
+    switch (section) {
+      case 'transaction_history':
+        // Show transaction history modal or navigate to dedicated screen
+        Alert.alert(
+          'Transaction History',
+          `Total transactions: ${earningsData.transactionHistory.length}\nTotal earned: ₹${earningsData.totalEarned.toFixed(2)}`,
+          [{ text: 'OK' }]
+        );
+        break;
+      case 'withdrawal_history':
+        // Show withdrawal history
+        Alert.alert(
+          'Withdrawal History',
+          `Total withdrawals: ${earningsData.withdrawalHistory.length}\nTotal withdrawn: ₹${earningsData.withdrawalTotal.toFixed(2)}`,
+          [{ text: 'OK' }]
+        );
+        break;
+      case 'wallet':
+        navigation.navigate('Wallet' as never);
+        break;
+      case 'install_to_earn':
+        navigation.navigate('PlayToEarn' as never); // This now goes to InstallToEarnScreen
+        break;
+      default:
+        console.log(`Navigate to ${section}`);
+    }
+  }, [navigation, earningsData]);
+
+  // Menu items with real functionality
   const menuItems = [
     {
-      id: 'payment_history',
-      icon: 'calendar',
-      title: 'Payment History',
-      onPress: () => console.log('Navigate to Payment History'),
+      id: 'transaction_history',
+      icon: 'list',
+      title: 'Transaction History',
+      subtitle: `${earningsData.transactionHistory.length} transactions`,
+      onPress: () => handleNavigation('transaction_history'),
       iconBgColor: '#FFFAEB',
       iconColor: '#F6A723',
     },
     {
-      id: 'withdrawal_methods',
-      icon: 'credit-card',
-      title: 'Withdrawal Methods',
-      onPress: () => console.log('Navigate to Withdrawal Methods'),
+      id: 'withdrawal_history',
+      icon: 'download',
+      title: 'Withdrawal History',
+      subtitle: `₹${earningsData.withdrawalTotal.toFixed(2)} withdrawn`,
+      onPress: () => handleNavigation('withdrawal_history'),
       iconBgColor: '#F0F9FF',
       iconColor: '#0091FF',
     },
     {
-      id: 'earning_goals',
-      icon: 'target',
-      title: 'Earning Goals',
-      onPress: () => console.log('Navigate to Earning Goals'),
-      iconBgColor: '#FEF6FB',
-      iconColor: '#CB1C8D',
+      id: 'wallet',
+      icon: 'credit-card',
+      title: 'My Wallet',
+      subtitle: `₹${earningsData.availableBalance.toFixed(2)} available`,
+      onPress: () => handleNavigation('wallet'),
+      iconBgColor: '#F0FDF4',
+      iconColor: '#10B981',
     },
     {
-      id: 'bonus_rewards',
-      icon: 'gift',
-      title: 'Bonus Rewards',
-      onPress: () => console.log('Navigate to Bonus Rewards'),
+      id: 'install_to_earn',
+      icon: 'smartphone',
+      title: 'Install to Earn',
+      subtitle: 'Earn more by installing apps',
+      onPress: () => handleNavigation('install_to_earn'),
       iconBgColor: '#FFF5F5',
       iconColor: '#F87171',
-      badge: '3 Available'
+      badge: 'New'
     },
   ];
 
@@ -82,9 +246,16 @@ const EarningsScreen: React.FC = () => {
       <View style={[styles.menuItemIconContainer, {backgroundColor: item.iconBgColor}]}>
         <Icon name={item.icon} size={22} color={item.iconColor} />
       </View>
-      <Text style={[styles.menuItemText, {color: colors.text.primary}]}>
-        {item.title}
-      </Text>
+      <View style={styles.menuItemContent}>
+        <Text style={[styles.menuItemText, {color: colors.text.primary}]}>
+          {item.title}
+        </Text>
+        {item.subtitle && (
+          <Text style={[styles.menuItemSubtitle, {color: colors.text.secondary}]}>
+            {item.subtitle}
+          </Text>
+        )}
+      </View>
       <View style={styles.menuItemRight}>
         {item.badge && (
           <View style={styles.badge}>
@@ -96,8 +267,70 @@ const EarningsScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
-  // Calculate progress percentage
-  const progressPercentage = (earningsData.progress / earningsData.progressTarget) * 100;
+  // Loading state
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, {backgroundColor: colors.background}]}>
+        <Header
+          title="Earnings"
+          showWallet={false}
+          showSearch={false}
+          showPremium={false}
+          leftComponent={
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
+        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, {color: colors.text.secondary}]}>
+            Loading earnings data...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <SafeAreaView style={[styles.container, {backgroundColor: colors.background}]}>
+        <Header
+          title="Earnings"
+          showWallet={false}
+          showSearch={false}
+          showPremium={false}
+          leftComponent={
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
+        />
+        <View style={styles.errorContainer}>
+          <Icon name="alert-circle" size={48} color={colors.error || '#F87171'} />
+          <Text style={[styles.errorTitle, {color: colors.text.primary}]}>
+            Unable to Load Data
+          </Text>
+          <Text style={[styles.errorMessage, {color: colors.text.secondary}]}>
+            {error}
+          </Text>
+          <TouchableOpacity
+            style={[styles.retryButton, {backgroundColor: colors.primary}]}
+            onPress={fetchEarningsData}
+          >
+            <Text style={styles.retryButtonText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, {backgroundColor: colors.background}]}>
@@ -115,8 +348,19 @@ const EarningsScreen: React.FC = () => {
           </TouchableOpacity>
         }
       />
-      
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
+      >
         {/* Earnings Card */}
         <View style={[styles.earningsCard, {backgroundColor: isDarkMode ? colors.card : '#FFFFFF'}]}>
           <View style={styles.earningsHeader}>
@@ -133,7 +377,7 @@ const EarningsScreen: React.FC = () => {
           <View style={styles.earningsStats}>
             <View style={styles.totalEarnings}>
               <Text style={[styles.totalAmount, {color: colors.text.primary}]}>
-                ${earningsData.totalEarned.toFixed(2)}
+                ₹{earningsData.totalEarned.toFixed(2)}
               </Text>
               <Text style={[styles.totalLabel, {color: colors.text.tertiary}]}>
                 Total Earned
@@ -142,7 +386,7 @@ const EarningsScreen: React.FC = () => {
 
             <View style={styles.monthlyEarnings}>
               <Text style={[styles.monthlyAmount, {color: '#10B981'}]}>
-                ${earningsData.thisMonth.toFixed(2)}
+                ₹{earningsData.thisMonth.toFixed(2)}
               </Text>
               <Text style={[styles.monthlyLabel, {color: colors.text.tertiary}]}>
                 This Month
@@ -150,20 +394,33 @@ const EarningsScreen: React.FC = () => {
             </View>
           </View>
 
-          <View style={styles.progressSection}>
-            <Text style={[styles.progressText, {color: colors.text.tertiary}]}>
-              Progress to next reward
-            </Text>
-            <Text style={[styles.progressAmount, {color: colors.text.secondary}]}>
-              ${earningsData.progress.toFixed(2)} / ${earningsData.progressTarget.toFixed(2)}
-            </Text>
-            <View style={[styles.progressBarContainer, {backgroundColor: isDarkMode ? colors.border.light : '#F3F4F6'}]}>
-              <View 
-                style={[
-                  styles.progressBar, 
-                  {width: `${progressPercentage}%`, backgroundColor: '#10B981'}
-                ]} 
-              />
+          {/* Additional Stats Row */}
+          <View style={styles.additionalStats}>
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, {color: colors.text.primary}]}>
+                ₹{earningsData.thisWeek.toFixed(2)}
+              </Text>
+              <Text style={[styles.statLabel, {color: colors.text.tertiary}]}>
+                This Week
+              </Text>
+            </View>
+
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, {color: colors.text.primary}]}>
+                ₹{earningsData.todayEarnings.toFixed(2)}
+              </Text>
+              <Text style={[styles.statLabel, {color: colors.text.tertiary}]}>
+                Today
+              </Text>
+            </View>
+
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, {color: '#10B981'}]}>
+                ₹{earningsData.availableBalance.toFixed(2)}
+              </Text>
+              <Text style={[styles.statLabel, {color: colors.text.tertiary}]}>
+                Available
+              </Text>
             </View>
           </View>
         </View>
@@ -287,10 +544,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  menuItemText: {
+  menuItemContent: {
     flex: 1,
+  },
+  menuItemText: {
     fontSize: 16,
     fontWeight: '500',
+  },
+  menuItemSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
   },
   menuItemRight: {
     flexDirection: 'row',
@@ -311,6 +574,63 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
     marginRight: 8,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorMessage: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  retryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  additionalStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
   },
 });
 
