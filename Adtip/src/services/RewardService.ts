@@ -53,12 +53,38 @@ export default class RewardService {
    * @returns Promise resolving when the offerwall is closed
    */
   static async showOfferwall(): Promise<void> {
-    // Temporary notice while PubScale is disabled
-    Alert.alert(
-      'Feature Disabled',
-      'The offerwall feature is currently disabled. Please check back later.',
-    );
-    return Promise.resolve();
+    try {
+      // Import PubScaleService dynamically to avoid circular dependencies
+      const PubScaleService = (await import('./PubScaleService')).default;
+
+      // Show the offerwall
+      await PubScaleService.showOfferwall();
+
+      console.log('[RewardService] Offerwall shown successfully');
+    } catch (error) {
+      console.error('[RewardService] Error showing offerwall:', error);
+
+      // Show fallback alert with option to try web version
+      Alert.alert(
+        'Offerwall Unavailable',
+        'The native offerwall is currently unavailable. Would you like to try the web version?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Try Web Version',
+            onPress: async () => {
+              try {
+                const PubScaleFallbackService = (await import('./PubScaleFallbackService')).default;
+                await PubScaleFallbackService.showOfferwall();
+              } catch (fallbackError) {
+                console.error('[RewardService] Fallback offerwall also failed:', fallbackError);
+                Alert.alert('Error', 'Unable to load offerwall. Please try again later.');
+              }
+            }
+          }
+        ]
+      );
+    }
   }
 
   /**

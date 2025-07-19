@@ -19,6 +19,8 @@ import Header from '../../components/common/Header';
 import {useNavigation} from '@react-navigation/native';
 import ApiService from '../../services/ApiService';
 import WalletService from '../../services/WalletService';
+import EarningsTimeline from '../../components/earnings/EarningsTimeline';
+import { useUserPremiumStatus } from '../../contexts/UserDataContext';
 
 interface EarningsData {
   totalEarned: number;
@@ -36,6 +38,7 @@ const EarningsScreen: React.FC = () => {
   const {colors, isDarkMode} = useTheme();
   const {user} = useAuth();
   const navigation = useNavigation();
+  const { isPremium } = useUserPremiumStatus();
 
   // State management
   const [earningsData, setEarningsData] = useState<EarningsData>({
@@ -424,6 +427,12 @@ const EarningsScreen: React.FC = () => {
             </View>
           </View>
         </View>
+
+        {/* Earnings Credit Timeline */}
+        <EarningsTimeline
+          isPremium={isPremium}
+          showFullTimeline={false}
+        />
 
         {/* Menu Items */}
         {menuItems.map(renderMenuItem)}

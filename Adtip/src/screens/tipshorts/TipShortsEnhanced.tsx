@@ -56,7 +56,6 @@ import ShortsCardSkeleton from '../../components/skeletons/ShortsCardSkeleton';
 import EnhancedShortCard from './components/EnhancedShortCard';
 import LoginPromptModal from '../../components/modals/LoginPromptModal';
 import VideoCommentsModal from '../../components/tiptube/VideoCommentsModal';
-import useSimpleRewardedAd from '../../googleads/SimpleRewardedAd';
 import useVideoRewardAd from '../../hooks/useVideoRewardAd';
 import VideoErrorBoundary from '../../components/common/VideoErrorBoundary';
 import ApiService from '../../services/ApiService';
@@ -75,7 +74,7 @@ type TipShortsRouteParams = {
 
 type TipShortsRouteProp = RouteProp<{ params: TipShortsRouteParams }, 'params'>;
 
-const REWARD_INTERVAL = 5; // Keep this for handleAdView function
+// Reward logic is now handled by useVideoRewardAd hook
 
 
 
@@ -123,8 +122,6 @@ const TipShortsEnhanced = () => {
   } = useShorts();
   const insets = useSafeAreaInsets();
   const isPremium = user && typeof user.is_premium === 'boolean' ? user.is_premium : false;
-  const { showAd, hasEarnedReward } = useSimpleRewardedAd();
-  const [viewCount, setViewCount] = useState(0);
 
   // Use the custom reward hook
   const {
@@ -139,7 +136,6 @@ const TipShortsEnhanced = () => {
     isPremium,
     isGuest,
     userId: user?.id,
-    hasEarnedReward,
   });
 
   // Safe parameter destructuring to prevent undefined access
@@ -628,35 +624,13 @@ const TipShortsEnhanced = () => {
     }
   }, [shorts, isLoading, error, refetch]);
 
-  // Call this after a video is completed/skipped
-  const handleAdView = useCallback(() => {
-    setViewCount((prev) => {
-      const newCount = prev + 1;
-      console.log(`[TipShorts] Video viewed. Count: ${newCount}, Interval: ${REWARD_INTERVAL}`);
-      if (newCount % REWARD_INTERVAL === 0) {
-        console.log(`[TipShorts] Showing reward ad after ${newCount} videos`);
-        showAd();
-      }
-      return newCount;
-    });
-  }, [showAd]);
+  // Reward logic is now handled by useVideoRewardAd hook
 
   // Reward logic is now handled by useVideoRewardAd hook
 
   // Old reward popup actions are now handled by useVideoRewardAd hook
 
-  // Handle navigation actions for reward popup
-  const handleRewardNavigation = useCallback(async (action: 'upgrade' | 'cancel' | 'gotit' | 'wallet') => {
-    // Call the hook's handler first
-    await handleRewardPopupAction(action);
-
-    // Then handle navigation
-    if (action === 'upgrade') {
-      navigation.navigate('Packages' as never);
-    } else if (action === 'wallet') {
-      navigation.navigate('Wallet' as never);
-    }
-  }, [handleRewardPopupAction, navigation]);
+  // Navigation is now handled by useVideoRewardAd hook
 
   // Render loading state
   if (isLoading && shorts.length === 0) {
@@ -787,10 +761,10 @@ const TipShortsEnhanced = () => {
             Active: {activeIndex + 1}/{shorts.length} | Loading: {isLoading.toString()}
           </Text>
           {/* Test button for reward ads */}
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => {
               console.log('[TipShorts] Manual reward ad trigger');
-              handleAdView();
+              showRewardAd();
             }}
             style={{
               backgroundColor: '#FF3040',

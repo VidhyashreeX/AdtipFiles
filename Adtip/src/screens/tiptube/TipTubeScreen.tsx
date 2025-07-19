@@ -166,7 +166,7 @@ const TipTubeSearchBar = ({
         color: colors.text.primary,
         fontSize: 16,
       }}
-      placeholder="Search YouTube"
+      placeholder="Search TipTube"
       placeholderTextColor={colors.text.secondary}
       value={value}
       onChangeText={onChangeText}
@@ -613,7 +613,6 @@ const TipTubeScreen = () => {
   const [videoCount, setVideoCount] = useState(0);
   const [showRewardPopup, setShowRewardPopup] = useState(false);
   const [earnedAmount, setEarnedAmount] = useState(0);
-  const [isDevelopmentMode] = useState(__DEV__); // Development mode flag
 
   // Handle video view for reward ads (triggered on scroll/view, not completion)
   const handleVideoView = useCallback(() => {
@@ -641,23 +640,15 @@ const TipTubeScreen = () => {
   // Show reward ad
   const showRewardAd = useCallback(() => {
     console.log('🎁 [TipTube] Showing reward ad...');
-    
+
     // Determine reward amount based on premium status
     const rewardAmount = isPremium ? 0.10 : 0.03;
     setEarnedAmount(rewardAmount);
-    
-    // In development mode, just show popup without API call
-    if (isDevelopmentMode) {
-      console.log('🔧 [TipTube] Development mode: Showing popup without API call');
-      setShowRewardPopup(true);
-      return;
-    }
-    
-    // In production, show actual reward ad
-    // For now, simulate reward ad completion
-    console.log('🎁 [TipTube] Production mode: Would show actual reward ad');
+
+    // Show reward popup (production mode)
+    console.log('🎁 [TipTube] Production mode: Showing reward popup');
     setShowRewardPopup(true);
-  }, [isPremium, isDevelopmentMode]);
+  }, [isPremium]);
 
   // Handle reward popup actions
   const handleRewardPopupAction = useCallback(async (action: 'upgrade' | 'cancel' | 'gotit' | 'wallet') => {
@@ -674,8 +665,8 @@ const TipTubeScreen = () => {
       navigation.navigate('Wallet');
     }
     
-    // In production mode, credit wallet
-    if (!isDevelopmentMode && user?.id) {
+    // Credit wallet for all actions except cancel
+    if (action !== 'cancel' && user?.id) {
       try {
         console.log('💰 [TipTube] Crediting wallet with amount:', earnedAmount);
 
@@ -689,10 +680,8 @@ const TipTubeScreen = () => {
       } catch (error) {
         console.error('❌ [TipTube] Error crediting wallet:', error);
       }
-    } else {
-      console.log('🔧 [TipTube] Development mode: Skipping wallet credit');
     }
-  }, [earnedAmount, isDevelopmentMode, navigation]);
+  }, [earnedAmount, navigation, user?.id]);
 
   // Close reward popup
   const closeRewardPopup = useCallback(() => {

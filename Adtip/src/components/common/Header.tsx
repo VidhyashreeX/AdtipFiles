@@ -27,6 +27,7 @@ export interface HeaderProps {
   showTipShortsIcon?: boolean;
   onSearchSubmit?: (query: string) => void;
   onSearchQueryChange?: (query: string) => void;
+  searchQuery?: string; // External search query value
   showSearch?: boolean;
   showPremium?: boolean; // New prop to control premium button visibility
 }
@@ -82,6 +83,7 @@ const Header: React.FC<HeaderProps> = ({
   showTipShortsIcon,
   onSearchSubmit,
   onSearchQueryChange,
+  searchQuery,
   showSearch = true,
   showPremium = true,
 }) => {
@@ -103,6 +105,9 @@ const Header: React.FC<HeaderProps> = ({
 
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [searchQueryLocal, setSearchQueryLocal] = useState('');
+
+  // Use external search query if provided, otherwise use local state
+  const currentSearchQuery = searchQuery !== undefined ? searchQuery : searchQueryLocal;
 
   // Animation for premium toggle
   const toggleAnimation = useRef(new Animated.Value(isPremium ? 1 : 0)).current;
@@ -151,33 +156,55 @@ const Header: React.FC<HeaderProps> = ({
   const handleCloseSearch = useCallback(() => {
     Keyboard.dismiss();
     // If there's text in the search, clear it first, otherwise close the search
-    if (searchQueryLocal.trim()) {
-      setSearchQueryLocal('');
-      if (onSearchQueryChange) {
-        onSearchQueryChange('');
+    if (currentSearchQuery.trim()) {
+      if (searchQuery !== undefined) {
+        // External search query - use callback
+        if (onSearchQueryChange) {
+          onSearchQueryChange('');
+        }
+      } else {
+        // Local search query
+        setSearchQueryLocal('');
+        if (onSearchQueryChange) {
+          onSearchQueryChange('');
+        }
       }
     } else {
       setIsSearchActive(false);
-      setSearchQueryLocal('');
-      if (onSearchQueryChange) {
-        onSearchQueryChange('');
+      if (searchQuery !== undefined) {
+        if (onSearchQueryChange) {
+          onSearchQueryChange('');
+        }
+      } else {
+        setSearchQueryLocal('');
+        if (onSearchQueryChange) {
+          onSearchQueryChange('');
+        }
       }
     }
-  }, [onSearchQueryChange, searchQueryLocal]);
+  }, [onSearchQueryChange, currentSearchQuery, searchQuery]);
 
   const handleSearchQueryChangeInternal = useCallback((text: string) => {
-    setSearchQueryLocal(text);
-    if (onSearchQueryChange) {
-      onSearchQueryChange(text);
+    if (searchQuery !== undefined) {
+      // External search query - use callback only
+      if (onSearchQueryChange) {
+        onSearchQueryChange(text);
+      }
+    } else {
+      // Local search query
+      setSearchQueryLocal(text);
+      if (onSearchQueryChange) {
+        onSearchQueryChange(text);
+      }
     }
-  }, [onSearchQueryChange]);
+  }, [onSearchQueryChange, searchQuery]);
   
   const handleSearchSubmitInternal = useCallback(() => {
     Keyboard.dismiss();
-    if (searchQueryLocal.trim() && onSearchSubmit) {
-      onSearchSubmit(searchQueryLocal.trim());
+    if (currentSearchQuery.trim() && onSearchSubmit) {
+      onSearchSubmit(currentSearchQuery.trim());
     }
-  }, [searchQueryLocal, onSearchSubmit]);
+  }, [currentSearchQuery, onSearchSubmit]);
 
   // Memoized derived values
   const defaultShowLogo = useMemo(() => !isScreenHeader(), []);
@@ -331,7 +358,7 @@ const Header: React.FC<HeaderProps> = ({
                 }
               ]}
               placeholder="Search..."
-              value={searchQueryLocal}
+              value={currentSearchQuery}
               onChangeText={handleSearchQueryChangeInternal}
               onSubmitEditing={handleSearchSubmitInternal}
               returnKeyType="search"
@@ -364,7 +391,7 @@ const Header: React.FC<HeaderProps> = ({
               shouldShowBuiltInSearch ? (
                 <TouchableOpacity onPress={handleCloseSearch} style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}>
                   <Icon
-                    name={searchQueryLocal.trim() ? "delete" : "x"}
+                    name={currentSearchQuery.trim() ? "delete" : "x"}
                     size={sizes.iconSize}
                     color={colors.text.primary}
                   />

@@ -272,7 +272,9 @@ apiClient.interceptors.response.use(
     });
     return response;
   },
-  error => {
+  async error => {
+    const originalRequest = error.config;
+
     // Log error response details
     if (error.response) {
       console.log('❌ API ERROR RESPONSE:', {
@@ -287,9 +289,46 @@ apiClient.interceptors.response.use(
         timestamp: new Date().toISOString()
       });
 
-      if (error.response.status === 401) {
-        // Unauthorized - token expired or invalid
-        console.warn('API: Unauthorized access - token may be expired');
+      // Handle 401 Unauthorized - attempt token refresh
+      if (error.response.status === 401 && !originalRequest._retry) {
+        originalRequest._retry = true;
+
+        try {
+          console.log('🔄 Attempting token refresh...');
+          const currentToken = await AsyncStorage.getItem('accessToken');
+
+          if (currentToken) {
+            // Attempt to refresh token
+            const refreshResponse = await axios.post(
+              `${API_BASE_URL}/api/refresh-token`,
+              {},
+              {
+                headers: {
+                  'Authorization': `Bearer ${currentToken}`,
+                  'Content-Type': 'application/json'
+                }
+              }
+            );
+
+            if (refreshResponse.data.status && refreshResponse.data.accessToken) {
+              const newToken = refreshResponse.data.accessToken;
+              await AsyncStorage.setItem('accessToken', newToken);
+
+              // Update the original request with new token
+              originalRequest.headers.Authorization = `Bearer ${newToken}`;
+
+              console.log('✅ Token refreshed successfully, retrying original request');
+              return apiClient(originalRequest);
+            }
+          }
+        } catch (refreshError) {
+          console.error('❌ Token refresh failed:', refreshError);
+
+          // Clear stored auth data
+          await AsyncStorage.multiRemove(['accessToken', '@auth_token', 'user']);
+
+          console.warn('🚨 User needs to re-authenticate - token refresh failed');
+        }
       }
 
       if (error.response.status === 429) {
@@ -721,6 +760,36 @@ export default class ApiService {
    */
   static async ping(): Promise<any> {
     return this.get(ApiEndpoints.AUTH_ENDPOINTS.PING);
+  }
+
+  /**
+   * Refresh authentication token
+   */
+  static async refreshToken(): Promise<any> {
+    try {
+      const currentToken = await AsyncStorage.getItem('accessToken');
+
+      if (!currentToken) {
+        throw new Error('No token available for refresh');
+      }
+
+      const response = await this.post('/api/refresh-token', {}, {
+        headers: {
+          'Authorization': `Bearer ${currentToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.status && response.accessToken) {
+        await AsyncStorage.setItem('accessToken', response.accessToken);
+        return response;
+      } else {
+        throw new Error('Invalid refresh response');
+      }
+    } catch (error) {
+      console.error('[ApiService] Token refresh failed:', error);
+      throw this.handleError(error);
+    }
   }
 
   /**
@@ -2432,6 +2501,22 @@ export default class ApiService {
         `/api/viewNormalVideo`,
         { reelId: videoId }
       );
+
+      // Track analytics event for normal video view
+      if (response.status === true || response.statusCode === 200) {
+        try {
+          const analyticsService = (await import('./AnalyticsService')).default;
+          await analyticsService.trackEvent('video_view', {
+            videoId: videoId,
+            videoType: 'normal',
+            timestamp: Date.now(),
+            source: 'api_call'
+          });
+        } catch (analyticsError) {
+          console.warn('Failed to track analytics for normal video view:', analyticsError);
+        }
+      }
+
       return response;
     } catch (error) {
       throw this.handleError(error);
@@ -2444,6 +2529,23 @@ export default class ApiService {
         `/api/viewPaidVideo`,
         { reelId: videoId }
       );
+
+      // Track analytics event for paid video view
+      if (response.status === true || response.statusCode === 200) {
+        try {
+          const analyticsService = (await import('./AnalyticsService')).default;
+          await analyticsService.trackEvent('video_view', {
+            videoId: videoId,
+            videoType: 'paid',
+            paymentType: 'standard',
+            timestamp: Date.now(),
+            source: 'api_call'
+          });
+        } catch (analyticsError) {
+          console.warn('Failed to track analytics for paid video view:', analyticsError);
+        }
+      }
+
       return response;
     } catch (error) {
       throw this.handleError(error);
@@ -2750,23 +2852,6 @@ export default class ApiService {
   }
 
   /**
-   * Get withdrawal history for a user
-   * @param userId - User ID
-   * @param type - Type of withdrawals (default: 'all')
-   * @param page - Page number (default: 1)
-   * @param limit - Items per page (default: 10)
-   */
-  static async getWithdrawalHistory(userId: number, type: string = 'all', page: number = 1, limit: number = 10) {
-    try {
-      const response = await this.get(`/api/withdrawal-history/${userId}?type=${type}&page=${page}&limit=${limit}`);
-      return response;
-    } catch (error) {
-      console.error('Error getting withdrawal history:', error);
-      throw this.handleError(error);
-    }
-  }
-
-  /**
    * Get reward history for a user
    * @param page - Page number (default: 1)
    * @param limit - Items per page (default: 20)
@@ -2815,6 +2900,23 @@ export default class ApiService {
         `/api/viewSubscriptionPaidVideo`,
         { reelId: videoId }
       );
+
+      // Track analytics event for subscription paid video view
+      if (response.status === true || response.statusCode === 200) {
+        try {
+          const analyticsService = (await import('./AnalyticsService')).default;
+          await analyticsService.trackEvent('video_view', {
+            videoId: videoId,
+            videoType: 'paid',
+            paymentType: 'subscription',
+            timestamp: Date.now(),
+            source: 'api_call'
+          });
+        } catch (analyticsError) {
+          console.warn('Failed to track analytics for subscription paid video view:', analyticsError);
+        }
+      }
+
       return response;
     } catch (error) {
       throw this.handleError(error);
@@ -2827,6 +2929,23 @@ export default class ApiService {
         `/api/viewPaidVideoNoPremium`,
         { reelId: videoId }
       );
+
+      // Track analytics event for paid video view (no premium)
+      if (response.status === true || response.statusCode === 200) {
+        try {
+          const analyticsService = (await import('./AnalyticsService')).default;
+          await analyticsService.trackEvent('video_view', {
+            videoId: videoId,
+            videoType: 'paid',
+            paymentType: 'no_premium',
+            timestamp: Date.now(),
+            source: 'api_call'
+          });
+        } catch (analyticsError) {
+          console.warn('Failed to track analytics for paid video view (no premium):', analyticsError);
+        }
+      }
+
       return response;
     } catch (error) {
       throw this.handleError(error);

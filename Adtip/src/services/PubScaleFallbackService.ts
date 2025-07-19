@@ -81,9 +81,22 @@ class PubScaleFallbackService {
                 userId: this.userId || 'anonymous_user',
               });
 
-              // Open a mock web offerwall
-              const fallbackUrl = `${PUBSCALE_BASE_URL || 'https://offerwall.pubscale.com'}/?app_id=${PUBSCALE_APP_ID}&user_id=${this.userId}`;
-              Linking.openURL(fallbackUrl).catch(err => {
+              // Open proper Pubscale offerwall with callback URL
+              const callbackUrl = encodeURIComponent('https://api.adtip.in/payments/offers/pubscale');
+              const fallbackUrl = `${PUBSCALE_BASE_URL || 'https://offerwall.pubscale.com'}/?app_id=${PUBSCALE_APP_ID}&user_id=${this.userId}&platform=android&callback_url=${callbackUrl}`;
+
+              Linking.openURL(fallbackUrl).then(() => {
+                console.log('[PubScaleFallback] Successfully opened offerwall URL');
+
+                // Show instructions to user
+                setTimeout(() => {
+                  Alert.alert(
+                    'Instructions',
+                    'Complete the offers in your browser. Your rewards will be credited to your wallet automatically after verification.',
+                    [{ text: 'OK' }]
+                  );
+                }, 1000);
+              }).catch(err => {
                 console.error('[PubScaleFallback] Error opening URL:', err);
 
                 // Track error
@@ -92,12 +105,13 @@ class PubScaleFallbackService {
                   error: err.message || 'Unknown error',
                   url: fallbackUrl,
                 });
-              });
 
-              // Simulate receiving a reward after a delay
-              setTimeout(() => {
-                this.simulateReward();
-              }, 5000);
+                Alert.alert(
+                  'Error',
+                  'Unable to open offerwall. Please check your internet connection and try again.',
+                  [{ text: 'OK' }]
+                );
+              });
 
               resolve();
             },

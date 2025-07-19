@@ -311,9 +311,40 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       setLoading(false);
     }
   };
+  // Handle authentication errors and token refresh
+  const handleAuthError = async (): Promise<void> => {
+    console.log('[AuthContext] Handling authentication error - clearing auth state');
+
+    try {
+      // Clear all authentication data
+      await AsyncStorage.multiRemove([
+        'accessToken',
+        '@auth_token',
+        'user',
+        'userName',
+        'is_premium',
+        'premium_plan_id',
+        'content_creator_plan_id'
+      ]);
+
+      // Reset state
+      setUser(null);
+      setIsAuthenticated(false);
+      setPremiumState({
+        isPremium: false,
+        premiumPlanId: 0,
+        contentCreatorPlanId: 0,
+      });
+
+      console.log('[AuthContext] ✅ Auth state cleared due to authentication error');
+    } catch (error) {
+      console.error('[AuthContext] ❌ Error clearing auth state:', error);
+    }
+  };
+
   // Logout
   const logout = async (): Promise<void> => {
-    // setLoading(true); // This is the AuthContext's general 'loading' state, 
+    // setLoading(true); // This is the AuthContext's general 'loading' state,
                       // which is fine if you want a global loading indicator for auth operations.
                       // SettingsScreen uses its own 'authLoading' derived from this.
     setError(null);
@@ -322,10 +353,10 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
 
     try {
       LastSeenService.stopTracking();
-      
+
       if (currentUserId) { // Check if there was a user to log out
         console.log(`[AuthContext] Attempting to call API logout for user ID: ${currentUserId}`);
-        
+
         // Use the proper ApiService.logout method which handles FCM token cleanup
         await ApiService.logout(String(currentUserId));
         console.log(`[AuthContext] API logout call successful for user ID: ${currentUserId}`);

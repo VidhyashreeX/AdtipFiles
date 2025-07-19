@@ -8,6 +8,7 @@ export const AUTH_ENDPOINTS = {
   LOGOUT: '/api/logout',
   SAVE_USER_DETAILS: '/api/saveuserdetails',
   PING: '/api/ping',
+  REFRESH_TOKEN: '/api/refresh-token',
 };
 
 // Home page endpoints

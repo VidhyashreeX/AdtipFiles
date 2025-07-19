@@ -86,7 +86,7 @@ const ModernRewardPopup: React.FC<ModernRewardPopupProps> = ({
                   >
                     <IndianRupee size={24} color="#FFFFFF" />
                     <Text style={styles.amountText}>
-                      {earnedAmount.toFixed(2)}
+                      {earnedAmount.toFixed(3)}
                     </Text>
                   </LinearGradient>
                 </View>
@@ -113,7 +113,7 @@ const ModernRewardPopup: React.FC<ModernRewardPopupProps> = ({
                   >
                     <IndianRupee size={24} color="#FFFFFF" />
                     <Text style={styles.amountText}>
-                      {earnedAmount.toFixed(2)}
+                      {earnedAmount.toFixed(3)}
                     </Text>
                   </LinearGradient>
                 </View>

@@ -13,6 +13,8 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../contexts/ThemeContext';
 import ApiService from '../../services/ApiService';
+import EarningsTimeline from '../earnings/EarningsTimeline';
+import { useUserPremiumStatus } from '../../contexts/UserDataContext';
 
 interface WithdrawalFormProps {
   visible: boolean;
@@ -41,6 +43,7 @@ const WithdrawalForm: React.FC<WithdrawalFormProps> = ({
   channelId,
 }) => {
   const { colors } = useTheme();
+  const { isPremium } = useUserPremiumStatus();
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState<WithdrawalSettings | null>(null);
   const [amount, setAmount] = useState('');
@@ -297,6 +300,13 @@ const WithdrawalForm: React.FC<WithdrawalFormProps> = ({
             <Text style={[styles.balanceLabel, { color: colors.text.secondary }]}>Available Balance</Text>
             <Text style={[styles.balanceAmount, { color: colors.text.primary }]}>₹{availableBalance.toFixed(2)}</Text>
           </View>
+
+          {/* Processing Timeline */}
+          <EarningsTimeline
+            isPremium={isPremium}
+            showFullTimeline={false}
+            compact={true}
+          />
 
           {/* Amount Input */}
           <View style={styles.section}>

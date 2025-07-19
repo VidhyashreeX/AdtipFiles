@@ -16,16 +16,21 @@ import { IndianRupee } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 import LinearGradient from 'react-native-linear-gradient';
+import WithdrawalMessaging from '../../components/withdrawal/WithdrawalMessaging';
+import { useUserPremiumStatus } from '../../contexts/UserDataContext';
+import { getWithdrawalMessaging } from '../../utils/withdrawalMessaging';
 
 const WithdrawalAmountScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute();
   const { colors, isDarkMode } = useTheme();
+  const { isPremium } = useUserPremiumStatus();
   const [amount, setAmount] = useState('');
 
   const routeParams = route.params as any;
   const balance = routeParams?.balance || 0;
-  const minimumWithdrawal = routeParams?.minimumWithdrawal || 100;
+  const withdrawalMessaging = getWithdrawalMessaging(isPremium);
+  const minimumWithdrawal = withdrawalMessaging.limits.minimumAmount;
 
   const handleAmountSubmit = () => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -35,7 +40,7 @@ const WithdrawalAmountScreen: React.FC = () => {
     if (parseFloat(amount) < minimumWithdrawal) {
       Alert.alert(
         'Amount Too Low',
-        `Minimum withdrawal amount is ₹${minimumWithdrawal}`
+        `Minimum withdrawal amount is ₹${minimumWithdrawal} for ${isPremium ? 'premium' : 'standard'} users. ${!isPremium ? 'Upgrade to premium for ₹1,000 minimum.' : ''}`
       );
       return;
     }
@@ -163,7 +168,14 @@ const WithdrawalAmountScreen: React.FC = () => {
             </View>
           )}
 
-          {/* Info Section */}
+          {/* Withdrawal Information */}
+          <WithdrawalMessaging
+            isPremium={isPremium}
+            variant="info"
+            onUpgradePress={() => navigation.navigate('Premium')}
+          />
+
+          {/* Transaction Limits */}
           <View style={[styles.infoSection, { backgroundColor: colors.primary + '10' }]}>
             <View style={styles.infoItem}>
               <Icon name="shield" size={16} color={colors.primary} />
@@ -173,7 +185,7 @@ const WithdrawalAmountScreen: React.FC = () => {
             </View>
             <View style={styles.infoDetails}>
               <Text style={[styles.infoText, { color: colors.text.secondary }]}>
-                • Minimum: ₹{minimumWithdrawal}
+                • Minimum: ₹{minimumWithdrawal} ({isPremium ? 'Premium' : 'Standard'} user)
               </Text>
               <Text style={[styles.infoText, { color: colors.text.secondary }]}>
                 • Maximum: ₹50,000 per transaction
@@ -182,10 +194,18 @@ const WithdrawalAmountScreen: React.FC = () => {
                 • Available balance: ₹{balance.toFixed(2)}
               </Text>
               <Text style={[styles.infoText, { color: colors.text.secondary }]}>
-                • Processing time: 3-5 business days
+                • Processing time: {withdrawalMessaging.limits.processingDays} business days
               </Text>
             </View>
           </View>
+
+          {!isPremium && (
+            <WithdrawalMessaging
+              isPremium={isPremium}
+              variant="warning"
+              onUpgradePress={() => navigation.navigate('Premium')}
+            />
+          )}
         </View>
       </ScrollView>
 

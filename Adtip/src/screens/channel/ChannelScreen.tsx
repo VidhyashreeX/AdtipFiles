@@ -75,6 +75,9 @@ interface Video {
   videoType: number; // 0 for TipTube, 1 for TipShorts
   videoLink: string;
   is_shot: number; // 0 for video, 1 for short
+  isPaidPromotional?: number; // 0 for normal, 1 for paid
+  promotionalPrice?: number; // Price for paid videos
+  hasContentCreatorPremium?: number; // 0 or 1
 }
 
 const ChannelScreen: React.FC = () => {
@@ -208,7 +211,7 @@ const ChannelScreen: React.FC = () => {
   }, [selectedTab, shouldFetchChannelData, channelData, channelLoading, userIdForApi, refetchChannel]);
 
   // Transform videos data
-  const videos: Video[] = videosData?.pages?.flatMap(page => 
+  const videos: Video[] = videosData?.pages?.flatMap(page =>
     page?.data?.map((video: any) => ({
       id: String(video.id),
       name: video.name || 'Untitled Video',
@@ -220,11 +223,14 @@ const ChannelScreen: React.FC = () => {
       videoType: 0,
       videoLink: video.video_link || '',
       is_shot: video.is_shot || 0,
+      isPaidPromotional: video.is_paid_promotional || 0,
+      promotionalPrice: video.promotional_price || 0,
+      hasContentCreatorPremium: video.has_content_creator_premium || 0,
     })) || []
   ) || [];
 
   // Transform shorts data
-  const shorts: Video[] = shortsData?.pages?.flatMap(page => 
+  const shorts: Video[] = shortsData?.pages?.flatMap(page =>
     page?.data?.map((video: any) => ({
       id: String(video.id),
       name: video.name || 'Untitled Short',
@@ -236,6 +242,9 @@ const ChannelScreen: React.FC = () => {
       videoType: 1,
       videoLink: video.video_link || '',
       is_shot: video.is_shot || 1,
+      isPaidPromotional: video.is_paid_promotional || 0,
+      promotionalPrice: video.promotional_price || 0,
+      hasContentCreatorPremium: video.has_content_creator_premium || 0,
     })) || []
   ) || [];
 
@@ -355,43 +364,133 @@ const ChannelScreen: React.FC = () => {
   };
 
   const handleVideoPress = useCallback(async (video: Video) => {
-    console.log('[ChannelScreen] Video pressed:', { id: video.id, name: video.name, is_shot: video.is_shot });
-    
-    try {
-      // For now, treat all videos as normal videos (not paid)
-      // You can add paid video logic here if needed
-      await ApiService.viewNormalVideo(Number(video.id));
-      
-      // Create video object for VideoPlayerModal
-      const videoForPlayer = {
-        id: Number(video.id),
-        title: video.name,
-        thumbnail: video.videoThumbnail,
-        videoUrl: video.videoLink,
-        duration: 0, // You might want to parse this from playDuration
-        views: video.views,
-        posted: video.createdDate,
-        avatar: channelInfo?.profileImage,
-        creatorName: channelInfo?.channelName || 'Unknown',
-        isVerified: channelInfo?.isVerified || false,
-        channelId: channelInfo?.channelId || '',
-        price: 0,
-        isPaidPromotional: 0,
-        contentCreatorPlanId: 0,
-      };
+    console.log('[ChannelScreen] Video pressed:', {
+      id: video.id,
+      name: video.name,
+      isPaid: video.isPaidPromotional,
+      hasContentCreatorPremium: video.hasContentCreatorPremium
+    });
 
-      // Get up next videos from current content
-      const currentContent = videos;
-      const upNextVideos = shuffleArray(currentContent.filter((v: Video) => v.id !== video.id))
-        .slice(0, 10)
-        .map((v: Video) => ({
-          id: Number(v.id),
-          title: v.name,
-          thumbnail: v.videoThumbnail,
-          videoUrl: v.videoLink,
+    try {
+      // --- IMPLEMENT SAME LOGIC AS TipTubeScreen: Three cases for paid/normal videos ---
+      if (video.isPaidPromotional === 1) {
+        if (video.hasContentCreatorPremium === 1) {
+          // Case 1: Paid video, owner has content creator premium
+          const response = await ApiService.viewSubscriptionPaidVideo(Number(video.id));
+          if (response.status === true) {
+            const videoUrl = response.data?.video_link || video.videoLink;
+            const videoForPlayer = {
+              id: Number(video.id),
+              title: video.name,
+              thumbnail: video.videoThumbnail,
+              videoUrl,
+              duration: 0,
+              views: video.views,
+              posted: video.createdDate,
+              avatar: channelInfo?.profileImage,
+              creatorName: channelInfo?.channelName || 'Unknown',
+              isVerified: channelInfo?.isVerified || false,
+              channelId: channelInfo?.channelId || '',
+              price: video.promotionalPrice || 0,
+              isPaidPromotional: video.isPaidPromotional || 0,
+              contentCreatorPlanId: 0,
+            };
+
+            const upNextVideos = shuffleArray(videos.filter((v: Video) => v.id !== video.id))
+              .slice(0, 10)
+              .map((v: Video) => ({
+                id: Number(v.id),
+                title: v.name,
+                thumbnail: v.videoThumbnail,
+                videoUrl: v.videoLink,
+                duration: 0,
+                views: v.views,
+                posted: v.createdDate,
+                avatar: channelInfo?.profileImage,
+                creatorName: channelInfo?.channelName || 'Unknown',
+                isVerified: channelInfo?.isVerified || false,
+                channelId: channelInfo?.channelId || '',
+                price: v.promotionalPrice || 0,
+                isPaidPromotional: v.isPaidPromotional || 0,
+                contentCreatorPlanId: 0,
+              }));
+
+            navigation.navigate('VideoPlayerModal', {
+              video: videoForPlayer,
+              cardLayout: null,
+              upNextVideos
+            });
+          } else {
+            Alert.alert(
+              'Insufficient Balance',
+              'You do not have enough balance to watch this video.'
+            );
+          }
+        } else {
+          // Case 2: Paid video, owner does NOT have content creator premium
+          const response = await ApiService.viewPaidVideoNoPremium(Number(video.id));
+          if (response.status === true) {
+            const videoUrl = response.data?.video_link || video.videoLink;
+            const videoForPlayer = {
+              id: Number(video.id),
+              title: video.name,
+              thumbnail: video.videoThumbnail,
+              videoUrl,
+              duration: 0,
+              views: video.views,
+              posted: video.createdDate,
+              avatar: channelInfo?.profileImage,
+              creatorName: channelInfo?.channelName || 'Unknown',
+              isVerified: channelInfo?.isVerified || false,
+              channelId: channelInfo?.channelId || '',
+              price: video.promotionalPrice || 0,
+              isPaidPromotional: video.isPaidPromotional || 0,
+              contentCreatorPlanId: 0,
+            };
+
+            const upNextVideos = shuffleArray(videos.filter((v: Video) => v.id !== video.id))
+              .slice(0, 10)
+              .map((v: Video) => ({
+                id: Number(v.id),
+                title: v.name,
+                thumbnail: v.videoThumbnail,
+                videoUrl: v.videoLink,
+                duration: 0,
+                views: v.views,
+                posted: v.createdDate,
+                avatar: channelInfo?.profileImage,
+                creatorName: channelInfo?.channelName || 'Unknown',
+                isVerified: channelInfo?.isVerified || false,
+                channelId: channelInfo?.channelId || '',
+                price: v.promotionalPrice || 0,
+                isPaidPromotional: v.isPaidPromotional || 0,
+                contentCreatorPlanId: 0,
+              }));
+
+            navigation.navigate('VideoPlayerModal', {
+              video: videoForPlayer,
+              cardLayout: null,
+              upNextVideos
+            });
+          } else {
+            Alert.alert(
+              'Insufficient Balance',
+              'You do not have enough balance to watch this video.'
+            );
+          }
+        }
+      } else {
+        // Case 3: Normal video
+        await ApiService.viewNormalVideo(Number(video.id));
+
+        const videoForPlayer = {
+          id: Number(video.id),
+          title: video.name,
+          thumbnail: video.videoThumbnail,
+          videoUrl: video.videoLink,
           duration: 0,
-          views: v.views,
-          posted: v.createdDate,
+          views: video.views,
+          posted: video.createdDate,
           avatar: channelInfo?.profileImage,
           creatorName: channelInfo?.channelName || 'Unknown',
           isVerified: channelInfo?.isVerified || false,
@@ -399,13 +498,33 @@ const ChannelScreen: React.FC = () => {
           price: 0,
           isPaidPromotional: 0,
           contentCreatorPlanId: 0,
-        }));
+        };
 
-      navigation.navigate('VideoPlayerModal', {
-        video: videoForPlayer,
-        cardLayout: null, // Add cardLayout parameter
-        upNextVideos
-      });
+        const upNextVideos = shuffleArray(videos.filter((v: Video) => v.id !== video.id))
+          .slice(0, 10)
+          .map((v: Video) => ({
+            id: Number(v.id),
+            title: v.name,
+            thumbnail: v.videoThumbnail,
+            videoUrl: v.videoLink,
+            duration: 0,
+            views: v.views,
+            posted: v.createdDate,
+            avatar: channelInfo?.profileImage,
+            creatorName: channelInfo?.channelName || 'Unknown',
+            isVerified: channelInfo?.isVerified || false,
+            channelId: channelInfo?.channelId || '',
+            price: 0,
+            isPaidPromotional: 0,
+            contentCreatorPlanId: 0,
+          }));
+
+        navigation.navigate('VideoPlayerModal', {
+          video: videoForPlayer,
+          cardLayout: null,
+          upNextVideos
+        });
+      }
     } catch (error) {
       console.error('[ChannelScreen] Error handling video press:', error);
       Alert.alert('Error', 'There was an issue accessing this video. Please try again later.');

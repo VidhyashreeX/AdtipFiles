@@ -97,6 +97,21 @@ const ReferralScreen: React.FC = () => {
     }
   };
 
+  const handleShareApp = async () => {
+    try {
+      const appUrl = 'https://adtip.app/download';
+      const message = `Check out Adtip - the best app to earn money by watching videos and creating content! Download now and start earning:\n\n${appUrl}`;
+
+      await Share.share({
+        message,
+        url: appUrl,
+        title: 'Download Adtip - Earn Money Watching Videos!',
+      });
+    } catch (error) {
+      console.error('Error sharing app:', error);
+    }
+  };
+
   const copyReferralCode = () => {
     Clipboard.setString(referralData.referral_code);
     Alert.alert('Copied!', 'Referral code copied to clipboard');
@@ -114,24 +129,26 @@ const ReferralScreen: React.FC = () => {
   };
 
   const handleReferralWithdraw = () => {
-    if (!isPremium) {
-      setShowPremiumPopup(true);
-      return;
-    }
-    if (referralData.available_referral_balance < 1000) {
-      Alert.alert('Minimum withdrawal amount is ₹1000 for premium users.');
+    const minimumAmount = isPremium ? 1000 : 5000;
+
+    if (referralData.available_referral_balance < minimumAmount) {
+      Alert.alert(
+        'Insufficient Balance',
+        `Minimum withdrawal amount is ₹${minimumAmount} for ${isPremium ? 'premium' : 'regular'} users.${!isPremium ? ' Upgrade to premium for ₹1,000 minimum.' : ''}`
+      );
       return;
     }
     setIsReferralWithdrawalModalVisible(true);
   };
 
   const handleCouponWithdraw = () => {
-    if (!isPremium) {
-      setShowPremiumPopup(true);
-      return;
-    }
-    if (referralData.available_coupon_balance < 1000) {
-      Alert.alert('Minimum withdrawal amount is ₹1000 for premium users.');
+    const minimumAmount = isPremium ? 1000 : 5000;
+
+    if (referralData.available_coupon_balance < minimumAmount) {
+      Alert.alert(
+        'Insufficient Balance',
+        `Minimum withdrawal amount is ₹${minimumAmount} for ${isPremium ? 'premium' : 'regular'} users.${!isPremium ? ' Upgrade to premium for ₹1,000 minimum.' : ''}`
+      );
       return;
     }
     setIsCouponWithdrawalModalVisible(true);
@@ -210,6 +227,19 @@ const ReferralScreen: React.FC = () => {
                     Withdraw Referral Earnings (₹{referralData.available_referral_balance.toFixed(2)})
                   </Text>
                 </TouchableOpacity>
+
+                {/* Withdrawal Info */}
+                <View style={[styles.withdrawalInfo, {backgroundColor: isPremium ? '#D4EDDA' : '#FFF3CD'}]}>
+                  <Icon
+                    name="info"
+                    size={16}
+                    color={isPremium ? '#155724' : '#856404'}
+                  />
+                  <Text style={[styles.withdrawalInfoText, {color: isPremium ? '#155724' : '#856404'}]}>
+                    Minimum withdrawal: ₹{isPremium ? '1,000' : '5,000'} ({isPremium ? 'Premium' : 'Regular'} user)
+                    {!isPremium && '\nUpgrade to premium for ₹1,000 minimum'}
+                  </Text>
+                </View>
               </View>
 
               {/* Coupon Stats */}
@@ -253,6 +283,19 @@ const ReferralScreen: React.FC = () => {
                     Withdraw Coupon Earnings (₹{referralData.available_coupon_balance.toFixed(2)})
                   </Text>
                 </TouchableOpacity>
+
+                {/* Withdrawal Info */}
+                <View style={[styles.withdrawalInfo, {backgroundColor: isPremium ? '#D4EDDA' : '#FFF3CD'}]}>
+                  <Icon
+                    name="info"
+                    size={16}
+                    color={isPremium ? '#155724' : '#856404'}
+                  />
+                  <Text style={[styles.withdrawalInfoText, {color: isPremium ? '#155724' : '#856404'}]}>
+                    Minimum withdrawal: ₹{isPremium ? '1,000' : '5,000'} ({isPremium ? 'Premium' : 'Regular'} user)
+                    {!isPremium && '\nUpgrade to premium for ₹1,000 minimum'}
+                  </Text>
+                </View>
               </View>
 
               {/* Referral Code Section */}
@@ -321,6 +364,41 @@ const ReferralScreen: React.FC = () => {
                     </Text>
                   </TouchableOpacity>
                 </View>
+              </View>
+
+              {/* Share App Section */}
+              <View
+                style={[
+                  styles.referralSection,
+                  {backgroundColor: colors.surface},
+                ]}>
+                <View style={styles.referralHeader}>
+                  <Icon name="smartphone" size={24} color={colors.primary} />
+                  <Text
+                    style={[styles.referralTitle, {color: colors.text.primary}]}>
+                    Share Adtip App
+                  </Text>
+                </View>
+
+                <Text
+                  style={[
+                    styles.referralDescription,
+                    {color: colors.text.secondary},
+                  ]}>
+                  Help others discover Adtip and start earning money by watching videos and creating content!
+                </Text>
+
+                <TouchableOpacity
+                  style={[
+                    styles.shareButton,
+                    {backgroundColor: colors.success || colors.primary},
+                  ]}
+                  onPress={handleShareApp}>
+                  <Icon name="download" size={18} color={colors.white} />
+                  <Text style={[styles.shareButtonText, {color: colors.white}]}>
+                    Share App
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               {/* Coupon Code Section */}
@@ -576,6 +654,20 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
     marginRight: 8,
+  },
+
+  withdrawalInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  withdrawalInfoText: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginLeft: 8,
+    flex: 1,
   },
 });
 

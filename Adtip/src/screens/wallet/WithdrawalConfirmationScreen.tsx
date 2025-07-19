@@ -15,11 +15,14 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../contexts/ThemeContext';
 import Header from '../../components/common/Header';
 import LinearGradient from 'react-native-linear-gradient';
+import { useUserPremiumStatus } from '../../contexts/UserDataContext';
+import { getWithdrawalConfirmationMessage } from '../../utils/withdrawalMessaging';
 
 const WithdrawalConfirmationScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute();
   const { colors, isDarkMode } = useTheme();
+  const { isPremium } = useUserPremiumStatus();
   const [processing, setProcessing] = useState(false);
 
   const routeParams = route.params as any;
@@ -48,10 +51,14 @@ const WithdrawalConfirmationScreen: React.FC = () => {
       // Simulate API call for withdrawal request
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Show success message
+      // Show success message with user-specific messaging
+      const charges = amount * 0.05; // 5% charges
+      const netAmount = amount - charges;
+      const confirmationMessage = getWithdrawalConfirmationMessage(isPremium, amount, charges, netAmount);
+
       Alert.alert(
         'Withdrawal Requested',
-        `Your withdrawal request for ₹${amount} has been submitted successfully. You will receive the money within 3-5 business days.`,
+        confirmationMessage,
         [
           {
             text: 'OK',

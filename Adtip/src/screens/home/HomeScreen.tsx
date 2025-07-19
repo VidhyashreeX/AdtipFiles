@@ -36,7 +36,7 @@ import ApiService from '../../services/ApiService';
 import {API_BASE_URL} from '../../constants/api';
 import {HOME_ENDPOINTS} from '../../constants/apiEndpoints';
 import shareService from '../../services/ShareService';
-import { usePosts, useGuestPosts, useLikeMutation, useFollowMutation, usePrefetchData, useSubscriptionStatus, useCategories } from '../../hooks/useQueries';
+import { usePosts, useGuestPosts, useLikeMutation, useFollowMutation, usePrefetchData, useSubscriptionStatus, useCategories, useSearchUsers } from '../../hooks/useQueries';
 import { useUserDataContext, useUserPremiumStatus, useUserWallet } from '../../contexts/UserDataContext';
 import { getUserDisplayName, isPremiumUser } from '../../utils/userDataUtils';
 import { useNetInfo } from '@react-native-community/netinfo';
@@ -414,6 +414,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
   // UI state management (never blocks navigation)
   const [selectedCategoryState, setSelectedCategoryState] = useState<string>('0');
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [isSearchActive, setIsSearchActive] = useState(false);
   
   // Fetch categories from API
   const {
@@ -884,9 +889,130 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     }
   }, [isGuest, showLoginPromptForAction, posts]);
 
-  const handleSearchIconPress = useCallback(() => {
+  // Search handlers
+  const handleSearchQueryChange = useCallback((query: string) => {
+    setSearchQuery(query);
+    setIsSearchActive(query.length > 0);
+  }, []);
+
+  const handleSearchSubmit = useCallback(() => {
+    // For now, just navigate to search screen for complex search
     (navigation as any).navigate('Search');
   }, [navigation]);
+
+  const handleUserPress = useCallback((userId: number) => {
+    console.log('[HomeScreen] Navigating to Profile with userId:', userId);
+    (navigation as any).navigate('Profile', { userId });
+    // Clear search when navigating
+    setSearchQuery('');
+    setIsSearchActive(false);
+  }, [navigation]);
+
+  // Search results component
+  const SearchResults = useMemo(() => {
+    if (!isSearchActive || !debouncedSearchQuery) return null;
+
+    const users = searchUsersData?.data || [];
+
+    return (
+      <View style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: colors.background,
+        zIndex: 1000,
+        paddingTop: 60, // Account for header height
+      }}>
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 16,
+          paddingVertical: 8,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+        }}>
+          <Text style={{
+            fontSize: 16,
+            fontWeight: '600',
+            color: colors.text,
+            flex: 1,
+          }}>
+            Search Results for "{debouncedSearchQuery}"
+          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              setSearchQuery('');
+              setIsSearchActive(false);
+            }}
+            style={{
+              padding: 8,
+            }}
+          >
+            <Text style={{ color: colors.primary, fontSize: 16 }}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+
+        {searchUsersLoading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : users.length === 0 ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <Text style={{ color: colors.text, fontSize: 16 }}>No users found</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={users}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                onPress={() => handleUserPress(item.id)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
+                }}
+              >
+                <Image
+                  source={{ uri: item.profile_picture || 'https://via.placeholder.com/50' }}
+                  style={{
+                    width: 50,
+                    height: 50,
+                    borderRadius: 25,
+                    marginRight: 12,
+                  }}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '600',
+                    color: colors.text,
+                  }}>
+                    {item.username}
+                  </Text>
+                  {item.full_name && (
+                    <Text style={{
+                      fontSize: 14,
+                      color: colors.textSecondary,
+                      marginTop: 2,
+                    }}>
+                      {item.full_name}
+                    </Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            )}
+            style={{ flex: 1 }}
+          />
+        )}
+      </View>
+    );
+  }, [isSearchActive, debouncedSearchQuery, searchUsersData, searchUsersLoading, colors, handleUserPress]);
 
 
 
@@ -920,6 +1046,20 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
   // Rewarded posts state
   const [rewardedPosts, setRewardedPosts] = useState<Set<number>>(new Set());
+
+  // Debounce search query
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  // Search users query
+  const {
+    data: searchUsersData,
+    isLoading: searchUsersLoading,
+  } = useSearchUsers(debouncedSearchQuery, 1, 20);
 
   // Function to handle view of promoted posts
   const handlePromotedPostView = useCallback(async (postId: number) => {
@@ -1075,7 +1215,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             showSearch={true}
             showWallet={true}
             showPremium={true}
+            searchQuery={searchQuery}
+            onSearchQueryChange={handleSearchQueryChange}
+            onSearchSubmit={handleSearchSubmit}
           />
+          {SearchResults}
           <FlatList
           data={displayPosts}
           renderItem={renderPostItem}

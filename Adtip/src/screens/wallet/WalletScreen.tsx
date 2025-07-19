@@ -175,10 +175,10 @@ const WalletScreen = () => {
   };
 
   const handleWithdraw = () => {
-    if (!isPremium) {
+    /*if (!isPremium) {
       setShowPremiumPopup(true);
       return;
-    }
+    }*/
     if (currentBalance < 1000) {
       Alert.alert('Minimum withdrawal amount is ₹1000 for premium users.');
       return;

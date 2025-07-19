@@ -159,7 +159,7 @@ export const useChannelAnalytics = (channelId: string | number) => {
 export const useWithdrawalRequests = (userId: string | number) => {
   return useQuery({
     queryKey: ['withdrawals', userId],
-    queryFn: () => ApiService.get(`/api/withdrawal-requests/${userId}`),
+    queryFn: () => ApiService.get(`/api/withdrawal-history/${userId}`),
     enabled: !!userId,
     staleTime: 2 * 60 * 1000, // 2 minutes
   });

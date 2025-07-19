@@ -264,7 +264,7 @@ const PremiumUserScreen = () => {
                 <View style={styles.benefitItem}>
                   <Icon name="check-circle" size={20} color="#10B981" />
                   <Text style={[styles.benefitText, { color: colors.text.primary }]}>
-                    Reduced platform fee (30% + 18% GST)
+                    Reduced platform commission (30% vs 60% for regular users)
                   </Text>
                 </View>
                 
@@ -285,14 +285,14 @@ const PremiumUserScreen = () => {
                 <View style={styles.benefitItem}>
                   <Icon name="check-circle" size={20} color="#10B981" />
                   <Text style={[styles.benefitText, { color: colors.text.primary }]}>
-                    Faster withdrawal processing (14 days)
+                    Faster withdrawal processing (5 business days vs 21 days)
                   </Text>
                 </View>
-                
+
                 <View style={styles.benefitItem}>
                   <Icon name="check-circle" size={20} color="#10B981" />
                   <Text style={[styles.benefitText, { color: colors.text.primary }]}>
-                    Lower minimum withdrawal (₹1,000)
+                    Lower minimum withdrawal (₹1,000 vs ₹5,000)
                   </Text>
                 </View>
               </View>
