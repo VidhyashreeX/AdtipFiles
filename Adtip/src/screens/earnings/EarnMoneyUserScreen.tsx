@@ -13,6 +13,7 @@ import { IndianRupee } from 'lucide-react-native';
 import {useTheme} from '../../contexts/ThemeContext';
 import {useAuth} from '../../contexts/AuthContext';
 import Header from '../../components/common/Header';
+import YouTubePlayer from '../../components/common/YouTubePlayer';
 import {useNavigation} from '@react-navigation/native';
 
 const EarnMoneyUserScreen: React.FC = () => {
@@ -216,6 +217,13 @@ const EarnMoneyUserScreen: React.FC = () => {
         {renderGetStartedCard()}
         {earningOpportunities.map(renderEarningCard)}
         {renderFinancialDetailsCard()}
+
+        {/* Tutorial Video */}
+        <YouTubePlayer
+          videoId="oV0Wt8tui2Q"
+          title="How to Earn Money as a User - Tutorial"
+          height={220}
+        />
       </ScrollView>
     </SafeAreaView>
   );

@@ -4,6 +4,7 @@ import {API_BASE_URL, ENDPOINTS} from '../constants/api';
 import ApiService from '../services/ApiService';
 import {navigationRef} from '../navigation/NavigationService';
 import LastSeenService from '../services/LastSeenService'; // Ensure this import is present
+import DataPreloadService from '../services/DataPreloadService';
 // UnifiedCallService removed - using simplified calling flow
 import FirebaseService from '../services/FirebaseService';
 import UserDataStorageService from '../services/UserDataStorageService';
@@ -334,6 +335,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         isPremium: false,
         premiumPlanId: 0,
         contentCreatorPlanId: 0,
+        walletBalance: '0.00',
       });
 
       console.log('[AuthContext] ✅ Auth state cleared due to authentication error');
@@ -648,15 +650,36 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
   // Add this to the AuthContext component where user state is managed
   useEffect(() => {
     if (isAuthenticated && user?.id) {
-      console.log(`🔄 User authenticated, starting ping service for user ${user.id}`);
+      console.log(`🔄 User authenticated, starting services for user ${user.id}`);
+
+      // Start ping service for online status
       LastSeenService.startTracking();
-      
+
+      // Start background data preloading for better UX
+      DataPreloadService.startPreloading(Number(user.id), false)
+        .then(() => {
+          console.log('✅ Background data preloading completed');
+        })
+        .catch((error) => {
+          console.warn('⚠️ Background data preloading failed:', error);
+        });
+
       return () => {
-        console.log('🔄 Cleaning up ping service on auth context unmount');
+        console.log('🔄 Cleaning up services on auth context unmount');
         LastSeenService.stopTracking();
       };
+    } else if (!isAuthenticated && !loading) {
+      // User is in guest mode, start guest data preloading
+      console.log('👤 Guest mode detected, starting guest data preloading');
+      DataPreloadService.startPreloading(undefined, true)
+        .then(() => {
+          console.log('✅ Guest data preloading completed');
+        })
+        .catch((error) => {
+          console.warn('⚠️ Guest data preloading failed:', error);
+        });
     }
-  }, [isAuthenticated, user?.id]);
+  }, [isAuthenticated, user?.id, loading]);
 
   return (
     <AuthContext.Provider value={contextValue}>

@@ -28,6 +28,8 @@ import ShortsScreen from '../screens/media/ShortsScreen';
 import ChannelScreen from '../screens/channel/ChannelScreen';
 import CreateChannelScreen from '../screens/channel/CreateChannelScreen';
 import MyChannelScreen from '../screens/channel/MyChannelScreen';
+import EditChannelScreen from '../screens/channel/EditChannelScreen';
+import ChannelSettingsScreen from '../screens/channel/ChannelSettingsScreen';
 import EditPostScreen from '../screens/content/EditPostScreen';
 import PackagesScreen from '../screens/packages/PackagesScreen';
 import ChoosePackagesScreen from '../screens/packages/ChoosePackagesScreen';
@@ -497,13 +499,15 @@ const MainNavigator = () => {
       <Stack.Screen name="VideoPreview" component={EnhancedVideoPreviewScreen} />
       <Stack.Screen name="Video" component={EnhancedVideoScreen} />
       {/* Replace TipShorts screen with TipShortsEnhanced - keep ultra-smooth transition */}
-      <Stack.Screen 
-        name="TipShorts" 
+      <Stack.Screen
+        name="TipShorts"
         component={EnhancedTipShortsScreen}
         options={{
           ...fastTransitionConfig, // Use fastest transition for smooth Reels experience
           gestureEnabled: true,
           gestureDirection: 'vertical' as const, // Allow vertical gesture for better UX
+          presentation: 'fullScreenModal', // Fullscreen modal presentation
+          headerShown: false, // Hide header for fullscreen experience
         }}
       />
       <Stack.Screen name="Shorts" component={EnhancedShortsScreen} />
@@ -518,6 +522,8 @@ const MainNavigator = () => {
       {/* Channel screens */}
       <Stack.Screen name="Channel" component={EnhancedChannelScreen} />
       <Stack.Screen name="MyChannel" component={MyChannelScreen} />
+      <Stack.Screen name="EditChannel" component={EditChannelScreen} />
+      <Stack.Screen name="ChannelSettings" component={ChannelSettingsScreen} />
       <Stack.Screen
         name="CreateChannel"
         component={EnhancedCreateChannelScreen}

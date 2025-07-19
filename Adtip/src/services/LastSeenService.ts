@@ -6,7 +6,7 @@ import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns';
  */
 class LastSeenService {
   private pingIntervalId: NodeJS.Timeout | null = null;
-  private pingInterval = 600000; // 10 minutes
+  private pingInterval = 240000; // 4 minutes (less than 5 minute online threshold)
 
   /**
    * Start tracking user's online presence
@@ -34,6 +34,15 @@ class LastSeenService {
       this.pingIntervalId = null;
       console.log('🔄 Ping service stopped');
     }
+  }
+
+  /**
+   * Trigger an immediate ping for user activity
+   * Call this when user performs actions like sending messages, making calls, etc.
+   */
+  public triggerActivityPing(): void {
+    console.log('🔄 User activity detected, sending immediate ping...');
+    this.ping();
   }
   
   /**

@@ -132,6 +132,8 @@ export type MainNavigatorParamList = {
   };
   Channel: { channelId: string | number };
   MyChannel: undefined;
+  EditChannel: { channelId: string };
+  ChannelSettings: undefined;
   AddFundsScreen: undefined;
   UpgradePremiumScreen: undefined;
   Comments: { postId: number; visible: boolean; onClose: () => void; };

@@ -13,6 +13,8 @@ import {
   Platform,
   FlatList,
   Dimensions,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -24,6 +26,7 @@ import { launchImageLibrary } from 'react-native-image-picker';
 import Header from '../../components/common/Header';
 import ContentCreatorPlanToggle from '../../components/common/ContentCreatorPlanToggle';
 import ApiService from '../../services/ApiService';
+import CloudflareUploadService from '../../services/CloudflareUploadService';
 import { 
   ChannelInfo, 
   Video, 
@@ -32,7 +35,7 @@ import {
   UpdateChannelRequest,
   ChannelAnalyticsResponse 
 } from '../../types/api';
-import { Play, Calendar, Users, Eye, Settings, Edit3, Upload, BarChart3 } from 'lucide-react-native';
+import { Play, Calendar, Users, Eye, Settings, Edit3, Upload, BarChart3, MoreVertical, Trash2, Edit } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -81,6 +84,14 @@ const MyChannelScreen: React.FC = () => {
   const [isCallEnabled, setIsCallEnabled] = useState(false);
   const [isVideoCallEnabled, setIsVideoCallEnabled] = useState(false);
   const [isChatEnabled, setIsChatEnabled] = useState(false);
+
+  // Video management state
+  const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
+  const [showVideoActions, setShowVideoActions] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingVideoName, setEditingVideoName] = useState('');
+  const [editingVideoDescription, setEditingVideoDescription] = useState('');
+  const [isUpdatingVideo, setIsUpdatingVideo] = useState(false);
 
   // Content Creator Premium State - Using shared context
   const { 
@@ -163,15 +174,31 @@ const MyChannelScreen: React.FC = () => {
   // Fetch channel content (videos and shorts)
   const fetchChannelContent = async (channelId: string) => {
     try {
-      // Use correct videoType: 1 for videos, 2 for shorts (as per working logic in other channel screens)
-      const videosResponse = await ApiService.getVideoByChannel(1, Number(channelId), Number(user?.id));
+      console.log('🎥 [MyChannelScreen] Fetching videos for channel:', channelId);
+
+      // Use correct videoType: 0 for videos (is_shot=0), 1 for shorts (is_shot=1)
+      const videosResponse = await ApiService.getVideoByChannel(0, Number(channelId), Number(user?.id));
+      console.log('📹 [MyChannelScreen] Videos response:', {
+        status: videosResponse.status,
+        dataLength: videosResponse.data?.length,
+        data: videosResponse.data
+      });
+
       if (videosResponse.status === 200 && videosResponse.data) {
         setVideos(videosResponse.data);
       } else {
         setVideos([]);
       }
+
       // Fetch shorts separately
-      const shortsResponse = await ApiService.getVideoByChannel(2, Number(channelId), Number(user?.id));
+      console.log('🎬 [MyChannelScreen] Fetching shorts for channel:', channelId);
+      const shortsResponse = await ApiService.getVideoByChannel(1, Number(channelId), Number(user?.id));
+      console.log('🎬 [MyChannelScreen] Shorts response:', {
+        status: shortsResponse.status,
+        dataLength: shortsResponse.data?.length,
+        data: shortsResponse.data
+      });
+
       if (shortsResponse.status === 200 && shortsResponse.data) {
         setShorts(shortsResponse.data);
       } else {
@@ -242,28 +269,32 @@ const MyChannelScreen: React.FC = () => {
 
   // Update channel avatar
   const updateChannelAvatar = async (imageUri: string) => {
-    if (!channel) return;
+    if (!channel || !user) return;
 
     try {
-      const formData = new FormData();
-      formData.append('channelId', channel.channelId);
-      formData.append('profileImage', {
-        uri: imageUri,
-        type: 'image/jpeg',
-        name: `profile_${user?.id}.jpg`,
-      } as any);
+      // First upload image to Cloudflare
+      const uploadResult = await CloudflareUploadService.uploadFile(
+        imageUri,
+        'images',
+        `profile_${Date.now()}.jpg`,
+        Number(user.id)
+      );
 
-      // Use update channel endpoint
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || 'Upload failed');
+      }
+
+      // Use the Cloudflare URL for the API call
       const updateData: UpdateChannelRequest = {
         id: Number(channel.channelId),
         channelName: channel.channelName,
         channelDescription: channel.description,
-        profileImageURL: imageUri,
+        profileImageURL: uploadResult.url,
       };
 
       const response = await ApiService.updateChannel(updateData);
       if (response.status === 200) {
-        setChannel(prev => prev ? { ...prev, profileImage: imageUri } : null);
+        setChannel(prev => prev ? { ...prev, profileImage: uploadResult.url } : null);
         Alert.alert('Success', 'Profile image updated successfully');
       }
     } catch (err) {
@@ -332,27 +363,140 @@ const MyChannelScreen: React.FC = () => {
     }, [fetchChannelData])
   );
 
+  // Handle video actions
+  const handleVideoActions = (video: Video) => {
+    setSelectedVideo(video);
+    setShowVideoActions(true);
+  };
+
+  // Handle edit video
+  const handleEditVideo = () => {
+    if (!selectedVideo) return;
+
+    setEditingVideoName(selectedVideo.name);
+    setEditingVideoDescription(selectedVideo.description || '');
+    setShowVideoActions(false);
+    setShowEditModal(true);
+  };
+
+  // Handle delete video
+  const handleDeleteVideo = () => {
+    if (!selectedVideo) return;
+
+    Alert.alert(
+      'Delete Video',
+      `Are you sure you want to delete "${selectedVideo.name}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: confirmDeleteVideo
+        }
+      ]
+    );
+  };
+
+  // Confirm delete video
+  const confirmDeleteVideo = async () => {
+    if (!selectedVideo) return;
+
+    try {
+      const response = await ApiService.deleteVideo(Number(selectedVideo.id));
+
+      if (response.status === 200) {
+        // Remove video from local state
+        if (selectedVideo.videoType === 1) {
+          setShorts(prev => prev.filter(v => v.id !== selectedVideo.id));
+        } else {
+          setVideos(prev => prev.filter(v => v.id !== selectedVideo.id));
+        }
+
+        Alert.alert('Success', 'Video deleted successfully');
+      }
+    } catch (error) {
+      console.error('Error deleting video:', error);
+      Alert.alert('Error', 'Failed to delete video');
+    } finally {
+      setShowVideoActions(false);
+      setSelectedVideo(null);
+    }
+  };
+
+  // Save video edits
+  const saveVideoEdits = async () => {
+    if (!selectedVideo) return;
+
+    try {
+      setIsUpdatingVideo(true);
+
+      const response = await ApiService.editVideo({
+        id: Number(selectedVideo.id),
+        name: editingVideoName.trim(),
+        description: editingVideoDescription.trim(),
+      });
+
+      if (response.status === 200) {
+        // Update video in local state
+        const updateVideoInList = (videos: Video[]) =>
+          videos.map(v =>
+            v.id === selectedVideo.id
+              ? { ...v, name: editingVideoName.trim(), description: editingVideoDescription.trim() }
+              : v
+          );
+
+        if (selectedVideo.videoType === 1) {
+          setShorts(updateVideoInList);
+        } else {
+          setVideos(updateVideoInList);
+        }
+
+        Alert.alert('Success', 'Video updated successfully');
+        setShowEditModal(false);
+      }
+    } catch (error) {
+      console.error('Error updating video:', error);
+      Alert.alert('Error', 'Failed to update video');
+    } finally {
+      setIsUpdatingVideo(false);
+    }
+  };
+
   // Render video item
   const renderVideoItem = ({ item }: { item: Video }) => (
-    <TouchableOpacity
-      style={styles.videoItem}
-      onPress={() => navigation.navigate('VideoPreview', { postId: item.id })}
-    >
-      <Image source={{ uri: item.videoThumbnail }} style={styles.videoThumbnail} />
-      <View style={styles.videoOverlay}>
-        <View style={styles.videoDuration}>
-          <Text style={styles.videoDurationText}>{item.playDuration}</Text>
+    <View style={styles.videoItem}>
+      <TouchableOpacity
+        style={styles.videoContent}
+        onPress={() => navigation.navigate('VideoPreview', { postId: item.id })}
+      >
+        <Image source={{ uri: item.videoThumbnail }} style={styles.videoThumbnail} />
+        <View style={styles.videoOverlay}>
+          <View style={styles.videoDuration}>
+            <Text style={styles.videoDurationText}>{item.playDuration}</Text>
+          </View>
         </View>
+      </TouchableOpacity>
+
+      <View style={styles.videoInfo}>
+        <View style={styles.videoTextInfo}>
+          <Text style={[styles.videoTitle, { color: colors.text.primary }]} numberOfLines={2}>
+            {item.name}
+          </Text>
+          <View style={styles.videoStats}>
+            <Text style={[styles.videoStatsText, { color: colors.textSecondary }]}>
+              {item.views} views • {new Date(item.createdDate).toLocaleDateString()}
+            </Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.videoActionButton}
+          onPress={() => handleVideoActions(item)}
+        >
+          <MoreVertical size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
       </View>
-      <Text style={[styles.videoTitle, { color: colors.text.primary }]} numberOfLines={2}>
-        {item.name}
-      </Text>
-      <View style={styles.videoStats}>
-        <Text style={[styles.videoStatsText, { color: colors.textSecondary }]}>
-          {item.views} views • {new Date(item.createdDate).toLocaleDateString()}
-        </Text>
-      </View>
-    </TouchableOpacity>
+    </View>
   );
 
   // Render analytics section
@@ -522,74 +666,148 @@ const MyChannelScreen: React.FC = () => {
     </View>
   );
 
-  // Render tab content
-  const renderTabContent = () => {
+  // Get current tab data for FlatList
+  const getCurrentTabData = () => {
     switch (activeTab) {
       case 'Videos':
-        return (
-          <FlatList
-            key="videos-flatlist"
-            data={videos}
-            renderItem={renderVideoItem}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            columnWrapperStyle={styles.videoRow}
-            contentContainerStyle={styles.videosList}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Upload size={48} color={colors.textSecondary} />
-                <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
-                  No videos uploaded yet
-                </Text>
-                <TouchableOpacity
-                  style={[styles.uploadButton, { backgroundColor: colors.primary }]}
-                  onPress={() => navigation.navigate('TipTubeUpload')}
-                >
-                  <Text style={[styles.uploadButtonText, { color: colors.background }]}>
-                    Upload Video
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            }
-          />
-        );
+        return videos;
       case 'Shorts':
-        return (
-          <FlatList
-            key="shorts-flatlist"
-            data={shorts}
-            renderItem={renderVideoItem}
-            keyExtractor={(item) => item.id}
-            numColumns={3}
-            columnWrapperStyle={styles.shortsRow}
-            contentContainerStyle={styles.videosList}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Upload size={48} color={colors.textSecondary} />
-                <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
-                  No shorts uploaded yet
-                </Text>
-                <TouchableOpacity
-                  style={[styles.uploadButton, { backgroundColor: colors.primary }]}
-                  onPress={() => navigation.navigate('TipShortsUpload')}
-                >
-                  <Text style={[styles.uploadButtonText, { color: colors.background }]}>
-                    Upload Short
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            }
-          />
-        );
+        return shorts;
       case 'Analytics':
-        return renderAnalytics();
       case 'About':
-        return renderAbout();
+        return []; // Empty array for non-list tabs
       default:
-        return null;
+        return [];
     }
+  };
+
+  // Render header component for FlatList
+  const renderListHeader = () => (
+    <View>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Icon name="arrow-left" size={24} color={colors.text.primary} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text.primary }]}>My Channel</Text>
+        <View style={styles.headerRight}>
+          {/* Content Creator Premium Toggle */}
+          <ContentCreatorPlanToggle onPress={handleTogglePremium} />
+          <TouchableOpacity onPress={() => navigation.navigate('ChannelSettings')}>
+            <Settings size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Cover Image */}
+      {channel.coverImage && (
+        <Image source={{ uri: channel.coverImage }} style={styles.coverImage} />
+      )}
+
+      {/* Channel Info */}
+      <View style={styles.channelInfo}>
+        <TouchableOpacity onPress={handleAvatarChange} style={styles.avatarContainer}>
+          <Image
+            source={{
+              uri: channel.profileImage || `https://api.dicebear.com/9.x/identicon/svg?seed=${user?.id}`,
+            }}
+            style={styles.avatar}
+          />
+          <View style={[styles.editAvatarOverlay, { backgroundColor: colors.primary }]}>
+            <Edit3 size={16} color={colors.background} />
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.channelDetails}>
+          <Text style={[styles.channelName, { color: colors.text.primary }]}>{channel.channelName}</Text>
+          <Text style={[styles.channelStats, { color: colors.textSecondary }]}>
+            {(channel.totalSubscribers || 0).toLocaleString()} subscribers • {channel.totalVideos} videos
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.editButton, { borderColor: colors.primary }]}
+          onPress={() => navigation.navigate('EditChannel', { channelId: channel.channelId })}
+        >
+          <Text style={[styles.editButtonText, { color: colors.primary }]}>Edit Channel</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Tabs */}
+      <View style={[styles.tabsContainer, { borderBottomColor: colors.border }]}>
+        {(['Videos', 'Shorts', 'Analytics', 'About'] as const).map((tab) => (
+          <TouchableOpacity
+            key={tab}
+            style={[
+              styles.tab,
+              activeTab === tab && { borderBottomColor: colors.primary },
+            ]}
+            onPress={() => setActiveTab(tab)}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                { color: activeTab === tab ? colors.primary : colors.textSecondary },
+              ]}
+            >
+              {tab}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+
+  // Render footer component for non-list tabs
+  const renderListFooter = () => {
+    if (activeTab === 'Analytics') {
+      return renderAnalytics();
+    }
+    if (activeTab === 'About') {
+      return renderAbout();
+    }
+    return null;
+  };
+
+  // Render empty component for list tabs
+  const renderEmptyComponent = () => {
+    if (activeTab === 'Videos') {
+      return (
+        <View style={styles.emptyState}>
+          <Upload size={48} color={colors.textSecondary} />
+          <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
+            No videos uploaded yet
+          </Text>
+          <TouchableOpacity
+            style={[styles.uploadButton, { backgroundColor: colors.primary }]}
+            onPress={() => navigation.navigate('TipTubeUpload')}
+          >
+            <Text style={[styles.uploadButtonText, { color: colors.background }]}>
+              Upload Video
+            </Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    if (activeTab === 'Shorts') {
+      return (
+        <View style={styles.emptyState}>
+          <Upload size={48} color={colors.textSecondary} />
+          <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
+            No shorts uploaded yet
+          </Text>
+          <TouchableOpacity
+            style={[styles.uploadButton, { backgroundColor: colors.primary }]}
+            onPress={() => navigation.navigate('TipShortsUpload')}
+          >
+            <Text style={[styles.uploadButtonText, { color: colors.background }]}>
+              Upload Short
+            </Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return null;
   };
 
   if (isLoading) {
@@ -637,87 +855,151 @@ const MyChannelScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
+      <FlatList
+        data={getCurrentTabData()}
+        renderItem={renderVideoItem}
+        keyExtractor={(item) => item.id}
+        numColumns={activeTab === 'Videos' ? 2 : activeTab === 'Shorts' ? 3 : 1}
+        key={`${activeTab}-${activeTab === 'Videos' ? 2 : activeTab === 'Shorts' ? 3 : 1}`} // Force re-render when columns change
+        columnWrapperStyle={activeTab === 'Videos' ? styles.videoRow : activeTab === 'Shorts' ? styles.shortsRow : undefined}
+        contentContainerStyle={styles.videosList}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
         }
-        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={renderListHeader}
+        ListFooterComponent={renderListFooter}
+        ListEmptyComponent={renderEmptyComponent}
+      />
+
+      {/* Video Actions Modal */}
+      <Modal
+        visible={showVideoActions}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowVideoActions(false)}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Icon name="arrow-left" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text.primary }]}>My Channel</Text>
-          <View style={styles.headerRight}>
-            {/* Content Creator Premium Toggle */}
-            <ContentCreatorPlanToggle onPress={handleTogglePremium} />
-            <TouchableOpacity onPress={() => navigation.navigate('ChannelSettings')}>
-              <Settings size={24} color={colors.text.primary} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Cover Image */}
-        {channel.coverImage && (
-          <Image source={{ uri: channel.coverImage }} style={styles.coverImage} />
-        )}
-
-        {/* Channel Info */}
-        <View style={styles.channelInfo}>
-          <TouchableOpacity onPress={handleAvatarChange} style={styles.avatarContainer}>
-            <Image
-              source={{
-                uri: channel.profileImage || `https://api.dicebear.com/9.x/identicon/svg?seed=${user?.id}`,
-              }}
-              style={styles.avatar}
-            />
-            <View style={[styles.editAvatarOverlay, { backgroundColor: colors.primary }]}>
-              <Edit3 size={16} color={colors.background} />
-            </View>
-          </TouchableOpacity>
-          
-          <View style={styles.channelDetails}>
-            <Text style={[styles.channelName, { color: colors.text.primary }]}>{channel.channelName}</Text>
-            <Text style={[styles.channelStats, { color: colors.textSecondary }]}>
-              {(channel.totalSubscribers || 0).toLocaleString()} subscribers • {channel.totalVideos} videos
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.editButton, { borderColor: colors.primary }]}
-            onPress={() => navigation.navigate('EditChannel', { channelId: channel.channelId })}
-          >
-            <Text style={[styles.editButtonText, { color: colors.primary }]}>Edit Channel</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Tabs */}
-        <View style={[styles.tabsContainer, { borderBottomColor: colors.border }]}>
-          {(['Videos', 'Shorts', 'Analytics', 'About'] as const).map((tab) => (
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowVideoActions(false)}
+        >
+          <View style={[styles.actionSheet, { backgroundColor: colors.surface }]}>
             <TouchableOpacity
-              key={tab}
-              style={[
-                styles.tab,
-                activeTab === tab && { borderBottomColor: colors.primary },
-              ]}
-              onPress={() => setActiveTab(tab)}
+              style={styles.actionItem}
+              onPress={handleEditVideo}
             >
-              <Text
-                style={[
-                  styles.tabText,
-                  { color: activeTab === tab ? colors.primary : colors.textSecondary },
-                ]}
-              >
-                {tab}
-              </Text>
+              <Edit size={20} color={colors.primary} />
+              <Text style={[styles.actionText, { color: colors.text.primary }]}>Edit Video</Text>
             </TouchableOpacity>
-          ))}
-        </View>
 
-        {/* Tab Content */}
-        {renderTabContent()}
-      </ScrollView>
+            <TouchableOpacity
+              style={styles.actionItem}
+              onPress={handleDeleteVideo}
+            >
+              <Trash2 size={20} color="#FF4444" />
+              <Text style={[styles.actionText, { color: '#FF4444' }]}>Delete Video</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionItem, styles.cancelAction]}
+              onPress={() => setShowVideoActions(false)}
+            >
+              <Text style={[styles.actionText, { color: colors.textSecondary }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Edit Video Modal */}
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowEditModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.editModalContent, { backgroundColor: colors.background }]}>
+            <View style={styles.editModalHeader}>
+              <Text style={[styles.editModalTitle, { color: colors.text.primary }]}>
+                Edit Video
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowEditModal(false)}
+                style={styles.closeButton}
+              >
+                <Icon name="x" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.editModalBody}>
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.text.primary }]}>Title</Text>
+                <TextInput
+                  style={[
+                    styles.textInput,
+                    {
+                      backgroundColor: colors.surface,
+                      color: colors.text.primary,
+                      borderColor: colors.border,
+                    }
+                  ]}
+                  value={editingVideoName}
+                  onChangeText={setEditingVideoName}
+                  placeholder="Enter video title"
+                  placeholderTextColor={colors.textSecondary}
+                  maxLength={100}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.text.primary }]}>Description</Text>
+                <TextInput
+                  style={[
+                    styles.textArea,
+                    {
+                      backgroundColor: colors.surface,
+                      color: colors.text.primary,
+                      borderColor: colors.border,
+                    }
+                  ]}
+                  value={editingVideoDescription}
+                  onChangeText={setEditingVideoDescription}
+                  placeholder="Enter video description"
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                  numberOfLines={4}
+                  maxLength={500}
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.editModalFooter}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton, { borderColor: colors.border }]}
+                onPress={() => setShowEditModal(false)}
+                disabled={isUpdatingVideo}
+              >
+                <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton, { backgroundColor: colors.primary }]}
+                onPress={saveVideoEdits}
+                disabled={isUpdatingVideo}
+              >
+                {isUpdatingVideo ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.saveButtonText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -759,7 +1041,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingTop: 8, // Reduced top padding
   },
   headerTitle: {
     fontSize: 18,
@@ -859,6 +1143,21 @@ const styles = StyleSheet.create({
   videoItem: {
     width: (width - 48) / 2,
     marginBottom: 16,
+  },
+  videoContent: {
+    position: 'relative',
+  },
+  videoInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingTop: 8,
+  },
+  videoTextInfo: {
+    flex: 1,
+  },
+  videoActionButton: {
+    padding: 4,
+    marginLeft: 8,
   },
   videoThumbnail: {
     width: '100%',
@@ -1001,6 +1300,111 @@ const styles = StyleSheet.create({
   settingDescription: {
     fontSize: 14,
     marginTop: 4,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  actionSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 34,
+  },
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  actionText: {
+    fontSize: 16,
+    marginLeft: 12,
+  },
+  cancelAction: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.1)',
+    marginTop: 8,
+  },
+  editModalContent: {
+    flex: 1,
+    marginTop: 50,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  editModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  editModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  editModalBody: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+  },
+  textArea: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    textAlignVertical: 'top',
+    minHeight: 100,
+  },
+  editModalFooter: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: 8,
+  },
+  cancelButton: {
+    borderWidth: 1,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+  },
+  saveButton: {
+    backgroundColor: '#007AFF',
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 
 });

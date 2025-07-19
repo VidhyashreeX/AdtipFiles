@@ -13,6 +13,7 @@ import { Star, Trophy } from 'lucide-react-native';
 import {useTheme} from '../../contexts/ThemeContext';
 import {useContentCreatorPremium} from '../../contexts/ContentCreatorPremiumContext';
 import Header from '../../components/common/Header';
+import YouTubePlayer from '../../components/common/YouTubePlayer';
 import {useNavigation} from '@react-navigation/native';
 
 const EarnMoneyCreatorScreen: React.FC = () => {
@@ -184,6 +185,13 @@ const EarnMoneyCreatorScreen: React.FC = () => {
 
         {/* Success Tips */}
         {renderSuccessTipsCard()}
+
+        {/* Tutorial Video */}
+        <YouTubePlayer
+          videoId="oV0Wt8tui2Q"
+          title="How to Earn Money as a Content Creator - Tutorial"
+          height={220}
+        />
       </ScrollView>
     </SafeAreaView>
   );

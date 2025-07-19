@@ -134,6 +134,13 @@ const TabNavigator = () => {
   const tipCallTabPress = useCallback(handleInstantNavigation('TipCall'), [handleInstantNavigation]);
   const profileTabPress = useCallback(handleInstantNavigation('Profile'), [handleInstantNavigation]);
 
+  // Custom handler for TipShorts - navigate to fullscreen version
+  const tipShortsTabPress = useCallback((e: any) => {
+    e.preventDefault(); // Prevent default tab navigation
+    console.log('TipShorts tab pressed - navigating to fullscreen');
+    navigation.navigate('TipShorts'); // Navigate to the stack screen for fullscreen experience
+  }, [navigation]);
+
   // Memoize tab press listener for create content (prevents navigation)
   const createContentTabPress = useCallback((e: any) => {
     e.preventDefault(); // Prevent navigation
@@ -187,10 +194,10 @@ const TabNavigator = () => {
           name="TipShorts"
           component={TipShortsEnhanced}
           options={{
-            tabBarIcon: TipShortsIcon, // Reuse the video icon for shorts
+            tabBarIcon: TipShortsIcon,
           }}
           listeners={{
-            tabPress: tipTubeTabPress, // Reuse the TipTube tab press handler
+            tabPress: tipShortsTabPress, // Use custom handler for fullscreen navigation
           }}
         />
       </Tab.Navigator>

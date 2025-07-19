@@ -190,10 +190,35 @@ const AnalyticsScreen: React.FC = () => {
     );
   }
 
-  // Don't render anything if user doesn't have content creator premium
-  // The useEffect will handle showing the alert and navigation
+  // Show basic screen with header for non-premium users
+  // The useEffect will handle showing the alert
   if (!isContentCreatorPremium) {
-    return null;
+    return (
+      <View style={[styles.container, {backgroundColor: colors.background}]}>
+        <Header
+          title="Analytics"
+          showWallet={false}
+          showSearch={false}
+          showPremium={false}
+          leftComponent={
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={{padding: 8}}
+            >
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
+        />
+
+        {/* Analytics Premium Alert */}
+        <AnalyticsPremiumAlert
+          visible={showPremiumAlert}
+          onClose={() => setShowPremiumAlert(false)}
+          onUpgrade={handlePremiumUpgrade}
+          onGoBack={handlePremiumGoBack}
+        />
+      </View>
+    );
   }
 
   if (loading) {

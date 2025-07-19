@@ -69,8 +69,17 @@ const ContactCard = ({
   onProfilePress?: () => void
   onBlockUser?: () => void
 }) => {
-  const isOnline = contact.online_status
+  // Use is_available as primary indicator, considering DND and online status
+  const isOnline = contact.is_available && !contact.dnd && contact.online_status
   const avatarColor = isOnline ? colors.success : colors.text.secondary
+
+  // Debug log for status checking
+  console.log(`[ContactCard] ${contact.name} status:`, {
+    is_available: contact.is_available,
+    dnd: contact.dnd,
+    online_status: contact.online_status,
+    isOnline
+  })
 
   return (
     <TouchableOpacity
@@ -117,11 +126,13 @@ const ContactCard = ({
               style={[styles.contactStatus, { color: colors.text.secondary }]}
               numberOfLines={1}
             >
-              {isOnline
-                ? 'Online now'
-                : contact.dnd
+              {contact.dnd
                 ? 'Do not disturb'
-                : 'Offline'}
+                : !contact.is_available
+                ? 'Unavailable'
+                : !contact.online_status
+                ? 'Offline'
+                : 'Available for calls'}
             </Text>
           </View>
         </View>
