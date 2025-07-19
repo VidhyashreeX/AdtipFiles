@@ -2092,6 +2092,40 @@ export default class ApiService {
     }
   }
 
+  /**
+   * Get single post by ID
+   */
+  static async getSinglePost(postId: number): Promise<any> {
+    console.log('[ApiService] Getting single post:', postId);
+    try {
+      const response = await this.get(`/api/post/${postId}`);
+      console.log('[ApiService] Single post retrieved successfully:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error getting single post:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Update post
+   */
+  static async updatePost(data: {
+    post_id: number;
+    title: string;
+    content: string;
+  }): Promise<any> {
+    console.log('[ApiService] Updating post:', data);
+    try {
+      const response = await this.post('/api/update-post', data);
+      console.log('[ApiService] Post updated successfully:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Error updating post:', error);
+      throw this.handleError(error);
+    }
+  }
+
   // ===== CONTACT FORM APIS =====
 
   /**

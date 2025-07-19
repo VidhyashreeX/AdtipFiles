@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import Video from 'react-native-video';
 import { useTheme } from '../../contexts/ThemeContext';
+import { createSecureVideoSource, validateAndFixVideoUrl } from '../../utils/mediaUtils';
 
 interface VideoThumbnailProps {
   videoUrl: string;
@@ -19,6 +20,7 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
   const { colors } = useTheme();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [secureVideoSource, setSecureVideoSource] = useState<any>(null);
   const videoRef = useRef<any>(null);
 
   useEffect(() => {
@@ -31,6 +33,32 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
     // Reset state when video URL changes
     setIsLoading(true);
     setError(false);
+
+    // Load secure video source for Cloudflare URLs
+    const loadSecureSource = async () => {
+      try {
+        console.log('[VideoThumbnail] Loading secure source for:', videoUrl);
+
+        // Validate and fix the video URL if needed
+        const validatedUrl = await validateAndFixVideoUrl(videoUrl);
+
+        // Create secure video source (handles Cloudflare URLs)
+        const secureSource = await createSecureVideoSource(validatedUrl || videoUrl);
+
+        console.log('[VideoThumbnail] Secure source created:', {
+          hasUri: !!secureSource.uri,
+          uri: secureSource.uri?.substring(0, 100) + '...'
+        });
+
+        setSecureVideoSource(secureSource);
+      } catch (error) {
+        console.error('[VideoThumbnail] Error loading secure source:', error);
+        setError(true);
+        setIsLoading(false);
+      }
+    };
+
+    loadSecureSource();
   }, [videoUrl]);
 
   const handleVideoLoad = (data: any) => {
@@ -66,6 +94,17 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
     );
   }
 
+  // Don't render video until we have a secure source
+  if (!secureVideoSource) {
+    return (
+      <View style={[styles.container, style]}>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.skeleton.background }]}>
+          <ActivityIndicator size="small" color={colors.primary} />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, style]}>
       {isLoading && (
@@ -76,7 +115,7 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
 
       <Video
         ref={videoRef}
-        source={{ uri: videoUrl }}
+        source={secureVideoSource}
         style={[styles.video, style]}
         resizeMode={resizeMode}
         paused={true} // Keep paused to show as thumbnail

@@ -119,18 +119,35 @@ const BannerCarousel: React.FC<BannerCarouselProps> = ({ onBannerPress }) => {
       {/* Dots Indicator */}
       {STATIC_BANNERS.length > 1 && (
         <View style={styles.dotsContainer}>
-          {STATIC_BANNERS.map((_, index) => (
+          {STATIC_BANNERS.map((banner, index) => (
             <TouchableOpacity
               key={index}
-              style={[
-                styles.dot,
-                {
-                  backgroundColor: index === currentIndex ? colors.primary : colors.border,
-                  transform: [{ scale: index === currentIndex ? 1.2 : 1 }],
-                },
-              ]}
               onPress={() => handleDotPress(index)}
-            />
+            >
+              {index === currentIndex ? (
+                <LinearGradient
+                  colors={banner.gradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[
+                    styles.dot,
+                    {
+                      transform: [{ scale: 1.3 }],
+                    },
+                  ]}
+                />
+              ) : (
+                <View
+                  style={[
+                    styles.dot,
+                    {
+                      backgroundColor: 'rgba(255, 255, 255, 0.4)',
+                      transform: [{ scale: 1 }],
+                    },
+                  ]}
+                />
+              )}
+            </TouchableOpacity>
           ))}
         </View>
       )}
@@ -141,8 +158,6 @@ const BannerCarousel: React.FC<BannerCarouselProps> = ({ onBannerPress }) => {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: 'transparent',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
   },
   carouselContainer: {
     height: 112,
@@ -192,14 +207,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 4,
     paddingHorizontal: 16,
+    paddingBottom: 8,
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginHorizontal: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginHorizontal: 3,
   },
 });
 

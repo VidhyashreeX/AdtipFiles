@@ -27,6 +27,8 @@ import VideoScreen from '../screens/media/VideoScreen';
 import ShortsScreen from '../screens/media/ShortsScreen';
 import ChannelScreen from '../screens/channel/ChannelScreen';
 import CreateChannelScreen from '../screens/channel/CreateChannelScreen';
+import MyChannelScreen from '../screens/channel/MyChannelScreen';
+import EditPostScreen from '../screens/content/EditPostScreen';
 import PackagesScreen from '../screens/packages/PackagesScreen';
 import ChoosePackagesScreen from '../screens/packages/ChoosePackagesScreen';
 import CheckoutScreen from '../screens/packages/CheckoutScreen';
@@ -465,13 +467,18 @@ const MainNavigator = () => {
       />
       
       {/* Content creation with slide up animation */}
-      <Stack.Screen 
-        name="CreatePost" 
+      <Stack.Screen
+        name="CreatePost"
         component={EnhancedCreatePostScreen}
         options={slideUpTransitionConfig}
       />
-      <Stack.Screen 
-        name="SelectCategory" 
+      <Stack.Screen
+        name="EditPost"
+        component={EditPostScreen}
+        options={slideUpTransitionConfig}
+      />
+      <Stack.Screen
+        name="SelectCategory"
         component={EnhancedSelectCategoryScreen}
       />
       <Stack.Screen 
@@ -510,8 +517,9 @@ const MainNavigator = () => {
       
       {/* Channel screens */}
       <Stack.Screen name="Channel" component={EnhancedChannelScreen} />
-      <Stack.Screen 
-        name="CreateChannel" 
+      <Stack.Screen name="MyChannel" component={MyChannelScreen} />
+      <Stack.Screen
+        name="CreateChannel"
         component={EnhancedCreateChannelScreen}
         options={slideUpTransitionConfig}
       />

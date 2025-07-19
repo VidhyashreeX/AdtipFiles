@@ -147,6 +147,7 @@ const ExploreScreen: React.FC = () => {
     <FlatList
       data={Array(12).fill(null)} // Show 4 rows of 3 items = 12 skeletons
       numColumns={3}
+      key="skeleton-grid-3" // Force re-render when numColumns changes
       keyExtractor={(_, index) => `skeleton-${index}`}
       renderItem={() => (
         <View style={[styles.itemContainer, { backgroundColor: colors.surface }]}>
@@ -187,12 +188,13 @@ const ExploreScreen: React.FC = () => {
   ), [colors]);
 
   // Optimized FlatList props
-  const optimizedFlatListProps = useMemo(() => 
+  const optimizedFlatListProps = useMemo(() =>
     createOptimizedFlatListProps('GRID', {
       data: exploreItems,
       renderItem,
       keyExtractor,
       numColumns: ITEMS_PER_ROW,
+      key: `explore-grid-${ITEMS_PER_ROW}`, // Force re-render when numColumns changes
       columnWrapperStyle: styles.row,
       contentContainerStyle: styles.listContent,
       showsVerticalScrollIndicator: false,

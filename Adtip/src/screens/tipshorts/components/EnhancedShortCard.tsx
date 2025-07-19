@@ -73,13 +73,13 @@ const OptimizedVideoPlayer = memo(({
   // Set error state if URI is invalid
   useEffect(() => {
     if (!isValidUri) {
-      console.warn('[OptimizedVideoPlayer] Invalid or missing video URI:', source);
+      console.warn('[OptimizedVideoPlayer] Invalid or missing video URI:', source?.uri);
       setHasError(true);
       setIsLoaded(false);
     } else {
       setHasError(false);
     }
-  }, [isValidUri, source]);
+  }, [isValidUri, source?.uri]);
 
   const shouldPlay = isActive && !isPaused && isLoaded && !hasError && isValidUri;
 

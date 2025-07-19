@@ -103,24 +103,50 @@ const EarningsScreen: React.FC = () => {
         t.transaction_type === 'credit' || t.transaction_type === 'Credit' || t.amount > 0
       );
 
-      const totalEarned = creditTransactions.reduce((sum: number, t: any) =>
+      const totalEarnedFromTransactions = creditTransactions.reduce((sum: number, t: any) =>
         sum + parseFloat(t.amount || 0), 0
       );
 
-      // Calculate this month's earnings
-      const thisMonthEarnings = creditTransactions
+      // Calculate total earned from rewards
+      const totalEarnedFromRewards = rewards.reduce((sum: number, r: any) =>
+        sum + parseFloat(r.amount || 0), 0
+      );
+
+      // Calculate combined total earnings
+      const totalEarned = totalEarnedFromTransactions + totalEarnedFromRewards;
+
+      // Calculate this month's earnings (transactions + rewards)
+      const thisMonthTransactionEarnings = creditTransactions
         .filter((t: any) => new Date(t.created_at) >= startOfMonth)
         .reduce((sum: number, t: any) => sum + parseFloat(t.amount || 0), 0);
 
-      // Calculate this week's earnings
-      const thisWeekEarnings = creditTransactions
+      const thisMonthRewardEarnings = rewards
+        .filter((r: any) => new Date(r.date) >= startOfMonth)
+        .reduce((sum: number, r: any) => sum + parseFloat(r.amount || 0), 0);
+
+      const thisMonthEarnings = thisMonthTransactionEarnings + thisMonthRewardEarnings;
+
+      // Calculate this week's earnings (transactions + rewards)
+      const thisWeekTransactionEarnings = creditTransactions
         .filter((t: any) => new Date(t.created_at) >= startOfWeek)
         .reduce((sum: number, t: any) => sum + parseFloat(t.amount || 0), 0);
 
-      // Calculate today's earnings
-      const todayEarnings = creditTransactions
+      const thisWeekRewardEarnings = rewards
+        .filter((r: any) => new Date(r.date) >= startOfWeek)
+        .reduce((sum: number, r: any) => sum + parseFloat(r.amount || 0), 0);
+
+      const thisWeekEarnings = thisWeekTransactionEarnings + thisWeekRewardEarnings;
+
+      // Calculate today's earnings (transactions + rewards)
+      const todayTransactionEarnings = creditTransactions
         .filter((t: any) => new Date(t.created_at) >= startOfDay)
         .reduce((sum: number, t: any) => sum + parseFloat(t.amount || 0), 0);
+
+      const todayRewardEarnings = rewards
+        .filter((r: any) => new Date(r.date) >= startOfDay)
+        .reduce((sum: number, r: any) => sum + parseFloat(r.amount || 0), 0);
+
+      const todayEarnings = todayTransactionEarnings + todayRewardEarnings;
 
       // Calculate total withdrawals
       const totalWithdrawals = withdrawals.reduce((sum: number, w: any) =>
@@ -178,6 +204,17 @@ const EarningsScreen: React.FC = () => {
           [{ text: 'OK' }]
         );
         break;
+      case 'reward_history':
+        // Show reward history
+        const totalRewardEarnings = earningsData.rewardHistory.reduce((sum: number, r: any) =>
+          sum + parseFloat(r.amount || 0), 0
+        );
+        Alert.alert(
+          'Reward History',
+          `Total rewards: ${earningsData.rewardHistory.length}\nTotal earned from ads: ₹${totalRewardEarnings.toFixed(2)}`,
+          [{ text: 'OK' }]
+        );
+        break;
       case 'wallet':
         navigation.navigate('Wallet' as never);
         break;
@@ -208,6 +245,15 @@ const EarningsScreen: React.FC = () => {
       onPress: () => handleNavigation('withdrawal_history'),
       iconBgColor: '#F0F9FF',
       iconColor: '#0091FF',
+    },
+    {
+      id: 'reward_history',
+      icon: 'gift',
+      title: 'Reward History',
+      subtitle: `${earningsData.rewardHistory.length} ad rewards`,
+      onPress: () => handleNavigation('reward_history'),
+      iconBgColor: '#FEF3F2',
+      iconColor: '#F04438',
     },
     {
       id: 'wallet',

@@ -512,10 +512,9 @@ const TipTubeScreen = () => {
       return;
     }
     if (userChannelId && user?.id) {
-      // Note: Despite the parameter name being 'channelId', we pass the userId
-      // because the ChannelScreen API expects userId, not channelId
-      console.log('[TipTubeScreen] Navigating to Channel with userId:', String(user.id));
-      navigation.navigate('Channel', { channelId: String(user.id) });
+      // Navigate to MyChannel screen for user's own channel
+      console.log('[TipTubeScreen] Navigating to MyChannel for user:', user.id);
+      navigation.navigate('MyChannel');
     } else {
       // If no channel found, redirect to create channel
       console.log('[TipTubeScreen] No channel found, redirecting to CreateChannel');

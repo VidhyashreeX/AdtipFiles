@@ -470,56 +470,13 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
 
   // Handle post edit (works for both videos and images)
   const handleEditPost = useCallback((post: Post) => {
-    const contentType = post.media_type === 'video' ? 'video' : 'post';
-    Alert.alert(
-      `Edit ${contentType === 'video' ? 'Video' : 'Post'}`,
-      'Choose what you want to edit',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Edit Details',
-          onPress: () => {
-            // Navigate to edit screen or show edit modal
-            Alert.prompt(
-              `Edit ${contentType === 'video' ? 'Video' : 'Post'} Title`,
-              `Enter new title for your ${contentType}`,
-              [
-                {
-                  text: 'Cancel',
-                  style: 'cancel',
-                },
-                {
-                  text: 'Save',
-                  onPress: async (newTitle) => {
-                    if (newTitle && newTitle.trim()) {
-                      try {
-                        // For user profile posts, we should use updatePost API
-                        // Note: This might need to be implemented if not available
-                        await ApiService.editVideo({
-                          id: post.id,
-                          name: newTitle.trim(),
-                        });
-                        Alert.alert('Success', `${contentType === 'video' ? 'Video' : 'Post'} title updated successfully`);
-                        handleRefresh();
-                      } catch (error) {
-                        console.error(`Error editing ${contentType}:`, error);
-                        Alert.alert('Error', `Failed to update ${contentType} title`);
-                      }
-                    }
-                  },
-                },
-              ],
-              'plain-text',
-              post.content || ''
-            );
-          },
-        },
-      ]
-    );
-  }, []);
+    // Navigate to the new EditPostScreen
+    navigation.navigate('EditPost', {
+      postId: post.id,
+      currentTitle: post.title || post.content || '',
+      currentContent: post.content || '',
+    });
+  }, [navigation]);
 
   // Handle post delete (works for both videos and images)
   const handleDeletePost = useCallback((post: Post) => {
@@ -593,6 +550,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
       <FlatList
         data={posts}
         numColumns={3}
+        key="profile-grid-3" // Force re-render when numColumns changes
         keyExtractor={(item) => item.id.toString()}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -624,6 +582,17 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
                   )}
                 </View>
               </View>
+
+              {/* Edit Profile Button - Show only for own profile */}
+              {isOwnProfile && (
+                <TouchableOpacity
+                  style={styles.editProfileButton}
+                  onPress={() => navigation.navigate('EditProfile')}
+                  activeOpacity={0.7}
+                >
+                  <Icon name="edit-2" size={20} color={colors.text.primary} />
+                </TouchableOpacity>
+              )}
 
               {/* Stats Container */}
               <View style={styles.statsContainer}>
@@ -895,10 +864,22 @@ const styles = StyleSheet.create({
   },
   profileHeader: {
     padding: 16,
+    position: 'relative',
   },
   profileInfo: {
     flexDirection: 'row',
     marginBottom: 16,
+  },
+  editProfileButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
   },
   profileImage: {
     marginRight: 16,

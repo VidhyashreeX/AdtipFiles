@@ -59,6 +59,7 @@ export type MainNavigatorParamList = {
   PostViewer: {posts?: any[]; initialIndex?: number; userId?: number; postId?: number};
   Story: {storyId: string};
   CreatePost: undefined;
+  EditPost: { postId: number; currentTitle?: string; currentContent?: string };
   WatchAndEarn: undefined;
   Referral: undefined;
   TabHome: undefined; // Assuming these are part of MainNavigator, e.g., tabs
@@ -130,6 +131,7 @@ export type MainNavigatorParamList = {
     };
   };
   Channel: { channelId: string | number };
+  MyChannel: undefined;
   AddFundsScreen: undefined;
   UpgradePremiumScreen: undefined;
   Comments: { postId: number; visible: boolean; onClose: () => void; };

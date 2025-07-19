@@ -528,6 +528,7 @@ const MyChannelScreen: React.FC = () => {
       case 'Videos':
         return (
           <FlatList
+            key="videos-flatlist"
             data={videos}
             renderItem={renderVideoItem}
             keyExtractor={(item) => item.id}
@@ -556,6 +557,7 @@ const MyChannelScreen: React.FC = () => {
       case 'Shorts':
         return (
           <FlatList
+            key="shorts-flatlist"
             data={shorts}
             renderItem={renderVideoItem}
             keyExtractor={(item) => item.id}

@@ -1324,8 +1324,6 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
   storiesSection: {
     paddingVertical: 16,
     backgroundColor: colors.background,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.border,
   },
   storiesContainer: {
     paddingLeft: 16,
@@ -1338,8 +1336,6 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
   categoriesSection: {
     paddingVertical: 12,
     backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   categoriesContainer: {
     paddingLeft: 16,
@@ -1351,19 +1347,13 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
   // Earn cards carousel section
   earnCardsCarouselSection: {
     backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   // External link banner section
   externalLinkBannerSection: {
     backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   rushPlayGamesBannerSection: {
     backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   earnCardsCarouselSkeletonContainer: {
     paddingHorizontal: 16,
@@ -1434,16 +1424,12 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
   stickyBannerContainer: {
     backgroundColor: colors.surface,
     paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
-  
+
   // Rectangle ad
   rectangleAdContainer: {
     backgroundColor: colors.surface,
     paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
 
   // Loading and error states

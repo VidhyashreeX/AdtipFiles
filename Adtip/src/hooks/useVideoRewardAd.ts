@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Alert } from 'react-native';
 import ApiService from '../services/ApiService';
 import { useNavigation } from '@react-navigation/native';
+import { useRewardedAd } from '../googleads';
 
 const NON_PREMIUM_REWARD = 0.03;
 const PREMIUM_REWARD = 0.10;
@@ -31,6 +32,20 @@ export const useVideoRewardAd = ({
   const [showRewardPopup, setShowRewardPopup] = useState(false);
   const [earnedAmount, setEarnedAmount] = useState(0);
   const navigation = useNavigation();
+
+  // Initialize rewarded ad
+  const { isLoaded, showAd, hasEarnedReward, reward } = useRewardedAd();
+
+  // Handle reward earned from actual ad
+  useEffect(() => {
+    if (hasEarnedReward && reward) {
+      console.log('🎉 [useVideoRewardAd] User earned reward from ad:', reward);
+      const rewardAmount = isPremium ? PREMIUM_REWARD : NON_PREMIUM_REWARD;
+      setEarnedAmount(rewardAmount);
+      setShowRewardPopup(true);
+      creditWallet(rewardAmount);
+    }
+  }, [hasEarnedReward, reward, isPremium]);
 
   // Handle video view for reward ads (triggered on scroll/view, not completion)
   const handleVideoViewed = useCallback(() => {
@@ -64,31 +79,42 @@ export const useVideoRewardAd = ({
   const showRewardAd = useCallback(() => {
     console.log('🎁 [useVideoRewardAd] Showing reward ad...');
 
-    // Determine reward amount based on premium status
-    const rewardAmount = isPremium ? PREMIUM_REWARD : NON_PREMIUM_REWARD;
-    setEarnedAmount(rewardAmount);
-
-    // Show reward popup (production mode - always credit wallet)
-    console.log('🎁 [useVideoRewardAd] Production mode: Showing reward popup');
-    setShowRewardPopup(true);
-  }, [isPremium]);
+    if (isLoaded) {
+      // Show the actual rewarded ad
+      console.log('📺 [useVideoRewardAd] Displaying Google AdMob rewarded ad');
+      showAd();
+    } else {
+      // Fallback: Show reward popup directly if ad is not loaded
+      console.log('⚠️ [useVideoRewardAd] Ad not loaded, showing direct reward');
+      const rewardAmount = isPremium ? PREMIUM_REWARD : NON_PREMIUM_REWARD;
+      setEarnedAmount(rewardAmount);
+      setShowRewardPopup(true);
+      creditWallet(rewardAmount);
+    }
+  }, [isPremium, isLoaded, showAd]);
 
   // Reward system is self-contained - no external ad system integration needed
 
   // Credit wallet with reward amount
-  const creditWallet = useCallback(async () => {
+  const creditWallet = useCallback(async (amount?: number) => {
     if (!userId) {
       console.log('❌ [useVideoRewardAd] No userId provided, skipping wallet credit');
       return;
     }
 
+    const amountToCredit = amount || earnedAmount;
+    if (!amountToCredit || amountToCredit <= 0) {
+      console.log('❌ [useVideoRewardAd] Invalid amount, skipping wallet credit:', amountToCredit);
+      return;
+    }
+
     try {
-      console.log('💰 [useVideoRewardAd] Crediting wallet with amount:', earnedAmount);
+      console.log('💰 [useVideoRewardAd] Crediting wallet with amount:', amountToCredit);
 
       // Use ApiService instead of direct fetch
       await ApiService.creditAdReward({
         userId,
-        amount: earnedAmount
+        amount: amountToCredit
       });
 
       console.log('✅ [useVideoRewardAd] Wallet credited successfully');
