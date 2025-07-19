@@ -69,16 +69,16 @@ const ContactCard = ({
   onProfilePress?: () => void
   onBlockUser?: () => void
 }) => {
-  // Use is_available as primary indicator, considering DND and online status
-  const isOnline = contact.is_available && !contact.dnd && contact.online_status
-  const avatarColor = isOnline ? colors.success : colors.text.secondary
+  // Show all users as online - no need to differentiate between offline and online
+  const isOnline = true // Always show as online
+  const avatarColor = colors.success // Always use success color
 
   // Debug log for status checking
   console.log(`[ContactCard] ${contact.name} status:`, {
     is_available: contact.is_available,
     dnd: contact.dnd,
     online_status: contact.online_status,
-    isOnline
+    isOnline: 'forced_online'
   })
 
   return (
@@ -126,13 +126,7 @@ const ContactCard = ({
               style={[styles.contactStatus, { color: colors.text.secondary }]}
               numberOfLines={1}
             >
-              {contact.dnd
-                ? 'Do not disturb'
-                : !contact.is_available
-                ? 'Unavailable'
-                : !contact.online_status
-                ? 'Offline'
-                : 'Available for calls'}
+              Available for calls
             </Text>
           </View>
         </View>
