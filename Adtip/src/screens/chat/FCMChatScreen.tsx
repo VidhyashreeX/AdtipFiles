@@ -18,11 +18,14 @@ import {
   Platform,
   ActivityIndicator,
   Keyboard,
+  Animated,
+  LayoutAnimation,
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Clock, Check, CheckCheck, Send } from 'lucide-react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFCMChat } from '../../contexts/FCMChatContext';
@@ -46,18 +49,37 @@ interface MessageBubbleProps {
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isOwn, showStatus }) => {
-  const { colors } = useTheme();
+  const { colors, isDarkMode } = useTheme();
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  // Animate message appearance
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 100,
+        friction: 8,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [scaleAnim, opacityAnim]);
 
   const getStatusIcon = () => {
     switch (message.status) {
       case 'sending':
         return Clock;
       case 'sent':
-        return Check; // Single tick for sent
+        return Check;
       case 'delivered':
-        return CheckCheck; // Double tick for delivered
+        return CheckCheck;
       case 'read':
-        return CheckCheck; // Double tick for read (will be colored differently)
+        return CheckCheck;
       default:
         return Clock;
     }
@@ -66,53 +88,87 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isOwn, showStatu
   const getStatusColor = () => {
     switch (message.status) {
       case 'sending':
-        return typeof COLORS.gray === 'string' ? COLORS.gray : COLORS.gray[500];
+        return 'rgba(255, 255, 255, 0.6)';
       case 'sent':
-        return typeof COLORS.white === 'string' ? COLORS.white : COLORS.white[500];
+        return 'rgba(255, 255, 255, 0.8)';
       case 'delivered':
-        return typeof COLORS.white === 'string' ? COLORS.white : COLORS.white[500];
+        return 'rgba(255, 255, 255, 0.9)';
       case 'read':
-        return typeof COLORS.success === 'string' ? COLORS.success : COLORS.success[500];
+        return '#00E676'; // Bright green for read
       default:
-        return typeof COLORS.gray === 'string' ? COLORS.gray : COLORS.gray[500];
+        return 'rgba(255, 255, 255, 0.6)';
     }
   };
 
-  return (
-    <View style={[
-      styles.messageBubble,
-      isOwn ? [styles.ownMessage, { backgroundColor: COLORS.primary }] : [styles.otherMessage, { backgroundColor: colors.surface }]
-    ]}>
-      <Text style={[
-        styles.messageText,
-        { color: isOwn ? COLORS.white : colors.text.primary }
-      ]}>
-        {message.content}
-      </Text>
+  const ownMessageGradient = isDarkMode
+    ? ['#24d05a', '#1db954']
+    : ['#24d05a', '#00C853'];
 
-      <View style={styles.messageFooter}>
-        <Text style={[
-          styles.messageTime,
-          { color: isOwn ? COLORS.white : colors.text.secondary }
-        ]}>
-          {new Date(message.createdAt).toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit'
-          })}
-        </Text>
-        
-        {isOwn && showStatus && (() => {
-          const StatusIcon = getStatusIcon();
-          return (
-            <StatusIcon
-              size={16}
-              color={getStatusColor()}
-              style={styles.statusIcon}
-            />
-          );
-        })()}
-      </View>
-    </View>
+  const otherMessageGradient = isDarkMode
+    ? ['#2D2D2D', '#1A1A1A']
+    : ['#F5F5F5', '#EEEEEE'];
+
+  return (
+    <Animated.View
+      style={[
+        styles.messageBubbleContainer,
+        isOwn ? styles.ownMessageContainer : styles.otherMessageContainer,
+        {
+          transform: [{ scale: scaleAnim }],
+          opacity: opacityAnim,
+        }
+      ]}
+    >
+      {isOwn ? (
+        <LinearGradient
+          colors={ownMessageGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.messageBubble, styles.ownMessage]}
+        >
+          <Text style={[styles.messageText, { color: COLORS.white }]}>
+            {message.content}
+          </Text>
+          <View style={styles.messageFooter}>
+            <Text style={[styles.messageTime, { color: 'rgba(255, 255, 255, 0.8)' }]}>
+              {new Date(message.createdAt).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </Text>
+            {showStatus && (() => {
+              const StatusIcon = getStatusIcon();
+              return (
+                <StatusIcon
+                  size={14}
+                  color={getStatusColor()}
+                  style={styles.statusIcon}
+                />
+              );
+            })()}
+          </View>
+        </LinearGradient>
+      ) : (
+        <LinearGradient
+          colors={otherMessageGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.messageBubble, styles.otherMessage]}
+        >
+          <Text style={[styles.messageText, { color: colors.text.primary }]}>
+            {message.content}
+          </Text>
+          <View style={styles.messageFooter}>
+            <Text style={[styles.messageTime, { color: colors.text.secondary }]}>
+              {new Date(message.createdAt).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </Text>
+          </View>
+        </LinearGradient>
+      )}
+    </Animated.View>
   );
 };
 
@@ -123,7 +179,6 @@ const FCMChatScreen: React.FC = () => {
   const { colors } = useTheme();
 
   const {
-    currentConversationId,
     currentMessages,
     loadingMessages,
     isInitialized,
@@ -141,7 +196,13 @@ const FCMChatScreen: React.FC = () => {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [loadingLocalMessages, setLoadingLocalMessages] = useState(true);
+  const [inputHeight, setInputHeight] = useState(50);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const textInputRef = useRef<TextInput>(null);
+  const sendButtonScale = useRef(new Animated.Value(1)).current;
+  const keyboardAnimationValue = useRef(new Animated.Value(0)).current;
+  const inputContainerAnimValue = useRef(new Animated.Value(0)).current;
 
   // Set navigation title and header styling
   useEffect(() => {
@@ -158,17 +219,45 @@ const FCMChatScreen: React.FC = () => {
         color: colors.text.primary,
         fontWeight: '600',
       },
-      // Removed headerRight completely for clean minimal look
     });
   }, [navigation, participantName, colors.text.primary, colors.background]);
 
-  // Keyboard handling
+  // Enhanced keyboard handling with smooth animations
   useEffect(() => {
+    // Configure layout animations for smooth transitions
+    LayoutAnimation.configureNext({
+      duration: 250,
+      create: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+      update: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+      },
+    });
+
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
       (e) => {
-        setKeyboardHeight(e.endCoordinates.height);
-        // Scroll to bottom when keyboard shows
+        const keyboardHeight = e.endCoordinates.height;
+        setKeyboardHeight(keyboardHeight);
+        setIsKeyboardVisible(true);
+
+        // Smooth keyboard animation
+        Animated.parallel([
+          Animated.timing(keyboardAnimationValue, {
+            toValue: 1,
+            duration: 250,
+            useNativeDriver: false,
+          }),
+          Animated.timing(inputContainerAnimValue, {
+            toValue: keyboardHeight,
+            duration: 250,
+            useNativeDriver: false,
+          }),
+        ]).start();
+
+        // Auto-scroll to bottom with proper timing
         setTimeout(() => {
           flatListRef.current?.scrollToEnd({ animated: true });
         }, 100);
@@ -179,14 +268,46 @@ const FCMChatScreen: React.FC = () => {
       'keyboardDidHide',
       () => {
         setKeyboardHeight(0);
+        setIsKeyboardVisible(false);
+
+        // Smooth keyboard hide animation
+        Animated.parallel([
+          Animated.timing(keyboardAnimationValue, {
+            toValue: 0,
+            duration: 250,
+            useNativeDriver: false,
+          }),
+          Animated.timing(inputContainerAnimValue, {
+            toValue: 0,
+            duration: 250,
+            useNativeDriver: false,
+          }),
+        ]).start();
       }
     );
+
+    const keyboardWillShowListener = Platform.OS === 'ios' 
+      ? Keyboard.addListener('keyboardWillShow', (e) => {
+          // Pre-animate for iOS for smoother experience
+          const keyboardHeight = e.endCoordinates.height;
+          setKeyboardHeight(keyboardHeight);
+          setIsKeyboardVisible(true);
+        })
+      : null;
+
+    const keyboardWillHideListener = Platform.OS === 'ios'
+      ? Keyboard.addListener('keyboardWillHide', () => {
+          setIsKeyboardVisible(false);
+        })
+      : null;
 
     return () => {
       keyboardDidShowListener?.remove();
       keyboardDidHideListener?.remove();
+      keyboardWillShowListener?.remove();
+      keyboardWillHideListener?.remove();
     };
-  }, []);
+  }, [keyboardAnimationValue, inputContainerAnimValue]);
 
   // Initialize conversation
   useEffect(() => {
@@ -231,7 +352,7 @@ const FCMChatScreen: React.FC = () => {
     if (conversationId && currentMessages.length > 0 && hasMarkedAsReadRef.current !== conversationId) {
       // Check if there are any unread messages before calling the API
       const unreadMessages = currentMessages.filter(msg =>
-        msg.senderId !== user?.id?.toString() && !msg.isRead
+        msg.senderId !== user?.id?.toString() && msg.status !== 'read'
       );
 
       if (unreadMessages.length > 0) {
@@ -263,6 +384,60 @@ const FCMChatScreen: React.FC = () => {
     };
   }, [setCurrentConversation]);
 
+  // Animate send button on press
+  const animateSendButton = useCallback(() => {
+    Animated.sequence([
+      Animated.timing(sendButtonScale, {
+        toValue: 0.9,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(sendButtonScale, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [sendButtonScale]);
+
+  // Handle input text change with dynamic height
+  const handleTextChange = useCallback((text: string) => {
+    setMessageText(text);
+    
+    // Calculate dynamic height based on content
+    const lines = text.split('\n').length;
+    const calculatedHeight = Math.min(Math.max(50, lines * 20 + 30), 120);
+    
+    if (calculatedHeight !== inputHeight) {
+      LayoutAnimation.configureNext({
+        duration: 200,
+        create: {
+          type: LayoutAnimation.Types.easeInEaseOut,
+          property: LayoutAnimation.Properties.opacity,
+        },
+        update: {
+          type: LayoutAnimation.Types.easeInEaseOut,
+        },
+      });
+      setInputHeight(calculatedHeight);
+      
+      // Ensure messages remain visible above input
+      setTimeout(() => {
+        if (isKeyboardVisible) {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }
+      }, 100);
+    }
+  }, [inputHeight, isKeyboardVisible]);
+
+  // Handle input focus with enhanced scroll behavior
+  const handleInputFocus = useCallback(() => {
+    // Delay scroll to ensure keyboard animation completes
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, Platform.OS === 'ios' ? 300 : 400);
+  }, []);
+
   // Handle sending message
   const handleSendMessage = useCallback(async () => {
     if (!messageText.trim() || !conversationId || sending) {
@@ -271,8 +446,12 @@ const FCMChatScreen: React.FC = () => {
 
     const messageToSend = messageText.trim();
 
+    // Animate send button
+    animateSendButton();
+
     // Reset input immediately for better UX
     setMessageText('');
+    setInputHeight(50); // Reset input height
 
     // Scroll to bottom immediately to show the optimistic message
     setTimeout(() => {
@@ -282,7 +461,7 @@ const FCMChatScreen: React.FC = () => {
     try {
       setSending(true);
       await sendMessage(conversationId, messageToSend);
-      console.log('✅ [FCMChatScreen] Message sent successfully, status should update to tick');
+      console.log('✅ [FCMChatScreen] Message sent successfully');
 
     } catch (error) {
       console.error('❌ [FCMChatScreen] Failed to send message:', error);
@@ -292,7 +471,7 @@ const FCMChatScreen: React.FC = () => {
     } finally {
       setSending(false);
     }
-  }, [messageText, conversationId, sending, sendMessage]);
+  }, [messageText, conversationId, sending, sendMessage, animateSendButton]);
 
   // Handle refresh
   const handleRefresh = useCallback(async () => {
@@ -328,7 +507,18 @@ const FCMChatScreen: React.FC = () => {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={styles.container}>
+      {/* Vibrant Gradient Background */}
+      <LinearGradient
+        colors={colors.background === '#000000'
+          ? ['#0A0A0A', '#1A1A1A', '#0F0F0F']
+          : ['#E3F2FD', '#F8F9FA', '#FFFFFF']
+        }
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.backgroundGradient}
+      />
+
       {/* Messages List */}
       <FlatList
         ref={flatListRef}
@@ -361,53 +551,71 @@ const FCMChatScreen: React.FC = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <View style={[
+        <Animated.View style={[
           styles.inputContainer,
           {
             backgroundColor: colors.surface,
             borderTopColor: colors.border,
-            marginBottom: Platform.OS === 'android' ? keyboardHeight : 0
+            marginBottom: Platform.OS === 'android' ? keyboardHeight : 0,
+            height: inputHeight + 24, // Dynamic height based on input content
           }
         ]}>
           <TextInput
+            ref={textInputRef}
             style={[styles.textInput, {
               backgroundColor: colors.background,
               color: colors.text.primary,
-              borderColor: colors.border
+              borderColor: colors.border,
+              height: inputHeight,
             }]}
             value={messageText}
-            onChangeText={setMessageText}
+            onChangeText={handleTextChange}
             placeholder="Type a message..."
             placeholderTextColor={colors.text.secondary}
             multiline
             maxLength={1000}
             editable={!sending}
-            onFocus={() => {
-              // Scroll to bottom when input is focused
-              setTimeout(() => {
-                flatListRef.current?.scrollToEnd({ animated: true });
-              }, 300);
-            }}
+            onFocus={handleInputFocus}
+            textAlignVertical="top"
+            scrollEnabled={inputHeight >= 120}
           />
 
-          <TouchableOpacity
+          <Animated.View
             style={[
-              styles.sendButton,
+              styles.sendButtonContainer,
               {
-                backgroundColor: messageText.trim() && !sending ? COLORS.primary : colors.border,
-                opacity: messageText.trim() && !sending ? 1 : 0.5
+                transform: [{ scale: sendButtonScale }],
               }
             ]}
-            onPress={handleSendMessage}
-            disabled={!messageText.trim() || sending}
           >
-            {sending ? (
-              <ActivityIndicator size="small" color={COLORS.white} />
-            ) : (
-              <Send size={20} color={COLORS.white} />
-            )}
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              onPress={handleSendMessage}
+              disabled={!messageText.trim() || sending}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={messageText.trim() && !sending
+                  ? ['#24d05a', '#00C853']
+                  : [colors.border, colors.border]
+                }
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[
+                  styles.sendButton,
+                  {
+                    opacity: messageText.trim() && !sending ? 1 : 0.5
+                  }
+                ]}
+              >
+                {sending ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <Send size={20} color={COLORS.white} />
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -416,6 +624,13 @@ const FCMChatScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  backgroundGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   centered: {
     justifyContent: 'center',
@@ -432,36 +647,53 @@ const styles = StyleSheet.create({
     padding: 16,
     flexGrow: 1,
   },
+  messageBubbleContainer: {
+    marginVertical: 3,
+    maxWidth: '85%',
+  },
+  ownMessageContainer: {
+    alignSelf: 'flex-end',
+  },
+  otherMessageContainer: {
+    alignSelf: 'flex-start',
+  },
   messageBubble: {
-    maxWidth: '80%',
-    padding: 12,
-    borderRadius: 16,
-    marginVertical: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   ownMessage: {
-    alignSelf: 'flex-end',
-    borderBottomRightRadius: 4,
+    borderBottomRightRadius: 6,
   },
   otherMessage: {
-    alignSelf: 'flex-start',
-    borderBottomLeftRadius: 4,
+    borderBottomLeftRadius: 6,
   },
   messageText: {
     fontSize: 16,
-    lineHeight: 20,
+    lineHeight: 22,
+    fontWeight: '400',
   },
   messageFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    marginTop: 4,
+    marginTop: 6,
   },
   messageTime: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '500',
     marginRight: 4,
   },
   statusIcon: {
-    marginLeft: 4,
+    marginLeft: 2,
   },
   emptyContainer: {
     flex: 1,
@@ -477,30 +709,59 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    padding: 16,
-    borderTopWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 0.5,
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 8,
   },
   textInput: {
     flex: 1,
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 16,
+    borderWidth: 1.5,
+    borderRadius: 25,
+    paddingHorizontal: 18,
     paddingVertical: 12,
     marginRight: 12,
-    maxHeight: 100,
+    maxHeight: 120,
     fontSize: 16,
-    minHeight: 44,
+    minHeight: 50,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  sendButtonContainer: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  sendButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
 });
 

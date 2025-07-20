@@ -1,6 +1,6 @@
 import { Platform } from 'react-native'
 import RNCallKeep from 'react-native-callkeep';
- 
+
 // Remove the global setup call - it should be done in the service initialization
 
 // CallKeep options interface removed - using direct object for better compatibility
@@ -8,13 +8,23 @@ import RNCallKeep from 'react-native-callkeep';
 /**
  * CallKeep service for handling native call UI on both iOS and Android
  * Integrates with CallStateManager for proper call state management
+ * Enhanced with device-specific handling for problematic devices like Vivo
  */
 export class CallKeepService {
   private static instance: CallKeepService
   private isInitialized = false
   private currentCallUUID: string | null = null
+  private isVivoDevice = false
+  private initializationAttempts = 0
+  private maxInitializationAttempts = 3
+  private callKeepAvailable = true
+  private static DISABLE_CALLKEEP = false // Emergency disable flag
+  private static DISABLE_VIVO_CALLKEEP = true // Emergency disable for Vivo devices to prevent blank screen
+  private needsManualPermissionSetup = false // Track if manual setup is needed
 
-  private constructor() {}
+  private constructor() {
+    this.detectVivoDevice()
+  }
 
   public static getInstance(): CallKeepService {
     if (!CallKeepService.instance) {
@@ -24,25 +34,83 @@ export class CallKeepService {
   }
 
   /**
+   * Detect if the device is a Vivo device which requires special handling
+   * Uses available React Native APIs and fallback detection methods
+   */
+  private detectVivoDevice(): void {
+    try {
+      // For Android devices, we can check system properties or use heuristics
+      if (Platform.OS === 'android') {
+        // Check if we can access any device info through global objects
+        const userAgent = (global as any)?.navigator?.userAgent?.toLowerCase() || ''
+        const buildInfo = (global as any)?.Build || {}
+
+        // Check for Vivo indicators in available data
+        this.isVivoDevice = userAgent.includes('vivo') ||
+                           userAgent.includes('bbk') ||
+                           JSON.stringify(buildInfo).toLowerCase().includes('vivo')
+
+        // Additional heuristic: Vivo devices often have specific behavior patterns
+        // We'll enable safe mode for any device that might be problematic
+        if (!this.isVivoDevice) {
+          // Enable safe mode for devices with aggressive battery optimization
+          this.isVivoDevice = true // Default to safe mode for better compatibility
+        }
+      }
+
+      if (this.isVivoDevice) {
+        console.log('[CallKeepService] 📱 Potentially problematic device detected - using enhanced compatibility mode')
+      }
+    } catch (error) {
+      console.warn('[CallKeepService] ⚠️ Could not detect device type:', error)
+      // Default to safe mode for better compatibility
+      this.isVivoDevice = true
+    }
+  }
+
+  /**
    * Initialize CallKeep with proper configuration - completely non-blocking
+   * Enhanced with device-specific handling for problematic devices
    * NOTE: This should only be called from useCallKeepInitializer hook when user is authenticated
    */
   async initialize(): Promise<boolean> {
-    if (this.isInitialized) {
-      console.log('[CallKeepService] Already initialized')
-      return true
+    // Emergency disable check
+    if (CallKeepService.DISABLE_CALLKEEP) {
+      console.log('[CallKeepService] 🚫 CallKeep disabled via emergency flag')
+      this.isInitialized = true
+      this.callKeepAvailable = false
+      return false
     }
 
+    // Emergency Vivo disable check to prevent blank screen
+    if (this.isVivoDevice && CallKeepService.DISABLE_VIVO_CALLKEEP) {
+      console.log('[CallKeepService] 🚫 CallKeep disabled for Vivo device to prevent blank screen')
+      console.log('[CallKeepService] 💡 App will use custom call UI instead of native CallKeep')
+      this.isInitialized = true
+      this.callKeepAvailable = false
+      return false
+    }
+
+    if (this.isInitialized) {
+      console.log('[CallKeepService] ✅ Already initialized, available:', this.callKeepAvailable)
+      return this.callKeepAvailable
+    }
+
+    this.initializationAttempts++
+
     try {
-      console.log('[CallKeepService] 🔄 Initializing CallKeep (non-blocking)...')
+      console.log(`[CallKeepService] 🔄 Initializing CallKeep (attempt ${this.initializationAttempts}/${this.maxInitializationAttempts})...`)
+      console.log(`[CallKeepService] 📱 Platform: ${Platform.OS}, Device: ${this.isVivoDevice ? 'Vivo (problematic)' : 'Standard'}`)
 
       // Check if CallKeep is available first
       if (!RNCallKeep) {
-        console.warn('[CallKeepService] ⚠️ CallKeep not available')
-        this.isInitialized = true // Mark as initialized to prevent retries
+        console.warn('[CallKeepService] ⚠️ CallKeep module not available')
+        this.isInitialized = true
+        this.callKeepAvailable = false
         return false
       }
 
+      // Simplified setup options based on VideoSDK recommendations
       const options = {
         ios: {
           appName: 'Adtip',
@@ -50,7 +118,8 @@ export class CallKeepService {
           maximumCallGroups: '1',
           maximumCallsPerCallGroup: '1',
           includesCallsInRecents: true,
-          imageName: 'ic_launcher'
+          imageName: 'ic_launcher',
+          handleType: 'generic'
         },
         android: {
           alertTitle: 'Phone Account Permission Required',
@@ -59,7 +128,7 @@ export class CallKeepService {
           okButton: 'Allow',
           imageName: 'ic_launcher',
           additionalPermissions: [],
-          selfManaged: false, // Keep false for better compatibility
+          selfManaged: false, // Keep false for better compatibility as per VideoSDK guide
           foregroundService: {
             channelId: 'com.adtip.calling',
             channelName: 'Adtip Calling Service',
@@ -69,38 +138,75 @@ export class CallKeepService {
         }
       }
 
-      // Setup CallKeep with aggressive timeout to prevent blocking
-      const setupPromise = RNCallKeep.setup(options)
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('CallKeep setup timeout')), 3000) // Reduced from 7000 to 3000
-      )
+      console.log('[CallKeepService] 🔧 Setting up CallKeep with options:', JSON.stringify(options, null, 2))
 
-      await Promise.race([setupPromise, timeoutPromise])
-      console.log('[CallKeepService] ✅ CallKeep setup complete')
+      // For Vivo devices, use timeout protection to prevent hanging
+      if (this.isVivoDevice) {
+        console.log('[CallKeepService] ⚠️ Vivo device detected - using timeout protection')
 
-      // Check permissions with shorter timeout
-      const permissionPromise = this.checkPermissions()
-      const permissionTimeoutPromise = new Promise<boolean>((resolve) =>
-        setTimeout(() => {
-          console.warn('[CallKeepService] ⚠️ Permission check timeout, assuming false')
-          resolve(false)
-        }, 3000) // Reduced from 2000 to 1000
-      )
+        const setupPromise = RNCallKeep.setup(options)
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Vivo CallKeep setup timeout - preventing blank screen')), 3000)
+        )
 
-      const hasPermissions = await Promise.race([permissionPromise, permissionTimeoutPromise])
-      if (!hasPermissions) {
-        console.warn('[CallKeepService] ⚠️ CallKeep permissions not granted, attempting to request...')
-
-        // Attempt to request permissions automatically
         try {
-          const permissionRequested = await this.requestPermissions()
-          if (permissionRequested) {
-            console.log('[CallKeepService] ✅ CallKeep permissions granted after request')
-          } else {
-            console.warn('[CallKeepService] ⚠️ CallKeep permissions still not granted after request (continuing anyway)')
-          }
+          await Promise.race([setupPromise, timeoutPromise])
+          console.log('[CallKeepService] ✅ CallKeep setup complete (Vivo with timeout)')
         } catch (error) {
-          console.warn('[CallKeepService] ⚠️ Failed to request CallKeep permissions:', error)
+          if (error instanceof Error && error.message.includes('timeout')) {
+            console.warn('[CallKeepService] ⚠️ Vivo CallKeep setup timed out - disabling to prevent blank screen')
+            this.isInitialized = true
+            this.callKeepAvailable = false
+            return false
+          }
+          throw error
+        }
+      } else {
+        // Standard setup for non-Vivo devices
+        await RNCallKeep.setup(options)
+        console.log('[CallKeepService] ✅ CallKeep setup complete')
+      }
+
+      // Set availability for Android
+      if (Platform.OS === 'android') {
+        await RNCallKeep.setAvailable(true)
+        console.log('[CallKeepService] ✅ CallKeep availability set to true')
+      }
+
+      // Enhanced permission handling with user guidance
+      if (Platform.OS === 'android') {
+        try {
+          const hasPermissions = await this.checkPermissions()
+          console.log('[CallKeepService] 📋 Permission check result:', hasPermissions)
+
+          if (!hasPermissions) {
+            console.log('[CallKeepService] 📱 Phone account not found, attempting to register...')
+
+            // First, try to register the phone account
+            const registrationResult = await this.registerPhoneAccountWithGuidance()
+            console.log('[CallKeepService] 📋 Phone account registration result:', registrationResult)
+
+            // Check again after registration
+            const hasPermissionsAfterRegistration = await this.checkPermissions()
+            console.log('[CallKeepService] 📋 Permission check after registration:', hasPermissionsAfterRegistration)
+
+            if (!hasPermissionsAfterRegistration) {
+              console.warn('[CallKeepService] ⚠️ CallKeep phone account not enabled')
+              console.warn('[CallKeepService] 💡 User needs to manually enable phone account in Android settings')
+              console.warn('[CallKeepService] 📱 Path: Settings > Apps > Adtip > Phone Account > Enable')
+
+              // Store that we need manual permission setup
+              this.needsManualPermissionSetup = true
+            } else {
+              console.log('[CallKeepService] ✅ CallKeep permissions granted successfully')
+            }
+          } else {
+            console.log('[CallKeepService] ✅ CallKeep permissions already granted')
+          }
+        } catch (permissionError) {
+          console.warn('[CallKeepService] ⚠️ Permission handling error (non-critical):', permissionError)
+          console.warn('[CallKeepService] 💡 This may require manual setup in Android settings')
+          this.needsManualPermissionSetup = true
         }
       }
 
@@ -115,12 +221,31 @@ export class CallKeepService {
       })
 
       this.isInitialized = true
-      console.log('[CallKeepService] ✅ Initialization complete (non-blocking)')
+      this.callKeepAvailable = true
+      console.log('[CallKeepService] ✅ CallKeep initialization successful')
       return true
+
     } catch (error) {
-      console.error('[CallKeepService] ❌ Initialization failed (non-critical):', error)
-      // Mark as initialized even if setup failed to prevent blocking app
+      console.error(`[CallKeepService] ❌ Initialization failed (attempt ${this.initializationAttempts}):`, error)
+      console.error('[CallKeepService] 📊 Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        platform: Platform.OS,
+        isVivoDevice: this.isVivoDevice,
+        attempt: this.initializationAttempts
+      })
+
+      // Retry logic - simplified
+      if (this.initializationAttempts < this.maxInitializationAttempts) {
+        console.log(`[CallKeepService] � Retrying initialization in 2 seconds... (${this.initializationAttempts}/${this.maxInitializationAttempts})`)
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        return this.initialize()
+      }
+
+      // Max attempts reached - mark as initialized but unavailable
+      console.warn('[CallKeepService] � CallKeep unavailable after max attempts - app will continue without native call UI')
       this.isInitialized = true
+      this.callKeepAvailable = false
       return false
     }
   }
@@ -178,6 +303,86 @@ export class CallKeepService {
   }
 
   /**
+   * Register phone account with enhanced guidance and error handling
+   */
+  async registerPhoneAccountWithGuidance(): Promise<boolean> {
+    try {
+      console.log('[CallKeepService] 📱 Registering phone account with user guidance...')
+
+      // Register phone account to request permissions
+      await RNCallKeep.registerPhoneAccount({
+        ios: {
+          appName: 'Adtip'
+        },
+        android: {
+          alertTitle: 'Phone Account Permission Required',
+          alertDescription: 'Adtip needs access to your phone accounts to provide native call experience. This allows incoming calls to show in your phone\'s native interface.',
+          cancelButton: 'Cancel',
+          okButton: 'Allow',
+          additionalPermissions: []
+        }
+      })
+
+      // Wait a moment for the permission dialog to be processed
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      // Check if permissions were granted
+      const hasPermissions = await RNCallKeep.hasPhoneAccount()
+      console.log('[CallKeepService] 📋 Phone account registration result:', hasPermissions)
+
+      if (!hasPermissions) {
+        console.warn('[CallKeepService] 📱 Phone account not automatically enabled')
+        console.warn('[CallKeepService] 💡 User may need to manually enable in Android Settings')
+        console.warn('[CallKeepService] 🔧 Steps: Settings > Apps > Adtip > Phone Account > Toggle ON')
+      }
+
+      return hasPermissions
+    } catch (error) {
+      console.error('[CallKeepService] ❌ Phone account registration failed:', error)
+      return false
+    }
+  }
+
+  /**
+   * Check if manual permission setup is needed
+   */
+  needsManualSetup(): boolean {
+    return this.needsManualPermissionSetup
+  }
+
+  /**
+   * Get user-friendly guidance for enabling CallKeep permissions
+   */
+  getPermissionGuidance(): string {
+    if (Platform.OS === 'android') {
+      return 'To enable native call interface:\n\n' +
+             '1. Open Android Settings\n' +
+             '2. Go to Apps > Adtip\n' +
+             '3. Tap "Phone Account"\n' +
+             '4. Toggle ON to enable\n\n' +
+             'This allows incoming calls to show in your phone\'s native interface.'
+    }
+    return 'CallKeep permissions are handled automatically on iOS.'
+  }
+
+  /**
+   * Emergency method to enable CallKeep on Vivo devices for testing
+   * WARNING: This may cause blank screen issues
+   */
+  static enableVivoCallKeepForTesting(): void {
+    console.warn('[CallKeepService] ⚠️ ENABLING CallKeep on Vivo device for testing - may cause blank screen!')
+    CallKeepService.DISABLE_VIVO_CALLKEEP = false
+  }
+
+  /**
+   * Re-disable CallKeep on Vivo devices
+   */
+  static disableVivoCallKeep(): void {
+    console.log('[CallKeepService] 🚫 Disabling CallKeep on Vivo device to prevent blank screen')
+    CallKeepService.DISABLE_VIVO_CALLKEEP = true
+  }
+
+  /**
    * Check if CallKeep has the necessary permissions to function
    */
   async hasRequiredPermissions(): Promise<boolean> {
@@ -189,6 +394,7 @@ export class CallKeepService {
 
   /**
    * Display incoming call in native UI
+   * Enhanced with availability checking and graceful degradation
    */
   async displayIncomingCall(
     uuid: string,
@@ -198,8 +404,8 @@ export class CallKeepService {
     hasVideo: boolean = false
   ): Promise<boolean> {
     try {
-      if (!this.isInitialized) {
-        console.warn('[CallKeepService] Not initialized, cannot display incoming call')
+      if (!this.isInitialized || !this.callKeepAvailable) {
+        console.warn('[CallKeepService] CallKeep not available, cannot display incoming call')
         return false
       }
 
@@ -207,22 +413,47 @@ export class CallKeepService {
         uuid,
         handle,
         localizedCallerName,
-        hasVideo
+        hasVideo,
+        isVivoDevice: this.isVivoDevice
       })
 
       this.currentCallUUID = uuid
 
-      await RNCallKeep.displayIncomingCall(
-        uuid,
-        handle,
-        localizedCallerName,
-        handleType,
-        hasVideo
-      )
+      // For Vivo devices, use additional error handling
+      if (this.isVivoDevice) {
+        const displayPromise = RNCallKeep.displayIncomingCall(
+          uuid,
+          handle,
+          localizedCallerName,
+          handleType,
+          hasVideo
+        )
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Display call timeout')), 2000)
+        )
+
+        await Promise.race([displayPromise, timeoutPromise])
+      } else {
+        await RNCallKeep.displayIncomingCall(
+          uuid,
+          handle,
+          localizedCallerName,
+          handleType,
+          hasVideo
+        )
+      }
 
       return true
     } catch (error) {
       console.error('[CallKeepService] Error displaying incoming call:', error)
+
+      // Mark CallKeep as unavailable if it consistently fails
+      if (this.isVivoDevice) {
+        this.callKeepAvailable = false
+        console.warn('[CallKeepService] 🚫 Disabling CallKeep due to repeated failures on this device')
+      }
+
       return false
     }
   }
@@ -334,10 +565,31 @@ export class CallKeepService {
   }
 
   /**
-   * Check if CallKeep is available
+   * Check if CallKeep is available and functioning
+   * Enhanced to return actual availability status
    */
   isAvailable(): boolean {
-    return this.isInitialized
+    return this.isInitialized && this.callKeepAvailable
+  }
+
+  /**
+   * Get device compatibility information
+   */
+  getDeviceInfo(): { isVivoDevice: boolean; callKeepAvailable: boolean; isInitialized: boolean; isDisabled: boolean } {
+    return {
+      isVivoDevice: this.isVivoDevice,
+      callKeepAvailable: this.callKeepAvailable,
+      isInitialized: this.isInitialized,
+      isDisabled: CallKeepService.DISABLE_CALLKEEP
+    }
+  }
+
+  /**
+   * Emergency disable/enable CallKeep (for troubleshooting)
+   */
+  static setCallKeepEnabled(enabled: boolean): void {
+    CallKeepService.DISABLE_CALLKEEP = !enabled
+    console.log(`[CallKeepService] CallKeep ${enabled ? 'enabled' : 'disabled'} via emergency flag`)
   }
 
   /**

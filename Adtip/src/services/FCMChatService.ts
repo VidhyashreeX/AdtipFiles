@@ -15,9 +15,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import messaging, { FirebaseMessagingTypes } from '@react-native-firebase/messaging';
 import { AppState, AppStateStatus, Platform } from 'react-native';
+import notifee, { AndroidImportance, EventType } from '@notifee/react-native';
 import ApiService from './ApiService';
 import { API_BASE_URL } from '../constants/api';
 import { CHAT_ENDPOINTS, FCM_CHAT_ENDPOINTS } from '../constants/apiEndpoints';
+import { navigationRef } from '../navigation/NavigationService';
+
+// Import default logo for notifications
+const defaultLogo = require('../assets/images/logo.png');
 
 export interface Message {
   id: string;
@@ -104,10 +109,13 @@ class FCMChatService {
   private readonly BASE_RETRY_DELAY = 2000; // 2 seconds
   private lastRequestTime = 0;
   private readonly MIN_REQUEST_INTERVAL = 1000; // 1 second minimum between requests
+  private readonly CHAT_NOTIFICATION_CHANNEL = 'chat-messages';
 
   private constructor() {
     // Monitor app state changes using the new subscription-based API
     this.appStateSubscription = AppState.addEventListener('change', this.handleAppStateChange);
+    // Initialize notification channels
+    this.createNotificationChannels();
   }
 
   public static getInstance(): FCMChatService {
@@ -115,6 +123,28 @@ class FCMChatService {
       FCMChatService.instance = new FCMChatService();
     }
     return FCMChatService.instance;
+  }
+
+  /**
+   * Create notification channels for chat messages
+   */
+  private async createNotificationChannels(): Promise<void> {
+    try {
+      await notifee.createChannel({
+        id: this.CHAT_NOTIFICATION_CHANNEL,
+        name: 'Chat Messages',
+        importance: AndroidImportance.HIGH,
+        sound: 'default',
+        vibration: true,
+        vibrationPattern: [300, 500],
+        lights: true,
+        lightColor: '#00D4AA',
+        badge: true,
+      });
+      console.log('[FCMChatService] Chat notification channel created');
+    } catch (error) {
+      console.error('[FCMChatService] Failed to create notification channels:', error);
+    }
   }
 
   /**
@@ -199,8 +229,48 @@ class FCMChatService {
         await this.updateFCMToken(token);
       });
 
+      // Setup notifee event handling for notification taps
+      this.setupNotifeeEventHandling();
+
     } catch (error) {
       console.error('[FCMChatService] FCM setup failed:', error);
+    }
+  }
+
+  /**
+   * Setup notifee event handling for notification interactions
+   */
+  private setupNotifeeEventHandling(): void {
+    try {
+      // Handle notification press events (both foreground and background)
+      notifee.onForegroundEvent(async ({ type, detail }) => {
+        if (type === EventType.PRESS) {
+          console.log('[FCMChatService] Notifee notification pressed:', detail.notification?.data);
+
+          const data = detail.notification?.data;
+          if (data?.type === 'chat_message') {
+            this.navigateToChat(data);
+          }
+        }
+      });
+
+      // Handle background notification events
+      notifee.onBackgroundEvent(async ({ type, detail }) => {
+        if (type === EventType.PRESS) {
+          console.log('[FCMChatService] Notifee background notification pressed:', detail.notification?.data);
+
+          const data = detail.notification?.data;
+          if (data?.type === 'chat_message') {
+            // For background events, we'll handle navigation when app comes to foreground
+            // Store the navigation intent
+            await AsyncStorage.setItem('pendingChatNavigation', JSON.stringify(data));
+          }
+        }
+      });
+
+      console.log('[FCMChatService] Notifee event handling setup complete');
+    } catch (error) {
+      console.error('[FCMChatService] Failed to setup notifee event handling:', error);
     }
   }
 
@@ -308,7 +378,7 @@ class FCMChatService {
         senderId: currentUser.id,
         senderName: currentUser.name,
         recipientId: recipient.id,
-        recipientToken: recipient.fcmToken,
+        recipientToken: recipient.fcmToken!, // Safe to use ! because we validated above
         conversationId,
         content,
         messageType: 'text',
@@ -579,18 +649,37 @@ class FCMChatService {
   private async handleFCMMessage(remoteMessage: FirebaseMessagingTypes.RemoteMessage): Promise<void> {
     const { data, notification } = remoteMessage;
 
-    if (data?.type === 'chat_message') {
-      console.log('[FCMChatService] Received chat message via FCM:', data);
+    // Parse message data from new info field format or legacy format
+    let messageData: any = null;
+
+    // Check new format (info field)
+    if (data?.info && typeof data.info === 'string') {
+      try {
+        messageData = JSON.parse(data.info);
+        console.log('[FCMChatService] Parsed FCM message from info field:', messageData);
+      } catch (e) {
+        console.warn('[FCMChatService] Failed to parse info field:', e);
+      }
+    }
+
+    // Check legacy format (direct type)
+    if (!messageData && data?.type === 'chat_message') {
+      messageData = data;
+      console.log('[FCMChatService] Using legacy FCM message format:', messageData);
+    }
+
+    if (messageData?.type === 'chat_message') {
+      console.log('[FCMChatService] Processing chat message:', messageData);
 
       // Create message object from FCM data
       const message: Message = {
-        id: data.messageId || `fcm_${Date.now()}`,
-        conversationId: data.conversationId || '',
-        senderId: data.senderId || '',
-        senderName: data.senderName || 'Unknown',
-        content: notification?.body || data.content || '',
-        messageType: 'text',
-        createdAt: data.timestamp || new Date().toISOString(),
+        id: messageData.messageId || `fcm_${Date.now()}`,
+        conversationId: messageData.conversationId?.toString() || '',
+        senderId: messageData.senderId?.toString() || '',
+        senderName: messageData.senderName || 'Unknown',
+        content: messageData.content || notification?.body || '',
+        messageType: messageData.messageType || 'text',
+        createdAt: messageData.timestamp || new Date().toISOString(),
         status: 'delivered',
         deliveryStatus: 'delivered'
       };
@@ -601,6 +690,9 @@ class FCMChatService {
       // Notify handlers
       this.eventHandlers.onMessageReceived?.(message);
 
+      // Create notifee notification if appropriate
+      await this.createChatNotification(message, messageData);
+
       // If app is in foreground and user is in the same conversation, mark as read
       if (this.appState === 'active') {
         // Auto-mark as read if user is viewing the conversation
@@ -610,14 +702,115 @@ class FCMChatService {
   }
 
   /**
+   * Create notifee notification for chat message
+   */
+  private async createChatNotification(message: Message, messageData: any): Promise<void> {
+    try {
+      // Only show notification if app is in background or user is not in the same chat
+      const shouldShowNotification = this.appState !== 'active' || !this.isUserInCurrentChat(message.senderId);
+
+      if (!shouldShowNotification) {
+        console.log('[FCMChatService] Skipping notification - user is in active chat');
+        return;
+      }
+
+      console.log('[FCMChatService] Creating chat notification for message:', message.id);
+
+      // Prepare notification configuration
+      const notificationConfig: any = {
+        id: `chat_${message.id}`,
+        title: message.senderName,
+        body: message.content,
+        android: {
+          channelId: this.CHAT_NOTIFICATION_CHANNEL,
+          importance: AndroidImportance.HIGH,
+          pressAction: { id: 'default' },
+          sound: 'default',
+          vibrationPattern: [300, 500],
+          // smallIcon will use default app icon if not specified
+        },
+        data: {
+          type: 'chat_message',
+          senderId: message.senderId,
+          senderName: message.senderName,
+          conversationId: message.conversationId,
+          messageId: message.id,
+        },
+      };
+
+      // Only add largeIcon if senderAvatar is a valid string URL or use default logo
+      if (message.senderAvatar && typeof message.senderAvatar === 'string' && message.senderAvatar.trim() !== '') {
+        notificationConfig.android.largeIcon = message.senderAvatar;
+      } else {
+        // Use default app logo from assets
+        notificationConfig.android.largeIcon = defaultLogo;
+      }
+
+      await notifee.displayNotification(notificationConfig);
+
+      console.log('[FCMChatService] Chat notification displayed successfully');
+    } catch (error) {
+      console.error('[FCMChatService] Failed to create chat notification:', error);
+    }
+  }
+
+  /**
+   * Check if user is currently in chat with the sender
+   */
+  private isUserInCurrentChat(_senderId: string): boolean {
+    // This would need to be implemented based on your navigation state
+    // For now, return false to always show notifications
+    // You can enhance this by tracking current conversation state
+    return false;
+  }
+
+  /**
    * Handle notification tap
    */
   private handleNotificationTap(remoteMessage: FirebaseMessagingTypes.RemoteMessage): void {
     const { data } = remoteMessage;
 
-    if (data?.type === 'chat_message' && data?.conversationId) {
-      // Navigate to chat screen - this would be handled by navigation service
-      console.log('[FCMChatService] Should navigate to conversation:', data.conversationId);
+    if (data?.type === 'chat_message') {
+      this.navigateToChat(data);
+    }
+  }
+
+  /**
+   * Navigate to FCMChatScreen with proper parameters
+   */
+  private navigateToChat(data: any): void {
+    try {
+      const senderId = data.senderId?.toString();
+      const senderName = data.senderName;
+
+      if (!senderId || !senderName) {
+        console.warn('[FCMChatService] Missing required data for navigation:', { senderId, senderName });
+        return;
+      }
+
+      console.log('[FCMChatService] Navigating to FCMChatScreen:', { senderId, senderName });
+
+      // Use navigation service to navigate to FCMChatScreen
+      if (navigationRef.isReady()) {
+        // Check if we're in the Main navigator context
+        const currentRoute = navigationRef.getCurrentRoute();
+        console.log('[FCMChatService] Current route:', currentRoute?.name);
+
+        // Navigate to FCMChat screen with proper parameters
+        (navigationRef as any).navigate('Main', {
+          screen: 'FCMChat',
+          params: {
+            participantId: senderId,
+            participantName: senderName,
+          },
+        });
+      } else {
+        console.warn('[FCMChatService] Navigation not ready, queuing navigation');
+        // Queue navigation for when navigation is ready
+        setTimeout(() => this.navigateToChat(data), 500);
+      }
+    } catch (error) {
+      console.error('[FCMChatService] Error navigating to chat:', error);
     }
   }
 
@@ -636,7 +829,7 @@ class FCMChatService {
       await ApiService.updateFcmToken({
         userId,
         fcmToken: token,
-        platform: Platform.OS
+        platform: Platform.OS as 'ios' | 'android'
       });
       console.log('[FCMChatService] FCM token updated on server using calling system method');
     } catch (error) {
@@ -654,6 +847,32 @@ class FCMChatService {
     if (nextAppState === 'active') {
       // App became active, sync messages
       this.syncMessages();
+
+      // Handle pending navigation from background notification
+      this.handlePendingNavigation();
+    }
+  };
+
+  /**
+   * Handle pending navigation from background notification
+   */
+  private async handlePendingNavigation(): Promise<void> {
+    try {
+      const pendingNavigation = await AsyncStorage.getItem('pendingChatNavigation');
+      if (pendingNavigation) {
+        const data = JSON.parse(pendingNavigation);
+        console.log('[FCMChatService] Handling pending navigation:', data);
+
+        // Clear the pending navigation
+        await AsyncStorage.removeItem('pendingChatNavigation');
+
+        // Navigate to chat
+        setTimeout(() => {
+          this.navigateToChat(data);
+        }, 1000); // Small delay to ensure app is fully active
+      }
+    } catch (error) {
+      console.error('[FCMChatService] Error handling pending navigation:', error);
     }
   };
 
@@ -930,6 +1149,11 @@ class FCMChatService {
     const recipient = conversation.participants.find(p => p.id !== currentUser.id);
     if (!recipient) {
       throw new Error('Recipient not found');
+    }
+
+    // Validate recipient has a valid FCM token
+    if (!recipient.fcmToken || recipient.fcmToken.length < 10) {
+      throw new Error(`Recipient does not have a valid FCM token. Token: ${recipient.fcmToken || 'null'}`);
     }
 
     // Send via Firebase Cloud Function FCM API

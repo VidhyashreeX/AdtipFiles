@@ -17,37 +17,41 @@ const useCallKeepInitializer = () => {
     if (isAuthenticated && isInitialized && !hasInitialized.current) {
       hasInitialized.current = true;
 
-      // Delay CallKeep initialization to ensure UI is stable
+      // Completely non-blocking CallKeep initialization
       const initializeCallKeep = () => {
-        setTimeout(async () => {
-          try {
-            console.log('[useCallKeepInitializer] 🔄 Initializing CallKeep for authenticated user...');
+        // Use setImmediate to ensure this runs after all current UI updates
+        setImmediate(() => {
+          setTimeout(async () => {
+            try {
+              console.log('[useCallKeepInitializer] 🔄 Starting non-blocking CallKeep initialization...');
 
-            // Dynamic import to avoid blocking main thread
-            const { default: CallKeepService } = await import('../services/calling/CallKeepService');
-            const callKeepService = CallKeepService.getInstance();
+              // Dynamic import to avoid blocking main thread
+              const { default: CallKeepService } = await import('../services/calling/CallKeepService');
+              const callKeepService = CallKeepService.getInstance();
 
-            // Initialize with timeout protection
-            const initPromise = callKeepService.initialize();
-            const timeoutPromise = new Promise<boolean>((resolve) => {
-              setTimeout(() => {
-                console.warn('[useCallKeepInitializer] ⚠️ CallKeep initialization timeout');
-                resolve(false);
-              }, 5000);
-            });
+              // Fire and forget - don't await the result to avoid any blocking
+              callKeepService.initialize()
+                .then((result) => {
+                  if (result) {
+                    console.log('[useCallKeepInitializer] ✅ CallKeep initialized successfully');
+                    console.log('[useCallKeepInitializer] 📋 CallKeep is now available for native call UI');
+                  } else {
+                    console.warn('[useCallKeepInitializer] ⚠️ CallKeep initialization failed (app continues normally)');
+                    console.warn('[useCallKeepInitializer] 📋 App will use custom call UI instead of native UI');
+                  }
+                })
+                .catch((error) => {
+                  console.warn('[useCallKeepInitializer] ⚠️ CallKeep initialization error (non-critical):', error);
+                  console.warn('[useCallKeepInitializer] 📋 This is expected on some devices - app will continue normally');
+                });
 
-            const result = await Promise.race([initPromise, timeoutPromise]);
-            
-            if (result) {
-              console.log('[useCallKeepInitializer] ✅ CallKeep initialized successfully');
-            } else {
-              console.warn('[useCallKeepInitializer] ⚠️ CallKeep initialization failed or timed out');
+              console.log('[useCallKeepInitializer] 🚀 CallKeep initialization started in background');
+
+            } catch (error) {
+              console.warn('[useCallKeepInitializer] ⚠️ CallKeep initialization setup error (non-critical):', error);
             }
-
-          } catch (error) {
-            console.warn('[useCallKeepInitializer] ⚠️ CallKeep initialization error (non-critical):', error);
-          }
-        }, 2000); // 2 second delay after user reaches main app
+          }, 3000); // Increased delay to 3 seconds to ensure UI is fully stable
+        });
       };
 
       initializeCallKeep();
