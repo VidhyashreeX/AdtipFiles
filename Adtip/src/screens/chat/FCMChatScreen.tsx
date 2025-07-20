@@ -22,7 +22,7 @@ import {
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { Clock, Check, CheckCheck, MoreVertical, Send } from 'lucide-react-native';
+import { Clock, Check, CheckCheck, Send } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFCMChat } from '../../contexts/FCMChatContext';
@@ -140,6 +140,7 @@ const FCMChatScreen: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [loadingLocalMessages, setLoadingLocalMessages] = useState(true);
   const flatListRef = useRef<FlatList>(null);
 
   // Set navigation title and header styling
@@ -148,21 +149,16 @@ const FCMChatScreen: React.FC = () => {
       title: participantName || 'Chat',
       headerStyle: {
         backgroundColor: colors.background,
+        elevation: 0, // Remove shadow on Android
+        shadowOpacity: 0, // Remove shadow on iOS
+        borderBottomWidth: 0, // Remove border
       },
       headerTintColor: colors.text.primary,
       headerTitleStyle: {
         color: colors.text.primary,
+        fontWeight: '600',
       },
-      headerRight: () => (
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => {
-            // Add any header actions here (e.g., call, video call)
-          }}
-        >
-          <MoreVertical size={24} color={colors.text.primary} />
-        </TouchableOpacity>
-      ),
+      // Removed headerRight completely for clean minimal look
     });
   }, [navigation, participantName, colors.text.primary, colors.background]);
 
@@ -198,16 +194,19 @@ const FCMChatScreen: React.FC = () => {
       if (!isInitialized || !participantId) return;
 
       try {
+        setLoadingLocalMessages(true);
         console.log('[FCMChatScreen] Creating/getting conversation with participant:', participantId);
         const result = await createOrGetConversation(participantId);
         setConversationId(result);
         setCurrentConversation(result);
-        
+
         // Load messages for this conversation
         await loadMessages(result);
-        
+        setLoadingLocalMessages(false);
+
       } catch (error) {
         console.error('[FCMChatScreen] Failed to initialize conversation:', error);
+        setLoadingLocalMessages(false);
         Alert.alert('Error', 'Failed to load conversation');
       }
     };
@@ -270,18 +269,25 @@ const FCMChatScreen: React.FC = () => {
       return;
     }
 
+    const messageToSend = messageText.trim();
+
+    // Reset input immediately for better UX
+    setMessageText('');
+
+    // Scroll to bottom immediately to show the optimistic message
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 50);
+
     try {
       setSending(true);
-      await sendMessage(conversationId, messageText.trim());
-      setMessageText('');
-
-      // Scroll to bottom after sending
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      await sendMessage(conversationId, messageToSend);
+      console.log('✅ [FCMChatScreen] Message sent successfully, status should update to tick');
 
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error('❌ [FCMChatScreen] Failed to send message:', error);
+      // Restore message text on failure
+      setMessageText(messageToSend);
       Alert.alert('Error', 'Failed to send message. Please try again.');
     } finally {
       setSending(false);
@@ -339,12 +345,14 @@ const FCMChatScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Icon name="chat" size={48} color={colors.text.secondary} />
-            <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
-              No messages yet. Start the conversation!
-            </Text>
-          </View>
+          !loadingLocalMessages ? (
+            <View style={styles.emptyContainer}>
+              <Icon name="chat" size={48} color={colors.text.secondary} />
+              <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
+                No messages yet. Start the conversation!
+              </Text>
+            </View>
+          ) : null
         }
       />
 
@@ -416,10 +424,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-  },
-  headerButton: {
-    padding: 8,
-    marginRight: 8,
   },
   messagesList: {
     flex: 1,

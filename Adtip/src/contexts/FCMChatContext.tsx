@@ -129,6 +129,8 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
       // Load from local storage for immediate display (primary source)
       const localMessages = await fcmChatService.getMessagesFromLocal(conversationId);
       console.log('[FCMChatContext] Loaded local messages:', localMessages.length);
+
+      // Always set local messages immediately to prevent empty state flashing
       setCurrentMessages(localMessages);
 
       // Fetch from server in background for sync (don't overwrite local)
@@ -141,8 +143,8 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
         // Smart merge: only add new messages from server that don't exist locally
         const mergedMessages = await mergeMessagesIntelligently(localMessages, serverMessages, conversationId);
 
-        // Only update if we have new messages
-        if (mergedMessages.length > localMessages.length) {
+        // Only update if we have new messages or if local was empty
+        if (mergedMessages.length > localMessages.length || localMessages.length === 0) {
           console.log('[FCMChatContext] Merged messages, updating display:', mergedMessages.length);
           setCurrentMessages(mergedMessages);
         }
@@ -154,6 +156,8 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
 
     } catch (error) {
       console.error('[FCMChatContext] Failed to load messages:', error);
+      // Set empty array on error to show proper empty state
+      setCurrentMessages([]);
     } finally {
       setLoadingMessages(false);
     }
@@ -212,9 +216,10 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
   const sendMessage = useCallback(async (conversationId: string, content: string, replyTo?: string) => {
     if (!isInitialized || !content.trim() || !user?.id) return;
 
-    // Create optimistic message
+    // Create optimistic message with unique temp ID
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const optimisticMessage: Message = {
-      id: `temp_${Date.now()}`,
+      id: tempId,
       conversationId,
       senderId: user.id.toString(),
       senderName: user.name || 'You',
@@ -222,7 +227,7 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
       content: content.trim(),
       messageType: 'text',
       createdAt: new Date().toISOString(),
-      tempId: `temp_${Date.now()}`,
+      tempId: tempId,
       status: 'sending',
       deliveryStatus: 'pending',
       replyTo
@@ -231,7 +236,7 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
     // Add optimistic message immediately to current conversation if it matches
     if (currentConversationId === conversationId) {
       setCurrentMessages(prev => [...prev, optimisticMessage]);
-      console.log('🚀 [FCMChatContext] Added optimistic message to current conversation:', optimisticMessage);
+      console.log('🚀 [FCMChatContext] Added optimistic message with status "sending":', optimisticMessage.tempId);
     }
 
     try {
@@ -373,7 +378,7 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
         );
 
         if (existingIndex !== -1) {
-          // Update existing message with server response
+          // Update existing message with server response - ensure status is 'sent'
           const updated = [...prev];
           updated[existingIndex] = {
             ...updated[existingIndex],
@@ -381,11 +386,13 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
             status: 'sent',
             deliveryStatus: 'sent'
           };
+          console.log('✅ [FCMChatContext] Updated message status to sent:', updated[existingIndex].id);
           return updated.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         }
 
         // Add new message and sort by creation time
         const updated = [...prev, { ...message, status: 'sent', deliveryStatus: 'sent' }];
+        console.log('✅ [FCMChatContext] Added new sent message:', message.id);
         return updated.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
       });
     }
