@@ -30,6 +30,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFCMChat } from '../../contexts/FCMChatContext';
 import { Message } from '../../services/FCMChatService';
+import FCMChatService from '../../services/FCMChatService';
 import { COLORS } from '../../constants/colors';
 
 type RootStackParamList = {
@@ -346,6 +347,15 @@ const FCMChatScreen: React.FC = () => {
 
   // Track if we've already marked messages as read for this conversation
   const hasMarkedAsReadRef = useRef<string | null>(null);
+
+  // Cleanup conversation state when component unmounts
+  useEffect(() => {
+    return () => {
+      // Clear conversation state when leaving the screen
+      FCMChatService.getInstance().clearCurrentConversation();
+      console.log('[FCMChatScreen] Cleared conversation state on unmount');
+    };
+  }, []);
 
   // Mark messages as read when conversation becomes active (only once per conversation)
   useEffect(() => {

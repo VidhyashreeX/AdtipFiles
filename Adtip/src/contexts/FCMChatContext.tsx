@@ -53,6 +53,7 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [currentParticipantId, setCurrentParticipantId] = useState<string | null>(null);
   const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [totalUnreadCount, setTotalUnreadCount] = useState(0);
@@ -277,10 +278,16 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
 
     try {
       const result = await fcmChatService.createOrGetConversation(participantId);
-      
+
+      // Set current participant for conversation state tracking
+      setCurrentParticipantId(participantId);
+
+      // Set conversation state in FCMChatService for notification management
+      fcmChatService.setCurrentConversation(result.conversationId, participantId);
+
       // Refresh conversations to include the new one
       await loadConversations();
-      
+
       return result.conversationId;
     } catch (error) {
       console.error('[FCMChatContext] Failed to create conversation:', error);
@@ -293,8 +300,11 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
     setCurrentConversationId(conversationId);
     if (!conversationId) {
       setCurrentMessages([]);
+      setCurrentParticipantId(null);
+      // Clear conversation state in FCMChatService
+      fcmChatService.clearCurrentConversation();
     }
-  }, []);
+  }, [fcmChatService]);
 
   // Mark messages as read
   const markAsRead = useCallback(async (conversationId: string, messageId?: string) => {

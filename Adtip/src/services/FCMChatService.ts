@@ -111,6 +111,10 @@ class FCMChatService {
   private readonly MIN_REQUEST_INTERVAL = 1000; // 1 second minimum between requests
   private readonly CHAT_NOTIFICATION_CHANNEL = 'chat-messages';
 
+  // Current conversation state for notification management
+  private currentConversationId: string | null = null;
+  private currentChatParticipantId: string | null = null;
+
   private constructor() {
     // Monitor app state changes using the new subscription-based API
     this.appStateSubscription = AppState.addEventListener('change', this.handleAppStateChange);
@@ -456,11 +460,30 @@ class FCMChatService {
    */
   private async getCurrentUserInfo(): Promise<{ id: string; name: string } | null> {
     try {
-      // This should be implemented to get current user info
-      // For now, return a placeholder - this should be integrated with your auth system
+      // Get user data from AsyncStorage (same as AuthContext)
+      const userDataString = await AsyncStorage.getItem('user');
+      const userName = await AsyncStorage.getItem('userName');
+
+      if (userDataString) {
+        const userData = JSON.parse(userDataString);
+        return {
+          id: this.currentUserId || userData.id?.toString() || 'unknown',
+          name: userName || userData.name || userData.username || 'Unknown User'
+        };
+      }
+
+      // Fallback to stored userName if user object not available
+      if (userName && this.currentUserId) {
+        return {
+          id: this.currentUserId,
+          name: userName
+        };
+      }
+
+      console.warn('[FCMChatService] No user data found in storage');
       return {
         id: this.currentUserId || 'unknown',
-        name: 'Current User' // This should come from your auth context
+        name: 'Unknown User'
       };
     } catch (error) {
       console.error('[FCMChatService] Error getting current user info:', error);
@@ -486,7 +509,7 @@ class FCMChatService {
       });
 
       // Try to find conversation by various ID fields (backend uses conversation_id)
-      let conversation: ApiConversation | undefined = conversationsResult.conversations.find((c: any) => {
+      const conversation: ApiConversation | undefined = conversationsResult.conversations.find((c: any) => {
         const cId = c.id || c.conversationId || c.conversation_id;
         return cId === conversationId ||
                String(cId) === String(conversationId) ||
@@ -704,7 +727,7 @@ class FCMChatService {
   /**
    * Create notifee notification for chat message
    */
-  private async createChatNotification(message: Message, messageData: any): Promise<void> {
+  private async createChatNotification(message: Message, _messageData: any): Promise<void> {
     try {
       // Only show notification if app is in background or user is not in the same chat
       const shouldShowNotification = this.appState !== 'active' || !this.isUserInCurrentChat(message.senderId);
@@ -755,13 +778,34 @@ class FCMChatService {
   }
 
   /**
+   * Set current conversation state (called when user enters FCMChatScreen)
+   */
+  public setCurrentConversation(conversationId: string, participantId: string): void {
+    this.currentConversationId = conversationId;
+    this.currentChatParticipantId = participantId;
+    console.log('[FCMChatService] Current conversation set:', { conversationId, participantId });
+  }
+
+  /**
+   * Clear current conversation state (called when user leaves FCMChatScreen)
+   */
+  public clearCurrentConversation(): void {
+    this.currentConversationId = null;
+    this.currentChatParticipantId = null;
+    console.log('[FCMChatService] Current conversation cleared');
+  }
+
+  /**
    * Check if user is currently in chat with the sender
    */
-  private isUserInCurrentChat(_senderId: string): boolean {
-    // This would need to be implemented based on your navigation state
-    // For now, return false to always show notifications
-    // You can enhance this by tracking current conversation state
-    return false;
+  private isUserInCurrentChat(senderId: string): boolean {
+    const isInChat = this.currentChatParticipantId === senderId;
+    console.log('[FCMChatService] Checking if user is in current chat:', {
+      senderId,
+      currentParticipant: this.currentChatParticipantId,
+      isInChat
+    });
+    return isInChat;
   }
 
   /**
@@ -874,7 +918,7 @@ class FCMChatService {
     } catch (error) {
       console.error('[FCMChatService] Error handling pending navigation:', error);
     }
-  };
+  }
 
   /**
    * Save message to local storage
