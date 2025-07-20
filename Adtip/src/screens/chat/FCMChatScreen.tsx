@@ -17,10 +17,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { Clock, Check, CheckCheck, MoreVertical, Send } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFCMChat } from '../../contexts/FCMChatContext';
@@ -49,15 +51,15 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isOwn, showStatu
   const getStatusIcon = () => {
     switch (message.status) {
       case 'sending':
-        return 'schedule';
+        return Clock;
       case 'sent':
-        return 'done';
+        return Check; // Single tick for sent
       case 'delivered':
-        return 'done-all';
+        return CheckCheck; // Double tick for delivered
       case 'read':
-        return 'done-all';
+        return CheckCheck; // Double tick for read (will be colored differently)
       default:
-        return 'schedule';
+        return Clock;
     }
   };
 
@@ -99,14 +101,16 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isOwn, showStatu
           })}
         </Text>
         
-        {isOwn && showStatus && (
-          <Icon 
-            name={getStatusIcon()} 
-            size={16} 
-            color={getStatusColor()}
-            style={styles.statusIcon}
-          />
-        )}
+        {isOwn && showStatus && (() => {
+          const StatusIcon = getStatusIcon();
+          return (
+            <StatusIcon
+              size={16}
+              color={getStatusColor()}
+              style={styles.statusIcon}
+            />
+          );
+        })()}
       </View>
     </View>
   );
@@ -135,12 +139,20 @@ const FCMChatScreen: React.FC = () => {
   const [messageText, setMessageText] = useState('');
   const [sending, setSending] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const flatListRef = useRef<FlatList>(null);
 
-  // Set navigation title
+  // Set navigation title and header styling
   useEffect(() => {
     navigation.setOptions({
       title: participantName || 'Chat',
+      headerStyle: {
+        backgroundColor: colors.background,
+      },
+      headerTintColor: colors.text.primary,
+      headerTitleStyle: {
+        color: colors.text.primary,
+      },
       headerRight: () => (
         <TouchableOpacity
           style={styles.headerButton}
@@ -148,11 +160,37 @@ const FCMChatScreen: React.FC = () => {
             // Add any header actions here (e.g., call, video call)
           }}
         >
-          <Icon name="more-vert" size={24} color={colors.text.primary} />
+          <MoreVertical size={24} color={colors.text.primary} />
         </TouchableOpacity>
       ),
     });
-  }, [navigation, participantName, colors.text.primary]);
+  }, [navigation, participantName, colors.text.primary, colors.background]);
+
+  // Keyboard handling
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+        // Scroll to bottom when keyboard shows
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    );
+
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      keyboardDidShowListener?.remove();
+      keyboardDidHideListener?.remove();
+    };
+  }, []);
 
   // Initialize conversation
   useEffect(() => {
@@ -210,6 +248,15 @@ const FCMChatScreen: React.FC = () => {
     hasMarkedAsReadRef.current = null;
   }, [conversationId]);
 
+  // Scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (currentMessages.length > 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [currentMessages.length]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -227,7 +274,12 @@ const FCMChatScreen: React.FC = () => {
       setSending(true);
       await sendMessage(conversationId, messageText.trim());
       setMessageText('');
-      
+
+      // Scroll to bottom after sending
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+
     } catch (error) {
       console.error('Failed to send message:', error);
       Alert.alert('Error', 'Failed to send message. Please try again.');
@@ -270,21 +322,22 @@ const FCMChatScreen: React.FC = () => {
   }
 
   return (
-    <KeyboardAvoidingView 
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Messages List */}
       <FlatList
         ref={flatListRef}
         data={currentMessages}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
-        style={styles.messagesList}
-        contentContainerStyle={styles.messagesContent}
+        style={[styles.messagesList, { marginBottom: keyboardHeight > 0 ? 0 : 0 }]}
+        contentContainerStyle={[
+          styles.messagesContent,
+          { paddingBottom: keyboardHeight > 0 ? 10 : 80 } // Add padding when keyboard is visible
+        ]}
         onRefresh={handleRefresh}
         refreshing={loadingMessages}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Icon name="chat" size={48} color={colors.text.secondary} />
@@ -296,41 +349,59 @@ const FCMChatScreen: React.FC = () => {
       />
 
       {/* Input Area */}
-      <View style={[styles.inputContainer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-        <TextInput
-          style={[styles.textInput, { 
-            backgroundColor: colors.background, 
-            color: colors.text.primary,
-            borderColor: colors.border 
-          }]}
-          value={messageText}
-          onChangeText={setMessageText}
-          placeholder="Type a message..."
-          placeholderTextColor={colors.text.secondary}
-          multiline
-          maxLength={1000}
-          editable={!sending}
-        />
-        
-        <TouchableOpacity
-          style={[
-            styles.sendButton,
-            { 
-              backgroundColor: messageText.trim() && !sending ? COLORS.primary : colors.border,
-              opacity: messageText.trim() && !sending ? 1 : 0.5 
-            }
-          ]}
-          onPress={handleSendMessage}
-          disabled={!messageText.trim() || sending}
-        >
-          {sending ? (
-            <ActivityIndicator size="small" color={COLORS.white} />
-          ) : (
-            <Icon name="send" size={20} color={COLORS.white} />
-          )}
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        <View style={[
+          styles.inputContainer,
+          {
+            backgroundColor: colors.surface,
+            borderTopColor: colors.border,
+            marginBottom: Platform.OS === 'android' ? keyboardHeight : 0
+          }
+        ]}>
+          <TextInput
+            style={[styles.textInput, {
+              backgroundColor: colors.background,
+              color: colors.text.primary,
+              borderColor: colors.border
+            }]}
+            value={messageText}
+            onChangeText={setMessageText}
+            placeholder="Type a message..."
+            placeholderTextColor={colors.text.secondary}
+            multiline
+            maxLength={1000}
+            editable={!sending}
+            onFocus={() => {
+              // Scroll to bottom when input is focused
+              setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+              }, 300);
+            }}
+          />
+
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              {
+                backgroundColor: messageText.trim() && !sending ? COLORS.primary : colors.border,
+                opacity: messageText.trim() && !sending ? 1 : 0.5
+              }
+            ]}
+            onPress={handleSendMessage}
+            disabled={!messageText.trim() || sending}
+          >
+            {sending ? (
+              <ActivityIndicator size="small" color={COLORS.white} />
+            ) : (
+              <Send size={20} color={COLORS.white} />
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 };
 
@@ -404,6 +475,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     padding: 16,
     borderTopWidth: 1,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   textInput: {
     flex: 1,
@@ -414,6 +489,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
     maxHeight: 100,
     fontSize: 16,
+    minHeight: 44,
   },
   sendButton: {
     width: 44,
