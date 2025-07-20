@@ -20,6 +20,7 @@ import { Camera, Save, X } from 'lucide-react-native';
 import ApiService from '../../services/ApiService';
 import CloudflareUploadService from '../../services/CloudflareUploadService';
 import { UpdateChannelRequest } from '../../types/api';
+import { useUpdateChannel } from '../../hooks/useQueries';
 
 type RootStackParamList = {
   EditChannel: { channelId: string };
@@ -40,8 +41,11 @@ const EditChannelScreen: React.FC = () => {
   const route = useRoute<EditChannelScreenRouteProp>();
   const { colors } = useTheme();
   const { user } = useAuth();
-  
+
   const { channelId } = route.params;
+
+  // React Query mutation for updating channel
+  const updateChannelMutation = useUpdateChannel();
   
   // State management
   const [channel, setChannel] = useState<ChannelData | null>(null);
@@ -174,17 +178,21 @@ const EditChannelScreen: React.FC = () => {
         channelName: channelName.trim(),
         channelDescription: description.trim(),
         profileImageURL: profileImage || '',
+        createdBy: Number(user.id), // Add createdBy for proper query invalidation
       };
 
-      const response = await ApiService.updateChannel(updateData);
-      
-      if (response.status === 200) {
-        Alert.alert('Success', 'Channel updated successfully', [
-          { text: 'OK', onPress: () => navigation.goBack() }
-        ]);
-      }
+      console.log('🔄 [EditChannelScreen] Updating channel with data:', updateData);
+
+      // Use the React Query mutation which will automatically invalidate and refetch channel data
+      await updateChannelMutation.mutateAsync(updateData);
+
+      console.log('✅ [EditChannelScreen] Channel updated successfully, queries invalidated');
+      Alert.alert('Success', 'Channel updated successfully', [
+        { text: 'OK', onPress: () => navigation.goBack() }
+      ]);
+
     } catch (error) {
-      console.error('Error updating channel:', error);
+      console.error('❌ [EditChannelScreen] Error updating channel:', error);
       Alert.alert('Error', 'Failed to update channel');
     } finally {
       setIsSaving(false);

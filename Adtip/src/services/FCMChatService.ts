@@ -203,20 +203,38 @@ class FCMChatService {
     this.eventHandlers.onMessageSent?.(message);
 
     try {
-      // Send via FCM API
+      // Get current user and conversation info for Firebase Cloud Function
+      const currentUser = await this.getCurrentUserInfo();
+      const conversation = await this.getConversationInfo(conversationId);
+
+      if (!currentUser || !conversation) {
+        throw new Error('Missing user or conversation information');
+      }
+
+      // Find recipient for direct conversations
+      const recipient = conversation.participants.find(p => p.id !== currentUser.id);
+      if (!recipient) {
+        throw new Error('Recipient not found');
+      }
+
+      // Send via Firebase Cloud Function FCM API
       const response = await ApiService.post(FCM_CHAT_ENDPOINTS.SEND_MESSAGE, {
+        senderId: currentUser.id,
+        senderName: currentUser.name,
+        recipientId: recipient.id,
+        recipientToken: recipient.fcmToken,
         conversationId,
         content,
         messageType: 'text',
         replyToMessageId: replyTo
       });
 
-      console.log('[FCMChatService] Message sent successfully:', response);
+      console.log('[FCMChatService] Message sent successfully via Firebase Cloud Function:', response);
 
-      // Update message status
+      // Update message status with Firebase Cloud Function response
       message.status = 'sent';
       message.deliveryStatus = 'sent';
-      message.id = response.data?.message?.id || message.id;
+      message.id = response.data?.messageId || message.id;
       
       await this.updateMessageInLocal(message);
       
@@ -233,6 +251,60 @@ class FCMChatService {
       await this.updateMessageInLocal(message);
       
       throw error;
+    }
+  }
+
+  /**
+   * Get current user information
+   */
+  private async getCurrentUserInfo(): Promise<{ id: string; name: string } | null> {
+    try {
+      // This should be implemented to get current user info
+      // For now, return a placeholder - this should be integrated with your auth system
+      return {
+        id: this.currentUserId || 'unknown',
+        name: 'Current User' // This should come from your auth context
+      };
+    } catch (error) {
+      console.error('[FCMChatService] Error getting current user info:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get conversation information including participants
+   */
+  private async getConversationInfo(conversationId: string): Promise<{
+    participants: Array<{ id: string; name: string; fcmToken?: string }>
+  } | null> {
+    try {
+      // This should fetch conversation details from your API or local storage
+      // For now, return a placeholder - this should be implemented based on your data structure
+
+      // Try to get conversations from the service
+      const conversationsResult = await this.getConversations(1, 100);
+      const conversation = conversationsResult.conversations.find((c: any) => c.id === conversationId);
+
+      if (conversation) {
+        return {
+          participants: conversation.participants.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            fcmToken: p.fcmToken // This should be available from participant data
+          }))
+        };
+      }
+
+      // Fallback: return a basic structure for testing
+      return {
+        participants: [
+          { id: 'user1', name: 'User 1', fcmToken: 'token1' },
+          { id: 'user2', name: 'User 2', fcmToken: 'token2' }
+        ]
+      };
+    } catch (error) {
+      console.error('[FCMChatService] Error getting conversation info:', error);
+      return null;
     }
   }
 

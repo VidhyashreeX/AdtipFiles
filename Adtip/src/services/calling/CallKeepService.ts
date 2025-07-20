@@ -1,31 +1,9 @@
 import { Platform } from 'react-native'
+import RNCallKeep from 'react-native-callkeep';
+ 
+// Remove the global setup call - it should be done in the service initialization
 
-// Safe CallKeep import
-let RNCallKeep: any = null
-try {
-  RNCallKeep = require('react-native-callkeep')
-} catch (error) {
-  console.warn('[CallKeepService] react-native-callkeep not available:', error)
-}
-
-interface CallKeepOptions {
-  ios: {
-    appName: string
-    supportsVideo: boolean
-    maximumCallGroups: number
-    maximumCallsPerCallGroup: number
-    includesCallsInRecents: boolean
-  }
-  android: {
-    alertTitle: string
-    alertDescription: string
-    cancelButton: string
-    okButton: string
-    imageName: string
-    additionalPermissions: string[]
-    selfManaged: boolean
-  }
-}
+// CallKeep options interface removed - using direct object for better compatibility
 
 /**
  * CallKeep service for handling native call UI on both iOS and Android
@@ -46,7 +24,8 @@ export class CallKeepService {
   }
 
   /**
-   * Initialize CallKeep with proper configuration
+   * Initialize CallKeep with proper configuration - completely non-blocking
+   * NOTE: This should only be called from useCallKeepInitializer hook when user is authenticated
    */
   async initialize(): Promise<boolean> {
     if (this.isInitialized) {
@@ -55,52 +34,57 @@ export class CallKeepService {
     }
 
     try {
-      console.log('[CallKeepService] 🔄 Initializing CallKeep...')
+      console.log('[CallKeepService] 🔄 Initializing CallKeep (non-blocking)...')
 
       // Check if CallKeep is available first
       if (!RNCallKeep) {
         console.warn('[CallKeepService] ⚠️ CallKeep not available')
+        this.isInitialized = true // Mark as initialized to prevent retries
         return false
       }
 
-      const options: CallKeepOptions = {
+      const options = {
         ios: {
           appName: 'Adtip',
           supportsVideo: true,
-          maximumCallGroups: 1,
-          maximumCallsPerCallGroup: 1,
-          includesCallsInRecents: true
+          maximumCallGroups: '1',
+          maximumCallsPerCallGroup: '1',
+          includesCallsInRecents: true,
+          imageName: 'ic_launcher'
         },
         android: {
           alertTitle: 'Phone Account Permission Required',
-          alertDescription: 'Adtip needs access to your phone accounts to provide native call experience with VideoSDK integration',
+          alertDescription: 'Adtip needs access to your phone accounts to provide native call experience',
           cancelButton: 'Cancel',
           okButton: 'Allow',
-          imageName: 'ic_launcher', // Use app icon
-          additionalPermissions: [
-            'android.permission.CAMERA',
-            'android.permission.RECORD_AUDIO'
-          ],
-          selfManaged: true // Enable self-managed for better VideoSDK integration
+          imageName: 'ic_launcher',
+          additionalPermissions: [],
+          selfManaged: false, // Keep false for better compatibility
+          foregroundService: {
+            channelId: 'com.adtip.calling',
+            channelName: 'Adtip Calling Service',
+            notificationTitle: 'Adtip is handling a call',
+            notificationIcon: 'ic_launcher'
+          }
         }
       }
 
-      // Setup CallKeep with timeout
+      // Setup CallKeep with aggressive timeout to prevent blocking
       const setupPromise = RNCallKeep.setup(options)
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('CallKeep setup timeout')), 7000)
+        setTimeout(() => reject(new Error('CallKeep setup timeout')), 3000) // Reduced from 7000 to 3000
       )
 
       await Promise.race([setupPromise, timeoutPromise])
       console.log('[CallKeepService] ✅ CallKeep setup complete')
 
-      // Check permissions with timeout
+      // Check permissions with shorter timeout
       const permissionPromise = this.checkPermissions()
       const permissionTimeoutPromise = new Promise<boolean>((resolve) =>
         setTimeout(() => {
           console.warn('[CallKeepService] ⚠️ Permission check timeout, assuming false')
           resolve(false)
-        }, 2000)
+        }, 1000) // Reduced from 2000 to 1000
       )
 
       const hasPermissions = await Promise.race([permissionPromise, permissionTimeoutPromise])
@@ -109,11 +93,18 @@ export class CallKeepService {
         // Don't fail initialization for permission issues
       }
 
-      // Setup event listeners
-      this.setupEventListeners()
+      // Setup event listeners in a non-blocking way
+      setImmediate(() => {
+        try {
+          this.setupEventListeners()
+          console.log('[CallKeepService] ✅ Event listeners setup complete')
+        } catch (error) {
+          console.warn('[CallKeepService] ⚠️ Event listeners setup failed:', error)
+        }
+      })
 
       this.isInitialized = true
-      console.log('[CallKeepService] ✅ Initialization complete')
+      console.log('[CallKeepService] ✅ Initialization complete (non-blocking)')
       return true
     } catch (error) {
       console.error('[CallKeepService] ❌ Initialization failed (non-critical):', error)
@@ -129,7 +120,7 @@ export class CallKeepService {
   async checkPermissions(): Promise<boolean> {
     try {
       if (Platform.OS === 'android') {
-        return await RNCallKeep.checkPhoneAccountPermission()
+        return await RNCallKeep.hasPhoneAccount()
       }
       return true // iOS doesn't need explicit permission check
     } catch (error) {
@@ -144,7 +135,20 @@ export class CallKeepService {
   async requestPermissions(): Promise<boolean> {
     try {
       if (Platform.OS === 'android') {
-        return await RNCallKeep.requestPhoneAccountPermission()
+        // Register phone account to request permissions
+        RNCallKeep.registerPhoneAccount({
+          ios: {
+            appName: 'Adtip'
+          },
+          android: {
+            alertTitle: 'Phone Account Permission Required',
+            alertDescription: 'Adtip needs access to your phone accounts',
+            cancelButton: 'Cancel',
+            okButton: 'Allow',
+            additionalPermissions: []
+          }
+        })
+        return await RNCallKeep.hasPhoneAccount()
       }
       return true // iOS doesn't need explicit permission request
     } catch (error) {
@@ -431,15 +435,15 @@ export class CallKeepService {
   /**
    * Handle audio route changes
    */
-  private onAudioRouteChanged = ({ callUUID, output }: { callUUID: string; output: string }) => {
-    console.log('[CallKeepService] Audio route changed for call:', callUUID, 'to:', output)
+  private onAudioRouteChanged = (args: { output: string; reason?: number; handle?: string; callUUID?: string }) => {
+    console.log('[CallKeepService] Audio route changed:', args.output, 'for call:', args.callUUID)
   }
 
   /**
    * Handle start call action (outgoing calls)
    */
-  private onStartCallAction = ({ callUUID, handle }: { callUUID: string; handle: string }) => {
-    console.log('[CallKeepService] Start call action:', callUUID, handle)
+  private onStartCallAction = (args: { handle: string; callUUID?: string; name?: string }) => {
+    console.log('[CallKeepService] Start call action:', args.callUUID, args.handle)
   }
 
   /**

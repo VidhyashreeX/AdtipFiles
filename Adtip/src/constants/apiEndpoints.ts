@@ -118,22 +118,35 @@ export const CHAT_ENDPOINTS = {
   MARK_AS_READ: '/api/chat/conversations', // + '/:conversationId/read'
 };
 
-// FCM Chat endpoints (high priority notifications)
+// FCM Chat endpoints (high priority notifications) - Now using Firebase Cloud Functions
 export const FCM_CHAT_ENDPOINTS = {
-  // FCM messaging
-  SEND_MESSAGE: '/api/chat/fcm/send-message',
-  SEND_MESSAGE_MULTICAST: '/api/chat/fcm/send-message-multicast',
+  // Firebase Cloud Function messaging endpoints
+  SEND_MESSAGE: '/api/chat/send-message',
+  SEND_MESSAGE_MULTICAST: '/api/chat/send-message-multicast',
 
-  // FCM token management
-  UPDATE_TOKEN: '/api/chat/fcm/update-token',
+  // Conversation management
+  CREATE_CONVERSATION: '/api/chat/create-conversation',
 
-  // Message status and queue management
+  // Status updates
+  UPDATE_TYPING_STATUS: '/api/chat/update-typing-status',
+  UPDATE_MESSAGE_STATUS: '/api/chat/update-message-status',
+
+  // FCM token management (Firebase Cloud Function)
+  UPDATE_FCM_TOKEN: '/api/chat/update-fcm-token',
+
+  // Legacy endpoints (for backward compatibility)
+  LEGACY_SEND_MESSAGE: '/api/chat/fcm/send-message',
+  LEGACY_SEND_MESSAGE_MULTICAST: '/api/chat/fcm/send-message-multicast',
+  LEGACY_UPDATE_TOKEN: '/api/chat/fcm/update-token',
+
+  // Message status and queue management (legacy)
   QUEUE_STATS: '/api/chat/fcm/queue-stats',
   MESSAGE_STATUS: '/api/chat/fcm/message-status', // + '/:messageId'
   RETRY_FAILED: '/api/chat/fcm/retry-failed',
 
-  // Test FCM
+  // Test and health endpoints
   TEST_FCM: '/api/chat/test-fcm',
+  HEALTH: '/api/chat/health',
 };
 
 // Additional endpoints from CSV analysis

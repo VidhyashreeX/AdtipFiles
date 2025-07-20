@@ -21,8 +21,8 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
-import { useChat } from '../../contexts/ChatContext';
-import { Conversation } from '../../services/NewChatService';
+import { useFCMChat } from '../../contexts/FCMChatContext';
+import { Conversation } from '../../services/FCMChatService';
 import { COLORS } from '../../constants/colors';
 
 type ConversationsNavigationProp = StackNavigationProp<any, 'Conversations'>;
@@ -48,41 +48,38 @@ const ConversationItem: React.FC<ConversationItemProps> = ({ conversation, onPre
   };
 
   const getLastMessagePreview = () => {
-    if (!conversation.last_message_content) {
+    if (!conversation.lastMessage) {
       return 'No messages yet';
     }
-    
-    const prefix = conversation.last_message_sender_name === 'You' ? 'You: ' : '';
-    const content = conversation.last_message_content;
-    
-    if (conversation.last_message_type === 'image') {
+
+    const lastMessage = conversation.lastMessage;
+    const prefix = lastMessage.senderName === 'You' ? 'You: ' : '';
+    const content = lastMessage.content;
+
+    if (lastMessage.messageType === 'image') {
       return `${prefix}📷 Photo`;
-    } else if (conversation.last_message_type === 'video') {
+    } else if (lastMessage.messageType === 'video') {
       return `${prefix}🎥 Video`;
-    } else if (conversation.last_message_type === 'audio') {
+    } else if (lastMessage.messageType === 'audio') {
       return `${prefix}🎵 Audio`;
-    } else if (conversation.last_message_type === 'file') {
+    } else if (lastMessage.messageType === 'file') {
       return `${prefix}📎 File`;
     }
-    
-    return `${prefix}${content}`;
+
+    return `${prefix}${content.length > 30 ? content.substring(0, 30) + '...' : content}`;
   };
 
   const getStatusIcon = () => {
-    if (conversation.other_user_status === 'online') {
-      return (
-        <View style={styles.onlineIndicator} />
-      );
-    }
+    // FCM conversations don't have online status, so we'll skip this for now
     return null;
   };
 
   return (
     <TouchableOpacity style={styles.conversationItem} onPress={onPress}>
       <View style={styles.avatarContainer}>
-        {conversation.other_user_avatar ? (
-          <Image 
-            source={{ uri: conversation.other_user_avatar }} 
+        {conversation.participants[0]?.avatar ? (
+          <Image
+            source={{ uri: conversation.participants[0].avatar }}
             style={styles.avatar}
           />
         ) : (
@@ -96,34 +93,33 @@ const ConversationItem: React.FC<ConversationItemProps> = ({ conversation, onPre
       <View style={styles.conversationContent}>
         <View style={styles.conversationHeader}>
           <Text style={styles.conversationName} numberOfLines={1}>
-            {conversation.other_user_name || conversation.title || 'Unknown'}
+            {conversation.participants[0]?.name || conversation.title || 'Unknown'}
           </Text>
-          
+
           <Text style={styles.conversationTime}>
-            {formatTime(conversation.last_activity_at)}
+            {formatTime(conversation.lastActivity)}
           </Text>
         </View>
         
         <View style={styles.conversationFooter}>
-          <Text 
+          <Text
             style={[
               styles.lastMessage,
-              conversation.unread_count > 0 && styles.unreadMessage
-            ]} 
+              conversation.unreadCount > 0 && styles.unreadMessage
+            ]}
             numberOfLines={1}
           >
             {getLastMessagePreview()}
           </Text>
-          
-          {conversation.unread_count > 0 && (
+
+          {conversation.unreadCount > 0 && (
             <View style={styles.unreadBadge}>
               <Text style={styles.unreadCount}>
-                {conversation.unread_count > 99 ? '99+' : conversation.unread_count}
+                {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
               </Text>
             </View>
           )}
-          
-          {conversation.is_muted && (
+          {conversation.isMuted && (
             <Icon name="volume-off" size={16} color={COLORS.gray[400]} style={styles.muteIcon} />
           )}
         </View>
@@ -138,11 +134,10 @@ const ConversationsScreen: React.FC = () => {
   const {
     conversations,
     loadingConversations,
-    isConnected,
     isInitialized,
     loadConversations,
     totalUnreadCount
-  } = useChat();
+  } = useFCMChat();
 
   // Set navigation options with unread count
   useEffect(() => {
@@ -150,9 +145,6 @@ const ConversationsScreen: React.FC = () => {
       title: 'Chats',
       headerRight: () => (
         <View style={styles.headerRight}>
-          {!isConnected && (
-            <Icon name="cloud-off" size={24} color={COLORS.error} />
-          )}
           {totalUnreadCount > 0 && (
             <View style={styles.headerBadge}>
               <Text style={styles.headerBadgeText}>
@@ -163,7 +155,7 @@ const ConversationsScreen: React.FC = () => {
         </View>
       )
     });
-  }, [navigation, isConnected, totalUnreadCount]);
+  }, [navigation, totalUnreadCount]);
 
   // Load conversations when initialized
   useEffect(() => {
@@ -174,9 +166,10 @@ const ConversationsScreen: React.FC = () => {
 
   // Handle conversation press
   const handleConversationPress = useCallback((conversation: Conversation) => {
-    navigation.navigate('NewChat', {
-      conversationId: conversation.conversation_id,
-      participantName: conversation.other_user_name || conversation.title
+    navigation.navigate('FCMChat', {
+      conversationId: conversation.id,
+      participantId: conversation.participants[0]?.id,
+      participantName: conversation.participants[0]?.name || conversation.title
     });
   }, [navigation]);
 
@@ -220,19 +213,13 @@ const ConversationsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Connection status */}
-      {!isConnected && (
-        <View style={styles.connectionStatus}>
-          <Icon name="cloud-off" size={16} color={COLORS.white} />
-          <Text style={styles.connectionText}>Offline - messages will sync when connected</Text>
-        </View>
-      )}
+      {/* FCM chat is always connected via API */}
 
       {/* Conversations list */}
       <FlatList
         data={conversations}
         renderItem={renderConversation}
-        keyExtractor={(item) => item.conversation_id}
+        keyExtractor={(item) => item.id}
         style={styles.conversationsList}
         refreshControl={
           <RefreshControl

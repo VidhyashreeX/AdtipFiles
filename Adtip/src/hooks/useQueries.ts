@@ -371,29 +371,63 @@ export const useSendChatMessage = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (data: { userId: number; receiverId: number; message: string }) => {
-      const key = `${CHAT_STORAGE_PREFIX}${data.userId}_${data.receiverId}`;
-      console.log('🔍 [useSendChatMessage] Saving message for key:', key);
-      const now = new Date().toISOString();
-      const newMsg = {
-        id: Date.now(),
-        sender: data.userId,
-        receiver: data.receiverId,
-        message: data.message,
-        createddate: now,
-        is_seen: false,
-      };
-      console.log('🔍 [useSendChatMessage] New message:', newMsg);
-      let messages: any[] = [];
-      const raw = await AsyncStorage.getItem(key);
-      if (raw) messages = JSON.parse(raw);
-      console.log('🔍 [useSendChatMessage] Existing messages:', messages);
-      messages.push(newMsg);
-      // Temporarily disable pruning to test if that's causing the issue
-      // messages = pruneOldMessages(messages);
-      console.log('🔍 [useSendChatMessage] Messages after adding (pruning disabled):', messages);
-      await AsyncStorage.setItem(key, JSON.stringify(messages));
-      console.log('🔍 [useSendChatMessage] Message saved to storage');
-      return newMsg;
+      console.log('🔍 [useSendChatMessage] Sending message via API:', data);
+
+      // First, try to send via the FCM API
+      try {
+        const response = await ApiService.post('/api/chat/fcm/send-message', {
+          conversationId: `${Math.min(data.userId, data.receiverId)}_${Math.max(data.userId, data.receiverId)}`,
+          content: data.message,
+          messageType: 'text',
+          recipientId: data.receiverId
+        });
+
+        console.log('🔍 [useSendChatMessage] API response:', response);
+
+        if (response.status === 200 && response.data) {
+          // Save the confirmed message to local storage
+          const key = `${CHAT_STORAGE_PREFIX}${data.userId}_${data.receiverId}`;
+          const confirmedMsg = {
+            id: response.data.data?.message?.id || Date.now(),
+            sender: data.userId,
+            receiver: data.receiverId,
+            message: data.message,
+            createddate: response.data.data?.message?.createdAt || new Date().toISOString(),
+            is_seen: false,
+          };
+
+          let messages: any[] = [];
+          const raw = await AsyncStorage.getItem(key);
+          if (raw) messages = JSON.parse(raw);
+          messages.push(confirmedMsg);
+          await AsyncStorage.setItem(key, JSON.stringify(messages));
+
+          console.log('🔍 [useSendChatMessage] Message sent successfully and saved to storage');
+          return confirmedMsg;
+        }
+      } catch (apiError) {
+        console.error('🔍 [useSendChatMessage] API call failed:', apiError);
+        // Fallback to local storage only
+        const key = `${CHAT_STORAGE_PREFIX}${data.userId}_${data.receiverId}`;
+        const now = new Date().toISOString();
+        const fallbackMsg = {
+          id: Date.now(),
+          sender: data.userId,
+          receiver: data.receiverId,
+          message: data.message,
+          createddate: now,
+          is_seen: false,
+        };
+
+        let messages: any[] = [];
+        const raw = await AsyncStorage.getItem(key);
+        if (raw) messages = JSON.parse(raw);
+        messages.push(fallbackMsg);
+        await AsyncStorage.setItem(key, JSON.stringify(messages));
+
+        console.log('🔍 [useSendChatMessage] Fallback: Message saved to storage only');
+        return fallbackMsg;
+      }
     },
     onSuccess: (data, variables) => {
       console.log('🔍 [useSendChatMessage] Mutation success, invalidating queries');

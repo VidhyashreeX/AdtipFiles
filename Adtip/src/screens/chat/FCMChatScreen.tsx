@@ -186,12 +186,29 @@ const FCMChatScreen: React.FC = () => {
     }
   }, [currentMessages]);
 
-  // Mark messages as read when conversation becomes active
+  // Track if we've already marked messages as read for this conversation
+  const hasMarkedAsReadRef = useRef<string | null>(null);
+
+  // Mark messages as read when conversation becomes active (only once per conversation)
   useEffect(() => {
-    if (conversationId && currentMessages.length > 0) {
-      markAsRead(conversationId);
+    if (conversationId && currentMessages.length > 0 && hasMarkedAsReadRef.current !== conversationId) {
+      // Check if there are any unread messages before calling the API
+      const unreadMessages = currentMessages.filter(msg =>
+        msg.senderId !== user?.id?.toString() && !msg.isRead
+      );
+
+      if (unreadMessages.length > 0) {
+        console.log(`🔍 [FCMChatScreen] Marking ${unreadMessages.length} messages as read for conversation:`, conversationId);
+        markAsRead(conversationId);
+        hasMarkedAsReadRef.current = conversationId;
+      }
     }
-  }, [conversationId, currentMessages.length, markAsRead]);
+  }, [conversationId, currentMessages.length, markAsRead, user?.id]);
+
+  // Reset the flag when conversation changes
+  useEffect(() => {
+    hasMarkedAsReadRef.current = null;
+  }, [conversationId]);
 
   // Cleanup on unmount
   useEffect(() => {

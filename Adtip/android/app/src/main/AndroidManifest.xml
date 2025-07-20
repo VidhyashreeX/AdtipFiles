@@ -184,8 +184,9 @@
         <!-- CALLLEEP CONNECTION SERVICE -->
         <service
             android:name="io.wazo.callkeep.VoiceConnectionService"
+            android:label="VoiceConnectionService"
             android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE"
-            android:foregroundServiceType="phoneCall"
+            android:foregroundServiceType="phoneCall|camera|microphone"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.telecom.ConnectionService" />

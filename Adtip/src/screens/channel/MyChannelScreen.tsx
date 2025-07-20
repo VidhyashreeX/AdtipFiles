@@ -412,6 +412,12 @@ const MyChannelScreen: React.FC = () => {
           setVideos(prev => prev.filter(v => v.id !== selectedVideo.id));
         }
 
+        // Refresh the video list from server to ensure consistency
+        if (channel?.channelId) {
+          console.log('🔄 [MyChannelScreen] Refreshing video list after delete');
+          fetchChannelContent(channel.channelId);
+        }
+
         Alert.alert('Success', 'Video deleted successfully');
       }
     } catch (error) {
@@ -449,6 +455,12 @@ const MyChannelScreen: React.FC = () => {
           setShorts(updateVideoInList);
         } else {
           setVideos(updateVideoInList);
+        }
+
+        // Refresh the video list from server to ensure consistency
+        if (channel?.channelId) {
+          console.log('🔄 [MyChannelScreen] Refreshing video list after edit');
+          fetchChannelContent(channel.channelId);
         }
 
         Alert.alert('Success', 'Video updated successfully');

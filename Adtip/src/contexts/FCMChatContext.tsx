@@ -143,15 +143,45 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
 
   // Send a message
   const sendMessage = useCallback(async (conversationId: string, content: string, replyTo?: string) => {
-    if (!isInitialized || !content.trim()) return;
+    if (!isInitialized || !content.trim() || !user?.id) return;
+
+    // Create optimistic message
+    const optimisticMessage: Message = {
+      id: `temp_${Date.now()}`,
+      conversationId,
+      senderId: user.id.toString(),
+      senderName: user.name || 'You',
+      senderAvatar: user.profile_image || undefined,
+      content: content.trim(),
+      messageType: 'text',
+      createdAt: new Date().toISOString(),
+      tempId: `temp_${Date.now()}`,
+      status: 'sending',
+      deliveryStatus: 'pending',
+      replyTo
+    };
+
+    // Add optimistic message immediately to current conversation if it matches
+    if (currentConversationId === conversationId) {
+      setCurrentMessages(prev => [...prev, optimisticMessage]);
+      console.log('🚀 [FCMChatContext] Added optimistic message to current conversation:', optimisticMessage);
+    }
 
     try {
       await fcmChatService.sendMessage(conversationId, content.trim(), replyTo);
+      console.log('✅ [FCMChatContext] Message sent successfully via API');
     } catch (error) {
-      console.error('[FCMChatContext] Failed to send message:', error);
+      console.error('❌ [FCMChatContext] Failed to send message:', error);
+
+      // Remove the optimistic message on failure
+      if (currentConversationId === conversationId) {
+        setCurrentMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
+        console.log('🗑️ [FCMChatContext] Removed failed optimistic message');
+      }
+
       throw error;
     }
-  }, [isInitialized]);
+  }, [isInitialized, user?.id, currentConversationId]);
 
   // Update message status
   const updateMessageStatus = useCallback((messageId: string, status: 'sending' | 'sent' | 'delivered' | 'read') => {

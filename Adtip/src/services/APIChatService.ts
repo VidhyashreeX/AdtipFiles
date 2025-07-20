@@ -100,6 +100,38 @@ class APIChatService {
   }
 
   /**
+   * Get current user information
+   */
+  private async getCurrentUser(): Promise<{ id: string; name: string } | null> {
+    if (!this.currentUserId) {
+      return null;
+    }
+
+    try {
+      // Try to get user info from local database first
+      const userProfile = await this.localDB.getUserProfile(this.currentUserId);
+      if (userProfile) {
+        return {
+          id: this.currentUserId,
+          name: userProfile.name || 'Unknown User'
+        };
+      }
+
+      // If not in local DB, return basic info
+      return {
+        id: this.currentUserId,
+        name: 'Unknown User'
+      };
+    } catch (error) {
+      console.warn('[APIChatService] Error getting current user:', error);
+      return {
+        id: this.currentUserId,
+        name: 'Unknown User'
+      };
+    }
+  }
+
+  /**
    * Start periodic sync with server
    */
   private startPeriodicSync(): void {
@@ -268,28 +300,49 @@ class APIChatService {
       this.eventHandlers.onMessageSent?.(localMessage);
       
       try {
-        // Try to send to server via FCM endpoint
+        // Get current user info for the message
+        const currentUser = await this.getCurrentUser();
+        if (!currentUser) {
+          throw new Error('User not authenticated');
+        }
+
+        // Get recipient info for FCM token
+        const conversation = await this.localDB.getConversation(messageData.conversationId);
+        if (!conversation) {
+          throw new Error('Conversation not found');
+        }
+
+        // For direct conversations, find the other participant
+        const otherParticipant = conversation.participants.find(p => p.id !== currentUser.id);
+        if (!otherParticipant) {
+          throw new Error('Recipient not found');
+        }
+
+        // Try to send to server via Firebase Cloud Function endpoint
         const response = await ApiService.post(FCM_CHAT_ENDPOINTS.SEND_MESSAGE, {
+          senderId: currentUser.id,
+          senderName: currentUser.name,
+          recipientId: otherParticipant.id,
+          recipientToken: otherParticipant.fcmToken, // This should be available from conversation data
           conversationId: messageData.conversationId,
           content: messageData.content,
           messageType: messageData.messageType,
-          replyTo: messageData.replyTo,
-          tempId: tempId,
+          replyToMessageId: messageData.replyTo,
         });
         
-        if (response.status === 200 && response.data) {
-          // Update local message with server response
-          const serverMessage = response.data.message;
+        if (response.status === 200 && response.data && response.data.success) {
+          // Update local message with server response from Firebase Cloud Function
           const updatedMessage: LocalMessage = {
             ...localMessage,
-            id: serverMessage.id,
+            id: response.data.messageId, // Firebase cloud function returns messageId
             isSent: true,
             isDelivered: true,
+            timestamp: response.data.timestamp,
           };
-          
+
           await this.localDB.addMessage(updatedMessage);
           this.eventHandlers.onMessageSent?.(updatedMessage);
-          
+
           return updatedMessage;
         }
       } catch (error) {

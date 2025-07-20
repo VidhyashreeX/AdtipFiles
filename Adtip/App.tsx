@@ -41,7 +41,6 @@ import { useTabNavigator, TabNavigatorProvider } from './src/contexts/TabNavigat
 //import { CallProvider, useCall, ActiveCall } from './src/contexts/CallProvider';
 import { ContentCreatorPremiumProvider } from './src/contexts/ContentCreatorPremiumContext';
 import { UserDataProvider } from './src/contexts/UserDataContext';
-import { ChatProvider } from './src/contexts/ChatContext';
 import { FCMChatProvider } from './src/contexts/FCMChatContext';
 import { DataProvider } from './src/providers/DataProvider';
 import { EnhancedQueryProvider } from './src/providers/QueryProvider';
@@ -330,54 +329,35 @@ function App(): React.JSX.Element {
   // Add centralized FCM message router for both call and chat messages
   useFCMMessageRouter();
 
-  // Initialize background call handler and CallKeep (non-blocking) - RE-ENABLED WITH FIXES
+  // Initialize background call handler only (lightweight, non-blocking)
   useEffect(() => {
-    const initCallServices = async () => {
-      try {
-        console.log('[App] 🔄 Starting non-blocking call services initialization...');
+    // Only initialize the lightweight background call handler
+    // CallKeep will be initialized later when user is in main app
+    const initBackgroundHandler = () => {
+      setTimeout(async () => {
+        try {
+          console.log('[App] 🔄 Starting lightweight background call handler initialization...');
 
-        // Initialize background call handler first (lightweight)
-        const { BackgroundCallHandler } = await import('./src/services/calling/BackgroundCallHandler');
-        const handler = BackgroundCallHandler.getInstance();
-        await handler.loadPendingCall();
-        console.log('[App] ✅ Background call handler initialized');
-
-        // Initialize CallKeep with timeout to prevent blocking
-        const initCallKeepWithTimeout = async () => {
+          // Initialize background call handler first (lightweight)
           try {
-            console.log('[App] 🔄 Starting CallKeep initialization in background...');
-            const { default: CallKeepService } = await import('./src/services/calling/CallKeepService');
-            const callKeepService = CallKeepService.getInstance();
-
-            // Set a timeout for CallKeep initialization
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('CallKeep initialization timeout')), 3000)
-            );
-
-            const initPromise = callKeepService.initialize();
-            const callKeepInitialized = await Promise.race([initPromise, timeoutPromise]);
-            console.log('[App] ✅ CallKeep initialized successfully:', callKeepInitialized);
-          } catch (callKeepError) {
-            console.warn('[App] ⚠️ CallKeep initialization failed (non-critical):', callKeepError);
-            // Don't block app startup for CallKeep issues
+            const { BackgroundCallHandler } = await import('./src/services/calling/BackgroundCallHandler');
+            const handler = BackgroundCallHandler.getInstance();
+            await handler.loadPendingCall();
+            console.log('[App] ✅ Background call handler initialized');
+          } catch (handlerError) {
+            console.warn('[App] ⚠️ Background call handler initialization failed:', handlerError);
           }
-        };
 
-        // Run CallKeep initialization in background with delay to not interfere with UI
-        setTimeout(() => {
-          initCallKeepWithTimeout().catch(err => {
-            console.warn('[App] ⚠️ CallKeep background initialization error:', err);
-          });
-        }, 3000); // 3 second delay to let UI settle first
-
-      } catch (error) {
-        console.error('[App] ❌ Error initializing call services (non-critical):', error);
-        // Don't block app startup for call service issues
-      }
+          console.log('[App] ✅ Background services initialization complete');
+        } catch (error) {
+          console.warn('[App] ⚠️ Background services setup error (non-critical):', error);
+        }
+      }, 1000); // Reduced delay to 1 second for faster startup
     };
 
-    // Run initialization in background without blocking
-    setTimeout(initCallServices, 1000); // 1 second delay to let app initialize first
+    // Start lightweight background initialization
+    initBackgroundHandler();
+
   }, []);
 
   // Initialize AdMob SDK in background
@@ -442,30 +422,28 @@ function App(): React.JSX.Element {
             <AuthProvider>
               <EnhancedQueryProvider>
                 <UserDataProvider>
-                  <ChatProvider>
-                    <FCMChatProvider>
-                      <WalletProvider>
-                      <ContentCreatorPremiumProvider>
-                        <DataProvider>
-                        <ShortsProvider>
-                          <TabNavigatorProvider>
-                            <SidebarProvider>
-                              <GestureHandlerRootView style={{ flex: 1 }}>
-                                <AppNavigator />
-                                <PersistentMeetingManager />
-                              {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
+                  <FCMChatProvider>
+                    <WalletProvider>
+                    <ContentCreatorPremiumProvider>
+                      <DataProvider>
+                      <ShortsProvider>
+                        <TabNavigatorProvider>
+                          <SidebarProvider>
+                            <GestureHandlerRootView style={{ flex: 1 }}>
+                              <AppNavigator />
+                              <PersistentMeetingManager />
+                            {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
 
-                              {/* Ad Debugger - only shows in development */}
-                              {/*<AdDebugger />*/}
-                              </GestureHandlerRootView>
-                            </SidebarProvider>
-                          </TabNavigatorProvider>
-                        </ShortsProvider>
-                        </DataProvider>
-                      </ContentCreatorPremiumProvider>
-                    </WalletProvider>
-                    </FCMChatProvider>
-                  </ChatProvider>
+                            {/* Ad Debugger - only shows in development */}
+                            {/*<AdDebugger />*/}
+                            </GestureHandlerRootView>
+                          </SidebarProvider>
+                        </TabNavigatorProvider>
+                      </ShortsProvider>
+                      </DataProvider>
+                    </ContentCreatorPremiumProvider>
+                  </WalletProvider>
+                  </FCMChatProvider>
                 </UserDataProvider>
               </EnhancedQueryProvider>
             </AuthProvider>

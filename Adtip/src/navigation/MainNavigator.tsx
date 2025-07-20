@@ -7,6 +7,8 @@ import { withFastLoading } from '../components/hoc/withFastLoading';
 import { MainNavigatorParamList } from '../types/navigation';
 // Import the navigation ref for global navigation
 import { navigationRef } from './NavigationService';
+// Import CallKeep initializer hook
+import useCallKeepInitializer from '../hooks/useCallKeepInitializer';
 
 // Import navigators
 import TabNavigator from './TabNavigator';
@@ -90,8 +92,7 @@ import SubscriptionScreen from '../screens/packages/SubscriptionScreen';
 
 import ContentCreatorSubscriptionScreen from '../screens/packages/ContentCreatorSubscriptionScreen';
 
-// Import New Chat Screens
-import NewChatScreen from '../screens/chat/NewChatScreen';
+// Import FCM Chat Screens
 import ConversationsScreen from '../screens/chat/ConversationsScreen';
 import FCMChatScreen from '../screens/chat/FCMChatScreen';
 
@@ -361,9 +362,12 @@ const callTransitionConfig = {
  * Main application stack navigator (when user is authenticated)
  */
 const MainNavigator = () => {
+  // Initialize CallKeep now that user is authenticated and in main app
+  useCallKeepInitializer();
+
   // Note: Navigation to Meeting screen now happens via Zustand state changes
   // in UnifiedCallService when a call is accepted or started
-  
+
   // The HOC-wrapped components are now defined outside, so this function is much cleaner.
 
   return (
@@ -439,15 +443,6 @@ const MainNavigator = () => {
         }}
       />
       <Stack.Screen
-        name="NewChat"
-        component={NewChatScreen}
-        options={{
-          headerShown: true,
-          animation: 'slide_from_right',
-          gestureEnabled: true,
-        }}
-      />
-      <Stack.Screen
         name="FCMChat"
         component={FCMChatScreen}
         options={{
@@ -456,13 +451,12 @@ const MainNavigator = () => {
           gestureEnabled: true,
         }}
       />
-      {/* Legacy Chat screen for backward compatibility */}
+      {/* Chat screen now uses FCM chat */}
       <Stack.Screen
         name="Chat"
-        component={ConversationsScreen}
+        component={FCMChatScreen}
         options={{
           headerShown: true,
-          title: 'Chats',
           animation: 'slide_from_right',
           gestureEnabled: true,
         }}
