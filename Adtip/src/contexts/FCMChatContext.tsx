@@ -119,27 +119,94 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
     }
   }, [isInitialized]);
 
-  // Load messages for a conversation
+  // Load messages for a conversation - Local database first approach
   const loadMessages = useCallback(async (conversationId: string) => {
     if (!isInitialized) return;
 
     try {
       setLoadingMessages(true);
-      
-      // First load from local storage for immediate display
+
+      // Load from local storage for immediate display (primary source)
       const localMessages = await fcmChatService.getMessagesFromLocal(conversationId);
+      console.log('[FCMChatContext] Loaded local messages:', localMessages.length);
       setCurrentMessages(localMessages);
-      
-      // Then fetch from server for latest messages
-      const result = await fcmChatService.getMessages(conversationId);
-      setCurrentMessages(result.messages);
-      
+
+      // Fetch from server in background for sync (don't overwrite local)
+      try {
+        const result = await fcmChatService.getMessages(conversationId);
+        const serverMessages = result.messages || [];
+
+        console.log('[FCMChatContext] Fetched server messages:', serverMessages.length);
+
+        // Smart merge: only add new messages from server that don't exist locally
+        const mergedMessages = await mergeMessagesIntelligently(localMessages, serverMessages, conversationId);
+
+        // Only update if we have new messages
+        if (mergedMessages.length > localMessages.length) {
+          console.log('[FCMChatContext] Merged messages, updating display:', mergedMessages.length);
+          setCurrentMessages(mergedMessages);
+        }
+
+      } catch (serverError) {
+        console.warn('[FCMChatContext] Server fetch failed, using local messages only:', serverError);
+        // Continue with local messages - don't fail the entire operation
+      }
+
     } catch (error) {
       console.error('[FCMChatContext] Failed to load messages:', error);
     } finally {
       setLoadingMessages(false);
     }
   }, [isInitialized]);
+
+  // Intelligent message merging - preserves local data integrity
+  const mergeMessagesIntelligently = useCallback(async (
+    localMessages: Message[],
+    serverMessages: Message[],
+    conversationId: string
+  ): Promise<Message[]> => {
+    try {
+      // Create a map of local messages by ID and tempId for quick lookup
+      const localMessageMap = new Map<string, Message>();
+      const localTempIdMap = new Map<string, Message>();
+
+      localMessages.forEach(msg => {
+        if (msg.id) localMessageMap.set(msg.id.toString(), msg);
+        if (msg.tempId) localTempIdMap.set(msg.tempId, msg);
+      });
+
+      // Start with local messages as base (they are authoritative)
+      const mergedMessages = [...localMessages];
+
+      // Add new messages from server that don't exist locally
+      for (const serverMsg of serverMessages) {
+        const existsLocally = localMessageMap.has(serverMsg.id?.toString() || '') ||
+                             (serverMsg.tempId && localTempIdMap.has(serverMsg.tempId));
+
+        if (!existsLocally) {
+          console.log('[FCMChatContext] Adding new server message:', serverMsg.id);
+          mergedMessages.push(serverMsg);
+
+          // Save new message to local storage
+          await fcmChatService.saveMessageToLocal(serverMsg);
+        }
+      }
+
+      // Sort by timestamp to maintain chronological order
+      mergedMessages.sort((a, b) => {
+        const timeA = new Date(a.createdAt || a.timestamp || 0).getTime();
+        const timeB = new Date(b.createdAt || b.timestamp || 0).getTime();
+        return timeA - timeB;
+      });
+
+      return mergedMessages;
+
+    } catch (error) {
+      console.error('[FCMChatContext] Error merging messages:', error);
+      // Return local messages on error to maintain stability
+      return localMessages;
+    }
+  }, []);
 
   // Send a message
   const sendMessage = useCallback(async (conversationId: string, content: string, replyTo?: string) => {

@@ -47,10 +47,32 @@ export interface Conversation {
     id: string;
     name: string;
     avatar?: string;
+    fcmToken?: string;
   }>;
   lastMessage?: Message;
   unreadCount: number;
   lastActivity: string;
+}
+
+// Interface for the actual API response structure
+export interface ApiConversation {
+  conversation_id?: string | number;
+  id?: string | number;
+  conversationId?: string | number;
+  type: 'direct' | 'group';
+  title?: string;
+  last_activity_at?: string;
+  lastActivity?: string;
+  unread_count?: number;
+  is_muted?: boolean;
+  last_message_content?: string;
+  last_message_type?: string;
+  last_message_time?: string;
+  last_message_sender_name?: string;
+  other_user_id?: string | number;
+  other_user_name?: string;
+  other_user_avatar?: string;
+  other_user_status?: 'online' | 'offline' | 'away';
 }
 
 interface FCMChatEventHandlers {
@@ -253,9 +275,32 @@ class FCMChatService {
         throw new Error('Recipient not found in conversation');
       }
 
-      // Validate recipient has a valid FCM token
+      console.log('[FCMChatService] Recipient found:', {
+        id: recipient.id,
+        name: recipient.name,
+        fcmToken: recipient.fcmToken ? `${recipient.fcmToken.substring(0, 20)}...` : 'null',
+        tokenLength: recipient.fcmToken?.length || 0
+      });
+
+      // Validate recipient has a valid FCM token - if not, try to fetch it again
       if (!recipient.fcmToken || recipient.fcmToken.length < 10) {
-        throw new Error(`Recipient does not have a valid FCM token. Token: ${recipient.fcmToken || 'null'}`);
+        console.warn('[FCMChatService] Recipient FCM token invalid, attempting to refetch...', {
+          currentToken: recipient.fcmToken,
+          recipientId: recipient.id
+        });
+
+        try {
+          const tokenData = await ApiService.getFCMToken(recipient.id);
+          if (tokenData?.token && tokenData.token.length >= 10) {
+            recipient.fcmToken = tokenData.token;
+            console.log('[FCMChatService] Successfully refetched FCM token for recipient:', recipient.id);
+          } else {
+            throw new Error(`Recipient does not have a valid FCM token after refetch. Token: ${tokenData?.token || 'null'}`);
+          }
+        } catch (refetchError) {
+          console.error('[FCMChatService] Failed to refetch FCM token:', refetchError);
+          throw new Error(`Recipient does not have a valid FCM token. Token: ${recipient.fcmToken || 'null'}`);
+        }
       }
 
       // Send via Firebase Cloud Function FCM API
@@ -278,7 +323,9 @@ class FCMChatService {
         content,
         messageType: 'text',
         replyToMessageId: replyTo,
-        messageId: fcmResponse.data?.messageId // Link to FCM message
+        messageId: fcmResponse.data?.messageId, // Link to FCM message
+        tempId: message.tempId, // Include temp ID for sync tracking
+        timestamp: message.createdAt // Include client timestamp
       });
 
       console.log('[FCMChatService] Message saved to database successfully:', dbResponse);
@@ -369,7 +416,7 @@ class FCMChatService {
       });
 
       // Try to find conversation by various ID fields (backend uses conversation_id)
-      let conversation = conversationsResult.conversations.find((c: any) => {
+      let conversation: ApiConversation | undefined = conversationsResult.conversations.find((c: any) => {
         const cId = c.id || c.conversationId || c.conversation_id;
         return cId === conversationId ||
                String(cId) === String(conversationId) ||
@@ -392,14 +439,13 @@ class FCMChatService {
         });
 
         // Build participants array based on conversation structure
-        const participants = [];
+        const participants: Array<{ id: string; name: string; fcmToken?: string }> = [];
 
         // Add current user
         if (currentUserId) {
           participants.push({
             id: currentUserId,
-            name: 'You',
-            fcmToken: null // Will be fetched if needed
+            name: 'You'
           });
         }
 
@@ -407,8 +453,7 @@ class FCMChatService {
         if (conversation.other_user_id) {
           participants.push({
             id: String(conversation.other_user_id),
-            name: conversation.other_user_name || 'Unknown User',
-            fcmToken: null // Will be fetched
+            name: conversation.other_user_name || 'Unknown User'
           });
         }
 
@@ -416,10 +461,17 @@ class FCMChatService {
         for (const participant of participants) {
           if (participant.id && participant.id !== currentUserId) {
             try {
+              console.log('[FCMChatService] Fetching FCM token for participant:', participant.id);
               const tokenData = await ApiService.getFCMToken(participant.id);
               if (tokenData?.token) {
                 participant.fcmToken = tokenData.token;
-                console.log('[FCMChatService] Fetched FCM token for participant:', participant.id);
+                console.log('[FCMChatService] Successfully assigned FCM token to participant:', {
+                  participantId: participant.id,
+                  tokenLength: tokenData.token.length,
+                  tokenPreview: tokenData.token.substring(0, 20) + '...'
+                });
+              } else {
+                console.warn('[FCMChatService] No FCM token received for participant:', participant.id, tokenData);
               }
             } catch (error) {
               console.warn('[FCMChatService] Failed to fetch FCM token for participant:', participant.id, error);
@@ -429,7 +481,12 @@ class FCMChatService {
 
         console.log('[FCMChatService] Built participants:', {
           count: participants.length,
-          participants: participants.map(p => ({ id: p.id, name: p.name, hasToken: !!p.fcmToken }))
+          participants: participants.map(p => ({
+            id: p.id,
+            name: p.name,
+            hasToken: !!p.fcmToken,
+            tokenLength: p.fcmToken?.length || 0
+          }))
         });
 
         return { participants };
@@ -603,7 +660,7 @@ class FCMChatService {
   /**
    * Save message to local storage
    */
-  private async saveMessageToLocal(message: Message): Promise<void> {
+  async saveMessageToLocal(message: Message): Promise<void> {
     try {
       const key = `chat_messages_${message.conversationId}`;
       const existingData = await AsyncStorage.getItem(key);
@@ -895,7 +952,9 @@ class FCMChatService {
       content: message.content,
       messageType: message.messageType,
       replyToMessageId: message.replyTo,
-      messageId: fcmResponse.data?.messageId // Link to FCM message
+      messageId: fcmResponse.data?.messageId, // Link to FCM message
+      tempId: message.tempId, // Include temp ID for sync tracking
+      timestamp: message.createdAt // Include client timestamp
     });
 
     console.log('[FCMChatService] Message saved to database successfully:', dbResponse);
