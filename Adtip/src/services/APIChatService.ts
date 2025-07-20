@@ -319,7 +319,7 @@ class APIChatService {
         }
 
         // Try to send to server via Firebase Cloud Function endpoint
-        const response = await ApiService.sendChatMessage({
+        const fcmResponse = await ApiService.sendChatMessage({
           senderId: currentUser.id,
           senderName: currentUser.name,
           recipientId: otherParticipant.id,
@@ -329,15 +329,24 @@ class APIChatService {
           messageType: messageData.messageType,
           replyToMessageId: messageData.replyTo,
         });
-        
-        if (response.status === 200 && response.data && response.data.success) {
-          // Update local message with server response from Firebase Cloud Function
+
+        if (fcmResponse.success) {
+          // Save message to database via backend API
+          const dbResponse = await ApiService.post('/api/chat/save-message', {
+            conversationId: messageData.conversationId,
+            content: messageData.content,
+            messageType: messageData.messageType,
+            replyToMessageId: messageData.replyTo,
+            messageId: fcmResponse.data?.messageId // Link to FCM message
+          });
+
+          // Update local message with database response
           const updatedMessage: LocalMessage = {
             ...localMessage,
-            id: response.data.messageId, // Firebase cloud function returns messageId
+            id: dbResponse.data?.message?.id || fcmResponse.data?.messageId,
             isSent: true,
             isDelivered: true,
-            timestamp: response.data.timestamp,
+            timestamp: dbResponse.data?.message?.created_at || fcmResponse.data?.timestamp,
           };
 
           await this.localDB.addMessage(updatedMessage);

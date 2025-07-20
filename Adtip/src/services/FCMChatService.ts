@@ -259,7 +259,7 @@ class FCMChatService {
       }
 
       // Send via Firebase Cloud Function FCM API
-      const response = await ApiService.sendChatMessage({
+      const fcmResponse = await ApiService.sendChatMessage({
         senderId: currentUser.id,
         senderName: currentUser.name,
         recipientId: recipient.id,
@@ -270,13 +270,24 @@ class FCMChatService {
         replyToMessageId: replyTo
       });
 
-      console.log('[FCMChatService] Message sent successfully via Firebase Cloud Function:', response);
+      console.log('[FCMChatService] FCM message sent successfully via Firebase Cloud Function:', fcmResponse);
 
-      // Update message status with Firebase Cloud Function response
+      // Save message to database via backend API
+      const dbResponse = await ApiService.post('/api/chat/save-message', {
+        conversationId,
+        content,
+        messageType: 'text',
+        replyToMessageId: replyTo,
+        messageId: fcmResponse.data?.messageId // Link to FCM message
+      });
+
+      console.log('[FCMChatService] Message saved to database successfully:', dbResponse);
+
+      // Update message status with database response
       message.status = 'sent';
       message.deliveryStatus = 'sent';
-      message.id = response.data?.messageId || message.id;
-      
+      message.id = dbResponse.data?.message?.id || fcmResponse.data?.messageId || message.id;
+
       await this.updateMessageInLocal(message);
       
       // Remove from queue
@@ -865,7 +876,7 @@ class FCMChatService {
     }
 
     // Send via Firebase Cloud Function FCM API
-    const response = await ApiService.sendChatMessage({
+    const fcmResponse = await ApiService.sendChatMessage({
       senderId: currentUser.id,
       senderName: currentUser.name,
       recipientId: recipient.id,
@@ -876,12 +887,23 @@ class FCMChatService {
       replyToMessageId: message.replyTo
     });
 
-    console.log('[FCMChatService] Message sent successfully via Firebase Cloud Function:', response);
+    console.log('[FCMChatService] FCM message sent successfully via Firebase Cloud Function:', fcmResponse);
+
+    // Save message to database via backend API
+    const dbResponse = await ApiService.post('/api/chat/save-message', {
+      conversationId: message.conversationId,
+      content: message.content,
+      messageType: message.messageType,
+      replyToMessageId: message.replyTo,
+      messageId: fcmResponse.data?.messageId // Link to FCM message
+    });
+
+    console.log('[FCMChatService] Message saved to database successfully:', dbResponse);
 
     // Update message status
     message.status = 'sent';
     message.deliveryStatus = 'sent';
-    message.id = response.data?.messageId || message.id;
+    message.id = dbResponse.data?.message?.id || fcmResponse.data?.messageId || message.id;
 
     await this.updateMessageInLocal(message);
   }
