@@ -11,24 +11,16 @@ export function useFcmCallHandlers() {
   useEffect(() => {
     // Initialize controller
     const callController = CallController.getInstance()
-    
-    // Handle FCM messages in foreground
-    const unsubscribeForeground = messaging().onMessage(async (remoteMessage) => {
-      try {
-        console.log('[FCM] Foreground message:', remoteMessage)
 
-        // Check if this is a call-related message
-        if (
-          remoteMessage.data?.type === 'CALL_INITIATE' ||
-          remoteMessage.data?.type === 'CALL_ACCEPT' ||
-          remoteMessage.data?.type === 'CALL_END'
-        ) {
-          callController.handleFCMMessage(remoteMessage)
-        }
-      } catch (error) {
-        console.error('[FCM] Error handling foreground message:', error)
-      }
-    })
+    // FCM message handling is now centralized in FCMMessageRouter
+    // This prevents conflicts with chat FCM handling
+    // Messages will be routed to CallController via FCMMessageRouter
+    console.log('[FCM] Call handlers setup - delegated to FCMMessageRouter')
+
+    // No direct FCM listener registration here to avoid conflicts
+    const unsubscribeForeground = () => {
+      // Placeholder cleanup function
+    }
     
     // Handle notification press events from Notifee
     const unsubscribeNotifee = notifee.onForegroundEvent(async ({ type, detail }) => {

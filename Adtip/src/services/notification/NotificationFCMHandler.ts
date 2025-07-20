@@ -11,12 +11,53 @@ export class NotificationFCMHandler implements FCMHandler {
 
   /**
    * Check if this handler can process the message
-   * This is a fallback handler, so it accepts any message not handled by others
+   * This is a fallback handler, but should exclude chat and call messages
    */
   canHandle(message: FirebaseMessagingTypes.RemoteMessage): boolean {
-    // This handler accepts any message as a fallback
-    // It should be registered last in the priority order
+    // Extract message type from data or info field
+    const messageType = this.extractMessageType(message)
+
+    // Exclude chat messages (handled by ChatFCMHandler)
+    const chatMessageTypes = ['chat_message']
+    if (chatMessageTypes.includes(messageType || '')) {
+      return false
+    }
+
+    // Exclude call messages (handled by CallFCMHandler)
+    const callMessageTypes = [
+      'CALL_INITIATED', 'CALL_INITIATE',
+      'CALL_ACCEPT', 'CALL_ACCEPTED',
+      'CALL_END', 'CALL_ENDED',
+      'CALL_REJECT', 'CALL_REJECTED'
+    ]
+    if (callMessageTypes.includes(messageType || '')) {
+      return false
+    }
+
+    // Accept other notification messages
     return true
+  }
+
+  /**
+   * Extract message type from FCM message data or info field
+   */
+  private extractMessageType(message: FirebaseMessagingTypes.RemoteMessage): string | null {
+    // Check direct data.type
+    if (message.data?.type) {
+      return message.data.type as string
+    }
+
+    // Check info field (new format)
+    if (message.data?.info && typeof message.data.info === 'string') {
+      try {
+        const parsedInfo = JSON.parse(message.data.info)
+        return parsedInfo.type || null
+      } catch (e) {
+        // Ignore parsing errors
+      }
+    }
+
+    return null
   }
 
   /**

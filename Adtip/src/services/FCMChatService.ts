@@ -17,8 +17,7 @@ import messaging, { FirebaseMessagingTypes } from '@react-native-firebase/messag
 import { AppState, AppStateStatus, Platform } from 'react-native';
 import notifee, { AndroidImportance, EventType } from '@notifee/react-native';
 import ApiService from './ApiService';
-import { API_BASE_URL } from '../constants/api';
-import { CHAT_ENDPOINTS, FCM_CHAT_ENDPOINTS } from '../constants/apiEndpoints';
+import { CHAT_ENDPOINTS } from '../constants/apiEndpoints';
 import { navigationRef } from '../navigation/NavigationService';
 
 // Import default logo for notifications
@@ -94,6 +93,7 @@ class FCMChatService {
   private static instance: FCMChatService;
   private currentUserId: string | null = null;
   private authToken: string | null = null;
+
   private eventHandlers: FCMChatEventHandlers = {};
   private messageQueue: Message[] = [];
   private deadLetterQueue: Message[] = [];
@@ -694,10 +694,28 @@ class FCMChatService {
     if (messageData?.type === 'chat_message') {
       console.log('[FCMChatService] Processing chat message:', messageData);
 
+      // Create consistent message ID for deduplication
+      const messageId = messageData.messageId ||
+        `fcm_${messageData.conversationId}_${messageData.senderId}_${messageData.content?.substring(0, 20)}_${messageData.timestamp}`;
+
+      // Ensure conversation ID uses local format
+      let conversationId = messageData.conversationId?.toString() || '';
+
+      // If conversation ID doesn't use local format, convert it
+      if (conversationId && !conversationId.startsWith('conv_')) {
+        const currentUserId = await AsyncStorage.getItem('userId');
+        const senderId = messageData.senderId?.toString();
+        if (currentUserId && senderId) {
+          const participants = [currentUserId, senderId].sort();
+          conversationId = `conv_${participants[0]}_${participants[1]}`;
+          console.log('[FCMChatService] Converted to local conversation ID:', conversationId);
+        }
+      }
+
       // Create message object from FCM data
       const message: Message = {
-        id: messageData.messageId || `fcm_${Date.now()}`,
-        conversationId: messageData.conversationId?.toString() || '',
+        id: messageId,
+        conversationId: conversationId,
         senderId: messageData.senderId?.toString() || '',
         senderName: messageData.senderName || 'Unknown',
         content: messageData.content || notification?.body || '',
@@ -822,7 +840,7 @@ class FCMChatService {
   /**
    * Navigate to FCMChatScreen with proper parameters
    */
-  private navigateToChat(data: any): void {
+  private async navigateToChat(data: any): Promise<void> {
     try {
       const senderId = data.senderId?.toString();
       const senderName = data.senderName;
@@ -834,24 +852,44 @@ class FCMChatService {
 
       console.log('[FCMChatService] Navigating to FCMChatScreen:', { senderId, senderName });
 
+      // Store pending navigation for killed app scenarios
+      await AsyncStorage.setItem('pendingChatNavigation', JSON.stringify({
+        senderId,
+        senderName,
+        timestamp: Date.now()
+      }));
+
       // Use navigation service to navigate to FCMChatScreen
       if (navigationRef.isReady()) {
-        // Check if we're in the Main navigator context
+        // Check current route to determine navigation strategy
         const currentRoute = navigationRef.getCurrentRoute();
         console.log('[FCMChatService] Current route:', currentRoute?.name);
 
-        // Navigate to FCMChat screen with proper parameters
-        (navigationRef as any).navigate('Main', {
-          screen: 'FCMChat',
-          params: {
+        // If already in Main navigator, navigate directly to FCMChat
+        if (currentRoute?.name && ['Home', 'TipTube', 'TipCall', 'Profile', 'Conversations', 'FCMChat'].includes(currentRoute.name)) {
+          console.log('[FCMChatService] Already in Main navigator, navigating directly to FCMChat');
+          (navigationRef as any).navigate('FCMChat', {
             participantId: senderId,
             participantName: senderName,
-          },
-        });
+          });
+          // Clear pending navigation on successful navigation
+          await AsyncStorage.removeItem('pendingChatNavigation');
+        } else {
+          // Navigate to Main navigator first, then to FCMChat
+          console.log('[FCMChatService] Navigating to Main navigator then FCMChat');
+          (navigationRef as any).navigate('Main', {
+            screen: 'FCMChat',
+            params: {
+              participantId: senderId,
+              participantName: senderName,
+            },
+          });
+          // Clear pending navigation on successful navigation
+          await AsyncStorage.removeItem('pendingChatNavigation');
+        }
       } else {
-        console.warn('[FCMChatService] Navigation not ready, queuing navigation');
-        // Queue navigation for when navigation is ready
-        setTimeout(() => this.navigateToChat(data), 500);
+        console.warn('[FCMChatService] Navigation not ready, will retry when app becomes active');
+        // Don't retry immediately, let the app state change handler deal with it
       }
     } catch (error) {
       console.error('[FCMChatService] Error navigating to chat:', error);
@@ -928,21 +966,43 @@ class FCMChatService {
       const key = `chat_messages_${message.conversationId}`;
       const existingData = await AsyncStorage.getItem(key);
       const messages: Message[] = existingData ? JSON.parse(existingData) : [];
-      
-      // Check if message already exists
-      const existingIndex = messages.findIndex(m => m.id === message.id || m.tempId === message.tempId);
-      
+
+      // Enhanced deduplication logic
+      const existingIndex = messages.findIndex(m => {
+        // Check by ID first
+        if (m.id === message.id || m.tempId === message.tempId) {
+          return true;
+        }
+
+        // Check for content-based duplicates (same sender, content, and close timestamp)
+        const timeDiff = Math.abs(new Date(m.createdAt).getTime() - new Date(message.createdAt).getTime());
+        return (
+          m.senderId === message.senderId &&
+          m.content === message.content &&
+          timeDiff < 5000 // Within 5 seconds
+        );
+      });
+
       if (existingIndex >= 0) {
-        // Update existing message
-        messages[existingIndex] = message;
+        // Update existing message (prefer server ID over FCM ID)
+        const existing = messages[existingIndex];
+        const updated = {
+          ...existing,
+          ...message,
+          // Keep server ID if available, otherwise use the newer ID
+          id: existing.id.startsWith('fcm_') && !message.id.startsWith('fcm_') ? message.id : existing.id
+        };
+        messages[existingIndex] = updated;
+        console.log('[FCMChatService] Updated duplicate message:', updated.id);
       } else {
         // Add new message
         messages.push(message);
+        console.log('[FCMChatService] Added new message:', message.id);
       }
-      
+
       // Sort by creation time
       messages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      
+
       await AsyncStorage.setItem(key, JSON.stringify(messages));
     } catch (error) {
       console.error('[FCMChatService] Failed to save message to local storage:', error);

@@ -120,40 +120,19 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
     }
   }, [isInitialized]);
 
-  // Load messages for a conversation - Local database first approach
+  // Load messages for a conversation - Local storage only approach
   const loadMessages = useCallback(async (conversationId: string) => {
     if (!isInitialized) return;
 
     try {
       setLoadingMessages(true);
 
-      // Load from local storage for immediate display (primary source)
+      // Load from local storage only (no API calls)
       const localMessages = await fcmChatService.getMessagesFromLocal(conversationId);
       console.log('[FCMChatContext] Loaded local messages:', localMessages.length);
 
-      // Always set local messages immediately to prevent empty state flashing
+      // Set local messages immediately
       setCurrentMessages(localMessages);
-
-      // Fetch from server in background for sync (don't overwrite local)
-      try {
-        const result = await fcmChatService.getMessages(conversationId);
-        const serverMessages = result.messages || [];
-
-        console.log('[FCMChatContext] Fetched server messages:', serverMessages.length);
-
-        // Smart merge: only add new messages from server that don't exist locally
-        const mergedMessages = await mergeMessagesIntelligently(localMessages, serverMessages, conversationId);
-
-        // Only update if we have new messages or if local was empty
-        if (mergedMessages.length > localMessages.length || localMessages.length === 0) {
-          console.log('[FCMChatContext] Merged messages, updating display:', mergedMessages.length);
-          setCurrentMessages(mergedMessages);
-        }
-
-      } catch (serverError) {
-        console.warn('[FCMChatContext] Server fetch failed, using local messages only:', serverError);
-        // Continue with local messages - don't fail the entire operation
-      }
 
     } catch (error) {
       console.error('[FCMChatContext] Failed to load messages:', error);
@@ -270,30 +249,37 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
     setCurrentMessages(prev => prev.filter(message => message.tempId !== tempId));
   }, []);
 
-  // Create or get conversation
+  // Create or get conversation - Local storage only approach
   const createOrGetConversation = useCallback(async (participantId: string): Promise<string> => {
     if (!isInitialized) {
       throw new Error('Chat service not initialized');
     }
 
     try {
-      const result = await fcmChatService.createOrGetConversation(participantId);
+      // Generate conversation ID locally using consistent format
+      const currentUserId = await AsyncStorage.getItem('userId');
+      if (!currentUserId) {
+        throw new Error('User not authenticated');
+      }
+
+      // Create deterministic conversation ID based on participant IDs
+      const participants = [currentUserId, participantId].sort();
+      const conversationId = `conv_${participants[0]}_${participants[1]}`;
+
+      console.log('[FCMChatContext] Using local conversation ID:', conversationId);
 
       // Set current participant for conversation state tracking
       setCurrentParticipantId(participantId);
 
       // Set conversation state in FCMChatService for notification management
-      fcmChatService.setCurrentConversation(result.conversationId, participantId);
+      fcmChatService.setCurrentConversation(conversationId, participantId);
 
-      // Refresh conversations to include the new one
-      await loadConversations();
-
-      return result.conversationId;
+      return conversationId;
     } catch (error) {
-      console.error('[FCMChatContext] Failed to create conversation:', error);
+      console.error('[FCMChatContext] Failed to create/get conversation:', error);
       throw error;
     }
-  }, [isInitialized, loadConversations]);
+  }, [isInitialized]);
 
   // Set current conversation
   const setCurrentConversation = useCallback((conversationId: string | null) => {
