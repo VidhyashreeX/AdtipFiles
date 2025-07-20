@@ -14,7 +14,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import messaging, { FirebaseMessagingTypes } from '@react-native-firebase/messaging';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import ApiService from './ApiService';
 import { API_BASE_URL } from '../constants/api';
 import { CHAT_ENDPOINTS, FCM_CHAT_ENDPOINTS } from '../constants/apiEndpoints';
@@ -32,6 +32,11 @@ export interface Message {
   status?: 'sending' | 'sent' | 'delivered' | 'read';
   replyTo?: string;
   deliveryStatus?: 'pending' | 'sent' | 'delivered' | 'failed';
+  // Retry tracking fields
+  retryCount?: number;
+  lastRetryAt?: string;
+  nextRetryAt?: string;
+  isInDeadLetterQueue?: boolean;
 }
 
 export interface Conversation {
@@ -64,11 +69,19 @@ class FCMChatService {
   private authToken: string | null = null;
   private eventHandlers: FCMChatEventHandlers = {};
   private messageQueue: Message[] = [];
+  private deadLetterQueue: Message[] = [];
   private appState: AppStateStatus = 'active';
   private isInitialized = false;
   private fcmUnsubscribe: (() => void) | null = null;
   private syncInterval: NodeJS.Timeout | null = null;
   private appStateSubscription: any = null;
+  private isProcessingQueue = false;
+  private consecutiveFailures = 0;
+  private readonly MAX_RETRY_ATTEMPTS = 3;
+  private readonly MAX_CONSECUTIVE_FAILURES = 10;
+  private readonly BASE_RETRY_DELAY = 2000; // 2 seconds
+  private lastRequestTime = 0;
+  private readonly MIN_REQUEST_INTERVAL = 1000; // 1 second minimum between requests
 
   private constructor() {
     // Monitor app state changes using the new subscription-based API
@@ -97,7 +110,10 @@ class FCMChatService {
       
       // Load queued messages from storage
       await this.loadQueuedMessages();
-      
+
+      // Load dead letter queue from storage
+      await this.loadDeadLetterQueue();
+
       // Start periodic sync
       this.startPeriodicSync();
 
@@ -170,6 +186,20 @@ class FCMChatService {
    * Send a message via FCM API
    */
   async sendMessage(conversationId: string, content: string, replyTo?: string): Promise<void> {
+    // IMMEDIATE CIRCUIT BREAKER CHECK - Stop infinite loops
+    if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
+      console.warn(`[FCMChatService] Circuit breaker active. Rejecting message send. Consecutive failures: ${this.consecutiveFailures}`);
+      throw new Error('Circuit breaker active - too many consecutive failures. Please try again later.');
+    }
+
+    // RATE LIMITING - Prevent rapid-fire requests
+    const now = Date.now();
+    if (now - this.lastRequestTime < this.MIN_REQUEST_INTERVAL) {
+      console.warn(`[FCMChatService] Rate limit exceeded. Rejecting message send. Last request: ${now - this.lastRequestTime}ms ago`);
+      throw new Error('Rate limit exceeded - please wait before sending another message.');
+    }
+    this.lastRequestTime = now;
+
     const tempId = `temp_${Date.now()}_${Math.random()}`;
 
     const message: Message = {
@@ -189,7 +219,9 @@ class FCMChatService {
     console.log('[FCMChatService] Sending message:', {
       tempId,
       conversationId,
-      content: content.substring(0, 20) + '...'
+      content: content.substring(0, 20) + '...',
+      consecutiveFailures: this.consecutiveFailures,
+      timeSinceLastRequest: now - this.lastRequestTime
     });
 
     // Add to local storage immediately for optimistic UI
@@ -207,18 +239,27 @@ class FCMChatService {
       const currentUser = await this.getCurrentUserInfo();
       const conversation = await this.getConversationInfo(conversationId);
 
-      if (!currentUser || !conversation) {
-        throw new Error('Missing user or conversation information');
+      if (!currentUser) {
+        throw new Error('Current user information not available');
+      }
+
+      if (!conversation) {
+        throw new Error('Conversation information not available. Please ensure the conversation exists and try again.');
       }
 
       // Find recipient for direct conversations
       const recipient = conversation.participants.find(p => p.id !== currentUser.id);
       if (!recipient) {
-        throw new Error('Recipient not found');
+        throw new Error('Recipient not found in conversation');
+      }
+
+      // Validate recipient has a valid FCM token
+      if (!recipient.fcmToken || recipient.fcmToken.length < 10) {
+        throw new Error(`Recipient does not have a valid FCM token. Token: ${recipient.fcmToken || 'null'}`);
       }
 
       // Send via Firebase Cloud Function FCM API
-      const response = await ApiService.post(FCM_CHAT_ENDPOINTS.SEND_MESSAGE, {
+      const response = await ApiService.sendChatMessage({
         senderId: currentUser.id,
         senderName: currentUser.name,
         recipientId: recipient.id,
@@ -242,14 +283,42 @@ class FCMChatService {
       this.messageQueue = this.messageQueue.filter(m => m.tempId !== tempId);
       await this.saveQueuedMessages();
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('[FCMChatService] Failed to send message:', error);
-      
-      // Update message status to failed
-      message.status = 'sending'; // Keep as sending for retry
-      message.deliveryStatus = 'failed';
-      await this.updateMessageInLocal(message);
-      
+
+      // Check if this is a permanent failure (invalid token, etc.)
+      const isPermanentFailure = this.isPermanentFailure(error);
+
+      if (isPermanentFailure) {
+        console.warn(`[FCMChatService] Permanent failure detected, moving to dead letter queue:`, message.tempId);
+        message.status = 'sending';
+        message.deliveryStatus = 'failed';
+        await this.updateMessageInLocal(message);
+
+        // Remove from queue and move to dead letter queue immediately
+        this.messageQueue = this.messageQueue.filter(m => m.tempId !== message.tempId);
+        await this.moveToDeadLetterQueue(message);
+      } else {
+        // Temporary failure - apply retry logic
+        message.status = 'sending'; // Keep as sending for retry
+        message.deliveryStatus = 'failed';
+        message.retryCount = (message.retryCount || 0) + 1;
+        message.lastRetryAt = new Date().toISOString();
+
+        // Calculate next retry time with exponential backoff
+        const retryDelay = this.calculateRetryDelay(message.retryCount);
+        message.nextRetryAt = new Date(Date.now() + retryDelay).toISOString();
+
+        await this.updateMessageInLocal(message);
+
+        // Only keep in queue if not exceeded max attempts
+        if (message.retryCount >= this.MAX_RETRY_ATTEMPTS) {
+          console.warn(`[FCMChatService] Message exceeded max retry attempts, removing from queue:`, message.tempId);
+          this.messageQueue = this.messageQueue.filter(m => m.tempId !== message.tempId);
+          await this.moveToDeadLetterQueue(message);
+        }
+      }
+
       throw error;
     }
   }
@@ -278,30 +347,86 @@ class FCMChatService {
     participants: Array<{ id: string; name: string; fcmToken?: string }>
   } | null> {
     try {
-      // This should fetch conversation details from your API or local storage
-      // For now, return a placeholder - this should be implemented based on your data structure
+      console.log('[FCMChatService] Getting conversation info for ID:', conversationId);
 
       // Try to get conversations from the service
       const conversationsResult = await this.getConversations(1, 100);
-      const conversation = conversationsResult.conversations.find((c: any) => c.id === conversationId);
+      console.log('[FCMChatService] Retrieved conversations:', {
+        count: conversationsResult.conversations.length,
+        conversationIds: conversationsResult.conversations.map((c: any) => c.id || c.conversationId || c.conversation_id),
+        sampleConversation: conversationsResult.conversations[0] // Log first conversation structure
+      });
+
+      // Try to find conversation by various ID fields (backend uses conversation_id)
+      let conversation = conversationsResult.conversations.find((c: any) => {
+        const cId = c.id || c.conversationId || c.conversation_id;
+        return cId === conversationId ||
+               String(cId) === String(conversationId) ||
+               parseInt(cId) === parseInt(conversationId);
+      });
+
+      console.log('[FCMChatService] Conversation search result:', {
+        searchingFor: conversationId,
+        found: !!conversation,
+        foundId: conversation ? (conversation.id || conversation.conversationId || conversation.conversation_id) : null
+      });
 
       if (conversation) {
-        return {
-          participants: conversation.participants.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            fcmToken: p.fcmToken // This should be available from participant data
-          }))
-        };
+        const currentUserId = await AsyncStorage.getItem('userId');
+        console.log('[FCMChatService] Found conversation:', {
+          id: conversation.conversation_id || conversation.id,
+          type: conversation.type,
+          currentUserId,
+          otherUserId: conversation.other_user_id
+        });
+
+        // Build participants array based on conversation structure
+        const participants = [];
+
+        // Add current user
+        if (currentUserId) {
+          participants.push({
+            id: currentUserId,
+            name: 'You',
+            fcmToken: null // Will be fetched if needed
+          });
+        }
+
+        // Add other participant (for direct chats)
+        if (conversation.other_user_id) {
+          participants.push({
+            id: String(conversation.other_user_id),
+            name: conversation.other_user_name || 'Unknown User',
+            fcmToken: null // Will be fetched
+          });
+        }
+
+        // Fetch FCM tokens for all participants
+        for (const participant of participants) {
+          if (participant.id && participant.id !== currentUserId) {
+            try {
+              const tokenData = await ApiService.getFCMToken(participant.id);
+              if (tokenData?.token) {
+                participant.fcmToken = tokenData.token;
+                console.log('[FCMChatService] Fetched FCM token for participant:', participant.id);
+              }
+            } catch (error) {
+              console.warn('[FCMChatService] Failed to fetch FCM token for participant:', participant.id, error);
+            }
+          }
+        }
+
+        console.log('[FCMChatService] Built participants:', {
+          count: participants.length,
+          participants: participants.map(p => ({ id: p.id, name: p.name, hasToken: !!p.fcmToken }))
+        });
+
+        return { participants };
       }
 
-      // Fallback: return a basic structure for testing
-      return {
-        participants: [
-          { id: 'user1', name: 'User 1', fcmToken: 'token1' },
-          { id: 'user2', name: 'User 2', fcmToken: 'token2' }
-        ]
-      };
+      // No fallback - return null if conversation info cannot be fetched
+      console.warn('[FCMChatService] Could not find conversation with ID:', conversationId);
+      return null;
     } catch (error) {
       console.error('[FCMChatService] Error getting conversation info:', error);
       return null;
@@ -429,15 +554,23 @@ class FCMChatService {
   }
 
   /**
-   * Update FCM token on server
+   * Update FCM token on server - Use same mechanism as calling system
    */
   private async updateFCMToken(token: string): Promise<void> {
     try {
-      await ApiService.post(FCM_CHAT_ENDPOINTS.UPDATE_TOKEN, {
+      const userId = await AsyncStorage.getItem('userId');
+      if (!userId) {
+        console.warn('[FCMChatService] No userId found, cannot update FCM token');
+        return;
+      }
+
+      // Use the same FCM token update mechanism as the calling system
+      await ApiService.updateFcmToken({
+        userId,
         fcmToken: token,
-        platform: 'react-native'
+        platform: Platform.OS
       });
-      console.log('[FCMChatService] FCM token updated on server');
+      console.log('[FCMChatService] FCM token updated on server using calling system method');
     } catch (error) {
       console.error('[FCMChatService] Failed to update FCM token:', error);
     }
@@ -538,27 +671,235 @@ class FCMChatService {
   }
 
   /**
-   * Process queued messages
+   * Load dead letter queue
+   */
+  private async loadDeadLetterQueue(): Promise<void> {
+    try {
+      if (!this.currentUserId) return;
+
+      const deadLetterData = await AsyncStorage.getItem(`fcm_chat_dead_letter_${this.currentUserId}`);
+      if (deadLetterData) {
+        this.deadLetterQueue = JSON.parse(deadLetterData);
+        console.log(`[FCMChatService] Loaded ${this.deadLetterQueue.length} dead letter messages`);
+      }
+    } catch (error) {
+      console.error('[FCMChatService] Failed to load dead letter queue:', error);
+    }
+  }
+
+  /**
+   * Process queued messages with retry logic and circuit breaker
    */
   private async processMessageQueue(): Promise<void> {
-    if (this.messageQueue.length === 0) return;
+    if (this.messageQueue.length === 0 || this.isProcessingQueue) return;
 
+    // Circuit breaker: stop processing if too many consecutive failures
+    if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
+      console.warn(`[FCMChatService] Circuit breaker activated. Too many consecutive failures (${this.consecutiveFailures}). Skipping queue processing.`);
+      return;
+    }
+
+    this.isProcessingQueue = true;
     console.log(`[FCMChatService] Processing ${this.messageQueue.length} queued messages`);
 
-    const messagesToSend = [...this.messageQueue];
+    const messagesToProcess = [...this.messageQueue];
     this.messageQueue = [];
 
-    for (const message of messagesToSend) {
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (const message of messagesToProcess) {
       try {
-        await this.sendMessage(message.conversationId, message.content, message.replyTo);
+        // Check if message should be retried
+        if (!this.shouldRetryMessage(message)) {
+          console.warn(`[FCMChatService] Moving message to dead letter queue:`, message.tempId);
+          await this.moveToDeadLetterQueue(message);
+          continue;
+        }
+
+        // Update retry tracking
+        message.retryCount = (message.retryCount || 0) + 1;
+        message.lastRetryAt = new Date().toISOString();
+
+        // Send message directly via API (avoid infinite recursion)
+        await this.sendMessageDirectly(message);
+        successCount++;
+
+        console.log(`[FCMChatService] Successfully sent queued message:`, message.tempId);
+
       } catch (error) {
         console.error('[FCMChatService] Failed to send queued message:', error);
-        // Re-add to queue for retry
-        this.messageQueue.push(message);
+        failureCount++;
+
+        // Calculate next retry time with exponential backoff
+        const retryDelay = this.calculateRetryDelay(message.retryCount || 0);
+        message.nextRetryAt = new Date(Date.now() + retryDelay).toISOString();
+
+        // Re-add to queue for retry if not exceeded max attempts
+        if ((message.retryCount || 0) < this.MAX_RETRY_ATTEMPTS) {
+          this.messageQueue.push(message);
+        } else {
+          console.warn(`[FCMChatService] Message exceeded max retry attempts, moving to dead letter queue:`, message.tempId);
+          await this.moveToDeadLetterQueue(message);
+        }
       }
     }
 
+    // Update consecutive failure counter
+    if (failureCount > 0 && successCount === 0) {
+      this.consecutiveFailures++;
+    } else if (successCount > 0) {
+      this.consecutiveFailures = 0; // Reset on any success
+    }
+
+    console.log(`[FCMChatService] Queue processing completed. Success: ${successCount}, Failures: ${failureCount}, Consecutive failures: ${this.consecutiveFailures}`);
+
     await this.saveQueuedMessages();
+    this.isProcessingQueue = false;
+  }
+
+  /**
+   * Check if an error represents a permanent failure that shouldn't be retried
+   */
+  private isPermanentFailure(error: any): boolean {
+    if (!error) return false;
+
+    // Check for HTTP status codes that indicate permanent failures
+    if (error.status === 400 || error.status === 401 || error.status === 403) {
+      return true;
+    }
+
+    // Check for specific error codes from the backend
+    if (error.response?.data?.errorCode) {
+      const errorCode = error.response.data.errorCode;
+      const permanentErrorCodes = [
+        'invalid_token',
+        'token_not_found',
+        'config_mismatch'
+      ];
+      return permanentErrorCodes.includes(errorCode);
+    }
+
+    // Check error message for permanent failure indicators
+    const errorMessage = error.message || '';
+    const permanentFailureMessages = [
+      'Invalid or unregistered FCM token',
+      'FCM token not found',
+      'token may be invalid',
+      'different Firebase project'
+    ];
+
+    return permanentFailureMessages.some(msg =>
+      errorMessage.toLowerCase().includes(msg.toLowerCase())
+    );
+  }
+
+  /**
+   * Check if a message should be retried
+   */
+  private shouldRetryMessage(message: Message): boolean {
+    const retryCount = message.retryCount || 0;
+
+    // Don't retry if already exceeded max attempts
+    if (retryCount >= this.MAX_RETRY_ATTEMPTS) {
+      return false;
+    }
+
+    // Don't retry if already in dead letter queue
+    if (message.isInDeadLetterQueue) {
+      return false;
+    }
+
+    // Check if enough time has passed for next retry
+    if (message.nextRetryAt) {
+      const nextRetryTime = new Date(message.nextRetryAt).getTime();
+      const now = Date.now();
+      if (now < nextRetryTime) {
+        return false; // Not time for retry yet
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Calculate retry delay with exponential backoff
+   */
+  private calculateRetryDelay(retryCount: number): number {
+    return Math.min(
+      this.BASE_RETRY_DELAY * Math.pow(2, retryCount),
+      30000 // Max 30 seconds
+    );
+  }
+
+  /**
+   * Move message to dead letter queue
+   */
+  private async moveToDeadLetterQueue(message: Message): Promise<void> {
+    message.isInDeadLetterQueue = true;
+    message.deliveryStatus = 'failed';
+    this.deadLetterQueue.push(message);
+
+    // Save dead letter queue to storage
+    await this.saveDeadLetterQueue();
+
+    console.log(`[FCMChatService] Message moved to dead letter queue: ${message.tempId}`);
+  }
+
+  /**
+   * Send message directly via API without adding to queue
+   */
+  private async sendMessageDirectly(message: Message): Promise<void> {
+    // Get current user and conversation info for Firebase Cloud Function
+    const currentUser = await this.getCurrentUserInfo();
+    const conversation = await this.getConversationInfo(message.conversationId);
+
+    if (!currentUser || !conversation) {
+      throw new Error('Missing user or conversation information');
+    }
+
+    // Find recipient for direct conversations
+    const recipient = conversation.participants.find(p => p.id !== currentUser.id);
+    if (!recipient) {
+      throw new Error('Recipient not found');
+    }
+
+    // Send via Firebase Cloud Function FCM API
+    const response = await ApiService.sendChatMessage({
+      senderId: currentUser.id,
+      senderName: currentUser.name,
+      recipientId: recipient.id,
+      recipientToken: recipient.fcmToken,
+      conversationId: message.conversationId,
+      content: message.content,
+      messageType: message.messageType,
+      replyToMessageId: message.replyTo
+    });
+
+    console.log('[FCMChatService] Message sent successfully via Firebase Cloud Function:', response);
+
+    // Update message status
+    message.status = 'sent';
+    message.deliveryStatus = 'sent';
+    message.id = response.data?.messageId || message.id;
+
+    await this.updateMessageInLocal(message);
+  }
+
+  /**
+   * Save dead letter queue to storage
+   */
+  private async saveDeadLetterQueue(): Promise<void> {
+    try {
+      if (!this.currentUserId) return;
+
+      await AsyncStorage.setItem(
+        `fcm_chat_dead_letter_${this.currentUserId}`,
+        JSON.stringify(this.deadLetterQueue)
+      );
+    } catch (error) {
+      console.error('[FCMChatService] Failed to save dead letter queue:', error);
+    }
   }
 
   /**
@@ -568,7 +909,7 @@ class FCMChatService {
     try {
       // Process any queued messages
       await this.processMessageQueue();
-      
+
       // Sync could include fetching latest messages, updating read status, etc.
       console.log('[FCMChatService] Message sync completed');
     } catch (error) {
@@ -582,8 +923,10 @@ class FCMChatService {
   private startPeriodicSync(): void {
     // Sync every 30 seconds when app is active
     this.syncInterval = setInterval(() => {
-      if (this.appState === 'active') {
+      if (this.appState === 'active' && this.consecutiveFailures < this.MAX_CONSECUTIVE_FAILURES) {
         this.syncMessages();
+      } else if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
+        console.warn('[FCMChatService] Skipping sync - circuit breaker active');
       }
     }, 30000);
   }
@@ -621,6 +964,111 @@ class FCMChatService {
    */
   isServiceInitialized(): boolean {
     return this.isInitialized;
+  }
+
+  /**
+   * Reset circuit breaker (for manual recovery)
+   */
+  resetCircuitBreaker(): void {
+    this.consecutiveFailures = 0;
+    this.lastRequestTime = 0;
+    console.log('[FCMChatService] Circuit breaker reset');
+  }
+
+  /**
+   * Emergency stop - immediately halt all queue processing and clear queues
+   */
+  emergencyStop(): void {
+    console.warn('[FCMChatService] EMERGENCY STOP - Halting all queue processing');
+
+    // Stop all processing
+    this.isProcessingQueue = false;
+    this.consecutiveFailures = this.MAX_CONSECUTIVE_FAILURES; // Activate circuit breaker
+
+    // Clear all queues to stop loops
+    const queuedCount = this.messageQueue.length;
+    const deadLetterCount = this.deadLetterQueue.length;
+
+    this.messageQueue = [];
+    this.deadLetterQueue = [];
+
+    // Stop periodic sync
+    this.stopPeriodicSync();
+
+    console.warn(`[FCMChatService] Emergency stop completed. Cleared ${queuedCount} queued messages and ${deadLetterCount} dead letter messages.`);
+    console.warn('[FCMChatService] Call resetCircuitBreaker() to resume normal operation.');
+  }
+
+  /**
+   * Get queue status for debugging
+   */
+  getQueueStatus(): {
+    messageQueue: number;
+    deadLetterQueue: number;
+    consecutiveFailures: number;
+    isProcessing: boolean;
+  } {
+    return {
+      messageQueue: this.messageQueue.length,
+      deadLetterQueue: this.deadLetterQueue.length,
+      consecutiveFailures: this.consecutiveFailures,
+      isProcessing: this.isProcessingQueue,
+    };
+  }
+
+  /**
+   * Manually retry dead letter queue (for admin/debugging)
+   */
+  async retryDeadLetterQueue(): Promise<void> {
+    if (this.deadLetterQueue.length === 0) {
+      console.log('[FCMChatService] No messages in dead letter queue to retry');
+      return;
+    }
+
+    console.log(`[FCMChatService] Retrying ${this.deadLetterQueue.length} messages from dead letter queue`);
+
+    // Move messages back to main queue with reset retry count
+    const messagesToRetry = [...this.deadLetterQueue];
+    this.deadLetterQueue = [];
+
+    for (const message of messagesToRetry) {
+      message.retryCount = 0;
+      message.isInDeadLetterQueue = false;
+      message.nextRetryAt = undefined;
+      this.messageQueue.push(message);
+    }
+
+    await this.saveQueuedMessages();
+    await this.saveDeadLetterQueue();
+
+    // Reset circuit breaker for fresh start
+    this.resetCircuitBreaker();
+  }
+
+  /**
+   * Handle FCM token refresh when permanent failures are detected
+   */
+  async handleTokenRefresh(): Promise<void> {
+    try {
+      console.log('[FCMChatService] Attempting to refresh FCM token...');
+
+      // Get new FCM token
+      const newToken = await messaging().getToken();
+      if (newToken) {
+        console.log('[FCMChatService] New FCM token obtained');
+        await this.updateFCMToken(newToken);
+
+        // Reset circuit breaker and retry dead letter queue
+        this.resetCircuitBreaker();
+        await this.retryDeadLetterQueue();
+
+        console.log('[FCMChatService] FCM token refresh completed successfully');
+      } else {
+        console.warn('[FCMChatService] Failed to obtain new FCM token');
+      }
+    } catch (error) {
+      console.error('[FCMChatService] FCM token refresh failed:', error);
+    }
   }
 
   /**

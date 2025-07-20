@@ -359,7 +359,7 @@ class CallController {
       if (!callerToken || !recipientToken) throw new Error('FCM token(s) missing')
       
       // Build payload & call initiate-call API (FCM notification)
-      await ApiService.initiateCall({
+      const initiateCallPayload = {
         calleeInfo: {
           platform: require('react-native').Platform.OS === 'ios' ? 'IOS' : 'ANDROID',
           token: recipientToken,
@@ -373,12 +373,31 @@ class CallController {
           token,
           callType,
         },
-      })
+      };
+
+      console.log('🚀 [CallController] Making initiate-call API request:', {
+        recipientId,
+        callType,
+        meetingId,
+        callerName: userName,
+        platform: require('react-native').Platform.OS,
+        timestamp: new Date().toISOString()
+      });
+
+      await ApiService.initiateCall(initiateCallPayload);
+
+      console.log('✅ [CallController] initiate-call API request completed successfully');
 
       // Call payment API to start billing and get callId
       let callId: number | undefined
       try {
-        console.log(`[CallController] Starting payment tracking for ${callType} call`)
+        console.log(`🚀 [CallController] Making payment API request for ${callType} call:`, {
+          callerId: parseInt(userId),
+          receiverId: parseInt(recipientId),
+          action: 'start',
+          timestamp: new Date().toISOString()
+        });
+
         const paymentResponse = callType === 'video'
           ? await ApiService.initiateVideoCall({
               callerId: parseInt(userId),
@@ -389,7 +408,13 @@ class CallController {
               callerId: parseInt(userId),
               receiverId: parseInt(recipientId),
               action: 'start'
-            })
+            });
+
+        console.log('✅ [CallController] Payment API response received:', {
+          callType,
+          response: paymentResponse,
+          timestamp: new Date().toISOString()
+        });
 
         // Fix: Support both callId and call_id from backend
         callId = paymentResponse.callId || paymentResponse.call_id;

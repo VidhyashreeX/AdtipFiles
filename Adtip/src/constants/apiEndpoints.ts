@@ -131,13 +131,13 @@ export const FCM_CHAT_ENDPOINTS = {
   UPDATE_TYPING_STATUS: '/api/chat/update-typing-status',
   UPDATE_MESSAGE_STATUS: '/api/chat/update-message-status',
 
-  // FCM token management (Firebase Cloud Function)
-  UPDATE_FCM_TOKEN: '/api/chat/update-fcm-token',
+  // FCM token management - REMOVED: Now uses calling system's /api/update-fcm-token
+  // UPDATE_FCM_TOKEN: '/api/chat/update-fcm-token', // DEPRECATED - Use ApiService.updateFcmToken() instead
 
   // Legacy endpoints (for backward compatibility)
   LEGACY_SEND_MESSAGE: '/api/chat/fcm/send-message',
   LEGACY_SEND_MESSAGE_MULTICAST: '/api/chat/fcm/send-message-multicast',
-  LEGACY_UPDATE_TOKEN: '/api/chat/fcm/update-token',
+  // LEGACY_UPDATE_TOKEN: '/api/chat/fcm/update-token', // DEPRECATED - Use ApiService.updateFcmToken() instead
 
   // Message status and queue management (legacy)
   QUEUE_STATS: '/api/chat/fcm/queue-stats',

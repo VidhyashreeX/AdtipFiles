@@ -319,7 +319,7 @@ class APIChatService {
         }
 
         // Try to send to server via Firebase Cloud Function endpoint
-        const response = await ApiService.post(FCM_CHAT_ENDPOINTS.SEND_MESSAGE, {
+        const response = await ApiService.sendChatMessage({
           senderId: currentUser.id,
           senderName: currentUser.name,
           recipientId: otherParticipant.id,
@@ -567,8 +567,17 @@ class APIChatService {
    */
   private async retrySendMessage(messageData: APIChatMessage): Promise<boolean> {
     try {
-      const response = await ApiService.post(FCM_CHAT_ENDPOINTS.SEND_MESSAGE, messageData);
-      return response.status === 200;
+      const response = await ApiService.sendChatMessage({
+        senderId: messageData.senderId.toString(),
+        senderName: 'User', // We might not have the name in retry context
+        recipientId: messageData.receiverId?.toString() || '',
+        recipientToken: '', // This would need to be fetched
+        conversationId: messageData.conversationId.toString(),
+        content: messageData.content,
+        messageType: messageData.messageType,
+        replyToMessageId: messageData.replyTo?.toString()
+      });
+      return response.success;
     } catch (error) {
       console.warn('[APIChatService] Retry send message failed:', error);
       return false;

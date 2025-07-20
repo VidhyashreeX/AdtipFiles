@@ -84,7 +84,7 @@ export class CallKeepService {
         setTimeout(() => {
           console.warn('[CallKeepService] ⚠️ Permission check timeout, assuming false')
           resolve(false)
-        }, 1000) // Reduced from 2000 to 1000
+        }, 3000) // Reduced from 2000 to 1000
       )
 
       const hasPermissions = await Promise.race([permissionPromise, permissionTimeoutPromise])

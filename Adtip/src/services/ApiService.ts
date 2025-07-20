@@ -3,7 +3,7 @@ import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import { API_BASE_URL } from '../constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ApiEndpoints from '../constants/apiEndpoints';
-import { FCM_SERVER_URL } from '../constants/api';
+import { FCM_SERVER_URL, FCM_CHAT_SERVER_URL } from '../constants/api';
 import { Platform } from 'react-native';
 import messaging, { AuthorizationStatus } from '@react-native-firebase/messaging';
 import FirebaseService from './FirebaseService';
@@ -183,6 +183,28 @@ export interface UpdateCallStatusResponse {
   success: boolean;
   message: string;
   data?: any;
+}
+
+// Chat message interfaces for FCM Cloud Functions
+export interface SendChatMessageRequest {
+  senderId: string;
+  senderName: string;
+  recipientId: string;
+  recipientToken: string;
+  conversationId: string;
+  content: string;
+  messageType?: 'text' | 'image' | 'video' | 'audio' | 'file';
+  replyToMessageId?: string;
+}
+
+export interface SendChatMessageResponse {
+  messageId: string;
+  success: boolean;
+  data?: {
+    messageId: string;
+    conversationId: string;
+    timestamp: string;
+  };
 }
 
 // Define public endpoints that don't require authentication
@@ -1659,6 +1681,45 @@ export default class ApiService {
       console.error('❌ [ApiService] update-call error details:', {
         payload: JSON.stringify(payload, null, 2),
         url: `${FCM_SERVER_URL}/api/call/update-call`,
+        hasAuthToken: !!(await AsyncStorage.getItem('accessToken') || await AsyncStorage.getItem('@auth_token'))
+      });
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Send Chat Message (Cloud Function) - Direct FCM Chat Server call
+   */
+  static async sendChatMessage(payload: SendChatMessageRequest): Promise<SendChatMessageResponse> {
+    try {
+      console.log('🚀 [ApiService] Making direct call to FCM Chat Server for send-message:', FCM_CHAT_SERVER_URL);
+      console.log('🚀 [ApiService] Chat payload:', JSON.stringify(payload, null, 2));
+
+      // Get auth token for authenticated requests
+      const authToken = await AsyncStorage.getItem('accessToken') || await AsyncStorage.getItem('@auth_token');
+
+      const headers: any = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      };
+
+      // Add auth token if available
+      if (authToken) {
+        headers.Authorization = `Bearer ${authToken}`;
+      }
+
+      const response = await axios.post(`${FCM_CHAT_SERVER_URL}/api/chat/send-message`, payload, {
+        headers,
+        timeout: 30000,
+      });
+
+      console.log('✅ [ApiService] send-chat-message response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ [ApiService] send-chat-message error:', error);
+      console.error('❌ [ApiService] send-chat-message error details:', {
+        payload: JSON.stringify(payload, null, 2),
+        url: `${FCM_CHAT_SERVER_URL}/api/chat/send-message`,
         hasAuthToken: !!(await AsyncStorage.getItem('accessToken') || await AsyncStorage.getItem('@auth_token'))
       });
       throw this.handleError(error);

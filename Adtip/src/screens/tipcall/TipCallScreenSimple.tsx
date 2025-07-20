@@ -823,19 +823,37 @@ const TipCallScreenSimple = () => {
     setShowCallConfirmationAlert(false)
 
     try {
+      console.log('🚀 [TipCallScreenSimple] Starting call via CallController:', {
+        recipientId: pendingCallData.recipientId,
+        recipientName: pendingCallData.recipientName,
+        callType: pendingCallData.callType,
+        timestamp: new Date().toISOString()
+      });
+
       const success = await callController.startCall(
         pendingCallData.recipientId,
         pendingCallData.recipientName,
         pendingCallData.callType
       )
 
-      if (!success) {
+      console.log('📞 [TipCallScreenSimple] Call initiation result:', {
+        success,
+        recipientId: pendingCallData.recipientId,
+        callType: pendingCallData.callType,
+        timestamp: new Date().toISOString()
+      });
+
+      if (success) {
+        console.log('✅ [TipCallScreenSimple] Call started successfully - API calls should be logged by CallController');
+      } else {
+        console.log('❌ [TipCallScreenSimple] Call failed to start');
         Alert.alert(
           'Call Failed',
           'Unable to start the call. The user may be unavailable.'
         )
       }
     } catch (error) {
+      console.error('💥 [TipCallScreenSimple] Call confirmation error:', error);
       TipCallLogger.error('Call confirmation error:', error)
       Alert.alert('Error', 'Failed to start call. Please try again.')
     } finally {

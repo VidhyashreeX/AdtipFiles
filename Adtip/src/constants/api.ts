@@ -8,7 +8,11 @@ export const API_BASE_URL = 'http://192.168.1.178:7082';   // DEV URL
 //export const API_BASE_URL = 'http://192.168.0.104:7082';   // DEV URL
 
 // Firebase Cloud Functions URL for call notifications
-export const FCM_SERVER_URL = "https://us-central1-adtip-3873c.cloudfunctions.net/callApi";
+export const FCM_SERVER_URL = "https://us-central1-adtip-3873c.cloudfunctions.net/callApi"; // Production
+//export const FCM_SERVER_URL = API_BASE_URL; // Use same server as API for development
+
+// Firebase Cloud Functions URL for chat notifications
+export const FCM_CHAT_SERVER_URL = "https://us-central1-adtip-3873c.cloudfunctions.net/chatApi"; // Production
 
 // Timeout for API calls (in milliseconds)
 export const API_TIMEOUT = 30000;
