@@ -928,10 +928,10 @@ const TipCallScreenSimple = () => {
   // Handle chat - Updated to use FCM chat system
   const handleChatNavigation = useCallback(async (contact: Contact) => {
     //Testing Chat
-    /*if (!isPremium) {
+    if (!isPremium) {
       setShowPremiumPopup(true)
       return
-    }*/
+    }
 
     try {
       // Navigate to FCM chat system - create conversation with the contact
