@@ -89,8 +89,19 @@ export class CallKeepService {
 
       const hasPermissions = await Promise.race([permissionPromise, permissionTimeoutPromise])
       if (!hasPermissions) {
-        console.warn('[CallKeepService] ⚠️ CallKeep permissions not granted (continuing anyway)')
-        // Don't fail initialization for permission issues
+        console.warn('[CallKeepService] ⚠️ CallKeep permissions not granted, attempting to request...')
+
+        // Attempt to request permissions automatically
+        try {
+          const permissionRequested = await this.requestPermissions()
+          if (permissionRequested) {
+            console.log('[CallKeepService] ✅ CallKeep permissions granted after request')
+          } else {
+            console.warn('[CallKeepService] ⚠️ CallKeep permissions still not granted after request (continuing anyway)')
+          }
+        } catch (error) {
+          console.warn('[CallKeepService] ⚠️ Failed to request CallKeep permissions:', error)
+        }
       }
 
       // Setup event listeners in a non-blocking way
@@ -135,26 +146,45 @@ export class CallKeepService {
   async requestPermissions(): Promise<boolean> {
     try {
       if (Platform.OS === 'android') {
+        console.log('[CallKeepService] Requesting CallKeep permissions...')
+
         // Register phone account to request permissions
-        RNCallKeep.registerPhoneAccount({
+        await RNCallKeep.registerPhoneAccount({
           ios: {
             appName: 'Adtip'
           },
           android: {
             alertTitle: 'Phone Account Permission Required',
-            alertDescription: 'Adtip needs access to your phone accounts',
+            alertDescription: 'Adtip needs access to your phone accounts to provide native call experience',
             cancelButton: 'Cancel',
             okButton: 'Allow',
             additionalPermissions: []
           }
         })
-        return await RNCallKeep.hasPhoneAccount()
+
+        // Wait a moment for the permission dialog to be processed
+        await new Promise(resolve => setTimeout(resolve, 1000))
+
+        // Check if permissions were granted
+        const hasPermissions = await RNCallKeep.hasPhoneAccount()
+        console.log('[CallKeepService] Permission request result:', hasPermissions)
+        return hasPermissions
       }
       return true // iOS doesn't need explicit permission request
     } catch (error) {
       console.error('[CallKeepService] Error requesting permissions:', error)
       return false
     }
+  }
+
+  /**
+   * Check if CallKeep has the necessary permissions to function
+   */
+  async hasRequiredPermissions(): Promise<boolean> {
+    if (!this.isInitialized) {
+      return false
+    }
+    return await this.checkPermissions()
   }
 
   /**

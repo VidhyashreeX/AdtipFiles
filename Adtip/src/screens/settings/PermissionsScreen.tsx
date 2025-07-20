@@ -35,6 +35,11 @@ const PERMISSIONS = [
     label: 'Microphone',
     icon: 'mic',
   },
+  {
+    key: 'callkeep',
+    label: 'Native Call UI',
+    icon: 'phone',
+  },
 ];
 
 const PermissionsScreen: React.FC = () => {
@@ -45,11 +50,13 @@ const PermissionsScreen: React.FC = () => {
     notifications: false,
     camera: false,
     microphone: false,
+    callkeep: false,
   });
   const [requesting, setRequesting] = useState({
     notifications: false,
     camera: false,
     microphone: false,
+    callkeep: false,
   });
 
   // Check all permissions
@@ -58,11 +65,26 @@ const PermissionsScreen: React.FC = () => {
     try {
       const permissionManager = PermissionManagerService.getInstance();
       const permissions = await permissionManager.checkAllPermissions();
-      
+
+      // Check CallKeep permissions separately
+      let callkeepPermissions = false;
+      try {
+        if (Platform.OS === 'android') {
+          const { CallKeepService } = await import('../../services/calling/CallKeepService');
+          const callKeepService = CallKeepService.getInstance();
+          callkeepPermissions = await callKeepService.checkPermissions();
+        } else {
+          callkeepPermissions = true; // iOS doesn't need explicit CallKeep permissions
+        }
+      } catch (error) {
+        console.warn('Error checking CallKeep permissions:', error);
+      }
+
       setPermissionStatus({
         notifications: permissions.notifications,
         camera: permissions.camera,
         microphone: permissions.microphone,
+        callkeep: callkeepPermissions,
       });
     } catch (e) {
       console.error('Error checking permissions:', e);
@@ -89,6 +111,12 @@ const PermissionsScreen: React.FC = () => {
       } else if (key === 'microphone') {
         const result = await permissionManager.requestCallPermissions(false); // Microphone only
         console.log('Microphone permission result:', result);
+      } else if (key === 'callkeep') {
+        // Request CallKeep permissions
+        const { CallUICoordinator } = await import('../../services/calling/CallUICoordinator');
+        const coordinator = CallUICoordinator.getInstance();
+        const result = await coordinator.requestPermissions();
+        console.log('CallKeep permission result:', result);
       }
       
       // Refresh permission status

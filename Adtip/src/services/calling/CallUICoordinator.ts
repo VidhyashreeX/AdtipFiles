@@ -109,8 +109,22 @@ export class CallUICoordinator {
       // Check if permissions are granted
       const hasPermissions = await this.callKeepService.checkPermissions()
       if (!hasPermissions) {
-        console.log('[CallUICoordinator] CallKeep permissions not granted, using custom UI')
-        return false
+        console.log('[CallUICoordinator] CallKeep permissions not granted, attempting to request...')
+
+        // Try to request permissions before falling back to custom UI
+        try {
+          const permissionGranted = await this.requestPermissions()
+          if (permissionGranted) {
+            console.log('[CallUICoordinator] CallKeep permissions granted, will use CallKeep UI')
+            return true
+          } else {
+            console.log('[CallUICoordinator] CallKeep permissions still denied, using custom UI')
+            return false
+          }
+        } catch (error) {
+          console.warn('[CallUICoordinator] Error requesting CallKeep permissions:', error)
+          return false
+        }
       }
     }
 
