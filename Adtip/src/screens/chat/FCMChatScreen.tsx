@@ -17,7 +17,6 @@ import {
   Animated,
   LayoutAnimation,
   Keyboard,
-  Platform,
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -200,7 +199,6 @@ const FCMChatScreen: React.FC = () => {
     setCurrentConversation,
     markAsRead,
     loadMessages,
-    showChatUnavailableAlert,
   } = useFCMChat();
 
   const { participantId, participantName } = route.params;
@@ -209,11 +207,8 @@ const FCMChatScreen: React.FC = () => {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [loadingLocalMessages, setLoadingLocalMessages] = useState(true);
   const [inputHeight, setInputHeight] = useState(50);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const textInputRef = useRef<TextInput>(null);
   const sendButtonScale = useRef(new Animated.Value(1)).current;
-  const scrollViewRef = useRef<any>(null);
 
   // Real-time message handling
   useRealTimeMessages(conversationId || '');
@@ -252,48 +247,26 @@ const FCMChatScreen: React.FC = () => {
         color: colors.text.primary,
         fontWeight: '600',
       },
-      headerRight: () => (
-        <TouchableOpacity
-          onPress={() => {
-            console.log('[FCMChatScreen] 🧪 Testing chat unavailable alert');
-            showChatUnavailableAlert(participantName || 'Test User');
-          }}
-          style={{ marginRight: 15, padding: 5 }}
-        >
-          <Text style={{ color: colors.text.primary, fontSize: 12 }}>TEST</Text>
-        </TouchableOpacity>
-      ),
+      headerShown: true, // Ensure header is always shown
+      // Remove the test button for cleaner UI
     });
-  }, [navigation, participantName, colors.text.primary, colors.background, showChatUnavailableAlert]);
+  }, [navigation, participantName, colors.text.primary, colors.background]);
 
-  // Enhanced keyboard handling for focus management and auto-scroll
+  // Enhanced keyboard handling for focus management
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
-      (e) => {
-        setKeyboardHeight(e.endCoordinates.height);
-        setIsKeyboardVisible(true);
-
+      () => {
         // Auto-focus the input when keyboard opens
         if (textInputRef.current) {
           textInputRef.current.focus();
         }
-
-        // Auto-scroll to bottom with chat height padding
-        setTimeout(() => {
-          if (scrollViewRef.current) {
-            scrollViewRef.current.scrollToEnd({ animated: true });
-          }
-        });
       }
     );
 
     const keyboardDidHideListener = Keyboard.addListener(
       'keyboardDidHide',
       () => {
-        setKeyboardHeight(0);
-        setIsKeyboardVisible(false);
-
         // Blur the input when keyboard closes
         if (textInputRef.current) {
           textInputRef.current.blur();
@@ -524,16 +497,16 @@ const FCMChatScreen: React.FC = () => {
 
       {/* Messages List with Keyboard Avoider */}
       <KeyboardAvoiderScrollView
-        style={[styles.messagesList, { flex: 1 }]}
+        style={styles.messagesList}
         contentContainerStyle={[
-          styles.messagesContent
-        // Increased padding for better spacing
+          styles.messagesContent,
+          { paddingBottom: 20 } // Minimal padding to ensure messages end above input
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        extraSpace={0} // Increased space to ensure full keyboard avoidance
+        extraSpace={0}
         animationTime={300}
-        iosHideBehavior="revert" // Return to original position when keyboard hides
+        iosHideBehavior="revert"
       >
         {currentMessages.length === 0 && !loadingLocalMessages ? (
           <View style={styles.emptyContainer}>
@@ -551,19 +524,17 @@ const FCMChatScreen: React.FC = () => {
         )}
       </KeyboardAvoiderScrollView>
 
-      {/* Input Area Wrapper */}
-      <View style={styles.inputWrapper}>
-        <KeyboardAvoiderView
-          avoidMode="whole-view"
-          extraSpace={0} // Increased space to push input well above keyboard
-          animationTime={300}
-          enableAndroid={true}
-        >
+      {/* Input Area - Fixed at bottom */}
+      <KeyboardAvoiderView
+        avoidMode="whole-view"
+        extraSpace={0}
+        animationTime={300}
+        enableAndroid={true}
+      >
         <Animated.View style={[
           styles.inputContainer,
           {
             backgroundColor: colors.surface,
-            borderTopColor: colors.border,
             height: inputHeight + 24, // Dynamic height based on input content
           }
         ]}>
@@ -623,8 +594,7 @@ const FCMChatScreen: React.FC = () => {
             </TouchableOpacity>
           </Animated.View>
         </Animated.View>
-        </KeyboardAvoiderView>
-      </View>
+      </KeyboardAvoiderView>
     </View>
   );
 };
@@ -714,19 +684,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
   },
-  inputWrapper: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
+
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderTopWidth: 0.5,
-    // Removed absolute positioning to let KeyboardAvoiderView handle positioning
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
