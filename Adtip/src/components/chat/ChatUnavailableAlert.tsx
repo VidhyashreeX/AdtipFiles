@@ -14,11 +14,11 @@ import Animated, {
   withTiming,
   runOnJS,
 } from 'react-native-reanimated';
-// import { Canvas, RoundedRect, LinearGradient, vec, Blur } from '@shopify/react-native-skia';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../../contexts/ThemeContext';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
 
 interface ChatUnavailableAlertProps {
   visible: boolean;
@@ -34,7 +34,9 @@ const ChatUnavailableAlert: React.FC<ChatUnavailableAlertProps> = ({
   onRetry,
 }) => {
   const insets = useSafeAreaInsets();
-  
+  const { width: screenWidth } = Dimensions.get('window');
+  const { colors, isDarkMode } = useTheme();
+
   // Animation values
   const opacity = useSharedValue(0);
   const scale = useSharedValue(0.8);
@@ -117,7 +119,7 @@ const ChatUnavailableAlert: React.FC<ChatUnavailableAlertProps> = ({
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          backgroundColor: isDarkMode ? 'rgba(0, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.5)',
         },
         backdropStyle,
       ]} />
@@ -133,47 +135,55 @@ const ChatUnavailableAlert: React.FC<ChatUnavailableAlertProps> = ({
       }}>
         <Animated.View style={[
           {
-            width: SCREEN_WIDTH - 48,
-            height: 280,
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            borderRadius: 24,
+            width: screenWidth - 48,
+            minHeight: 320,
+            backgroundColor: isDarkMode ? colors.surface : 'rgba(255, 255, 255, 0.98)',
+            borderRadius: 28,
             padding: 32,
             alignItems: 'center',
             justifyContent: 'center',
-            shadowColor: '#000',
+            shadowColor: isDarkMode ? '#000' : '#000',
             shadowOffset: {
               width: 0,
-              height: 10,
+              height: 12,
             },
-            shadowOpacity: 0.25,
-            shadowRadius: 20,
-            elevation: 10,
+            shadowOpacity: isDarkMode ? 0.4 : 0.25,
+            shadowRadius: 24,
+            elevation: 12,
+            borderWidth: isDarkMode ? 1 : 0,
+            borderColor: isDarkMode ? colors.border : 'transparent',
           },
           alertStyle
         ]}>
           {/* Icon */}
             <Animated.View style={[
               {
-                width: 64,
-                height: 64,
-                borderRadius: 32,
-                backgroundColor: '#FEF3C7',
+                width: 72,
+                height: 72,
+                borderRadius: 36,
+                backgroundColor: isDarkMode ? 'rgba(251, 191, 36, 0.15)' : '#FEF3C7',
                 alignItems: 'center',
                 justifyContent: 'center',
-                marginBottom: 24,
+                marginBottom: 28,
+                borderWidth: isDarkMode ? 1 : 0,
+                borderColor: isDarkMode ? 'rgba(251, 191, 36, 0.3)' : 'transparent',
               },
               iconStyle,
             ]}>
-              <Icon name="chat-bubble-outline" size={32} color="#F59E0B" />
+              <Icon
+                name="chat-bubble-outline"
+                size={36}
+                color={isDarkMode ? '#FCD34D' : '#F59E0B'}
+              />
             </Animated.View>
 
             {/* Title */}
             <Text style={{
-              fontSize: 20,
+              fontSize: 22,
               fontWeight: '700',
-              color: '#1F2937',
+              color: colors.text.primary,
               textAlign: 'center',
-              marginBottom: 12,
+              marginBottom: 16,
               letterSpacing: -0.5,
             }}>
               Chat Unavailable
@@ -181,65 +191,79 @@ const ChatUnavailableAlert: React.FC<ChatUnavailableAlertProps> = ({
 
             {/* Message */}
             <Text style={{
-              fontSize: 15,
+              fontSize: 16,
               fontWeight: '400',
-              color: '#6B7280',
+              color: colors.text.secondary,
               textAlign: 'center',
-              lineHeight: 22,
-              marginBottom: 32,
+              lineHeight: 24,
+              marginBottom: 36,
+              paddingHorizontal: 4,
             }}>
               {recipientName} is not on the latest version of the app yet. Chat is only supported when both users have the updated version.
             </Text>
 
             {/* Buttons */}
             <View style={{
-              flexDirection: 'row',
+              flexDirection: onRetry ? 'row' : 'column',
               gap: 12,
               width: '100%',
+              alignItems: 'stretch',
+              justifyContent: 'center',
             }}>
-              {/* Retry Button */}
+              {/* Retry Button - Primary Action */}
               {onRetry && (
                 <Pressable
                   onPress={handleRetry}
                   style={({ pressed }) => ({
                     flex: 1,
-                    height: 48,
-                    borderRadius: 12,
-                    backgroundColor: pressed ? '#3B82F6' : '#4F46E5',
+                    height: 52,
+                    borderRadius: 16,
+                    backgroundColor: pressed
+                      ? (isDarkMode ? '#1E40AF' : '#3B82F6')
+                      : (isDarkMode ? '#2563EB' : '#4F46E5'),
                     alignItems: 'center',
                     justifyContent: 'center',
                     transform: [{ scale: pressed ? 0.98 : 1 }],
+                    shadowColor: isDarkMode ? '#2563EB' : '#4F46E5',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 6,
                   })}
                 >
                   <Text style={{
-                    fontSize: 16,
+                    fontSize: 17,
                     fontWeight: '600',
                     color: '#FFFFFF',
+                    letterSpacing: 0.2,
                   }}>
-                    Retry
+                    Try Again
                   </Text>
                 </Pressable>
               )}
 
-              {/* Close Button */}
+              {/* Close Button - Secondary Action */}
               <Pressable
                 onPress={handleClose}
                 style={({ pressed }) => ({
-                  flex: onRetry ? 1 : 2,
-                  height: 48,
-                  borderRadius: 12,
-                  backgroundColor: pressed ? '#F3F4F6' : '#F9FAFB',
+                  flex: onRetry ? 1 : undefined,
+                  height: 52,
+                  borderRadius: 16,
+                  backgroundColor: pressed
+                    ? (isDarkMode ? colors.surface : '#F3F4F6')
+                    : (isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#F9FAFB'),
                   borderWidth: 1,
-                  borderColor: '#E5E7EB',
+                  borderColor: isDarkMode ? colors.border : '#E5E7EB',
                   alignItems: 'center',
                   justifyContent: 'center',
                   transform: [{ scale: pressed ? 0.98 : 1 }],
                 })}
               >
                 <Text style={{
-                  fontSize: 16,
+                  fontSize: 17,
                   fontWeight: '600',
-                  color: '#374151',
+                  color: colors.text.primary,
+                  letterSpacing: 0.2,
                 }}>
                   {onRetry ? 'Cancel' : 'Got it'}
                 </Text>

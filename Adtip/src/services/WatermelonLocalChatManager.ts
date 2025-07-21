@@ -395,15 +395,7 @@ export class WatermelonLocalChatManager {
           hasEventHandler: !!this.eventHandlers.onChatUnavailable
         });
 
-        // TEMPORARY: Force trigger alert for any error to test the flow
-        const forceTestAlert = true;
-        if (forceTestAlert && recipientId) {
-          Logger.info('[WatermelonLocalChatManager] 🧪 FORCE TESTING: Triggering alert for any error');
-          const recipientName = await this.getRecipientName(recipientId);
-          if (this.eventHandlers.onChatUnavailable) {
-            this.eventHandlers.onChatUnavailable(recipientName, error);
-          }
-        }
+
 
         if (isUnavailableError && recipientId) {
           Logger.info('[WatermelonLocalChatManager] 🚫 Chat unavailable error detected, triggering alert');
@@ -421,7 +413,13 @@ export class WatermelonLocalChatManager {
           }
 
           // Update message status to failed
-          await this.chatDb.updateMessageStatus(messageId, 'failed');
+          Logger.info('[WatermelonLocalChatManager] 🔴 Updating message status to failed:', messageId);
+          const updatedMessage = await this.chatDb.updateMessageStatus(messageId, 'failed');
+          Logger.info('[WatermelonLocalChatManager] 🔴 Message status updated result:', {
+            messageId,
+            updatedStatus: updatedMessage?.status,
+            success: !!updatedMessage
+          });
 
           // Emit updated message with failed status
           const failedMessage = { ...localMessage, status: 'failed' as const };
@@ -429,6 +427,14 @@ export class WatermelonLocalChatManager {
         } else {
           // For other errors, message remains in 'sending' status for retry
           Logger.info('[WatermelonLocalChatManager] ❌ Non-availability error, keeping message in sending status for retry');
+
+          // FALLBACK: If any message fails and we have a recipient, show alert anyway
+          // This ensures users get feedback even if error detection fails
+          if (recipientId && this.eventHandlers.onChatUnavailable) {
+            Logger.info('[WatermelonLocalChatManager] 🚨 FALLBACK: Triggering alert for any message failure');
+            const recipientName = await this.getRecipientName(recipientId);
+            this.eventHandlers.onChatUnavailable(recipientName, error);
+          }
         }
       });
 
@@ -957,16 +963,12 @@ export class WatermelonLocalChatManager {
     // This is a fallback for cases where the server doesn't provide detailed error messages
     const is400Error = statusCode === 400;
 
-    // For testing: also treat any error containing "failed" as unavailable
-    const isFailedError = errorLower.includes('failed') || errorLower.includes('request failed');
-
-    const isUnavailable = messageMatch || responseMatch || is400Error || isFailedError;
+    const isUnavailable = messageMatch || responseMatch || is400Error;
 
     Logger.info('[WatermelonLocalChatManager] 🔍 Error classification result:', {
       messageMatch,
       responseMatch,
       is400Error,
-      isFailedError,
       isUnavailable
     });
 

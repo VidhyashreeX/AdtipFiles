@@ -72,6 +72,16 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isOwn, showStatu
   }, [scaleAnim, opacityAnim]);
 
   const getStatusIcon = () => {
+    // Debug log to see message status
+    if (message.status === 'failed') {
+      console.log('[FCMChatScreen] 🔴 Failed message detected:', {
+        id: message.id,
+        tempId: message.tempId,
+        status: message.status,
+        content: message.content.substring(0, 20) + '...'
+      });
+    }
+
     switch (message.status) {
       case 'sending':
         return Clock;
@@ -534,7 +544,12 @@ const FCMChatScreen: React.FC = () => {
   // Render message item
   const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
     const isOwn = item.senderId === user?.id?.toString();
-    const showStatus = isOwn && index === currentMessages.length - 1;
+    // Show status for all own messages, especially failed ones
+    // Also show for the last message as before
+    const showStatus = isOwn && (
+      index === currentMessages.length - 1 ||
+      item.status === 'failed'
+    );
 
     return (
       <MessageBubble
