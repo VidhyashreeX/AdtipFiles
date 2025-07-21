@@ -47,10 +47,12 @@ export class FCMChatServiceLocal {
   /**
    * Initialize the service
    */
-  async initialize(userId: string, authToken: string, eventHandlers: FCMChatEventHandlers = {}): Promise<void> {
+  async initialize(userId: string, authToken: string, eventHandlers: FCMChatEventHandlers = {}, options?: { disableFCMHandlers?: boolean }): Promise<void> {
     try {
       this.currentUserId = userId;
       this.eventHandlers = eventHandlers;
+
+      console.log('[FCMChatServiceLocal] Initializing with user ID:', userId, 'FCM disabled:', options?.disableFCMHandlers);
 
       // Get user name from storage
       const userName = await this.getCurrentUserName();
@@ -75,10 +77,15 @@ export class FCMChatServiceLocal {
         }
       };
 
-      await this.localChatManager.initialize(userId, userName, localEventHandlers);
+      // Pass FCM disable option to prevent conflicts with the main WatermelonLocalChatManager
+      await this.localChatManager.initialize(userId, userName, localEventHandlers, { disableFCMHandlers: true });
 
-      // Setup FCM for notifications
-      await this.setupFCMForChat();
+      // Setup FCM for notifications (unless disabled)
+      if (!options?.disableFCMHandlers) {
+        await this.setupFCMForChat();
+      } else {
+        console.log('[FCMChatServiceLocal] FCM handlers disabled - skipping FCM setup to prevent conflicts with WatermelonLocalChatManager');
+      }
 
       // Setup app state handling
       this.setupAppStateHandling();
@@ -303,16 +310,37 @@ export class FCMChatServiceLocal {
         status: 'delivered'
       };
 
-      // Let LocalChatManager handle the message processing
-      // It will save to storage and manage notifications
-      
-      // Emit event for UI updates
-      this.eventHandlers.onMessageReceived?.(message);
+      // Let LocalChatManager handle the message processing and save to database
+      console.log('[FCMChatServiceLocal] Calling localChatManager to save message to database...');
 
-      // Show notification if not in active chat
-      if (this.currentConversationId !== data.conversationId) {
-        await this.showChatNotification(message);
+      // Save message to database via WatermelonLocalChatManager public method
+      const success = await this.localChatManager.handleIncomingMessage({
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        senderName: message.senderName,
+        content: message.content,
+        messageType: message.messageType || 'text',
+        timestamp: message.createdAt
+      });
+
+      if (success) {
+        console.log('[FCMChatServiceLocal] ✅ Message saved to database successfully');
+        // Note: The localChatManager.handleIncomingMessage already calls event handlers and shows notifications
+        // So we don't need to duplicate that here
+      } else {
+        console.error('[FCMChatServiceLocal] ❌ Failed to save message to database');
+        // Still emit event for UI updates even if database save failed
+        this.eventHandlers.onMessageReceived?.(message);
+
+        // Only show notification if database save failed (as fallback)
+        if (this.currentConversationId !== data.conversationId) {
+          await this.showChatNotification(message);
+        }
       }
+
+      // Note: Notification handling is now done by WatermelonLocalChatManager
+      // No need to duplicate notification display here
 
     } catch (error) {
       console.error('[FCMChatServiceLocal] Error handling FCM message:', error);

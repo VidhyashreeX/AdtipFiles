@@ -212,6 +212,42 @@ export class SyncService {
         return true;
       }
 
+      // Ensure sender user exists
+      let senderUser = await this.chatDb.getUserById(messageData.senderId);
+      if (!senderUser) {
+        Logger.info(`[SyncService] Sender user ${messageData.senderId} doesn't exist, creating it...`);
+        try {
+          senderUser = await this.chatDb.createUser({
+            id: messageData.senderId,
+            name: messageData.senderName
+          });
+          Logger.info(`[SyncService] Created sender user: ${messageData.senderId}`);
+        } catch (createError) {
+          Logger.error(`[SyncService] Failed to create sender user ${messageData.senderId}:`, createError);
+        }
+      }
+
+      // Ensure conversation exists before saving message
+      let conversation = await this.chatDb.getConversationById(messageData.conversationId);
+      if (!conversation) {
+        Logger.info(`[SyncService] Conversation ${messageData.conversationId} doesn't exist, creating it...`);
+
+        // Create conversation with sender as participant
+        // Note: We don't know the current user ID here, so we'll create a minimal conversation
+        // The conversation will be properly populated when the user opens it
+        try {
+          conversation = await this.chatDb.createConversation({
+            id: messageData.conversationId,
+            type: 'direct',
+            participantIds: [messageData.senderId] // Add sender, recipient will be added when conversation is opened
+          });
+          Logger.info(`[SyncService] Created conversation: ${messageData.conversationId}`);
+        } catch (createError) {
+          Logger.error(`[SyncService] Failed to create conversation ${messageData.conversationId}:`, createError);
+          // Continue anyway - the message might still be saved
+        }
+      }
+
       // Create new message
       await this.chatDb.createMessage({
         id: messageData.id,
@@ -224,7 +260,6 @@ export class SyncService {
       });
 
       // Update conversation unread count
-      const conversation = await this.chatDb.getConversationById(messageData.conversationId);
       if (conversation) {
         await conversation.incrementUnreadCount();
       }

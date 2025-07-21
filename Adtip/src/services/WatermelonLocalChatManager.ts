@@ -5,7 +5,9 @@
  * Provides the same API interface while leveraging WatermelonDB's reactive capabilities.
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import messaging from '@react-native-firebase/messaging';
+import notifee, { AndroidImportance, EventType } from '@notifee/react-native';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { DirectFCMService } from './DirectFCMService';
@@ -13,10 +15,25 @@ import { WatermelonChatDatabase } from '../database/services/WatermelonChatDatab
 import { QueryHelpers } from '../database/services/QueryHelpers';
 import { SyncService } from '../database/services/SyncService';
 import { initializeDatabase } from '../database';
+import ApiService from './ApiService';
 import Logger from '../utils/LogUtils';
 import type { Message } from '../database/models/Message';
 import type { Conversation } from '../database/models/Conversation';
 import type { User } from '../database/models/User';
+
+// Import navigation
+import { navigationRef } from '../navigation/NavigationService';
+
+// Storage keys for FCM token caching
+export const STORAGE_KEYS = {
+  CONVERSATIONS: '@fcm_chat_conversations',
+  MESSAGES_PREFIX: '@fcm_chat_messages_',
+  USER_PROFILES: '@fcm_chat_user_profiles',
+  UNREAD_COUNTS: '@fcm_chat_unread_counts',
+  LAST_SYNC: '@fcm_chat_last_sync',
+  FCM_TOKENS: '@fcm_chat_fcm_tokens',
+  MESSAGE_QUEUE: '@fcm_chat_message_queue'
+};
 
 // Re-export types for compatibility
 export interface LocalMessage {
@@ -68,6 +85,7 @@ export class WatermelonLocalChatManager {
   private currentUserId: string | null = null;
   private currentUserName: string | null = null;
   private currentConversationId: string | null = null;
+  private currentParticipantId: string | null = null; // Store the current chat participant ID
   private eventHandlers: LocalChatEventHandlers = {};
   private isInitialized: boolean = false;
 
@@ -75,14 +93,113 @@ export class WatermelonLocalChatManager {
     this.chatDb = new WatermelonChatDatabase();
     this.syncService = new SyncService();
     this.fcmService = DirectFCMService.getInstance();
+
+    // Setup notification channels
+    this.setupNotificationChannels();
+  }
+
+  /**
+   * Setup notification channels for chat notifications
+   */
+  private async setupNotificationChannels(): Promise<void> {
+    try {
+      await notifee.createChannel({
+        id: 'chat',
+        name: 'Chat Messages',
+        importance: AndroidImportance.HIGH,
+        sound: 'default',
+        vibration: true,
+      });
+
+      Logger.info('[WatermelonLocalChatManager] Notification channels created');
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] Failed to create notification channels:', error);
+    }
+  }
+
+  /**
+   * Setup notification interaction handlers
+   */
+  private async setupNotificationHandlers(): Promise<void> {
+    try {
+      // Handle notification press events
+      notifee.onForegroundEvent(async ({ type, detail }) => {
+        if (type === EventType.PRESS) {
+          const data = detail.notification?.data;
+          if (data?.type === 'chat_message' && data?.conversationId && data?.senderId) {
+            Logger.info('[WatermelonLocalChatManager] 📱 Notification pressed, opening conversation:', data.conversationId);
+            // Get sender name from notification title (which is the sender name)
+            const senderName = detail.notification?.title || 'Unknown User';
+            await this.navigateToConversation(String(data.conversationId), String(data.senderId), senderName);
+          }
+        }
+      });
+
+      Logger.info('[WatermelonLocalChatManager] Notification handlers setup complete');
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] Failed to setup notification handlers:', error);
+    }
+  }
+
+  /**
+   * Navigate to conversation from notification
+   */
+  private async navigateToConversation(conversationId: string, senderId: string, senderName?: string): Promise<void> {
+    try {
+      Logger.info('[WatermelonLocalChatManager] 🧭 Navigating to conversation:', conversationId, 'from sender:', senderId);
+
+      // Use provided sender name or try to get from database
+      let finalSenderName = senderName;
+      if (!finalSenderName || finalSenderName === 'Unknown User') {
+        const senderUser = await this.chatDb.getUserById(senderId);
+        finalSenderName = senderUser?.name || senderName || 'Unknown User';
+      }
+
+      Logger.info('[WatermelonLocalChatManager] 🧭 Sender info:', { senderId, senderName: finalSenderName });
+
+      // Navigate to FCMChatScreen with sender info
+      // The FCMChatScreen will create/get the conversation with this participant
+      // and should load the existing conversation that contains the message
+      if (navigationRef.isReady()) {
+        const currentRoute = navigationRef.getCurrentRoute();
+        Logger.info('[WatermelonLocalChatManager] 🧭 Current route:', currentRoute?.name);
+
+        // Store the target conversation ID for the FCMChatScreen to use
+        await AsyncStorage.setItem('targetConversationId', conversationId);
+
+        // Navigate to FCMChatScreen with participant info
+        if (currentRoute?.name && ['Home', 'TipTube', 'TipCall', 'Profile', 'Conversations', 'FCMChat'].includes(currentRoute.name)) {
+          Logger.info('[WatermelonLocalChatManager] 🧭 Navigating directly to FCMChat');
+          (navigationRef as any).navigate('FCMChat', {
+            participantId: senderId,
+            participantName: finalSenderName,
+          });
+        } else {
+          Logger.info('[WatermelonLocalChatManager] 🧭 Navigating to Main navigator then FCMChat');
+          (navigationRef as any).navigate('Main', {
+            screen: 'FCMChat',
+            params: {
+              participantId: senderId,
+              participantName: finalSenderName,
+            },
+          });
+        }
+
+        Logger.info('[WatermelonLocalChatManager] ✅ Navigation completed');
+      } else {
+        Logger.warn('[WatermelonLocalChatManager] ❌ Navigation not ready');
+      }
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] ❌ Error navigating to conversation:', error);
+    }
   }
 
   /**
    * Initialize the chat manager
    */
-  async initialize(userId: string, userName: string, eventHandlers: LocalChatEventHandlers = {}): Promise<void> {
+  async initialize(userId: string, userName: string, eventHandlers: LocalChatEventHandlers = {}, options?: { disableFCMHandlers?: boolean }): Promise<void> {
     try {
-      Logger.info('[WatermelonLocalChatManager] Initializing...');
+      Logger.info('[WatermelonLocalChatManager] Initializing...', 'FCM disabled:', options?.disableFCMHandlers);
 
       this.currentUserId = userId;
       this.currentUserName = userName;
@@ -97,8 +214,13 @@ export class WatermelonLocalChatManager {
       // Create or update current user
       await this.ensureCurrentUser();
 
-      // Setup FCM message handler
-      await this.setupFCMHandler();
+      // Setup FCM message handler (unless disabled)
+      if (!options?.disableFCMHandlers) {
+        await this.setupFCMHandler();
+        await this.setupNotificationHandlers();
+      } else {
+        Logger.info('[WatermelonLocalChatManager] FCM handlers disabled - skipping FCM setup to prevent conflicts');
+      }
 
       // Perform initial sync
       await this.syncService.performSync(userId);
@@ -171,7 +293,7 @@ export class WatermelonLocalChatManager {
     // Send via FCM in background
     this.sendFCMMessage(localMessage)
       .then(async () => {
-        Logger.info('[WatermelonLocalChatManager] FCM message sent successfully:', messageId);
+        Logger.info('[WatermelonLocalChatManager] ✅ FCM API call completed successfully for message:', messageId);
         // Update status to sent
         await this.chatDb.updateMessageStatus(messageId, 'sent');
 
@@ -180,7 +302,14 @@ export class WatermelonLocalChatManager {
         this.eventHandlers.onMessageSent?.(updatedMessage);
       })
       .catch((error) => {
-        Logger.error('[WatermelonLocalChatManager] Failed to send FCM message:', error);
+        Logger.error('[WatermelonLocalChatManager] ❌ Failed to send FCM message via API:', error);
+        Logger.error('[WatermelonLocalChatManager] ❌ Error details:', {
+          messageId,
+          conversationId: localMessage.conversationId,
+          recipientId: 'extracted from conversation',
+          errorMessage: error.message,
+          errorStack: error.stack
+        });
         // Message remains in 'sending' status for retry
       });
 
@@ -233,8 +362,12 @@ export class WatermelonLocalChatManager {
   /**
    * Set current conversation for notification management
    */
-  setCurrentConversation(conversationId: string | null): void {
+  setCurrentConversation(conversationId: string | null, participantId?: string | null): void {
     this.currentConversationId = conversationId;
+    if (participantId !== undefined) {
+      this.currentParticipantId = participantId;
+      Logger.info('[WatermelonLocalChatManager] Set current participant ID:', participantId);
+    }
   }
 
   /**
@@ -292,6 +425,61 @@ export class WatermelonLocalChatManager {
       Logger.info('[WatermelonLocalChatManager] Updated FCM token for user:', this.currentUserId);
     } catch (error) {
       Logger.error('[WatermelonLocalChatManager] Error updating FCM token:', error);
+    }
+  }
+
+  /**
+   * Public method to handle incoming messages (for use by other services)
+   */
+  async handleIncomingMessage(messageData: {
+    id: string;
+    conversationId: string;
+    senderId: string;
+    senderName: string;
+    content: string;
+    messageType: string;
+    timestamp: string;
+  }): Promise<boolean> {
+    try {
+      Logger.info('[WatermelonLocalChatManager] 📨 PUBLIC: Handling incoming message:', messageData.id);
+
+      const success = await this.syncService.handleIncomingMessage(messageData);
+
+      if (success) {
+        Logger.info('[WatermelonLocalChatManager] ✅ PUBLIC: Message saved to database successfully');
+
+        // Create message object for event handlers
+        const messageForHandlers: LocalMessage = {
+          id: messageData.id,
+          conversationId: messageData.conversationId,
+          senderId: messageData.senderId,
+          senderName: messageData.senderName,
+          content: messageData.content,
+          messageType: (messageData.messageType as any) || 'text',
+          status: 'delivered' as const,
+          createdAt: messageData.timestamp || new Date().toISOString()
+        };
+
+        // Always notify event handlers for UI updates
+        this.eventHandlers.onMessageReceived?.(messageForHandlers);
+
+        // Don't show notification if user is viewing this conversation
+        if (this.currentConversationId !== messageData.conversationId) {
+          Logger.info('[WatermelonLocalChatManager] 🔔 PUBLIC: Showing notification for conversation:', messageData.conversationId);
+          // Show actual notification
+          await this.showChatNotification(messageForHandlers);
+        } else {
+          Logger.info('[WatermelonLocalChatManager] 👁️ PUBLIC: User viewing this conversation - no notification needed');
+        }
+
+        return true;
+      } else {
+        Logger.warn('[WatermelonLocalChatManager] ❌ PUBLIC: Sync service failed to process message');
+        return false;
+      }
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] ❌ PUBLIC: Error handling incoming message:', error);
+      return false;
     }
   }
 
@@ -371,23 +559,78 @@ export class WatermelonLocalChatManager {
   }
 
   private async setupFCMHandler(): Promise<void> {
+    Logger.info('[WatermelonLocalChatManager] 🔧 Setting up FCM message handlers...');
+
     messaging().onMessage(async (remoteMessage) => {
-      if (remoteMessage.data?.type === 'chat_message') {
+      // Check for chat messages in both direct data and info field formats
+      const isDirectChatMessage = remoteMessage.data?.type === 'chat_message';
+      const isInfoChatMessage = remoteMessage.data?.info &&
+        (() => {
+          try {
+            const infoString = typeof remoteMessage.data.info === 'string' ? remoteMessage.data.info : JSON.stringify(remoteMessage.data.info);
+            const parsed = JSON.parse(infoString);
+            return parsed.type === 'chat_message';
+          } catch {
+            return false;
+          }
+        })();
+
+      if (isDirectChatMessage || isInfoChatMessage) {
+        Logger.info('[WatermelonLocalChatManager] 📱 Foreground chat message received');
         await this.handleIncomingFCMMessage(remoteMessage);
       }
     });
 
     messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-      if (remoteMessage.data?.type === 'chat_message') {
+      // Check for chat messages in both direct data and info field formats
+      const isDirectChatMessage = remoteMessage.data?.type === 'chat_message';
+      const isInfoChatMessage = remoteMessage.data?.info &&
+        (() => {
+          try {
+            const infoString = typeof remoteMessage.data.info === 'string' ? remoteMessage.data.info : JSON.stringify(remoteMessage.data.info);
+            const parsed = JSON.parse(infoString);
+            return parsed.type === 'chat_message';
+          } catch {
+            return false;
+          }
+        })();
+
+      if (isDirectChatMessage || isInfoChatMessage) {
+        Logger.info('[WatermelonLocalChatManager] 📱 Background chat message received');
         await this.handleIncomingFCMMessage(remoteMessage);
       }
     });
+
+    Logger.info('[WatermelonLocalChatManager] ✅ FCM message handlers setup complete');
   }
 
   private async handleIncomingFCMMessage(remoteMessage: any): Promise<void> {
     try {
-      const messageData = remoteMessage.data;
-      
+      Logger.info('[WatermelonLocalChatManager] 📨 ENTRY: Processing incoming FCM message:', remoteMessage.data);
+
+      // Parse message data - handle both direct data and info field formats
+      let messageData;
+      if (remoteMessage.data?.info) {
+        // New format: data is in 'info' field as JSON string
+        try {
+          const infoString = typeof remoteMessage.data.info === 'string' ? remoteMessage.data.info : JSON.stringify(remoteMessage.data.info);
+          messageData = JSON.parse(infoString);
+          Logger.info('[WatermelonLocalChatManager] 📨 Parsed message from info field:', messageData);
+        } catch (parseError) {
+          Logger.error('[WatermelonLocalChatManager] Failed to parse info field:', parseError);
+          return;
+        }
+      } else {
+        // Legacy format: data is directly in remoteMessage.data
+        messageData = remoteMessage.data;
+        Logger.info('[WatermelonLocalChatManager] 📨 Using direct data format:', messageData);
+      }
+
+      if (!messageData || messageData.type !== 'chat_message') {
+        Logger.warn('[WatermelonLocalChatManager] Invalid or non-chat message data:', messageData);
+        return;
+      }
+
       const success = await this.syncService.handleIncomingMessage({
         id: messageData.messageId,
         conversationId: messageData.conversationId,
@@ -399,20 +642,33 @@ export class WatermelonLocalChatManager {
       });
 
       if (success) {
+        Logger.info('[WatermelonLocalChatManager] ✅ Message processed successfully by sync service');
+
+        // Create message object for handlers and notifications
+        const messageForHandlers = {
+          id: messageData.messageId,
+          conversationId: messageData.conversationId,
+          senderId: messageData.senderId,
+          senderName: messageData.senderName,
+          content: messageData.content,
+          messageType: messageData.messageType || 'text',
+          status: 'delivered' as const,
+          createdAt: messageData.timestamp || new Date().toISOString()
+        };
+
+        // Always notify event handlers for UI updates
+        this.eventHandlers.onMessageReceived?.(messageForHandlers);
+
         // Don't show notification if user is viewing this conversation
         if (this.currentConversationId !== messageData.conversationId) {
-          // Handle notification display
-          this.eventHandlers.onMessageReceived?.({
-            id: messageData.messageId,
-            conversationId: messageData.conversationId,
-            senderId: messageData.senderId,
-            senderName: messageData.senderName,
-            content: messageData.content,
-            messageType: messageData.messageType || 'text',
-            status: 'delivered',
-            createdAt: messageData.timestamp || new Date().toISOString()
-          });
+          Logger.info('[WatermelonLocalChatManager] 🔔 Showing notification for conversation:', messageData.conversationId);
+          // Show actual notification
+          await this.showChatNotification(messageForHandlers);
+        } else {
+          Logger.info('[WatermelonLocalChatManager] 👁️ User viewing this conversation - no notification needed');
         }
+      } else {
+        Logger.warn('[WatermelonLocalChatManager] ❌ Sync service failed to process message');
       }
 
     } catch (error) {
@@ -420,10 +676,161 @@ export class WatermelonLocalChatManager {
     }
   }
 
+  /**
+   * Show chat notification using notifee
+   */
+  private async showChatNotification(message: LocalMessage): Promise<void> {
+    try {
+      Logger.info('[WatermelonLocalChatManager] 📱 Displaying notification for message:', message.id);
+
+      await notifee.displayNotification({
+        title: message.senderName,
+        body: message.content,
+        data: {
+          type: 'chat_message',
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          messageId: message.id
+        },
+        android: {
+          channelId: 'chat',
+          importance: AndroidImportance.HIGH,
+          pressAction: {
+            id: 'default',
+          },
+          sound: 'default',
+          vibrationPattern: [300, 500, 300, 500],
+        },
+        ios: {
+          sound: 'default',
+        },
+      });
+
+      Logger.info('[WatermelonLocalChatManager] ✅ Notification displayed successfully');
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] ❌ Error showing notification:', error);
+    }
+  }
+
   private async sendFCMMessage(message: LocalMessage): Promise<void> {
-    // Implementation would depend on how FCM tokens are managed
-    // This is a placeholder for the FCM sending logic
-    Logger.info('[WatermelonLocalChatManager] Sending FCM message:', message.id);
+    try {
+      Logger.info('[WatermelonLocalChatManager] 🚀 Starting FCM message send process for:', message.id);
+
+      // Get recipient ID from stored participant ID (from TipCallScreenSimple contact card)
+      Logger.info('[WatermelonLocalChatManager] Current conversation ID:', message.conversationId);
+      Logger.info('[WatermelonLocalChatManager] Current user ID:', this.currentUserId);
+      Logger.info('[WatermelonLocalChatManager] Stored participant ID:', this.currentParticipantId);
+
+      const recipientId = this.currentParticipantId;
+      if (!recipientId) {
+        throw new Error(`No participant ID available for conversation: ${message.conversationId}. Make sure setCurrentConversation() was called with participantId.`);
+      }
+
+      Logger.info('[WatermelonLocalChatManager] ✅ Using recipient ID from contact card:', recipientId);
+
+      Logger.info('[WatermelonLocalChatManager] 🔍 Getting FCM token for recipient:', recipientId);
+      const recipientToken = await this.getRecipientFCMToken(recipientId);
+      if (!recipientToken) {
+        throw new Error(`Recipient FCM token not available for user: ${recipientId}`);
+      }
+
+      Logger.info('[WatermelonLocalChatManager] ✅ Got FCM token, length:', recipientToken.length);
+
+      // Validate FCM token
+      if (!DirectFCMService.isValidFCMToken(recipientToken)) {
+        throw new Error(`Invalid FCM token format for user: ${recipientId}`);
+      }
+
+      // Send via Firebase Cloud Function FCM API (FCM_CHAT_SERVER_URL)
+      Logger.info('[WatermelonLocalChatManager] 📡 Calling FCM Chat Server API...');
+      Logger.info('[WatermelonLocalChatManager] 📡 API Payload:', {
+        senderId: message.senderId,
+        senderName: message.senderName,
+        recipientId: recipientId,
+        recipientTokenLength: recipientToken.length,
+        conversationId: message.conversationId,
+        content: message.content.substring(0, 50) + '...',
+        messageType: message.messageType
+      });
+
+      const fcmResponse = await ApiService.sendChatMessage({
+        senderId: message.senderId,
+        senderName: message.senderName,
+        recipientId: recipientId,
+        recipientToken: recipientToken,
+        conversationId: message.conversationId,
+        content: message.content,
+        messageType: message.messageType,
+        replyToMessageId: message.replyTo
+      });
+
+      Logger.info('[WatermelonLocalChatManager] 📡 FCM API Response:', fcmResponse);
+
+      if (!fcmResponse.success) {
+        throw new Error(`FCM Chat Server API call failed: ${JSON.stringify(fcmResponse)}`);
+      }
+
+      Logger.info('[WatermelonLocalChatManager] ✅ FCM message sent successfully via Chat Server:', fcmResponse.messageId);
+
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] Error sending FCM message:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get recipient FCM token
+   */
+  private async getRecipientFCMToken(userId: string): Promise<string | null> {
+    try {
+      // Validate userId format
+      if (!userId || userId === 'conv' || userId === 'undefined') {
+        Logger.error('[WatermelonLocalChatManager] Invalid user ID format:', userId);
+        return null;
+      }
+
+      // First check local cache
+      const tokens = await AsyncStorage.getItem(STORAGE_KEYS.FCM_TOKENS);
+      const tokenCache = tokens ? JSON.parse(tokens) : {};
+
+      const cachedToken = tokenCache[userId];
+      if (cachedToken && new Date(cachedToken.expiresAt) > new Date()) {
+        Logger.info('[WatermelonLocalChatManager] Using cached FCM token for user:', userId);
+        return cachedToken.token;
+      }
+
+      // If not in cache or expired, fetch from API
+      Logger.info('[WatermelonLocalChatManager] 🔄 Fetching FCM token from API for user:', userId);
+
+      // Use the same API service that the calling system uses
+      Logger.info('[WatermelonLocalChatManager] 🔄 Calling ApiService.getFCMToken with userId:', userId);
+      const tokenData = await ApiService.getFCMToken(userId);
+      Logger.info('[WatermelonLocalChatManager] 🔄 API response for FCM token:', tokenData);
+
+      if (tokenData?.token) {
+        // Cache the token with 24-hour expiration
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 24);
+
+        // Update token cache
+        tokenCache[userId] = {
+          token: tokenData.token,
+          expiresAt: expiresAt.toISOString()
+        };
+
+        // Save updated cache
+        await AsyncStorage.setItem(STORAGE_KEYS.FCM_TOKENS, JSON.stringify(tokenCache));
+
+        Logger.info('[WatermelonLocalChatManager] FCM token cached for user:', userId);
+        return tokenData.token;
+      }
+
+      Logger.warn('[WatermelonLocalChatManager] FCM token not available for user:', userId);
+      return null;
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] Error getting recipient FCM token:', error);
+      return null;
+    }
   }
 
   private convertMessageToLocal = (message: Message): LocalMessage => ({

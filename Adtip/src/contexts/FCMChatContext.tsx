@@ -89,8 +89,9 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
         onConversationUpdated: handleConversationUpdated,
       };
 
-      // Initialize the legacy service with limited event handlers
-      await fcmChatService.initialize(user.id.toString(), authToken, legacyEventHandlers);
+      // Initialize the legacy service with limited event handlers (FCM disabled to prevent conflicts)
+      // Note: FCM message handling is now done by WatermelonLocalChatManager
+      await fcmChatService.initialize(user.id.toString(), authToken, legacyEventHandlers, { disableFCMHandlers: true });
 
       // Initialize WatermelonDB manager for reactive queries (primary message handler)
       const manager = new WatermelonLocalChatManager();
@@ -274,6 +275,27 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
     }
 
     try {
+      // Check if there's a target conversation ID from notification navigation
+      const targetConversationId = await AsyncStorage.getItem('targetConversationId');
+      if (targetConversationId) {
+        console.log('[FCMChatContext] Using target conversation from notification:', targetConversationId);
+        // Clear the stored target conversation ID
+        await AsyncStorage.removeItem('targetConversationId');
+
+        // Verify the conversation exists and contains the participant
+        console.log('[FCMChatContext] Checking if conversation exists in database...');
+        const conversation = await watermelonManager.chatDb.getConversationById(targetConversationId);
+        console.log('[FCMChatContext] Conversation lookup result:', conversation ? 'FOUND' : 'NOT FOUND');
+
+        if (conversation) {
+          console.log('[FCMChatContext] Target conversation found, using it:', targetConversationId);
+          return targetConversationId;
+        } else {
+          console.warn('[FCMChatContext] Target conversation not found in database, creating new one');
+          console.warn('[FCMChatContext] This means the message was saved to a conversation that doesn\'t exist in the local database');
+        }
+      }
+
       // Use WatermelonDB manager to create/get conversation
       const conversationId = await watermelonManager.createOrGetConversation(participantId);
 
@@ -283,7 +305,7 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
       setCurrentParticipantId(participantId);
 
       // Set conversation state for notification management
-      watermelonManager.setCurrentConversation(conversationId);
+      watermelonManager.setCurrentConversation(conversationId, participantId);
       fcmChatService.setCurrentConversation(conversationId, participantId);
 
       return conversationId;

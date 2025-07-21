@@ -152,16 +152,25 @@ class FCMChatService {
   /**
    * Initialize FCM chat service
    */
-  async initialize(userId: string, authToken: string): Promise<void> {
+  async initialize(userId: string, authToken: string, eventHandlers?: FCMChatEventHandlers, options?: { disableFCMHandlers?: boolean }): Promise<void> {
     try {
       this.currentUserId = userId;
       this.authToken = authToken;
 
-      console.log('[FCMChatService] Initializing with user ID:', userId);
+      // Set event handlers if provided
+      if (eventHandlers) {
+        this.eventHandlers = eventHandlers;
+      }
 
-      // Setup FCM for chat notifications
-      await this.setupFCMForChat();
-      
+      console.log('[FCMChatService] Initializing with user ID:', userId, 'FCM disabled:', options?.disableFCMHandlers);
+
+      // Setup FCM for chat notifications (unless disabled)
+      if (!options?.disableFCMHandlers) {
+        await this.setupFCMForChat();
+      } else {
+        console.log('[FCMChatService] FCM handlers disabled - skipping FCM setup and notification handlers to prevent conflicts with WatermelonLocalChatManager');
+      }
+
       // Load queued messages from storage
       await this.loadQueuedMessages();
 

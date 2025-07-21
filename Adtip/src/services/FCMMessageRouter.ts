@@ -180,31 +180,31 @@ export class FCMMessageRouter {
   }
 
   /**
-   * Route message to chat handler (FCMChatService)
-   * New functionality to enable chat FCM
+   * Route message to chat handler (WatermelonLocalChatManager)
+   * Updated to use the new WatermelonDB-based chat system
    */
   private async routeToChatHandler(
     remoteMessage: FirebaseMessagingTypes.RemoteMessage,
     context: 'foreground' | 'background'
   ): Promise<void> {
     try {
-      console.log('[FCMMessageRouter] Routing to chat handler...');
+      console.log('[FCMMessageRouter] Chat message detected - handled by WatermelonLocalChatManager');
 
-      // Import FCMChatService dynamically to avoid circular dependencies
-      const { default: FCMChatService } = await import('./FCMChatService');
-      const chatService = FCMChatService.getInstance();
+      // The new WatermelonLocalChatManager handles FCM messages directly via its own setupFCMHandler()
+      // No routing needed - the manager registers its own FCM listeners in initialize()
+      // This prevents duplicate message processing
 
-      // Check if chat service is initialized
-      if (!chatService.isServiceInitialized()) {
-        console.warn('[FCMMessageRouter] FCMChatService not initialized, skipping chat message');
-        return;
-      }
+      console.log('[FCMMessageRouter] Chat message will be processed by WatermelonLocalChatManager FCM handlers');
 
-      // Call the chat service's message handler (receive only - sending handled by WatermelonDB)
-      await chatService.handleFCMMessageFromRouter(remoteMessage);
-      console.log('[FCMMessageRouter] Chat message processed successfully');
+      // Note: WatermelonLocalChatManager.setupFCMHandler() already handles:
+      // - messaging().onMessage() for foreground messages
+      // - messaging().setBackgroundMessageHandler() for background messages
+      // - Saving messages to WatermelonDB
+      // - UI updates via FCMChatContext event handlers
+      // - Notification management based on active conversation
+
     } catch (error) {
-      console.error('[FCMMessageRouter] Error routing to chat handler:', error);
+      console.error('[FCMMessageRouter] Error in chat handler routing:', error);
       // Don't throw for chat errors to avoid breaking call functionality
     }
   }
