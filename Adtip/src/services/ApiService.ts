@@ -1689,6 +1689,9 @@ export default class ApiService {
 
   /**
    * Send Chat Message (Cloud Function) - Direct FCM Chat Server call
+   *
+   * ⚠️ DEPRECATED: Use DirectFCMService instead for local-only chat
+   * @deprecated Use DirectFCMService.sendMessage() instead
    */
   static async sendChatMessage(payload: SendChatMessageRequest): Promise<SendChatMessageResponse> {
     try {

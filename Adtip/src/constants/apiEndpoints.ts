@@ -101,38 +101,27 @@ export const EXPLORE_ENDPOINTS = {
   GET_EXPLORE_CONTENT: '/api/explore',
 };
 
-// Chat endpoints
+// Chat endpoints - DEPRECATED: Chat now uses local-only storage
+// These endpoints are kept for backward compatibility but should not be used
 export const CHAT_ENDPOINTS = {
-  // Test endpoint
+  // ⚠️ DEPRECATED: Use local-only chat instead
   TEST: '/api/chat/test',
-
-  // Conversations
   GET_CONVERSATIONS: '/api/chat/conversations',
   CREATE_CONVERSATION: '/api/chat/conversations',
-
-  // Messages
-  GET_MESSAGES: '/api/chat/conversations', // + '/:conversationId/messages'
-  SEND_MESSAGE: '/api/chat/conversations', // + '/:conversationId/messages'
-
-  // Mark as read
-  MARK_AS_READ: '/api/chat/conversations', // + '/:conversationId/read'
+  GET_MESSAGES: '/api/chat/conversations',
+  SEND_MESSAGE: '/api/chat/conversations',
+  MARK_AS_READ: '/api/chat/conversations',
 };
 
-// FCM Chat endpoints (high priority notifications) - Now using Firebase Cloud Functions
+// FCM Chat endpoints - DEPRECATED: Chat now uses direct FCM API calls
+// These endpoints are kept for backward compatibility but should not be used
 export const FCM_CHAT_ENDPOINTS = {
-  // Firebase Cloud Function messaging endpoints
+  // ⚠️ DEPRECATED: Use DirectFCMService instead
   SEND_MESSAGE: '/api/chat/send-message',
   SEND_MESSAGE_MULTICAST: '/api/chat/send-message-multicast',
-
-  // Conversation management
   CREATE_CONVERSATION: '/api/chat/create-conversation',
-
-  // Status updates
   UPDATE_TYPING_STATUS: '/api/chat/update-typing-status',
   UPDATE_MESSAGE_STATUS: '/api/chat/update-message-status',
-
-  // FCM token management - REMOVED: Now uses calling system's /api/update-fcm-token
-  // UPDATE_FCM_TOKEN: '/api/chat/update-fcm-token', // DEPRECATED - Use ApiService.updateFcmToken() instead
 
   // Legacy endpoints (for backward compatibility)
   LEGACY_SEND_MESSAGE: '/api/chat/fcm/send-message',

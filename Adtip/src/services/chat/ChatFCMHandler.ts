@@ -40,19 +40,12 @@ export class ChatFCMHandler implements FCMHandler {
         hasNotification: !!message.notification
       })
 
-      // Route to existing FCMChatService
-      const { default: FCMChatService } = await import('../FCMChatService')
-      const chatService = FCMChatService.getInstance()
+      // Note: FCMChatServiceLocal handles FCM messages internally via its own handlers
+      // This router handler is no longer needed as the new service manages FCM messages directly
+      console.log('[ChatFCMHandler] Chat message will be handled by FCMChatServiceLocal internal handlers')
 
-      // Check if chat service is initialized
-      if (!chatService.isServiceInitialized()) {
-        console.warn('[ChatFCMHandler] FCMChatService not initialized, skipping chat message')
-        return
-      }
-
-      // Call the chat service's message handler
-      await chatService.handleFCMMessageFromRouter(message)
-      console.log('[ChatFCMHandler] Chat message processed successfully')
+      // The new service automatically handles FCM messages through its own setupFCMMessageHandlers
+      // No additional routing is needed here
 
     } catch (error) {
       console.error('[ChatFCMHandler] Error handling chat message:', error)

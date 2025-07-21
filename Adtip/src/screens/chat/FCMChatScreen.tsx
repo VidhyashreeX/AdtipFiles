@@ -29,8 +29,8 @@ import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFCMChat } from '../../contexts/FCMChatContext';
-import { Message } from '../../services/FCMChatService';
-import FCMChatService from '../../services/FCMChatService';
+import { Message } from '../../services/FCMChatServiceLocal';
+import { RealTimeMessageHandler, useRealTimeMessages } from '../../components/chat/RealTimeMessageHandler';
 import { COLORS } from '../../constants/colors';
 
 type RootStackParamList = {
@@ -205,6 +205,31 @@ const FCMChatScreen: React.FC = () => {
   const keyboardAnimationValue = useRef(new Animated.Value(0)).current;
   const inputContainerAnimValue = useRef(new Animated.Value(0)).current;
 
+  // Real-time message handling
+  const { isActive } = useRealTimeMessages(conversationId || '');
+
+  // Auto-scroll to bottom function
+  const scrollToBottom = useCallback(() => {
+    if (flatListRef.current && currentMessages.length > 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [currentMessages.length]);
+
+  // Handle real-time message events
+  const handleMessageReceived = useCallback((message: Message) => {
+    console.log('[FCMChatScreen] Real-time message received:', message.id);
+    // Auto-scroll to new message
+    scrollToBottom();
+  }, [scrollToBottom]);
+
+  const handleMessageSent = useCallback((message: Message) => {
+    console.log('[FCMChatScreen] Real-time message sent:', message.id);
+    // Auto-scroll to new message
+    scrollToBottom();
+  }, [scrollToBottom]);
+
   // Set navigation title and header styling
   useEffect(() => {
     navigation.setOptions({
@@ -352,10 +377,10 @@ const FCMChatScreen: React.FC = () => {
   useEffect(() => {
     return () => {
       // Clear conversation state when leaving the screen
-      FCMChatService.getInstance().clearCurrentConversation();
+      setCurrentConversation(null);
       console.log('[FCMChatScreen] Cleared conversation state on unmount');
     };
-  }, []);
+  }, [setCurrentConversation]);
 
   // Mark messages as read when conversation becomes active (only once per conversation)
   useEffect(() => {
@@ -528,6 +553,16 @@ const FCMChatScreen: React.FC = () => {
         end={{ x: 1, y: 1 }}
         style={styles.backgroundGradient}
       />
+
+      {/* Real-time Message Handler */}
+      {conversationId && (
+        <RealTimeMessageHandler
+          conversationId={conversationId}
+          onMessageReceived={handleMessageReceived}
+          onMessageSent={handleMessageSent}
+          onAutoScroll={scrollToBottom}
+        />
+      )}
 
       {/* Messages List */}
       <FlatList

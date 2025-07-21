@@ -1,15 +1,13 @@
 /**
  * FCM-based Chat Service for React Native
- * 
- * This service handles chat functionality using FCM high priority notifications
- * for reliable message delivery, replacing Socket.IO with API-based messaging.
- * 
- * Features:
- * - FCM high priority notifications for real-time messaging
- * - Local database persistence with AsyncStorage
- * - Offline message queuing and synchronization
- * - Message status tracking
- * - Background message handling
+ *
+ * ⚠️ DEPRECATED: This service has been replaced by FCMChatServiceLocal
+ *
+ * This service is kept for backward compatibility but should not be used
+ * in new implementations. Use FCMChatServiceLocal instead which provides
+ * local-only chat functionality without backend dependencies.
+ *
+ * @deprecated Use FCMChatServiceLocal instead
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -298,11 +296,20 @@ class FCMChatService {
 
     const tempId = `temp_${Date.now()}_${Math.random()}`;
 
+    // Get current user info for proper sender name
+    const currentUser = await this.getCurrentUserInfo();
+    const getSenderName = () => {
+      if (currentUser?.name && currentUser.name.trim()) return currentUser.name.trim();
+      if (currentUser?.username && currentUser.username.trim()) return currentUser.username.trim();
+      if (currentUser?.mobile_number) return currentUser.mobile_number;
+      return `User ${this.currentUserId}`;
+    };
+
     const message: Message = {
       id: tempId,
       conversationId,
       senderId: this.currentUserId!,
-      senderName: 'You',
+      senderName: getSenderName(),
       content,
       messageType: 'text',
       createdAt: new Date().toISOString(),
@@ -458,7 +465,7 @@ class FCMChatService {
   /**
    * Get current user information
    */
-  private async getCurrentUserInfo(): Promise<{ id: string; name: string } | null> {
+  private async getCurrentUserInfo(): Promise<{ id: string; name: string; username?: string; mobile_number?: string } | null> {
     try {
       // Get user data from AsyncStorage (same as AuthContext)
       const userDataString = await AsyncStorage.getItem('user');
@@ -468,7 +475,9 @@ class FCMChatService {
         const userData = JSON.parse(userDataString);
         return {
           id: this.currentUserId || userData.id?.toString() || 'unknown',
-          name: userName || userData.name || userData.username || 'Unknown User'
+          name: userName || userData.name || userData.username || 'Unknown User',
+          username: userData.username,
+          mobile_number: userData.mobile_number
         };
       }
 

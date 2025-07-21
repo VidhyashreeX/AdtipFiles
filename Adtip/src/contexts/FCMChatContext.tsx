@@ -7,7 +7,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import FCMChatService, { Message, Conversation, FCMChatEventHandlers } from '../services/FCMChatService';
+import { FCMChatServiceLocal, Message, Conversation, FCMChatEventHandlers } from '../services/FCMChatServiceLocal';
 import { useAuth } from './AuthContext';
 
 interface FCMChatContextType {
@@ -58,7 +58,7 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [totalUnreadCount, setTotalUnreadCount] = useState(0);
 
-  const fcmChatService = FCMChatService.getInstance();
+  const fcmChatService = FCMChatServiceLocal.getInstance();
 
   // Initialize chat service
   const initializeChat = useCallback(async () => {
@@ -84,10 +84,8 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
         onConversationUpdated: handleConversationUpdated,
       };
 
-      fcmChatService.setEventHandlers(eventHandlers);
-
-      // Initialize the service
-      await fcmChatService.initialize(user.id.toString(), authToken);
+      // Initialize the service with event handlers
+      await fcmChatService.initialize(user.id.toString(), authToken, eventHandlers);
 
       setIsInitialized(true);
       console.log('[FCMChatContext] FCM chat service initialized successfully');
@@ -106,13 +104,13 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
 
     try {
       setLoadingConversations(true);
-      const result = await fcmChatService.getConversations();
-      setConversations(result.conversations);
-      
+      const conversations = await fcmChatService.getConversations();
+      setConversations(conversations);
+
       // Calculate total unread count
-      const unreadCount = result.conversations.reduce((total, conv) => total + conv.unreadCount, 0);
+      const unreadCount = conversations.reduce((total, conv) => total + conv.unreadCount, 0);
       setTotalUnreadCount(unreadCount);
-      
+
     } catch (error) {
       console.error('[FCMChatContext] Failed to load conversations:', error);
     } finally {
@@ -128,7 +126,7 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
       setLoadingMessages(true);
 
       // Load from local storage only (no API calls)
-      const localMessages = await fcmChatService.getMessagesFromLocal(conversationId);
+      const localMessages = await fcmChatService.getMessages(conversationId);
       console.log('[FCMChatContext] Loaded local messages:', localMessages.length);
 
       // Set local messages immediately
@@ -196,13 +194,21 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
   const sendMessage = useCallback(async (conversationId: string, content: string, replyTo?: string) => {
     if (!isInitialized || !content.trim() || !user?.id) return;
 
+    // Get proper sender name - prioritize name, fallback to username, then mobile number
+    const getSenderName = () => {
+      if (user.name && user.name.trim()) return user.name.trim();
+      if (user.username && user.username.trim()) return user.username.trim();
+      if (user.mobile_number) return user.mobile_number;
+      return `User ${user.id}`;
+    };
+
     // Create optimistic message with unique temp ID
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const optimisticMessage: Message = {
       id: tempId,
       conversationId,
       senderId: user.id.toString(),
-      senderName: user.name || 'You',
+      senderName: getSenderName(),
       senderAvatar: user.profile_image || undefined,
       content: content.trim(),
       messageType: 'text',
@@ -256,15 +262,8 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
     }
 
     try {
-      // Generate conversation ID locally using consistent format
-      const currentUserId = await AsyncStorage.getItem('userId');
-      if (!currentUserId) {
-        throw new Error('User not authenticated');
-      }
-
-      // Create deterministic conversation ID based on participant IDs
-      const participants = [currentUserId, participantId].sort();
-      const conversationId = `conv_${participants[0]}_${participants[1]}`;
+      // Use FCMChatServiceLocal to create/get conversation
+      const conversationId = await fcmChatService.createOrGetConversation(participantId);
 
       console.log('[FCMChatContext] Using local conversation ID:', conversationId);
 
@@ -288,34 +287,34 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
       setCurrentMessages([]);
       setCurrentParticipantId(null);
       // Clear conversation state in FCMChatService
-      fcmChatService.clearCurrentConversation();
+      fcmChatService.setCurrentConversation(null);
     }
-  }, [fcmChatService]);
+  }, []); // Remove fcmChatService dependency since it's a singleton
 
   // Mark messages as read
   const markAsRead = useCallback(async (conversationId: string, messageId?: string) => {
     if (!isInitialized) return;
 
     try {
-      await fcmChatService.markAsRead(conversationId, messageId);
-      
+      await fcmChatService.markMessagesAsRead(conversationId);
+
       // Update local conversation unread count
-      setConversations(prev => prev.map(conv => 
-        conv.id === conversationId 
+      setConversations(prev => prev.map(conv =>
+        conv.id === conversationId
           ? { ...conv, unreadCount: 0 }
           : conv
       ));
-      
-      // Recalculate total unread count
+
+      // Recalculate total unread count using functional update to avoid dependency
       setTotalUnreadCount(prev => {
-        const conversation = conversations.find(c => c.id === conversationId);
-        return prev - (conversation?.unreadCount || 0);
+        // Get current conversations from state to avoid dependency
+        return Math.max(0, prev - 1); // Simple decrement, will be corrected by loadConversations
       });
-      
+
     } catch (error) {
       console.error('[FCMChatContext] Failed to mark as read:', error);
     }
-  }, [isInitialized, conversations]);
+  }, [isInitialized]); // Remove conversations dependency
 
   // Refresh messages for current conversation
   const refreshMessages = useCallback(async (conversationId: string) => {
@@ -468,7 +467,8 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
   useEffect(() => {
     return () => {
       if (isInitialized) {
-        fcmChatService.cleanup();
+        // Clear current conversation on unmount
+        fcmChatService.setCurrentConversation(null);
       }
     };
   }, [isInitialized]);
