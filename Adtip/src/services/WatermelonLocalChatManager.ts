@@ -324,7 +324,20 @@ export class WatermelonLocalChatManager {
 
     return QueryHelpers.getUserMessagesObservable(this.currentUserId, otherUserId, limit)
       .pipe(
-        map(messages => messages.map(this.convertMessageToLocal))
+        map(messages => {
+          const convertedMessages = messages.map(this.convertMessageToLocal);
+          // Debug log to see message statuses from database
+          const failedMessages = convertedMessages.filter(m => m.status === 'failed');
+          if (failedMessages.length > 0) {
+            Logger.info('[WatermelonLocalChatManager] 🔴 Failed messages from DB:', failedMessages.map(m => ({
+              id: m.id,
+              tempId: m.tempId,
+              status: m.status,
+              content: m.content.substring(0, 20) + '...'
+            })));
+          }
+          return convertedMessages;
+        })
       );
   }
 
@@ -425,8 +438,21 @@ export class WatermelonLocalChatManager {
           const failedMessage = { ...localMessage, status: 'failed' as const };
           this.eventHandlers.onMessageSent?.(failedMessage);
         } else {
-          // For other errors, message remains in 'sending' status for retry
-          Logger.info('[WatermelonLocalChatManager] ❌ Non-availability error, keeping message in sending status for retry');
+          // For other errors, ALSO mark as failed to show proper UI feedback
+          Logger.info('[WatermelonLocalChatManager] ❌ Non-availability error, but marking as failed for UI feedback');
+
+          // Update message status to failed for ALL errors
+          Logger.info('[WatermelonLocalChatManager] 🔴 Updating message status to failed (non-availability error):', messageId);
+          const updatedMessage = await this.chatDb.updateMessageStatus(messageId, 'failed');
+          Logger.info('[WatermelonLocalChatManager] 🔴 Message status updated result (non-availability):', {
+            messageId,
+            updatedStatus: updatedMessage?.status,
+            success: !!updatedMessage
+          });
+
+          // Emit updated message with failed status
+          const failedMessage = { ...localMessage, status: 'failed' as const };
+          this.eventHandlers.onMessageSent?.(failedMessage);
 
           // FALLBACK: If any message fails and we have a recipient, show alert anyway
           // This ensures users get feedback even if error detection fails

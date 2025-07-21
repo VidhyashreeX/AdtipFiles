@@ -159,6 +159,21 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
 
     const messagesSubscription = watermelonManager.observeMessages(currentConversationId).subscribe({
       next: (messages) => {
+        // Debug log to see message statuses from reactive query
+        const failedMessages = messages.filter(m => m.status === 'failed');
+        if (failedMessages.length > 0) {
+          console.log('[FCMChatContext] 🔴 Reactive query found failed messages:', failedMessages.map(m => ({
+            id: m.id,
+            tempId: m.tempId,
+            status: m.status,
+            content: m.content.substring(0, 20) + '...'
+          })));
+        }
+        console.log('[FCMChatContext] 📨 Reactive messages update:', {
+          total: messages.length,
+          failed: failedMessages.length,
+          statuses: messages.map(m => ({ id: m.id, status: m.status }))
+        });
         setCurrentMessages(messages);
       },
       error: (error) => {
@@ -408,21 +423,22 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
         );
 
         if (existingIndex !== -1) {
-          // Update existing message with server response - ensure status is 'sent'
+          // Update existing message - preserve the actual status from the message
           const updated = [...prev];
           updated[existingIndex] = {
             ...updated[existingIndex],
             ...message,
-            status: 'sent',
-            deliveryStatus: 'sent'
+            // Preserve the actual status (could be 'sent', 'failed', etc.)
+            status: message.status,
+            deliveryStatus: message.status
           };
-          console.log('✅ [FCMChatContext] Updated message status to sent:', updated[existingIndex].id);
+          console.log('✅ [FCMChatContext] Updated message with status:', message.status, 'for message:', updated[existingIndex].id);
           return updated.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         }
 
-        // Add new message and sort by creation time
-        const updated = [...prev, { ...message, status: 'sent', deliveryStatus: 'sent' }];
-        console.log('✅ [FCMChatContext] Added new sent message:', message.id);
+        // Add new message and sort by creation time - preserve actual status
+        const updated = [...prev, { ...message, status: message.status, deliveryStatus: message.status }];
+        console.log('✅ [FCMChatContext] Added new message with status:', message.status, 'for message:', message.id);
         return updated.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
       });
     }

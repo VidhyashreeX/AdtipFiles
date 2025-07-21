@@ -438,8 +438,8 @@ class FCMChatService {
       const isPermanentFailure = this.isPermanentFailure(error);
 
       if (isPermanentFailure) {
-        console.warn(`[FCMChatService] Permanent failure detected, moving to dead letter queue:`, message.tempId);
-        message.status = 'sending';
+        console.warn(`[FCMChatService] Permanent failure detected, marking as failed:`, message.tempId);
+        message.status = 'failed';  // Mark as failed, not sending
         message.deliveryStatus = 'failed';
         await this.updateMessageInLocal(message);
 
@@ -461,7 +461,12 @@ class FCMChatService {
 
         // Only keep in queue if not exceeded max attempts
         if (message.retryCount >= this.MAX_RETRY_ATTEMPTS) {
-          console.warn(`[FCMChatService] Message exceeded max retry attempts, removing from queue:`, message.tempId);
+          console.warn(`[FCMChatService] Message exceeded max retry attempts, marking as failed:`, message.tempId);
+          // Mark as failed before moving to dead letter queue
+          message.status = 'failed';
+          message.deliveryStatus = 'failed';
+          await this.updateMessageInLocal(message);
+
           this.messageQueue = this.messageQueue.filter(m => m.tempId !== message.tempId);
           await this.moveToDeadLetterQueue(message);
         }
@@ -1148,7 +1153,11 @@ class FCMChatService {
         if ((message.retryCount || 0) < this.MAX_RETRY_ATTEMPTS) {
           this.messageQueue.push(message);
         } else {
-          console.warn(`[FCMChatService] Message exceeded max retry attempts, moving to dead letter queue:`, message.tempId);
+          console.warn(`[FCMChatService] Message exceeded max retry attempts in queue processing, marking as failed:`, message.tempId);
+          // Mark as failed before moving to dead letter queue
+          message.status = 'failed';
+          message.deliveryStatus = 'failed';
+          await this.updateMessageInLocal(message);
           await this.moveToDeadLetterQueue(message);
         }
       }
@@ -1246,13 +1255,18 @@ class FCMChatService {
    */
   private async moveToDeadLetterQueue(message: Message): Promise<void> {
     message.isInDeadLetterQueue = true;
+    message.status = 'failed';  // Ensure status is failed
     message.deliveryStatus = 'failed';
+
+    // Update in local storage to reflect failed status
+    await this.updateMessageInLocal(message);
+
     this.deadLetterQueue.push(message);
 
     // Save dead letter queue to storage
     await this.saveDeadLetterQueue();
 
-    console.log(`[FCMChatService] Message moved to dead letter queue: ${message.tempId}`);
+    console.log(`[FCMChatService] Message moved to dead letter queue with failed status: ${message.tempId}`);
   }
 
   /**

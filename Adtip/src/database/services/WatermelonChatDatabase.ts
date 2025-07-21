@@ -151,12 +151,26 @@ export class WatermelonChatDatabase {
 
   async updateMessageStatus(messageId: string, status: MessageStatus): Promise<Message | null> {
     try {
+      console.log('[WatermelonChatDatabase] 🔄 Updating message status:', { messageId, status });
       const message = await messagesCollection.find(messageId);
-      return await database.write(async () => {
+      console.log('[WatermelonChatDatabase] 🔄 Found message before update:', {
+        id: message.id,
+        currentStatus: message.status,
+        newStatus: status
+      });
+
+      const updatedMessage = await database.write(async () => {
         return await message.update(msg => {
           msg.status = status;
         });
       });
+
+      console.log('[WatermelonChatDatabase] ✅ Message status updated successfully:', {
+        id: updatedMessage.id,
+        finalStatus: updatedMessage.status
+      });
+
+      return updatedMessage;
     } catch (error) {
       console.error('[WatermelonChatDatabase] Error updating message status (message not found):', messageId, error);
       return null;
