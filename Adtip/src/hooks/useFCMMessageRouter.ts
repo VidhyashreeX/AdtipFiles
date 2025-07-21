@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import messaging, { FirebaseMessagingTypes } from '@react-native-firebase/messaging';
 import notifee, { EventType } from '@notifee/react-native';
 import { FCMMessageRouter } from '../services/FCMMessageRouter';
@@ -31,13 +32,20 @@ export function useFCMMessageRouter() {
         await router.initialize();
 
         // Set up single foreground FCM handler that routes to appropriate services
+        // Only process when app is in active state to prevent duplicate processing with background handler
         unsubscribeForeground = messaging().onMessage(async (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => {
           try {
-            console.log('[useFCMMessageRouter] Foreground FCM message received:', remoteMessage.data);
-            
-            // Route message to appropriate handler (call or chat)
-            await router!.routeMessage(remoteMessage, 'foreground');
-            console.log('[useFCMMessageRouter] Foreground message routed successfully');
+            const currentAppState = AppState.currentState;
+            console.log('[useFCMMessageRouter] FCM message received, app state:', currentAppState);
+
+            // Only process if app is active to prevent duplicates with background handler
+            if (currentAppState === 'active') {
+              console.log('[useFCMMessageRouter] Processing foreground FCM message:', remoteMessage.data);
+              await router!.routeMessage(remoteMessage, 'foreground');
+              console.log('[useFCMMessageRouter] Foreground message routed successfully');
+            } else {
+              console.log('[useFCMMessageRouter] App not active, skipping - background handler will process');
+            }
           } catch (error) {
             console.error('[useFCMMessageRouter] Error routing foreground message:', error);
           }

@@ -198,25 +198,83 @@ export class FCMMessageRouter {
         return;
       }
 
-      // Get the WatermelonLocalChatManager instance from global context
-      // The instance is stored in FCMChatContext and should be accessible
-      const chatManager = (global as any).watermelonChatManager;
+      // Try to get the WatermelonLocalChatManager instance from global context first
+      let chatManager = (global as any).watermelonChatManager;
 
       if (chatManager && chatManager.isInitialized) {
-        // Route the message to the chat manager's public method
+        // Use existing initialized manager (app is running)
         const success = await chatManager.handleIncomingMessage(messageData);
         if (success) {
-          console.log('[FCMMessageRouter] Chat message routed successfully to WatermelonLocalChatManager');
+          console.log('[FCMMessageRouter] Chat message routed successfully to existing WatermelonLocalChatManager');
         } else {
-          console.warn('[FCMMessageRouter] WatermelonLocalChatManager failed to process message');
+          console.warn('[FCMMessageRouter] Existing WatermelonLocalChatManager failed to process message');
         }
       } else {
-        console.warn('[FCMMessageRouter] WatermelonLocalChatManager not available or not initialized');
+        // App is killed or manager not available - create temporary instance
+        console.log('[FCMMessageRouter] Creating temporary WatermelonLocalChatManager for killed app state');
+        await this.handleKilledAppChatMessage(messageData, context);
       }
 
     } catch (error) {
       console.error('[FCMMessageRouter] Error routing chat message:', error);
       // Don't throw for chat errors to avoid breaking call functionality
+    }
+  }
+
+  /**
+   * Handle chat message when app is killed (no global manager available)
+   */
+  private async handleKilledAppChatMessage(messageData: any, context: 'foreground' | 'background'): Promise<void> {
+    try {
+      console.log('[FCMMessageRouter] Handling chat message for killed app state');
+
+      // Import required modules dynamically
+      const [
+        { WatermelonLocalChatManager },
+        { initializeDatabase },
+        AsyncStorage
+      ] = await Promise.all([
+        import('./WatermelonLocalChatManager'),
+        import('../database'),
+        import('@react-native-async-storage/async-storage')
+      ]);
+
+      // Get user info from storage (needed for initialization)
+      const userDataStr = await AsyncStorage.getItem('user');
+      if (!userDataStr) {
+        console.warn('[FCMMessageRouter] No user data available for killed app chat processing');
+        return;
+      }
+
+      const userData = JSON.parse(userDataStr);
+      const userId = userData.id?.toString();
+      const userName = userData.name || userData.username || 'Unknown User';
+
+      if (!userId) {
+        console.warn('[FCMMessageRouter] No user ID available for killed app chat processing');
+        return;
+      }
+
+      // Initialize database
+      await initializeDatabase();
+
+      // Create temporary chat manager instance
+      const tempChatManager = new WatermelonLocalChatManager();
+
+      // Initialize with minimal setup (disable FCM handlers to prevent conflicts)
+      await tempChatManager.initialize(userId, userName, {}, { disableFCMHandlers: true });
+
+      // Process the message
+      const success = await tempChatManager.handleIncomingMessage(messageData);
+
+      if (success) {
+        console.log('[FCMMessageRouter] Chat message processed successfully in killed app state');
+      } else {
+        console.warn('[FCMMessageRouter] Failed to process chat message in killed app state');
+      }
+
+    } catch (error) {
+      console.error('[FCMMessageRouter] Error handling killed app chat message:', error);
     }
   }
 
