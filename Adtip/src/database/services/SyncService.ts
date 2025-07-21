@@ -203,7 +203,7 @@ export class SyncService {
     content: string;
     messageType: string;
     timestamp: string;
-  }): Promise<boolean> {
+  }, currentUserId?: string): Promise<boolean> {
     try {
       // Check if message already exists
       const existingMessage = await this.chatDb.getMessageById(messageData.id);
@@ -232,16 +232,18 @@ export class SyncService {
       if (!conversation) {
         Logger.info(`[SyncService] Conversation ${messageData.conversationId} doesn't exist, creating it...`);
 
-        // Create conversation with sender as participant
-        // Note: We don't know the current user ID here, so we'll create a minimal conversation
-        // The conversation will be properly populated when the user opens it
+        // Create conversation with both participants if currentUserId is available
         try {
+          const participantIds = currentUserId
+            ? [messageData.senderId, currentUserId] // Include both sender and recipient
+            : [messageData.senderId]; // Fallback: only sender
+
           conversation = await this.chatDb.createConversation({
             id: messageData.conversationId,
             type: 'direct',
-            participantIds: [messageData.senderId] // Add sender, recipient will be added when conversation is opened
+            participantIds: participantIds
           });
-          Logger.info(`[SyncService] Created conversation: ${messageData.conversationId}`);
+          Logger.info(`[SyncService] Created conversation: ${messageData.conversationId} with participants:`, participantIds);
         } catch (createError) {
           Logger.error(`[SyncService] Failed to create conversation ${messageData.conversationId}:`, createError);
           // Continue anyway - the message might still be saved

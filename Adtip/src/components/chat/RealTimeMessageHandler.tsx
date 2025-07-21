@@ -58,11 +58,13 @@ export const RealTimeMessageHandler: React.FC<RealTimeMessageHandlerProps> = ({
     markAsRead(conversationId);
 
     return () => {
-      // Clear active conversation when component unmounts
-      isMountedRef.current = false;
-      Logger.log('[RealTimeMessageHandler] Clearing active conversation');
-      setCurrentConversation(null);
-      hasSetConversationRef.current = false;
+      // Only clear if this component actually set the conversation
+      if (hasSetConversationRef.current) {
+        isMountedRef.current = false;
+        Logger.log('[RealTimeMessageHandler] Clearing active conversation on unmount');
+        setCurrentConversation(null);
+        hasSetConversationRef.current = false;
+      }
     };
   }, [conversationId]); // Remove function dependencies
 
@@ -172,9 +174,12 @@ export const useRealTimeMessages = (conversationId: string) => {
     }
 
     return () => {
-      isMountedRef.current = false;
-      setCurrentConversation(null);
-      hasSetConversationRef.current = false;
+      // Only clear if this hook actually set the conversation
+      if (hasSetConversationRef.current) {
+        isMountedRef.current = false;
+        setCurrentConversation(null);
+        hasSetConversationRef.current = false;
+      }
     };
   }, [conversationId]); // Remove function dependencies
 

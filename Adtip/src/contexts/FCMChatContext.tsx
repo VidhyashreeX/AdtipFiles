@@ -289,6 +289,14 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
 
         if (conversation) {
           console.log('[FCMChatContext] Target conversation found, using it:', targetConversationId);
+
+          // Set current participant for conversation state tracking
+          setCurrentParticipantId(participantId);
+
+          // Set conversation state for notification management
+          watermelonManager.setCurrentConversation(targetConversationId, participantId);
+          fcmChatService.setCurrentConversation(targetConversationId, participantId);
+
           return targetConversationId;
         } else {
           console.warn('[FCMChatContext] Target conversation not found in database, creating new one');

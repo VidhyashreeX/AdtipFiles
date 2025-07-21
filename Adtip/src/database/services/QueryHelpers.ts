@@ -78,9 +78,13 @@ export class QueryHelpers {
   }
 
   static async getDirectConversation(userId1: string, userId2: string): Promise<Conversation | null> {
+    console.log('[QueryHelpers] 🔍 Searching for direct conversation between:', userId1, 'and', userId2);
+
     const conversations = await conversationsCollection
       .query(Q.where('type', 'direct'))
       .fetch();
+
+    console.log('[QueryHelpers] 📋 Found', conversations.length, 'direct conversations to check');
 
     for (const conversation of conversations) {
       const participants = await participantsCollection
@@ -93,11 +97,15 @@ export class QueryHelpers {
       const participantIds = participants.map(p => p.userId).sort();
       const targetIds = [userId1, userId2].sort();
 
+      console.log('[QueryHelpers] 🔍 Checking conversation:', conversation.id, 'participants:', participantIds, 'vs target:', targetIds);
+
       if (JSON.stringify(participantIds) === JSON.stringify(targetIds)) {
+        console.log('[QueryHelpers] ✅ Found matching conversation:', conversation.id);
         return conversation;
       }
     }
 
+    console.log('[QueryHelpers] ❌ No matching conversation found');
     return null;
   }
 

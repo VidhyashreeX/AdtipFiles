@@ -59,7 +59,9 @@ export class FCMMessageRouter {
       if (this.isCallMessage(messageType, remoteMessage)) {
         await this.routeToCallHandler(remoteMessage, context);
       } else if (this.isChatMessage(messageType, remoteMessage)) {
-        await this.routeToChatHandler(remoteMessage, context);
+        // Chat messages are handled directly by WatermelonLocalChatManager's own FCM handlers
+        // Don't route here to prevent duplicate processing
+        console.log('[FCMMessageRouter] Chat message detected - will be handled by WatermelonLocalChatManager FCM handlers');
       } else {
         console.log('[FCMMessageRouter] Unknown message type, ignoring:', messageType);
       }

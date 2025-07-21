@@ -324,6 +324,8 @@ export class WatermelonLocalChatManager {
       throw new Error('Chat manager not initialized');
     }
 
+    Logger.info('[WatermelonLocalChatManager] 🔍 Looking for existing conversation between:', this.currentUserId, 'and', participantId);
+
     // Check if direct conversation already exists
     const existingConversation = await QueryHelpers.getDirectConversation(
       this.currentUserId,
@@ -331,18 +333,22 @@ export class WatermelonLocalChatManager {
     );
 
     if (existingConversation) {
+      Logger.info('[WatermelonLocalChatManager] ✅ Found existing conversation:', existingConversation.id);
       return existingConversation.id;
     }
 
+    Logger.info('[WatermelonLocalChatManager] ❌ No existing conversation found, creating new one...');
+
     // Create new conversation
     const conversationId = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
     const conversation = await this.chatDb.createConversation({
       id: conversationId,
       type: 'direct',
       participantIds: [this.currentUserId, participantId]
     });
 
+    Logger.info('[WatermelonLocalChatManager] ✅ Created new conversation:', conversation.id);
     return conversation.id;
   }
 
@@ -443,7 +449,7 @@ export class WatermelonLocalChatManager {
     try {
       Logger.info('[WatermelonLocalChatManager] 📨 PUBLIC: Handling incoming message:', messageData.id);
 
-      const success = await this.syncService.handleIncomingMessage(messageData);
+      const success = await this.syncService.handleIncomingMessage(messageData, this.currentUserId || undefined);
 
       if (success) {
         Logger.info('[WatermelonLocalChatManager] ✅ PUBLIC: Message saved to database successfully');
@@ -639,7 +645,7 @@ export class WatermelonLocalChatManager {
         content: messageData.content,
         messageType: messageData.messageType || 'text',
         timestamp: messageData.timestamp || new Date().toISOString()
-      });
+      }, this.currentUserId || undefined);
 
       if (success) {
         Logger.info('[WatermelonLocalChatManager] ✅ Message processed successfully by sync service');
