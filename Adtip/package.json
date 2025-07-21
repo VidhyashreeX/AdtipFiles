@@ -22,6 +22,7 @@
     "@aws-sdk/s3-request-presigner": "^3.839.0",
     "@babel/plugin-transform-class-static-block": "^7.27.1",
     "@d11/react-native-fast-image": "^8.9.2",
+    "@good-react-native/keyboard-avoider": "^1.1.4",
     "@notifee/react-native": "^9.1.8",
     "@nozbe/watermelondb": "^0.28.0",
     "@nozbe/with-observables": "^1.6.0",

@@ -44,6 +44,7 @@ import { UserDataProvider } from './src/contexts/UserDataContext';
 import { FCMChatProvider } from './src/contexts/FCMChatContext';
 import { DataProvider } from './src/providers/DataProvider';
 import { EnhancedQueryProvider } from './src/providers/QueryProvider';
+import { KeyboardAvoiderProvider } from '@good-react-native/keyboard-avoider';
 
 // Components & Navigators
 import Sidebar from './src/components/sidebar/Sidebar';
@@ -206,7 +207,8 @@ const AppNavigator = () => {
     if (isAuthenticated) {
       setTimeout(async () => {
         try {
-          const PermissionsService = require('./src/services/PermissionsService').default;
+          const PermissionsServiceModule = await import('./src/services/PermissionsService');
+          const PermissionsService = PermissionsServiceModule.default;
           await PermissionsService.requestPhoneCallForegroundServicePermission();
           console.log('[App] Background: Phone call permissions requested');
         } catch (error) {
@@ -418,36 +420,38 @@ function App(): React.JSX.Element {
     <AppErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
-          <ThemeProvider>
-            <AuthProvider>
-              <EnhancedQueryProvider>
-                <UserDataProvider>
-                  <FCMChatProvider>
-                    <WalletProvider>
-                    <ContentCreatorPremiumProvider>
-                      <DataProvider>
-                      <ShortsProvider>
-                        <TabNavigatorProvider>
-                          <SidebarProvider>
-                            <GestureHandlerRootView style={{ flex: 1 }}>
-                              <AppNavigator />
-                              <PersistentMeetingManager />
-                            {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
+          <KeyboardAvoiderProvider>
+            <ThemeProvider>
+              <AuthProvider>
+                <EnhancedQueryProvider>
+                  <UserDataProvider>
+                    <FCMChatProvider>
+                      <WalletProvider>
+                      <ContentCreatorPremiumProvider>
+                        <DataProvider>
+                        <ShortsProvider>
+                          <TabNavigatorProvider>
+                            <SidebarProvider>
+                              <GestureHandlerRootView style={{ flex: 1 }}>
+                                <AppNavigator />
+                                <PersistentMeetingManager />
+                              {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
 
-                            {/* Ad Debugger - only shows in development */}
-                            {/*<AdDebugger />*/}
-                            </GestureHandlerRootView>
-                          </SidebarProvider>
-                        </TabNavigatorProvider>
-                      </ShortsProvider>
-                      </DataProvider>
-                    </ContentCreatorPremiumProvider>
-                  </WalletProvider>
-                  </FCMChatProvider>
-                </UserDataProvider>
-              </EnhancedQueryProvider>
-            </AuthProvider>
-          </ThemeProvider>
+                              {/* Ad Debugger - only shows in development */}
+                              {/*<AdDebugger />*/}
+                              </GestureHandlerRootView>
+                            </SidebarProvider>
+                          </TabNavigatorProvider>
+                        </ShortsProvider>
+                        </DataProvider>
+                      </ContentCreatorPremiumProvider>
+                    </WalletProvider>
+                    </FCMChatProvider>
+                  </UserDataProvider>
+                </EnhancedQueryProvider>
+              </AuthProvider>
+            </ThemeProvider>
+          </KeyboardAvoiderProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </AppErrorBoundary>

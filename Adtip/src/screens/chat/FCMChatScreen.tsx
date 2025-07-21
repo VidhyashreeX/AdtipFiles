@@ -11,21 +11,20 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  FlatList,
   Alert,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
-  Keyboard,
   Animated,
   LayoutAnimation,
+  Keyboard,
+  Platform,
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Clock, Check, CheckCheck, Send, CircleAlert } from 'lucide-react-native';
 import LinearGradient from 'react-native-linear-gradient';
+import { KeyboardAvoiderScrollView, KeyboardAvoiderView } from '@good-react-native/keyboard-avoider';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFCMChat } from '../../contexts/FCMChatContext';
@@ -195,14 +194,12 @@ const FCMChatScreen: React.FC = () => {
 
   const {
     currentMessages,
-    loadingMessages,
     isInitialized,
     sendMessage,
     createOrGetConversation,
     setCurrentConversation,
     markAsRead,
     loadMessages,
-    refreshMessages,
     showChatUnavailableAlert,
   } = useFCMChat();
 
@@ -210,27 +207,22 @@ const FCMChatScreen: React.FC = () => {
   const [messageText, setMessageText] = useState('');
   const [sending, setSending] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [loadingLocalMessages, setLoadingLocalMessages] = useState(true);
   const [inputHeight, setInputHeight] = useState(50);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  const flatListRef = useRef<FlatList>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const textInputRef = useRef<TextInput>(null);
   const sendButtonScale = useRef(new Animated.Value(1)).current;
-  const keyboardAnimationValue = useRef(new Animated.Value(0)).current;
-  const inputContainerAnimValue = useRef(new Animated.Value(0)).current;
+  const scrollViewRef = useRef<any>(null);
 
   // Real-time message handling
-  const { isActive } = useRealTimeMessages(conversationId || '');
+  useRealTimeMessages(conversationId || '');
 
-  // Auto-scroll to bottom function
+  // Auto-scroll is handled automatically by KeyboardAvoiderScrollView
   const scrollToBottom = useCallback(() => {
-    if (flatListRef.current && currentMessages.length > 0) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }
-  }, [currentMessages.length]);
+    // KeyboardAvoiderScrollView handles scrolling automatically
+    console.log('[FCMChatScreen] Auto-scroll handled by KeyboardAvoiderScrollView');
+  }, []);
 
   // Handle real-time message events
   const handleMessageReceived = useCallback((message: Message) => {
@@ -274,45 +266,25 @@ const FCMChatScreen: React.FC = () => {
     });
   }, [navigation, participantName, colors.text.primary, colors.background, showChatUnavailableAlert]);
 
-  // Enhanced keyboard handling with smooth animations
+  // Enhanced keyboard handling for focus management and auto-scroll
   useEffect(() => {
-    // Configure layout animations for smooth transitions
-    LayoutAnimation.configureNext({
-      duration: 250,
-      create: {
-        type: LayoutAnimation.Types.easeInEaseOut,
-        property: LayoutAnimation.Properties.opacity,
-      },
-      update: {
-        type: LayoutAnimation.Types.easeInEaseOut,
-      },
-    });
-
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
       (e) => {
-        const keyboardHeight = e.endCoordinates.height;
-        setKeyboardHeight(keyboardHeight);
+        setKeyboardHeight(e.endCoordinates.height);
         setIsKeyboardVisible(true);
 
-        // Smooth keyboard animation
-        Animated.parallel([
-          Animated.timing(keyboardAnimationValue, {
-            toValue: 1,
-            duration: 250,
-            useNativeDriver: false,
-          }),
-          Animated.timing(inputContainerAnimValue, {
-            toValue: keyboardHeight,
-            duration: 250,
-            useNativeDriver: false,
-          }),
-        ]).start();
+        // Auto-focus the input when keyboard opens
+        if (textInputRef.current) {
+          textInputRef.current.focus();
+        }
 
-        // Auto-scroll to bottom with proper timing
+        // Auto-scroll to bottom with chat height padding
         setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+          if (scrollViewRef.current) {
+            scrollViewRef.current.scrollToEnd({ animated: true });
+          }
+        });
       }
     );
 
@@ -322,44 +294,18 @@ const FCMChatScreen: React.FC = () => {
         setKeyboardHeight(0);
         setIsKeyboardVisible(false);
 
-        // Smooth keyboard hide animation
-        Animated.parallel([
-          Animated.timing(keyboardAnimationValue, {
-            toValue: 0,
-            duration: 250,
-            useNativeDriver: false,
-          }),
-          Animated.timing(inputContainerAnimValue, {
-            toValue: 0,
-            duration: 250,
-            useNativeDriver: false,
-          }),
-        ]).start();
+        // Blur the input when keyboard closes
+        if (textInputRef.current) {
+          textInputRef.current.blur();
+        }
       }
     );
-
-    const keyboardWillShowListener = Platform.OS === 'ios' 
-      ? Keyboard.addListener('keyboardWillShow', (e) => {
-          // Pre-animate for iOS for smoother experience
-          const keyboardHeight = e.endCoordinates.height;
-          setKeyboardHeight(keyboardHeight);
-          setIsKeyboardVisible(true);
-        })
-      : null;
-
-    const keyboardWillHideListener = Platform.OS === 'ios'
-      ? Keyboard.addListener('keyboardWillHide', () => {
-          setIsKeyboardVisible(false);
-        })
-      : null;
 
     return () => {
       keyboardDidShowListener?.remove();
       keyboardDidHideListener?.remove();
-      keyboardWillShowListener?.remove();
-      keyboardWillHideListener?.remove();
     };
-  }, [keyboardAnimationValue, inputContainerAnimValue]);
+  }, []);
 
   // Initialize conversation
   useEffect(() => {
@@ -387,13 +333,10 @@ const FCMChatScreen: React.FC = () => {
     initializeConversation();
   }, [isInitialized, participantId, createOrGetConversation, setCurrentConversation, loadMessages]);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll is handled by KeyboardAvoiderScrollView
   useEffect(() => {
-    if (currentMessages.length > 0) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }
+    // KeyboardAvoiderScrollView handles auto-scrolling
+    console.log('[FCMChatScreen] New messages detected, auto-scroll handled by library');
   }, [currentMessages]);
 
   // Track if we've already marked messages as read for this conversation
@@ -429,13 +372,10 @@ const FCMChatScreen: React.FC = () => {
     hasMarkedAsReadRef.current = null;
   }, [conversationId]);
 
-  // Scroll to bottom when new messages arrive
+  // Auto-scroll is handled by KeyboardAvoiderScrollView
   useEffect(() => {
-    if (currentMessages.length > 0) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }
+    // KeyboardAvoiderScrollView handles auto-scrolling
+    console.log('[FCMChatScreen] Messages updated, auto-scroll handled by library');
   }, [currentMessages.length]);
 
   // Cleanup on unmount
@@ -464,11 +404,11 @@ const FCMChatScreen: React.FC = () => {
   // Handle input text change with dynamic height
   const handleTextChange = useCallback((text: string) => {
     setMessageText(text);
-    
+
     // Calculate dynamic height based on content
     const lines = text.split('\n').length;
     const calculatedHeight = Math.min(Math.max(50, lines * 20 + 30), 120);
-    
+
     if (calculatedHeight !== inputHeight) {
       LayoutAnimation.configureNext({
         duration: 200,
@@ -481,22 +421,16 @@ const FCMChatScreen: React.FC = () => {
         },
       });
       setInputHeight(calculatedHeight);
-      
-      // Ensure messages remain visible above input
-      setTimeout(() => {
-        if (isKeyboardVisible) {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }
-      }, 100);
+
+      // Auto-scroll is handled by KeyboardAvoiderScrollView
+      console.log('[FCMChatScreen] Input height changed, auto-scroll handled by library');
     }
-  }, [inputHeight, isKeyboardVisible]);
+  }, [inputHeight]);
 
   // Handle input focus with enhanced scroll behavior
   const handleInputFocus = useCallback(() => {
-    // Delay scroll to ensure keyboard animation completes
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, Platform.OS === 'ios' ? 300 : 400);
+    // The keyboard avoider will handle scrolling automatically
+    console.log('[FCMChatScreen] Input focused, auto-scroll handled by library');
   }, []);
 
   // Handle sending message
@@ -514,10 +448,8 @@ const FCMChatScreen: React.FC = () => {
     setMessageText('');
     setInputHeight(50); // Reset input height
 
-    // Scroll to bottom immediately to show the optimistic message
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 50);
+    // Auto-scroll is handled by KeyboardAvoiderScrollView
+    console.log('[FCMChatScreen] Message sent, auto-scroll handled by library');
 
     try {
       setSending(true);
@@ -534,12 +466,7 @@ const FCMChatScreen: React.FC = () => {
     }
   }, [messageText, conversationId, sending, sendMessage, animateSendButton]);
 
-  // Handle refresh
-  const handleRefresh = useCallback(async () => {
-    if (conversationId) {
-      await refreshMessages(conversationId);
-    }
-  }, [conversationId, refreshMessages]);
+  // Refresh functionality removed since KeyboardAvoiderScrollView doesn't support pull-to-refresh
 
   // Render message item
   const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
@@ -595,44 +522,48 @@ const FCMChatScreen: React.FC = () => {
         />
       )}
 
-      {/* Messages List */}
-      <FlatList
-        ref={flatListRef}
-        data={currentMessages}
-        renderItem={renderMessage}
-        keyExtractor={(item) => item.id}
-        style={[styles.messagesList, { marginBottom: keyboardHeight > 0 ? 0 : 0 }]}
+      {/* Messages List with Keyboard Avoider */}
+      <KeyboardAvoiderScrollView
+        style={[styles.messagesList, { flex: 1 }]}
         contentContainerStyle={[
-          styles.messagesContent,
-          { paddingBottom: keyboardHeight > 0 ? 10 : 80 } // Add padding when keyboard is visible
+          styles.messagesContent
+        // Increased padding for better spacing
         ]}
-        onRefresh={handleRefresh}
-        refreshing={loadingMessages}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={
-          !loadingLocalMessages ? (
-            <View style={styles.emptyContainer}>
-              <Icon name="chat" size={48} color={colors.text.secondary} />
-              <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
-                No messages yet. Start the conversation!
-              </Text>
-            </View>
-          ) : null
-        }
-      />
-
-      {/* Input Area */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        extraSpace={0} // Increased space to ensure full keyboard avoidance
+        animationTime={300}
+        iosHideBehavior="revert" // Return to original position when keyboard hides
       >
+        {currentMessages.length === 0 && !loadingLocalMessages ? (
+          <View style={styles.emptyContainer}>
+            <Icon name="chat" size={48} color={colors.text.secondary} />
+            <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
+              No messages yet. Start the conversation!
+            </Text>
+          </View>
+        ) : (
+          currentMessages.map((item, index) => (
+            <View key={item.id}>
+              {renderMessage({ item, index })}
+            </View>
+          ))
+        )}
+      </KeyboardAvoiderScrollView>
+
+      {/* Input Area Wrapper */}
+      <View style={styles.inputWrapper}>
+        <KeyboardAvoiderView
+          avoidMode="whole-view"
+          extraSpace={0} // Increased space to push input well above keyboard
+          animationTime={300}
+          enableAndroid={true}
+        >
         <Animated.View style={[
           styles.inputContainer,
           {
             backgroundColor: colors.surface,
             borderTopColor: colors.border,
-            marginBottom: Platform.OS === 'android' ? keyboardHeight : 0,
             height: inputHeight + 24, // Dynamic height based on input content
           }
         ]}>
@@ -692,7 +623,8 @@ const FCMChatScreen: React.FC = () => {
             </TouchableOpacity>
           </Animated.View>
         </Animated.View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoiderView>
+      </View>
     </View>
   );
 };
@@ -782,16 +714,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
   },
+  inputWrapper: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderTopWidth: 0.5,
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    // Removed absolute positioning to let KeyboardAvoiderView handle positioning
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
