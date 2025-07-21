@@ -7,7 +7,9 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Observable } from 'rxjs';
 import { FCMChatServiceLocal, Message, Conversation, FCMChatEventHandlers } from '../services/FCMChatServiceLocal';
+import { WatermelonLocalChatManager } from '../services/WatermelonLocalChatManager';
 import { useAuth } from './AuthContext';
 
 interface FCMChatContextType {
@@ -60,6 +62,9 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
 
   const fcmChatService = FCMChatServiceLocal.getInstance();
 
+  // WatermelonDB manager for reactive queries
+  const [watermelonManager, setWatermelonManager] = useState<WatermelonLocalChatManager | null>(null);
+
   // Initialize chat service
   const initializeChat = useCallback(async () => {
     if (!user?.id || isInitialized) {
@@ -76,70 +81,110 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
         return;
       }
 
-      // Setup event handlers
-      const eventHandlers: FCMChatEventHandlers = {
+      // Setup event handlers for legacy FCM service (receive only)
+      const legacyEventHandlers: FCMChatEventHandlers = {
         onMessageReceived: handleMessageReceived,
-        onMessageSent: handleMessageSent,
+        onMessageSent: () => {}, // Disable to prevent duplicates - WatermelonDB handles this
         onMessageDelivered: handleMessageDelivered,
         onConversationUpdated: handleConversationUpdated,
       };
 
-      // Initialize the service with event handlers
-      await fcmChatService.initialize(user.id.toString(), authToken, eventHandlers);
+      // Initialize the legacy service with limited event handlers
+      await fcmChatService.initialize(user.id.toString(), authToken, legacyEventHandlers);
+
+      // Initialize WatermelonDB manager for reactive queries (primary message handler)
+      const manager = new WatermelonLocalChatManager();
+      await manager.initialize(user.id.toString(), user.name || user.username || 'Unknown User', {
+        onMessageReceived: handleMessageReceived,
+        onMessageSent: handleMessageSent, // Primary message sent handler
+        onConversationUpdated: handleConversationUpdated,
+        onUnreadCountChanged: (count) => setTotalUnreadCount(count)
+      });
+      setWatermelonManager(manager);
 
       setIsInitialized(true);
       console.log('[FCMChatContext] FCM chat service initialized successfully');
 
-      // Load initial conversations
-      await loadConversations();
+      // Initial conversations will be loaded via reactive subscription
 
     } catch (error) {
       console.error('[FCMChatContext] Failed to initialize chat service:', error);
     }
   }, [user?.id, isInitialized]);
 
-  // Load conversations
+  // Setup reactive subscriptions for WatermelonDB
+  useEffect(() => {
+    if (!watermelonManager || !isInitialized) return;
+
+    // Subscribe to conversations
+    const conversationsSubscription = watermelonManager.observeConversations().subscribe({
+      next: (conversations) => {
+        setConversations(conversations);
+        const unreadCount = conversations.reduce((total, conv) => total + conv.unreadCount, 0);
+        setTotalUnreadCount(unreadCount);
+      },
+      error: (error) => {
+        console.error('[FCMChatContext] Conversations subscription error:', error);
+      }
+    });
+
+    return () => {
+      conversationsSubscription.unsubscribe();
+    };
+  }, [watermelonManager, isInitialized]);
+
+  // Setup reactive subscription for current conversation messages
+  useEffect(() => {
+    if (!watermelonManager || !currentConversationId) return;
+
+    const messagesSubscription = watermelonManager.observeMessages(currentConversationId).subscribe({
+      next: (messages) => {
+        setCurrentMessages(messages);
+      },
+      error: (error) => {
+        console.error('[FCMChatContext] Messages subscription error:', error);
+      }
+    });
+
+    return () => {
+      messagesSubscription.unsubscribe();
+    };
+  }, [watermelonManager, currentConversationId]);
+
+  // Load conversations (now handled by reactive subscription)
   const loadConversations = useCallback(async () => {
-    if (!isInitialized) return;
+    if (!isInitialized || !watermelonManager) return;
 
     try {
       setLoadingConversations(true);
-      const conversations = await fcmChatService.getConversations();
-      setConversations(conversations);
-
-      // Calculate total unread count
-      const unreadCount = conversations.reduce((total, conv) => total + conv.unreadCount, 0);
-      setTotalUnreadCount(unreadCount);
-
+      // Conversations are automatically loaded via reactive subscription
+      // This method is kept for compatibility but does minimal work
+      console.log('[FCMChatContext] Conversations loaded via reactive subscription');
     } catch (error) {
       console.error('[FCMChatContext] Failed to load conversations:', error);
     } finally {
       setLoadingConversations(false);
     }
-  }, [isInitialized]);
+  }, [isInitialized, watermelonManager]);
 
-  // Load messages for a conversation - Local storage only approach
+  // Load messages for a conversation (now handled by reactive subscription)
   const loadMessages = useCallback(async (conversationId: string) => {
-    if (!isInitialized) return;
+    if (!isInitialized || !watermelonManager) return;
 
     try {
       setLoadingMessages(true);
 
-      // Load from local storage only (no API calls)
-      const localMessages = await fcmChatService.getMessages(conversationId);
-      console.log('[FCMChatContext] Loaded local messages:', localMessages.length);
-
-      // Set local messages immediately
-      setCurrentMessages(localMessages);
+      // Messages are automatically loaded via reactive subscription when currentConversationId changes
+      // This method is kept for compatibility but does minimal work
+      console.log('[FCMChatContext] Messages loaded via reactive subscription for:', conversationId);
 
     } catch (error) {
       console.error('[FCMChatContext] Failed to load messages:', error);
-      // Set empty array on error to show proper empty state
       setCurrentMessages([]);
     } finally {
       setLoadingMessages(false);
     }
-  }, [isInitialized]);
+  }, [isInitialized, watermelonManager]);
 
   // Intelligent message merging - preserves local data integrity
   const mergeMessagesIntelligently = useCallback(async (
@@ -192,54 +237,21 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
 
   // Send a message
   const sendMessage = useCallback(async (conversationId: string, content: string, replyTo?: string) => {
-    if (!isInitialized || !content.trim() || !user?.id) return;
-
-    // Get proper sender name - prioritize name, fallback to username, then mobile number
-    const getSenderName = () => {
-      if (user.name && user.name.trim()) return user.name.trim();
-      if (user.username && user.username.trim()) return user.username.trim();
-      if (user.mobile_number) return user.mobile_number;
-      return `User ${user.id}`;
-    };
-
-    // Create optimistic message with unique temp ID
-    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const optimisticMessage: Message = {
-      id: tempId,
-      conversationId,
-      senderId: user.id.toString(),
-      senderName: getSenderName(),
-      senderAvatar: user.profile_image || undefined,
-      content: content.trim(),
-      messageType: 'text',
-      createdAt: new Date().toISOString(),
-      tempId: tempId,
-      status: 'sending',
-      deliveryStatus: 'pending',
-      replyTo
-    };
-
-    // Add optimistic message immediately to current conversation if it matches
-    if (currentConversationId === conversationId) {
-      setCurrentMessages(prev => [...prev, optimisticMessage]);
-      console.log('🚀 [FCMChatContext] Added optimistic message with status "sending":', optimisticMessage.tempId);
-    }
+    if (!isInitialized || !content.trim() || !user?.id || !watermelonManager) return;
 
     try {
-      await fcmChatService.sendMessage(conversationId, content.trim(), replyTo);
-      console.log('✅ [FCMChatContext] Message sent successfully via API');
+      // Use WatermelonDB manager to send message (handles optimistic UI automatically)
+      const message = await watermelonManager.sendMessage(conversationId, content.trim(), replyTo);
+      console.log('✅ [FCMChatContext] Message sent successfully via WatermelonDB:', message.id);
+
+      // NOTE: Removed legacy FCM service call to prevent duplicate messages
+      // WatermelonDB manager handles both local storage and FCM sending
+
     } catch (error) {
       console.error('❌ [FCMChatContext] Failed to send message:', error);
-
-      // Remove the optimistic message on failure
-      if (currentConversationId === conversationId) {
-        setCurrentMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
-        console.log('🗑️ [FCMChatContext] Removed failed optimistic message');
-      }
-
       throw error;
     }
-  }, [isInitialized, user?.id, currentConversationId]);
+  }, [isInitialized, user?.id, watermelonManager]);
 
   // Update message status
   const updateMessageStatus = useCallback((messageId: string, status: 'sending' | 'sent' | 'delivered' | 'read') => {
@@ -255,22 +267,23 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
     setCurrentMessages(prev => prev.filter(message => message.tempId !== tempId));
   }, []);
 
-  // Create or get conversation - Local storage only approach
+  // Create or get conversation - WatermelonDB approach
   const createOrGetConversation = useCallback(async (participantId: string): Promise<string> => {
-    if (!isInitialized) {
+    if (!isInitialized || !watermelonManager) {
       throw new Error('Chat service not initialized');
     }
 
     try {
-      // Use FCMChatServiceLocal to create/get conversation
-      const conversationId = await fcmChatService.createOrGetConversation(participantId);
+      // Use WatermelonDB manager to create/get conversation
+      const conversationId = await watermelonManager.createOrGetConversation(participantId);
 
-      console.log('[FCMChatContext] Using local conversation ID:', conversationId);
+      console.log('[FCMChatContext] Using WatermelonDB conversation ID:', conversationId);
 
       // Set current participant for conversation state tracking
       setCurrentParticipantId(participantId);
 
-      // Set conversation state in FCMChatService for notification management
+      // Set conversation state for notification management
+      watermelonManager.setCurrentConversation(conversationId);
       fcmChatService.setCurrentConversation(conversationId, participantId);
 
       return conversationId;
@@ -278,43 +291,40 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
       console.error('[FCMChatContext] Failed to create/get conversation:', error);
       throw error;
     }
-  }, [isInitialized]);
+  }, [isInitialized, watermelonManager]);
 
   // Set current conversation
   const setCurrentConversation = useCallback((conversationId: string | null) => {
     setCurrentConversationId(conversationId);
+
+    // Update WatermelonDB manager
+    if (watermelonManager) {
+      watermelonManager.setCurrentConversation(conversationId);
+    }
+
     if (!conversationId) {
       setCurrentMessages([]);
       setCurrentParticipantId(null);
       // Clear conversation state in FCMChatService
       fcmChatService.setCurrentConversation(null);
     }
-  }, []); // Remove fcmChatService dependency since it's a singleton
+  }, [watermelonManager]);
 
   // Mark messages as read
   const markAsRead = useCallback(async (conversationId: string, messageId?: string) => {
-    if (!isInitialized) return;
+    if (!isInitialized || !watermelonManager) return;
 
     try {
-      await fcmChatService.markMessagesAsRead(conversationId);
+      // Use WatermelonDB manager to mark as read (handles reactive updates automatically)
+      await watermelonManager.markAsRead(conversationId, messageId);
 
-      // Update local conversation unread count
-      setConversations(prev => prev.map(conv =>
-        conv.id === conversationId
-          ? { ...conv, unreadCount: 0 }
-          : conv
-      ));
-
-      // Recalculate total unread count using functional update to avoid dependency
-      setTotalUnreadCount(prev => {
-        // Get current conversations from state to avoid dependency
-        return Math.max(0, prev - 1); // Simple decrement, will be corrected by loadConversations
-      });
+      // NOTE: Removed legacy service call to prevent duplicate mark as read operations
+      // WatermelonDB manager handles all read status updates
 
     } catch (error) {
       console.error('[FCMChatContext] Failed to mark as read:', error);
     }
-  }, [isInitialized]); // Remove conversations dependency
+  }, [isInitialized, watermelonManager]);
 
   // Refresh messages for current conversation
   const refreshMessages = useCallback(async (conversationId: string) => {

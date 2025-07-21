@@ -123,7 +123,7 @@ class PermissionManagerService {
    */
   public async requestNotificationPermissions(): Promise<boolean> {
     const permissionKey = 'notifications';
-    
+
     if (this.pendingRequests.has(permissionKey)) {
       console.log('[PermissionManager] Notification permission request already in progress');
       return this.permissionState.notifications;
@@ -137,24 +137,48 @@ class PermissionManagerService {
       let granted = false;
 
       if (Platform.OS === 'android') {
-        // Request Notifee permissions first
-        const notifeeStatus = await notifee.requestPermission();
-        const notifeeGranted = notifeeStatus.authorizationStatus === NotifeeAuthStatus.AUTHORIZED;
-        
-        // Then request FCM permissions
-        const fcmStatus = await messaging().requestPermission({
-          sound: true,
-          alert: true,
-          badge: true,
-        });
-        const fcmGranted = fcmStatus === AuthorizationStatus.AUTHORIZED || 
-                          fcmStatus === AuthorizationStatus.PROVISIONAL;
+        // Add safety check for app state and UI availability
+        if (!this.isAppReadyForPermissionRequest()) {
+          console.warn('[PermissionManager] App not ready for permission request, waiting...');
+
+          // Wait a bit and try again
+          await new Promise(resolve => setTimeout(resolve, 1000));
+
+          if (!this.isAppReadyForPermissionRequest()) {
+            console.warn('[PermissionManager] App still not ready, skipping permission request');
+            return this.permissionState.notifications;
+          }
+        }
+
+        // Request Notifee permissions first with error handling
+        let notifeeGranted = false;
+        try {
+          const notifeeStatus = await notifee.requestPermission();
+          notifeeGranted = notifeeStatus?.authorizationStatus === NotifeeAuthStatus.AUTHORIZED;
+        } catch (notifeeError) {
+          console.error('[PermissionManager] Notifee permission request failed:', notifeeError);
+          // Continue with FCM permissions even if Notifee fails
+        }
+
+        // Then request FCM permissions with error handling
+        let fcmGranted = false;
+        try {
+          const fcmStatus = await messaging().requestPermission({
+            sound: true,
+            alert: true,
+            badge: true,
+          });
+          fcmGranted = fcmStatus === AuthorizationStatus.AUTHORIZED ||
+                      fcmStatus === AuthorizationStatus.PROVISIONAL;
+        } catch (fcmError) {
+          console.error('[PermissionManager] FCM permission request failed:', fcmError);
+        }
 
         granted = notifeeGranted && fcmGranted;
-        console.log('[PermissionManager] Android notification permissions:', { 
-          notifee: notifeeGranted, 
-          fcm: fcmGranted, 
-          overall: granted 
+        console.log('[PermissionManager] Android notification permissions:', {
+          notifee: notifeeGranted,
+          fcm: fcmGranted,
+          overall: granted
         });
 
       } else {
@@ -169,7 +193,7 @@ class PermissionManagerService {
           provisional: false,
         });
 
-        granted = status === AuthorizationStatus.AUTHORIZED || 
+        granted = status === AuthorizationStatus.AUTHORIZED ||
                  status === AuthorizationStatus.PROVISIONAL;
         console.log('[PermissionManager] iOS notification permissions:', { status, granted });
       }
@@ -333,6 +357,38 @@ class PermissionManagerService {
   }
 
   // ===== PRIVATE METHODS =====
+
+  /**
+   * Check if app is ready for permission requests (prevents NullPointerException)
+   */
+  private isAppReadyForPermissionRequest(): boolean {
+    try {
+      // Check if we're in a valid app state
+      const { AppState } = require('react-native');
+      const currentState = AppState.currentState;
+
+      if (currentState !== 'active') {
+        console.log('[PermissionManager] App not in active state:', currentState);
+        return false;
+      }
+
+      // Additional safety checks for Android
+      if (Platform.OS === 'android') {
+        // Check if we have a valid activity context
+        // This helps prevent the NullPointerException when UI is not ready
+        const { DeviceEventEmitter } = require('react-native');
+        if (!DeviceEventEmitter) {
+          console.log('[PermissionManager] DeviceEventEmitter not available');
+          return false;
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error('[PermissionManager] Error checking app readiness:', error);
+      return false;
+    }
+  }
 
   private async checkNotificationPermissions(): Promise<boolean> {
     try {

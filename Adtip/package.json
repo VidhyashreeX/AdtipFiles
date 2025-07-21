@@ -23,6 +23,8 @@
     "@babel/plugin-transform-class-static-block": "^7.27.1",
     "@d11/react-native-fast-image": "^8.9.2",
     "@notifee/react-native": "^9.1.8",
+    "@nozbe/watermelondb": "^0.28.0",
+    "@nozbe/with-observables": "^1.6.0",
     "@playwright/mcp": "^0.0.30",
     "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-native-clipboard/clipboard": "^1.16.3",
@@ -112,6 +114,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
+    "@babel/plugin-proposal-decorators": "^7.28.0",
     "@babel/preset-env": "^7.25.3",
     "@babel/runtime": "^7.25.0",
     "@react-native-community/cli": "18.0.0",

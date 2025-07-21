@@ -10,7 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import messaging, { FirebaseMessagingTypes } from '@react-native-firebase/messaging';
 import { AppState, AppStateStatus } from 'react-native';
 import notifee, { AndroidImportance, EventType } from '@notifee/react-native';
-import { LocalChatManager, LocalMessage, LocalConversation } from './LocalChatManager';
+import { WatermelonLocalChatManager, LocalMessage, LocalConversation } from './WatermelonLocalChatManager';
 import Logger from '../utils/LogUtils';
 
 export interface Message extends LocalMessage {}
@@ -29,12 +29,12 @@ export class FCMChatServiceLocal {
   private isInitialized = false;
   private currentUserId: string | null = null;
   private eventHandlers: FCMChatEventHandlers = {};
-  private localChatManager: LocalChatManager;
+  private localChatManager: WatermelonLocalChatManager;
   private currentConversationId: string | null = null;
   private currentParticipantId: string | null = null;
 
   private constructor() {
-    this.localChatManager = LocalChatManager.getInstance();
+    this.localChatManager = new WatermelonLocalChatManager();
   }
 
   static getInstance(): FCMChatServiceLocal {

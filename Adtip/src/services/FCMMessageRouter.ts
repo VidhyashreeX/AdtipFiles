@@ -200,7 +200,7 @@ export class FCMMessageRouter {
         return;
       }
 
-      // Call the chat service's message handler
+      // Call the chat service's message handler (receive only - sending handled by WatermelonDB)
       await chatService.handleFCMMessageFromRouter(remoteMessage);
       console.log('[FCMMessageRouter] Chat message processed successfully');
     } catch (error) {
