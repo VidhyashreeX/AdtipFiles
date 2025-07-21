@@ -15,13 +15,15 @@ export class Message extends Model {
   static table = 'messages';
 
   static associations: Associations = {
-    conversation: { type: 'belongs_to', key: 'conversation_id' },
     sender: { type: 'belongs_to', key: 'sender_id' },
+    recipient: { type: 'belongs_to', key: 'recipient_id' },
     replyToMessage: { type: 'belongs_to', key: 'reply_to' },
   };
 
-  @field('conversation_id') conversationId!: string;
+  // User-based chat fields (clean implementation)
+  @field('chat_id') chatId!: string;
   @field('sender_id') senderId!: string;
+  @field('recipient_id') recipientId!: string;
   @field('sender_name') senderName!: string;
   @field('sender_avatar') senderAvatar?: string;
   @field('content') content!: string;
@@ -40,8 +42,8 @@ export class Message extends Model {
   @readonly @date('created_at') createdAt!: Date;
   @readonly @date('updated_at') updatedAt!: Date;
 
-  @relation('conversations', 'conversation_id') conversation: any;
   @relation('users', 'sender_id') sender: any;
+  @relation('users', 'recipient_id') recipient: any;
   @relation('messages', 'reply_to') replyToMessage: any;
 
   // Helper methods
@@ -112,17 +114,21 @@ export class Message extends Model {
 
   // Soft delete message
   async softDelete(): Promise<void> {
-    await this.update(message => {
-      message.isDeleted = true;
-      message.deletedAt = new Date();
+    await this.database.write(async () => {
+      await this.update(message => {
+        message.isDeleted = true;
+        message.deletedAt = new Date();
+      });
     });
   }
 
   // Restore deleted message
   async restore(): Promise<void> {
-    await this.update(message => {
-      message.isDeleted = false;
-      message.deletedAt = undefined;
+    await this.database.write(async () => {
+      await this.update(message => {
+        message.isDeleted = false;
+        message.deletedAt = undefined;
+      });
     });
   }
 
@@ -133,11 +139,13 @@ export class Message extends Model {
     fileSize?: number;
     fileMimeType?: string;
   }): Promise<void> {
-    await this.update(message => {
-      if (fileInfo.fileUrl !== undefined) message.fileUrl = fileInfo.fileUrl;
-      if (fileInfo.fileName !== undefined) message.fileName = fileInfo.fileName;
-      if (fileInfo.fileSize !== undefined) message.fileSize = fileInfo.fileSize;
-      if (fileInfo.fileMimeType !== undefined) message.fileMimeType = fileInfo.fileMimeType;
+    await this.database.write(async () => {
+      await this.update(message => {
+        if (fileInfo.fileUrl !== undefined) message.fileUrl = fileInfo.fileUrl;
+        if (fileInfo.fileName !== undefined) message.fileName = fileInfo.fileName;
+        if (fileInfo.fileSize !== undefined) message.fileSize = fileInfo.fileSize;
+        if (fileInfo.fileMimeType !== undefined) message.fileMimeType = fileInfo.fileMimeType;
+      });
     });
   }
 
@@ -145,19 +153,37 @@ export class Message extends Model {
   getFormattedTime(): string {
     const now = new Date();
     const messageDate = this.createdAt;
-    
+
     // If today, show time only
     if (messageDate.toDateString() === now.toDateString()) {
       return messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
-    
+
     // If this week, show day and time
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     if (messageDate > weekAgo) {
       return messageDate.toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
     }
-    
+
     // Otherwise show date
     return messageDate.toLocaleDateString();
+  }
+
+  // User-based chat helper methods
+  static generateChatId(userId1: string, userId2: string): string {
+    const [user1, user2] = [userId1, userId2].sort();
+    return `chat_${user1}_${user2}`;
+  }
+
+  getOtherUserId(currentUserId: string): string {
+    return this.senderId === currentUserId ? this.recipientId : this.senderId;
+  }
+
+  getOtherUserName(currentUserId: string): string {
+    return this.senderId === currentUserId ? 'You' : this.senderName;
+  }
+
+  isFromUser(currentUserId: string): boolean {
+    return this.senderId === currentUserId;
   }
 }

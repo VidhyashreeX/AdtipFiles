@@ -18,7 +18,7 @@ import { initializeDatabase } from '../database';
 import ApiService from './ApiService';
 import Logger from '../utils/LogUtils';
 import type { Message } from '../database/models/Message';
-import type { Conversation } from '../database/models/Conversation';
+import type { UserChat } from '../database/models/UserChat';
 import type { User } from '../database/models/User';
 
 // Import navigation
@@ -126,11 +126,16 @@ export class WatermelonLocalChatManager {
       notifee.onForegroundEvent(async ({ type, detail }) => {
         if (type === EventType.PRESS) {
           const data = detail.notification?.data;
-          if (data?.type === 'chat_message' && data?.conversationId && data?.senderId) {
-            Logger.info('[WatermelonLocalChatManager] 📱 Notification pressed, opening conversation:', data.conversationId);
+          if (data?.type === 'chat_message' && data?.senderId) {
+            Logger.info('[WatermelonLocalChatManager] 📱 Notification pressed for user-based chat');
             // Get sender name from notification title (which is the sender name)
             const senderName = detail.notification?.title || 'Unknown User';
-            await this.navigateToConversation(String(data.conversationId), String(data.senderId), senderName);
+
+            // Use chat ID if available, otherwise fall back to conversation ID
+            const chatIdentifier = data.chatId || data.conversationId;
+            Logger.info('[WatermelonLocalChatManager] 📱 Using chat identifier:', chatIdentifier);
+
+            await this.navigateToUserChat(String(data.senderId), senderName);
           }
         }
       });
@@ -142,11 +147,11 @@ export class WatermelonLocalChatManager {
   }
 
   /**
-   * Navigate to conversation from notification
+   * Navigate to user-based chat from notification
    */
-  private async navigateToConversation(conversationId: string, senderId: string, senderName?: string): Promise<void> {
+  private async navigateToUserChat(senderId: string, senderName?: string): Promise<void> {
     try {
-      Logger.info('[WatermelonLocalChatManager] 🧭 Navigating to conversation:', conversationId, 'from sender:', senderId);
+      Logger.info('[WatermelonLocalChatManager] 🧭 Navigating to user chat with sender:', senderId);
 
       // Use provided sender name or try to get from database
       let finalSenderName = senderName;
@@ -158,14 +163,10 @@ export class WatermelonLocalChatManager {
       Logger.info('[WatermelonLocalChatManager] 🧭 Sender info:', { senderId, senderName: finalSenderName });
 
       // Navigate to FCMChatScreen with sender info
-      // The FCMChatScreen will create/get the conversation with this participant
-      // and should load the existing conversation that contains the message
+      // The FCMChatScreen will create/get the user-based chat with this participant
       if (navigationRef.isReady()) {
         const currentRoute = navigationRef.getCurrentRoute();
         Logger.info('[WatermelonLocalChatManager] 🧭 Current route:', currentRoute?.name);
-
-        // Store the target conversation ID for the FCMChatScreen to use
-        await AsyncStorage.setItem('targetConversationId', conversationId);
 
         // Navigate to FCMChatScreen with participant info
         if (currentRoute?.name && ['Home', 'TipTube', 'TipCall', 'Profile', 'Conversations', 'FCMChat'].includes(currentRoute.name)) {
@@ -190,7 +191,7 @@ export class WatermelonLocalChatManager {
         Logger.warn('[WatermelonLocalChatManager] ❌ Navigation not ready');
       }
     } catch (error) {
-      Logger.error('[WatermelonLocalChatManager] ❌ Error navigating to conversation:', error);
+      Logger.error('[WatermelonLocalChatManager] ❌ Error navigating to user chat:', error);
     }
   }
 
@@ -235,24 +236,34 @@ export class WatermelonLocalChatManager {
   }
 
   /**
-   * Get conversations with reactive updates
+   * Get user chats with reactive updates
    */
   observeConversations(): Observable<LocalConversation[]> {
     if (!this.currentUserId) {
       throw new Error('Chat manager not initialized');
     }
 
-    return QueryHelpers.observeActiveConversations(this.currentUserId)
+    return QueryHelpers.getUserChatsObservable(this.currentUserId)
       .pipe(
-        map(conversations => conversations.map(this.convertConversationToLocal))
+        map(userChats => userChats.map(this.convertUserChatToLocal))
       );
   }
 
   /**
-   * Get messages for a conversation with reactive updates
+   * Get messages for a user-based chat with reactive updates
    */
-  observeMessages(conversationId: string, limit: number = 50): Observable<LocalMessage[]> {
-    return QueryHelpers.observeConversationMessages(conversationId, limit)
+  observeMessages(chatId: string, limit: number = 50): Observable<LocalMessage[]> {
+    if (!this.currentUserId) {
+      throw new Error('Chat manager not initialized');
+    }
+
+    // Extract other user ID from chat ID (format: chat_userId1_userId2)
+    const [, userId1, userId2] = chatId.split('_');
+    const otherUserId = userId1 === this.currentUserId ? userId2 : userId1;
+
+    Logger.info('[WatermelonLocalChatManager] 📨 Observing user-based messages between:', this.currentUserId, 'and', otherUserId);
+
+    return QueryHelpers.getUserMessagesObservable(this.currentUserId, otherUserId, limit)
       .pipe(
         map(messages => messages.map(this.convertMessageToLocal))
       );
@@ -272,10 +283,16 @@ export class WatermelonLocalChatManager {
 
     Logger.info('[WatermelonLocalChatManager] Creating message:', messageId);
 
+    // Extract recipient ID from user-based chat ID (format: chat_userId1_userId2)
+    const [, userId1, userId2] = conversationId.split('_');
+    const recipientId = userId1 === this.currentUserId ? userId2 : userId1;
+    Logger.info('[WatermelonLocalChatManager] 📨 User-based chat - recipient ID:', recipientId);
+
     const message = await this.chatDb.createMessage({
       id: messageId,
-      conversationId,
+      chatId: conversationId, // conversationId is actually chatId in user-based system
       senderId: this.currentUserId,
+      recipientId: recipientId,
       senderName: this.currentUserName,
       content: content.trim(),
       messageType: 'text',
@@ -291,7 +308,7 @@ export class WatermelonLocalChatManager {
     this.eventHandlers.onMessageSent?.(localMessage);
 
     // Send via FCM in background
-    this.sendFCMMessage(localMessage)
+    this.sendFCMMessage(localMessage, recipientId)
       .then(async () => {
         Logger.info('[WatermelonLocalChatManager] ✅ FCM API call completed successfully for message:', messageId);
         // Update status to sent
@@ -306,7 +323,7 @@ export class WatermelonLocalChatManager {
         Logger.error('[WatermelonLocalChatManager] ❌ Error details:', {
           messageId,
           conversationId: localMessage.conversationId,
-          recipientId: 'extracted from conversation',
+          recipientId: recipientId,
           errorMessage: error.message,
           errorStack: error.stack
         });
@@ -324,42 +341,30 @@ export class WatermelonLocalChatManager {
       throw new Error('Chat manager not initialized');
     }
 
-    Logger.info('[WatermelonLocalChatManager] 🔍 Looking for existing conversation between:', this.currentUserId, 'and', participantId);
+    Logger.info('[WatermelonLocalChatManager] 🔍 Creating/getting user chat between:', this.currentUserId, 'and', participantId);
 
-    // Check if direct conversation already exists
-    const existingConversation = await QueryHelpers.getDirectConversation(
-      this.currentUserId,
-      participantId
-    );
+    // Use new user-based chat system
+    const chatId = QueryHelpers.generateChatId(this.currentUserId, participantId);
 
-    if (existingConversation) {
-      Logger.info('[WatermelonLocalChatManager] ✅ Found existing conversation:', existingConversation.id);
-      return existingConversation.id;
-    }
+    // Ensure user chat exists
+    await QueryHelpers.getOrCreateUserChat(this.currentUserId, participantId);
 
-    Logger.info('[WatermelonLocalChatManager] ❌ No existing conversation found, creating new one...');
-
-    // Create new conversation
-    const conversationId = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-    const conversation = await this.chatDb.createConversation({
-      id: conversationId,
-      type: 'direct',
-      participantIds: [this.currentUserId, participantId]
-    });
-
-    Logger.info('[WatermelonLocalChatManager] ✅ Created new conversation:', conversation.id);
-    return conversation.id;
+    Logger.info('[WatermelonLocalChatManager] ✅ User chat ready:', chatId);
+    return chatId;
   }
 
   /**
-   * Mark conversation as read
+   * Mark user chat as read
    */
-  async markAsRead(conversationId: string, messageId?: string): Promise<void> {
+  async markAsRead(chatId: string, _messageId?: string): Promise<void> {
     if (!this.currentUserId) return;
 
-    await this.chatDb.markConversationAsRead(conversationId, this.currentUserId, messageId);
-    
+    // Extract other user ID from chat ID
+    const [, userId1, userId2] = chatId.split('_');
+    const otherUserId = userId1 === this.currentUserId ? userId2 : userId1;
+
+    await QueryHelpers.markUserChatAsRead(this.currentUserId, otherUserId);
+
     // Update unread count
     const unreadCount = await QueryHelpers.getTotalUnreadCount(this.currentUserId);
     this.eventHandlers.onUnreadCountChanged?.(unreadCount);
@@ -384,20 +389,23 @@ export class WatermelonLocalChatManager {
   }
 
   /**
-   * Mark messages as read in a conversation
+   * Mark messages as read in a user chat
    */
-  async markMessagesAsRead(conversationId: string): Promise<void> {
+  async markMessagesAsRead(chatId: string): Promise<void> {
     if (!this.currentUserId) return;
 
     try {
-      // Mark conversation as read
-      await this.chatDb.markConversationAsRead(conversationId, this.currentUserId);
+      // Extract other user ID from chat ID
+      const [, userId1, userId2] = chatId.split('_');
+      const otherUserId = userId1 === this.currentUserId ? userId2 : userId1;
+
+      await QueryHelpers.markUserChatAsRead(this.currentUserId, otherUserId);
 
       // Update unread count
       const unreadCount = await QueryHelpers.getTotalUnreadCount(this.currentUserId);
       this.eventHandlers.onUnreadCountChanged?.(unreadCount);
 
-      Logger.info('[WatermelonLocalChatManager] Marked messages as read for conversation:', conversationId);
+      Logger.info('[WatermelonLocalChatManager] Marked messages as read for chat:', chatId);
     } catch (error) {
       Logger.error('[WatermelonLocalChatManager] Error marking messages as read:', error);
     }
@@ -490,23 +498,23 @@ export class WatermelonLocalChatManager {
   }
 
   /**
-   * Get conversation participants with user details
+   * Get chat participants with user details (user-based)
    */
-  async getConversationParticipants(conversationId: string): Promise<User[]> {
+  async getConversationParticipants(chatId: string): Promise<User[]> {
     try {
-      const participants = await this.chatDb.getConversationParticipants(conversationId);
+      // Extract user IDs from chat ID
+      const [, userId1, userId2] = chatId.split('_');
       const users: User[] = [];
 
-      for (const participant of participants) {
-        const user = await this.chatDb.getUserById(participant.userId);
-        if (user) {
-          users.push(user);
-        }
-      }
+      const user1 = await this.chatDb.getUserById(userId1);
+      const user2 = await this.chatDb.getUserById(userId2);
+
+      if (user1) users.push(user1);
+      if (user2) users.push(user2);
 
       return users;
     } catch (error) {
-      Logger.error('[WatermelonLocalChatManager] Error getting conversation participants:', error);
+      Logger.error('[WatermelonLocalChatManager] Error getting chat participants:', error);
       return [];
     }
   }
@@ -520,11 +528,11 @@ export class WatermelonLocalChatManager {
   }
 
   /**
-   * Get conversation by ID
+   * Get user chat by ID
    */
-  async getConversationById(conversationId: string): Promise<LocalConversation | null> {
-    const conversation = await this.chatDb.getConversationById(conversationId);
-    return conversation ? this.convertConversationToLocal(conversation) : null;
+  async getConversationById(chatId: string): Promise<LocalConversation | null> {
+    const userChat = await this.chatDb.getUserChatById(chatId);
+    return userChat ? this.convertUserChatToLocal(userChat) : null;
   }
 
   /**
@@ -689,12 +697,18 @@ export class WatermelonLocalChatManager {
     try {
       Logger.info('[WatermelonLocalChatManager] 📱 Displaying notification for message:', message.id);
 
+      // Generate user-based chat ID for notification data
+      const chatId = this.currentUserId
+        ? QueryHelpers.generateChatId(message.senderId, this.currentUserId)
+        : message.conversationId; // Fallback to original conversation ID
+
       await notifee.displayNotification({
         title: message.senderName,
         body: message.content,
         data: {
           type: 'chat_message',
-          conversationId: message.conversationId,
+          chatId: chatId,
+          conversationId: message.conversationId, // Keep for backward compatibility
           senderId: message.senderId,
           messageId: message.id
         },
@@ -718,33 +732,34 @@ export class WatermelonLocalChatManager {
     }
   }
 
-  private async sendFCMMessage(message: LocalMessage): Promise<void> {
+  private async sendFCMMessage(message: LocalMessage, recipientId?: string): Promise<void> {
     try {
       Logger.info('[WatermelonLocalChatManager] 🚀 Starting FCM message send process for:', message.id);
 
-      // Get recipient ID from stored participant ID (from TipCallScreenSimple contact card)
+      // Use provided recipient ID or fall back to stored participant ID
       Logger.info('[WatermelonLocalChatManager] Current conversation ID:', message.conversationId);
       Logger.info('[WatermelonLocalChatManager] Current user ID:', this.currentUserId);
+      Logger.info('[WatermelonLocalChatManager] Provided recipient ID:', recipientId);
       Logger.info('[WatermelonLocalChatManager] Stored participant ID:', this.currentParticipantId);
 
-      const recipientId = this.currentParticipantId;
-      if (!recipientId) {
-        throw new Error(`No participant ID available for conversation: ${message.conversationId}. Make sure setCurrentConversation() was called with participantId.`);
+      const finalRecipientId = recipientId || this.currentParticipantId;
+      if (!finalRecipientId) {
+        throw new Error(`No recipient ID available for conversation: ${message.conversationId}. Make sure setCurrentConversation() was called with participantId or provide recipientId parameter.`);
       }
 
-      Logger.info('[WatermelonLocalChatManager] ✅ Using recipient ID from contact card:', recipientId);
+      Logger.info('[WatermelonLocalChatManager] ✅ Using recipient ID:', finalRecipientId);
 
-      Logger.info('[WatermelonLocalChatManager] 🔍 Getting FCM token for recipient:', recipientId);
-      const recipientToken = await this.getRecipientFCMToken(recipientId);
+      Logger.info('[WatermelonLocalChatManager] 🔍 Getting FCM token for recipient:', finalRecipientId);
+      const recipientToken = await this.getRecipientFCMToken(finalRecipientId);
       if (!recipientToken) {
-        throw new Error(`Recipient FCM token not available for user: ${recipientId}`);
+        throw new Error(`Recipient FCM token not available for user: ${finalRecipientId}`);
       }
 
       Logger.info('[WatermelonLocalChatManager] ✅ Got FCM token, length:', recipientToken.length);
 
       // Validate FCM token
       if (!DirectFCMService.isValidFCMToken(recipientToken)) {
-        throw new Error(`Invalid FCM token format for user: ${recipientId}`);
+        throw new Error(`Invalid FCM token format for user: ${finalRecipientId}`);
       }
 
       // Send via Firebase Cloud Function FCM API (FCM_CHAT_SERVER_URL)
@@ -752,7 +767,7 @@ export class WatermelonLocalChatManager {
       Logger.info('[WatermelonLocalChatManager] 📡 API Payload:', {
         senderId: message.senderId,
         senderName: message.senderName,
-        recipientId: recipientId,
+        recipientId: finalRecipientId,
         recipientTokenLength: recipientToken.length,
         conversationId: message.conversationId,
         content: message.content.substring(0, 50) + '...',
@@ -762,7 +777,7 @@ export class WatermelonLocalChatManager {
       const fcmResponse = await ApiService.sendChatMessage({
         senderId: message.senderId,
         senderName: message.senderName,
-        recipientId: recipientId,
+        recipientId: finalRecipientId,
         recipientToken: recipientToken,
         conversationId: message.conversationId,
         content: message.content,
@@ -841,7 +856,7 @@ export class WatermelonLocalChatManager {
 
   private convertMessageToLocal = (message: Message): LocalMessage => ({
     id: message.id,
-    conversationId: message.conversationId,
+    conversationId: message.chatId, // Use chatId for conversationId field
     senderId: message.senderId,
     senderName: message.senderName,
     senderAvatar: message.senderAvatar,
@@ -853,13 +868,13 @@ export class WatermelonLocalChatManager {
     replyTo: message.replyTo
   });
 
-  private convertConversationToLocal = (conversation: Conversation): LocalConversation => ({
-    id: conversation.id,
-    type: conversation.type,
-    participants: [], // Would need to fetch participants
-    lastActivity: conversation.lastActivity.toISOString(),
-    unreadCount: conversation.unreadCount,
-    createdAt: conversation.createdAt.toISOString(),
-    updatedAt: conversation.updatedAt.toISOString()
+  private convertUserChatToLocal = (userChat: UserChat): LocalConversation => ({
+    id: userChat.chatId,
+    type: 'direct' as const,
+    participants: [userChat.userId1, userChat.userId2],
+    lastActivity: userChat.lastMessageTime?.toISOString() || userChat.createdAt.toISOString(),
+    unreadCount: this.currentUserId ? userChat.getUnreadCount(this.currentUserId) : 0,
+    createdAt: userChat.createdAt.toISOString(),
+    updatedAt: userChat.updatedAt.toISOString()
   });
 }

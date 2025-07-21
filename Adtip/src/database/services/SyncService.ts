@@ -168,26 +168,27 @@ export class SyncService {
   }
 
   /**
-   * Sync conversations
+   * Sync conversations (user chats)
    */
   private async syncConversations(userId: string): Promise<number> {
     try {
-      const conversations = await QueryHelpers.getUserConversations(userId);
+      const userChats = await QueryHelpers.getUserConversations(userId);
       let syncedCount = 0;
 
-      for (const conversation of conversations) {
+      for (const userChat of userChats) {
         try {
-          // Update conversation activity
-          await conversation.updateActivity();
+          // For user chats, we don't need to update activity since it's handled automatically
+          // when messages are sent/received. Just count as synced.
           syncedCount++;
+          Logger.debug(`[SyncService] Synced user chat: ${userChat.chatId}`);
         } catch (error) {
-          Logger.error(`[SyncService] Failed to sync conversation ${conversation.id}:`, error);
+          Logger.error(`[SyncService] Failed to sync user chat ${userChat.chatId}:`, error);
         }
       }
 
       return syncedCount;
     } catch (error) {
-      Logger.error('[SyncService] Error syncing conversations:', error);
+      Logger.error('[SyncService] Error syncing user chats:', error);
       return 0;
     }
   }
@@ -227,43 +228,40 @@ export class SyncService {
         }
       }
 
-      // Ensure conversation exists before saving message
-      let conversation = await this.chatDb.getConversationById(messageData.conversationId);
-      if (!conversation) {
-        Logger.info(`[SyncService] Conversation ${messageData.conversationId} doesn't exist, creating it...`);
-
-        // Create conversation with both participants if currentUserId is available
-        try {
-          const participantIds = currentUserId
-            ? [messageData.senderId, currentUserId] // Include both sender and recipient
-            : [messageData.senderId]; // Fallback: only sender
-
-          conversation = await this.chatDb.createConversation({
-            id: messageData.conversationId,
-            type: 'direct',
-            participantIds: participantIds
-          });
-          Logger.info(`[SyncService] Created conversation: ${messageData.conversationId} with participants:`, participantIds);
-        } catch (createError) {
-          Logger.error(`[SyncService] Failed to create conversation ${messageData.conversationId}:`, createError);
-          // Continue anyway - the message might still be saved
-        }
+      // Generate user-based chat ID
+      if (!currentUserId) {
+        throw new Error('Current user ID is required for user-based chat system');
       }
 
-      // Create new message
+      const chatId = QueryHelpers.generateChatId(messageData.senderId, currentUserId);
+      Logger.info(`[SyncService] Using user-based chat ID: ${chatId}`);
+
+      // Ensure user chat exists
+      await QueryHelpers.getOrCreateUserChat(messageData.senderId, currentUserId);
+
+      // Create new message with user-based fields
       await this.chatDb.createMessage({
         id: messageData.id,
-        conversationId: messageData.conversationId,
+        chatId: chatId,
         senderId: messageData.senderId,
+        recipientId: currentUserId,
         senderName: messageData.senderName,
         content: messageData.content,
         messageType: messageData.messageType as any,
         status: 'delivered'
       });
 
-      // Update conversation unread count
-      if (conversation) {
-        await conversation.incrementUnreadCount();
+      // Update user chat with new message
+      try {
+        await QueryHelpers.updateUserChatWithMessage(
+          messageData.id,
+          chatId,
+          messageData.content,
+          new Date(messageData.timestamp)
+        );
+        Logger.info(`[SyncService] Updated user chat: ${chatId}`);
+      } catch (error) {
+        Logger.error(`[SyncService] Failed to update user chat:`, error);
       }
 
       Logger.info(`[SyncService] Processed incoming message: ${messageData.id}`);

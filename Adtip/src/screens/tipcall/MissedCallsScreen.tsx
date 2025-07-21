@@ -247,7 +247,7 @@ export default function MissedCallsScreen() {
   }, [user, navigation]);
 
   const handleChat = useCallback((contact: Contact) => {
-    navigation.navigate('NewChat', {
+    navigation.navigate('FCMChat', {
       participantId: contact.id.toString(),
       participantName: contact.name || 'Unknown User',
     });

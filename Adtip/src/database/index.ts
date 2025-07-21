@@ -9,16 +9,13 @@ import { Database } from '@nozbe/watermelondb';
 import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite';
 import { schema } from './schema';
 import { User } from './models/User';
-import { Conversation } from './models/Conversation';
+import { UserChat } from './models/UserChat';
 import { Message } from './models/Message';
-import { Participant } from './models/Participant';
-import migrations from './migrations';
 
 // Database adapter configuration
 const adapter = new SQLiteAdapter({
   schema,
-  migrations,
-  dbName: 'FCMChatDB',
+  dbName: 'FCMChatDB_v2', // New database name for fresh start
   jsi: true, // Enable JSI for better performance
   onSetUpError: (error) => {
     console.error('[WatermelonDB] Database setup error:', error);
@@ -30,20 +27,18 @@ export const database = new Database({
   adapter,
   modelClasses: [
     User,
-    Conversation,
+    UserChat,
     Message,
-    Participant,
   ],
 });
 
 // Export models for easy access
-export { User, Conversation, Message, Participant };
+export { User, UserChat, Message };
 
 // Export collections
 export const usersCollection = database.get<User>('users');
-export const conversationsCollection = database.get<Conversation>('conversations');
+export const userChatsCollection = database.get<UserChat>('user_chats');
 export const messagesCollection = database.get<Message>('messages');
-export const participantsCollection = database.get<Participant>('participants');
 
 // Database initialization
 export const initializeDatabase = async (): Promise<void> => {

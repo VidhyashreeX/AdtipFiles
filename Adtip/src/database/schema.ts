@@ -8,7 +8,7 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb';
 
 export const schema = appSchema({
-  version: 1,
+  version: 1, // Keep version 1 for fresh start
   tables: [
     // Users table
     tableSchema({
@@ -30,33 +30,43 @@ export const schema = appSchema({
       ]
     }),
 
-    // Conversations table
+    // User Chats table (simplified user-to-user chat mapping)
     tableSchema({
-      name: 'conversations',
+      name: 'user_chats',
       columns: [
-        { name: 'type', type: 'string' }, // 'direct' | 'group'
-        { name: 'title', type: 'string', isOptional: true },
-        { name: 'last_activity', type: 'number' },
-        { name: 'unread_count', type: 'number' },
-        { name: 'is_archived', type: 'boolean', isOptional: true },
-        { name: 'is_muted', type: 'boolean', isOptional: true },
+        { name: 'chat_id', type: 'string' },
+        { name: 'user_id_1', type: 'string' },
+        { name: 'user_id_2', type: 'string' },
+        { name: 'user_1_name', type: 'string' },
+        { name: 'user_2_name', type: 'string' },
+        { name: 'last_message_id', type: 'string', isOptional: true },
+        { name: 'last_message_content', type: 'string', isOptional: true },
+        { name: 'last_message_time', type: 'number', isOptional: true },
+        { name: 'user_1_unread_count', type: 'number' },
+        { name: 'user_2_unread_count', type: 'number' },
+        { name: 'is_active', type: 'boolean' },
         { name: 'created_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
       ],
       indexes: [
-        'type',
-        'last_activity',
-        'unread_count',
-        'is_archived',
+        'chat_id',
+        'user_id_1',
+        'user_id_2',
+        'last_message_time',
+        'is_active',
       ]
     }),
 
-    // Messages table
+
+
+    // Messages table (user-based chat system)
     tableSchema({
       name: 'messages',
       columns: [
-        { name: 'conversation_id', type: 'string', isIndexed: true },
+        // User-based chat fields
+        { name: 'chat_id', type: 'string', isIndexed: true },
         { name: 'sender_id', type: 'string', isIndexed: true },
+        { name: 'recipient_id', type: 'string', isIndexed: true },
         { name: 'sender_name', type: 'string' },
         { name: 'sender_avatar', type: 'string', isOptional: true },
         { name: 'content', type: 'string' },
@@ -76,8 +86,12 @@ export const schema = appSchema({
         { name: 'updated_at', type: 'number' },
       ],
       indexes: [
-        'conversation_id',
+        // User-based indexes
+        'chat_id',
         'sender_id',
+        'recipient_id',
+
+        // Common indexes
         'message_type',
         'status',
         'temp_id',
@@ -86,28 +100,7 @@ export const schema = appSchema({
       ]
     }),
 
-    // Participants table (junction table for conversation participants)
-    tableSchema({
-      name: 'participants',
-      columns: [
-        { name: 'conversation_id', type: 'string', isIndexed: true },
-        { name: 'user_id', type: 'string', isIndexed: true },
-        { name: 'role', type: 'string', isOptional: true }, // 'admin' | 'member' for groups
-        { name: 'joined_at', type: 'number' },
-        { name: 'left_at', type: 'number', isOptional: true },
-        { name: 'is_active', type: 'boolean' },
-        { name: 'last_read_message_id', type: 'string', isOptional: true },
-        { name: 'last_read_at', type: 'number', isOptional: true },
-        { name: 'created_at', type: 'number' },
-        { name: 'updated_at', type: 'number' },
-      ],
-      indexes: [
-        'conversation_id',
-        'user_id',
-        'is_active',
-        'last_read_at',
-      ]
-    }),
+
 
     // Message queue table for offline/retry functionality
     tableSchema({

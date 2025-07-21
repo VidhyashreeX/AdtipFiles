@@ -46,26 +46,32 @@ export class User extends Model {
     avatar?: string;
     fcmToken?: string;
   }): Promise<void> {
-    await this.update(user => {
-      if (data.name !== undefined) user.name = data.name;
-      if (data.username !== undefined) user.username = data.username;
-      if (data.avatar !== undefined) user.avatar = data.avatar;
-      if (data.fcmToken !== undefined) user.fcmToken = data.fcmToken;
+    await this.database.write(async () => {
+      await this.update(user => {
+        if (data.name !== undefined) user.name = data.name;
+        if (data.username !== undefined) user.username = data.username;
+        if (data.avatar !== undefined) user.avatar = data.avatar;
+        if (data.fcmToken !== undefined) user.fcmToken = data.fcmToken;
+      });
     });
   }
 
   // Update last seen timestamp
   async updateLastSeen(): Promise<void> {
-    await this.update(user => {
-      user.lastSeen = new Date();
-      user.isOnline = true;
+    await this.database.write(async () => {
+      await this.update(user => {
+        user.lastSeen = new Date();
+        user.isOnline = true;
+      });
     });
   }
 
   // Set user offline
   async setOffline(): Promise<void> {
-    await this.update(user => {
-      user.isOnline = false;
+    await this.database.write(async () => {
+      await this.update(user => {
+        user.isOnline = false;
+      });
     });
   }
 }

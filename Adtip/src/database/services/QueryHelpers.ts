@@ -1,359 +1,276 @@
 /**
- * WatermelonDB Query Helpers
+ * Clean QueryHelpers for User-Based Chat System
  * 
- * Utility functions for common database queries and operations.
- * Provides reusable query patterns for the chat system.
+ * Simplified query helpers for user-based chats only.
+ * No legacy conversation/participant complexity.
  */
 
 import { Q } from '@nozbe/watermelondb';
 import { Observable } from 'rxjs';
-import { map, distinctUntilChanged } from 'rxjs/operators';
-import { 
-  conversationsCollection,
+import { map } from 'rxjs/operators';
+import {
+  database,
   messagesCollection,
-  participantsCollection,
-  usersCollection
+  usersCollection,
+  userChatsCollection
 } from '../index';
-import type { Conversation } from '../models/Conversation';
-import type { Message } from '../models/Message';
-import type { User } from '../models/User';
-import type { Participant } from '../models/Participant';
 
 export class QueryHelpers {
-  
-  // Conversation queries
-  static observeActiveConversations(userId: string): Observable<Conversation[]> {
-    return conversationsCollection
-      .query(
-        Q.where('is_archived', Q.notEq(true)),
-        Q.sortBy('last_activity', Q.desc)
-      )
-      .observe()
-      .pipe(
-        map(conversations => 
-          conversations.filter(async conv => {
-            const isParticipant = await conv.isUserParticipant(userId);
-            return isParticipant;
-          })
-        ),
-        distinctUntilChanged()
-      );
+  // ===== USER-BASED CHAT METHODS =====
+
+  /**
+   * Generate chat ID for two users
+   */
+  static generateChatId(userId1: string, userId2: string): string {
+    const [user1, user2] = [userId1, userId2].sort();
+    return `chat_${user1}_${user2}`;
   }
 
-  static observeConversationMessages(
-    conversationId: string, 
-    limit: number = 50,
-    offset: number = 0
-  ): Observable<Message[]> {
-    return messagesCollection
+  /**
+   * Get or create user chat between two users
+   */
+  static async getOrCreateUserChat(currentUserId: string, otherUserId: string): Promise<any> {
+    const chatId = this.generateChatId(currentUserId, otherUserId);
+
+    console.log('[QueryHelpers] 🔍 Looking for user chat:', chatId);
+
+    // Try to find existing chat
+    const userChat = await userChatsCollection
+      .query(Q.where('chat_id', chatId))
+      .fetch();
+
+    if (userChat.length > 0) {
+      console.log('[QueryHelpers] ✅ Found existing user chat:', chatId);
+      return userChat[0];
+    }
+
+    console.log('[QueryHelpers] 📝 Creating new user chat:', chatId);
+
+    // Get or create user records
+    const currentUser = await this.getOrCreateUser(currentUserId);
+    const otherUser = await this.getOrCreateUser(otherUserId);
+
+    const [user1, user2] = [currentUserId, otherUserId].sort();
+    const [user1Name, user2Name] = user1 === currentUserId
+      ? [currentUser.name, otherUser.name]
+      : [otherUser.name, currentUser.name];
+
+    // Create new chat
+    const newChat = await database.write(async () => {
+      return await userChatsCollection.create((chat: any) => {
+        chat.chatId = chatId;
+        chat.userId1 = user1;
+        chat.userId2 = user2;
+        chat.user1Name = user1Name;
+        chat.user2Name = user2Name;
+        chat.user1UnreadCount = 0;
+        chat.user2UnreadCount = 0;
+        chat.isActive = true;
+      });
+    });
+
+    console.log('[QueryHelpers] ✅ Created new user chat:', chatId);
+    return newChat;
+  }
+
+  /**
+   * Get messages between two users
+   */
+  static async getUserMessages(currentUserId: string, otherUserId: string, limit: number = 50): Promise<any[]> {
+    const chatId = this.generateChatId(currentUserId, otherUserId);
+    
+    console.log('[QueryHelpers] 📨 Getting messages for chat:', chatId);
+    
+    return await messagesCollection
       .query(
-        Q.where('conversation_id', conversationId),
-        Q.where('is_deleted', Q.notEq(true)),
+        Q.where('chat_id', chatId),
         Q.sortBy('created_at', Q.desc),
-        Q.take(limit),
-        Q.skip(offset)
+        Q.take(limit)
+      )
+      .fetch();
+  }
+
+  /**
+   * Get messages observable for real-time updates
+   */
+  static getUserMessagesObservable(currentUserId: string, otherUserId: string, limit: number = 50): Observable<any[]> {
+    const chatId = this.generateChatId(currentUserId, otherUserId);
+    
+    return messagesCollection
+      .query(
+        Q.where('chat_id', chatId),
+        Q.sortBy('created_at', Q.desc),
+        Q.take(limit)
       )
       .observe()
       .pipe(
-        map(messages => messages.reverse()), // Show oldest first
-        distinctUntilChanged()
+        map(messages => messages.reverse()) // Reverse to show oldest first
       );
   }
 
-  static async getConversationParticipants(conversationId: string): Promise<User[]> {
-    const participants = await participantsCollection
+  /**
+   * Get all user chats for a user
+   */
+  static async getUserChats(currentUserId: string): Promise<any[]> {
+    console.log('[QueryHelpers] 📋 Getting user chats for:', currentUserId);
+    
+    return await userChatsCollection
       .query(
-        Q.where('conversation_id', conversationId),
-        Q.where('is_active', true)
+        Q.or(
+          Q.where('user_id_1', currentUserId),
+          Q.where('user_id_2', currentUserId)
+        ),
+        Q.where('is_active', true),
+        Q.sortBy('last_message_time', Q.desc)
       )
       .fetch();
-
-    const users: User[] = [];
-    for (const participant of participants) {
-      const user = await participant.user.fetch();
-      if (user) users.push(user);
-    }
-
-    return users;
   }
 
-  static async getDirectConversation(userId1: string, userId2: string): Promise<Conversation | null> {
-    console.log('[QueryHelpers] 🔍 Searching for direct conversation between:', userId1, 'and', userId2);
-
-    const conversations = await conversationsCollection
-      .query(Q.where('type', 'direct'))
-      .fetch();
-
-    console.log('[QueryHelpers] 📋 Found', conversations.length, 'direct conversations to check');
-
-    for (const conversation of conversations) {
-      const participants = await participantsCollection
-        .query(
-          Q.where('conversation_id', conversation.id),
-          Q.where('is_active', true)
-        )
-        .fetch();
-
-      const participantIds = participants.map(p => p.userId).sort();
-      const targetIds = [userId1, userId2].sort();
-
-      console.log('[QueryHelpers] 🔍 Checking conversation:', conversation.id, 'participants:', participantIds, 'vs target:', targetIds);
-
-      if (JSON.stringify(participantIds) === JSON.stringify(targetIds)) {
-        console.log('[QueryHelpers] ✅ Found matching conversation:', conversation.id);
-        return conversation;
-      }
-    }
-
-    console.log('[QueryHelpers] ❌ No matching conversation found');
-    return null;
-  }
-
-  // Message queries
-  static observeUnreadMessages(userId: string): Observable<Message[]> {
-    return messagesCollection
+  /**
+   * Get user chats observable for real-time updates
+   */
+  static getUserChatsObservable(currentUserId: string): Observable<any[]> {
+    return userChatsCollection
       .query(
-        Q.where('sender_id', Q.notEq(userId)),
-        Q.where('status', Q.notEq('read')),
-        Q.where('is_deleted', Q.notEq(true)),
-        Q.sortBy('created_at', Q.desc)
+        Q.or(
+          Q.where('user_id_1', currentUserId),
+          Q.where('user_id_2', currentUserId)
+        ),
+        Q.where('is_active', true),
+        Q.sortBy('last_message_time', Q.desc)
       )
       .observe();
   }
 
-  static async getMessagesByStatus(status: string): Promise<Message[]> {
+  /**
+   * Mark messages as read for a user chat
+   */
+  static async markUserChatAsRead(currentUserId: string, otherUserId: string): Promise<void> {
+    const chatId = this.generateChatId(currentUserId, otherUserId);
+    
+    console.log('[QueryHelpers] ✅ Marking chat as read:', chatId);
+    
+    const userChat = await userChatsCollection
+      .query(Q.where('chat_id', chatId))
+      .fetch();
+
+    if (userChat.length > 0) {
+      await userChat[0].markAsRead(currentUserId);
+    }
+  }
+
+  /**
+   * Get unread count for a user
+   */
+  static async getTotalUnreadCount(currentUserId: string): Promise<number> {
+    const userChats = await this.getUserChats(currentUserId);
+    
+    return userChats.reduce((total, chat) => {
+      return total + chat.getUnreadCount(currentUserId);
+    }, 0);
+  }
+
+  /**
+   * Update user chat with new message
+   */
+  static async updateUserChatWithMessage(messageId: string, chatId: string, content: string, timestamp: Date): Promise<void> {
+    const userChat = await userChatsCollection
+      .query(Q.where('chat_id', chatId))
+      .fetch();
+
+    if (userChat.length > 0) {
+      await userChat[0].updateLastMessage(messageId, content, timestamp);
+    }
+  }
+
+  /**
+   * Search messages across all user chats
+   */
+  static async searchMessages(query: string, chatId?: string): Promise<any[]> {
+    let queryBuilder = messagesCollection.query(
+      Q.where('content', Q.like(`%${Q.sanitizeLikeString(query)}%`)),
+      Q.sortBy('created_at', Q.desc)
+    );
+
+    if (chatId) {
+      queryBuilder = messagesCollection.query(
+        Q.where('chat_id', chatId),
+        Q.where('content', Q.like(`%${Q.sanitizeLikeString(query)}%`)),
+        Q.sortBy('created_at', Q.desc)
+      );
+    }
+
+    return await queryBuilder.fetch();
+  }
+
+  /**
+   * Get user by ID
+   */
+  static async getUserById(userId: string): Promise<any | null> {
+    try {
+      return await usersCollection.find(userId);
+    } catch (error) {
+      console.log('[QueryHelpers] User not found:', userId, error);
+      return null;
+    }
+  }
+
+  /**
+   * Get or create user by ID (creates placeholder if not found)
+   */
+  static async getOrCreateUser(userId: string, name?: string): Promise<any> {
+    try {
+      return await usersCollection.find(userId);
+    } catch (error) {
+      console.log('[QueryHelpers] 👤 User not found locally, creating placeholder:', userId, error);
+      return await database.write(async () => {
+        return await usersCollection.create((user: any) => {
+          user._raw.id = userId;
+          user.name = name || `User ${userId}`;
+          user.username = `user_${userId}`;
+          user.isOnline = false;
+        });
+      });
+    }
+  }
+
+  /**
+   * Search users by name or username
+   */
+  static async searchUsers(query: string): Promise<any[]> {
+    return await usersCollection
+      .query(
+        Q.or(
+          Q.where('name', Q.like(`%${Q.sanitizeLikeString(query)}%`)),
+          Q.where('username', Q.like(`%${Q.sanitizeLikeString(query)}%`))
+        )
+      )
+      .fetch();
+  }
+
+  // ===== SYNC SERVICE COMPATIBILITY METHODS =====
+
+  /**
+   * Get messages by status (for sync service)
+   */
+  static async getMessagesByStatus(status: string): Promise<any[]> {
+    console.log('[QueryHelpers] 📨 Getting messages by status:', status);
+
     return await messagesCollection
       .query(
         Q.where('status', status),
-        Q.where('is_deleted', Q.notEq(true)),
         Q.sortBy('created_at', Q.desc)
       )
       .fetch();
   }
 
-  static async getMessagesByTempId(tempId: string): Promise<Message[]> {
-    return await messagesCollection
-      .query(Q.where('temp_id', tempId))
-      .fetch();
-  }
+  /**
+   * Get user conversations (alias for getUserChats for sync service compatibility)
+   */
+  static async getUserConversations(userId: string): Promise<any[]> {
+    console.log('[QueryHelpers] 📋 Getting user conversations (alias for getUserChats):', userId);
 
-  static async getReplyChain(messageId: string): Promise<Message[]> {
-    const chain: Message[] = [];
-    let currentMessageId: string | undefined = messageId;
-
-    while (currentMessageId) {
-      try {
-        const message = await messagesCollection.find(currentMessageId);
-        if (!message) break;
-
-        chain.unshift(message);
-        currentMessageId = message.replyTo;
-      } catch {
-        break;
-      }
-    }
-
-    return chain;
-  }
-
-  // User queries
-  static async searchUsers(query: string, limit: number = 20): Promise<User[]> {
-    const searchTerm = query.toLowerCase();
-    
-    return await usersCollection
-      .query(
-        Q.or(
-          Q.where('name', Q.like(`%${Q.sanitizeLikeString(searchTerm)}%`)),
-          Q.where('username', Q.like(`%${Q.sanitizeLikeString(searchTerm)}%`))
-        ),
-        Q.take(limit),
-        Q.sortBy('name', Q.asc)
-      )
-      .fetch();
-  }
-
-  static async getOnlineUsers(): Promise<User[]> {
-    return await usersCollection
-      .query(
-        Q.where('is_online', true),
-        Q.sortBy('last_seen', Q.desc)
-      )
-      .fetch();
-  }
-
-  static async getUsersByIds(userIds: string[]): Promise<User[]> {
-    if (userIds.length === 0) return [];
-
-    return await usersCollection
-      .query(Q.where('id', Q.oneOf(userIds)))
-      .fetch();
-  }
-
-  // Participant queries
-  static async getUserConversations(userId: string): Promise<Conversation[]> {
-    const participants = await participantsCollection
-      .query(
-        Q.where('user_id', userId),
-        Q.where('is_active', true)
-      )
-      .fetch();
-
-    const conversations: Conversation[] = [];
-    for (const participant of participants) {
-      const conversation = await participant.conversation.fetch();
-      if (conversation) conversations.push(conversation);
-    }
-
-    return conversations.sort((a, b) => 
-      b.lastActivity.getTime() - a.lastActivity.getTime()
-    );
-  }
-
-  static async getConversationUnreadCount(conversationId: string, userId: string): Promise<number> {
-    const participant = await participantsCollection
-      .query(
-        Q.where('conversation_id', conversationId),
-        Q.where('user_id', userId),
-        Q.where('is_active', true)
-      )
-      .fetch();
-
-    if (participant.length === 0) return 0;
-
-    return await participant[0].getUnreadCount();
-  }
-
-  static async getTotalUnreadCount(userId: string): Promise<number> {
-    const participants = await participantsCollection
-      .query(
-        Q.where('user_id', userId),
-        Q.where('is_active', true)
-      )
-      .fetch();
-
-    let totalUnread = 0;
-    for (const participant of participants) {
-      totalUnread += await participant.getUnreadCount();
-    }
-
-    return totalUnread;
-  }
-
-  // Search and filtering
-  static async searchMessages(
-    query: string, 
-    conversationId?: string,
-    limit: number = 50
-  ): Promise<Message[]> {
-    const baseQuery = [
-      Q.where('content', Q.like(`%${Q.sanitizeLikeString(query)}%`)),
-      Q.where('is_deleted', Q.notEq(true)),
-      Q.sortBy('created_at', Q.desc),
-      Q.take(limit)
-    ];
-
-    if (conversationId) {
-      baseQuery.unshift(Q.where('conversation_id', conversationId));
-    }
-
-    return await messagesCollection.query(...baseQuery).fetch();
-  }
-
-  static async getMediaMessages(
-    conversationId: string,
-    messageType?: string,
-    limit: number = 50
-  ): Promise<Message[]> {
-    const baseQuery = [
-      Q.where('conversation_id', conversationId),
-      Q.where('is_deleted', Q.notEq(true)),
-      Q.sortBy('created_at', Q.desc),
-      Q.take(limit)
-    ];
-
-    if (messageType) {
-      baseQuery.push(Q.where('message_type', messageType));
-    } else {
-      baseQuery.push(Q.where('message_type', Q.oneOf(['image', 'video', 'audio', 'file'])));
-    }
-
-    return await messagesCollection.query(...baseQuery).fetch();
-  }
-
-  // Analytics and statistics
-  static async getConversationStats(conversationId: string): Promise<{
-    totalMessages: number;
-    mediaMessages: number;
-    participantCount: number;
-    oldestMessage?: Date;
-    newestMessage?: Date;
-  }> {
-    const [messages, participants] = await Promise.all([
-      messagesCollection
-        .query(
-          Q.where('conversation_id', conversationId),
-          Q.where('is_deleted', Q.notEq(true))
-        )
-        .fetch(),
-      participantsCollection
-        .query(
-          Q.where('conversation_id', conversationId),
-          Q.where('is_active', true)
-        )
-        .fetch()
-    ]);
-
-    const mediaMessages = messages.filter(msg => 
-      ['image', 'video', 'audio', 'file'].includes(msg.messageType)
-    );
-
-    const sortedMessages = messages.sort((a, b) => 
-      a.createdAt.getTime() - b.createdAt.getTime()
-    );
-
-    return {
-      totalMessages: messages.length,
-      mediaMessages: mediaMessages.length,
-      participantCount: participants.length,
-      oldestMessage: sortedMessages[0]?.createdAt,
-      newestMessage: sortedMessages[sortedMessages.length - 1]?.createdAt
-    };
-  }
-
-  static async getUserMessageCount(userId: string, days: number = 30): Promise<number> {
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    
-    const messages = await messagesCollection
-      .query(
-        Q.where('sender_id', userId),
-        Q.where('created_at', Q.gte(since.getTime())),
-        Q.where('is_deleted', Q.notEq(true))
-      )
-      .fetch();
-
-    return messages.length;
-  }
-
-  // Cleanup utilities
-  static async getOldDeletedMessages(daysOld: number = 30): Promise<Message[]> {
-    const cutoffDate = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
-    
-    return await messagesCollection
-      .query(
-        Q.where('is_deleted', true),
-        Q.where('deleted_at', Q.lt(cutoffDate.getTime()))
-      )
-      .fetch();
-  }
-
-  static async getInactiveConversations(daysInactive: number = 90): Promise<Conversation[]> {
-    const cutoffDate = new Date(Date.now() - daysInactive * 24 * 60 * 60 * 1000);
-    
-    return await conversationsCollection
-      .query(
-        Q.where('last_activity', Q.lt(cutoffDate.getTime())),
-        Q.where('is_archived', Q.notEq(true))
-      )
-      .fetch();
+    // Since we're using user-based chats, this is just an alias for getUserChats
+    return await this.getUserChats(userId);
   }
 }

@@ -201,8 +201,8 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
       return
     }
 
-    // Navigate to new chat system
-    navigation.navigate('NewChat', {
+    // Navigate to FCM chat system
+    navigation.navigate('FCMChat', {
       participantId: userId.toString(),
       participantName: user.name || 'Unknown User'
     });

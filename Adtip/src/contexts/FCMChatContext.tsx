@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Observable } from 'rxjs';
 import { FCMChatServiceLocal, Message, Conversation, FCMChatEventHandlers } from '../services/FCMChatServiceLocal';
 import { WatermelonLocalChatManager } from '../services/WatermelonLocalChatManager';
+import { QueryHelpers } from '../database/services/QueryHelpers';
 import { useAuth } from './AuthContext';
 
 interface FCMChatContextType {
@@ -268,60 +269,36 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
     setCurrentMessages(prev => prev.filter(message => message.tempId !== tempId));
   }, []);
 
-  // Create or get conversation - WatermelonDB approach
+  // Create or get conversation - User-based approach
   const createOrGetConversation = useCallback(async (participantId: string): Promise<string> => {
-    if (!isInitialized || !watermelonManager) {
+    if (!isInitialized || !watermelonManager || !user) {
       throw new Error('Chat service not initialized');
     }
 
     try {
-      // Check if there's a target conversation ID from notification navigation
-      const targetConversationId = await AsyncStorage.getItem('targetConversationId');
-      if (targetConversationId) {
-        console.log('[FCMChatContext] Using target conversation from notification:', targetConversationId);
-        // Clear the stored target conversation ID
-        await AsyncStorage.removeItem('targetConversationId');
+      console.log('[FCMChatContext] 🎯 Creating user-based chat between:', user.id, 'and', participantId);
 
-        // Verify the conversation exists and contains the participant
-        console.log('[FCMChatContext] Checking if conversation exists in database...');
-        const conversation = await watermelonManager.chatDb.getConversationById(targetConversationId);
-        console.log('[FCMChatContext] Conversation lookup result:', conversation ? 'FOUND' : 'NOT FOUND');
+      // Generate user-based chat ID
+      const chatId = `chat_${[user.id.toString(), participantId].sort().join('_')}`;
+      console.log('[FCMChatContext] 📱 Generated chat ID:', chatId);
 
-        if (conversation) {
-          console.log('[FCMChatContext] Target conversation found, using it:', targetConversationId);
-
-          // Set current participant for conversation state tracking
-          setCurrentParticipantId(participantId);
-
-          // Set conversation state for notification management
-          watermelonManager.setCurrentConversation(targetConversationId, participantId);
-          fcmChatService.setCurrentConversation(targetConversationId, participantId);
-
-          return targetConversationId;
-        } else {
-          console.warn('[FCMChatContext] Target conversation not found in database, creating new one');
-          console.warn('[FCMChatContext] This means the message was saved to a conversation that doesn\'t exist in the local database');
-        }
-      }
-
-      // Use WatermelonDB manager to create/get conversation
-      const conversationId = await watermelonManager.createOrGetConversation(participantId);
-
-      console.log('[FCMChatContext] Using WatermelonDB conversation ID:', conversationId);
+      // Use WatermelonDB manager to create/get user chat (it handles the database operations)
+      const resultChatId = await watermelonManager.createOrGetConversation(participantId);
+      console.log('[FCMChatContext] ✅ User chat ready:', resultChatId);
 
       // Set current participant for conversation state tracking
       setCurrentParticipantId(participantId);
 
       // Set conversation state for notification management
-      watermelonManager.setCurrentConversation(conversationId, participantId);
-      fcmChatService.setCurrentConversation(conversationId, participantId);
+      watermelonManager.setCurrentConversation(resultChatId, participantId);
+      fcmChatService.setCurrentConversation(resultChatId, participantId);
 
-      return conversationId;
+      return resultChatId;
     } catch (error) {
-      console.error('[FCMChatContext] Failed to create/get conversation:', error);
+      console.error('[FCMChatContext] Failed to create/get user chat:', error);
       throw error;
     }
-  }, [isInitialized, watermelonManager]);
+  }, [isInitialized, watermelonManager, fcmChatService, user]);
 
   // Set current conversation
   const setCurrentConversation = useCallback((conversationId: string | null) => {

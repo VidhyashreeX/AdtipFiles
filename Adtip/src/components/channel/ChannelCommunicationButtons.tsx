@@ -226,8 +226,8 @@ const ChannelCommunicationButtons: React.FC<CommunicationButtonsProps> = ({
       return;
     }
 
-    // Navigate to new chat system
-    navigation.navigate('NewChat', {
+    // Navigate to FCM chat system
+    navigation.navigate('FCMChat', {
       participantId: channelInfo.createdBy.toString(),
       participantName: channelInfo.channelName || 'Channel Owner'
     });

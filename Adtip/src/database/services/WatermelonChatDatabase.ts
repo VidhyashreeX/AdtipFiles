@@ -1,25 +1,20 @@
 /**
- * WatermelonDB Chat Database Service
+ * Clean WatermelonDB Chat Database Service
  * 
- * Main database service for chat operations using WatermelonDB.
- * Provides high-level methods for chat functionality with proper error handling.
+ * Simplified database service for user-based chat operations only.
+ * No legacy conversation/participant complexity.
  */
 
 import { Q } from '@nozbe/watermelondb';
-import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
-import { 
-  database, 
-  User, 
-  Conversation, 
-  Message, 
-  Participant,
+import {
+  database,
+  User,
+  UserChat,
+  Message,
   usersCollection,
-  conversationsCollection,
-  messagesCollection,
-  participantsCollection
+  userChatsCollection,
+  messagesCollection
 } from '../index';
-import type { ConversationType } from '../models/Conversation';
 import type { MessageType, MessageStatus } from '../models/Message';
 
 export interface CreateUserData {
@@ -30,27 +25,33 @@ export interface CreateUserData {
   fcmToken?: string;
 }
 
-export interface CreateConversationData {
-  id: string;
-  type: ConversationType;
-  title?: string;
-  participantIds: string[];
-}
-
 export interface CreateMessageData {
   id: string;
-  conversationId: string;
+  chatId: string;
   senderId: string;
+  recipientId: string;
   senderName: string;
   senderAvatar?: string;
   content: string;
   messageType: MessageType;
-  status?: MessageStatus;
+  status: MessageStatus;
   tempId?: string;
   replyTo?: string;
 }
 
+export interface UpdateUserData {
+  name?: string;
+  username?: string;
+  avatar?: string;
+  fcmToken?: string;
+  lastSeen?: Date;
+  isOnline?: boolean;
+}
+
 export class WatermelonChatDatabase {
+  // Expose database instance for compatibility
+  database = database;
+
   // User operations
   async createUser(userData: CreateUserData): Promise<User> {
     return await database.write(async () => {
@@ -60,7 +61,7 @@ export class WatermelonChatDatabase {
         user.username = userData.username;
         user.avatar = userData.avatar;
         user.fcmToken = userData.fcmToken;
-        user.isOnline = true;
+        user.isOnline = false;
       });
     });
   }
@@ -68,113 +69,42 @@ export class WatermelonChatDatabase {
   async getUserById(userId: string): Promise<User | null> {
     try {
       return await usersCollection.find(userId);
-    } catch {
+    } catch (error) {
       return null;
     }
   }
 
-  async updateUser(userId: string, updates: Partial<CreateUserData>): Promise<User | null> {
-    const user = await this.getUserById(userId);
-    if (!user) return null;
-
-    return await database.write(async () => {
-      return await user.update(u => {
-        if (updates.name !== undefined) u.name = updates.name;
-        if (updates.username !== undefined) u.username = updates.username;
-        if (updates.avatar !== undefined) u.avatar = updates.avatar;
-        if (updates.fcmToken !== undefined) u.fcmToken = updates.fcmToken;
-      });
-    });
-  }
-
-  async updateUserLastSeen(userId: string): Promise<User | null> {
-    const user = await this.getUserById(userId);
-    if (!user) return null;
-
-    return await database.write(async () => {
-      return await user.update(u => {
-        u.lastSeen = new Date();
-        u.isOnline = true;
-      });
-    });
-  }
-
-  async getConversationParticipants(conversationId: string): Promise<Participant[]> {
-    const participantsCollection = database.get<Participant>('participants');
-    return await participantsCollection
-      .query(Q.where('conversation_id', conversationId), Q.where('is_active', true))
-      .fetch();
-  }
-
-
-
-  // Conversation operations
-  async createConversation(conversationData: CreateConversationData): Promise<Conversation> {
-    return await database.write(async () => {
-      // Create conversation
-      const conversation = await conversationsCollection.create(conv => {
-        conv._raw.id = conversationData.id;
-        conv.type = conversationData.type;
-        conv.title = conversationData.title;
-        conv.lastActivity = new Date();
-        conv.unreadCount = 0;
-        conv.isArchived = false;
-        conv.isMuted = false;
-      });
-
-      // Create participants
-      for (const participantId of conversationData.participantIds) {
-        await participantsCollection.create(participant => {
-          participant.conversationId = conversation.id;
-          participant.userId = participantId;
-          participant.joinedAt = new Date();
-          participant.isActive = true;
-        });
-      }
-
-      return conversation;
-    });
-  }
-
-  async getConversationById(conversationId: string): Promise<Conversation | null> {
+  async updateUser(userId: string, updateData: UpdateUserData): Promise<User | null> {
     try {
-      return await conversationsCollection.find(conversationId);
-    } catch {
+      const user = await usersCollection.find(userId);
+      return await database.write(async () => {
+        return await user.update(u => {
+          if (updateData.name !== undefined) u.name = updateData.name;
+          if (updateData.username !== undefined) u.username = updateData.username;
+          if (updateData.avatar !== undefined) u.avatar = updateData.avatar;
+          if (updateData.fcmToken !== undefined) u.fcmToken = updateData.fcmToken;
+          if (updateData.lastSeen !== undefined) u.lastSeen = updateData.lastSeen;
+          if (updateData.isOnline !== undefined) u.isOnline = updateData.isOnline;
+        });
+      });
+    } catch (error) {
+      console.error('[WatermelonChatDatabase] Error updating user (user not found or update failed):', userId, error);
       return null;
     }
   }
 
-  observeConversations(): Observable<Conversation[]> {
-    return conversationsCollection
-      .query(
-        Q.where('is_archived', Q.notEq(true)),
-        Q.sortBy('last_activity', Q.desc)
-      )
-      .observe();
-  }
-
-  async getConversationByParticipants(participantIds: string[]): Promise<Conversation | null> {
-    // For direct conversations, find by exact participant match
-    if (participantIds.length === 2) {
-      const conversations = await conversationsCollection
-        .query(Q.where('type', 'direct'))
-        .fetch();
-
-      for (const conversation of conversations) {
-        const participants = await conversation.participants
-          .extend(Q.where('is_active', true))
-          .fetch();
-        
-        const participantUserIds = participants.map((p: any) => p.userId).sort();
-        const sortedInputIds = [...participantIds].sort();
-        
-        if (JSON.stringify(participantUserIds) === JSON.stringify(sortedInputIds)) {
-          return conversation;
-        }
-      }
+  async updateUserLastSeen(userId: string): Promise<void> {
+    try {
+      const user = await usersCollection.find(userId);
+      await database.write(async () => {
+        await user.update(u => {
+          u.lastSeen = new Date();
+          u.isOnline = true;
+        });
+      });
+    } catch (error) {
+      console.error('[WatermelonChatDatabase] Error updating user last seen (user not found):', userId, error);
     }
-    
-    return null;
   }
 
   // Message operations
@@ -182,26 +112,29 @@ export class WatermelonChatDatabase {
     return await database.write(async () => {
       const message = await messagesCollection.create(msg => {
         msg._raw.id = messageData.id;
-        msg.conversationId = messageData.conversationId;
+        msg.chatId = messageData.chatId;
         msg.senderId = messageData.senderId;
+        msg.recipientId = messageData.recipientId;
         msg.senderName = messageData.senderName;
         msg.senderAvatar = messageData.senderAvatar;
         msg.content = messageData.content;
         msg.messageType = messageData.messageType;
-        msg.status = messageData.status || 'sending';
+        msg.status = messageData.status;
         msg.tempId = messageData.tempId;
         msg.replyTo = messageData.replyTo;
-        msg.isEdited = false;
-        msg.isDeleted = false;
       });
 
-      // Update conversation last activity within the same transaction to avoid nested writers
-      const conversation = await this.getConversationById(messageData.conversationId);
-      if (conversation) {
-        // Update directly without calling updateActivity() to avoid nested database.write()
-        await conversation.update(conv => {
-          conv.lastActivity = new Date();
-        });
+      // Update user chat with new message (using internal method to avoid nested transactions)
+      try {
+        const userChat = await userChatsCollection
+          .query(Q.where('chat_id', messageData.chatId))
+          .fetch();
+
+        if (userChat.length > 0) {
+          await userChat[0].updateLastMessageInternal(messageData.id, messageData.content, new Date());
+        }
+      } catch (error) {
+        console.warn('[WatermelonChatDatabase] Failed to update user chat:', error);
       }
 
       return message;
@@ -211,161 +144,70 @@ export class WatermelonChatDatabase {
   async getMessageById(messageId: string): Promise<Message | null> {
     try {
       return await messagesCollection.find(messageId);
-    } catch {
+    } catch (error) {
       return null;
     }
   }
 
-  observeMessages(conversationId: string, limit: number = 50): Observable<Message[]> {
-    return messagesCollection
-      .query(
-        Q.where('conversation_id', conversationId),
-        Q.where('is_deleted', Q.notEq(true)),
-        Q.sortBy('created_at', Q.desc),
-        Q.take(limit)
-      )
-      .observe()
-      .pipe(
-        map(messages => messages.reverse()) // Reverse to show oldest first
-      );
-  }
-
   async updateMessageStatus(messageId: string, status: MessageStatus): Promise<Message | null> {
-    const message = await this.getMessageById(messageId);
-    if (!message) return null;
-
-    return await database.write(async () => {
-      // Update directly without calling updateStatus() to avoid nested database.write()
-      return await message.update(msg => {
-        msg.status = status;
-      });
-    });
-  }
-
-  async updateMessageByTempId(tempId: string, updates: {
-    id?: string;
-    status?: MessageStatus;
-    content?: string;
-  }): Promise<Message | null> {
-    const messages = await messagesCollection
-      .query(Q.where('temp_id', tempId))
-      .fetch();
-    
-    const message = messages[0];
-    if (!message) return null;
-
-    return await database.write(async () => {
-      return await message.update(msg => {
-        if (updates.id !== undefined) msg._raw.id = updates.id;
-        if (updates.status !== undefined) msg.status = updates.status;
-        if (updates.content !== undefined) msg.content = updates.content;
-      });
-    });
-  }
-
-  // Participant operations
-  async addParticipant(conversationId: string, userId: string): Promise<Participant> {
-    return await database.write(async () => {
-      return await participantsCollection.create(participant => {
-        participant.conversationId = conversationId;
-        participant.userId = userId;
-        participant.joinedAt = new Date();
-        participant.isActive = true;
-      });
-    });
-  }
-
-  async removeParticipant(conversationId: string, userId: string): Promise<void> {
-    const participants = await participantsCollection
-      .query(
-        Q.where('conversation_id', conversationId),
-        Q.where('user_id', userId),
-        Q.where('is_active', true)
-      )
-      .fetch();
-
-    if (participants.length > 0) {
-      await database.write(async () => {
-        await participants[0].leave();
-      });
-    }
-  }
-
-  async markConversationAsRead(conversationId: string, userId: string, messageId?: string): Promise<void> {
-    const conversation = await this.getConversationById(conversationId);
-    if (!conversation) return;
-
-    await database.write(async () => {
-      // Update conversation unread count directly to avoid nested database.write()
-      await conversation.update(conv => {
-        conv.unreadCount = 0;
-      });
-
-      // Update participant's last read
-      const participants = await participantsCollection
-        .query(
-          Q.where('conversation_id', conversationId),
-          Q.where('user_id', userId),
-          Q.where('is_active', true)
-        )
-        .fetch();
-
-      if (participants.length > 0 && messageId) {
-        // Update participant directly to avoid nested database.write()
-        await participants[0].update(participant => {
-          participant.lastReadMessageId = messageId;
-          participant.lastReadAt = new Date();
+    try {
+      const message = await messagesCollection.find(messageId);
+      return await database.write(async () => {
+        return await message.update(msg => {
+          msg.status = status;
         });
-      }
-    });
-  }
-
-  // Utility methods
-  async getUnreadCount(userId: string): Promise<number> {
-    const conversations = await conversationsCollection
-      .query(Q.where('is_archived', Q.notEq(true)))
-      .fetch();
-
-    let totalUnread = 0;
-    for (const conversation of conversations) {
-      const participant = await conversation.getParticipant(userId);
-      if (participant) {
-        totalUnread += await participant.getUnreadCount();
-      }
+      });
+    } catch (error) {
+      console.error('[WatermelonChatDatabase] Error updating message status (message not found):', messageId, error);
+      return null;
     }
-
-    return totalUnread;
   }
 
-  async searchMessages(query: string, conversationId?: string): Promise<Message[]> {
-    const baseQuery = [
-      Q.where('content', Q.like(`%${Q.sanitizeLikeString(query)}%`)),
-      Q.where('is_deleted', Q.notEq(true)),
-      Q.sortBy('created_at', Q.desc)
-    ];
-
-    if (conversationId) {
-      baseQuery.unshift(Q.where('conversation_id', conversationId));
-    }
-
-    return await messagesCollection.query(...baseQuery).fetch();
-  }
-
-  // Database maintenance
-  async cleanup(): Promise<void> {
-    await database.write(async () => {
-      // Clean up old deleted messages (older than 30 days)
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      const oldDeletedMessages = await messagesCollection
-        .query(
-          Q.where('is_deleted', true),
-          Q.where('deleted_at', Q.lt(thirtyDaysAgo.getTime()))
-        )
+  // User Chat operations
+  async getUserChatById(chatId: string): Promise<UserChat | null> {
+    try {
+      const userChats = await userChatsCollection
+        .query(Q.where('chat_id', chatId))
         .fetch();
+      return userChats.length > 0 ? userChats[0] : null;
+    } catch (error) {
+      console.error('[WatermelonChatDatabase] Error getting user chat:', error);
+      return null;
+    }
+  }
 
-      for (const message of oldDeletedMessages) {
-        await message.destroyPermanently();
-      }
-    });
+  // Cleanup operations
+  async cleanup(): Promise<void> {
+    try {
+      // Clean up old messages (older than 30 days)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      await database.write(async () => {
+        const oldMessages = await messagesCollection
+          .query(Q.where('created_at', Q.lt(thirtyDaysAgo.getTime())))
+          .fetch();
+
+        for (const message of oldMessages) {
+          await message.markAsDeleted();
+        }
+      });
+
+      console.log('[WatermelonChatDatabase] Cleanup completed');
+    } catch (error) {
+      console.error('[WatermelonChatDatabase] Cleanup failed:', error);
+    }
+  }
+
+  // Database health check
+  async healthCheck(): Promise<boolean> {
+    try {
+      // Simple query to test database connectivity
+      await usersCollection.query().fetch();
+      return true;
+    } catch (error) {
+      console.error('[WatermelonChatDatabase] Health check failed:', error);
+      return false;
+    }
   }
 }
