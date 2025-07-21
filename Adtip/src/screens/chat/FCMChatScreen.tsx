@@ -24,7 +24,7 @@ import {
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { Clock, Check, CheckCheck, Send } from 'lucide-react-native';
+import { Clock, Check, CheckCheck, Send, CircleAlert } from 'lucide-react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -81,6 +81,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isOwn, showStatu
         return CheckCheck;
       case 'read':
         return CheckCheck;
+      case 'failed':
+        return CircleAlert;
       default:
         return Clock;
     }
@@ -96,6 +98,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isOwn, showStatu
         return 'rgba(255, 255, 255, 0.9)';
       case 'read':
         return '#00E676'; // Bright green for read
+      case 'failed':
+        return '#FF5252'; // Red for failed
       default:
         return 'rgba(255, 255, 255, 0.6)';
     }
@@ -189,6 +193,7 @@ const FCMChatScreen: React.FC = () => {
     markAsRead,
     loadMessages,
     refreshMessages,
+    showChatUnavailableAlert,
   } = useFCMChat();
 
   const { participantId, participantName } = route.params;
@@ -245,8 +250,19 @@ const FCMChatScreen: React.FC = () => {
         color: colors.text.primary,
         fontWeight: '600',
       },
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => {
+            console.log('[FCMChatScreen] 🧪 Testing chat unavailable alert');
+            showChatUnavailableAlert(participantName || 'Test User');
+          }}
+          style={{ marginRight: 15, padding: 5 }}
+        >
+          <Text style={{ color: colors.text.primary, fontSize: 12 }}>TEST</Text>
+        </TouchableOpacity>
+      ),
     });
-  }, [navigation, participantName, colors.text.primary, colors.background]);
+  }, [navigation, participantName, colors.text.primary, colors.background, showChatUnavailableAlert]);
 
   // Enhanced keyboard handling with smooth animations
   useEffect(() => {

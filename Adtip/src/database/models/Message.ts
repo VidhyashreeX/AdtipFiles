@@ -9,7 +9,7 @@ import { field, date, readonly, relation } from '@nozbe/watermelondb/decorators'
 import type { Associations } from '@nozbe/watermelondb/Model';
 
 export type MessageType = 'text' | 'image' | 'video' | 'audio' | 'file';
-export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read';
+export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 
 export class Message extends Model {
   static table = 'messages';
@@ -87,6 +87,8 @@ export class Message extends Model {
         return 'check-check';
       case 'read':
         return 'check-check';
+      case 'failed':
+        return 'error';
       default:
         return 'clock';
     }

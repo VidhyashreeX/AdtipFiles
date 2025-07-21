@@ -45,7 +45,7 @@ export interface LocalMessage {
   content: string;
   messageType: 'text' | 'image' | 'video' | 'audio' | 'file';
   createdAt: string;
-  status: 'sending' | 'sent' | 'delivered' | 'read';
+  status: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
   tempId?: string;
   replyTo?: string;
 }
@@ -75,6 +75,7 @@ export interface LocalChatEventHandlers {
   onMessageSent?: (message: LocalMessage) => void;
   onConversationUpdated?: (conversation: LocalConversation) => void;
   onUnreadCountChanged?: (count: number) => void;
+  onChatUnavailable?: (recipientName: string, error: any) => void;
 }
 
 export class WatermelonLocalChatManager {
@@ -376,7 +377,7 @@ export class WatermelonLocalChatManager {
         const updatedMessage = { ...localMessage, status: 'sent' as const };
         this.eventHandlers.onMessageSent?.(updatedMessage);
       })
-      .catch((error) => {
+      .catch(async (error) => {
         Logger.error('[WatermelonLocalChatManager] ❌ Failed to send FCM message via API:', error);
         Logger.error('[WatermelonLocalChatManager] ❌ Error details:', {
           messageId,
@@ -385,7 +386,50 @@ export class WatermelonLocalChatManager {
           errorMessage: error.message,
           errorStack: error.stack
         });
-        // Message remains in 'sending' status for retry
+
+        // Check if this is a chat unavailability error (FCM token issues)
+        const isUnavailableError = this.isChatUnavailableError(error);
+        Logger.info('[WatermelonLocalChatManager] 🔍 Error analysis result:', {
+          isUnavailableError,
+          recipientId,
+          hasEventHandler: !!this.eventHandlers.onChatUnavailable
+        });
+
+        // TEMPORARY: Force trigger alert for any error to test the flow
+        const forceTestAlert = true;
+        if (forceTestAlert && recipientId) {
+          Logger.info('[WatermelonLocalChatManager] 🧪 FORCE TESTING: Triggering alert for any error');
+          const recipientName = await this.getRecipientName(recipientId);
+          if (this.eventHandlers.onChatUnavailable) {
+            this.eventHandlers.onChatUnavailable(recipientName, error);
+          }
+        }
+
+        if (isUnavailableError && recipientId) {
+          Logger.info('[WatermelonLocalChatManager] 🚫 Chat unavailable error detected, triggering alert');
+
+          // Get recipient name for the alert
+          const recipientName = await this.getRecipientName(recipientId);
+          Logger.info('[WatermelonLocalChatManager] 🚫 Recipient name:', recipientName);
+
+          // Check if event handler exists
+          if (this.eventHandlers.onChatUnavailable) {
+            Logger.info('[WatermelonLocalChatManager] 🚫 Calling onChatUnavailable event handler');
+            this.eventHandlers.onChatUnavailable(recipientName, error);
+          } else {
+            Logger.error('[WatermelonLocalChatManager] ❌ onChatUnavailable event handler not found!');
+          }
+
+          // Update message status to failed
+          await this.chatDb.updateMessageStatus(messageId, 'failed');
+
+          // Emit updated message with failed status
+          const failedMessage = { ...localMessage, status: 'failed' as const };
+          this.eventHandlers.onMessageSent?.(failedMessage);
+        } else {
+          // For other errors, message remains in 'sending' status for retry
+          Logger.info('[WatermelonLocalChatManager] ❌ Non-availability error, keeping message in sending status for retry');
+        }
       });
 
     return localMessage;
@@ -859,6 +903,102 @@ export class WatermelonLocalChatManager {
     } catch (error) {
       Logger.error('[WatermelonLocalChatManager] Error sending FCM message:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Check if an error indicates chat unavailability (FCM token issues)
+   */
+  private isChatUnavailableError(error: any): boolean {
+    // Get error message
+    const errorMessage = error.message || error.toString() || '';
+    const errorLower = errorMessage.toLowerCase();
+
+    // Get response data if available (for HTTP errors)
+    const responseData = error.response?.data || error.data || {};
+    const responseMessage = responseData.message || responseData.error || '';
+    const responseMessageLower = responseMessage.toLowerCase();
+
+    // Get status code
+    const statusCode = error.response?.status || error.status;
+
+    Logger.info('[WatermelonLocalChatManager] 🔍 Checking error for chat unavailability:', {
+      errorMessage,
+      responseMessage,
+      statusCode,
+      responseData
+    });
+
+    const unavailablePatterns = [
+      'invalid or unregistered fcm token',
+      'fcm token not found',
+      'invalid fcm token',
+      'unregistered fcm token',
+      'token not found',
+      'invalid token',
+      'registration token not found',
+      'messaging/registration-token-not-registered',
+      'messaging/invalid-registration-token',
+      'recipient fcm token not available',
+      'user not found',
+      'recipient not found',
+      'fcm token is invalid',
+      'fcm token expired',
+      'token is not registered',
+    ];
+
+    // Check error message
+    const messageMatch = unavailablePatterns.some(pattern => errorLower.includes(pattern));
+
+    // Check response message
+    const responseMatch = unavailablePatterns.some(pattern => responseMessageLower.includes(pattern));
+
+    // For HTTP 400 errors, assume it's likely an FCM token issue if no specific pattern matches
+    // This is a fallback for cases where the server doesn't provide detailed error messages
+    const is400Error = statusCode === 400;
+
+    // For testing: also treat any error containing "failed" as unavailable
+    const isFailedError = errorLower.includes('failed') || errorLower.includes('request failed');
+
+    const isUnavailable = messageMatch || responseMatch || is400Error || isFailedError;
+
+    Logger.info('[WatermelonLocalChatManager] 🔍 Error classification result:', {
+      messageMatch,
+      responseMatch,
+      is400Error,
+      isFailedError,
+      isUnavailable
+    });
+
+    return isUnavailable;
+  }
+
+  /**
+   * Get recipient name for display in alerts
+   */
+  private async getRecipientName(recipientId: string): Promise<string> {
+    try {
+      // Try to get from local database first
+      const user = await this.chatDb.getUserById(recipientId);
+      if (user?.name) {
+        return user.name;
+      }
+
+      // Try to get from cached user profiles
+      const profiles = await AsyncStorage.getItem(STORAGE_KEYS.USER_PROFILES);
+      if (profiles) {
+        const profileCache = JSON.parse(profiles);
+        const cachedProfile = profileCache[recipientId];
+        if (cachedProfile?.name) {
+          return cachedProfile.name;
+        }
+      }
+
+      // Fallback to "Unknown User"
+      return 'Unknown User';
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] Error getting recipient name:', error);
+      return 'Unknown User';
     }
   }
 

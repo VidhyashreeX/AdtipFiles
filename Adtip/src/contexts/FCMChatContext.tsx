@@ -12,6 +12,8 @@ import { FCMChatServiceLocal, Message, Conversation, FCMChatEventHandlers } from
 import { WatermelonLocalChatManager } from '../services/WatermelonLocalChatManager';
 import { QueryHelpers } from '../database/services/QueryHelpers';
 import { useAuth } from './AuthContext';
+import useChatAvailabilityAlert from '../hooks/useChatAvailabilityAlert';
+import ChatUnavailableAlert from '../components/chat/ChatUnavailableAlert';
 
 interface FCMChatContextType {
   // Connection state
@@ -42,6 +44,9 @@ interface FCMChatContextType {
   getConversationById: (conversationId: string) => Conversation | undefined;
   getUnreadCount: (conversationId: string) => number;
   refreshMessages: (conversationId: string) => Promise<void>;
+
+  // Chat availability alert actions (for testing)
+  showChatUnavailableAlert: (recipientName: string) => void;
 }
 
 const FCMChatContext = createContext<FCMChatContextType | undefined>(undefined);
@@ -65,6 +70,9 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
 
   // WatermelonDB manager for reactive queries
   const [watermelonManager, setWatermelonManager] = useState<WatermelonLocalChatManager | null>(null);
+
+  // Chat availability alert
+  const chatAvailabilityAlert = useChatAvailabilityAlert();
 
   // Initialize chat service
   const initializeChat = useCallback(async () => {
@@ -101,7 +109,13 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
         onMessageReceived: handleMessageReceived,
         onMessageSent: handleMessageSent, // Primary message sent handler
         onConversationUpdated: handleConversationUpdated,
-        onUnreadCountChanged: (count) => setTotalUnreadCount(count)
+        onUnreadCountChanged: (count) => setTotalUnreadCount(count),
+        onChatUnavailable: (recipientName: string, error: any) => {
+          console.log('[FCMChatContext] 🚫 Chat unavailable event triggered for:', recipientName, error);
+          console.log('[FCMChatContext] 🚫 Showing unavailable alert...');
+          chatAvailabilityAlert.actions.showUnavailableAlert(recipientName);
+          console.log('[FCMChatContext] 🚫 Alert state after trigger:', chatAvailabilityAlert.state);
+        }
       }, { disableFCMHandlers: true });
       setWatermelonManager(manager);
 
@@ -512,11 +526,27 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
     getConversationById,
     getUnreadCount,
     refreshMessages,
+    showChatUnavailableAlert: chatAvailabilityAlert.actions.showUnavailableAlert,
   };
 
   return (
     <FCMChatContext.Provider value={contextValue}>
       {children}
+
+      {/* Chat Unavailable Alert */}
+      <ChatUnavailableAlert
+        visible={chatAvailabilityAlert.state.showAlert}
+        recipientName={chatAvailabilityAlert.state.recipientName}
+        onClose={chatAvailabilityAlert.actions.hideAlert}
+        onRetry={chatAvailabilityAlert.actions.retryChat}
+      />
+
+      {/* Debug: Log alert state changes */}
+      {console.log('[FCMChatContext] Alert state:', {
+        visible: chatAvailabilityAlert.state.showAlert,
+        recipientName: chatAvailabilityAlert.state.recipientName,
+        errorType: chatAvailabilityAlert.state.errorType
+      })}
     </FCMChatContext.Provider>
   );
 };
