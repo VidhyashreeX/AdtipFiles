@@ -59,9 +59,8 @@ export class FCMMessageRouter {
       if (this.isCallMessage(messageType, remoteMessage)) {
         await this.routeToCallHandler(remoteMessage, context);
       } else if (this.isChatMessage(messageType, remoteMessage)) {
-        // Chat messages are handled directly by WatermelonLocalChatManager's own FCM handlers
-        // Don't route here to prevent duplicate processing
-        console.log('[FCMMessageRouter] Chat message detected - will be handled by WatermelonLocalChatManager FCM handlers');
+        // Route chat messages to WatermelonLocalChatManager
+        await this.routeToChatHandler(remoteMessage, context);
       } else {
         console.log('[FCMMessageRouter] Unknown message type, ignoring:', messageType);
       }
@@ -190,24 +189,81 @@ export class FCMMessageRouter {
     context: 'foreground' | 'background'
   ): Promise<void> {
     try {
-      console.log('[FCMMessageRouter] Chat message detected - handled by WatermelonLocalChatManager');
+      console.log('[FCMMessageRouter] Routing chat message to WatermelonLocalChatManager');
 
-      // The new WatermelonLocalChatManager handles FCM messages directly via its own setupFCMHandler()
-      // No routing needed - the manager registers its own FCM listeners in initialize()
-      // This prevents duplicate message processing
+      // Parse message data from FCM message
+      const messageData = this.parseChatMessageData(remoteMessage);
+      if (!messageData) {
+        console.warn('[FCMMessageRouter] Failed to parse chat message data');
+        return;
+      }
 
-      console.log('[FCMMessageRouter] Chat message will be processed by WatermelonLocalChatManager FCM handlers');
+      // Get the WatermelonLocalChatManager instance from global context
+      // The instance is stored in FCMChatContext and should be accessible
+      const chatManager = (global as any).watermelonChatManager;
 
-      // Note: WatermelonLocalChatManager.setupFCMHandler() already handles:
-      // - messaging().onMessage() for foreground messages
-      // - messaging().setBackgroundMessageHandler() for background messages
-      // - Saving messages to WatermelonDB
-      // - UI updates via FCMChatContext event handlers
-      // - Notification management based on active conversation
+      if (chatManager && chatManager.isInitialized) {
+        // Route the message to the chat manager's public method
+        const success = await chatManager.handleIncomingMessage(messageData);
+        if (success) {
+          console.log('[FCMMessageRouter] Chat message routed successfully to WatermelonLocalChatManager');
+        } else {
+          console.warn('[FCMMessageRouter] WatermelonLocalChatManager failed to process message');
+        }
+      } else {
+        console.warn('[FCMMessageRouter] WatermelonLocalChatManager not available or not initialized');
+      }
 
     } catch (error) {
-      console.error('[FCMMessageRouter] Error in chat handler routing:', error);
+      console.error('[FCMMessageRouter] Error routing chat message:', error);
       // Don't throw for chat errors to avoid breaking call functionality
+    }
+  }
+
+  /**
+   * Parse chat message data from FCM remote message
+   */
+  private parseChatMessageData(remoteMessage: FirebaseMessagingTypes.RemoteMessage): any {
+    try {
+      const { data } = remoteMessage;
+
+      // Check new format (info field)
+      if (data?.info && typeof data.info === 'string') {
+        try {
+          const messageData = JSON.parse(data.info);
+          if (messageData.type === 'chat_message') {
+            return {
+              id: messageData.messageId,
+              conversationId: messageData.conversationId,
+              senderId: messageData.senderId,
+              senderName: messageData.senderName,
+              content: messageData.content,
+              messageType: messageData.messageType || 'text',
+              timestamp: messageData.timestamp || new Date().toISOString()
+            };
+          }
+        } catch (e) {
+          console.warn('[FCMMessageRouter] Failed to parse info field:', e);
+        }
+      }
+
+      // Check legacy format (direct type)
+      if (data?.type === 'chat_message') {
+        return {
+          id: data.messageId,
+          conversationId: data.conversationId,
+          senderId: data.senderId,
+          senderName: data.senderName,
+          content: data.content,
+          messageType: data.messageType || 'text',
+          timestamp: data.timestamp || new Date().toISOString()
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('[FCMMessageRouter] Error parsing chat message data:', error);
+      return null;
     }
   }
 

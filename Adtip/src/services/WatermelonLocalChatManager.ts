@@ -122,20 +122,30 @@ export class WatermelonLocalChatManager {
    */
   private async setupNotificationHandlers(): Promise<void> {
     try {
-      // Handle notification press events
+      // Handle notification press events (foreground)
       notifee.onForegroundEvent(async ({ type, detail }) => {
         if (type === EventType.PRESS) {
           const data = detail.notification?.data;
           if (data?.type === 'chat_message' && data?.senderId) {
-            Logger.info('[WatermelonLocalChatManager] 📱 Notification pressed for user-based chat');
-            // Get sender name from notification title (which is the sender name)
-            const senderName = detail.notification?.title || 'Unknown User';
+            Logger.info('[WatermelonLocalChatManager] 📱 Foreground notification pressed for user-based chat');
+            // Get sender name from notification data or title
+            const senderName = data.senderName || detail.notification?.title || 'Unknown User';
 
-            // Use chat ID if available, otherwise fall back to conversation ID
-            const chatIdentifier = data.chatId || data.conversationId;
-            Logger.info('[WatermelonLocalChatManager] 📱 Using chat identifier:', chatIdentifier);
+            // Navigate to FCMChatScreen
+            await this.navigateToUserChat(data.senderId, senderName);
+          }
+        }
+      });
 
-            await this.navigateToUserChat(String(data.senderId), senderName);
+      // Handle background notification press events
+      notifee.onBackgroundEvent(async ({ type, detail }) => {
+        if (type === EventType.PRESS) {
+          const data = detail.notification?.data;
+          if (data?.type === 'chat_message' && data?.senderId) {
+            Logger.info('[WatermelonLocalChatManager] 📱 Background notification pressed for user-based chat');
+            // Store navigation intent for when app becomes active
+            const senderName = data.senderName || detail.notification?.title || 'Unknown User';
+            await this.storePendingNavigation(data.senderId, senderName);
           }
         }
       });
@@ -196,6 +206,47 @@ export class WatermelonLocalChatManager {
   }
 
   /**
+   * Store pending navigation for background notification press
+   */
+  private async storePendingNavigation(senderId: string, senderName: string): Promise<void> {
+    try {
+      const pendingNavigation = {
+        senderId,
+        senderName,
+        timestamp: Date.now()
+      };
+
+      await AsyncStorage.setItem('pendingChatNavigation', JSON.stringify(pendingNavigation));
+      Logger.info('[WatermelonLocalChatManager] 📱 Stored pending navigation:', pendingNavigation);
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] ❌ Error storing pending navigation:', error);
+    }
+  }
+
+  /**
+   * Check and handle pending navigation from background notification
+   */
+  private async handlePendingNavigation(): Promise<void> {
+    try {
+      const pendingNavigation = await AsyncStorage.getItem('pendingChatNavigation');
+      if (pendingNavigation) {
+        const data = JSON.parse(pendingNavigation);
+        Logger.info('[WatermelonLocalChatManager] 📱 Handling pending navigation:', data);
+
+        // Clear the pending navigation
+        await AsyncStorage.removeItem('pendingChatNavigation');
+
+        // Navigate to chat with a small delay to ensure app is fully active
+        setTimeout(() => {
+          this.navigateToUserChat(data.senderId, data.senderName);
+        }, 1000);
+      }
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] ❌ Error handling pending navigation:', error);
+    }
+  }
+
+  /**
    * Initialize the chat manager
    */
   async initialize(userId: string, userName: string, eventHandlers: LocalChatEventHandlers = {}, options?: { disableFCMHandlers?: boolean }): Promise<void> {
@@ -216,15 +267,22 @@ export class WatermelonLocalChatManager {
       await this.ensureCurrentUser();
 
       // Setup FCM message handler (unless disabled)
+      // Note: In the main app, FCM handlers should be disabled to prevent conflicts with FCMMessageRouter
       if (!options?.disableFCMHandlers) {
         await this.setupFCMHandler();
         await this.setupNotificationHandlers();
+        Logger.info('[WatermelonLocalChatManager] FCM handlers enabled - this should only be used in standalone mode');
       } else {
-        Logger.info('[WatermelonLocalChatManager] FCM handlers disabled - skipping FCM setup to prevent conflicts');
+        // Only setup notification handlers for notification press events
+        await this.setupNotificationHandlers();
+        Logger.info('[WatermelonLocalChatManager] FCM message handlers disabled - using centralized FCMMessageRouter');
       }
 
       // Perform initial sync
       await this.syncService.performSync(userId);
+
+      // Handle any pending navigation from background notifications
+      await this.handlePendingNavigation();
 
       this.isInitialized = true;
       Logger.info('[WatermelonLocalChatManager] Initialized successfully');
@@ -702,7 +760,11 @@ export class WatermelonLocalChatManager {
         ? QueryHelpers.generateChatId(message.senderId, this.currentUserId)
         : message.conversationId; // Fallback to original conversation ID
 
+      // Create unique notification ID to prevent duplicates
+      const notificationId = `chat_${message.id}_${Date.now()}`;
+
       await notifee.displayNotification({
+        id: notificationId, // Unique ID to prevent duplicates
         title: message.senderName,
         body: message.content,
         data: {
@@ -710,6 +772,7 @@ export class WatermelonLocalChatManager {
           chatId: chatId,
           conversationId: message.conversationId, // Keep for backward compatibility
           senderId: message.senderId,
+          senderName: message.senderName, // Add sender name for navigation
           messageId: message.id
         },
         android: {
@@ -719,14 +782,14 @@ export class WatermelonLocalChatManager {
             id: 'default',
           },
           sound: 'default',
-          vibrationPattern: [300, 500, 300, 500],
+          vibrationPattern: [200, 300], // Shorter, gentler vibration
         },
         ios: {
           sound: 'default',
         },
       });
 
-      Logger.info('[WatermelonLocalChatManager] ✅ Notification displayed successfully');
+      Logger.info('[WatermelonLocalChatManager] ✅ Notification displayed successfully with ID:', notificationId);
     } catch (error) {
       Logger.error('[WatermelonLocalChatManager] ❌ Error showing notification:', error);
     }

@@ -95,14 +95,18 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
       await fcmChatService.initialize(user.id.toString(), authToken, legacyEventHandlers, { disableFCMHandlers: true });
 
       // Initialize WatermelonDB manager for reactive queries (primary message handler)
+      // Disable FCM handlers to prevent conflicts with centralized FCMMessageRouter
       const manager = new WatermelonLocalChatManager();
       await manager.initialize(user.id.toString(), user.name || user.username || 'Unknown User', {
         onMessageReceived: handleMessageReceived,
         onMessageSent: handleMessageSent, // Primary message sent handler
         onConversationUpdated: handleConversationUpdated,
         onUnreadCountChanged: (count) => setTotalUnreadCount(count)
-      });
+      }, { disableFCMHandlers: true });
       setWatermelonManager(manager);
+
+      // Store manager instance globally for FCMMessageRouter access
+      (global as any).watermelonChatManager = manager;
 
       setIsInitialized(true);
       console.log('[FCMChatContext] FCM chat service initialized successfully');
