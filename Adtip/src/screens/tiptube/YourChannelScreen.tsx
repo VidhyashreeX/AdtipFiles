@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,58 +8,32 @@ import {
   ScrollView,
   FlatList,
   Dimensions,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { Star, Edit, BarChart3 } from 'lucide-react-native';
+import { Star, Edit, BarChart3, Upload } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import TipTubeHeader from '../../components/tiptube/TipTubeHeader';
-
-interface ChannelVideo {
-  id: number;
-  title: string;
-  thumbnail: string;
-  views: number;
-  duration: string;
-}
+import Header from '../../components/common/Header';
+import ApiService from '../../services/ApiService';
+import {
+  ChannelInfo,
+  Video,
+  VideoListResponse
+} from '../../types/api';
+import {
+  getSecureMediaUrl,
+  getFallbackAvatarUrl,
+  getFallbackThumbnailUrl
+} from '../../utils/mediaUtils';
+import ComingSoonModal from '../../components/modals/ComingSoonModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const VIDEO_CARD_WIDTH = (SCREEN_WIDTH - 48) / 2; // 2 videos per row
 const VIDEO_CARD_HEIGHT = VIDEO_CARD_WIDTH * 0.6; // 16:10 aspect ratio
-
-// Mock data for demonstration
-const mockVideos: ChannelVideo[] = [
-  {
-    id: 1,
-    title: 'Cartoon Serial Part 2',
-    thumbnail: 'https://picsum.photos/300/180?random=1',
-    views: 1200,
-    duration: '12:01:00',
-  },
-  {
-    id: 2,
-    title: 'Comedy Show Episode 5',
-    thumbnail: 'https://picsum.photos/300/180?random=2',
-    views: 850,
-    duration: '8:45:00',
-  },
-  {
-    id: 3,
-    title: 'Tutorial Series Part 1',
-    thumbnail: 'https://picsum.photos/300/180?random=3',
-    views: 2100,
-    duration: '15:30:00',
-  },
-  {
-    id: 4,
-    title: 'Live Stream Highlights',
-    thumbnail: 'https://picsum.photos/300/180?random=4',
-    views: 950,
-    duration: '6:20:00',
-  },
-];
 
 const YourChannelScreen: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
@@ -68,9 +42,125 @@ const YourChannelScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const [selectedTab, setSelectedTab] = useState('Home');
 
+  // State for channel data
+  const [channel, setChannel] = useState<ChannelInfo | null>(null);
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [shorts, setShorts] = useState<Video[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState('');
+
+  // Modal state
+  const [showComingSoonModal, setShowComingSoonModal] = useState(false);
+
   const styles = createStyles(colors, isDarkMode, insets.top);
 
   const tabs = ['Home', 'InShorts', 'Products'];
+
+  // Fetch channel data using ApiService (same pattern as MyChannelScreen)
+  const fetchChannelData = useCallback(async () => {
+    console.log('🚀 [YourChannelScreen] Fetching channel data for user:', user?.id);
+
+    if (!user?.id) {
+      console.error('❌ [YourChannelScreen] User not authenticated');
+      setError('User not authenticated');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      setError('');
+      console.log('📡 [YourChannelScreen] Making API call to getChannelByUserId...');
+      const response = await ApiService.getChannelByUserId(Number(user.id));
+      console.log('📥 [YourChannelScreen] Channel data API response:', {
+        status: response.status,
+        hasData: !!response.data,
+        dataLength: response.data?.length
+      });
+
+      if (response.status === 200 && response.data && response.data.length > 0) {
+        const channelData = response.data[0];
+        console.log('✅ [YourChannelScreen] Channel data found:', channelData);
+
+        setChannel({
+          channelId: String(channelData.channelId),
+          channelName: channelData.channelName,
+          description: channelData.description || '',
+          profileImage: channelData.profileImage ? await getSecureMediaUrl(channelData.profileImage) : getFallbackAvatarUrl(user.id),
+          totalSubscribers: Number(channelData.totalSubscribers) || 0,
+          totalVideos: Number(channelData.totalVideos) || 0,
+          totalViews: Number(channelData.total_ads_view) || 0,
+          isSubscribed: false,
+          isVerified: false,
+          createdDate: channelData.createddate || new Date().toISOString(),
+          createdBy: channelData.createdby || Number(user.id),
+          isCallEnabled: channelData.isCallEnabled || false,
+        });
+
+        // Fetch videos and shorts for this channel
+        await fetchChannelContent(channelData.channelId);
+      } else {
+        setError('No channel found for this user');
+      }
+    } catch (err: any) {
+      console.error('Error fetching channel data:', err);
+      setError(err.message || 'Failed to load channel data');
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [user?.id]);
+
+  // Fetch channel content (videos and shorts)
+  const fetchChannelContent = async (channelId: string) => {
+    try {
+      console.log('🎥 [YourChannelScreen] Fetching videos for channel:', channelId);
+
+      // Use correct videoType: 0 for videos (is_shot=0), 1 for shorts (is_shot=1)
+      const videosResponse = await ApiService.getVideoByChannel(0, Number(channelId), Number(user?.id));
+      console.log('📹 [YourChannelScreen] Videos response:', {
+        status: videosResponse.status,
+        dataLength: videosResponse.data?.length,
+        data: videosResponse.data
+      });
+
+      if (videosResponse.status === 200 && videosResponse.data) {
+        setVideos(videosResponse.data);
+      } else {
+        setVideos([]);
+      }
+
+      // Fetch shorts separately
+      console.log('🎬 [YourChannelScreen] Fetching shorts for channel:', channelId);
+      const shortsResponse = await ApiService.getVideoByChannel(1, Number(channelId), Number(user?.id));
+      console.log('🎬 [YourChannelScreen] Shorts response:', {
+        status: shortsResponse.status,
+        dataLength: shortsResponse.data?.length,
+        data: shortsResponse.data
+      });
+
+      if (shortsResponse.status === 200 && shortsResponse.data) {
+        setShorts(shortsResponse.data);
+      } else {
+        setShorts([]);
+      }
+    } catch (err) {
+      console.error('Error fetching channel content:', err);
+      setVideos([]);
+      setShorts([]);
+    }
+  };
+
+  // Refresh handler
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    fetchChannelData();
+  }, [fetchChannelData]);
+
+  // Load data on component mount
+  useEffect(() => {
+    fetchChannelData();
+  }, [fetchChannelData]);
 
   const formatViewCount = (count: number): string => {
     if (count >= 1000000) {
@@ -87,8 +177,8 @@ const YourChannelScreen: React.FC = () => {
   };
 
   const handleVideoManagement = () => {
-    // Navigate to video management screen
-    navigation.navigate('VideoManagement' as never);
+    // Navigate to TipTube upload screen
+    navigation.navigate('TipTubeUpload' as never);
   };
 
   const handleEditChannel = () => {
@@ -97,37 +187,99 @@ const YourChannelScreen: React.FC = () => {
   };
 
   const handleAnalytics = () => {
-    // Navigate to analytics screen
-    navigation.navigate('Analytics' as never);
+    // Navigate to analytics screen with proper channelId
+    if (channel?.channelId) {
+      navigation.navigate('Analytics' as never, { channelId: channel.channelId });
+    } else {
+      console.warn('[YourChannelScreen] No channelId available for analytics');
+      // Show error or redirect to create channel
+      navigation.navigate('CreateChannel' as never);
+    }
   };
 
-  const renderVideoCard = ({ item }: { item: ChannelVideo }) => (
-    <TouchableOpacity style={styles.videoCard} activeOpacity={0.9}>
-      <Image
-        source={{ uri: item.thumbnail }}
-        style={styles.videoThumbnail}
-        resizeMode="cover"
-      />
-      <View style={styles.videoDurationOverlay}>
-        <Text style={styles.videoDurationText}>{item.duration}</Text>
-      </View>
-      <View style={styles.videoInfo}>
-        <Text style={styles.videoTitle} numberOfLines={2}>
-          {item.title}
-        </Text>
-        <Text style={styles.videoViews}>
-          {formatViewCount(item.views)} views
-        </Text>
-      </View>
-    </TouchableOpacity>
+  const handlePaidVideoAnalytics = () => {
+    // Show coming soon modal for paid video analytics
+    setShowComingSoonModal(true);
+  };
+
+  // Separate component for video card to properly use hooks
+  const VideoCard = React.memo(({ item, onPress }: { item: Video; onPress: (item: Video) => void }) => {
+    const [thumbnailUrl, setThumbnailUrl] = React.useState<string>(getFallbackThumbnailUrl());
+
+    React.useEffect(() => {
+      const loadThumbnail = async () => {
+        if (item.videoThumbnail) {
+          try {
+            const secureUrl = await getSecureMediaUrl(item.videoThumbnail);
+            if (secureUrl) {
+              setThumbnailUrl(secureUrl);
+            }
+          } catch (error) {
+            console.warn('[YourChannelScreen] Failed to load video thumbnail:', error);
+            // Keep fallback URL
+          }
+        }
+      };
+
+      loadThumbnail();
+    }, [item.videoThumbnail]);
+
+    return (
+      <TouchableOpacity
+        style={styles.videoCard}
+        activeOpacity={0.9}
+        onPress={() => onPress(item)}
+      >
+        <Image
+          source={{ uri: thumbnailUrl }}
+          style={styles.videoThumbnail}
+          resizeMode="cover"
+          onError={() => {
+            // Fallback to placeholder on error
+            setThumbnailUrl(getFallbackThumbnailUrl());
+          }}
+        />
+        <View style={styles.videoDurationOverlay}>
+          <Text style={styles.videoDurationText}>{item.playDuration || '0:00'}</Text>
+        </View>
+        <View style={styles.videoInfo}>
+          <Text style={styles.videoTitle} numberOfLines={2}>
+            {item.name}
+          </Text>
+          <Text style={styles.videoViews}>
+            {formatViewCount(item.views || 0)} views
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  });
+
+  const handleVideoPress = (item: Video) => {
+    // Navigate to video player
+    navigation.navigate('VideoPlayer' as never, { videoId: item.id });
+  };
+
+  const renderVideoCard = ({ item }: { item: Video }) => (
+    <VideoCard item={item} onPress={handleVideoPress} />
   );
 
   const renderTabContent = () => {
+    if (isLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
+            Loading content...
+          </Text>
+        </View>
+      );
+    }
+
     switch (selectedTab) {
       case 'Home':
-        return (
+        return videos.length > 0 ? (
           <FlatList
-            data={mockVideos}
+            data={videos}
             renderItem={renderVideoCard}
             keyExtractor={(item) => `video-${item.id}`}
             numColumns={2}
@@ -136,17 +288,56 @@ const YourChannelScreen: React.FC = () => {
             contentContainerStyle={styles.videoGrid}
             showsVerticalScrollIndicator={false}
           />
+        ) : (
+          <View style={styles.emptyState}>
+            <Upload size={48} color={colors.text.secondary} />
+            <Text style={[styles.emptyStateText, { color: colors.text.secondary }]}>
+              No videos uploaded yet
+            </Text>
+            <TouchableOpacity
+              style={[styles.uploadButton, { backgroundColor: colors.primary }]}
+              onPress={() => navigation.navigate('TipTubeUpload' as never)}
+            >
+              <Text style={[styles.uploadButtonText, { color: colors.background }]}>
+                Upload Video
+              </Text>
+            </TouchableOpacity>
+          </View>
         );
       case 'InShorts':
-        return (
+        return shorts.length > 0 ? (
+          <FlatList
+            data={shorts}
+            renderItem={renderVideoCard}
+            keyExtractor={(item) => `short-${item.id}`}
+            numColumns={2}
+            ItemSeparatorComponent={() => <View style={styles.videoSeparator} />}
+            columnWrapperStyle={styles.videoRow}
+            contentContainerStyle={styles.videoGrid}
+            showsVerticalScrollIndicator={false}
+          />
+        ) : (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No shorts available</Text>
+            <Upload size={48} color={colors.text.secondary} />
+            <Text style={[styles.emptyStateText, { color: colors.text.secondary }]}>
+              No shorts uploaded yet
+            </Text>
+            <TouchableOpacity
+              style={[styles.uploadButton, { backgroundColor: colors.primary }]}
+              onPress={() => navigation.navigate('TipShortsUpload' as never)}
+            >
+              <Text style={[styles.uploadButtonText, { color: colors.background }]}>
+                Upload Short
+              </Text>
+            </TouchableOpacity>
           </View>
         );
       case 'Products':
         return (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No products available</Text>
+            <Text style={[styles.emptyStateText, { color: colors.text.secondary }]}>
+              Products feature coming soon
+            </Text>
           </View>
         );
       default:
@@ -157,38 +348,45 @@ const YourChannelScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
-          <Icon name="arrow-left" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Your Channel</Text>
-        <View style={styles.headerToggle}>
-          <View style={styles.toggleContainer}>
-            <View style={styles.toggleTrack} />
-            <View style={styles.toggleThumb} />
-          </View>
-        </View>
-      </View>
+      <Header
+        title="Your Tiptube Channel"
+        showSearch={false}
+        showWallet={false}
+        showPremium={false}
+        showProfile={false}
+      />
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+        }
+      >
         {/* Profile Section */}
         <View style={styles.profileSection}>
           <Image
             source={{
-              uri: user?.profile_image || 'https://via.placeholder.com/100',
+              uri: channel?.profileImage || getFallbackAvatarUrl(user?.id),
             }}
             style={styles.profileImage}
           />
-          <Text style={styles.profileName}>{user?.name || 'Jarad Dugley'}</Text>
-          
+          <Text style={styles.profileName}>
+            {channel?.channelName || user?.name || 'Your Channel'}
+          </Text>
+
           {/* Stats */}
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>200</Text>
+              <Text style={styles.statNumber}>
+                {channel?.totalVideos || videos.length || 0}
+              </Text>
               <Text style={styles.statLabel}>Videos</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>1,920</Text>
+              <Text style={styles.statNumber}>
+                {formatViewCount(channel?.totalSubscribers || 0)}
+              </Text>
               <Text style={styles.statLabel}>Followers</Text>
             </View>
           </View>
@@ -199,7 +397,7 @@ const YourChannelScreen: React.FC = () => {
             onPress={handleVideoManagement}
             activeOpacity={0.8}
           >
-            <Text style={styles.videoManagementText}>Video Management</Text>
+            <Text style={styles.videoManagementText}>Upload Videos</Text>
           </TouchableOpacity>
 
           {/* Action Icons */}
@@ -214,6 +412,18 @@ const YourChannelScreen: React.FC = () => {
               <BarChart3 size={20} color={colors.text.secondary} />
             </TouchableOpacity>
           </View>
+
+          {/* Paid Video Analytics Button */}
+          <TouchableOpacity
+            style={[styles.paidAnalyticsButton, { backgroundColor: colors.primary }]}
+            onPress={handlePaidVideoAnalytics}
+            activeOpacity={0.8}
+          >
+            <BarChart3 size={16} color={colors.background} />
+            <Text style={[styles.paidAnalyticsText, { color: colors.background }]}>
+              Paid Video Analytics
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Tabs */}
@@ -243,6 +453,15 @@ const YourChannelScreen: React.FC = () => {
         {/* Tab Content */}
         {renderTabContent()}
       </ScrollView>
+
+      {/* Coming Soon Modal */}
+      <ComingSoonModal
+        visible={showComingSoonModal}
+        onClose={() => setShowComingSoonModal(false)}
+        title="Coming Soon"
+        feature="Paid Video Analytics"
+        description="Get detailed insights into your paid video performance, revenue tracking, and audience analytics. This premium feature will be available soon!"
+      />
     </View>
   );
 };
@@ -438,6 +657,44 @@ const createStyles = (colors: any, isDarkMode: boolean, topInset: number) =>
     emptyStateText: {
       fontSize: 16,
       color: colors.text.secondary,
+      textAlign: 'center',
+      marginBottom: 16,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingVertical: 60,
+    },
+    loadingText: {
+      fontSize: 16,
+      marginTop: 12,
+      textAlign: 'center',
+    },
+    uploadButton: {
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: 8,
+      marginTop: 16,
+    },
+    uploadButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    paidAnalyticsButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderRadius: 8,
+      marginTop: 16,
+    },
+    paidAnalyticsText: {
+      fontSize: 14,
+      fontWeight: '600',
+      marginLeft: 8,
     },
   });
 

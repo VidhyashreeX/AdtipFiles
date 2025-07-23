@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,17 @@ import {
   TouchableOpacity,
   FlatList,
   Dimensions,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Header from '../../components/common/Header';
+import ApiService from '../../services/ApiService';
+import { getSecureMediaUrl, getFallbackAvatarUrl } from '../../utils/mediaUtils';
 
 interface FollowedChannel {
   id: number;
@@ -19,77 +25,118 @@ interface FollowedChannel {
   avatar: string;
   isFollowing: boolean;
   subscriberCount?: number;
+  channelId?: number;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2; // 2 cards per row with padding
 
-// Mock data for demonstration
-const mockFollowedChannels: FollowedChannel[] = [
-  {
-    id: 1,
-    name: 'Jarad Dugley',
-    avatar: 'https://picsum.photos/100/100?random=1',
-    isFollowing: true,
-    subscriberCount: 1200,
-  },
-  {
-    id: 2,
-    name: 'Foodmania',
-    avatar: 'https://picsum.photos/100/100?random=2',
-    isFollowing: true,
-    subscriberCount: 5600,
-  },
-  {
-    id: 3,
-    name: 'Bakeryergy',
-    avatar: 'https://picsum.photos/100/100?random=3',
-    isFollowing: true,
-    subscriberCount: 890,
-  },
-  {
-    id: 4,
-    name: 'Bakery SQ',
-    avatar: 'https://picsum.photos/100/100?random=4',
-    isFollowing: true,
-    subscriberCount: 2300,
-  },
-  {
-    id: 5,
-    name: 'Paint Junction',
-    avatar: 'https://picsum.photos/100/100?random=5',
-    isFollowing: true,
-    subscriberCount: 750,
-  },
-  {
-    id: 6,
-    name: 'Activity',
-    avatar: 'https://picsum.photos/100/100?random=6',
-    isFollowing: true,
-    subscriberCount: 1800,
-  },
-];
-
 const FollowedChannelScreen: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
+  const { user } = useAuth();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const [channels, setChannels] = useState(mockFollowedChannels);
+
+  // State for followed channels
+  const [channels, setChannels] = useState<FollowedChannel[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState('');
 
   const styles = createStyles(colors, isDarkMode, insets.top);
+
+  // Fetch followed channels data
+  const fetchFollowedChannels = useCallback(async () => {
+    console.log('🚀 [FollowedChannelScreen] Fetching followed channels for user:', user?.id);
+
+    if (!user?.id) {
+      console.error('❌ [FollowedChannelScreen] User not authenticated');
+      setError('User not authenticated');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      setError('');
+      console.log('📡 [FollowedChannelScreen] Making API call to getListOfFollowedChannelByUser...');
+      const response = await ApiService.getListOfFollowedChannelByUser(Number(user.id));
+      console.log('📥 [FollowedChannelScreen] Followed channels API response:', {
+        status: response.status,
+        hasData: !!response.data,
+        dataLength: response.data?.length
+      });
+
+      if (response.status === 200 && response.data && Array.isArray(response.data)) {
+        const transformedChannels: FollowedChannel[] = await Promise.all(
+          response.data.map(async (channel: any) => ({
+            id: channel.channelId || channel.id,
+            channelId: channel.channelId,
+            name: channel.channelName || channel.name || 'Unknown Channel',
+            avatar: channel.profileImage
+              ? await getSecureMediaUrl(channel.profileImage)
+              : getFallbackAvatarUrl(channel.channelId || channel.id),
+            isFollowing: true, // They are in the followed list
+            subscriberCount: channel.totalSubscribers || channel.total_subscribers || 0,
+          }))
+        );
+
+        console.log('✅ [FollowedChannelScreen] Transformed channels:', transformedChannels.length);
+        setChannels(transformedChannels);
+      } else {
+        console.log('📭 [FollowedChannelScreen] No followed channels found');
+        setChannels([]);
+      }
+    } catch (err: any) {
+      console.error('Error fetching followed channels:', err);
+      setError(err.message || 'Failed to load followed channels');
+      setChannels([]);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [user?.id]);
+
+  // Refresh handler
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    fetchFollowedChannels();
+  }, [fetchFollowedChannels]);
+
+  // Load data on component mount
+  useEffect(() => {
+    fetchFollowedChannels();
+  }, [fetchFollowedChannels]);
 
   const handleBackPress = () => {
     navigation.goBack();
   };
 
-  const handleUnfollow = (channelId: number) => {
-    setChannels(prevChannels =>
-      prevChannels.map(channel =>
-        channel.id === channelId
-          ? { ...channel, isFollowing: false }
-          : channel
-      )
-    );
+  const handleUnfollow = async (channelId: number) => {
+    if (!user?.id) return;
+
+    try {
+      console.log('🔄 [FollowedChannelScreen] Unfollowing channel:', channelId);
+
+      // Call the API to unfollow the channel
+      const response = await ApiService.saveChannelFollowers({
+        userId: Number(user.id),
+        channelId: channelId,
+        follow: 0, // 0 for unfollow, 1 for follow
+      });
+
+      if (response.status === 200) {
+        // Update local state to remove the channel from the list
+        setChannels(prevChannels =>
+          prevChannels.filter(channel => channel.id !== channelId)
+        );
+        console.log('✅ [FollowedChannelScreen] Successfully unfollowed channel:', channelId);
+      } else {
+        console.error('❌ [FollowedChannelScreen] Failed to unfollow channel:', response);
+      }
+    } catch (error) {
+      console.error('Error unfollowing channel:', error);
+      // Optionally show an error message to the user
+    }
   };
 
   const handleChannelPress = (channel: FollowedChannel) => {
@@ -155,16 +202,36 @@ const FollowedChannelScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <Header
+          title="Followed Channels"
+          showSearch={false}
+          showWallet={false}
+          showPremium={false}
+          showProfile={false}
+        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
+            Loading followed channels...
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
-          <Icon name="arrow-left" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Followed Channel</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <Header
+        title="Followed Channels"
+        showSearch={false}
+        showWallet={false}
+        showPremium={false}
+        showProfile={false}
+      />
 
       {/* Channels Grid */}
       <FlatList
@@ -176,13 +243,16 @@ const FollowedChannelScreen: React.FC = () => {
         columnWrapperStyle={styles.row}
         contentContainerStyle={styles.gridContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+        }
         ListEmptyComponent={() => (
           <View style={styles.emptyState}>
-            <Icon name="users" size={48} color={colors.text.tertiary} />
-            <Text style={styles.emptyStateText}>
+            <Icon name="users" size={48} color={colors.text.secondary} />
+            <Text style={[styles.emptyStateText, { color: colors.text.primary }]}>
               You're not following any channels yet
             </Text>
-            <Text style={styles.emptyStateSubtext}>
+            <Text style={[styles.emptyStateSubtext, { color: colors.text.secondary }]}>
               Discover and follow channels to see them here
             </Text>
           </View>
@@ -308,6 +378,17 @@ const createStyles = (colors: any, _isDarkMode: boolean, topInset: number) =>
       color: colors.text.secondary,
       textAlign: 'center',
       lineHeight: 20,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingVertical: 60,
+    },
+    loadingText: {
+      fontSize: 16,
+      marginTop: 12,
+      textAlign: 'center',
     },
   });
 

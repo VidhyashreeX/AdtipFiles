@@ -30,6 +30,7 @@ export interface HeaderProps {
   searchQuery?: string; // External search query value
   showSearch?: boolean;
   showPremium?: boolean; // New prop to control premium button visibility
+  showProfile?: boolean; // New prop to control profile icon visibility
 }
 
 // Utility to help decide default logo visibility
@@ -86,6 +87,7 @@ const Header: React.FC<HeaderProps> = ({
   searchQuery,
   showSearch = true,
   showPremium = true,
+  showProfile = true,
 }) => {
   const navigation = useNavigation();
   const route = useRoute();
@@ -135,6 +137,11 @@ const Header: React.FC<HeaderProps> = ({
     console.log('📊 [Header] Current premium status:', { isPremium, balance });
     navigation.navigate('PremiumUser' as never);
   }, [navigation, isPremium, balance]);
+
+  const navigateToLibrary = useCallback(() => {
+    console.log('🚀 [Header] User clicked profile icon, navigating to Library');
+    navigation.navigate('Library' as never);
+  }, [navigation]);
 
   // Memoize search handlers
   const handleSearchIconPress = useCallback(() => {
@@ -410,6 +417,14 @@ const Header: React.FC<HeaderProps> = ({
                 style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}
               >
                 <Icon name="credit-card" size={sizes.iconSize} color={colors.primary} />
+              </TouchableOpacity>
+            )}
+            {showProfile && (
+              <TouchableOpacity
+                onPress={() => requireAuth('profile', navigateToLibrary)}
+                style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}
+              >
+                <Icon name="user" size={sizes.iconSize} color={colors.text.secondary} />
               </TouchableOpacity>
             )}
           </>

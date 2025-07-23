@@ -39,7 +39,7 @@ import Header from '../../components/common/Header';
 import VideoCardSkeleton from '../../components/skeletons/VideoCardSkeleton';
 import ScreenTransition from '../../components/common/ScreenTransition';
 import AnimatedVideoCard from './AnimatedVideoCard';
-import TipTubeHeader from '../../components/tiptube/TipTubeHeader';
+
 import CategoryTabs from '../../components/tiptube/CategoryTabs';
 import YouTubeStyleVideoCard from '../../components/tiptube/YouTubeStyleVideoCard';
 import TipShortsSection from '../../components/tiptube/TipShortsSection';
@@ -1087,15 +1087,18 @@ const TipTubeScreen = () => {
   return (
     <ScreenTransition animationType="slide" skipAnimation={false}>
       <View style={styles.container}>
-        <TipTubeHeader
-          onSearchPress={() => setIsTipTubeSearchActive(true)}
-          onProfilePress={handleNavigateToLibrary}
-          onSharePress={() => {
-            // Handle share functionality
+        <Header
+          title="TipTube"
+          showSearch={true}
+          showWallet={true}
+          showPremium={true}
+          showProfile={true}
+          onSearchSubmit={(query) => {
+            setSearchQuery(query);
+            setIsTipTubeSearchActive(true);
           }}
-          onCastPress={() => {
-            // Handle cast functionality
-          }}
+          onSearchQueryChange={(query) => setSearchQuery(query)}
+          searchQuery={searchQuery}
         />
         
         {initialLoading ? (

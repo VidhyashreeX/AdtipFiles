@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,66 +7,67 @@ import {
   TouchableOpacity,
   FlatList,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '../../contexts/AuthContext';
+import {
+  useShortsInfiniteQuery,
+  useGuestShortsQuery,
+  type ShortVideo as TanStackShortVideo
+} from '../../hooks/useShortsQuery';
+import { getSecureMediaUrl, getFallbackThumbnailUrl } from '../../utils/mediaUtils';
 
-interface ShortVideo {
-  id: number;
-  title: string;
-  thumbnail: string;
-  creator: string;
-  hashtags: string[];
-}
+// Use the same type as TipShortsEnhanced
+type ShortVideo = TanStackShortVideo;
 
 interface TipShortsSectionProps {
-  shorts?: ShortVideo[];
   onSeeAllPress?: () => void;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2; // 2 cards per row with padding
+const CARD_WIDTH = 120; // Fixed width for horizontal scrolling
 const CARD_HEIGHT = CARD_WIDTH * 1.5; // Vertical aspect ratio for shorts
 
-// Mock data for demonstration
-const mockShorts: ShortVideo[] = [
-  {
-    id: 1,
-    title: 'Food Lover Afooddish',
-    thumbnail: 'https://picsum.photos/200/300?random=1',
-    creator: 'FoodLover',
-    hashtags: ['#shorts', '#daily'],
-  },
-  {
-    id: 2,
-    title: 'Food Lover Afooddish',
-    thumbnail: 'https://picsum.photos/200/300?random=2',
-    creator: 'FoodLover',
-    hashtags: ['#shorts', '#daily'],
-  },
-  {
-    id: 3,
-    title: 'Cooking Tips',
-    thumbnail: 'https://picsum.photos/200/300?random=3',
-    creator: 'ChefMaster',
-    hashtags: ['#cooking', '#tips'],
-  },
-  {
-    id: 4,
-    title: 'Recipe Quick',
-    thumbnail: 'https://picsum.photos/200/300?random=4',
-    creator: 'QuickRecipes',
-    hashtags: ['#recipe', '#quick'],
-  },
-];
-
 const TipShortsSection: React.FC<TipShortsSectionProps> = ({
-  shorts = mockShorts,
   onSeeAllPress,
 }) => {
   const { colors, isDarkMode } = useTheme();
   const navigation = useNavigation();
+  const { user, isGuest } = useAuth();
   const styles = createStyles(colors, isDarkMode);
+
+  // Use the same API hooks as TipShortsEnhanced
+  const authenticatedShortsQuery = useShortsInfiniteQuery(user?.id?.toString() || '50816');
+  const guestShortsQuery = useGuestShortsQuery();
+
+  // Choose the appropriate query based on guest mode
+  const {
+    data,
+    isLoading,
+    error,
+  } = isGuest ? {
+    data: guestShortsQuery.data,
+    isLoading: guestShortsQuery.isLoading,
+    error: guestShortsQuery.error,
+  } : authenticatedShortsQuery;
+
+  // Extract shorts from the data structure
+  const shorts: ShortVideo[] = React.useMemo(() => {
+    if (!data) return [];
+
+    if (isGuest) {
+      // Guest data structure
+      return data.pages?.[0]?.data || [];
+    } else {
+      // Authenticated data structure - flatten all pages
+      return data.pages?.flatMap(page => page || []) || [];
+    }
+  }, [data, isGuest]);
+
+  // Take only first 6 shorts for the horizontal section
+  const displayShorts = shorts.slice(0, 6);
 
   const handleSeeAllPress = () => {
     if (onSeeAllPress) {
@@ -81,30 +82,64 @@ const TipShortsSection: React.FC<TipShortsSectionProps> = ({
     navigation.navigate('TipShorts' as never, { videoId: short.id });
   };
 
-  const renderShortCard = ({ item }: { item: ShortVideo }) => (
-    <TouchableOpacity
-      style={styles.shortCard}
-      onPress={() => handleShortPress(item)}
-      activeOpacity={0.9}
-    >
-      <Image
-        source={{ uri: item.thumbnail }}
-        style={styles.shortThumbnail}
-        resizeMode="cover"
-      />
-      
-      {/* Overlay Content */}
-      <View style={styles.shortOverlay}>
-        <View style={styles.shortContent}>
-          <Text style={styles.shortTitle} numberOfLines={2}>
-            {item.title}
-          </Text>
-          <Text style={styles.shortHashtags}>
-            {item.hashtags.join(' ')}
-          </Text>
+  // Separate component for short card to properly use hooks
+  const ShortCard = React.memo(({ item, onPress }: { item: ShortVideo; onPress: (item: ShortVideo) => void }) => {
+    const [thumbnailUrl, setThumbnailUrl] = React.useState<string>(getFallbackThumbnailUrl());
+
+    React.useEffect(() => {
+      const loadThumbnail = async () => {
+        if (item.thumbnail) {
+          try {
+            const secureUrl = await getSecureMediaUrl(item.thumbnail);
+            if (secureUrl) {
+              setThumbnailUrl(secureUrl);
+            }
+          } catch (error) {
+            console.warn('[TipShortsSection] Failed to load thumbnail:', error);
+            // Keep fallback URL
+          }
+        }
+      };
+
+      loadThumbnail();
+    }, [item.thumbnail]);
+
+    return (
+      <TouchableOpacity
+        style={styles.shortCard}
+        onPress={() => onPress(item)}
+        activeOpacity={0.9}
+      >
+        <Image
+          source={{ uri: thumbnailUrl }}
+          style={styles.shortThumbnail}
+          resizeMode="cover"
+          onError={() => {
+            // Fallback to placeholder on error
+            setThumbnailUrl(getFallbackThumbnailUrl());
+          }}
+        />
+
+        {/* Overlay Content */}
+        <View style={styles.shortOverlay}>
+          <View style={styles.shortContent}>
+            <Text style={styles.shortTitle} numberOfLines={2}>
+              {item.title}
+            </Text>
+            <Text style={styles.shortCreator}>
+              {item.channel.name}
+            </Text>
+            <Text style={styles.shortViews}>
+              {item.views.toLocaleString()} views
+            </Text>
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    );
+  });
+
+  const renderShortCard = ({ item }: { item: ShortVideo }) => (
+    <ShortCard item={item} onPress={handleShortPress} />
   );
 
   return (
@@ -117,17 +152,31 @@ const TipShortsSection: React.FC<TipShortsSectionProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* Shorts Grid */}
-      <FlatList
-        data={shorts}
-        renderItem={renderShortCard}
-        keyExtractor={(item) => `short-${item.id}`}
-        numColumns={2}
-        scrollEnabled={false}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        columnWrapperStyle={styles.row}
-        contentContainerStyle={styles.gridContent}
-      />
+      {/* Shorts Horizontal List */}
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
+            Loading shorts...
+          </Text>
+        </View>
+      ) : displayShorts.length > 0 ? (
+        <FlatList
+          data={displayShorts}
+          renderItem={renderShortCard}
+          keyExtractor={(item) => `short-${item.id}`}
+          horizontal={true}
+          showsHorizontalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
+          contentContainerStyle={styles.horizontalContent}
+        />
+      ) : (
+        <View style={styles.emptyContainer}>
+          <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
+            No shorts available
+          </Text>
+        </View>
+      )}
     </View>
   );
 };
@@ -155,14 +204,11 @@ const createStyles = (colors: any, isDarkMode: boolean) =>
       fontWeight: '600',
       color: '#00C853',
     },
-    gridContent: {
+    horizontalContent: {
       paddingHorizontal: 16,
     },
-    row: {
-      justifyContent: 'space-between',
-    },
-    separator: {
-      height: 12,
+    horizontalSeparator: {
+      width: 12,
     },
     shortCard: {
       width: CARD_WIDTH,
@@ -197,13 +243,43 @@ const createStyles = (colors: any, isDarkMode: boolean) =>
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 2,
     },
-    shortHashtags: {
+    shortCreator: {
       color: '#FFFFFF',
       fontSize: 12,
       opacity: 0.9,
       textShadowColor: 'rgba(0,0,0,0.5)',
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 2,
+      marginBottom: 2,
+    },
+    shortViews: {
+      color: '#FFFFFF',
+      fontSize: 11,
+      opacity: 0.8,
+      textShadowColor: 'rgba(0,0,0,0.5)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 2,
+    },
+    loadingContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 20,
+      paddingHorizontal: 16,
+    },
+    loadingText: {
+      marginLeft: 8,
+      fontSize: 14,
+    },
+    emptyContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 20,
+      paddingHorizontal: 16,
+    },
+    emptyText: {
+      fontSize: 14,
+      textAlign: 'center',
     },
   });
 
