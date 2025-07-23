@@ -98,7 +98,7 @@ export type MainNavigatorParamList = {
   Earnings: undefined;
   EarnMoneyUser: undefined;
   EarnMoneyCreator: undefined;
-  Analytics: undefined;
+  Analytics: { channelId?: string };
   Notifications: undefined;
   Packages: undefined; // Added if it was missing and PackagesScreen is a route
   ChoosePackages: undefined; // Added this line
@@ -160,6 +160,9 @@ export type MainNavigatorParamList = {
   PrivacyPolicy: undefined; // Add this line
   BlockedUsers: undefined; // Screen for managing blocked users
   PermissionsScreen: undefined; // Add PermissionsScreen to navigation types
+  UploadVideo: undefined; // Upload video screen
+  PaidVideoAnalytics: undefined; // Paid video analytics screen
+  EditChannel: { channelId: string }; // Edit channel screen
 };
 
 // This is the RootStackParamList for the Stack.Navigator in App.tsx

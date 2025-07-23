@@ -30,7 +30,7 @@ import ShortsScreen from '../screens/media/ShortsScreen';
 import ChannelScreen from '../screens/channel/ChannelScreen';
 import CreateChannelScreen from '../screens/channel/CreateChannelScreen';
 import MyChannelScreen from '../screens/channel/MyChannelScreen';
-import EditChannelScreen from '../screens/channel/EditChannelScreen';
+//import EditChannelScreen from '../screens/channel/EditChannelScreen';
 import ChannelSettingsScreen from '../screens/channel/ChannelSettingsScreen';
 import EditPostScreen from '../screens/content/EditPostScreen';
 import PackagesScreen from '../screens/packages/PackagesScreen';
@@ -103,6 +103,8 @@ import PrivacyPolicyScreen from '../screens/Privacy/PrivacyPolicyScreen';
 import YourChannelScreen from '../screens/tiptube/YourChannelScreen';
 import FollowedChannelScreen from '../screens/tiptube/FollowedChannelScreen';
 import LibraryScreen from '../screens/tiptube/LibraryScreen';
+import EditChannelScreen from '../screens/channel/EditChannelScreen';
+import ComingSoonScreen from '../screens/common/ComingSoonScreen';
 
 // Import PremiumUserScreen
 import PremiumUserScreen from '../screens/premium/PremiumUserScreen';
@@ -536,7 +538,24 @@ const MainNavigator = () => {
       
       {/* Other screens with standard transition */}
       <Stack.Screen name="Analytics" component={EnhancedAnalyticsScreen} />
-      <Stack.Screen name="Profile" component={EnhancedUserProfileScreen} />
+      <Stack.Screen
+        name="Profile"
+        component={({
+          route,
+        }: {
+          route: import('@react-navigation/native').RouteProp<
+            MainNavigatorParamList,
+            'Profile'
+          >;
+        }) => {
+          const userId = route.params.userId;
+          if (typeof userId !== 'number') {
+            // Optionally render a fallback or null if userId is not valid
+            return null;
+          }
+          return <EnhancedUserProfileScreen userId={userId} />;
+        }}
+      />
       <Stack.Screen name="InstagramProfile" component={EnhancedInstagramProfileScreen} />
       <Stack.Screen name="FollowersFollowing" component={FollowersFollowingScreen} />
       <Stack.Screen

@@ -10,9 +10,10 @@ import {
   Dimensions,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { Star, Edit, BarChart3, Upload } from 'lucide-react-native';
+import { Star, Edit, BarChart3, Upload, MoreVertical, Trash2, Edit3 } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
@@ -182,8 +183,14 @@ const YourChannelScreen: React.FC = () => {
   };
 
   const handleEditChannel = () => {
-    // Navigate to edit channel screen
-    navigation.navigate('EditChannel' as never);
+    // Navigate to edit channel screen with channelId
+    if (channel?.channelId) {
+      navigation.navigate('EditChannel' as never, { channelId: channel.channelId });
+    } else {
+      console.warn('[YourChannelScreen] No channelId available for editing');
+      // Show error or redirect to create channel
+      navigation.navigate('CreateChannel' as never);
+    }
   };
 
   const handleAnalytics = () => {
@@ -203,8 +210,19 @@ const YourChannelScreen: React.FC = () => {
   };
 
   // Separate component for video card to properly use hooks
-  const VideoCard = React.memo(({ item, onPress }: { item: Video; onPress: (item: Video) => void }) => {
+  const VideoCard = React.memo(({
+    item,
+    onPress,
+    onEdit,
+    onDelete
+  }: {
+    item: Video;
+    onPress: (item: Video) => void;
+    onEdit: (item: Video) => void;
+    onDelete: (item: Video) => void;
+  }) => {
     const [thumbnailUrl, setThumbnailUrl] = React.useState<string>(getFallbackThumbnailUrl());
+    const [showOptions, setShowOptions] = React.useState(false);
 
     React.useEffect(() => {
       const loadThumbnail = async () => {
@@ -224,6 +242,29 @@ const YourChannelScreen: React.FC = () => {
       loadThumbnail();
     }, [item.videoThumbnail]);
 
+    const handleOptionsPress = () => {
+      Alert.alert(
+        'Video Options',
+        `What would you like to do with "${item.name}"?`,
+        [
+          {
+            text: 'Edit',
+            onPress: () => onEdit(item),
+            style: 'default',
+          },
+          {
+            text: 'Delete',
+            onPress: () => onDelete(item),
+            style: 'destructive',
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+        ]
+      );
+    };
+
     return (
       <TouchableOpacity
         style={styles.videoCard}
@@ -242,6 +283,16 @@ const YourChannelScreen: React.FC = () => {
         <View style={styles.videoDurationOverlay}>
           <Text style={styles.videoDurationText}>{item.playDuration || '0:00'}</Text>
         </View>
+
+        {/* Video Options Button */}
+        <TouchableOpacity
+          style={styles.videoOptionsButton}
+          onPress={handleOptionsPress}
+          activeOpacity={0.8}
+        >
+          <MoreVertical size={16} color={colors.background} />
+        </TouchableOpacity>
+
         <View style={styles.videoInfo}>
           <Text style={styles.videoTitle} numberOfLines={2}>
             {item.name}
@@ -259,11 +310,176 @@ const YourChannelScreen: React.FC = () => {
     navigation.navigate('VideoPlayer' as never, { videoId: item.id });
   };
 
+  const handleEditVideo = (item: Video) => {
+    console.log('Edit video:', item.name);
+    // Navigate to edit video screen or show edit modal
+    // For now, show a placeholder alert
+    Alert.alert(
+      'Edit Video',
+      `Edit functionality for "${item.name}" will be implemented soon.`,
+      [{ text: 'OK' }]
+    );
+  };
+
+  const handleDeleteVideo = (item: Video) => {
+    Alert.alert(
+      'Delete Video',
+      `Are you sure you want to delete "${item.name}"? This action cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('🗑️ [YourChannelScreen] Deleting video:', item.id);
+
+              // Call the delete API
+              const response = await ApiService.deleteVideo(item.id);
+
+              if (response.status === 200 || response.status === true) {
+                console.log('✅ [YourChannelScreen] Video deleted successfully');
+
+                // Remove the video from local state
+                setVideos(prevVideos => prevVideos.filter(video => video.id !== item.id));
+                setShorts(prevShorts => prevShorts.filter(short => short.id !== item.id));
+
+                Alert.alert('Success', 'Video deleted successfully');
+              } else {
+                console.error('❌ [YourChannelScreen] Failed to delete video:', response);
+                Alert.alert('Error', 'Failed to delete video. Please try again.');
+              }
+            } catch (error) {
+              console.error('❌ [YourChannelScreen] Error deleting video:', error);
+              Alert.alert('Error', 'Failed to delete video. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const renderVideoCard = ({ item }: { item: Video }) => (
-    <VideoCard item={item} onPress={handleVideoPress} />
+    <VideoCard
+      item={item}
+      onPress={handleVideoPress}
+      onEdit={handleEditVideo}
+      onDelete={handleDeleteVideo}
+    />
   );
 
-  const renderTabContent = () => {
+
+
+  // Get current tab data
+  const getCurrentTabData = () => {
+    switch (selectedTab) {
+      case 'Home':
+        return videos;
+      case 'InShorts':
+        return shorts;
+      case 'Products':
+      default:
+        return [];
+    }
+  };
+
+  // Render header component for FlatList
+  const renderListHeader = () => (
+    <View>
+      {/* Profile Section */}
+      <View style={styles.profileSection}>
+        <Image
+          source={{
+            uri: channel?.profileImage || getFallbackAvatarUrl(user?.id),
+          }}
+          style={styles.profileImage}
+        />
+        <Text style={styles.profileName}>
+          {channel?.channelName || user?.name || 'Your Channel'}
+        </Text>
+
+        {/* Stats */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>
+              {channel?.totalVideos || videos.length || 0}
+            </Text>
+            <Text style={styles.statLabel}>Videos</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>
+              {formatViewCount(channel?.totalSubscribers || 0)}
+            </Text>
+            <Text style={styles.statLabel}>Followers</Text>
+          </View>
+        </View>
+
+        {/* Video Management Button */}
+        <TouchableOpacity
+          style={styles.videoManagementButton}
+          onPress={handleVideoManagement}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.videoManagementText}>Upload Videos</Text>
+        </TouchableOpacity>
+
+        {/* Action Icons */}
+        <View style={styles.actionIcons}>
+          <TouchableOpacity style={styles.actionIcon} onPress={handleEditChannel}>
+            <Star size={20} color={colors.text.secondary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionIcon} onPress={handleEditChannel}>
+            <Edit size={20} color={colors.text.secondary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionIcon} onPress={handleAnalytics}>
+            <BarChart3 size={20} color={colors.text.secondary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Paid Video Analytics Button */}
+        <TouchableOpacity
+          style={[styles.paidAnalyticsButton, { backgroundColor: colors.primary }]}
+          onPress={handlePaidVideoAnalytics}
+          activeOpacity={0.8}
+        >
+          <BarChart3 size={16} color={colors.background} />
+          <Text style={[styles.paidAnalyticsText, { color: colors.background }]}>
+            Paid Video Analytics
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
+        {tabs.map((tab) => (
+          <TouchableOpacity
+            key={tab}
+            style={[
+              styles.tab,
+              selectedTab === tab && styles.selectedTab,
+            ]}
+            onPress={() => setSelectedTab(tab)}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                selectedTab === tab && styles.selectedTabText,
+              ]}
+            >
+              {tab}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+
+  // Render empty state
+  const renderEmptyState = () => {
     if (isLoading) {
       return (
         <View style={styles.loadingContainer}>
@@ -277,18 +493,7 @@ const YourChannelScreen: React.FC = () => {
 
     switch (selectedTab) {
       case 'Home':
-        return videos.length > 0 ? (
-          <FlatList
-            data={videos}
-            renderItem={renderVideoCard}
-            keyExtractor={(item) => `video-${item.id}`}
-            numColumns={2}
-            ItemSeparatorComponent={() => <View style={styles.videoSeparator} />}
-            columnWrapperStyle={styles.videoRow}
-            contentContainerStyle={styles.videoGrid}
-            showsVerticalScrollIndicator={false}
-          />
-        ) : (
+        return (
           <View style={styles.emptyState}>
             <Upload size={48} color={colors.text.secondary} />
             <Text style={[styles.emptyStateText, { color: colors.text.secondary }]}>
@@ -305,18 +510,7 @@ const YourChannelScreen: React.FC = () => {
           </View>
         );
       case 'InShorts':
-        return shorts.length > 0 ? (
-          <FlatList
-            data={shorts}
-            renderItem={renderVideoCard}
-            keyExtractor={(item) => `short-${item.id}`}
-            numColumns={2}
-            ItemSeparatorComponent={() => <View style={styles.videoSeparator} />}
-            columnWrapperStyle={styles.videoRow}
-            contentContainerStyle={styles.videoGrid}
-            showsVerticalScrollIndicator={false}
-          />
-        ) : (
+        return (
           <View style={styles.emptyState}>
             <Upload size={48} color={colors.text.secondary} />
             <Text style={[styles.emptyStateText, { color: colors.text.secondary }]}>
@@ -345,6 +539,8 @@ const YourChannelScreen: React.FC = () => {
     }
   };
 
+  const currentData = getCurrentTabData();
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -356,103 +552,21 @@ const YourChannelScreen: React.FC = () => {
         showProfile={false}
       />
 
-      <ScrollView
-        style={styles.content}
+      <FlatList
+        data={currentData}
+        renderItem={renderVideoCard}
+        keyExtractor={(item) => `${selectedTab}-${item.id}`}
+        numColumns={2}
+        ItemSeparatorComponent={() => <View style={styles.videoSeparator} />}
+        columnWrapperStyle={currentData.length > 0 ? styles.videoRow : undefined}
+        contentContainerStyle={styles.videoGrid}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
         }
-      >
-        {/* Profile Section */}
-        <View style={styles.profileSection}>
-          <Image
-            source={{
-              uri: channel?.profileImage || getFallbackAvatarUrl(user?.id),
-            }}
-            style={styles.profileImage}
-          />
-          <Text style={styles.profileName}>
-            {channel?.channelName || user?.name || 'Your Channel'}
-          </Text>
-
-          {/* Stats */}
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>
-                {channel?.totalVideos || videos.length || 0}
-              </Text>
-              <Text style={styles.statLabel}>Videos</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>
-                {formatViewCount(channel?.totalSubscribers || 0)}
-              </Text>
-              <Text style={styles.statLabel}>Followers</Text>
-            </View>
-          </View>
-
-          {/* Video Management Button */}
-          <TouchableOpacity
-            style={styles.videoManagementButton}
-            onPress={handleVideoManagement}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.videoManagementText}>Upload Videos</Text>
-          </TouchableOpacity>
-
-          {/* Action Icons */}
-          <View style={styles.actionIcons}>
-            <TouchableOpacity style={styles.actionIcon} onPress={handleEditChannel}>
-              <Star size={20} color={colors.text.secondary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionIcon} onPress={handleEditChannel}>
-              <Edit size={20} color={colors.text.secondary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionIcon} onPress={handleAnalytics}>
-              <BarChart3 size={20} color={colors.text.secondary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Paid Video Analytics Button */}
-          <TouchableOpacity
-            style={[styles.paidAnalyticsButton, { backgroundColor: colors.primary }]}
-            onPress={handlePaidVideoAnalytics}
-            activeOpacity={0.8}
-          >
-            <BarChart3 size={16} color={colors.background} />
-            <Text style={[styles.paidAnalyticsText, { color: colors.background }]}>
-              Paid Video Analytics
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Tabs */}
-        <View style={styles.tabsContainer}>
-          {tabs.map((tab) => (
-            <TouchableOpacity
-              key={tab}
-              style={[
-                styles.tab,
-                selectedTab === tab && styles.selectedTab,
-              ]}
-              onPress={() => setSelectedTab(tab)}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.tabText,
-                  selectedTab === tab && styles.selectedTabText,
-                ]}
-              >
-                {tab}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Tab Content */}
-        {renderTabContent()}
-      </ScrollView>
+        ListHeaderComponent={renderListHeader}
+        ListEmptyComponent={renderEmptyState}
+      />
 
       {/* Coming Soon Modal */}
       <ComingSoonModal
@@ -634,6 +748,15 @@ const createStyles = (colors: any, isDarkMode: boolean, topInset: number) =>
       color: '#FFFFFF',
       fontSize: 10,
       fontWeight: 'bold',
+    },
+    videoOptionsButton: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      borderRadius: 12,
+      padding: 4,
+      zIndex: 1,
     },
     videoInfo: {
       padding: 8,

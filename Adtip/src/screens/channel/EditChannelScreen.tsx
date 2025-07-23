@@ -17,6 +17,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { launchImageLibrary } from 'react-native-image-picker';
 import Icon from 'react-native-vector-icons/Feather';
 import { Camera, Save, X } from 'lucide-react-native';
+import Header from '../../components/common/Header';
 import ApiService from '../../services/ApiService';
 import CloudflareUploadService from '../../services/CloudflareUploadService';
 import { UpdateChannelRequest } from '../../types/api';
@@ -42,7 +43,20 @@ const EditChannelScreen: React.FC = () => {
   const { colors } = useTheme();
   const { user } = useAuth();
 
-  const { channelId } = route.params;
+  // Get channelId from route params with error handling
+  const channelId = route.params?.channelId;
+
+  // If no channelId is provided, redirect back
+  React.useEffect(() => {
+    if (!channelId) {
+      console.error('[EditChannelScreen] No channelId provided in route params');
+      Alert.alert(
+        'Error',
+        'No channel ID provided. Please try again.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    }
+  }, [channelId, navigation]);
 
   // React Query mutation for updating channel
   const updateChannelMutation = useUpdateChannel();
@@ -201,38 +215,57 @@ const EditChannelScreen: React.FC = () => {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Icon name="arrow-left" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text.primary }]}>Edit Channel</Text>
-          <View style={{ width: 24 }} />
-        </View>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Header
+          title="Edit Channel"
+          showSearch={false}
+          showWallet={false}
+          showPremium={false}
+          showProfile={false}
+          leftComponent={
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <Icon name="arrow-left" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.text.primary }]}>Loading...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text.primary }]}>Edit Channel</Text>
-        <TouchableOpacity onPress={handleSave} disabled={isSaving}>
-          {isSaving ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : (
-            <Save size={24} color={colors.primary} />
-          )}
-        </TouchableOpacity>
-      </View>
+      {/* Standardized Header */}
+      <Header
+        title="Edit Channel"
+        showSearch={false}
+        showWallet={false}
+        showPremium={false}
+        showProfile={false}
+        leftComponent={
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Icon name="arrow-left" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        }
+        rightComponent={
+          <TouchableOpacity onPress={handleSave} disabled={isSaving} style={styles.saveButtonHeader}>
+            {isSaving ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Save size={24} color={colors.primary} />
+            )}
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Cover Image */}
@@ -358,16 +391,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  backButton: {
+    padding: 8,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+  saveButtonHeader: {
+    padding: 8,
   },
   loadingContainer: {
     flex: 1,

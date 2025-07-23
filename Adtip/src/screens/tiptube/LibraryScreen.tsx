@@ -9,8 +9,11 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import { Tv, Upload, BarChart3, Users, Bell, DollarSign } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useChannelData } from '../../hooks/useQueries';
+import Header from '../../components/common/Header';
 
 interface LibraryMenuItem {
   id: string;
@@ -22,13 +25,44 @@ interface LibraryMenuItem {
 
 const LibraryScreen: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
+  const { user } = useAuth();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
   const styles = createStyles(colors, isDarkMode, insets.top);
 
+  // Fetch user's channel data to get channelId
+  const {
+    data: channelData,
+    isLoading: channelLoading,
+    error: channelError
+  } = useChannelData(user?.id || 0);
+
+  // Get the channelId from the fetched data
+  const userChannelId = channelData?.data?.[0]?.channelId;
+
   const handleBackPress = () => {
     navigation.goBack();
+  };
+
+  const handleAnalyticsPress = () => {
+    if (userChannelId) {
+      navigation.navigate('Analytics' as never, { channelId: String(userChannelId) });
+    } else {
+      // If no channel found, navigate to create channel
+      navigation.navigate('CreateChannel' as never);
+    }
+  };
+
+  const handleUploadVideoPress = () => {
+    // Navigate to TipTubeUpload screen (same as YourChannelScreen)
+    navigation.navigate('TipTubeUpload' as never);
+  };
+
+  const handlePaidVideoAnalyticsPress = () => {
+    // For now, show coming soon or navigate to a placeholder
+    // This can be implemented when the PaidVideoAnalytics screen is ready
+    console.log('Paid Video Analytics - Coming Soon');
   };
 
   const menuItems: LibraryMenuItem[] = [
@@ -43,14 +77,14 @@ const LibraryScreen: React.FC = () => {
       id: 'upload-videos',
       title: 'Upload Videos',
       icon: <Upload size={24} color={colors.text.primary} />,
-      onPress: () => navigation.navigate('UploadVideo' as never),
+      onPress: handleUploadVideoPress,
       showChevron: true,
     },
     {
       id: 'analytics',
       title: 'Analytics',
       icon: <BarChart3 size={24} color={colors.text.primary} />,
-      onPress: () => navigation.navigate('Analytics' as never),
+      onPress: handleAnalyticsPress,
       showChevron: true,
     },
     {
@@ -71,7 +105,7 @@ const LibraryScreen: React.FC = () => {
       id: 'paid-video-analytics',
       title: 'Paid Video Analytics',
       icon: <DollarSign size={24} color={colors.text.primary} />,
-      onPress: () => navigation.navigate('PaidVideoAnalytics' as never),
+      onPress: handlePaidVideoAnalyticsPress,
       showChevron: true,
     },
   ];
@@ -100,14 +134,22 @@ const LibraryScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
-          <Icon name="arrow-left" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Library</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      {/* Standardized Header */}
+      <Header
+        title="Library"
+        showSearch={false}
+        showWallet={false}
+        showPremium={false}
+        showProfile={false}
+        leftComponent={
+          <TouchableOpacity
+            onPress={handleBackPress}
+            style={styles.backButton}
+          >
+            <Icon name="arrow-left" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        }
+      />
 
       {/* Menu Items */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -125,29 +167,8 @@ const createStyles = (colors: any, isDarkMode: boolean, topInset: number) =>
       flex: 1,
       backgroundColor: colors.background,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingTop: topInset + 12,
-      paddingHorizontal: 16,
-      paddingBottom: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    },
     backButton: {
       padding: 8,
-    },
-    headerTitle: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: colors.text.primary,
-      flex: 1,
-      textAlign: 'center',
-      marginHorizontal: 16,
-    },
-    headerSpacer: {
-      width: 40, // Same width as back button for centering
     },
     content: {
       flex: 1,
