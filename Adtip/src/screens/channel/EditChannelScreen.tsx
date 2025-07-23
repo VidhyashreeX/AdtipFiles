@@ -79,6 +79,12 @@ const EditChannelScreen: React.FC = () => {
   }, [channelId]);
 
   const loadChannelData = async () => {
+    if (!channelId) {
+      console.error('[EditChannelScreen] Cannot load channel data: channelId is undefined');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       setIsLoading(true);
       const response = await ApiService.getChannelByUserId(Number(channelId));
@@ -182,7 +188,14 @@ const EditChannelScreen: React.FC = () => {
 
   // Save changes
   const handleSave = async () => {
-    if (!validateForm() || !channel || !user) return;
+    if (!validateForm() || !channel || !user || !channelId) {
+      console.error('[EditChannelScreen] Cannot save: missing required data', {
+        hasChannel: !!channel,
+        hasUser: !!user,
+        hasChannelId: !!channelId
+      });
+      return;
+    }
 
     try {
       setIsSaving(true);
@@ -192,7 +205,6 @@ const EditChannelScreen: React.FC = () => {
         channelName: channelName.trim(),
         channelDescription: description.trim(),
         profileImageURL: profileImage || '',
-        createdBy: Number(user.id), // Add createdBy for proper query invalidation
       };
 
       console.log('🔄 [EditChannelScreen] Updating channel with data:', updateData);
