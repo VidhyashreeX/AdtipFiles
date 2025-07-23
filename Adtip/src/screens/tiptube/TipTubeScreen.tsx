@@ -299,7 +299,7 @@ const TipTubeScreen = () => {
     isLoading: channelLoading,
   } = useChannelData(user?.id || 0);
 
-  // Update userChannelId when channel data changes
+  // Update userChannelId and profile image when channel data changes
   useEffect(() => {
     console.log('[TipTubeScreen] Channel data changed:', {
       status: channelData?.status,
@@ -309,14 +309,37 @@ const TipTubeScreen = () => {
     });
 
     if (channelData?.status === 200 && channelData?.data?.length > 0) {
-      const newChannelId = String(channelData.data[0].channelId);
+      const channelInfo = channelData.data[0];
+      const newChannelId = String(channelInfo.channelId);
       console.log('[TipTubeScreen] Setting userChannelId to:', newChannelId);
       setUserChannelId(newChannelId);
+
+      // Load channel profile image
+      const loadChannelProfileImage = async () => {
+        if (channelInfo.profileImage) {
+          try {
+            const secureUrl = await getSecureMediaUrl(channelInfo.profileImage);
+            if (secureUrl) {
+              setChannelProfileImage(secureUrl);
+            } else {
+              setChannelProfileImage(getFallbackAvatarUrl(user?.id));
+            }
+          } catch (error) {
+            console.warn('[TipTubeScreen] Failed to load channel profile image:', error);
+            setChannelProfileImage(getFallbackAvatarUrl(user?.id));
+          }
+        } else {
+          setChannelProfileImage(getFallbackAvatarUrl(user?.id));
+        }
+      };
+
+      loadChannelProfileImage();
     } else {
       console.log('[TipTubeScreen] No valid channel data found');
       setUserChannelId(null);
+      setChannelProfileImage(getFallbackAvatarUrl(user?.id));
     }
-  }, [channelData]);
+  }, [channelData, user?.id]);
 
   // Fetch comments for a video
 
@@ -587,6 +610,40 @@ const TipTubeScreen = () => {
   const handleNavigateToTipShorts = useCallback(() => {
     navigation.navigate('TipShorts');
   }, [navigation]);
+
+  // Custom channel profile component for header
+  const ChannelProfileComponent = useCallback(() => {
+    if (isGuest) {
+      return null; // Don't show profile for guests
+    }
+
+    const handleProfilePress = () => {
+      if (userChannelId) {
+        navigation.navigate('YourChannel' as never);
+      } else {
+        navigation.navigate('CreateChannel' as never);
+      }
+    };
+
+    return (
+      <TouchableOpacity
+        onPress={handleProfilePress}
+        style={styles.channelProfileButton}
+        activeOpacity={0.8}
+      >
+        <Image
+          source={{
+            uri: channelProfileImage || getFallbackAvatarUrl(user?.id)
+          }}
+          style={styles.channelProfileImage}
+          onError={() => {
+            // Fallback to default avatar on error
+            setChannelProfileImage(getFallbackAvatarUrl(user?.id));
+          }}
+        />
+      </TouchableOpacity>
+    );
+  }, [isGuest, channelProfileImage, user?.id, userChannelId, navigation]);
 
   // New navigation handlers for TipTube screens
   const handleNavigateToYourChannel = useCallback(() => {
@@ -991,6 +1048,11 @@ const TipTubeScreen = () => {
   // Add state for live search query (separate from committed searchQuery)
   const [liveSearchQuery, setLiveSearchQuery] = useState("");
 
+  // State for user's channel profile image
+  const [channelProfileImage, setChannelProfileImage] = useState<string | null>(
+    user?.id ? getFallbackAvatarUrl(user.id) : null
+  );
+
   // Debounced setter for live search
   const debouncedSetLiveSearchQuery = useMemo(() => debounce((q: string) => setLiveSearchQuery(q), 300), []);
 
@@ -1088,17 +1150,18 @@ const TipTubeScreen = () => {
     <ScreenTransition animationType="slide" skipAnimation={false}>
       <View style={styles.container}>
         <Header
-          title="TipTube"
+          title=""
           showSearch={true}
           showWallet={true}
           showPremium={true}
-          showProfile={true}
+          showProfile={false}
           onSearchSubmit={(query) => {
             setSearchQuery(query);
             setIsTipTubeSearchActive(true);
           }}
           onSearchQueryChange={(query) => setSearchQuery(query)}
           searchQuery={searchQuery}
+          rightComponent={<ChannelProfileComponent />}
         />
         
         {initialLoading ? (
@@ -1732,6 +1795,15 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  channelProfileButton: {
+    padding: 4,
+  },
+  channelProfileImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E0E0E0',
   },
 });
 
