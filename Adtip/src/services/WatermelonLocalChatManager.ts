@@ -379,7 +379,7 @@ export class WatermelonLocalChatManager {
     // Emit message sent event immediately for optimistic UI
     this.eventHandlers.onMessageSent?.(localMessage);
 
-    // Send via FCM in background
+    // Send via FCM and sync to backend in background
     this.sendFCMMessage(localMessage, recipientId)
       .then(async () => {
         Logger.info('[WatermelonLocalChatManager] ✅ FCM API call completed successfully for message:', messageId);
@@ -389,6 +389,9 @@ export class WatermelonLocalChatManager {
         // Emit updated message with sent status
         const updatedMessage = { ...localMessage, status: 'sent' as const };
         this.eventHandlers.onMessageSent?.(updatedMessage);
+
+        // Queue for backend sync (dual write)
+        this.queueForBackendSync(localMessage, recipientId);
       })
       .catch(async (error) => {
         Logger.error('[WatermelonLocalChatManager] ❌ Failed to send FCM message via API:', error);
@@ -1108,4 +1111,264 @@ export class WatermelonLocalChatManager {
     createdAt: userChat.createdAt.toISOString(),
     updatedAt: userChat.updatedAt.toISOString()
   });
+
+  // =====================================================
+  // DUAL WRITE BACKEND SYNC METHODS
+  // =====================================================
+
+  /**
+   * Queue message for backend sync (dual write pattern)
+   */
+  private async queueForBackendSync(message: LocalMessage, recipientId: string): Promise<void> {
+    try {
+      Logger.info('[WatermelonLocalChatManager] 🔄 Queuing message for backend sync:', message.id);
+
+      // Prepare message data for backend
+      const backendMessageData = {
+        tempId: message.tempId,
+        chatId: message.conversationId, // conversationId is chatId in user-based system
+        recipientId: recipientId,
+        content: message.content,
+        messageType: message.messageType,
+        timestamp: message.createdAt,
+        replyToMessageId: message.replyTo
+      };
+
+      // Send to backend API
+      await this.syncMessageToBackend(backendMessageData);
+      Logger.info('[WatermelonLocalChatManager] ✅ Message synced to backend successfully:', message.id);
+
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] ❌ Failed to sync message to backend:', error);
+      // Don't throw error to avoid breaking the main flow
+      // The message is already stored locally and sent via FCM
+    }
+  }
+
+  /**
+   * Sync individual message to backend
+   */
+  private async syncMessageToBackend(messageData: any): Promise<void> {
+    try {
+      const authToken = await AsyncStorage.getItem('authToken');
+      if (!authToken) {
+        throw new Error('No auth token available');
+      }
+
+      const response = await fetch(`${ApiService.getBaseUrl()}/api/chat/send-message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify(messageData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Backend sync failed: ${errorData.message || response.statusText}`);
+      }
+
+      const result = await response.json();
+      Logger.info('[WatermelonLocalChatManager] 📤 Backend sync response:', result);
+
+      // Update local message with server ID if provided
+      if (result.data?.message?.id && messageData.tempId) {
+        await this.updateMessageWithServerId(messageData.tempId, result.data.message.id);
+      }
+
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] ❌ Backend sync API call failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update local message with server ID
+   */
+  private async updateMessageWithServerId(tempId: string, serverId: string): Promise<void> {
+    try {
+      // Find message by tempId and update with server ID
+      const messages = await QueryHelpers.getMessagesByTempId(tempId);
+      if (messages.length > 0) {
+        const message = messages[0];
+        await this.chatDb.database.write(async () => {
+          await message.update(msg => {
+            msg._raw.external_id = serverId;
+          });
+        });
+        Logger.info('[WatermelonLocalChatManager] ✅ Updated message with server ID:', { tempId, serverId });
+      }
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] ❌ Failed to update message with server ID:', error);
+    }
+  }
+
+  /**
+   * Sync pending messages to backend (batch sync)
+   */
+  async syncPendingMessagesToBackend(): Promise<void> {
+    try {
+      Logger.info('[WatermelonLocalChatManager] 🔄 Starting batch sync of pending messages');
+
+      // Get messages with 'sending' or 'sent' status that haven't been synced
+      const pendingMessages = await QueryHelpers.getMessagesByStatus('sending');
+      const sentMessages = await QueryHelpers.getMessagesByStatus('sent');
+
+      const allPendingMessages = [...pendingMessages, ...sentMessages].filter(msg =>
+        !msg._raw.external_id // Only sync messages without server ID
+      );
+
+      if (allPendingMessages.length === 0) {
+        Logger.info('[WatermelonLocalChatManager] ✅ No pending messages to sync');
+        return;
+      }
+
+      Logger.info('[WatermelonLocalChatManager] 📤 Syncing', allPendingMessages.length, 'pending messages');
+
+      // Prepare messages for batch sync
+      const messagesToSync = allPendingMessages.map(msg => ({
+        tempId: msg.tempId,
+        chatId: msg.chatId,
+        recipientId: msg.recipientId,
+        content: msg.content,
+        messageType: msg.messageType,
+        timestamp: msg.createdAt.toISOString()
+      }));
+
+      // Send batch sync request
+      await this.batchSyncToBackend(messagesToSync);
+      Logger.info('[WatermelonLocalChatManager] ✅ Batch sync completed successfully');
+
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] ❌ Batch sync failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Batch sync messages to backend
+   */
+  private async batchSyncToBackend(messages: any[]): Promise<void> {
+    try {
+      const authToken = await AsyncStorage.getItem('authToken');
+      if (!authToken) {
+        throw new Error('No auth token available');
+      }
+
+      const response = await fetch(`${ApiService.getBaseUrl()}/api/chat/sync-messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ messages })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Batch sync failed: ${errorData.message || response.statusText}`);
+      }
+
+      const result = await response.json();
+      Logger.info('[WatermelonLocalChatManager] 📤 Batch sync response:', result);
+
+      // Update local messages with server IDs
+      if (result.data?.syncResults) {
+        for (const syncResult of result.data.syncResults) {
+          if (syncResult.status === 'synced' && syncResult.tempId && syncResult.serverId) {
+            await this.updateMessageWithServerId(syncResult.tempId, syncResult.serverId);
+          }
+        }
+      }
+
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] ❌ Batch sync API call failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Pull messages from backend for a chat
+   */
+  async pullMessagesFromBackend(chatId: string, page: number = 1): Promise<LocalMessage[]> {
+    try {
+      Logger.info('[WatermelonLocalChatManager] 📥 Pulling messages from backend for chat:', chatId);
+
+      const authToken = await AsyncStorage.getItem('authToken');
+      if (!authToken) {
+        throw new Error('No auth token available');
+      }
+
+      const response = await fetch(`${ApiService.getBaseUrl()}/api/chat/messages/${chatId}?page=${page}&limit=50`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Failed to pull messages: ${errorData.message || response.statusText}`);
+      }
+
+      const result = await response.json();
+      const backendMessages = result.data?.messages || [];
+
+      Logger.info('[WatermelonLocalChatManager] 📥 Pulled', backendMessages.length, 'messages from backend');
+
+      // Convert backend messages to local format and merge with local database
+      const localMessages: LocalMessage[] = [];
+      for (const backendMsg of backendMessages) {
+        try {
+          // Check if message already exists locally
+          const existingMessage = await QueryHelpers.getMessageById(backendMsg.id.toString());
+
+          if (!existingMessage) {
+            // Create new local message from backend data
+            const localMessage = await this.createMessageFromBackend(backendMsg);
+            localMessages.push(this.convertMessageToLocal(localMessage));
+          }
+        } catch (error) {
+          Logger.error('[WatermelonLocalChatManager] ❌ Failed to process backend message:', error);
+        }
+      }
+
+      Logger.info('[WatermelonLocalChatManager] ✅ Successfully merged', localMessages.length, 'new messages from backend');
+      return localMessages;
+
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] ❌ Failed to pull messages from backend:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create local message from backend data
+   */
+  private async createMessageFromBackend(backendMessage: any): Promise<Message> {
+    try {
+      const messageData = {
+        id: backendMessage.id.toString(),
+        chatId: backendMessage.chat_id,
+        senderId: backendMessage.sender_id.toString(),
+        recipientId: backendMessage.recipient_id.toString(),
+        senderName: backendMessage.sender_name,
+        senderAvatar: backendMessage.sender_avatar,
+        content: backendMessage.content,
+        messageType: backendMessage.message_type as any,
+        status: backendMessage.status as any,
+        tempId: backendMessage.temp_id,
+        replyTo: backendMessage.reply_to_message_id?.toString()
+      };
+
+      const message = await this.chatDb.createMessage(messageData);
+      Logger.info('[WatermelonLocalChatManager] ✅ Created local message from backend data:', message.id);
+
+      return message;
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] ❌ Failed to create message from backend data:', error);
+      throw error;
+    }
+  }
 }

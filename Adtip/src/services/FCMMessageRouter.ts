@@ -264,11 +264,14 @@ export class FCMMessageRouter {
       // Initialize with minimal setup (disable FCM handlers to prevent conflicts)
       await tempChatManager.initialize(userId, userName, {}, { disableFCMHandlers: true });
 
-      // Process the message
+      // Process the message (write to WatermelonDB)
       const success = await tempChatManager.handleIncomingMessage(messageData);
 
       if (success) {
         console.log('[FCMMessageRouter] Chat message processed successfully in killed app state');
+
+        // Queue for backend sync (dual write)
+        await this.queueBackgroundMessageForSync(messageData, userId);
       } else {
         console.warn('[FCMMessageRouter] Failed to process chat message in killed app state');
       }
@@ -322,6 +325,60 @@ export class FCMMessageRouter {
     } catch (error) {
       console.error('[FCMMessageRouter] Error parsing chat message data:', error);
       return null;
+    }
+  }
+
+  /**
+   * Queue background message for backend sync (dual write)
+   */
+  private async queueBackgroundMessageForSync(messageData: any, currentUserId: string): Promise<void> {
+    try {
+      console.log('[FCMMessageRouter] 🔄 Queuing background message for backend sync');
+
+      // Import required modules
+      const [AsyncStorage, ApiService] = await Promise.all([
+        import('@react-native-async-storage/async-storage'),
+        import('./ApiService')
+      ]);
+
+      // Prepare message data for backend
+      const backendMessageData = {
+        tempId: messageData.id, // Use FCM message ID as temp ID
+        chatId: messageData.conversationId,
+        recipientId: currentUserId, // Current user is the recipient
+        content: messageData.content,
+        messageType: messageData.messageType || 'text',
+        timestamp: messageData.timestamp || new Date().toISOString()
+      };
+
+      // Get auth token
+      const authToken = await AsyncStorage.getItem('authToken');
+      if (!authToken) {
+        console.warn('[FCMMessageRouter] No auth token available for background sync');
+        return;
+      }
+
+      // Send to backend API
+      const response = await fetch(`${ApiService.getBaseUrl()}/api/chat/send-message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify(backendMessageData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('[FCMMessageRouter] ✅ Background message synced to backend successfully:', result);
+      } else {
+        const errorData = await response.json();
+        console.error('[FCMMessageRouter] ❌ Background sync failed:', errorData);
+      }
+
+    } catch (error) {
+      console.error('[FCMMessageRouter] ❌ Failed to queue background message for sync:', error);
+      // Don't throw error to avoid breaking message processing
     }
   }
 

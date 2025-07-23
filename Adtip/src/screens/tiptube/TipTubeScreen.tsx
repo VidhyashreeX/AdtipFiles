@@ -39,6 +39,10 @@ import Header from '../../components/common/Header';
 import VideoCardSkeleton from '../../components/skeletons/VideoCardSkeleton';
 import ScreenTransition from '../../components/common/ScreenTransition';
 import AnimatedVideoCard from './AnimatedVideoCard';
+import TipTubeHeader from '../../components/tiptube/TipTubeHeader';
+import CategoryTabs from '../../components/tiptube/CategoryTabs';
+import YouTubeStyleVideoCard from '../../components/tiptube/YouTubeStyleVideoCard';
+import TipShortsSection from '../../components/tiptube/TipShortsSection';
 import { 
   getSecureMediaUrl, 
   getFallbackAvatarUrl, 
@@ -104,20 +108,16 @@ interface CardLayout {
   };
 }
 
-// Categories
+// Categories - Updated to match the design
 const categories = [
-  { name: 'All', icon: '🌍' }, 
-  { name: 'Gaming', icon: '🎮' }, 
-  { name: 'Music', icon: '🎵' },
-  { name: 'Education', icon: '📚' }, 
-  { name: 'Sports', icon: '⚽️' }, 
-  { name: 'Tech', icon: '💻' },
-  { name: 'News', icon: '📰' }, 
-  { name: 'Comedy', icon: '😂' },
+  { id: 'all', name: 'All' },
+  { id: 'trendy', name: 'Trendy' },
+  { id: 'comedy', name: 'Comedy' },
+  { id: 'devotion', name: 'Devotion' },
 ];
 
 const categoryToIdMap: { [key: string]: number } = {
-  All: 0, Gaming: 1, Music: 2, Education: 3, Sports: 4, Tech: 5, News: 6, Comedy: 7,
+  All: 0, Trendy: 1, Comedy: 2, Devotion: 3,
 };
 
 const shuffleArray = <T,>(array: T[]): T[] => {
@@ -588,6 +588,31 @@ const TipTubeScreen = () => {
     navigation.navigate('TipShorts');
   }, [navigation]);
 
+  // New navigation handlers for TipTube screens
+  const handleNavigateToYourChannel = useCallback(() => {
+    if (isGuest) {
+      showLoginPromptForAction('access your channel');
+      return;
+    }
+    navigation.navigate('YourChannel' as never);
+  }, [navigation, isGuest, showLoginPromptForAction]);
+
+  const handleNavigateToFollowedChannels = useCallback(() => {
+    if (isGuest) {
+      showLoginPromptForAction('view followed channels');
+      return;
+    }
+    navigation.navigate('FollowedChannel' as never);
+  }, [navigation, isGuest, showLoginPromptForAction]);
+
+  const handleNavigateToLibrary = useCallback(() => {
+    if (isGuest) {
+      showLoginPromptForAction('access library');
+      return;
+    }
+    navigation.navigate('Library' as never);
+  }, [navigation, isGuest, showLoginPromptForAction]);
+
   // Handle analytics premium alert actions
   const handleAnalyticsPremiumUpgrade = useCallback(() => {
     setShowAnalyticsPremiumAlert(false);
@@ -894,78 +919,50 @@ const TipTubeScreen = () => {
   // Render category header
   const renderCategoryHeader = useCallback(() => (
     <View>
-      {/* Install to Earn PubScale Banner */}
-      {renderEarnCardsRow()}
+      {/* Category Tabs */}
+      <CategoryTabs
+        categories={categories}
+        selectedCategory={selectedCategory}
+        onCategoryChange={handleCategoryChange}
+      />
 
-      <View style={styles.categoryContainer}>
-        {searchQuery && searchQuery.trim() && (
-          <View style={styles.searchIndicator}>
-            <Icon name="search" size={16} color={colors.primary} />
-            <Text style={[styles.searchIndicatorText, {color: colors.primary}]}>
-              Search results for "{searchQuery.trim()}"
-            </Text>
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Icon name="x" size={16} color={colors.text.secondary} />
-            </TouchableOpacity>
-          </View>
-        )}
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={categories}
-          keyExtractor={(item) => item.name}
-          contentContainerStyle={styles.categoryScrollContent}
-          renderItem={({ item, index }) => (
-            <Animated.View entering={FadeIn.delay(index * 30).duration(200)}>
-              <TouchableOpacity
-                onPress={() => handleCategoryChange(item.name)}
-                style={[
-                  styles.categoryButton,
-                  selectedCategory === item.name && styles.selectedCategoryButton
-                ]}
-              >
-                <Text style={[
-                  styles.categoryButtonText,
-                  selectedCategory === item.name && styles.selectedCategoryButtonText
-                ]}>
-                  {item.icon || ''}{item.icon ? ' ' : ''}{item.name || ''}
-                </Text>
-              </TouchableOpacity>
-            </Animated.View>
-          )}
-        />
-      </View>
+      {/* Search Indicator */}
+      {searchQuery && searchQuery.trim() && (
+        <View style={styles.searchIndicator}>
+          <Icon name="search" size={16} color={colors.primary} />
+          <Text style={[styles.searchIndicatorText, {color: colors.primary}]}>
+            Search results for "{searchQuery.trim()}"
+          </Text>
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Icon name="x" size={16} color={colors.text.secondary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* TipShorts Section */}
+      <TipShortsSection onSeeAllPress={handleNavigateToTipShorts} />
     </View>
-  ), [selectedCategory, styles, handleCategoryChange, searchQuery, colors.primary, colors.text.secondary]);
+  ), [selectedCategory, handleCategoryChange, searchQuery, colors.primary, colors.text.secondary, handleNavigateToTipShorts]);
 
   // Render video item - YouTube style
   const renderVideoItem = useCallback(({ item, index }: { item: Video; index: number }) => (
-    <>
-      <AnimatedVideoCard
-        video={item}
-        onPress={(layout) => handleVideoPress(item)}
-        onPressIn={() => setPreviewingVideoId(item.id)}
-        onPressOut={() => setPreviewingVideoId(null)}
-        isSelected={selectedVideoId === item.id}
-        isPreview={previewingVideoId === item.id}
-        styles={styles}
-        colors={colors}
-        onNavigateToChannel={() => handleNavigateToChannel({
-          channelId: String(item.channelId),
-          channelName: item.creatorName,
-          avatar: item.avatar,
-          isVerified: item.isVerified,
-          createdBy: typeof item.channelId === 'number' ? item.channelId : parseInt(String(item.channelId))
-        })}
-        index={index}
-        isYouTubeLayout={true} // Pass flag for YouTube-like layout
-        onToggleComments={() => {
-          setSelectedVideoId(item.id);
-          toggleComments(item.id);
-        }}
-      />
-    </>
-  ), [handleVideoPress, selectedVideoId, previewingVideoId, styles, colors, handleNavigateToChannel, toggleComments]);
+    <YouTubeStyleVideoCard
+      video={item}
+      onPress={() => handleVideoPress(item)}
+      onChannelPress={() => handleNavigateToChannel({
+        channelId: String(item.channelId),
+        channelName: item.creatorName,
+        avatar: item.avatar,
+        isVerified: item.isVerified,
+        createdBy: typeof item.channelId === 'number' ? item.channelId : parseInt(String(item.channelId))
+      })}
+      onFollowPress={() => {
+        // Handle follow functionality
+        console.log('Follow pressed for channel:', item.channelId);
+      }}
+      isFollowing={false} // You can implement follow state logic here
+    />
+  ), [handleVideoPress, handleNavigateToChannel]);
 
   // Prevent autoplay for paid videos
   useEffect(() => {
@@ -1090,50 +1087,15 @@ const TipTubeScreen = () => {
   return (
     <ScreenTransition animationType="slide" skipAnimation={false}>
       <View style={styles.container}>
-        <Header 
-          title="" 
-          showTipShortsIcon={true}
-          showSearch={false}
-          showWallet={false}
-          centerComponent={undefined}
-          rightComponent={
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              {/* TipShorts Navigation Icon */}
-              <TouchableOpacity
-                onPress={handleNavigateToTipShorts}
-                style={[styles.headerIconButton, { marginRight: 8 }]}
-                activeOpacity={0.7}
-              >
-                <CirclePlay size={20} color={colors.text.secondary} />
-              </TouchableOpacity>
-              {/* Content Creator Plan Toggle */}
-              <ContentCreatorPlanToggle onPress={handleTogglePremium} />
-              {/* Analytics Icon */}
-              <TouchableOpacity
-                onPress={handleAnalytics}
-                style={[styles.headerIconButton, { marginRight: 8 }]}
-                activeOpacity={0.7}
-              >
-                <Icon name="bar-chart-2" size={20} color={colors.text.secondary} />
-              </TouchableOpacity>
-              {/* Channel Icon */}
-              <TouchableOpacity
-                onPress={handleMyChannel}
-                style={[styles.headerIconButton, { marginRight: 8 }]}
-                activeOpacity={0.7}
-              >
-                <Icon name="tv" size={20} color={colors.text.secondary} />
-              </TouchableOpacity>
-              {/* TipTube Search Icon */}
-              <TouchableOpacity 
-                onPress={() => setIsTipTubeSearchActive(true)} 
-                style={styles.headerIconButton}
-                activeOpacity={0.7}
-              >
-                <Icon name="search" size={20} color={colors.text.secondary} />
-              </TouchableOpacity>
-            </View>
-          }
+        <TipTubeHeader
+          onSearchPress={() => setIsTipTubeSearchActive(true)}
+          onProfilePress={handleNavigateToLibrary}
+          onSharePress={() => {
+            // Handle share functionality
+          }}
+          onCastPress={() => {
+            // Handle cast functionality
+          }}
         />
         
         {initialLoading ? (

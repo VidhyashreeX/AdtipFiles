@@ -1,13 +1,15 @@
 /**
- * WatermelonDB Sync Service
- * 
- * Handles synchronization between local WatermelonDB and external systems.
- * Provides conflict resolution and data consistency mechanisms.
+ * Enhanced WatermelonDB Sync Service
+ *
+ * Handles synchronization between local WatermelonDB and backend database.
+ * Provides conflict resolution, dual write support, and data consistency mechanisms.
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { database } from '../index';
 import { WatermelonChatDatabase } from './WatermelonChatDatabase';
 import { QueryHelpers } from './QueryHelpers';
+import ApiService from '../../services/ApiService';
 import Logger from '../../utils/LogUtils';
 
 export interface SyncStatus {
@@ -122,27 +124,54 @@ export class SyncService {
   }
 
   /**
-   * Sync pending messages (messages with 'sending' status)
+   * Sync pending messages to backend (enhanced with backend integration)
    */
   private async syncPendingMessages(): Promise<number> {
     try {
+      // Get messages that need to be synced to backend
       const pendingMessages = await QueryHelpers.getMessagesByStatus('sending');
-      let syncedCount = 0;
+      const sentMessages = await QueryHelpers.getMessagesByStatus('sent');
 
-      for (const message of pendingMessages) {
-        try {
-          // Here you would typically send the message via FCM or API
-          // For now, we'll just update the status to 'sent'
-          await this.chatDb.updateMessageStatus(message.id, 'sent');
-          syncedCount++;
-          
-          Logger.debug(`[SyncService] Synced message: ${message.id}`);
-        } catch (error) {
-          Logger.error(`[SyncService] Failed to sync message ${message.id}:`, error);
+      // Filter messages that don't have external_id (not synced to backend)
+      const allPendingMessages = [...pendingMessages, ...sentMessages].filter(msg =>
+        !msg._raw.external_id
+      );
+
+      if (allPendingMessages.length === 0) {
+        Logger.debug('[SyncService] No pending messages to sync');
+        return 0;
+      }
+
+      Logger.info(`[SyncService] Syncing ${allPendingMessages.length} pending messages to backend`);
+
+      // Prepare messages for backend sync
+      const messagesToSync = allPendingMessages.map(msg => ({
+        tempId: msg.tempId || msg.id,
+        chatId: msg.chatId,
+        recipientId: msg.recipientId,
+        content: msg.content,
+        messageType: msg.messageType,
+        timestamp: msg.createdAt.toISOString(),
+        replyToMessageId: msg.replyTo
+      }));
+
+      // Send batch sync request to backend
+      const syncResult = await this.batchSyncToBackend(messagesToSync);
+
+      // Update local messages with server IDs
+      let syncedCount = 0;
+      if (syncResult.syncResults) {
+        for (const result of syncResult.syncResults) {
+          if (result.status === 'synced' && result.tempId && result.serverId) {
+            await this.updateMessageWithServerId(result.tempId, result.serverId);
+            syncedCount++;
+          }
         }
       }
 
+      Logger.info(`[SyncService] Successfully synced ${syncedCount} messages to backend`);
       return syncedCount;
+
     } catch (error) {
       Logger.error('[SyncService] Error syncing pending messages:', error);
       return 0;
@@ -354,6 +383,191 @@ export class SyncService {
     }
   }
 
+  // =====================================================
+  // BACKEND SYNC METHODS
+  // =====================================================
+
+  /**
+   * Batch sync messages to backend
+   */
+  private async batchSyncToBackend(messages: any[]): Promise<any> {
+    try {
+      const authToken = await AsyncStorage.getItem('authToken');
+      if (!authToken) {
+        throw new Error('No auth token available');
+      }
+
+      const response = await fetch(`${ApiService.getBaseUrl()}/api/chat/sync-messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ messages })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Backend sync failed: ${errorData.message || response.statusText}`);
+      }
+
+      const result = await response.json();
+      Logger.debug('[SyncService] Backend sync response:', result);
+      return result.data;
+
+    } catch (error) {
+      Logger.error('[SyncService] Backend sync API call failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update local message with server ID
+   */
+  private async updateMessageWithServerId(tempId: string, serverId: string): Promise<void> {
+    try {
+      const messages = await QueryHelpers.getMessagesByTempId(tempId);
+      if (messages.length > 0) {
+        const message = messages[0];
+        await this.chatDb.database.write(async () => {
+          await message.update(msg => {
+            msg._raw.external_id = serverId;
+          });
+        });
+        Logger.debug('[SyncService] Updated message with server ID:', { tempId, serverId });
+      }
+    } catch (error) {
+      Logger.error('[SyncService] Failed to update message with server ID:', error);
+    }
+  }
+
+  /**
+   * Pull messages from backend for a chat
+   */
+  async pullMessagesFromBackend(chatId: string, page: number = 1): Promise<any[]> {
+    try {
+      Logger.info(`[SyncService] Pulling messages from backend for chat: ${chatId}`);
+
+      const authToken = await AsyncStorage.getItem('authToken');
+      if (!authToken) {
+        throw new Error('No auth token available');
+      }
+
+      const response = await fetch(`${ApiService.getBaseUrl()}/api/chat/messages/${chatId}?page=${page}&limit=50`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Failed to pull messages: ${errorData.message || response.statusText}`);
+      }
+
+      const result = await response.json();
+      const backendMessages = result.data?.messages || [];
+
+      Logger.info(`[SyncService] Pulled ${backendMessages.length} messages from backend`);
+
+      // Merge with local database
+      const newMessages = [];
+      for (const backendMsg of backendMessages) {
+        try {
+          const existingMessage = await QueryHelpers.getMessageById(backendMsg.id.toString());
+
+          if (!existingMessage) {
+            const localMessage = await this.createMessageFromBackend(backendMsg);
+            newMessages.push(localMessage);
+          }
+        } catch (error) {
+          Logger.error('[SyncService] Failed to process backend message:', error);
+        }
+      }
+
+      Logger.info(`[SyncService] Merged ${newMessages.length} new messages from backend`);
+      return newMessages;
+
+    } catch (error) {
+      Logger.error('[SyncService] Failed to pull messages from backend:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create local message from backend data
+   */
+  private async createMessageFromBackend(backendMessage: any): Promise<any> {
+    try {
+      const messageData = {
+        id: backendMessage.id.toString(),
+        chatId: backendMessage.chat_id,
+        senderId: backendMessage.sender_id.toString(),
+        recipientId: backendMessage.recipient_id.toString(),
+        senderName: backendMessage.sender_name,
+        senderAvatar: backendMessage.sender_avatar,
+        content: backendMessage.content,
+        messageType: backendMessage.message_type,
+        status: backendMessage.status,
+        tempId: backendMessage.temp_id,
+        replyTo: backendMessage.reply_to_message_id?.toString()
+      };
+
+      const message = await this.chatDb.createMessage(messageData);
+      Logger.debug('[SyncService] Created local message from backend data:', message.id);
+
+      return message;
+    } catch (error) {
+      Logger.error('[SyncService] Failed to create message from backend data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Force full sync with backend
+   */
+  async forceFullSync(userId: string): Promise<SyncResult> {
+    try {
+      Logger.info('[SyncService] Starting force full sync with backend');
+
+      const startTime = Date.now();
+      const result: SyncResult = {
+        success: false,
+        syncedMessages: 0,
+        syncedConversations: 0,
+        syncedUsers: 0,
+        conflicts: 0,
+        errors: [],
+        duration: 0
+      };
+
+      // 1. Sync pending messages to backend
+      result.syncedMessages = await this.syncPendingMessages();
+
+      // 2. Pull missing messages from backend for all user chats
+      const userChats = await QueryHelpers.getUserConversations(userId);
+      for (const chat of userChats) {
+        try {
+          const newMessages = await this.pullMessagesFromBackend(chat.chatId);
+          result.syncedMessages += newMessages.length;
+        } catch (error) {
+          Logger.error(`[SyncService] Failed to pull messages for chat ${chat.chatId}:`, error);
+          result.errors.push(`Failed to sync chat ${chat.chatId}: ${error.message}`);
+        }
+      }
+
+      result.success = result.errors.length === 0;
+      result.duration = Date.now() - startTime;
+
+      Logger.info('[SyncService] Force full sync completed:', result);
+      return result;
+
+    } catch (error) {
+      Logger.error('[SyncService] Force full sync failed:', error);
+      throw error;
+    }
+  }
+
   /**
    * Export data for backup
    */
@@ -361,7 +575,7 @@ export class SyncService {
     try {
       // TODO: Implement data export functionality
       // This would export all chat data in a portable format
-      
+
       Logger.info('[SyncService] Data export not yet implemented');
       return null;
     } catch (error) {
@@ -377,7 +591,7 @@ export class SyncService {
     try {
       // TODO: Implement data import functionality
       // This would import chat data from a backup
-      
+
       Logger.info('[SyncService] Data import not yet implemented');
       return false;
     } catch (error) {

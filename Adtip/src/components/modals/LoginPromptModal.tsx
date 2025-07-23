@@ -10,6 +10,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { resetTo } from '../../navigation/NavigationService';
 
 const { width } = Dimensions.get('window');
 
@@ -34,8 +35,9 @@ const LoginPromptModal: React.FC<LoginPromptModalProps> = ({
     try {
       await exitGuestMode();
       onClose();
-      // Navigate directly to LoginScreen
-      navigation.navigate('Login');
+      // Use resetTo to navigate directly to Auth stack with Login screen
+      // This ensures we bypass OnboardingScreen and go straight to LoginScreen
+      resetTo('Auth', { screen: 'Login' });
     } catch (error) {
       console.error('Failed to exit guest mode:', error);
     }

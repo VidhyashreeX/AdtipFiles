@@ -13,12 +13,30 @@ jest.mock('../../src/contexts/ThemeContext', () => ({
   useTheme: jest.fn(),
 }));
 
+// Mock the navigation service
+jest.mock('../../src/navigation/NavigationService', () => ({
+  resetTo: jest.fn(),
+}));
+
+// Mock React Navigation
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: jest.fn(),
+}));
+
 const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 const mockUseTheme = useTheme as jest.MockedFunction<typeof useTheme>;
+
+// Import the mocked functions
+import { resetTo } from '../../src/navigation/NavigationService';
+import { useNavigation } from '@react-navigation/native';
+
+const mockResetTo = resetTo as jest.MockedFunction<typeof resetTo>;
+const mockUseNavigation = useNavigation as jest.MockedFunction<typeof useNavigation>;
 
 describe('LoginPromptModal', () => {
   const mockExitGuestMode = jest.fn();
   const mockOnClose = jest.fn();
+  const mockNavigate = jest.fn();
 
   const mockTheme = {
     colors: {
@@ -34,7 +52,7 @@ describe('LoginPromptModal', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     mockUseAuth.mockReturnValue({
       exitGuestMode: mockExitGuestMode,
       isGuest: true,
@@ -62,6 +80,12 @@ describe('LoginPromptModal', () => {
     });
 
     mockUseTheme.mockReturnValue(mockTheme);
+
+    mockUseNavigation.mockReturnValue({
+      navigate: mockNavigate,
+      goBack: jest.fn(),
+      reset: jest.fn(),
+    });
   });
 
   describe('Rendering', () => {
@@ -131,7 +155,7 @@ describe('LoginPromptModal', () => {
       expect(mockOnClose).not.toHaveBeenCalled();
     });
 
-    it('should call exitGuestMode and onClose when Login button is pressed', async () => {
+    it('should call exitGuestMode, onClose, and navigate to Login screen when Login button is pressed', async () => {
       mockExitGuestMode.mockResolvedValue();
 
       const { getByText } = render(
@@ -146,6 +170,7 @@ describe('LoginPromptModal', () => {
       await waitFor(() => {
         expect(mockExitGuestMode).toHaveBeenCalledTimes(1);
         expect(mockOnClose).toHaveBeenCalledTimes(1);
+        expect(mockResetTo).toHaveBeenCalledWith('Auth', { screen: 'Login' });
       });
     });
 
@@ -171,6 +196,26 @@ describe('LoginPromptModal', () => {
       });
 
       consoleErrorSpy.mockRestore();
+    });
+
+    it('should navigate directly to Login screen bypassing OnboardingScreen', async () => {
+      mockExitGuestMode.mockResolvedValue();
+
+      const { getByText } = render(
+        <LoginPromptModal
+          visible={true}
+          onClose={mockOnClose}
+        />
+      );
+
+      fireEvent.press(getByText('Login'));
+
+      await waitFor(() => {
+        // Verify that resetTo is called with Auth stack and Login screen
+        expect(mockResetTo).toHaveBeenCalledWith('Auth', { screen: 'Login' });
+        // Verify that the old navigation.navigate is NOT called
+        expect(mockNavigate).not.toHaveBeenCalled();
+      });
     });
   });
 

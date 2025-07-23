@@ -99,6 +99,11 @@ import FCMChatScreen from '../screens/chat/FCMChatScreen';
 // Import PrivacyPolicyScreen
 import PrivacyPolicyScreen from '../screens/Privacy/PrivacyPolicyScreen';
 
+// Import new TipTube screens
+import YourChannelScreen from '../screens/tiptube/YourChannelScreen';
+import FollowedChannelScreen from '../screens/tiptube/FollowedChannelScreen';
+import LibraryScreen from '../screens/tiptube/LibraryScreen';
+
 // Import PremiumUserScreen
 import PremiumUserScreen from '../screens/premium/PremiumUserScreen';
 
@@ -608,6 +613,23 @@ const MainNavigator = () => {
         options={{ headerShown: false }}
       />
       <Stack.Screen name="PermissionsScreen" component={PermissionsScreen} />
+
+      {/* New TipTube screens */}
+      <Stack.Screen
+        name="YourChannel"
+        component={YourChannelScreen}
+        options={standardFastTransitionConfig}
+      />
+      <Stack.Screen
+        name="FollowedChannel"
+        component={FollowedChannelScreen}
+        options={standardFastTransitionConfig}
+      />
+      <Stack.Screen
+        name="Library"
+        component={LibraryScreen}
+        options={standardFastTransitionConfig}
+      />
     </Stack.Navigator>
   );
 };
