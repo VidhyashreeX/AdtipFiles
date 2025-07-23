@@ -84,7 +84,9 @@ const TipShortsSection: React.FC<TipShortsSectionProps> = ({
 
   // Separate component for short card to properly use hooks
   const ShortCard = React.memo(({ item, onPress }: { item: ShortVideo; onPress: (item: ShortVideo) => void }) => {
-    const [thumbnailUrl, setThumbnailUrl] = React.useState<string>(getFallbackThumbnailUrl());
+    // Use useMemo to ensure fallback URL is stable and doesn't change on every render
+    const fallbackUrl = React.useMemo(() => getFallbackThumbnailUrl(item.id), [item.id]);
+    const [thumbnailUrl, setThumbnailUrl] = React.useState<string>(fallbackUrl);
 
     React.useEffect(() => {
       const loadThumbnail = async () => {
@@ -96,13 +98,14 @@ const TipShortsSection: React.FC<TipShortsSectionProps> = ({
             }
           } catch (error) {
             console.warn('[TipShortsSection] Failed to load thumbnail:', error);
-            // Keep fallback URL
+            // Reset to stable fallback URL
+            setThumbnailUrl(fallbackUrl);
           }
         }
       };
 
       loadThumbnail();
-    }, [item.thumbnail]);
+    }, [item.thumbnail, fallbackUrl]);
 
     return (
       <TouchableOpacity
@@ -115,8 +118,8 @@ const TipShortsSection: React.FC<TipShortsSectionProps> = ({
           style={styles.shortThumbnail}
           resizeMode="cover"
           onError={() => {
-            // Fallback to placeholder on error
-            setThumbnailUrl(getFallbackThumbnailUrl());
+            // Fallback to stable placeholder on error
+            setThumbnailUrl(fallbackUrl);
           }}
         />
 

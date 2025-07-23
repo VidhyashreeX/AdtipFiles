@@ -491,9 +491,9 @@ const TipTubeScreen = () => {
     setSelectedCategory(categoryName);
     // Clear search when changing categories
     setSearchQuery('');
-    // Clear cache for better UX on category change
-    clearCache(`videos-${categoryToIdMap[selectedCategory]}`);
-  }, [selectedCategory, clearCache]);
+    // Clear cache for better UX on category change - use the current category from the parameter
+    clearCache(`videos-${categoryToIdMap[categoryName]}`);
+  }, [clearCache]);
 
 
 
@@ -619,7 +619,7 @@ const TipTubeScreen = () => {
 
     const handleProfilePress = () => {
       if (userChannelId) {
-        navigation.navigate('YourChannel' as never);
+        handleNavigateToLibrary();
       } else {
         navigation.navigate('CreateChannel' as never);
       }
