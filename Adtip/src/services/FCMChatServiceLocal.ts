@@ -13,8 +13,8 @@ import notifee, { AndroidImportance, EventType } from '@notifee/react-native';
 import { WatermelonLocalChatManager, LocalMessage, LocalConversation } from './WatermelonLocalChatManager';
 import Logger from '../utils/LogUtils';
 
-export interface Message extends LocalMessage {}
-export interface Conversation extends LocalConversation {}
+export type Message = LocalMessage;
+export type Conversation = LocalConversation;
 
 export interface FCMChatEventHandlers {
   onMessageReceived?: (message: Message) => void;

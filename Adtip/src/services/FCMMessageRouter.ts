@@ -1,4 +1,5 @@
 import { FirebaseMessagingTypes } from '@react-native-firebase/messaging';
+import Logger from '../utils/LogUtils';
 
 /**
  * FCMMessageRouter - Central coordinator for all FCM messages
@@ -34,9 +35,9 @@ export class FCMMessageRouter {
       return;
     }
 
-    console.log('[FCMMessageRouter] Initializing FCM message router...');
+    Logger.info('[FCMMessageRouter] Initializing FCM message router...');
     this.isInitialized = true;
-    console.log('[FCMMessageRouter] Router initialized successfully');
+    Logger.info('[FCMMessageRouter] Router initialized successfully');
   }
 
   /**
@@ -48,24 +49,24 @@ export class FCMMessageRouter {
     context: 'foreground' | 'background' = 'background'
   ): Promise<void> {
     try {
-      console.log(`[FCMMessageRouter] Routing ${context} message:`, {
+      Logger.info(`[FCMMessageRouter] Routing ${context} message:`, {
         data: remoteMessage.data,
         notification: remoteMessage.notification
       });
 
       const messageType = this.extractMessageType(remoteMessage);
-      console.log('[FCMMessageRouter] Detected message type:', messageType);
+      Logger.info('[FCMMessageRouter] Detected message type:', messageType);
 
-      if (this.isCallMessage(messageType, remoteMessage)) {
+      if (this.isCallMessage(messageType)) {
         await this.routeToCallHandler(remoteMessage, context);
-      } else if (this.isChatMessage(messageType, remoteMessage)) {
+      } else if (this.isChatMessage(messageType)) {
         // Route chat messages to WatermelonLocalChatManager
         await this.routeToChatHandler(remoteMessage, context);
       } else {
-        console.log('[FCMMessageRouter] Unknown message type, ignoring:', messageType);
+        Logger.info('[FCMMessageRouter] Unknown message type, ignoring:', messageType);
       }
     } catch (error) {
-      console.error('[FCMMessageRouter] Error routing message:', error);
+      Logger.error('[FCMMessageRouter] Error routing message:', error);
       // Don't throw to prevent app crashes
     }
   }
@@ -97,7 +98,7 @@ export class FCMMessageRouter {
    * Determine if message is call-related
    * Preserves exact logic from existing index.js implementation
    */
-  private isCallMessage(messageType: string | null, remoteMessage: FirebaseMessagingTypes.RemoteMessage): boolean {
+  private isCallMessage(messageType: string | null): boolean {
     if (!messageType) return false;
 
     // Call message types (preserving existing logic exactly)
@@ -113,7 +114,7 @@ export class FCMMessageRouter {
   /**
    * Determine if message is chat-related
    */
-  private isChatMessage(messageType: string | null, remoteMessage: FirebaseMessagingTypes.RemoteMessage): boolean {
+  private isChatMessage(messageType: string | null): boolean {
     if (!messageType) return false;
 
     // Chat message types
@@ -240,7 +241,7 @@ export class FCMMessageRouter {
       ]);
 
       // Get user info from storage (needed for initialization)
-      const userDataStr = await AsyncStorage.getItem('user');
+      const userDataStr = await AsyncStorage.default.getItem('user');
       if (!userDataStr) {
         console.warn('[FCMMessageRouter] No user data available for killed app chat processing');
         return;
@@ -336,10 +337,17 @@ export class FCMMessageRouter {
       console.log('[FCMMessageRouter] 🔄 Queuing background message for backend sync');
 
       // Import required modules
-      const [AsyncStorage, ApiService] = await Promise.all([
+      const [AsyncStorage, { API_BASE_URL }] = await Promise.all([
         import('@react-native-async-storage/async-storage'),
-        import('./ApiService')
+        import('../constants/api')
       ]);
+
+      // Get auth token first
+      const authToken = await AsyncStorage.default.getItem('accessToken');
+      if (!authToken) {
+        console.warn('[FCMMessageRouter] ⚠️ No auth token available for background sync. Message saved locally via WatermelonDB.');
+        return;
+      }
 
       // Prepare message data for backend
       const backendMessageData = {
@@ -351,15 +359,8 @@ export class FCMMessageRouter {
         timestamp: messageData.timestamp || new Date().toISOString()
       };
 
-      // Get auth token
-      const authToken = await AsyncStorage.getItem('authToken');
-      if (!authToken) {
-        console.warn('[FCMMessageRouter] No auth token available for background sync');
-        return;
-      }
-
       // Send to backend API
-      const response = await fetch(`${ApiService.getBaseUrl()}/api/chat/send-message`, {
+      const response = await fetch(`${API_BASE_URL}/api/chat/send-message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -265,6 +265,103 @@ export class QueryHelpers {
   }
 
   /**
+   * Get messages by temp ID (for sync tracking)
+   */
+  static async getMessagesByTempId(tempId: string): Promise<any[]> {
+    console.log('[QueryHelpers] 🔍 Getting messages by temp ID:', tempId);
+
+    return await messagesCollection
+      .query(
+        Q.where('temp_id', tempId)
+      )
+      .fetch();
+  }
+
+  /**
+   * Get message by ID
+   */
+  static async getMessageById(messageId: string): Promise<any | null> {
+    console.log('[QueryHelpers] 🔍 Getting message by ID:', messageId);
+
+    try {
+      const message = await messagesCollection.find(messageId);
+      return message;
+    } catch (error) {
+      console.log('[QueryHelpers] ⚠️ Message not found:', messageId);
+      return null;
+    }
+  }
+
+  /**
+   * Get old messages for cleanup (older than specified date)
+   */
+  static async getOldMessages(cutoffDate: Date, limit: number = 100): Promise<any[]> {
+    console.log('[QueryHelpers] 🗑️ Getting old messages before:', cutoffDate.toISOString());
+
+    return await messagesCollection
+      .query(
+        Q.where('created_at', Q.lt(cutoffDate.getTime())),
+        Q.sortBy('created_at', Q.asc),
+        Q.take(limit)
+      )
+      .fetch();
+  }
+
+  /**
+   * Get empty chats (chats with no messages)
+   */
+  static async getEmptyChats(): Promise<any[]> {
+    console.log('[QueryHelpers] 🗑️ Getting empty chats');
+
+    // This is a simplified implementation
+    // In a real scenario, you'd need a more complex query
+    const allChats = await userChatsCollection.query().fetch();
+    const emptyChats = [];
+
+    for (const chat of allChats) {
+      const messages = await messagesCollection
+        .query(Q.where('chat_id', chat.chatId))
+        .fetch();
+
+      if (messages.length === 0) {
+        emptyChats.push(chat);
+      }
+    }
+
+    return emptyChats;
+  }
+
+  /**
+   * Get total message count
+   */
+  static async getTotalMessageCount(): Promise<number> {
+    const messages = await messagesCollection.query().fetch();
+    return messages.length;
+  }
+
+  /**
+   * Get total chat count
+   */
+  static async getTotalChatCount(): Promise<number> {
+    const chats = await userChatsCollection.query().fetch();
+    return chats.length;
+  }
+
+  /**
+   * Get user conversations (for compatibility)
+   */
+  static async getUserConversations(userId: string): Promise<any[]> {
+    console.log('[QueryHelpers] 📋 Getting user conversations for:', userId);
+
+    return await userChatsCollection
+      .query(
+        Q.where('user_id_1', userId),
+        Q.or(Q.where('user_id_2', userId))
+      )
+      .fetch();
+  }
+
+  /**
    * Get user conversations (alias for getUserChats for sync service compatibility)
    */
   static async getUserConversations(userId: string): Promise<any[]> {

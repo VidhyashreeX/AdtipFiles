@@ -19,6 +19,7 @@ import { CHAT_ENDPOINTS } from '../constants/apiEndpoints';
 import { navigationRef } from '../navigation/NavigationService';
 
 // Import default logo for notifications
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const defaultLogo = require('../assets/images/logo.png');
 
 export interface Message {

@@ -7,10 +7,8 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Observable } from 'rxjs';
 import { FCMChatServiceLocal, Message, Conversation, FCMChatEventHandlers } from '../services/FCMChatServiceLocal';
 import { WatermelonLocalChatManager } from '../services/WatermelonLocalChatManager';
-import { QueryHelpers } from '../database/services/QueryHelpers';
 import { useAuth } from './AuthContext';
 import useChatAvailabilityAlert from '../hooks/useChatAvailabilityAlert';
 import ChatUnavailableAlert from '../components/chat/ChatUnavailableAlert';
@@ -61,7 +59,6 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
-  const [currentParticipantId, setCurrentParticipantId] = useState<string | null>(null);
   const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [totalUnreadCount, setTotalUnreadCount] = useState(0);
@@ -221,55 +218,6 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
     }
   }, [isInitialized, watermelonManager]);
 
-  // Intelligent message merging - preserves local data integrity
-  const mergeMessagesIntelligently = useCallback(async (
-    localMessages: Message[],
-    serverMessages: Message[],
-    conversationId: string
-  ): Promise<Message[]> => {
-    try {
-      // Create a map of local messages by ID and tempId for quick lookup
-      const localMessageMap = new Map<string, Message>();
-      const localTempIdMap = new Map<string, Message>();
-
-      localMessages.forEach(msg => {
-        if (msg.id) localMessageMap.set(msg.id.toString(), msg);
-        if (msg.tempId) localTempIdMap.set(msg.tempId, msg);
-      });
-
-      // Start with local messages as base (they are authoritative)
-      const mergedMessages = [...localMessages];
-
-      // Add new messages from server that don't exist locally
-      for (const serverMsg of serverMessages) {
-        const existsLocally = localMessageMap.has(serverMsg.id?.toString() || '') ||
-                             (serverMsg.tempId && localTempIdMap.has(serverMsg.tempId));
-
-        if (!existsLocally) {
-          console.log('[FCMChatContext] Adding new server message:', serverMsg.id);
-          mergedMessages.push(serverMsg);
-
-          // Save new message to local storage
-          await fcmChatService.saveMessageToLocal(serverMsg);
-        }
-      }
-
-      // Sort by timestamp to maintain chronological order
-      mergedMessages.sort((a, b) => {
-        const timeA = new Date(a.createdAt || a.timestamp || 0).getTime();
-        const timeB = new Date(b.createdAt || b.timestamp || 0).getTime();
-        return timeA - timeB;
-      });
-
-      return mergedMessages;
-
-    } catch (error) {
-      console.error('[FCMChatContext] Error merging messages:', error);
-      // Return local messages on error to maintain stability
-      return localMessages;
-    }
-  }, []);
-
   // Send a message
   const sendMessage = useCallback(async (conversationId: string, content: string, replyTo?: string) => {
     if (!isInitialized || !content.trim() || !user?.id || !watermelonManager) return;
@@ -288,20 +236,6 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
     }
   }, [isInitialized, user?.id, watermelonManager]);
 
-  // Update message status
-  const updateMessageStatus = useCallback((messageId: string, status: 'sending' | 'sent' | 'delivered' | 'read') => {
-    setCurrentMessages(prev => prev.map(message =>
-      message.id === messageId || message.tempId === messageId
-        ? { ...message, status, deliveryStatus: status }
-        : message
-    ));
-  }, []);
-
-  // Remove failed message
-  const removeFailedMessage = useCallback((tempId: string) => {
-    setCurrentMessages(prev => prev.filter(message => message.tempId !== tempId));
-  }, []);
-
   // Create or get conversation - User-based approach
   const createOrGetConversation = useCallback(async (participantId: string): Promise<string> => {
     if (!isInitialized || !watermelonManager || !user) {
@@ -318,9 +252,6 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
       // Use WatermelonDB manager to create/get user chat (it handles the database operations)
       const resultChatId = await watermelonManager.createOrGetConversation(participantId);
       console.log('[FCMChatContext] ✅ User chat ready:', resultChatId);
-
-      // Set current participant for conversation state tracking
-      setCurrentParticipantId(participantId);
 
       // Set conversation state for notification management
       watermelonManager.setCurrentConversation(resultChatId, participantId);
@@ -344,7 +275,6 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
 
     if (!conversationId) {
       setCurrentMessages([]);
-      setCurrentParticipantId(null);
       // Clear conversation state in FCMChatService
       fcmChatService.setCurrentConversation(null);
     }
@@ -558,11 +488,7 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
       />
 
       {/* Debug: Log alert state changes */}
-      {console.log('[FCMChatContext] Alert state:', {
-        visible: chatAvailabilityAlert.state.showAlert,
-        recipientName: chatAvailabilityAlert.state.recipientName,
-        errorType: chatAvailabilityAlert.state.errorType
-      })}
+      {/* To debug alert state, use a useEffect or log outside JSX */}
     </FCMChatContext.Provider>
   );
 };

@@ -15,6 +15,7 @@ import { WatermelonChatDatabase } from '../database/services/WatermelonChatDatab
 import { QueryHelpers } from '../database/services/QueryHelpers';
 import { SyncService } from '../database/services/SyncService';
 import { initializeDatabase } from '../database';
+import { API_BASE_URL } from '../constants/api';
 import ApiService from './ApiService';
 import Logger from '../utils/LogUtils';
 import type { Message } from '../database/models/Message';
@@ -130,10 +131,10 @@ export class WatermelonLocalChatManager {
           if (data?.type === 'chat_message' && data?.senderId) {
             Logger.info('[WatermelonLocalChatManager] 📱 Foreground notification pressed for user-based chat');
             // Get sender name from notification data or title
-            const senderName = data.senderName || detail.notification?.title || 'Unknown User';
+            const senderName = String(data.senderName || detail.notification?.title || 'Unknown User');
 
             // Navigate to FCMChatScreen
-            await this.navigateToUserChat(data.senderId, senderName);
+            await this.navigateToUserChat(String(data.senderId), senderName);
           }
         }
       });
@@ -145,8 +146,8 @@ export class WatermelonLocalChatManager {
           if (data?.type === 'chat_message' && data?.senderId) {
             Logger.info('[WatermelonLocalChatManager] 📱 Background notification pressed for user-based chat');
             // Store navigation intent for when app becomes active
-            const senderName = data.senderName || detail.notification?.title || 'Unknown User';
-            await this.storePendingNavigation(data.senderId, senderName);
+            const senderName = String(data.senderName || detail.notification?.title || 'Unknown User');
+            await this.storePendingNavigation(String(data.senderId), senderName);
           }
         }
       });
@@ -239,7 +240,7 @@ export class WatermelonLocalChatManager {
 
         // Navigate to chat with a small delay to ensure app is fully active
         setTimeout(() => {
-          this.navigateToUserChat(data.senderId, data.senderName);
+          this.navigateToUserChat(String(data.senderId), String(data.senderName));
         }, 1000);
       }
     } catch (error) {
@@ -1123,6 +1124,13 @@ export class WatermelonLocalChatManager {
     try {
       Logger.info('[WatermelonLocalChatManager] 🔄 Queuing message for backend sync:', message.id);
 
+      // Check if user is authenticated before attempting sync
+      const authToken = await AsyncStorage.getItem('accessToken');
+      if (!authToken) {
+        Logger.warn('[WatermelonLocalChatManager] ⚠️ No auth token available, skipping backend sync. Message saved locally and sent via FCM.');
+        return;
+      }
+
       // Prepare message data for backend
       const backendMessageData = {
         tempId: message.tempId,
@@ -1150,12 +1158,12 @@ export class WatermelonLocalChatManager {
    */
   private async syncMessageToBackend(messageData: any): Promise<void> {
     try {
-      const authToken = await AsyncStorage.getItem('authToken');
+      const authToken = await AsyncStorage.getItem('accessToken');
       if (!authToken) {
         throw new Error('No auth token available');
       }
 
-      const response = await fetch(`${ApiService.getBaseUrl()}/api/chat/send-message`, {
+      const response = await fetch(`${API_BASE_URL}/api/chat/send-message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1193,7 +1201,7 @@ export class WatermelonLocalChatManager {
       if (messages.length > 0) {
         const message = messages[0];
         await this.chatDb.database.write(async () => {
-          await message.update(msg => {
+          await message.update((msg: any) => {
             msg._raw.external_id = serverId;
           });
         });
@@ -1215,7 +1223,7 @@ export class WatermelonLocalChatManager {
       const pendingMessages = await QueryHelpers.getMessagesByStatus('sending');
       const sentMessages = await QueryHelpers.getMessagesByStatus('sent');
 
-      const allPendingMessages = [...pendingMessages, ...sentMessages].filter(msg =>
+      const allPendingMessages = [...pendingMessages, ...sentMessages].filter((msg: any) =>
         !msg._raw.external_id // Only sync messages without server ID
       );
 
@@ -1251,12 +1259,12 @@ export class WatermelonLocalChatManager {
    */
   private async batchSyncToBackend(messages: any[]): Promise<void> {
     try {
-      const authToken = await AsyncStorage.getItem('authToken');
+      const authToken = await AsyncStorage.getItem('accessToken');
       if (!authToken) {
         throw new Error('No auth token available');
       }
 
-      const response = await fetch(`${ApiService.getBaseUrl()}/api/chat/sync-messages`, {
+      const response = await fetch(`${API_BASE_URL}/api/chat/sync-messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1295,12 +1303,12 @@ export class WatermelonLocalChatManager {
     try {
       Logger.info('[WatermelonLocalChatManager] 📥 Pulling messages from backend for chat:', chatId);
 
-      const authToken = await AsyncStorage.getItem('authToken');
+      const authToken = await AsyncStorage.getItem('accessToken');
       if (!authToken) {
         throw new Error('No auth token available');
       }
 
-      const response = await fetch(`${ApiService.getBaseUrl()}/api/chat/messages/${chatId}?page=${page}&limit=50`, {
+      const response = await fetch(`${API_BASE_URL}/api/chat/messages/${chatId}?page=${page}&limit=50`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${authToken}`
@@ -1322,7 +1330,7 @@ export class WatermelonLocalChatManager {
       for (const backendMsg of backendMessages) {
         try {
           // Check if message already exists locally
-          const existingMessage = await QueryHelpers.getMessageById(backendMsg.id.toString());
+          const existingMessage = await QueryHelpers.getMessageById(String(backendMsg.id));
 
           if (!existingMessage) {
             // Create new local message from backend data
@@ -1349,17 +1357,17 @@ export class WatermelonLocalChatManager {
   private async createMessageFromBackend(backendMessage: any): Promise<Message> {
     try {
       const messageData = {
-        id: backendMessage.id.toString(),
+        id: String(backendMessage.id),
         chatId: backendMessage.chat_id,
-        senderId: backendMessage.sender_id.toString(),
-        recipientId: backendMessage.recipient_id.toString(),
+        senderId: String(backendMessage.sender_id),
+        recipientId: String(backendMessage.recipient_id),
         senderName: backendMessage.sender_name,
         senderAvatar: backendMessage.sender_avatar,
         content: backendMessage.content,
         messageType: backendMessage.message_type as any,
         status: backendMessage.status as any,
         tempId: backendMessage.temp_id,
-        replyTo: backendMessage.reply_to_message_id?.toString()
+        replyTo: backendMessage.reply_to_message_id ? String(backendMessage.reply_to_message_id) : undefined
       };
 
       const message = await this.chatDb.createMessage(messageData);

@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { database } from '../index';
 import { WatermelonChatDatabase } from './WatermelonChatDatabase';
 import { QueryHelpers } from './QueryHelpers';
-import ApiService from '../../services/ApiService';
+import { API_BASE_URL } from '../../constants/api';
 import Logger from '../../utils/LogUtils';
 
 export interface SyncStatus {
@@ -133,7 +133,7 @@ export class SyncService {
       const sentMessages = await QueryHelpers.getMessagesByStatus('sent');
 
       // Filter messages that don't have external_id (not synced to backend)
-      const allPendingMessages = [...pendingMessages, ...sentMessages].filter(msg =>
+      const allPendingMessages = [...pendingMessages, ...sentMessages].filter((msg: any) =>
         !msg._raw.external_id
       );
 
@@ -392,12 +392,12 @@ export class SyncService {
    */
   private async batchSyncToBackend(messages: any[]): Promise<any> {
     try {
-      const authToken = await AsyncStorage.getItem('authToken');
+      const authToken = await AsyncStorage.getItem('accessToken');
       if (!authToken) {
         throw new Error('No auth token available');
       }
 
-      const response = await fetch(`${ApiService.getBaseUrl()}/api/chat/sync-messages`, {
+      const response = await fetch(`${API_BASE_URL}/api/chat/sync-messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -430,7 +430,7 @@ export class SyncService {
       if (messages.length > 0) {
         const message = messages[0];
         await this.chatDb.database.write(async () => {
-          await message.update(msg => {
+          await message.update((msg: any) => {
             msg._raw.external_id = serverId;
           });
         });
@@ -448,12 +448,12 @@ export class SyncService {
     try {
       Logger.info(`[SyncService] Pulling messages from backend for chat: ${chatId}`);
 
-      const authToken = await AsyncStorage.getItem('authToken');
+      const authToken = await AsyncStorage.getItem('accessToken');
       if (!authToken) {
         throw new Error('No auth token available');
       }
 
-      const response = await fetch(`${ApiService.getBaseUrl()}/api/chat/messages/${chatId}?page=${page}&limit=50`, {
+      const response = await fetch(`${API_BASE_URL}/api/chat/messages/${chatId}?page=${page}&limit=50`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${authToken}`
@@ -474,7 +474,7 @@ export class SyncService {
       const newMessages = [];
       for (const backendMsg of backendMessages) {
         try {
-          const existingMessage = await QueryHelpers.getMessageById(backendMsg.id.toString());
+          const existingMessage = await QueryHelpers.getMessageById(String(backendMsg.id));
 
           if (!existingMessage) {
             const localMessage = await this.createMessageFromBackend(backendMsg);
@@ -500,17 +500,17 @@ export class SyncService {
   private async createMessageFromBackend(backendMessage: any): Promise<any> {
     try {
       const messageData = {
-        id: backendMessage.id.toString(),
+        id: String(backendMessage.id),
         chatId: backendMessage.chat_id,
-        senderId: backendMessage.sender_id.toString(),
-        recipientId: backendMessage.recipient_id.toString(),
+        senderId: String(backendMessage.sender_id),
+        recipientId: String(backendMessage.recipient_id),
         senderName: backendMessage.sender_name,
         senderAvatar: backendMessage.sender_avatar,
         content: backendMessage.content,
         messageType: backendMessage.message_type,
         status: backendMessage.status,
         tempId: backendMessage.temp_id,
-        replyTo: backendMessage.reply_to_message_id?.toString()
+        replyTo: backendMessage.reply_to_message_id ? String(backendMessage.reply_to_message_id) : undefined
       };
 
       const message = await this.chatDb.createMessage(messageData);
