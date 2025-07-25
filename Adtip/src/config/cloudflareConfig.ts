@@ -11,6 +11,12 @@ export interface CloudflareR2Config {
   publicUrl: string;
 }
 
+export interface CloudflareStreamConfig {
+  accountId: string;
+  apiToken: string;
+  customerCode: string;
+}
+
 // IMPORTANT: In production, these should be loaded from environment variables
 // For React Native, you can use react-native-config or a similar library
 // Never commit real credentials to version control!
@@ -61,6 +67,13 @@ export const PRESIGNED_URL_EXPIRY = 3600; // 1 hour - secure but enough time for
 
 // Custom domain for publicly accessible URLs (matches backend ReelsService.js)
 export const CLOUDFLARE_PUBLIC_DOMAIN = "https://theadtip.in";
+
+// Cloudflare Stream Configuration
+export const CLOUDFLARE_STREAM_CONFIG: CloudflareStreamConfig = {
+  accountId: '94e2ffe1e7d5daf0d3de8d11c55dd2d6',
+  apiToken: '6h1Svn_NmQpWHuLZD8o7OEq23PXy5Y-UneEH9rUu',
+  customerCode: '94e2ffe1e7d5daf0d3de8d11c55dd2d6', // Using account ID as customer code initially
+};
 
 // Setup Instructions:
 // 1. Create a Cloudflare R2 bucket at https://dash.cloudflare.com/

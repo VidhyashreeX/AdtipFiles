@@ -34,6 +34,8 @@ import { launchImageLibrary, MediaType } from 'react-native-image-picker';
 import { useLocationSearch } from '../../hooks/useQueries';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import CloudflareUploadService from '../../services/CloudflareUploadService';
+import UnifiedUploadService, { UnifiedUploadProgress } from '../../services/UnifiedUploadService';
+import { UploadConfigManager } from '../../config/UploadConfig';
 import Video from 'react-native-video';
 import { createThumbnail } from 'react-native-create-thumbnail';
 import { CampaignCreateRequest, CampaignCreateResponse } from '../../types/api';
@@ -516,36 +518,75 @@ const CreateCampaignScreen: React.FC = () => {
     }
   };
 
-  // Upload media and return both URL and key for cleanup purposes
-  const uploadMediaWithKey = async (mediaUri: string): Promise<{ url: string; key: string }> => {
+  // Upload media using Unified Upload Service (Stream or R2)
+  const uploadMediaWithKey = async (mediaUri: string): Promise<{ url: string; key: string; streamVideoId?: string }> => {
     try {
-      console.log('[CreateCampaign] Starting Cloudflare upload for:', mediaUri);
+      console.log('[CreateCampaign] Starting unified upload for:', mediaUri);
 
       if (!userId) {
         throw new Error('User not authenticated');
       }
 
-      const folder = mediaType === 'video' ? 'videos' : 'images';
-      const fileName = `campaign_${Date.now()}.${mediaType === 'video' ? 'mp4' : 'jpg'}`;
+      // For videos, use UnifiedUploadService; for images, use R2 directly
+      if (mediaType === 'video') {
+        const uploadResult = await UnifiedUploadService.uploadCampaignMedia(
+          mediaUri,
+          'video',
+          parseInt(userId),
+          (progress: UnifiedUploadProgress) => {
+            setUploadProgress(progress.percentage);
 
-      const uploadResult = await CloudflareUploadService.uploadFile(
-        mediaUri,
-        folder,
-        fileName,
-        parseInt(userId),
-        (progress) => {
-          setUploadProgress(progress.percentage);
+            // Show upload method in progress
+            if (progress.method === 'stream') {
+              console.log(`[CreateCampaign] Stream upload: ${progress.stage} (${progress.percentage}%)`);
+            } else {
+              console.log(`[CreateCampaign] R2 upload: ${progress.stage} (${progress.percentage}%)`);
+            }
+          }
+        );
+
+        if (!uploadResult.success || !uploadResult.videoUrl) {
+          throw new Error(uploadResult.error || 'Video upload failed');
         }
-      );
 
-      if (!uploadResult.success || !uploadResult.url || !uploadResult.key) {
-        throw new Error(uploadResult.error || 'Upload failed');
+        console.log('[CreateCampaign] Video upload successful:', {
+          method: uploadResult.method,
+          url: uploadResult.videoUrl,
+          streamVideoId: uploadResult.streamVideoId,
+        });
+
+        return {
+          url: uploadResult.videoUrl,
+          key: uploadResult.streamVideoId || `campaign_${Date.now()}.mp4`, // Use streamVideoId as key if available
+          streamVideoId: uploadResult.streamVideoId,
+        };
+      } else {
+        // For images, use traditional R2 upload
+        const folder = 'images';
+        const fileName = `campaign_${Date.now()}.jpg`;
+
+        const uploadResult = await CloudflareUploadService.uploadFile(
+          mediaUri,
+          folder,
+          fileName,
+          parseInt(userId),
+          (progress) => {
+            setUploadProgress(progress.percentage);
+          }
+        );
+
+        if (!uploadResult.success || !uploadResult.url || !uploadResult.key) {
+          throw new Error(uploadResult.error || 'Image upload failed');
+        }
+
+        console.log('[CreateCampaign] Image upload successful:', uploadResult.url);
+        return {
+          url: uploadResult.url,
+          key: uploadResult.key,
+        };
       }
-
-      console.log('[CreateCampaign] Cloudflare upload successful:', uploadResult.url);
-      return { url: uploadResult.url, key: uploadResult.key };
     } catch (error) {
-      console.error('[CreateCampaign] Error uploading media:', error);
+      console.error('[CreateCampaign] Upload error:', error);
       throw new Error('Failed to upload media file. Please check your connection and try again.');
     }
   };

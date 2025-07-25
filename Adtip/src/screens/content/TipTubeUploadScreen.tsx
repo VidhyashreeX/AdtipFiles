@@ -27,6 +27,8 @@ import Header from '../../components/common/Header';
 import VideoCompressionService, { VideoCompressionOptions } from '../../services/VideoCompressionService';
 import ApiService from '../../services/ApiService';
 import CloudflareUploadService from '../../services/CloudflareUploadService';
+import UnifiedUploadService, { UnifiedUploadProgress } from '../../services/UnifiedUploadService';
+import { UploadConfigManager } from '../../config/UploadConfig';
 import RNFS from 'react-native-fs';
 import { getVideoDurationProps } from '../../utils/videoUtils';
 import Video from 'react-native-video';
@@ -491,53 +493,74 @@ const TipTubeUploadScreen: React.FC = () => {
     }
   };
 
-  // Upload media files using Cloudflare R2
-  const uploadMedia = async (videoUri: string, thumbnailUri: string): Promise<{ videoUrl: string; thumbnailUrl: string }> => {
+  // Upload media files using Unified Upload Service (Stream or R2)
+  const uploadMedia = async (videoUri: string, thumbnailUri: string): Promise<{ videoUrl: string; thumbnailUrl: string; streamVideoId?: string }> => {
     try {
-      console.log('[TipTubeUpload] Starting Cloudflare R2 upload');
+      console.log('[TipTubeUpload] Starting unified upload (Stream/R2)');
 
       if (!user || !user.id) {
         throw new Error('User not authenticated');
       }
 
-      // Run diagnostics if upload fails repeatedly
-      const diagnostics = await CloudflareUploadService.diagnoseUploadIssues();
-      if (!diagnostics.connectionOk || !diagnostics.configValid) {
-        console.warn('[TipTubeUpload] Upload diagnostics found issues:', diagnostics.issues);
-        if (diagnostics.issues.length > 0) {
-          throw new Error(`Upload configuration issue: ${diagnostics.issues.join(', ')}`);
-        }
-      }
-
-      // Use CloudflareUploadService for batch upload
-      const uploadResult = await CloudflareUploadService.uploadTipTube(
+      // Prepare upload data
+      const uploadData = {
         videoUri,
         thumbnailUri,
-        user.id,
-        (progress) => {
+        metadata: {
+          name: title.trim(),
+          description: description.trim(),
+          categoryId: categoryId,
+          channelId: channelId,
+          userId: user.id,
+          isShot: false, // This is TipTube (long-form video)
+        },
+      };
+
+      // Use UnifiedUploadService for intelligent upload method selection
+      const uploadResult = await UnifiedUploadService.uploadTipTube(
+        uploadData,
+        (progress: UnifiedUploadProgress) => {
           setUploadProgress(progress.percentage);
+
+          // Show upload method in progress
+          if (progress.method === 'stream') {
+            console.log(`[TipTubeUpload] Stream upload: ${progress.stage} (${progress.percentage}%)`);
+          } else {
+            console.log(`[TipTubeUpload] R2 upload: ${progress.stage} (${progress.percentage}%)`);
+          }
         }
       );
 
-      if (!uploadResult.allSuccessful) {
-        throw new Error(`Upload failed: ${uploadResult.errors.join(', ')}`);
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || 'Upload failed');
       }
 
-      if (!uploadResult.video?.url || !uploadResult.thumbnail?.url) {
-        throw new Error('Upload completed but URLs are missing');
+      if (!uploadResult.videoUrl) {
+        throw new Error('Upload completed but video URL is missing');
       }
 
-      console.log('[TipTubeUpload] Cloudflare upload successful:', {
-        video: uploadResult.video.url,
-        thumbnail: uploadResult.thumbnail.url,
+      console.log('[TipTubeUpload] Upload successful:', {
+        method: uploadResult.method,
+        videoUrl: uploadResult.videoUrl,
+        thumbnailUrl: uploadResult.thumbnailUrl,
+        streamVideoId: uploadResult.streamVideoId,
+        fallbackUsed: uploadResult.fallbackUsed,
       });
 
+      // Show success message with upload method info
+      if (uploadResult.method === 'stream') {
+        console.log('[TipTubeUpload] ✅ Uploaded using Cloudflare Stream (optimized for mobile)');
+      } else {
+        console.log('[TipTubeUpload] ✅ Uploaded using Cloudflare R2 (traditional method)');
+      }
+
       return {
-        videoUrl: uploadResult.video.url,
-        thumbnailUrl: uploadResult.thumbnail.url,
+        videoUrl: uploadResult.videoUrl,
+        thumbnailUrl: uploadResult.thumbnailUrl || thumbnailUri,
+        streamVideoId: uploadResult.streamVideoId,
       };
     } catch (error) {
-      console.error('[TipTubeUpload] Error uploading to Cloudflare:', error);
+      console.error('[TipTubeUpload] Error uploading media:', error);
       throw new Error('Failed to upload media files to cloud storage. Please check your connection and try again.');
     }
   };
@@ -637,7 +660,7 @@ const TipTubeUploadScreen: React.FC = () => {
 
       // Step 2: Upload media files
       console.log('[TipTubeUpload] Step 2: Uploading media files');
-      const { videoUrl, thumbnailUrl } = await uploadMedia(compressedVideoUri, selectedThumbnail);
+      const { videoUrl, thumbnailUrl, streamVideoId } = await uploadMedia(compressedVideoUri, selectedThumbnail);
 
       // Step 3: Create TipTube video record
       console.log('[TipTubeUpload] Step 3: Creating video record');

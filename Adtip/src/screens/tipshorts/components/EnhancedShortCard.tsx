@@ -15,6 +15,8 @@ import { type ShortVideo } from '../../../hooks/useShortsQuery';
 import { Share2, Heart, MessageCircle, Play, Pause, VolumeX, Volume2 } from 'lucide-react-native';
 import shareService from '../../../services/ShareService';
 import VideoErrorBoundary from '../../../components/common/VideoErrorBoundary';
+import CloudflareStreamPlayer from '../../../components/CloudflareStreamPlayer';
+import VideoPlaybackService, { VideoMetadata } from '../../../services/VideoPlaybackService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -415,9 +417,36 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
 
 
 
-  // Validate video URL before rendering
-  const videoUri = item?.videoUrl || '';
-  const isValidVideoUrl = videoUri && typeof videoUri === 'string' && videoUri.trim().length > 0;
+  // Prepare video metadata for hybrid playback
+  const videoMetadata: VideoMetadata = useMemo(() => ({
+    id: item.id,
+    video_link: item?.videoUrl || '',
+    stream_video_id: item?.stream_video_id,
+    stream_status: item?.stream_status,
+    adaptive_manifest_url: item?.adaptive_manifest_url,
+    stream_ready_at: item?.stream_ready_at,
+    isShot: true,
+  }), [item]);
+
+  // Get optimal playback configuration
+  const playbackConfig = useMemo(() => {
+    const service = VideoPlaybackService.getInstance();
+
+    // Get debug info for troubleshooting
+    const debugInfo = service.getDebugInfo(videoMetadata);
+    console.log('[EnhancedShortCard] Video debug info:', debugInfo);
+
+    return service.getPlaybackConfig(videoMetadata, {
+      preferStream: true,
+      quality: 'auto',
+      autoplay: isActive && isGloballyPlaying,
+      muted: isGloballyMuted,
+      controls: false,
+    });
+  }, [videoMetadata, isActive, isGloballyPlaying, isGloballyMuted]);
+
+  // Validate video sources
+  const hasValidSource = playbackConfig.streamVideoId || playbackConfig.videoUrl;
 
   return (
     <View style={styles.shortCardContainer}>
@@ -430,16 +459,35 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
               console.error('[EnhancedShortCard] Error info:', errorInfo);
             }}
           >
-            <OptimizedVideoPlayer
-              source={{ uri: isValidVideoUrl ? videoUri : '' }}
-              isActive={isActive}
-              isPaused={!isGloballyPlaying}
-              isMuted={isGloballyMuted}
-              style={styles.video}
-              onLoad={handleVideoLoadLocal}
-              onProgress={handleVideoProgress}
-              onVideoCompletion={onVideoCompletion} // Pass onVideoCompletion
-            />
+            {hasValidSource ? (
+              <CloudflareStreamPlayer
+                streamVideoId={playbackConfig.streamVideoId}
+                streamStatus={videoMetadata.stream_status}
+                fallbackVideoUrl={playbackConfig.videoUrl}
+                width={SCREEN_WIDTH}
+                height={SCREEN_HEIGHT}
+                autoplay={isActive && isGloballyPlaying}
+                muted={isGloballyMuted}
+                controls={false}
+                useStreamPlayer={playbackConfig.useStreamPlayer}
+                style={styles.video}
+                onLoad={handleVideoLoadLocal}
+                onProgress={handleVideoProgress}
+                onError={(error) => {
+                  console.error('[EnhancedShortCard] Video playback error:', {
+                    error,
+                    videoId: item.id,
+                    streamVideoId: playbackConfig.streamVideoId,
+                    streamStatus: videoMetadata.stream_status,
+                    fallbackUrl: playbackConfig.videoUrl
+                  });
+                }}
+              />
+            ) : (
+              <View style={styles.videoPlaceholder}>
+                <Text style={styles.videoPlaceholderText}>Video not available</Text>
+              </View>
+            )}
           </VideoErrorBoundary>
 
           {/* Thumbnail overlay while loading */}
@@ -701,6 +749,18 @@ const styles = StyleSheet.create({
   followText: {
     color: 'white',
     fontSize: 11,
+    fontWeight: 'bold',
+  },
+  videoPlaceholder: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoPlaceholderText: {
+    color: '#FFF',
+    fontSize: 16,
+    textAlign: 'center',
     fontWeight: '600',
   },
   description: {
