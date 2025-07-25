@@ -71,12 +71,21 @@ export interface CachedUserProfile {
   lastUpdated: string;
 }
 
+// Sync status types
+export interface ConversationSyncStatus {
+  conversationId: string;
+  status: 'idle' | 'syncing' | 'complete' | 'error';
+  lastSyncAt: Date | null;
+  error: string | null;
+}
+
 export interface LocalChatEventHandlers {
   onMessageReceived?: (message: LocalMessage) => void;
   onMessageSent?: (message: LocalMessage) => void;
   onConversationUpdated?: (conversation: LocalConversation) => void;
   onUnreadCountChanged?: (count: number) => void;
   onChatUnavailable?: (recipientName: string, error: any) => void;
+  onSyncStatusChanged?: (status: ConversationSyncStatus) => void;
 }
 
 export class WatermelonLocalChatManager {
@@ -90,6 +99,7 @@ export class WatermelonLocalChatManager {
   private currentParticipantId: string | null = null; // Store the current chat participant ID
   private eventHandlers: LocalChatEventHandlers = {};
   private isInitialized: boolean = false;
+  private conversationSyncStatuses: Map<string, ConversationSyncStatus> = new Map();
 
   constructor() {
     this.chatDb = new WatermelonChatDatabase();
@@ -472,7 +482,7 @@ export class WatermelonLocalChatManager {
   }
 
   /**
-   * Create or get conversation
+   * Create or get conversation (non-blocking, immediate return)
    */
   async createOrGetConversation(participantId: string): Promise<string> {
     if (!this.currentUserId) {
@@ -484,21 +494,74 @@ export class WatermelonLocalChatManager {
     // Use new user-based chat system
     const chatId = QueryHelpers.generateChatId(this.currentUserId, participantId);
 
-    // Ensure user chat exists
+    // Ensure user chat exists locally (immediate)
     await QueryHelpers.getOrCreateUserChat(this.currentUserId, participantId);
 
-    // Sync messages from backend for this conversation
-    try {
-      Logger.info('[WatermelonLocalChatManager] 📥 Syncing messages from backend for conversation:', chatId);
-      const syncedMessages = await this.syncService.syncConversationMessages(chatId);
-      Logger.info(`[WatermelonLocalChatManager] ✅ Synced ${syncedMessages.length} messages from backend`);
-    } catch (syncError) {
-      Logger.error('[WatermelonLocalChatManager] ⚠️ Failed to sync messages from backend:', syncError);
-      // Don't throw error here, allow conversation to continue even if sync fails
-    }
+    Logger.info('[WatermelonLocalChatManager] ✅ User chat ready locally:', chatId);
 
-    Logger.info('[WatermelonLocalChatManager] ✅ User chat ready:', chatId);
+    // Start background sync without blocking
+    this.syncConversationInBackground(chatId);
+
     return chatId;
+  }
+
+  /**
+   * Sync conversation messages in background (non-blocking)
+   */
+  private syncConversationInBackground(chatId: string): void {
+    // Update sync status to indicate sync is starting
+    const syncStatus: ConversationSyncStatus = {
+      conversationId: chatId,
+      status: 'syncing',
+      lastSyncAt: null,
+      error: null
+    };
+
+    this.conversationSyncStatuses.set(chatId, syncStatus);
+    this.eventHandlers.onSyncStatusChanged?.(syncStatus);
+
+    // Perform sync in background
+    this.syncService.syncConversationMessages(chatId)
+      .then((syncedMessages) => {
+        Logger.info(`[WatermelonLocalChatManager] ✅ Background sync completed: ${syncedMessages.length} messages for ${chatId}`);
+
+        // Update sync status to indicate success
+        const completedStatus: ConversationSyncStatus = {
+          conversationId: chatId,
+          status: 'complete',
+          lastSyncAt: new Date(),
+          error: null
+        };
+
+        this.conversationSyncStatuses.set(chatId, completedStatus);
+        this.eventHandlers.onSyncStatusChanged?.(completedStatus);
+      })
+      .catch((syncError) => {
+        Logger.error('[WatermelonLocalChatManager] ⚠️ Background sync failed for conversation:', chatId, syncError);
+
+        // Update sync status to indicate error
+        const errorStatus: ConversationSyncStatus = {
+          conversationId: chatId,
+          status: 'error',
+          lastSyncAt: null,
+          error: syncError.message || 'Sync failed'
+        };
+
+        this.conversationSyncStatuses.set(chatId, errorStatus);
+        this.eventHandlers.onSyncStatusChanged?.(errorStatus);
+      });
+  }
+
+  /**
+   * Get sync status for a conversation
+   */
+  getSyncStatus(conversationId: string): ConversationSyncStatus {
+    return this.conversationSyncStatuses.get(conversationId) || {
+      conversationId,
+      status: 'idle',
+      lastSyncAt: null,
+      error: null
+    };
   }
 
   /**

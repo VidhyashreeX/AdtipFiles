@@ -21,7 +21,7 @@ import {
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { Clock, Check, CheckCheck, Send, CircleAlert } from 'lucide-react-native';
+import { Clock, Check, CheckCheck, Send, CircleAlert, ArrowLeft } from 'lucide-react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { KeyboardAvoiderScrollView, KeyboardAvoiderView } from '@good-react-native/keyboard-avoider';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -30,6 +30,7 @@ import { useFCMChat } from '../../contexts/FCMChatContext';
 import { Message } from '../../services/FCMChatServiceLocal';
 import { RealTimeMessageHandler, useRealTimeMessages } from '../../components/chat/RealTimeMessageHandler';
 import { COLORS } from '../../constants/colors';
+import Header from '../../components/common/Header';
 
 type RootStackParamList = {
   FCMChat: {
@@ -99,13 +100,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isOwn, showStatu
   const getStatusColor = () => {
     switch (message.status) {
       case 'sending':
-        return 'rgba(255, 255, 255, 0.6)';
+        return 'rgba(255, 255, 255, 0.6)'; // Light gray for sending
       case 'sent':
-        return 'rgba(255, 255, 255, 0.8)';
+        return 'rgba(255, 255, 255, 0.8)'; // White for sent
       case 'delivered':
-        return 'rgba(255, 255, 255, 0.9)';
+        return 'rgba(255, 255, 255, 0.9)'; // Bright white for delivered
       case 'read':
-        return '#00E676'; // Bright green for read
+        return '#2196F3'; // Blue for read (blue double tick)
       case 'failed':
         return '#FF5252'; // Red for failed
       default:
@@ -199,6 +200,7 @@ const FCMChatScreen: React.FC = () => {
     setCurrentConversation,
     markAsRead,
     loadMessages,
+    watermelonManager,
   } = useFCMChat();
 
   const { participantId, participantName } = route.params;
@@ -207,6 +209,9 @@ const FCMChatScreen: React.FC = () => {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [loadingLocalMessages, setLoadingLocalMessages] = useState(true);
   const [inputHeight, setInputHeight] = useState(50);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'complete' | 'error'>('idle');
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const textInputRef = useRef<TextInput>(null);
   const sendButtonScale = useRef(new Animated.Value(1)).current;
 
@@ -232,31 +237,63 @@ const FCMChatScreen: React.FC = () => {
     scrollToBottom();
   }, [scrollToBottom]);
 
-  // Set navigation title and header styling
+  // Create sync indicator component
+  const getSyncIndicator = useCallback(() => {
+    switch (syncStatus) {
+      case 'syncing':
+        return (
+          <View style={styles.syncIndicator}>
+            <ActivityIndicator size="small" color={colors.text.secondary} />
+            <Text style={[styles.syncText, { color: colors.text.secondary }]}>Syncing...</Text>
+          </View>
+        );
+      case 'error':
+        return (
+          <View style={styles.syncIndicator}>
+            <Icon name="error-outline" size={16} color="#FF5252" />
+            <Text style={[styles.syncText, { color: '#FF5252' }]}>Sync failed</Text>
+          </View>
+        );
+      case 'complete':
+        // Show briefly then hide
+        setTimeout(() => setSyncStatus('idle'), 2000);
+        return (
+          <View style={styles.syncIndicator}>
+            <Icon name="check-circle-outline" size={16} color="#4CAF50" />
+            <Text style={[styles.syncText, { color: '#4CAF50' }]}>Synced</Text>
+          </View>
+        );
+      default:
+        return null;
+    }
+  }, [syncStatus, colors.text.secondary]);
+
+  // Create back button component
+  const getBackButton = useCallback(() => {
+    return (
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={styles.backButton}
+      >
+        <ArrowLeft size={24} color={colors.text.primary} />
+      </TouchableOpacity>
+    );
+  }, [navigation, colors.text.primary]);
+
+  // Hide the default navigation header since we're using our own Header component
   useEffect(() => {
     navigation.setOptions({
-      title: participantName || 'Chat',
-      headerStyle: {
-        backgroundColor: colors.background,
-        elevation: 0, // Remove shadow on Android
-        shadowOpacity: 0, // Remove shadow on iOS
-        borderBottomWidth: 0, // Remove border
-      },
-      headerTintColor: colors.text.primary,
-      headerTitleStyle: {
-        color: colors.text.primary,
-        fontWeight: '600',
-      },
-      headerShown: true, // Ensure header is always shown
-      // Remove the test button for cleaner UI
+      headerShown: false,
     });
-  }, [navigation, participantName, colors.text.primary, colors.background]);
+  }, [navigation]);
 
   // Enhanced keyboard handling for focus management
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
       () => {
+        console.log('[FCMChatScreen] Keyboard shown');
+        setKeyboardVisible(true);
         // Auto-focus the input when keyboard opens
         if (textInputRef.current) {
           textInputRef.current.focus();
@@ -267,6 +304,8 @@ const FCMChatScreen: React.FC = () => {
     const keyboardDidHideListener = Keyboard.addListener(
       'keyboardDidHide',
       () => {
+        console.log('[FCMChatScreen] Keyboard hidden');
+        setKeyboardVisible(false);
         // Blur the input when keyboard closes
         if (textInputRef.current) {
           textInputRef.current.blur();
@@ -280,21 +319,24 @@ const FCMChatScreen: React.FC = () => {
     };
   }, []);
 
-  // Initialize conversation
+  // Initialize conversation (immediate local display, background sync)
   useEffect(() => {
     const initializeConversation = async () => {
       if (!isInitialized || !participantId) return;
 
       try {
-        setLoadingLocalMessages(true);
         console.log('[FCMChatScreen] Creating/getting conversation with participant:', participantId);
+
+        // Create conversation immediately (non-blocking)
         const result = await createOrGetConversation(participantId);
         setConversationId(result);
         setCurrentConversation(result);
 
-        // Load messages for this conversation
-        await loadMessages(result);
+        // Messages are automatically loaded via reactive subscription
+        // No need to wait for loadMessages or backend sync
         setLoadingLocalMessages(false);
+
+        console.log('[FCMChatScreen] ✅ Conversation ready locally, background sync will handle backend data');
 
       } catch (error) {
         console.error('[FCMChatScreen] Failed to initialize conversation:', error);
@@ -304,7 +346,39 @@ const FCMChatScreen: React.FC = () => {
     };
 
     initializeConversation();
-  }, [isInitialized, participantId, createOrGetConversation, setCurrentConversation, loadMessages]);
+  }, [isInitialized, participantId, createOrGetConversation, setCurrentConversation]);
+
+  // Listen for sync status changes
+  useEffect(() => {
+    if (!watermelonManager || !conversationId) return;
+
+    // Set up sync status listener
+    const originalHandler = watermelonManager['eventHandlers'].onSyncStatusChanged;
+
+    watermelonManager['eventHandlers'].onSyncStatusChanged = (status) => {
+      // Call original handler if it exists
+      originalHandler?.(status);
+
+      // Update local sync status if it's for our conversation
+      if (status.conversationId === conversationId) {
+        setSyncStatus(status.status);
+        setSyncError(status.error);
+        console.log('[FCMChatScreen] Sync status updated:', status);
+      }
+    };
+
+    // Get initial sync status
+    const initialStatus = watermelonManager.getSyncStatus(conversationId);
+    setSyncStatus(initialStatus.status);
+    setSyncError(initialStatus.error);
+
+    // Cleanup
+    return () => {
+      if (watermelonManager['eventHandlers']) {
+        watermelonManager['eventHandlers'].onSyncStatusChanged = originalHandler;
+      }
+    };
+  }, [watermelonManager, conversationId]);
 
   // Auto-scroll is handled by KeyboardAvoiderScrollView
   useEffect(() => {
@@ -444,12 +518,8 @@ const FCMChatScreen: React.FC = () => {
   // Render message item
   const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
     const isOwn = item.senderId === user?.id?.toString();
-    // Show status for all own messages, especially failed ones
-    // Also show for the last message as before
-    const showStatus = isOwn && (
-      index === currentMessages.length - 1 ||
-      item.status === 'failed'
-    );
+    // Show status for ALL own messages to provide complete status visibility
+    const showStatus = isOwn;
 
     return (
       <MessageBubble
@@ -468,12 +538,35 @@ const FCMChatScreen: React.FC = () => {
         <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
           Initializing chat...
         </Text>
+        {/* Debug info for testing */}
+        {__DEV__ && (
+          <Text style={[styles.debugText, { color: colors.text.secondary }]}>
+            Debug: participantId={participantId}, user={user?.id}
+          </Text>
+        )}
+      </View>
+    );
+  }
+
+  // Additional validation for testing
+  if (!participantId || !user?.id) {
+    return (
+      <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
+        <Icon name="error-outline" size={48} color={colors.text.secondary} />
+        <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
+          Invalid chat parameters
+        </Text>
+        {__DEV__ && (
+          <Text style={[styles.debugText, { color: colors.text.secondary }]}>
+            Debug: participantId={participantId}, user={user?.id}
+          </Text>
+        )}
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, keyboardVisible && styles.containerKeyboardVisible]}>
       {/* Vibrant Gradient Background */}
       <LinearGradient
         colors={colors.background === '#000000'
@@ -483,6 +576,18 @@ const FCMChatScreen: React.FC = () => {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.backgroundGradient}
+      />
+
+      {/* Header Component */}
+      <Header
+        title={participantName || 'Chat'}
+        leftComponent={getBackButton()}
+        rightComponent={getSyncIndicator()}
+        showLogo={false}
+        showWallet={false}
+        showSearch={false}
+        showPremium={false}
+        showProfile={false}
       />
 
       {/* Real-time Message Handler */}
@@ -504,9 +609,10 @@ const FCMChatScreen: React.FC = () => {
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        extraSpace={0}
-        animationTime={300}
+        extraSpace={10}
+        animationTime={250}
         iosHideBehavior="revert"
+        enableAndroid={true}
       >
         {currentMessages.length === 0 && !loadingLocalMessages ? (
           <View style={styles.emptyContainer}>
@@ -527,9 +633,10 @@ const FCMChatScreen: React.FC = () => {
       {/* Input Area - Fixed at bottom */}
       <KeyboardAvoiderView
         avoidMode="whole-view"
-        extraSpace={0}
-        animationTime={300}
+        extraSpace={10}
+        animationTime={250}
         enableAndroid={true}
+        iosHideBehavior="revert"
       >
         <Animated.View style={[
           styles.inputContainer,
@@ -603,6 +710,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  containerKeyboardVisible: {
+    // Ensure header stays fixed when keyboard is visible
+    // The KeyboardAvoider components handle the content adjustment
+  },
   backgroundGradient: {
     position: 'absolute',
     top: 0,
@@ -618,8 +729,15 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
   },
+  debugText: {
+    marginTop: 8,
+    fontSize: 12,
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
   messagesList: {
     flex: 1,
+    marginTop: 0, // Header component handles its own spacing
   },
   messagesContent: {
     padding: 16,
@@ -736,6 +854,23 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 4,
+  },
+  syncIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  syncText: {
+    fontSize: 12,
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  backButton: {
+    padding: 8,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 
