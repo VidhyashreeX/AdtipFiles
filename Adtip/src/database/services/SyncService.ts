@@ -442,11 +442,14 @@ export class SyncService {
   }
 
   /**
-   * Pull messages from backend for a chat using the correct API endpoint
+   * Pull messages from backend for a chat using incremental sync
    */
-  async pullMessagesFromBackend(chatId: string, _page: number = 1): Promise<any[]> {
+  async pullMessagesFromBackend(chatId: string, _page: number = 1, sinceTimestamp?: Date): Promise<any[]> {
     try {
-      Logger.info(`[SyncService] Pulling messages from backend for chat: ${chatId}`);
+      Logger.info(`[SyncService] Pulling messages from backend for chat: ${chatId}`, {
+        sinceTimestamp: sinceTimestamp?.toISOString(),
+        isIncremental: !!sinceTimestamp
+      });
 
       // Extract user IDs from chatId (format: chat_userId1_userId2)
       const chatParts = chatId.split('_');
@@ -471,12 +474,26 @@ export class SyncService {
       // Import ApiService dynamically to avoid circular dependency
       const { default: ApiService } = await import('../../services/ApiService');
 
-      // Use the fixed /api/getmessage endpoint
-      const response = await ApiService.get(`/api/getmessage/${loginUserId}/${chattingUserId}`);
+      // Build API endpoint with incremental sync support
+      let apiEndpoint = `/api/chat/messages/${chatId}`;
+      const queryParams = new URLSearchParams();
+
+      if (sinceTimestamp) {
+        queryParams.append('since_timestamp', sinceTimestamp.toISOString());
+        Logger.info(`[SyncService] Using incremental sync since: ${sinceTimestamp.toISOString()}`);
+      } else {
+        Logger.info(`[SyncService] Using full sync (no timestamp provided)`);
+      }
+
+      if (queryParams.toString()) {
+        apiEndpoint += `?${queryParams.toString()}`;
+      }
+
+      const response = await ApiService.get(apiEndpoint);
       Logger.info(`[SyncService] Successfully fetched messages from backend`);
 
-      const backendMessages = response.data || [];
-      Logger.info(`[SyncService] Pulled ${backendMessages.length} messages from backend`);
+      const backendMessages = response.data?.messages || response.data || [];
+      Logger.info(`[SyncService] Pulled ${backendMessages.length} messages from backend (incremental: ${!!sinceTimestamp})`);
 
       // Process messages and merge with local database
       const newMessages = [];
@@ -536,16 +553,25 @@ export class SyncService {
   }
 
   /**
-   * Sync messages for a specific conversation (used when opening FCMChatScreen)
+   * Sync messages for a specific conversation using incremental sync (used when opening FCMChatScreen)
    */
   async syncConversationMessages(chatId: string): Promise<any[]> {
     try {
       Logger.info(`[SyncService] Syncing messages for conversation: ${chatId}`);
 
-      // Pull messages from backend for this specific conversation
-      const newMessages = await this.pullMessagesFromBackend(chatId);
+      // Get latest message timestamp for incremental sync
+      const latestTimestamp = await QueryHelpers.getLatestMessageTimestamp(chatId);
 
-      Logger.info(`[SyncService] Synced ${newMessages.length} messages for conversation: ${chatId}`);
+      if (latestTimestamp) {
+        Logger.info(`[SyncService] Using incremental sync from: ${latestTimestamp.toISOString()}`);
+      } else {
+        Logger.info(`[SyncService] No local messages found, performing full sync`);
+      }
+
+      // Pull messages from backend for this specific conversation with incremental sync
+      const newMessages = await this.pullMessagesFromBackend(chatId, 1, latestTimestamp || undefined);
+
+      Logger.info(`[SyncService] Synced ${newMessages.length} new messages for conversation: ${chatId}`);
       return newMessages;
 
     } catch (error) {
@@ -575,11 +601,14 @@ export class SyncService {
       // 1. Sync pending messages to backend
       result.syncedMessages = await this.syncPendingMessages();
 
-      // 2. Pull missing messages from backend for all user chats
+      // 2. Pull missing messages from backend for all user chats using incremental sync
       const userChats = await QueryHelpers.getUserConversations(userId);
       for (const chat of userChats) {
         try {
-          const newMessages = await this.pullMessagesFromBackend(chat.chatId);
+          // Get latest message timestamp for this chat for incremental sync
+          const latestTimestamp = await QueryHelpers.getLatestMessageTimestamp(chat.chatId);
+
+          const newMessages = await this.pullMessagesFromBackend(chat.chatId, 1, latestTimestamp || undefined);
           result.syncedMessages += newMessages.length;
         } catch (error) {
           Logger.error(`[SyncService] Failed to pull messages for chat ${chat.chatId}:`, error);

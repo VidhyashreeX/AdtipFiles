@@ -204,6 +204,63 @@ export class QueryHelpers {
   }
 
   /**
+   * Get the latest message timestamp for a specific chat (for incremental sync)
+   */
+  static async getLatestMessageTimestamp(chatId: string): Promise<Date | null> {
+    try {
+      const latestMessage = await messagesCollection
+        .query(
+          Q.where('chat_id', chatId),
+          Q.sortBy('created_at', Q.desc),
+          Q.take(1)
+        )
+        .fetch();
+
+      if (latestMessage.length > 0) {
+        return latestMessage[0].createdAt;
+      }
+
+      return null;
+    } catch (error) {
+      console.error('[QueryHelpers] Error getting latest message timestamp:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get the latest message timestamp across all user chats (for global sync)
+   */
+  static async getLatestMessageTimestampForUser(userId: string): Promise<Date | null> {
+    try {
+      // Get all chat IDs for this user
+      const userChats = await this.getUserConversations(userId);
+
+      if (userChats.length === 0) {
+        return null;
+      }
+
+      const chatIds = userChats.map(chat => chat.chatId);
+
+      const latestMessage = await messagesCollection
+        .query(
+          Q.where('chat_id', Q.oneOf(chatIds)),
+          Q.sortBy('created_at', Q.desc),
+          Q.take(1)
+        )
+        .fetch();
+
+      if (latestMessage.length > 0) {
+        return latestMessage[0].createdAt;
+      }
+
+      return null;
+    } catch (error) {
+      console.error('[QueryHelpers] Error getting latest message timestamp for user:', error);
+      return null;
+    }
+  }
+
+  /**
    * Get user by ID
    */
   static async getUserById(userId: string): Promise<any | null> {

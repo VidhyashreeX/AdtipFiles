@@ -1370,18 +1370,28 @@ export class WatermelonLocalChatManager {
   }
 
   /**
-   * Pull messages from backend for a chat
+   * Pull messages from backend for a chat with incremental sync support
    */
-  async pullMessagesFromBackend(chatId: string, page: number = 1): Promise<LocalMessage[]> {
+  async pullMessagesFromBackend(chatId: string, page: number = 1, sinceTimestamp?: Date): Promise<LocalMessage[]> {
     try {
-      Logger.info('[WatermelonLocalChatManager] 📥 Pulling messages from backend for chat:', chatId);
+      Logger.info('[WatermelonLocalChatManager] 📥 Pulling messages from backend for chat:', chatId, {
+        page,
+        sinceTimestamp: sinceTimestamp?.toISOString(),
+        isIncremental: !!sinceTimestamp
+      });
 
       const authToken = await AsyncStorage.getItem('accessToken');
       if (!authToken) {
         throw new Error('No auth token available');
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/chat/messages/${chatId}?page=${page}&limit=50`, {
+      // Build URL with incremental sync support
+      let url = `${API_BASE_URL}/api/chat/messages/${chatId}?page=${page}&limit=50`;
+      if (sinceTimestamp) {
+        url += `&since_timestamp=${sinceTimestamp.toISOString()}`;
+      }
+
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${authToken}`
@@ -1395,17 +1405,29 @@ export class WatermelonLocalChatManager {
 
       const result = await response.json();
       const backendMessages = result.data?.messages || [];
+      const syncInfo = result.data?.sync || {};
 
-      Logger.info('[WatermelonLocalChatManager] 📥 Pulled', backendMessages.length, 'messages from backend');
+      Logger.info('[WatermelonLocalChatManager] 📊 Sync info:', {
+        isIncremental: syncInfo.isIncremental,
+        newMessagesCount: syncInfo.newMessagesCount,
+        totalFetched: backendMessages.length
+      });
 
       // Convert backend messages to local format and merge with local database
       const localMessages: LocalMessage[] = [];
       for (const backendMsg of backendMessages) {
         try {
-          // Check if message already exists locally
-          const existingMessage = await QueryHelpers.getMessageById(String(backendMsg.id));
+          // For incremental sync, we can skip the existence check since we're only getting new messages
+          // For full sync, we still need to check to avoid duplicates
+          let shouldCreateMessage = true;
 
-          if (!existingMessage) {
+          if (!sinceTimestamp) {
+            // Full sync - check if message already exists locally
+            const existingMessage = await QueryHelpers.getMessageById(String(backendMsg.id));
+            shouldCreateMessage = !existingMessage;
+          }
+
+          if (shouldCreateMessage) {
             // Create new local message from backend data
             const localMessage = await this.createMessageFromBackend(backendMsg);
             localMessages.push(this.convertMessageToLocal(localMessage));
@@ -1415,7 +1437,7 @@ export class WatermelonLocalChatManager {
         }
       }
 
-      Logger.info('[WatermelonLocalChatManager] ✅ Successfully merged', localMessages.length, 'new messages from backend');
+      Logger.info('[WatermelonLocalChatManager] ✅ Successfully merged', localMessages.length, 'new messages from backend (incremental:', !!sinceTimestamp, ')');
       return localMessages;
 
     } catch (error) {

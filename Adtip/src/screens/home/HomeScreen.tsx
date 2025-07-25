@@ -1155,7 +1155,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   // Render loading state
   if (initialLoading) {
     return (
-      <ScreenTransition>
+      <ScreenTransition skipAnimation={true}>
         <View style={[styles.container, {backgroundColor: colors.background}]}>
           <Header
             title=""
@@ -1205,7 +1205,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   }
 
   return (
-          <ScreenTransition>
+          <ScreenTransition skipAnimation={true}>
         <View style={[styles.container, {backgroundColor: colors.background}]}>
           <Header
             title=""
