@@ -199,7 +199,6 @@ const FCMChatScreen: React.FC = () => {
     createOrGetConversation,
     setCurrentConversation,
     markAsRead,
-    loadMessages,
     watermelonManager,
   } = useFCMChat();
 
@@ -211,7 +210,6 @@ const FCMChatScreen: React.FC = () => {
   const [inputHeight, setInputHeight] = useState(50);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'complete' | 'error'>('idle');
   const [syncError, setSyncError] = useState<string | null>(null);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const textInputRef = useRef<TextInput>(null);
   const sendButtonScale = useRef(new Animated.Value(1)).current;
 
@@ -237,35 +235,34 @@ const FCMChatScreen: React.FC = () => {
     scrollToBottom();
   }, [scrollToBottom]);
 
-  // Create sync indicator component
+  // Create sync indicator component with consistent width
   const getSyncIndicator = useCallback(() => {
-    switch (syncStatus) {
-      case 'syncing':
-        return (
+    return (
+      <View style={styles.syncIndicatorContainer}>
+        {syncStatus === 'syncing' && (
           <View style={styles.syncIndicator}>
             <ActivityIndicator size="small" color={colors.text.secondary} />
             <Text style={[styles.syncText, { color: colors.text.secondary }]}>Syncing...</Text>
           </View>
-        );
-      case 'error':
-        return (
+        )}
+        {syncStatus === 'error' && (
           <View style={styles.syncIndicator}>
             <Icon name="error-outline" size={16} color="#FF5252" />
             <Text style={[styles.syncText, { color: '#FF5252' }]}>Sync failed</Text>
           </View>
-        );
-      case 'complete':
-        // Show briefly then hide
-        setTimeout(() => setSyncStatus('idle'), 2000);
-        return (
-          <View style={styles.syncIndicator}>
-            <Icon name="check-circle-outline" size={16} color="#4CAF50" />
-            <Text style={[styles.syncText, { color: '#4CAF50' }]}>Synced</Text>
-          </View>
-        );
-      default:
-        return null;
-    }
+        )}
+        {syncStatus === 'complete' && (() => {
+          // Show briefly then hide
+          setTimeout(() => setSyncStatus('idle'), 2000);
+          return (
+            <View style={styles.syncIndicator}>
+              <Icon name="check-circle-outline" size={16} color="#4CAF50" />
+              <Text style={[styles.syncText, { color: '#4CAF50' }]}>Synced</Text>
+            </View>
+          );
+        })()}
+      </View>
+    );
   }, [syncStatus, colors.text.secondary]);
 
   // Create back button component
@@ -293,7 +290,6 @@ const FCMChatScreen: React.FC = () => {
       'keyboardDidShow',
       () => {
         console.log('[FCMChatScreen] Keyboard shown');
-        setKeyboardVisible(true);
         // Auto-focus the input when keyboard opens
         if (textInputRef.current) {
           textInputRef.current.focus();
@@ -305,7 +301,6 @@ const FCMChatScreen: React.FC = () => {
       'keyboardDidHide',
       () => {
         console.log('[FCMChatScreen] Keyboard hidden');
-        setKeyboardVisible(false);
         // Blur the input when keyboard closes
         if (textInputRef.current) {
           textInputRef.current.blur();
@@ -516,7 +511,7 @@ const FCMChatScreen: React.FC = () => {
   // Refresh functionality removed since KeyboardAvoiderScrollView doesn't support pull-to-refresh
 
   // Render message item
-  const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
+  const renderMessage = useCallback(({ item }: { item: Message; index: number }) => {
     const isOwn = item.senderId === user?.id?.toString();
     // Show status for ALL own messages to provide complete status visibility
     const showStatus = isOwn;
@@ -566,7 +561,7 @@ const FCMChatScreen: React.FC = () => {
   }
 
   return (
-    <View style={[styles.container, keyboardVisible && styles.containerKeyboardVisible]}>
+    <View style={styles.container}>
       {/* Vibrant Gradient Background */}
       <LinearGradient
         colors={colors.background === '#000000'
@@ -578,17 +573,26 @@ const FCMChatScreen: React.FC = () => {
         style={styles.backgroundGradient}
       />
 
-      {/* Header Component */}
-      <Header
-        title={participantName || 'Chat'}
-        leftComponent={getBackButton()}
-        rightComponent={getSyncIndicator()}
-        showLogo={false}
-        showWallet={false}
-        showSearch={false}
-        showPremium={false}
-        showProfile={false}
-      />
+      {/* Fixed Header Container */}
+      <View style={styles.headerContainer}>
+        <Header
+          title="" // Empty title since we're using centerComponent
+          leftComponent={getBackButton()}
+          centerComponent={
+            <View style={styles.headerTitleContainer}>
+              <Text style={[styles.headerTitle, { color: colors.text.primary }]}>
+                {participantName || 'Chat'}
+              </Text>
+            </View>
+          }
+          rightComponent={getSyncIndicator()}
+          showLogo={false}
+          showWallet={false}
+          showSearch={false}
+          showPremium={false}
+          showProfile={false}
+        />
+      </View>
 
       {/* Real-time Message Handler */}
       {conversationId && (
@@ -612,7 +616,6 @@ const FCMChatScreen: React.FC = () => {
         extraSpace={10}
         animationTime={250}
         iosHideBehavior="revert"
-        enableAndroid={true}
       >
         {currentMessages.length === 0 && !loadingLocalMessages ? (
           <View style={styles.emptyContainer}>
@@ -635,8 +638,6 @@ const FCMChatScreen: React.FC = () => {
         avoidMode="whole-view"
         extraSpace={10}
         animationTime={250}
-        enableAndroid={true}
-        iosHideBehavior="revert"
       >
         <Animated.View style={[
           styles.inputContainer,
@@ -710,10 +711,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  containerKeyboardVisible: {
-    // Ensure header stays fixed when keyboard is visible
-    // The KeyboardAvoider components handle the content adjustment
-  },
   backgroundGradient: {
     position: 'absolute',
     top: 0,
@@ -721,9 +718,28 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
+  headerContainer: {
+    position: 'relative',
+    zIndex: 1000,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
   centered: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  syncIndicatorContainer: {
+    minWidth: 80, // Fixed minimum width to prevent layout shifts
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   loadingText: {
     marginTop: 16,
