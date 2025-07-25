@@ -78,9 +78,9 @@ export class QueryHelpers {
    */
   static async getUserMessages(currentUserId: string, otherUserId: string, limit: number = 50): Promise<any[]> {
     const chatId = this.generateChatId(currentUserId, otherUserId);
-    
+
     console.log('[QueryHelpers] 📨 Getting messages for chat:', chatId);
-    
+
     return await messagesCollection
       .query(
         Q.where('chat_id', chatId),
@@ -95,7 +95,7 @@ export class QueryHelpers {
    */
   static getUserMessagesObservable(currentUserId: string, otherUserId: string, limit: number = 50): Observable<any[]> {
     const chatId = this.generateChatId(currentUserId, otherUserId);
-    
+
     return messagesCollection
       .query(
         Q.where('chat_id', chatId),
@@ -113,7 +113,7 @@ export class QueryHelpers {
    */
   static async getUserChats(currentUserId: string): Promise<any[]> {
     console.log('[QueryHelpers] 📋 Getting user chats for:', currentUserId);
-    
+
     return await userChatsCollection
       .query(
         Q.or(
@@ -147,9 +147,9 @@ export class QueryHelpers {
    */
   static async markUserChatAsRead(currentUserId: string, otherUserId: string): Promise<void> {
     const chatId = this.generateChatId(currentUserId, otherUserId);
-    
+
     console.log('[QueryHelpers] ✅ Marking chat as read:', chatId);
-    
+
     const userChat = await userChatsCollection
       .query(Q.where('chat_id', chatId))
       .fetch();
@@ -286,7 +286,7 @@ export class QueryHelpers {
     try {
       const message = await messagesCollection.find(messageId);
       return message;
-    } catch (error) {
+    } catch {
       console.log('[QueryHelpers] ⚠️ Message not found:', messageId);
       return null;
     }
@@ -355,19 +355,13 @@ export class QueryHelpers {
 
     return await userChatsCollection
       .query(
-        Q.where('user_id_1', userId),
-        Q.or(Q.where('user_id_2', userId))
+        Q.or(
+          Q.where('user_id_1', userId),
+          Q.where('user_id_2', userId)
+        )
       )
       .fetch();
   }
 
-  /**
-   * Get user conversations (alias for getUserChats for sync service compatibility)
-   */
-  static async getUserConversations(userId: string): Promise<any[]> {
-    console.log('[QueryHelpers] 📋 Getting user conversations (alias for getUserChats):', userId);
 
-    // Since we're using user-based chats, this is just an alias for getUserChats
-    return await this.getUserChats(userId);
-  }
 }

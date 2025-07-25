@@ -487,6 +487,16 @@ export class WatermelonLocalChatManager {
     // Ensure user chat exists
     await QueryHelpers.getOrCreateUserChat(this.currentUserId, participantId);
 
+    // Sync messages from backend for this conversation
+    try {
+      Logger.info('[WatermelonLocalChatManager] 📥 Syncing messages from backend for conversation:', chatId);
+      const syncedMessages = await this.syncService.syncConversationMessages(chatId);
+      Logger.info(`[WatermelonLocalChatManager] ✅ Synced ${syncedMessages.length} messages from backend`);
+    } catch (syncError) {
+      Logger.error('[WatermelonLocalChatManager] ⚠️ Failed to sync messages from backend:', syncError);
+      // Don't throw error here, allow conversation to continue even if sync fails
+    }
+
     Logger.info('[WatermelonLocalChatManager] ✅ User chat ready:', chatId);
     return chatId;
   }

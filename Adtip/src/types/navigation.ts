@@ -50,6 +50,7 @@ export type MainNavigatorParamList = {
     participantId: string;
     participantName: string;
   }; // FCM chat screen
+  Inbox: undefined; // Inbox screen for all messages
   MissedCalls: undefined;
   Profile: {userId?: number};
   InstagramProfile: {userId?: number};

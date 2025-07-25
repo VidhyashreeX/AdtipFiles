@@ -18,6 +18,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTabNavigator } from '../../contexts/TabNavigatorContext'
+import { useFCMChat } from '../../contexts/FCMChatContext'
 import { useUsers } from '../../hooks/useQueries'
 import { Contact } from '../../types/api'
 import Header from '../../components/common/Header'
@@ -25,7 +26,7 @@ import Icon from 'react-native-vector-icons/Feather'
 import { useBlocklist } from '../../hooks/useBlocklist'
 import { useMissedCallsCount } from '../../hooks/useMissedCalls'
 import { useWallet } from '../../hooks/useWallet'
-import { BanknoteArrowUp, Ban, MoreVertical } from 'lucide-react-native'
+import { BanknoteArrowUp, Ban, MoreVertical, Mail } from 'lucide-react-native'
 import { MainNavigatorParamList } from '../../types/navigation'
 import { CallType } from '../../stores/callStoreSimplified'
 import debounce from 'lodash.debounce'
@@ -303,6 +304,7 @@ const TipCallScreenSimple = () => {
   const { colors, isDarkMode } = useTheme()
   const { user } = useAuth()
   const { balance, isPremium } = useWallet()
+  const { totalUnreadCount } = useFCMChat()
   const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>()
   const { blockUser, isUserBlocked } = useBlocklist()
   const queryClient = useQueryClient()
@@ -1108,6 +1110,23 @@ const TipCallScreenSimple = () => {
         <Icon name="search" size={20} color={colors.text.secondary} />
       </TouchableOpacity>
 
+      {/* Inbox */}
+      <View style={{ position: 'relative' }}>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Inbox')}
+          style={styles.headerIconButton}
+        >
+          <Mail size={20} color={colors.text.secondary} />
+        </TouchableOpacity>
+        {totalUnreadCount > 0 && (
+          <View style={[styles.inboxBadge, { backgroundColor: colors.primary }]}>
+            <Text style={styles.inboxBadgeText}>
+              {totalUnreadCount > 99 ? '99+' : totalUnreadCount.toString()}
+            </Text>
+          </View>
+        )}
+      </View>
+
       {/* Menu Dropdown */}
       <View style={{ position: 'relative' }}>
         <TouchableOpacity
@@ -1873,6 +1892,24 @@ const styles = StyleSheet.create({
   dropdownBadgeText: {
     color: '#FFF',
     fontSize: 10,
+    fontWeight: 'bold',
+  },
+  inboxBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  inboxBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
     fontWeight: 'bold',
   },
 

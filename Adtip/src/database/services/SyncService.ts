@@ -442,42 +442,50 @@ export class SyncService {
   }
 
   /**
-   * Pull messages from backend for a chat
+   * Pull messages from backend for a chat using the correct API endpoint
    */
-  async pullMessagesFromBackend(chatId: string, page: number = 1): Promise<any[]> {
+  async pullMessagesFromBackend(chatId: string, _page: number = 1): Promise<any[]> {
     try {
       Logger.info(`[SyncService] Pulling messages from backend for chat: ${chatId}`);
 
-      const authToken = await AsyncStorage.getItem('accessToken');
-      if (!authToken) {
-        throw new Error('No auth token available');
+      // Extract user IDs from chatId (format: chat_userId1_userId2)
+      const chatParts = chatId.split('_');
+      if (chatParts.length !== 3 || chatParts[0] !== 'chat') {
+        throw new Error(`Invalid chat ID format: ${chatId}. Expected: chat_userId1_userId2`);
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/chat/messages/${chatId}?page=${page}&limit=50`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      });
+      const [, userId1, userId2] = chatParts;
+      const currentUserId = await AsyncStorage.getItem('userId');
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Failed to pull messages: ${errorData.message || response.statusText}`);
-      }
+      // Determine which user is the current user and which is the other user
+      const loginUserId = currentUserId;
+      const chattingUserId = loginUserId === userId1 ? userId2 : userId1;
 
-      const result = await response.json();
-      const backendMessages = result.data?.messages || [];
+      Logger.info(`[SyncService] Fetching messages between ${loginUserId} and ${chattingUserId}`);
 
+      // Generate the database chat_id in the same format as the database expects
+      const dbChatId = `chat_${Math.min(parseInt(loginUserId || '0'), parseInt(chattingUserId || '0'))}_${Math.max(parseInt(loginUserId || '0'), parseInt(chattingUserId || '0'))}`;
+
+      Logger.info(`[SyncService] Fetching messages for database chat_id: ${dbChatId}`);
+
+      // Import ApiService dynamically to avoid circular dependency
+      const { default: ApiService } = await import('../../services/ApiService');
+
+      // Use the fixed /api/getmessage endpoint
+      const response = await ApiService.get(`/api/getmessage/${loginUserId}/${chattingUserId}`);
+      Logger.info(`[SyncService] Successfully fetched messages from backend`);
+
+      const backendMessages = response.data || [];
       Logger.info(`[SyncService] Pulled ${backendMessages.length} messages from backend`);
 
-      // Merge with local database
+      // Process messages and merge with local database
       const newMessages = [];
       for (const backendMsg of backendMessages) {
         try {
-          const existingMessage = await QueryHelpers.getMessageById(String(backendMsg.id));
+          const existingMessage = await QueryHelpers.getMessageById(String(backendMsg.message_id || backendMsg.id));
 
           if (!existingMessage) {
-            const localMessage = await this.createMessageFromBackend(backendMsg);
+            const localMessage = await this.createMessageFromBackend(backendMsg, dbChatId);
             newMessages.push(localMessage);
           }
         } catch (error) {
@@ -497,20 +505,24 @@ export class SyncService {
   /**
    * Create local message from backend data
    */
-  private async createMessageFromBackend(backendMessage: any): Promise<any> {
+  private async createMessageFromBackend(backendMessage: any, chatId: string): Promise<any> {
     try {
+      // Backend message format from /api/getmessage endpoint:
+      // { message_id, message, sender, receiver, senderName, receiverName, createddate, is_seen, is_like, parent_id }
+
       const messageData = {
-        id: String(backendMessage.id),
-        chatId: backendMessage.chat_id,
-        senderId: String(backendMessage.sender_id),
-        recipientId: String(backendMessage.recipient_id),
-        senderName: backendMessage.sender_name,
-        senderAvatar: backendMessage.sender_avatar,
-        content: backendMessage.content,
-        messageType: backendMessage.message_type,
-        status: backendMessage.status,
+        id: String(backendMessage.message_id || backendMessage.id),
+        chatId: chatId, // Use the provided chatId
+        senderId: String(backendMessage.sender || backendMessage.sender_id),
+        recipientId: String(backendMessage.receiver || backendMessage.recipient_id),
+        senderName: backendMessage.senderName || backendMessage.sender_name || 'Unknown',
+        senderAvatar: backendMessage.senderNameProfileImage || backendMessage.sender_avatar,
+        content: backendMessage.message || backendMessage.content,
+        messageType: backendMessage.message_type || 'text',
+        status: (backendMessage.is_seen ? 'read' : 'sent') as 'read' | 'sent',
         tempId: backendMessage.temp_id,
-        replyTo: backendMessage.reply_to_message_id ? String(backendMessage.reply_to_message_id) : undefined
+        replyTo: backendMessage.parent_id ? String(backendMessage.parent_id) : undefined,
+        createdAt: backendMessage.createddate ? new Date(backendMessage.createddate) : new Date()
       };
 
       const message = await this.chatDb.createMessage(messageData);
@@ -520,6 +532,25 @@ export class SyncService {
     } catch (error) {
       Logger.error('[SyncService] Failed to create message from backend data:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Sync messages for a specific conversation (used when opening FCMChatScreen)
+   */
+  async syncConversationMessages(chatId: string): Promise<any[]> {
+    try {
+      Logger.info(`[SyncService] Syncing messages for conversation: ${chatId}`);
+
+      // Pull messages from backend for this specific conversation
+      const newMessages = await this.pullMessagesFromBackend(chatId);
+
+      Logger.info(`[SyncService] Synced ${newMessages.length} messages for conversation: ${chatId}`);
+      return newMessages;
+
+    } catch (error) {
+      Logger.error(`[SyncService] Failed to sync messages for conversation ${chatId}:`, error);
+      return [];
     }
   }
 
@@ -552,7 +583,7 @@ export class SyncService {
           result.syncedMessages += newMessages.length;
         } catch (error) {
           Logger.error(`[SyncService] Failed to pull messages for chat ${chat.chatId}:`, error);
-          result.errors.push(`Failed to sync chat ${chat.chatId}: ${error.message}`);
+          result.errors.push(`Failed to sync chat ${chat.chatId}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
 
@@ -587,7 +618,7 @@ export class SyncService {
   /**
    * Import data from backup
    */
-  async importData(data: any): Promise<boolean> {
+  async importData(_data: any): Promise<boolean> {
     try {
       // TODO: Implement data import functionality
       // This would import chat data from a backup
