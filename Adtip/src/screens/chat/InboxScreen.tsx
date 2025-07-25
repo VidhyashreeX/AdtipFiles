@@ -125,6 +125,13 @@ const InboxScreen: React.FC = () => {
   }, []);
 
   // Navigate to chat with sender
+  // Hide the default navigation header since we're using our own Header component
+  useEffect(() => {
+    navigation.setOptions({
+      headerShown: false,
+    });
+  }, [navigation]);
+
   const navigateToChat = useCallback((message: InboxMessage) => {
     // Mark as read if unread
     if (message.readStatus === 'unread') {

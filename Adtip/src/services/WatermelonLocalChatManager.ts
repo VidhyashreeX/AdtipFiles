@@ -371,6 +371,11 @@ export class WatermelonLocalChatManager {
     const recipientId = userId1 === this.currentUserId ? userId2 : userId1;
     Logger.info('[WatermelonLocalChatManager] 📨 User-based chat - recipient ID:', recipientId);
 
+    // Prevent self-messaging
+    if (recipientId === this.currentUserId) {
+      throw new Error('Cannot send message to yourself');
+    }
+
     const message = await this.chatDb.createMessage({
       id: messageId,
       chatId: conversationId, // conversationId is actually chatId in user-based system
