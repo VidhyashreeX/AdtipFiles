@@ -27,6 +27,7 @@ import { InfiniteData } from '@tanstack/react-query';
 import { PlayCircle, Gamepad2, WifiOff, Share2, HandCoins, Dices, Mail, Search, CreditCard } from 'lucide-react-native';
 import PostWithComments from '../../components/home/PostWithComments';
 import { FeedFlatList, useOptimizedRenderItem } from '../../components/common/OptimizedFlatList';
+import SurveyBanner from '../../components/home/SurveyBanner';
 
 // Enhanced Contexts & Services
 import {useTheme} from '../../contexts/ThemeContext';
@@ -258,68 +259,7 @@ const ExternalLinkBanner: React.FC<ExternalLinkBannerProps> = ({ isPremium, onUp
   );
 };
 
-// Rush Play Games Banner Component
-interface RushPlayGamesBannerProps {
-  isPremium: boolean;
-  onUpgrade: () => void;
-}
-
-const RushPlayGamesBanner: React.FC<RushPlayGamesBannerProps> = ({ isPremium, onUpgrade }) => {
-  const { colors } = useTheme();
-  const styles = createHomeScreenStyles(colors);
-
-  const handleBannerPress = async () => {
-    // Allow all users to access the games - no premium restriction
-    try {
-      const url = 'https://439096e5.rushquiz.com/';
-      const supported = await Linking.canOpenURL(url);
-
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-        Alert.alert('Error', 'Cannot open the link. Please try again later.');
-      }
-    } catch (error) {
-      Logger.error('HomeScreen', 'Error opening external link:', error);
-      Alert.alert('Error', 'Failed to open the link. Please try again.');
-    }
-  };
-
-  return (
-    <View style={styles.earnCardsCarouselSection}>
-      <TouchableOpacity
-        style={styles.earnCardVerticalItem}
-        onPress={handleBannerPress}
-        activeOpacity={0.9}
-      >
-        <LinearGradient
-          colors={['#9C27B0', '#7B1FA2', '#4A148C']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.earnCardGradient}
-        >
-          <View style={styles.earnCardContent}>
-            <View style={styles.earnCardTextContainer}>
-              <Text style={styles.earnCardTitle}>🧠 Rush Play Games</Text>
-              <Text style={styles.earnCardDescription}>Test your knowledge with exciting quiz games!</Text>
-              <LinearGradient
-                colors={['#FFD700', '#FFA500', '#FF8C00']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.earnCardRewardBadge}
-              >
-                <Text style={styles.earnCardRewardText}>Quiz Now!</Text>
-              </LinearGradient>
-            </View>
-            <View style={styles.earnCardIconContainer}>
-              <Gamepad2 size={32} color="#FFFFFF" />
-            </View>
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
-    </View>
-  );
-};
+// Survey Banner Component - Replaced Rush Play Games with CPX Research Surveys
 
 const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onInstallToEarn, isLoading }) => {
   const {colors} = useTheme();
@@ -1237,7 +1177,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             <BannerCarousel />
             <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onInstallToEarn={handleInstallToEarn} isLoading={true} />
             <ExternalLinkBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
-            <RushPlayGamesBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
+            <SurveyBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
             <View style={styles.skeletonContainer}>
               {Array(6).fill(0).map((_, index) => <PostItemSkeleton key={`skeleton-${index}`} />)}
             </View>
@@ -1307,7 +1247,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
               <BannerCarousel onBannerPress={handleBannerPress} />
               <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onInstallToEarn={handleInstallToEarn} />
               <ExternalLinkBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
-              <RushPlayGamesBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
+              <SurveyBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
             </>
           )}
           ListEmptyComponent={renderEmptyState}
@@ -1413,9 +1353,6 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
   },
   // External link banner section
   externalLinkBannerSection: {
-    backgroundColor: colors.surface,
-  },
-  rushPlayGamesBannerSection: {
     backgroundColor: colors.surface,
   },
   earnCardsCarouselSkeletonContainer: {
@@ -1660,62 +1597,7 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
     alignItems: 'center',
   },
 
-  // Rush Play Games Banner styles
-  rushPlayGamesBannerContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  rushPlayGamesBanner: {
-    borderRadius: 12,
-    padding: 16,
-    minHeight: 100,
-  },
-  rushPlayGamesBannerGradient: {
-    borderRadius: 12,
-    padding: 16,
-    minHeight: 100,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  rushPlayGamesBannerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  rushPlayGamesBannerTextContainer: {
-    flex: 1,
-    paddingRight: 16,
-  },
-  rushPlayGamesBannerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  rushPlayGamesBannerDescription: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    opacity: 0.9,
-    marginBottom: 8,
-  },
-  rushPlayGamesBannerUpgradeBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  rushPlayGamesBannerUpgradeText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  rushPlayGamesBannerIconContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+
   headerIconButton: {
     padding: 8,
     borderRadius: 20,

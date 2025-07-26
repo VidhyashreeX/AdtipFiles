@@ -21,6 +21,11 @@ export const API_TIMEOUT = 30000;
 export const PUBSCALE_APP_ID = '39604779';
 export const PUBSCALE_BASE_URL = 'https://offerwall.pubscale.com';
 
+// CPX Research integration
+export const CPX_RESEARCH_APP_ID = '28376'; // Correct app ID for this project
+export const CPX_RESEARCH_BASE_URL = 'https://offers.cpx-research.com';
+export const CPX_RESEARCH_API_URL = 'https://live-api.cpx-research.com/api/get-surveys.php';
+
 // API Endpoints
 export const API_ENDPOINTS = {
   // Auth
