@@ -462,10 +462,14 @@ const styles = StyleSheet.create({
   videoContainer: {
     flex: 1,
     backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   video: {
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
+    // Ensure proper aspect ratio for mobile shorts
+    aspectRatio: 9 / 16,
   },
   pauseOverlay: {
     ...StyleSheet.absoluteFillObject,

@@ -469,8 +469,10 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
                 autoplay={isActive && isGloballyPlaying}
                 muted={isGloballyMuted}
                 controls={false}
+                paused={!isActive || !isGloballyPlaying} // Add proper paused control
                 useStreamPlayer={playbackConfig.useStreamPlayer}
                 style={styles.video}
+                isShort={true} // Mark as short video for proper aspect ratio handling
                 onLoad={handleVideoLoadLocal}
                 onProgress={handleVideoProgress}
                 onError={(error) => {
@@ -623,10 +625,15 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     position: 'relative',
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   video: {
     width: '100%',
     height: '100%',
+    // Ensure video maintains proper aspect ratio for mobile shorts
+    aspectRatio: 9 / 16, // 9:16 aspect ratio for mobile shorts
   },
   thumbnailOverlay: {
     position: 'absolute',

@@ -25,12 +25,14 @@ interface CloudflareStreamPlayerProps {
   autoplay?: boolean;
   muted?: boolean;
   controls?: boolean;
+  paused?: boolean; // Add paused control for proper video playback
   onLoad?: () => void;
   onError?: (error: any) => void;
   onProgress?: (progress: any) => void;
   style?: any;
   resizeMode?: 'contain' | 'cover' | 'stretch';
   useStreamPlayer?: boolean; // Toggle between Stream and fallback
+  isShort?: boolean; // Flag to identify if this is a short video for aspect ratio handling
 }
 
 const CloudflareStreamPlayer: React.FC<CloudflareStreamPlayerProps> = ({
@@ -42,12 +44,14 @@ const CloudflareStreamPlayer: React.FC<CloudflareStreamPlayerProps> = ({
   autoplay = true, // Enable autoplay by default
   muted = true,
   controls = true,
+  paused = false, // Add paused prop with default value
   onLoad,
   onError,
   onProgress,
   style,
   resizeMode = 'contain',
   useStreamPlayer = true,
+  isShort = false, // Default to false for backward compatibility
 }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -57,6 +61,9 @@ const CloudflareStreamPlayer: React.FC<CloudflareStreamPlayerProps> = ({
   // Validate if Stream playback is possible
   const isStreamReady = streamVideoId && streamStatus === 'ready';
   const shouldUseStream = useStreamPlayer && isStreamReady;
+
+  // Determine optimal resize mode for shorts
+  const effectiveResizeMode = isShort ? 'cover' : resizeMode;
 
   // Generate Stream Player URL with validation
   const getStreamPlayerUrl = () => {
@@ -318,11 +325,12 @@ const CloudflareStreamPlayer: React.FC<CloudflareStreamPlayerProps> = ({
         source={videoSource}
         style={styles.video}
         controls={controls}
-        resizeMode={resizeMode}
+        resizeMode={effectiveResizeMode}
         onLoad={handleVideoLoad}
         onError={handleVideoError}
         onProgress={onProgress}
         muted={muted}
+        paused={paused} // Add paused control for proper playback
         repeat={false}
         playWhenInactive={false}
         playInBackground={false}

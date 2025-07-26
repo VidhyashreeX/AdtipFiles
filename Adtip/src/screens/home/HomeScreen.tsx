@@ -1185,9 +1185,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     return (
       <ScreenTransition>
         <View style={[styles.container, {backgroundColor: colors.background}]}>
-          <Header 
-            title="" 
-            onSearchSubmit={handleSearchIconPress}
+          <Header
+            title=""
+            onSearchSubmit={handleSearchSubmit}
           />
           <View style={styles.errorContainer}>
             <WifiOff size={48} color={colors.danger || '#FF0000'} />
