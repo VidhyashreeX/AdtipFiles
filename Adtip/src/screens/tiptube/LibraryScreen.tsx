@@ -60,8 +60,8 @@ const LibraryScreen: React.FC = () => {
   };
 
   const handleEarnMoneyPress = () => {
-    // Navigate to content creator premium screen to show earning opportunities
-    navigation.navigate('ContentCreatorPremium' as never);
+    // Navigate to EarnMoneyCreator to show earning opportunities
+    navigation.navigate('EarnMoneyCreator' as never);
   };
 
   const menuItems: LibraryMenuItem[] = [
@@ -139,7 +139,6 @@ const LibraryScreen: React.FC = () => {
         showSearch={false}
         showWallet={false}
         showPremium={false}
-        showProfile={false}
         leftComponent={
           <TouchableOpacity
             onPress={handleBackPress}

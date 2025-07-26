@@ -1185,7 +1185,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             showSearch={true}
             showWallet={true}
             showPremium={true}
-            showProfile={false}
             rightComponent={renderInboxIcon()}
           />
           <ScrollView style={styles.content} contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}>
@@ -1211,7 +1210,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
         <View style={[styles.container, {backgroundColor: colors.background}]}>
           <Header
             title=""
-            showProfile={false}
             onSearchSubmit={handleSearchSubmit}
             rightComponent={renderInboxIcon()}
           />
@@ -1239,7 +1237,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             showSearch={true}
             showWallet={true}
             showPremium={true}
-            showProfile={false}
             searchQuery={searchQuery}
             onSearchQueryChange={handleSearchQueryChange}
             onSearchSubmit={handleSearchSubmit}

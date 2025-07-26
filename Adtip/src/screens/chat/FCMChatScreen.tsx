@@ -638,7 +638,6 @@ const FCMChatScreen: React.FC = () => {
           showWallet={false}
           showSearch={false}
           showPremium={false}
-          showProfile={false}
         />
       </View>
 

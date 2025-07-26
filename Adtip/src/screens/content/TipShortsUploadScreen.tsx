@@ -1236,7 +1236,7 @@ const TipShortsUploadScreen: React.FC = () => {
                       Paid Video
                     </Text>
                     <Text style={[styles.switchDescription, { color: colors.text.secondary }]}>
-                      Enable to set a promotional price (Content Creator Premium required)
+                      Enable to set a promotional price{'\n'}(Content Creator Premium required)
                     </Text>
                   </View>
                   <Switch

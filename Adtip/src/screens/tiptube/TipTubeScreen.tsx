@@ -22,7 +22,7 @@ import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/nativ
 import { useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
-import { CirclePlay, Gamepad2 } from 'lucide-react-native';
+import { CirclePlay, Gamepad2, Search } from 'lucide-react-native';
 import RazorpayCheckout from 'react-native-razorpay';
 import debounce from 'lodash.debounce';
 
@@ -627,6 +627,17 @@ const TipTubeScreen = () => {
 
     return (
       <View style={styles.headerRightContainer}>
+        {/* Search Icon */}
+        <TouchableOpacity
+          onPress={() => {
+            setIsTipTubeSearchActive(true);
+          }}
+          style={styles.searchIconButton}
+          activeOpacity={0.8}
+        >
+          <Search size={20} color={colors.text.secondary} />
+        </TouchableOpacity>
+
         {/* Content Creator Premium Toggle */}
         <ContentCreatorPlanToggle onPress={handleTogglePremium} />
 
@@ -1160,7 +1171,6 @@ const TipTubeScreen = () => {
           showSearch={true}
           showWallet={true}
           showPremium={true}
-          showProfile={false}
           onSearchSubmit={(query) => {
             setSearchQuery(query);
             setIsTipTubeSearchActive(true);
@@ -1806,6 +1816,12 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  searchIconButton: {
+    padding: 8,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   channelProfileButton: {
     padding: 4,

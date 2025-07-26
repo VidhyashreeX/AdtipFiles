@@ -360,7 +360,6 @@ const InboxScreen: React.FC = () => {
         showWallet={false}
         showSearch={false}
         showPremium={false}
-        showProfile={false}
         leftComponent={
           <TouchableOpacity
             onPress={() => navigation.goBack()}

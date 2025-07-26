@@ -210,7 +210,6 @@ const FollowedChannelScreen: React.FC = () => {
           showSearch={false}
           showWallet={false}
           showPremium={false}
-          showProfile={false}
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -230,7 +229,6 @@ const FollowedChannelScreen: React.FC = () => {
         showSearch={false}
         showWallet={false}
         showPremium={false}
-        showProfile={false}
       />
 
       {/* Channels Grid */}
