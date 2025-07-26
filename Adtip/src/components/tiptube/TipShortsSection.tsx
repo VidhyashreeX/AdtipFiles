@@ -9,6 +9,7 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
@@ -123,19 +124,9 @@ const TipShortsSection: React.FC<TipShortsSectionProps> = ({
           }}
         />
 
-        {/* Overlay Content */}
-        <View style={styles.shortOverlay}>
-          <View style={styles.shortContent}>
-            <Text style={styles.shortTitle} numberOfLines={2}>
-              {item.title}
-            </Text>
-            <Text style={styles.shortCreator}>
-              {item.channel.name}
-            </Text>
-            <Text style={styles.shortViews}>
-              {item.views.toLocaleString()} views
-            </Text>
-          </View>
+        {/* Play indicator for shorts - matching explore screen design */}
+        <View style={styles.shortIndicator}>
+          <Icon name="play-circle" size={20} color="#fff" />
         </View>
       </TouchableOpacity>
     );
@@ -225,43 +216,13 @@ const createStyles = (colors: any, isDarkMode: boolean) =>
       width: '100%',
       height: '100%',
     },
-    shortOverlay: {
+    shortIndicator: {
       position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
-      backgroundColor: 'rgba(0,0,0,0.4)',
-      padding: 12,
-    },
-    shortContent: {
-      justifyContent: 'flex-end',
-    },
-    shortTitle: {
-      color: '#FFFFFF',
-      fontSize: 14,
-      fontWeight: '600',
-      marginBottom: 4,
-      textShadowColor: 'rgba(0,0,0,0.5)',
-      textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 2,
-    },
-    shortCreator: {
-      color: '#FFFFFF',
-      fontSize: 12,
-      opacity: 0.9,
-      textShadowColor: 'rgba(0,0,0,0.5)',
-      textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 2,
-      marginBottom: 2,
-    },
-    shortViews: {
-      color: '#FFFFFF',
-      fontSize: 11,
-      opacity: 0.8,
-      textShadowColor: 'rgba(0,0,0,0.5)',
-      textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 2,
+      top: 8,
+      right: 8,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      borderRadius: 12,
+      padding: 4,
     },
     loadingContainer: {
       flexDirection: 'row',

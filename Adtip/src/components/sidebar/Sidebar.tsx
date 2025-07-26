@@ -266,6 +266,8 @@ const Sidebar: React.FC = () => {
   const menuItems: MenuItemProps[] = useMemo(() => [
     {icon: 'home', label: 'Home', screen: 'TabHome'},
     {icon: 'user', label: 'View Profile', screen: 'Profile'},
+    {icon: 'users', label: 'Followers', screen: 'FollowersList'},
+    {icon: 'user-plus', label: 'Following', screen: 'FollowingsList'},
     {icon: 'indian-rupee', label: 'My Earnings', screen: 'Earnings'},
     {icon: 'compass', label: 'Explore', screen: 'Explore'},
     //{icon: 'credit-card', label: 'Wallet', screen: 'Wallet'},
@@ -279,7 +281,7 @@ const Sidebar: React.FC = () => {
     {icon: 'award', label: 'User Premium', screen: 'PremiumUser'},
     {icon: 'award', label: 'Content Creator Premium', screen: 'ContentCreatorPremium'},
     {icon: 'settings', label: 'Settings', screen: 'Settings'},
-    
+
   ], []);
 
   const handleNavigate = useCallback((screenName: keyof MainNavigatorParamList) => {
@@ -292,6 +294,8 @@ const Sidebar: React.FC = () => {
         'PlayToEarn': 'access play to earn games',
         'AdPassbook': 'access your ad passbook',
         'Profile': 'view your profile',
+        'FollowersList': 'view your followers',
+        'FollowingsList': 'view who you follow',
         'PremiumUser': 'access premium features',
         'ContentCreatorPremium': 'access content creator premium',
         'Settings': 'access settings',
@@ -343,6 +347,12 @@ const Sidebar: React.FC = () => {
         } else if (screenName === 'Profile') {
           // Pass current user's ID for own profile to avoid NaN issue
           NavigationService.navigate('Main', { screen: 'Profile', params: { userId: user?.id } } as any);
+        } else if (screenName === 'FollowersList') {
+          // Navigate to followers list with current user's ID
+          NavigationService.navigate('Main', { screen: 'FollowersList', params: { followers: [], userId: user?.id } } as any);
+        } else if (screenName === 'FollowingsList') {
+          // Navigate to following list with current user's ID
+          NavigationService.navigate('Main', { screen: 'FollowingsList', params: { followings: [], userId: user?.id } } as any);
         } else {
           // Direct navigation for other screens
           NavigationService.navigate('Main', { screen: screenName } as any);

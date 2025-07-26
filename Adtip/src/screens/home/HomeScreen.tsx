@@ -24,7 +24,7 @@ import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 import { InfiniteData } from '@tanstack/react-query';
 // Import Lucide React Native icons
-import { PlayCircle, Gamepad2, WifiOff, Share2, HandCoins, Dices, Mail } from 'lucide-react-native';
+import { PlayCircle, Gamepad2, WifiOff, Share2, HandCoins, Dices, Mail, Search, CreditCard } from 'lucide-react-native';
 import PostWithComments from '../../components/home/PostWithComments';
 import { FeedFlatList, useOptimizedRenderItem } from '../../components/common/OptimizedFlatList';
 
@@ -907,25 +907,72 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     setIsSearchActive(false);
   }, [navigation]);
 
-  // Inbox component for header
-  const renderInboxIcon = useCallback(() => (
-    <View style={{ position: 'relative' }}>
+  // Complete header right section with all icons
+  const renderHeaderRightSection = useCallback(() => (
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      {/* Search Icon */}
       <TouchableOpacity
-        onPress={() => navigation.navigate('Inbox' as never)}
-        style={styles.headerIconButton}
+        onPress={() => setIsSearchActive(true)}
+        style={[styles.headerIconButton, { marginLeft: 6 }]}
         activeOpacity={0.8}
       >
-        <Mail size={20} color={colors.text.secondary} />
+        <Search size={20} color={colors.text.secondary} />
       </TouchableOpacity>
-      {totalUnreadCount > 0 && (
-        <View style={[styles.inboxBadge, { backgroundColor: colors.primary }]}>
-          <Text style={styles.inboxBadgeText}>
-            {totalUnreadCount > 99 ? '99+' : totalUnreadCount.toString()}
-          </Text>
+
+      {/* Premium Toggle */}
+      <TouchableOpacity
+        style={[styles.headerIconButton, { marginLeft: 6 }]}
+        onPress={() => navigation.navigate('SubscriptionScreen' as never)}
+        activeOpacity={0.8}
+      >
+        <View style={{
+          width: 44,
+          height: 24,
+          borderRadius: 12,
+          backgroundColor: isPremium ? '#4CAF50' : '#FF4444',
+          justifyContent: 'center',
+          alignItems: 'center',
+          flexDirection: 'row'
+        }}>
+          <View style={{
+            width: 20,
+            height: 20,
+            borderRadius: 10,
+            backgroundColor: '#FFFFFF',
+            position: 'absolute',
+            left: isPremium ? 22 : 2,
+          }} />
         </View>
-      )}
+      </TouchableOpacity>
+
+      {/* Wallet Icon */}
+      <TouchableOpacity
+        onPress={() => navigation.navigate('Wallet' as never)}
+        style={[styles.headerIconButton, { marginLeft: 6 }]}
+        activeOpacity={0.8}
+      >
+        <CreditCard size={20} color={colors.primary} />
+      </TouchableOpacity>
+
+      {/* Inbox Icon */}
+      <View style={{ position: 'relative', marginLeft: 6 }}>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Inbox' as never)}
+          style={styles.headerIconButton}
+          activeOpacity={0.8}
+        >
+          <Mail size={20} color={colors.text.secondary} />
+        </TouchableOpacity>
+        {totalUnreadCount > 0 && (
+          <View style={[styles.inboxBadge, { backgroundColor: colors.primary }]}>
+            <Text style={styles.inboxBadgeText}>
+              {totalUnreadCount > 99 ? '99+' : totalUnreadCount.toString()}
+            </Text>
+          </View>
+        )}
+      </View>
     </View>
-  ), [navigation, totalUnreadCount, colors, styles]);
+  ), [navigation, totalUnreadCount, colors, styles, isPremium, setIsSearchActive]);
 
   // Search results component
   const SearchResults = useMemo(() => {
@@ -1182,10 +1229,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           <Header
             title=""
             showLogo={false}
-            showSearch={true}
-            showWallet={true}
-            showPremium={true}
-            rightComponent={renderInboxIcon()}
+            rightComponent={renderHeaderRightSection()}
           />
           <ScrollView style={styles.content} contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}>
             <StoriesRow stories={[]} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} isLoading={true} />
@@ -1211,7 +1255,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           <Header
             title=""
             onSearchSubmit={handleSearchSubmit}
-            rightComponent={renderInboxIcon()}
+            rightComponent={renderHeaderRightSection()}
           />
           <View style={styles.errorContainer}>
             <WifiOff size={48} color={colors.danger || '#FF0000'} />
@@ -1234,13 +1278,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           <Header
             title=""
             showLogo={false}
-            showSearch={true}
-            showWallet={true}
-            showPremium={true}
             searchQuery={searchQuery}
             onSearchQueryChange={handleSearchQueryChange}
             onSearchSubmit={handleSearchSubmit}
-            rightComponent={renderInboxIcon()}
+            rightComponent={renderHeaderRightSection()}
           />
           {SearchResults}
           <FeedFlatList

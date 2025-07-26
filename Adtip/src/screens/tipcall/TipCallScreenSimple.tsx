@@ -1282,6 +1282,25 @@ const TipCallScreenSimple = () => {
         </View>
       )}
 
+      {/* Call Acceptance Benefits Banner */}
+      <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+        <LinearGradient colors={['#4CAF50', '#45A049']} style={{ borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={{ fontSize: 20, marginRight: 12 }}>💰</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontWeight: '700', color: '#FFFFFF' }}>Earn by Accepting Calls</Text>
+            <Text style={{ color: '#FFFFFF', opacity: 0.9, fontSize: 12 }}>
+              Audio: {isPremium ? '₹2/min' : '₹0.60/min'} • Video: {isPremium ? '₹4/min' : '₹2/min'}
+            </Text>
+          </View>
+          <View style={{ alignItems: 'center' }}>
+            <Text style={{ fontSize: 12, color: '#FFFFFF', opacity: 0.8 }}>Per Min</Text>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#FFFFFF' }}>
+              {isPremium ? '₹2-4' : '₹0.60-2'}
+            </Text>
+          </View>
+        </LinearGradient>
+      </View>
+
       {/* Enhanced Filters Section with Languages and Interests */}
       <View style={[styles.filtersSection, { backgroundColor: colors.background }]}>
         {/* Languages Filter */}
