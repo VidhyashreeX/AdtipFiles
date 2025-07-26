@@ -78,16 +78,7 @@ export const createCPXConfig = (
     userId: userId.toString(),
     accentColor: baseColor,
     isHidden: false, // Keep the component active for webview functionality
-    // Add a minimal corner widget to ensure the component initializes properly
-    cornerWidget: {
-      backgroundColor: baseColor,
-      position: 'bottomright',
-      roundedCorners: 8,
-      size: 50,
-      text: '📊',
-      textColor: '#ffffff',
-      textSize: 20,
-    },
+    // No widgets - component will be invisible but functional
   };
 };
 

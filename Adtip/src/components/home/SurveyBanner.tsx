@@ -36,28 +36,36 @@ import CPXRewardService from '../../services/CPXRewardService';
 // Utils
 import Logger from '../../utils/logger';
 
+// Context
+import { useCPXResearch, useCPXResearchSafe } from '../../contexts/CPXResearchContext';
+
 interface SurveyBannerProps {
   isPremium: boolean;
   onUpgrade: () => void;
   onRewardEarned?: (amount: number, isPremium: boolean) => void;
   style?: any;
+  renderCPXAtRoot?: boolean; // New prop to control where CPX Research is rendered
 }
 
-const SurveyBanner: React.FC<SurveyBannerProps> = ({ 
-  isPremium, 
-  onUpgrade, 
+const SurveyBanner: React.FC<SurveyBannerProps> = ({
+  isPremium,
+  onUpgrade,
   onRewardEarned,
-  style 
+  style,
+  renderCPXAtRoot = false
 }) => {
   const { colors, isDarkMode } = useTheme();
   const { user, isGuest } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [surveyCount, setSurveyCount] = useState(0);
-  
-  // CPX Research refs for method binding
-  const markTransactionAsPaidRef = useRef<any>();
-  const fetchSurveysAndTransactionsRef = useRef<any>();
-  const openWebViewRef = useRef<any>();
+
+  // CPX Research refs for method binding (only used when not rendering at root)
+  const markTransactionAsPaidRef = useRef<any>(null);
+  const fetchSurveysAndTransactionsRef = useRef<any>(null);
+  const openWebViewRef = useRef<any>(null);
+
+  // Use CPX Research context when rendering at root level (safe hook)
+  const cpxResearchContext = useCPXResearchSafe();
 
   // Create styles
   const styles = createSurveyBannerStyles(colors, isDarkMode);
@@ -172,39 +180,49 @@ const SurveyBanner: React.FC<SurveyBannerProps> = ({
         surveyCount
       });
 
-      // Ensure surveys are loaded first
-      if (fetchSurveysAndTransactionsRef.current) {
-        fetchSurveysAndTransactionsRef.current();
-        // Wait a bit for surveys to load
+      // Use context or direct refs depending on configuration
+      if (renderCPXAtRoot && cpxResearchContext) {
+        // Using root-level CPX Research component via context
+        Logger.info('SurveyBanner', 'Opening survey via context');
+        cpxResearchContext.fetchSurveysAndTransactions();
         await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-      // Open CPX Research survey webview
-      if (openWebViewRef.current) {
-        Logger.info('SurveyBanner', 'Attempting to open CPX Research webview');
-        try {
-          // Call the webview open function (can optionally pass a surveyId)
-          const result = openWebViewRef.current();
-          Logger.info('SurveyBanner', 'WebView open result:', result);
-
-          // If the webview doesn't open, show a fallback after a delay
-          setTimeout(() => {
-            Logger.info('SurveyBanner', 'Checking if webview opened successfully');
-            // For now, show a temporary message that surveys are being loaded
-            // This will be replaced once the webview issue is resolved
-          }, 1000);
-
-        } catch (webViewError) {
-          Logger.error('SurveyBanner', 'Error calling openWebView:', webViewError);
-          Alert.alert('Error', 'Failed to open survey interface. Please try again.');
-        }
+        cpxResearchContext.openSurveyModal();
       } else {
-        Logger.warn('SurveyBanner', 'CPX Research webview function not available');
-        Alert.alert(
-          'Surveys Loading',
-          'The survey system is still initializing. Please try again in a few seconds.',
-          [{ text: 'OK', style: 'default' }]
-        );
+        // Using local CPX Research component
+        // Ensure surveys are loaded first
+        if (fetchSurveysAndTransactionsRef.current) {
+          fetchSurveysAndTransactionsRef.current();
+          // Wait a bit for surveys to load
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        // Open CPX Research survey webview
+        if (openWebViewRef.current) {
+          Logger.info('SurveyBanner', 'Attempting to open CPX Research webview');
+          try {
+            // Call the webview open function (can optionally pass a surveyId)
+            const result = openWebViewRef.current();
+            Logger.info('SurveyBanner', 'WebView open result:', result);
+
+            // If the webview doesn't open, show a fallback after a delay
+            setTimeout(() => {
+              Logger.info('SurveyBanner', 'Checking if webview opened successfully');
+              // For now, show a temporary message that surveys are being loaded
+              // This will be replaced once the webview issue is resolved
+            }, 1000);
+
+          } catch (webViewError) {
+            Logger.error('SurveyBanner', 'Error calling openWebView:', webViewError);
+            Alert.alert('Error', 'Failed to open survey interface. Please try again.');
+          }
+        } else {
+          Logger.warn('SurveyBanner', 'CPX Research webview function not available');
+          Alert.alert(
+            'Surveys Loading',
+            'The survey system is still initializing. Please try again in a few seconds.',
+            [{ text: 'OK', style: 'default' }]
+          );
+        }
       }
     } catch (error) {
       Logger.error('SurveyBanner', 'Error opening surveys:', error);
@@ -262,27 +280,29 @@ const SurveyBanner: React.FC<SurveyBannerProps> = ({
 
   return (
     <View style={[styles.container, style]}>
-      {/* CPX Research SDK Component - Now with visible corner widget */}
-      <View style={styles.cpxContainer}>
-        <CpxResearch
-          {...cpxConfig}
-          onSurveysUpdate={onSurveysUpdate}
-          onTransactionsUpdate={onTransactionsUpdate}
-          onWebViewWasClosed={onWebViewWasClosed}
-          bindMarkTransactionAsPaid={(fn: any) => {
-            markTransactionAsPaidRef.current = fn;
-            Logger.info('SurveyBanner', 'bindMarkTransactionAsPaid called');
-          }}
-          bindFetchSurveysAndTransactions={(fn: any) => {
-            fetchSurveysAndTransactionsRef.current = fn;
-            Logger.info('SurveyBanner', 'bindFetchSurveysAndTransactions called');
-          }}
-          bindOpenWebView={(fn: any) => {
-            openWebViewRef.current = fn;
-            Logger.info('SurveyBanner', 'bindOpenWebView called');
-          }}
-        />
-      </View>
+      {/* CPX Research SDK Component - Only render if not at root level */}
+      {!renderCPXAtRoot && (
+        <View style={styles.cpxContainer}>
+          <CpxResearch
+            {...cpxConfig}
+            onSurveysUpdate={onSurveysUpdate}
+            onTransactionsUpdate={onTransactionsUpdate}
+            onWebViewWasClosed={onWebViewWasClosed}
+            bindMarkTransactionAsPaid={(fn: any) => {
+              markTransactionAsPaidRef.current = fn;
+              Logger.info('SurveyBanner', 'bindMarkTransactionAsPaid called');
+            }}
+            bindFetchSurveysAndTransactions={(fn: any) => {
+              fetchSurveysAndTransactionsRef.current = fn;
+              Logger.info('SurveyBanner', 'bindFetchSurveysAndTransactions called');
+            }}
+            bindOpenWebView={(fn: any) => {
+              openWebViewRef.current = fn;
+              Logger.info('SurveyBanner', 'bindOpenWebView called');
+            }}
+          />
+        </View>
+      )}
 
       {/* Survey Banner UI */}
       <TouchableOpacity
@@ -334,7 +354,17 @@ const createSurveyBannerStyles = (_colors: any, _isDarkMode: boolean) => StyleSh
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 1000, // Put it on top so the corner widget is clickable
+    // Don't move off-screen as it prevents the webview modal from displaying properly
+    // The CPX Research component manages its own visibility
+  },
+  rootCpxContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9999, // Ensure it's above everything for full-screen modal
+    pointerEvents: 'box-none', // Allow touches to pass through when not showing modal
   },
   bannerItem: {
     borderRadius: 16,
@@ -390,5 +420,104 @@ const createSurveyBannerStyles = (_colors: any, _isDarkMode: boolean) => StyleSh
     justifyContent: 'center',
   },
 });
+
+// Separate CPX Research component for root-level rendering
+export const CPXResearchProvider: React.FC<{
+  isPremium: boolean;
+  onRewardEarned?: (amount: number, isPremium: boolean) => void;
+}> = ({ isPremium, onRewardEarned }) => {
+  const { isDarkMode } = useTheme();
+  const { user, isGuest } = useAuth();
+  const [_surveyCount, setSurveyCount] = useState(0);
+
+  // Use CPX Research context for binding
+  const cpxResearchContext = useCPXResearch();
+
+  // Handle reward earned
+  const handleRewardEarned = useCallback(async (amount: number, isPremium: boolean) => {
+    try {
+      Logger.info('CPXResearchProvider', 'Processing survey reward', { amount, isPremium });
+
+      if (!user?.id) {
+        Logger.error('CPXResearchProvider', 'No user ID available for reward processing');
+        return;
+      }
+
+      // Process the reward through CPXRewardService
+      const result = await CPXRewardService.processSurveyReward(
+        user.id,
+        `survey_${Date.now()}`,
+        amount,
+        isPremium
+      );
+
+      if (result.success) {
+        Logger.info('CPXResearchProvider', 'Survey reward processed successfully', result);
+        onRewardEarned?.(amount, isPremium);
+      } else {
+        Logger.error('CPXResearchProvider', 'Failed to process survey reward', result.error);
+      }
+    } catch (error) {
+      Logger.error('CPXResearchProvider', 'Error processing survey reward', error);
+    }
+  }, [user?.id, onRewardEarned]);
+
+  // CPX Research callbacks
+  const cpxCallbacks = createCPXCallbacks(handleRewardEarned);
+
+  // Enhanced callbacks with survey count tracking
+  const onSurveysUpdate = useCallback((surveys: any[]) => {
+    setSurveyCount(surveys?.length || 0);
+    cpxCallbacks.onSurveysUpdate?.(surveys);
+  }, [cpxCallbacks]);
+
+  const onTransactionsUpdate = useCallback((transactions: any[]) => {
+    cpxCallbacks.onTransactionsUpdate?.(transactions);
+  }, [cpxCallbacks]);
+
+  const onWebViewWasClosed = useCallback(() => {
+    cpxCallbacks.onWebViewWasClosed?.();
+    // Refresh surveys after closing webview
+    cpxResearchContext.fetchSurveysAndTransactions();
+  }, [cpxCallbacks, cpxResearchContext]);
+
+  // Create CPX Research configuration
+  const cpxConfig = isGuest
+    ? createGuestCPXConfig()
+    : createCPXConfig(user?.id || 0, isPremium, isDarkMode);
+
+  // Fetch surveys on component mount
+  useEffect(() => {
+    if (!isGuest && user?.id) {
+      cpxResearchContext.fetchSurveysAndTransactions();
+    }
+  }, [isGuest, user?.id, cpxResearchContext]);
+
+  if (isGuest) {
+    return null; // Don't render for guest users
+  }
+
+  const rootStyles = createSurveyBannerStyles({}, false);
+
+  return (
+    <View style={[rootStyles.rootCpxContainer, { pointerEvents: 'box-none' }]}>
+      <CpxResearch
+        {...cpxConfig}
+        onSurveysUpdate={onSurveysUpdate}
+        onTransactionsUpdate={onTransactionsUpdate}
+        onWebViewWasClosed={onWebViewWasClosed}
+        bindMarkTransactionAsPaid={(fn: any) => {
+          cpxResearchContext.bindMarkTransactionAsPaid(fn);
+        }}
+        bindFetchSurveysAndTransactions={(fn: any) => {
+          cpxResearchContext.bindFetchSurveysAndTransactions(fn);
+        }}
+        bindOpenWebView={(fn: any) => {
+          cpxResearchContext.bindOpenWebView(fn);
+        }}
+      />
+    </View>
+  );
+};
 
 export default SurveyBanner;

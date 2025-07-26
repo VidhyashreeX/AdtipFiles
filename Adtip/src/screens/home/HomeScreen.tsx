@@ -27,7 +27,8 @@ import { InfiniteData } from '@tanstack/react-query';
 import { PlayCircle, Gamepad2, WifiOff, Share2, HandCoins, Dices, Mail, Search, CreditCard } from 'lucide-react-native';
 import PostWithComments from '../../components/home/PostWithComments';
 import { FeedFlatList, useOptimizedRenderItem } from '../../components/common/OptimizedFlatList';
-import SurveyBanner from '../../components/home/SurveyBanner';
+import SurveyBanner, { CPXResearchProvider as CPXResearchComponent } from '../../components/home/SurveyBanner';
+import { CPXResearchProvider } from '../../contexts/CPXResearchContext';
 
 // Enhanced Contexts & Services
 import {useTheme} from '../../contexts/ThemeContext';
@@ -1177,7 +1178,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             <BannerCarousel />
             <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onInstallToEarn={handleInstallToEarn} isLoading={true} />
             <ExternalLinkBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
-            <SurveyBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
+            <SurveyBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} renderCPXAtRoot={true} />
             <View style={styles.skeletonContainer}>
               {Array(6).fill(0).map((_, index) => <PostItemSkeleton key={`skeleton-${index}`} />)}
             </View>
@@ -1213,8 +1214,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   }
 
   return (
-          <ScreenTransition skipAnimation={true}>
+    <CPXResearchProvider>
+      <ScreenTransition skipAnimation={true}>
         <View style={[styles.container, {backgroundColor: colors.background}]}>
+          {/* CPX Research Component at root level for full-screen modal */}
+          <CPXResearchComponent
+            isPremium={isPremium}
+            onRewardEarned={(amount, isPremium) => {
+              // Handle reward earned - could trigger wallet refresh, show notification, etc.
+              console.log('Survey reward earned:', amount, isPremium);
+            }}
+          />
+
           <Header
             title=""
             showLogo={false}
@@ -1247,7 +1258,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
               <BannerCarousel onBannerPress={handleBannerPress} />
               <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onInstallToEarn={handleInstallToEarn} />
               <ExternalLinkBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
-              <SurveyBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
+              <SurveyBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} renderCPXAtRoot={true} />
             </>
           )}
           ListEmptyComponent={renderEmptyState}
@@ -1307,6 +1318,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
       </View>
     </ScreenTransition>
+    </CPXResearchProvider>
   );
 };
 
