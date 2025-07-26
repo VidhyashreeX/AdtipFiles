@@ -3,8 +3,8 @@
  */
 
 // Base URL for API calls
-//export const API_BASE_URL = 'https://api.adtip.in';   // Production URL
-export const API_BASE_URL = 'http://192.168.250.209:7082';   // DEV URL
+export const API_BASE_URL = 'https://api.adtip.in';   // Production URL
+//export const API_BASE_URL = 'http://192.168.250.209:7082';   // DEV URL
 //export const API_BASE_URL = 'http://192.168.0.104:7082';   // DEV URL
 
 // Firebase Cloud Functions URL for call notifications

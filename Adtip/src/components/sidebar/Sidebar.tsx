@@ -43,6 +43,8 @@ interface MenuItemProps {
   icon: string;
   label: string;
   screen: keyof MainNavigatorParamList;
+  customAction?: () => void;
+  uniqueKey?: string;
 }
 
 // Optimized MenuItem component for individual animation
@@ -170,6 +172,7 @@ const Sidebar: React.FC = () => {
       'EarnMoneyCreator': 'EarnMoneyCreator', 'SelectCategory': 'TabHome',
       'TipTubeUpload': 'TabHome', 'TipShortsUpload': 'TipShorts', 'PromotePost': 'TabHome',
       'PlayToEarn': 'PlayToEarn', 'WatchToEarn': 'WatchToEarn', 'AdPassbook': 'AdPassbook',
+      'FollowersFollowing': 'FollowersFollowing',
     };
     return screenMapping[screenName] || 'TabHome';
   }, []);
@@ -263,11 +266,30 @@ const Sidebar: React.FC = () => {
     setShowLoginPrompt(true);
   }, []);
 
+  const navigateToFollowersFollowing = useCallback((initialTab: 'followers' | 'following') => {
+    closeSidebar();
+    setTimeout(() => {
+      try {
+        NavigationService.navigate('Main', {
+          screen: 'FollowersFollowing',
+          params: {
+            userId: user?.id || 0,
+            initialTab: initialTab,
+            userName: user?.name || user?.username || 'User'
+          }
+        } as any);
+      } catch (error) {
+        console.warn('Navigation error:', error);
+        NavigationService.navigate('Main', { screen: 'TabHome' } as any);
+      }
+    }, 100);
+  }, [closeSidebar, user]);
+
   const menuItems: MenuItemProps[] = useMemo(() => [
     {icon: 'home', label: 'Home', screen: 'TabHome'},
     {icon: 'user', label: 'View Profile', screen: 'Profile'},
-    {icon: 'users', label: 'Followers', screen: 'FollowersList'},
-    {icon: 'user-plus', label: 'Following', screen: 'FollowingsList'},
+    {icon: 'users', label: 'Followers', screen: 'FollowersFollowing', customAction: () => navigateToFollowersFollowing('followers'), uniqueKey: 'followers'},
+    {icon: 'user-plus', label: 'Following', screen: 'FollowersFollowing', customAction: () => navigateToFollowersFollowing('following'), uniqueKey: 'following'},
     {icon: 'indian-rupee', label: 'My Earnings', screen: 'Earnings'},
     {icon: 'compass', label: 'Explore', screen: 'Explore'},
     //{icon: 'credit-card', label: 'Wallet', screen: 'Wallet'},
@@ -282,7 +304,7 @@ const Sidebar: React.FC = () => {
     {icon: 'award', label: 'Content Creator Premium', screen: 'ContentCreatorPremium'},
     {icon: 'settings', label: 'Settings', screen: 'Settings'},
 
-  ], []);
+  ], [navigateToFollowersFollowing]);
 
   const handleNavigate = useCallback((screenName: keyof MainNavigatorParamList) => {
     // Check if user is in guest mode and show appropriate login prompts
@@ -294,8 +316,7 @@ const Sidebar: React.FC = () => {
         'PlayToEarn': 'access play to earn games',
         'AdPassbook': 'access your ad passbook',
         'Profile': 'view your profile',
-        'FollowersList': 'view your followers',
-        'FollowingsList': 'view who you follow',
+        'FollowersFollowing': 'view your followers and following',
         'PremiumUser': 'access premium features',
         'ContentCreatorPremium': 'access content creator premium',
         'Settings': 'access settings',
@@ -347,12 +368,6 @@ const Sidebar: React.FC = () => {
         } else if (screenName === 'Profile') {
           // Pass current user's ID for own profile to avoid NaN issue
           NavigationService.navigate('Main', { screen: 'Profile', params: { userId: user?.id } } as any);
-        } else if (screenName === 'FollowersList') {
-          // Navigate to followers list with current user's ID
-          NavigationService.navigate('Main', { screen: 'FollowersList', params: { followers: [], userId: user?.id } } as any);
-        } else if (screenName === 'FollowingsList') {
-          // Navigate to following list with current user's ID
-          NavigationService.navigate('Main', { screen: 'FollowingsList', params: { followings: [], userId: user?.id } } as any);
         } else {
           // Direct navigation for other screens
           NavigationService.navigate('Main', { screen: screenName } as any);
@@ -496,11 +511,11 @@ const Sidebar: React.FC = () => {
             >
               {menuItems.map((item, index) => (
                 <AnimatedMenuItem
-                  key={item.screen}
+                  key={item.uniqueKey || item.screen}
                   item={item}
                   index={index}
                   isActive={activeScreen === item.screen}
-                  onPress={() => handleNavigate(item.screen)}
+                  onPress={() => item.customAction ? item.customAction() : handleNavigate(item.screen)}
                   isSidebarOpen={isSidebarOpen}
                   colors={colors}
                   isDarkMode={isDarkMode}
