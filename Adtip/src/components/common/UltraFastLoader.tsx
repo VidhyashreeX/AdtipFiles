@@ -314,17 +314,17 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
             </>
           ) : shouldShowMainApp ? (
             <>
-              {console.log('[UltraFastLoader] ✅ Rendering MainNavigator for authenticated user')}
+              {__DEV__ && Math.random() < 0.1 && console.log('[UltraFastLoader] ✅ Rendering MainNavigator for authenticated user')}
               <RootStack.Screen name="Main" component={MainNavigator} />
             </>
           ) : shouldShowGuestApp ? (
             <>
-              {console.log('[UltraFastLoader] 👤 Rendering GuestNavigator for guest user')}
+              {__DEV__ && console.log('[UltraFastLoader] 👤 Rendering GuestNavigator for guest user')}
               <RootStack.Screen name="Guest" component={GuestNavigator} />
             </>
           ) : (
             <>
-              {console.log('[UltraFastLoader] 🆕 Rendering AuthNavigator (OnboardingScreen) for new user')}
+              {__DEV__ && console.log('[UltraFastLoader] 🆕 Rendering AuthNavigator (OnboardingScreen) for new user')}
               <RootStack.Screen name="Auth" component={AuthNavigator} />
             </>
           )}

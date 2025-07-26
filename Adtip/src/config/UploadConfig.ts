@@ -23,7 +23,7 @@ export interface UploadSystemConfig {
 // Default configuration - Stream enabled at 100%
 export const DEFAULT_UPLOAD_CONFIG: UploadSystemConfig = {
   useStreamUploads: true, // Stream enabled
-  streamUploadPercentage: 100, // 100% Stream uploads
+  streamUploadPercentage: 0, // 100% Stream uploads
   enableR2Fallback: true, // Always maintain R2 fallback
 
   preferStreamForTipShorts: true, // TipShorts benefit most from Stream (mobile data savings)
@@ -61,28 +61,50 @@ export const UploadConfigManager = {
    * Check if Stream uploads should be used for a specific content type
    */
   shouldUseStreamUpload(contentType: 'tipshorts' | 'tiptube' | 'campaign'): boolean {
+    console.log(`[UploadConfig] Checking Stream upload eligibility for ${contentType}`);
+    console.log(`[UploadConfig] Current config:`, {
+      useStreamUploads: uploadConfig.useStreamUploads,
+      streamUploadPercentage: uploadConfig.streamUploadPercentage,
+      preferStreamForTipShorts: uploadConfig.preferStreamForTipShorts,
+      preferStreamForTipTube: uploadConfig.preferStreamForTipTube,
+      preferStreamForCampaigns: uploadConfig.preferStreamForCampaigns
+    });
+
     // If Stream uploads are disabled globally, use R2
     if (!uploadConfig.useStreamUploads) {
+      console.log(`[UploadConfig] Stream uploads disabled globally, using R2`);
       return false;
     }
 
     // Check percentage-based rollout
     const randomPercentage = Math.random() * 100;
+    console.log(`[UploadConfig] Random percentage: ${randomPercentage}, threshold: ${uploadConfig.streamUploadPercentage}`);
+
     if (randomPercentage > uploadConfig.streamUploadPercentage) {
+      console.log(`[UploadConfig] Random percentage exceeds threshold, using R2`);
       return false;
     }
 
     // Check content-specific preferences
+    let contentPreference = false;
     switch (contentType) {
       case 'tipshorts':
-        return uploadConfig.preferStreamForTipShorts;
+        contentPreference = uploadConfig.preferStreamForTipShorts;
+        break;
       case 'tiptube':
-        return uploadConfig.preferStreamForTipTube;
+        contentPreference = uploadConfig.preferStreamForTipTube;
+        break;
       case 'campaign':
-        return uploadConfig.preferStreamForCampaigns;
+        contentPreference = uploadConfig.preferStreamForCampaigns;
+        break;
       default:
-        return false;
+        contentPreference = false;
     }
+
+    console.log(`[UploadConfig] Content preference for ${contentType}: ${contentPreference}`);
+    console.log(`[UploadConfig] Final decision for ${contentType}: ${contentPreference ? 'Stream' : 'R2'}`);
+
+    return contentPreference;
   },
 
   /**

@@ -133,7 +133,17 @@ export class SyncService {
       const sentMessages = await QueryHelpers.getMessagesByStatus('sent');
 
       // Filter messages that don't have external_id (not synced to backend)
-      const allPendingMessages = [...pendingMessages, ...sentMessages].filter((msg: any) =>
+      const allPendingMessages = [...pendingMessages, ...sentMessages].filter((msg: {
+        _raw: { external_id?: string };
+        tempId?: string;
+        id: string;
+        chatId: string;
+        recipientId: string;
+        content: string;
+        messageType: string;
+        createdAt: Date;
+        replyTo?: string;
+      }) =>
         !msg._raw.external_id
       );
 
@@ -268,8 +278,16 @@ export class SyncService {
       // Ensure user chat exists
       await QueryHelpers.getOrCreateUserChat(messageData.senderId, currentUserId);
 
-      // Create new message with user-based fields
-      await this.chatDb.createMessage({
+      // Check for duplicate message before creating
+      const duplicateMessage = await QueryHelpers.getMessageById(messageData.id);
+      if (duplicateMessage) {
+        Logger.info(`[SyncService] Message already exists, skipping: ${messageData.id}`);
+        return true; // Return success since message exists
+      }
+
+      // Create new message with user-based fields and proper timestamp
+      const createdAt = new Date(messageData.timestamp);
+      await this.chatDb.createMessageWithTimestamp({
         id: messageData.id,
         chatId: chatId,
         senderId: messageData.senderId,
@@ -278,7 +296,7 @@ export class SyncService {
         content: messageData.content,
         messageType: messageData.messageType as any,
         status: 'delivered'
-      });
+      }, createdAt);
 
       // Update user chat with new message
       try {
@@ -390,7 +408,21 @@ export class SyncService {
   /**
    * Batch sync messages to backend
    */
-  private async batchSyncToBackend(messages: any[]): Promise<any> {
+  private async batchSyncToBackend(messages: Array<{
+    tempId: string;
+    chatId: string;
+    recipientId: string;
+    content: string;
+    messageType: string;
+    timestamp: string;
+    replyToMessageId?: string;
+  }>): Promise<{
+    syncResults?: Array<{
+      status: string;
+      tempId?: string;
+      serverId?: string;
+    }>;
+  }> {
     try {
       const authToken = await AsyncStorage.getItem('accessToken');
       if (!authToken) {
@@ -430,7 +462,7 @@ export class SyncService {
       if (messages.length > 0) {
         const message = messages[0];
         await this.chatDb.database.write(async () => {
-          await message.update((msg: any) => {
+          await message.update((msg: { _raw: { external_id: string } }) => {
             msg._raw.external_id = serverId;
           });
         });
@@ -444,7 +476,15 @@ export class SyncService {
   /**
    * Pull messages from backend for a chat using incremental sync
    */
-  async pullMessagesFromBackend(chatId: string, _page: number = 1, sinceTimestamp?: Date): Promise<any[]> {
+  async pullMessagesFromBackend(chatId: string, _page: number = 1, sinceTimestamp?: Date): Promise<Array<{
+    id: string;
+    content: string;
+    senderId: string;
+    recipientId: string;
+    messageType: string;
+    createdAt: Date;
+    tempId?: string;
+  }>> {
     try {
       Logger.info(`[SyncService] Pulling messages from backend for chat: ${chatId}`, {
         sinceTimestamp: sinceTimestamp?.toISOString(),
@@ -522,10 +562,42 @@ export class SyncService {
   /**
    * Create local message from backend data
    */
-  private async createMessageFromBackend(backendMessage: any, chatId: string): Promise<any> {
+  private async createMessageFromBackend(backendMessage: {
+    message_id?: string;
+    id?: string;
+    message?: string;
+    content?: string;
+    sender?: string;
+    sender_id?: string;
+    receiver?: string;
+    recipient_id?: string;
+    senderName?: string;
+    sender_name?: string;
+    receiverName?: string;
+    senderNameProfileImage?: string;
+    sender_avatar?: string;
+    createddate: string;
+    is_seen?: boolean;
+    is_like?: boolean;
+    parent_id?: string;
+    message_type?: string;
+    replyTo?: string;
+    temp_id?: string;
+  }, chatId: string): Promise<{
+    id: string;
+    content: string;
+    senderId: string;
+    recipientId: string;
+    messageType: string;
+    createdAt: Date;
+    tempId?: string;
+  }> {
     try {
       // Backend message format from /api/getmessage endpoint:
       // { message_id, message, sender, receiver, senderName, receiverName, createddate, is_seen, is_like, parent_id }
+
+      // Parse the original creation timestamp from backend
+      const createdAt = backendMessage.createddate ? new Date(backendMessage.createddate) : new Date();
 
       const messageData = {
         id: String(backendMessage.message_id || backendMessage.id),
@@ -534,16 +606,20 @@ export class SyncService {
         recipientId: String(backendMessage.receiver || backendMessage.recipient_id),
         senderName: backendMessage.senderName || backendMessage.sender_name || 'Unknown',
         senderAvatar: backendMessage.senderNameProfileImage || backendMessage.sender_avatar,
-        content: backendMessage.message || backendMessage.content,
-        messageType: backendMessage.message_type || 'text',
+        content: backendMessage.message || backendMessage.content || '',
+        messageType: (backendMessage.message_type || 'text') as 'text' | 'image' | 'video' | 'audio' | 'file',
         status: (backendMessage.is_seen ? 'read' : 'sent') as 'read' | 'sent',
         tempId: backendMessage.temp_id,
-        replyTo: backendMessage.parent_id ? String(backendMessage.parent_id) : undefined,
-        createdAt: backendMessage.createddate ? new Date(backendMessage.createddate) : new Date()
+        replyTo: backendMessage.parent_id ? String(backendMessage.parent_id) : undefined
       };
 
-      const message = await this.chatDb.createMessage(messageData);
-      Logger.debug('[SyncService] Created local message from backend data:', message.id);
+      // Use createMessageWithTimestamp to preserve the original backend timestamp
+      const message = await this.chatDb.createMessageWithTimestamp(messageData, createdAt);
+      Logger.debug('[SyncService] Created local message from backend data with original timestamp:', {
+        messageId: message.id,
+        originalTimestamp: createdAt.toISOString(),
+        backendTimestamp: backendMessage.createddate
+      });
 
       return message;
     } catch (error) {
@@ -555,28 +631,48 @@ export class SyncService {
   /**
    * Sync messages for a specific conversation using incremental sync (used when opening FCMChatScreen)
    */
-  async syncConversationMessages(chatId: string): Promise<any[]> {
+  async syncConversationMessages(chatId: string): Promise<Array<{
+    id: string;
+    content: string;
+    senderId: string;
+    recipientId: string;
+    messageType: string;
+    createdAt: Date;
+    tempId?: string;
+  }>> {
     try {
-      Logger.info(`[SyncService] Syncing messages for conversation: ${chatId}`);
+      Logger.info(`[SyncService] 🔄 Starting incremental sync for conversation: ${chatId}`);
 
       // Get latest message timestamp for incremental sync
       const latestTimestamp = await QueryHelpers.getLatestMessageTimestamp(chatId);
 
       if (latestTimestamp) {
-        Logger.info(`[SyncService] Using incremental sync from: ${latestTimestamp.toISOString()}`);
+        Logger.info(`[SyncService] 📅 Using incremental sync from: ${latestTimestamp.toISOString()}`);
+
+        // Add a small buffer to avoid missing messages due to clock differences
+        const bufferTimestamp = new Date(latestTimestamp.getTime() - 1000); // 1 second buffer
+        Logger.info(`[SyncService] 📅 Using buffer timestamp: ${bufferTimestamp.toISOString()}`);
+
+        // Pull only new messages since the latest timestamp
+        const newMessages = await this.pullMessagesFromBackend(chatId, 1, bufferTimestamp);
+
+        Logger.info(`[SyncService] ✅ Incremental sync completed: ${newMessages.length} new messages for ${chatId}`);
+        return newMessages;
       } else {
-        Logger.info(`[SyncService] No local messages found, performing full sync`);
+        Logger.info(`[SyncService] 📭 No local messages found, performing initial sync (limited to recent messages)`);
+
+        // For initial sync, only get recent messages to avoid overwhelming the UI
+        const recentMessages = await this.pullMessagesFromBackend(chatId, 1, undefined);
+
+        Logger.info(`[SyncService] ✅ Initial sync completed: ${recentMessages.length} messages for ${chatId}`);
+        return recentMessages;
       }
 
-      // Pull messages from backend for this specific conversation with incremental sync
-      const newMessages = await this.pullMessagesFromBackend(chatId, 1, latestTimestamp || undefined);
-
-      Logger.info(`[SyncService] Synced ${newMessages.length} new messages for conversation: ${chatId}`);
-      return newMessages;
-
     } catch (error) {
-      Logger.error(`[SyncService] Failed to sync messages for conversation ${chatId}:`, error);
-      return [];
+      Logger.error(`[SyncService] ❌ Failed to sync messages for conversation ${chatId}:`, error);
+
+      // Re-throw with more context for retry logic
+      throw new Error(`Incremental sync failed for ${chatId}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -631,7 +727,7 @@ export class SyncService {
   /**
    * Export data for backup
    */
-  async exportData(): Promise<any> {
+  async exportData(): Promise<unknown> {
     try {
       // TODO: Implement data export functionality
       // This would export all chat data in a portable format
@@ -647,7 +743,7 @@ export class SyncService {
   /**
    * Import data from backup
    */
-  async importData(_data: any): Promise<boolean> {
+  async importData(_data: unknown): Promise<boolean> {
     try {
       // TODO: Implement data import functionality
       // This would import chat data from a backup

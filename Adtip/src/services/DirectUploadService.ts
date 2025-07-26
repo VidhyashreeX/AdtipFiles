@@ -63,11 +63,22 @@ class DirectUploadService {
    */
   private async getAuthToken(): Promise<string | null> {
     try {
-      // Try accessToken first, then fallback to @auth_token (same as ApiService)
+      // Use exact same logic as ApiService for consistency
       let token = await AsyncStorage.getItem('accessToken');
+      console.log('[DirectUpload] accessToken from AsyncStorage:', token ? `${token.substring(0, 20)}...` : 'null');
+
       if (!token) {
         token = await AsyncStorage.getItem('@auth_token');
+        console.log('[DirectUpload] @auth_token from AsyncStorage:', token ? `${token.substring(0, 20)}...` : 'null');
       }
+
+      console.log('[DirectUpload] Final token to use:', token ? `${token.substring(0, 20)}...` : 'null');
+
+      // Additional debugging: check all auth-related keys
+      const allKeys = await AsyncStorage.getAllKeys();
+      const authKeys = allKeys.filter(key => key.includes('token') || key.includes('auth') || key.includes('user'));
+      console.log('[DirectUpload] All auth-related keys in AsyncStorage:', authKeys);
+
       return token;
     } catch (error) {
       console.error('[DirectUpload] Error getting auth token:', error);
@@ -135,6 +146,31 @@ class DirectUploadService {
 
       console.log('[DirectUpload] Creating TipTube upload URL for:', userInfo);
       console.log('[DirectUpload] API URL:', `${this.baseUrl}/api/direct-upload/tiptube`);
+      console.log('[DirectUpload] Sending request with headers:', {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token.substring(0, 20)}...`,
+      });
+      console.log('[DirectUpload] Request body:', userInfo);
+
+      // Test token with a simple endpoint first
+      try {
+        console.log('[DirectUpload] Testing token with simple endpoint...');
+        const testResponse = await fetch(`${this.baseUrl}/api/getcategories`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        console.log('[DirectUpload] Token test response status:', testResponse.status);
+        if (!testResponse.ok) {
+          const testError = await testResponse.text();
+          console.log('[DirectUpload] Token test failed:', testError);
+        } else {
+          console.log('[DirectUpload] Token test successful - token is valid');
+        }
+      } catch (testError) {
+        console.error('[DirectUpload] Token test error:', testError);
+      }
 
       const response = await fetch(`${this.baseUrl}/api/direct-upload/tiptube`, {
         method: 'POST',
@@ -308,23 +344,47 @@ class DirectUploadService {
     onProgress?: (stage: string, progress?: number) => void
   ): Promise<{ success: boolean; videoId?: string; error?: string }> {
     try {
+      console.log('[DirectUpload] Starting complete upload workflow');
+      console.log('[DirectUpload] Video metadata:', videoMetadata);
+      console.log('[DirectUpload] User info:', userInfo);
+
       // Step 1: Create upload URL
       onProgress?.('Creating upload URL...');
-      const uploadResponse = videoMetadata.isShot 
+      console.log('[DirectUpload] Step 1: Creating upload URL...');
+
+      const uploadResponse = videoMetadata.isShot
         ? await this.createTipShortsUploadUrl(userInfo)
         : await this.createTipTubeUploadUrl(userInfo);
 
+      console.log('[DirectUpload] Upload URL creation response:', {
+        success: uploadResponse.success,
+        error: uploadResponse.error,
+        hasData: !!uploadResponse.data
+      });
+
       if (!uploadResponse.success) {
+        console.error('[DirectUpload] Failed to create upload URL:', uploadResponse.error);
         return { success: false, error: uploadResponse.error };
       }
 
       const { uploadURL, videoId } = uploadResponse.data!;
+      console.log('[DirectUpload] Upload URL and video ID obtained:', {
+        videoId,
+        uploadURL: uploadURL?.substring(0, 50) + '...'
+      });
 
       // Step 2: Pre-register video
       onProgress?.('Registering video...');
+      console.log('[DirectUpload] Step 2: Pre-registering video in database...');
+
       const registrationResponse = await this.preRegisterVideo({
         streamVideoId: videoId,
         ...videoMetadata,
+      });
+
+      console.log('[DirectUpload] Video registration response:', {
+        success: registrationResponse.success,
+        error: registrationResponse.error
       });
 
       if (!registrationResponse.success) {
@@ -333,17 +393,29 @@ class DirectUploadService {
 
       // Step 3: Upload video file
       onProgress?.('Uploading video...', 0);
+      console.log('[DirectUpload] Step 3: Uploading video file to Cloudflare Stream...');
+
       const uploadResult = await this.uploadVideoFile(
         uploadURL,
         videoFile,
-        (progress) => onProgress?.('Uploading video...', progress)
+        (progress) => {
+          console.log(`[DirectUpload] Upload progress: ${progress}%`);
+          onProgress?.('Uploading video...', progress);
+        }
       );
 
+      console.log('[DirectUpload] Video file upload result:', {
+        success: uploadResult.success,
+        error: uploadResult.error
+      });
+
       if (!uploadResult.success) {
+        console.error('[DirectUpload] Failed to upload video file:', uploadResult.error);
         return { success: false, error: uploadResult.error };
       }
 
       onProgress?.('Upload complete!', 100);
+      console.log('[DirectUpload] Complete upload workflow successful!', { videoId });
       return { success: true, videoId };
 
     } catch (error) {

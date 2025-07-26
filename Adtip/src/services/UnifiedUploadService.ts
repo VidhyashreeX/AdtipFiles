@@ -5,6 +5,7 @@
 import { UploadConfigManager, ContentType, UploadMethod } from '../config/UploadConfig';
 import CloudflareUploadService from './CloudflareUploadService';
 import DirectUploadService from './DirectUploadService';
+import ApiService from './ApiService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface UnifiedUploadProgress {
@@ -77,15 +78,25 @@ class UnifiedUploadService {
    */
   async uploadTipShorts(
     uploadData: VideoUploadData,
+    userInfo?: { userId: string; userName: string; channelId: string },
     onProgress?: (progress: UnifiedUploadProgress) => void
   ): Promise<UnifiedUploadResult> {
     const contentType: ContentType = 'tipshorts';
+    const config = UploadConfigManager.getConfig();
     const method = UploadConfigManager.getUploadMethod(contentType);
-    
+
+    console.log('[UnifiedUpload] TipShorts upload starting with config:', {
+      useStreamUploads: config.useStreamUploads,
+      streamUploadPercentage: config.streamUploadPercentage,
+      preferStreamForTipShorts: config.preferStreamForTipShorts,
+      enableR2Fallback: config.enableR2Fallback,
+      selectedMethod: method
+    });
+
     UploadConfigManager.logUploadDecision(
-      contentType, 
-      method, 
-      `Config: ${UploadConfigManager.getConfig().streamUploadPercentage}% rollout`
+      contentType,
+      method,
+      `Config: ${config.streamUploadPercentage}% rollout`
     );
 
     onProgress?.({
@@ -95,19 +106,33 @@ class UnifiedUploadService {
     });
 
     if (method === 'stream') {
-      const streamResult = await this.uploadWithStream(uploadData, onProgress);
-      
+      console.log('[UnifiedUpload] Attempting Stream upload for TipShorts');
+      const streamResult = await this.uploadWithStream(uploadData, userInfo, onProgress);
+
+      console.log('[UnifiedUpload] Stream upload result:', {
+        success: streamResult.success,
+        error: streamResult.error,
+        method: streamResult.method
+      });
+
       // If Stream fails and fallback is enabled, try R2
       if (!streamResult.success && UploadConfigManager.shouldUseR2Fallback()) {
         console.log('[UnifiedUpload] Stream upload failed, falling back to R2');
+        console.log('[UnifiedUpload] Stream failure details:', streamResult.error);
         UploadConfigManager.logUploadDecision(contentType, 'r2', 'Stream fallback');
-        
+
         const r2Result = await this.uploadWithR2(uploadData, onProgress);
+        console.log('[UnifiedUpload] R2 fallback result:', {
+          success: r2Result.success,
+          error: r2Result.error,
+          method: r2Result.method
+        });
         return { ...r2Result, fallbackUsed: true };
       }
-      
+
       return streamResult;
     } else {
+      console.log('[UnifiedUpload] Using R2 upload for TipShorts (method selected by config)');
       return await this.uploadWithR2(uploadData, onProgress);
     }
   }
@@ -117,15 +142,25 @@ class UnifiedUploadService {
    */
   async uploadTipTube(
     uploadData: VideoUploadData,
+    userInfo?: { userId: string; userName: string; channelId: string },
     onProgress?: (progress: UnifiedUploadProgress) => void
   ): Promise<UnifiedUploadResult> {
     const contentType: ContentType = 'tiptube';
+    const config = UploadConfigManager.getConfig();
     const method = UploadConfigManager.getUploadMethod(contentType);
-    
+
+    console.log('[UnifiedUpload] TipTube upload starting with config:', {
+      useStreamUploads: config.useStreamUploads,
+      streamUploadPercentage: config.streamUploadPercentage,
+      preferStreamForTipTube: config.preferStreamForTipTube,
+      enableR2Fallback: config.enableR2Fallback,
+      selectedMethod: method
+    });
+
     UploadConfigManager.logUploadDecision(
-      contentType, 
-      method, 
-      `Config: ${UploadConfigManager.getConfig().streamUploadPercentage}% rollout`
+      contentType,
+      method,
+      `Config: ${config.streamUploadPercentage}% rollout`
     );
 
     onProgress?.({
@@ -135,19 +170,33 @@ class UnifiedUploadService {
     });
 
     if (method === 'stream') {
-      const streamResult = await this.uploadWithStream(uploadData, onProgress);
-      
+      console.log('[UnifiedUpload] Attempting Stream upload for TipTube');
+      const streamResult = await this.uploadWithStream(uploadData, userInfo, onProgress);
+
+      console.log('[UnifiedUpload] Stream upload result:', {
+        success: streamResult.success,
+        error: streamResult.error,
+        method: streamResult.method
+      });
+
       // If Stream fails and fallback is enabled, try R2
       if (!streamResult.success && UploadConfigManager.shouldUseR2Fallback()) {
         console.log('[UnifiedUpload] Stream upload failed, falling back to R2');
+        console.log('[UnifiedUpload] Stream failure details:', streamResult.error);
         UploadConfigManager.logUploadDecision(contentType, 'r2', 'Stream fallback');
-        
+
         const r2Result = await this.uploadWithR2(uploadData, onProgress);
+        console.log('[UnifiedUpload] R2 fallback result:', {
+          success: r2Result.success,
+          error: r2Result.error,
+          method: r2Result.method
+        });
         return { ...r2Result, fallbackUsed: true };
       }
-      
+
       return streamResult;
     } else {
+      console.log('[UnifiedUpload] Using R2 upload for TipTube (method selected by config)');
       return await this.uploadWithR2(uploadData, onProgress);
     }
   }
@@ -195,7 +244,8 @@ class UnifiedUploadService {
         },
       };
 
-      const streamResult = await this.uploadWithStream(uploadData, onProgress);
+      const userInfo = { userId: userId.toString(), userName: '', channelId: userId.toString() };
+      const streamResult = await this.uploadWithStream(uploadData, userInfo, onProgress);
       
       // If Stream fails and fallback is enabled, try R2
       if (!streamResult.success && UploadConfigManager.shouldUseR2Fallback()) {
@@ -216,13 +266,21 @@ class UnifiedUploadService {
    */
   private async uploadWithStream(
     uploadData: VideoUploadData,
+    userInfo?: { userId: string; userName: string; channelId: string },
     onProgress?: (progress: UnifiedUploadProgress) => void
   ): Promise<UnifiedUploadResult> {
     try {
       console.log('[UnifiedUpload] Starting Stream upload');
-      
-      const userInfo = await this.getUserInfo();
+      console.log('[UnifiedUpload] Upload data:', {
+        videoUri: uploadData.videoUri?.substring(0, 50) + '...',
+        thumbnailUri: uploadData.thumbnailUri?.substring(0, 50) + '...',
+        metadata: uploadData.metadata
+      });
+
+      console.log('[UnifiedUpload] User info provided:', userInfo);
+
       if (!userInfo) {
+        console.error('[UnifiedUpload] No user info provided for Stream upload');
         return { success: false, method: 'stream', error: 'User authentication required' };
       }
 
@@ -232,11 +290,41 @@ class UnifiedUploadService {
         name: `${uploadData.metadata.name.replace(/\s+/g, '_')}_${Date.now()}.mp4`,
       };
 
+      console.log('[UnifiedUpload] Video file prepared:', {
+        uri: videoFile.uri?.substring(0, 50) + '...',
+        type: videoFile.type,
+        name: videoFile.name
+      });
+
+      console.log('[UnifiedUpload] Starting DirectUploadService.completeUploadWorkflow...');
+
+      // Test authentication with ApiService first
+      try {
+        console.log('[UnifiedUpload] Testing authentication with ApiService...');
+        const testResponse = await ApiService.post('/api/direct-upload/tiptube', userInfo);
+        console.log('[UnifiedUpload] ApiService auth test result:', testResponse);
+      } catch (authTestError) {
+        console.error('[UnifiedUpload] ApiService auth test failed:', authTestError);
+      }
+
+      // Transform metadata to match DirectUploadService expectations
+      const transformedMetadata = {
+        name: uploadData.metadata.name,
+        description: uploadData.metadata.description,
+        categoryId: uploadData.metadata.categoryId,
+        createdBy: parseInt(userInfo.userId),
+        videoChannel: userInfo.channelId,
+        isShot: uploadData.metadata.isShot,
+      };
+
+      console.log('[UnifiedUpload] Transformed metadata:', transformedMetadata);
+
       const result = await DirectUploadService.completeUploadWorkflow(
         videoFile,
-        uploadData.metadata,
+        transformedMetadata,
         userInfo,
         (stage, progress) => {
+          console.log(`[UnifiedUpload] Stream upload progress: ${stage} - ${progress}%`);
           onProgress?.({
             stage,
             percentage: progress || 0,
@@ -244,6 +332,12 @@ class UnifiedUploadService {
           });
         }
       );
+
+      console.log('[UnifiedUpload] DirectUploadService.completeUploadWorkflow completed:', {
+        success: result.success,
+        videoId: result.videoId,
+        error: result.error
+      });
 
       if (result.success) {
         console.log('[UnifiedUpload] Stream upload successful:', result.videoId);
@@ -262,7 +356,11 @@ class UnifiedUploadService {
       }
     } catch (error) {
       console.error('[UnifiedUpload] Stream upload error:', error);
-      return { success: false, method: 'stream', error: error.message };
+      if (error instanceof Error) {
+        console.error('[UnifiedUpload] Error stack:', error.stack);
+        return { success: false, method: 'stream', error: error.message };
+      }
+      return { success: false, method: 'stream', error: 'Unknown error occurred' };
     }
   }
 
@@ -296,8 +394,6 @@ class UnifiedUploadService {
             stage: 'Uploading to R2...',
             percentage: progress.percentage,
             method: 'r2',
-            bytesUploaded: progress.bytesUploaded,
-            totalBytes: progress.totalBytes,
           });
         }
       );
@@ -317,7 +413,7 @@ class UnifiedUploadService {
       }
     } catch (error) {
       console.error('[UnifiedUpload] R2 upload error:', error);
-      return { success: false, method: 'r2', error: error.message };
+      return { success: false, method: 'r2', error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 
@@ -354,7 +450,7 @@ class UnifiedUploadService {
         return { success: false, method: 'r2', error: result.error };
       }
     } catch (error) {
-      return { success: false, method: 'r2', error: error.message };
+      return { success: false, method: 'r2', error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 
@@ -391,7 +487,7 @@ class UnifiedUploadService {
         return { success: false, method: 'r2', error: result.error };
       }
     } catch (error) {
-      return { success: false, method: 'r2', error: error.message };
+      return { success: false, method: 'r2', error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 }

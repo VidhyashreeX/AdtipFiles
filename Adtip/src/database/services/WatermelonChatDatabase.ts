@@ -141,6 +141,45 @@ export class WatermelonChatDatabase {
     });
   }
 
+  /**
+   * Create message with specific timestamp (for backend sync)
+   */
+  async createMessageWithTimestamp(messageData: CreateMessageData, createdAt: Date): Promise<Message> {
+    return await database.write(async () => {
+      const message = await messagesCollection.create(msg => {
+        msg._raw.id = messageData.id;
+        msg.chatId = messageData.chatId;
+        msg.senderId = messageData.senderId;
+        msg.recipientId = messageData.recipientId;
+        msg.senderName = messageData.senderName;
+        msg.senderAvatar = messageData.senderAvatar;
+        msg.content = messageData.content;
+        msg.messageType = messageData.messageType;
+        msg.status = messageData.status;
+        msg.tempId = messageData.tempId;
+        msg.replyTo = messageData.replyTo;
+        // Set the specific timestamp for backend-synced messages
+        msg._raw.created_at = createdAt.getTime();
+        msg._raw.updated_at = createdAt.getTime();
+      });
+
+      // Update user chat with new message (using internal method to avoid nested transactions)
+      try {
+        const userChat = await userChatsCollection
+          .query(Q.where('chat_id', messageData.chatId))
+          .fetch();
+
+        if (userChat.length > 0) {
+          await userChat[0].updateLastMessageInternal(messageData.id, messageData.content, createdAt);
+        }
+      } catch (error) {
+        console.warn('[WatermelonChatDatabase] Failed to update user chat:', error);
+      }
+
+      return message;
+    });
+  }
+
   async getMessageById(messageId: string): Promise<Message | null> {
     try {
       return await messagesCollection.find(messageId);

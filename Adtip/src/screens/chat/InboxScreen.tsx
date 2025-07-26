@@ -28,19 +28,21 @@ import { useAuth } from '../../contexts/AuthContext';
 import Header from '../../components/common/Header';
 import { MainNavigatorParamList } from '../../types/navigation';
 import ApiService from '../../services/ApiService';
+import Logger from '../../utils/LogUtils';
 
 type InboxScreenNavigationProp = StackNavigationProp<MainNavigatorParamList, 'Inbox'>;
 
-interface InboxMessage {
+interface InboxConversation {
   id: number;
   chatId: string;
   senderId: number;
   senderName: string;
   senderAvatar?: string;
-  content: string;
-  messageType: string;
-  createdAt: string;
-  readStatus: 'read' | 'unread' | 'delivered' | 'sent';
+  latestContent: string;
+  latestMessageType: string;
+  latestCreatedAt: string;
+  totalMessages: number;
+  unreadCount: number;
   preview: string;
 }
 
@@ -52,7 +54,7 @@ const InboxScreen: React.FC = () => {
   const { user } = useAuth();
 
   // State management
-  const [messages, setMessages] = useState<InboxMessage[]>([]);
+  const [conversations, setConversations] = useState<InboxConversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -61,8 +63,25 @@ const InboxScreen: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(false);
 
-  // Load inbox messages
-  const loadInboxMessages = useCallback(async (page = 1, isRefresh = false) => {
+  // Generate consistent avatar colors based on name
+  const getAvatarColor = (name: string): string => {
+    const avatarColors = [
+      '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
+      '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9',
+      '#F8C471', '#82E0AA', '#F1948A', '#85C1E9', '#D7BDE2'
+    ];
+
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+
+    const index = Math.abs(hash) % avatarColors.length;
+    return avatarColors[index];
+  };
+
+  // Load inbox conversations
+  const loadInboxConversations = useCallback(async (page = 1, isRefresh = false) => {
     if (!user?.id) return;
 
     try {
@@ -75,30 +94,29 @@ const InboxScreen: React.FC = () => {
         setLoading(true);
       }
 
-      const response = await ApiService.get(`/api/inbox/${user.id}`, {
+      const response = await ApiService.get(`/api/inbox/conversations/${user.id}`, {
         params: {
           page,
           limit: 20,
           filter,
-          sortBy,
           sortOrder: 'desc'
         }
       });
 
-      const { messages: newMessages, pagination } = response.data;
+      const { conversations: newConversations, pagination } = response.data;
 
       if (isRefresh || page === 1) {
-        setMessages(newMessages);
+        setConversations(newConversations);
       } else {
-        setMessages(prev => [...prev, ...newMessages]);
+        setConversations(prev => [...prev, ...newConversations]);
       }
 
       setCurrentPage(pagination.currentPage);
       setHasNextPage(pagination.hasNextPage);
 
     } catch (error) {
-      console.error('[InboxScreen] Error loading messages:', error);
-      Alert.alert('Error', 'Failed to load inbox messages. Please try again.');
+      Logger.error('[InboxScreen] Error loading conversations:', error);
+      Alert.alert('Error', 'Failed to load inbox conversations. Please try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -110,17 +128,17 @@ const InboxScreen: React.FC = () => {
   const markMessageAsRead = useCallback(async (messageId: number) => {
     try {
       await ApiService.put(`/api/inbox/mark-read/${messageId}`);
-      
-      // Update local state
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === messageId 
-            ? { ...msg, readStatus: 'read' as const }
-            : msg
+
+      // Update local state - reduce unread count for the conversation
+      setConversations(prev =>
+        prev.map(conv =>
+          conv.id === messageId
+            ? { ...conv, unreadCount: Math.max(0, conv.unreadCount - 1) }
+            : conv
         )
       );
     } catch (error) {
-      console.error('[InboxScreen] Error marking message as read:', error);
+      Logger.error('[InboxScreen] Error marking message as read:', error);
     }
   }, []);
 
@@ -132,43 +150,43 @@ const InboxScreen: React.FC = () => {
     });
   }, [navigation]);
 
-  const navigateToChat = useCallback((message: InboxMessage) => {
-    // Mark as read if unread
-    if (message.readStatus === 'unread') {
-      markMessageAsRead(message.id);
+  const navigateToChat = useCallback((conversation: InboxConversation) => {
+    // Mark as read if has unread messages
+    if (conversation.unreadCount > 0) {
+      markMessageAsRead(conversation.id);
     }
 
     // Navigate to FCMChatScreen
     navigation.navigate('FCMChat', {
-      participantId: message.senderId.toString(),
-      participantName: message.senderName,
+      participantId: conversation.senderId.toString(),
+      participantName: conversation.senderName,
     });
   }, [navigation, markMessageAsRead]);
 
-  // Use messages directly without search filtering
-  const filteredMessages = messages;
+  // Use conversations directly without search filtering
+  const filteredConversations = conversations;
 
-  // Load more messages
-  const loadMoreMessages = useCallback(() => {
+  // Load more conversations
+  const loadMoreConversations = useCallback(() => {
     if (!loadingMore && hasNextPage) {
-      loadInboxMessages(currentPage + 1);
+      loadInboxConversations(currentPage + 1);
     }
-  }, [loadingMore, hasNextPage, currentPage, loadInboxMessages]);
+  }, [loadingMore, hasNextPage, currentPage, loadInboxConversations]);
 
-  // Refresh messages
+  // Refresh conversations
   const onRefresh = useCallback(() => {
-    loadInboxMessages(1, true);
-  }, [loadInboxMessages]);
+    loadInboxConversations(1, true);
+  }, [loadInboxConversations]);
 
   // Initial load and filter changes
   useEffect(() => {
-    loadInboxMessages(1);
+    loadInboxConversations(1);
   }, [filter, sortBy]);
 
   // Focus effect to refresh when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      loadInboxMessages(1, true);
+      loadInboxConversations(1, true);
     }, [])
   );
 
@@ -189,16 +207,16 @@ const InboxScreen: React.FC = () => {
     }
   };
 
-  // Render message item
-  const renderMessageItem = ({ item }: { item: InboxMessage }) => {
-    const isUnread = item.readStatus === 'unread';
-    
+  // Render conversation item
+  const renderConversationItem = ({ item }: { item: InboxConversation }) => {
+    const hasUnread = item.unreadCount > 0;
+
     return (
       <TouchableOpacity
         style={[
-          styles.messageItem,
+          styles.conversationItem,
           {
-            backgroundColor: isUnread 
+            backgroundColor: hasUnread
               ? colors.background === '#000000' ? '#1A1A1A' : '#F0F8FF'
               : colors.background,
             borderBottomColor: colors.border,
@@ -210,70 +228,96 @@ const InboxScreen: React.FC = () => {
         {/* Sender Avatar */}
         <View style={styles.avatarContainer}>
           {item.senderAvatar ? (
-            <Image 
-              source={{ uri: item.senderAvatar }} 
+            <Image
+              source={{ uri: item.senderAvatar }}
               style={styles.avatar}
             />
           ) : (
-            <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
+            <View style={[styles.avatarPlaceholder, { backgroundColor: getAvatarColor(item.senderName) }]}>
               <Text style={styles.avatarText}>
                 {item.senderName.charAt(0).toUpperCase()}
               </Text>
             </View>
           )}
-          {isUnread && (
+          {hasUnread && (
             <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
           )}
         </View>
 
-        {/* Message Content */}
-        <View style={styles.messageContent}>
-          <View style={styles.messageHeader}>
-            <Text 
+        {/* Conversation Content */}
+        <View style={styles.conversationContent}>
+          <View style={styles.conversationHeader}>
+            <Text
               style={[
-                styles.senderName, 
-                { 
+                styles.senderName,
+                {
                   color: colors.text.primary,
-                  fontWeight: isUnread ? '600' : '500'
+                  fontWeight: hasUnread ? '600' : '500'
                 }
               ]}
               numberOfLines={1}
             >
               {item.senderName}
             </Text>
-            <Text style={[styles.timestamp, { color: colors.text.secondary }]}>
-              {formatTimestamp(item.createdAt)}
-            </Text>
+            <View style={styles.headerRight}>
+              <Text style={[styles.timestamp, { color: colors.text.secondary }]}>
+                {formatTimestamp(item.latestCreatedAt)}
+              </Text>
+              <Icon name="chevron-right" size={16} color={colors.text.secondary} />
+            </View>
           </View>
-          
-          <Text 
-            style={[
-              styles.messagePreview, 
-              { 
-                color: colors.text.secondary,
-                fontWeight: isUnread ? '500' : '400'
-              }
-            ]}
-            numberOfLines={2}
-          >
-            {item.preview}
-          </Text>
+
+          <View style={styles.messagePreviewRow}>
+            <Text
+              style={[
+                styles.messagePreview,
+                {
+                  color: colors.text.secondary,
+                  fontWeight: hasUnread ? '500' : '400',
+                  flex: 1
+                }
+              ]}
+              numberOfLines={1}
+            >
+              {item.latestContent}
+            </Text>
+
+          {/* Message Count and Unread Badge */}
+          <View style={styles.badgeContainer}>
+            {item.totalMessages > 1 && (
+              <View style={[styles.messageBadge, { backgroundColor: colors.text.secondary }]}>
+                <Text style={[styles.badgeText, { color: colors.background }]}>
+                  {item.totalMessages}
+                </Text>
+              </View>
+            )}
+            {item.unreadCount > 0 && (
+              <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
+                <Text style={[styles.badgeText, { color: '#FFFFFF' }]}>
+                  {item.unreadCount}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Message Type Icon */}
-        <View style={styles.messageTypeContainer}>
-          {item.messageType === 'image' && (
-            <Icon name="image" size={16} color={colors.text.secondary} />
-          )}
-          {item.messageType === 'video' && (
-            <Icon name="video" size={16} color={colors.text.secondary} />
-          )}
-          {item.messageType === 'audio' && (
-            <Icon name="mic" size={16} color={colors.text.secondary} />
-          )}
-          {item.messageType === 'file' && (
-            <Icon name="file" size={16} color={colors.text.secondary} />
-          )}
+        {item.latestMessageType !== 'text' && (
+          <View style={styles.messageTypeContainer}>
+            {item.latestMessageType === 'image' && (
+              <Icon name="image" size={16} color={colors.text.secondary} />
+            )}
+            {item.latestMessageType === 'video' && (
+              <Icon name="video" size={16} color={colors.text.secondary} />
+            )}
+            {item.latestMessageType === 'audio' && (
+              <Icon name="mic" size={16} color={colors.text.secondary} />
+            )}
+            {item.latestMessageType === 'file' && (
+              <Icon name="file" size={16} color={colors.text.secondary} />
+            )}
+          </View>
+        )}
         </View>
       </TouchableOpacity>
     );
@@ -284,10 +328,10 @@ const InboxScreen: React.FC = () => {
     <View style={styles.emptyContainer}>
       <Mail size={64} color={colors.text.secondary} />
       <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>
-        No Messages Yet
+        No Conversations Yet
       </Text>
       <Text style={[styles.emptySubtitle, { color: colors.text.secondary }]}>
-        Your inbox is empty. Start a conversation to see messages here.
+        Your inbox is empty. Start a conversation to see it here.
       </Text>
     </View>
   );
@@ -329,21 +373,21 @@ const InboxScreen: React.FC = () => {
 
 
 
-      {/* Messages List */}
+      {/* Conversations List */}
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
-            Loading messages...
+            Loading conversations...
           </Text>
         </View>
       ) : (
         <FlatList
-          data={filteredMessages}
-          renderItem={renderMessageItem}
+          data={filteredConversations}
+          renderItem={renderConversationItem}
           keyExtractor={(item) => item.id.toString()}
-          style={styles.messagesList}
-          contentContainerStyle={styles.messagesContent}
+          style={styles.conversationsList}
+          contentContainerStyle={styles.conversationsContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -353,7 +397,7 @@ const InboxScreen: React.FC = () => {
               tintColor={colors.primary}
             />
           }
-          onEndReached={loadMoreMessages}
+          onEndReached={loadMoreConversations}
           onEndReachedThreshold={0.1}
           ListEmptyComponent={renderEmptyState}
           ListFooterComponent={
@@ -383,13 +427,13 @@ const styles = {
   backButton: {
     padding: 8,
   },
-  messagesList: {
+  conversationsList: {
     flex: 1,
   },
-  messagesContent: {
+  conversationsContent: {
     paddingBottom: 20,
   },
-  messageItem: {
+  conversationItem: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     paddingHorizontal: 16,
@@ -404,6 +448,7 @@ const styles = {
     width: 48,
     height: 48,
     borderRadius: 24,
+    backgroundColor: '#f0f0f0',
   },
   avatarPlaceholder: {
     width: 48,
@@ -411,11 +456,20 @@ const styles = {
     borderRadius: 24,
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.41,
   },
   avatarText: {
     color: '#FFFFFF',
     fontSize: 18,
-    fontWeight: '600' as const,
+    fontWeight: '700' as const,
+    textAlign: 'center' as const,
   },
   unreadDot: {
     position: 'absolute' as const,
@@ -427,15 +481,20 @@ const styles = {
     borderWidth: 2,
     borderColor: '#FFFFFF',
   },
-  messageContent: {
+  conversationContent: {
     flex: 1,
     marginRight: 8,
   },
-  messageHeader: {
+  conversationHeader: {
     flexDirection: 'row' as const,
     justifyContent: 'space-between' as const,
     alignItems: 'center' as const,
     marginBottom: 4,
+  },
+  headerRight: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
   },
   senderName: {
     fontSize: 16,
@@ -445,9 +504,39 @@ const styles = {
   timestamp: {
     fontSize: 12,
   },
+  messagePreviewRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+  },
   messagePreview: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  badgeContainer: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+  },
+  messageBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: 6,
+  },
+  unreadBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: 6,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '600' as const,
   },
   messageTypeContainer: {
     padding: 4,

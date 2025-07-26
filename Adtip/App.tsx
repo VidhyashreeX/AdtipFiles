@@ -408,10 +408,15 @@ function App(): React.JSX.Element {
   // - With only 30-second cooldown between ads
   // - Automatically retries loading ads
   
-  // Ensure ad is always ready
+  // Ensure ad is ready with throttling to prevent excessive calls
   useEffect(() => {
-    if (!adLoaded) {
-      console.log('App.tsx: Ensuring app open ad is loaded');
+    // Only force load if we haven't loaded an ad in the last 2 minutes
+    const lastForceLoad = Date.now() - (global.lastAdForceLoad || 0);
+    const FORCE_LOAD_COOLDOWN = 2 * 60 * 1000; // 2 minutes
+
+    if (!adLoaded && lastForceLoad > FORCE_LOAD_COOLDOWN) {
+      if (__DEV__) console.log('App.tsx: Ensuring app open ad is loaded');
+      global.lastAdForceLoad = Date.now();
       forceLoadAd();
     }
   }, [adLoaded, forceLoadAd]);

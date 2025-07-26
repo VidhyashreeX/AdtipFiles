@@ -261,6 +261,24 @@ export class QueryHelpers {
   }
 
   /**
+   * Get recent messages for a specific chat (for duplicate detection)
+   */
+  static async getRecentMessagesForChat(chatId: string, limit: number = 50): Promise<Message[]> {
+    try {
+      return await messagesCollection
+        .query(
+          Q.where('chat_id', chatId),
+          Q.sortBy('created_at', Q.desc),
+          Q.take(limit)
+        )
+        .fetch();
+    } catch (error) {
+      console.error('[QueryHelpers] Error getting recent messages for chat:', error);
+      return [];
+    }
+  }
+
+  /**
    * Get user by ID
    */
   static async getUserById(userId: string): Promise<any | null> {

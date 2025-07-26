@@ -581,7 +581,8 @@ const TipCallScreenSimple = () => {
     })
   }, [languageFilter, categoryFilter, debouncedSearch, user?.id])
 
-  // Live search data (only when search is active)
+  // Live search data (only when search is active and different from main search)
+  const shouldUseLiveSearch = liveSearchQuery && liveSearchQuery !== debouncedSearch;
   const {
     data: liveSearchData,
     isLoading: liveSearchLoading,
@@ -594,7 +595,7 @@ const TipCallScreenSimple = () => {
       categoryFilter,
       searchQuery: liveSearchQuery,
     },
-    user?.id,
+    shouldUseLiveSearch ? user?.id : undefined, // Only enable when needed
   )
 
   // Create service instances

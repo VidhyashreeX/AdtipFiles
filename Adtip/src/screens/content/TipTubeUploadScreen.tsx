@@ -28,6 +28,7 @@ import VideoCompressionService, { VideoCompressionOptions } from '../../services
 import ApiService from '../../services/ApiService';
 import CloudflareUploadService from '../../services/CloudflareUploadService';
 import UnifiedUploadService, { UnifiedUploadProgress } from '../../services/UnifiedUploadService';
+import { ForceStreamUploads } from '../../utils/ForceStreamUploads';
 import { UploadConfigManager } from '../../config/UploadConfig';
 import RNFS from 'react-native-fs';
 import { getVideoDurationProps } from '../../utils/videoUtils';
@@ -469,7 +470,20 @@ const TipTubeUploadScreen: React.FC = () => {
 
       // Validate that we have a valid compressed URI
       if (!compressedResult.success || !compressedResult.compressedUri) {
-        throw new Error(`Video compression failed: ${compressedResult.error || 'Unknown error'}`);
+        console.warn('[TipTubeUpload] Compression failed, using original video for upload');
+        console.warn('[TipTubeUpload] Compression error:', compressedResult.error);
+
+        // Fallback to original video if compression fails
+        // This allows Stream upload to proceed even if compression has issues
+        try {
+          const stats = await RNFS.stat(videoUri);
+          setVideoSize(stats.size);
+          console.log('[TipTubeUpload] Using original video size:', stats.size);
+          return videoUri; // Return original video URI
+        } catch (statError) {
+          console.error('[TipTubeUpload] Error getting original video stats:', statError);
+          throw new Error('Failed to process video. Please try again.');
+        }
       }
 
       // Update video size after compression
@@ -510,15 +524,25 @@ const TipTubeUploadScreen: React.FC = () => {
           name: title.trim(),
           description: description.trim(),
           categoryId: categoryId,
-          channelId: channelId,
+          channelId: channelId || user.id, // Use user.id as fallback if channelId is null
           userId: user.id,
           isShot: false, // This is TipTube (long-form video)
         },
       };
 
+      // Prepare user info for upload
+      const userInfo = {
+        userId: user.id.toString(),
+        userName: user.name || user.username || '',
+        channelId: channelId?.toString() || user.id.toString(),
+      };
+
+      console.log('[TipTubeUpload] User info for upload:', userInfo);
+
       // Use UnifiedUploadService for intelligent upload method selection
       const uploadResult = await UnifiedUploadService.uploadTipTube(
         uploadData,
+        userInfo,
         (progress: UnifiedUploadProgress) => {
           setUploadProgress(progress.percentage);
 
@@ -575,7 +599,7 @@ const TipTubeUploadScreen: React.FC = () => {
       const requestData = {
         name: title.trim(),
         categoryId: categoryId,
-        channelId: channelId,
+        channelId: channelId || user.id, // Use user.id as fallback if channelId is null
         videoLink: videoUrl,
         videoDesciption: description.trim(),
         createdby: user.id,
@@ -656,11 +680,11 @@ const TipTubeUploadScreen: React.FC = () => {
 
       // Step 1: Compress video
       console.log('[TipTubeUpload] Step 1: Compressing video');
-      const compressedVideoUri = await compressVideo(selectedVideo);
+      const compressedVideoUri = await compressVideo(selectedVideo!); // Non-null assertion - validated above
 
       // Step 2: Upload media files
       console.log('[TipTubeUpload] Step 2: Uploading media files');
-      const { videoUrl, thumbnailUrl, streamVideoId } = await uploadMedia(compressedVideoUri, selectedThumbnail);
+      const { videoUrl, thumbnailUrl, streamVideoId } = await uploadMedia(compressedVideoUri, selectedThumbnail!);
 
       // Step 3: Create TipTube video record
       console.log('[TipTubeUpload] Step 3: Creating video record');

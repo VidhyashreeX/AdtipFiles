@@ -107,15 +107,19 @@ function OptimizedFlatList<T>({
       getItemLayout,
     };
 
-    // Log optimizations in development
-    if (enablePerformanceLogging && debugName) {
-      console.log(`[OptimizedFlatList:${debugName}] Applied optimizations:`, {
-        preset,
-        itemHeight,
-        numColumns,
-        dataLength: data.length,
-        optimizations: Object.keys(combined),
-      });
+    // Log optimizations in development with throttling to prevent spam
+    if (enablePerformanceLogging && debugName && __DEV__) {
+      // Only log occasionally to prevent console spam
+      const shouldLog = Math.random() < 0.05; // Log only 5% of the time
+      if (shouldLog) {
+        console.log(`[OptimizedFlatList:${debugName}] Applied optimizations:`, {
+          preset,
+          itemHeight,
+          numColumns,
+          dataLength: data.length,
+          optimizations: Object.keys(combined),
+        });
+      }
     }
 
     return combined;

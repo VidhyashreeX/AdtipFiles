@@ -28,6 +28,7 @@ import VideoCompressionService, { VideoCompressionOptions } from '../../services
 import ApiService from '../../services/ApiService';
 import CloudflareUploadService from '../../services/CloudflareUploadService';
 import UnifiedUploadService, { UnifiedUploadProgress } from '../../services/UnifiedUploadService';
+import { ForceStreamUploads } from '../../utils/ForceStreamUploads';
 import { UploadConfigManager } from '../../config/UploadConfig';
 import RNFS from 'react-native-fs';
 import { EventRegister } from 'react-native-event-listeners';
@@ -593,7 +594,19 @@ const TipShortsUploadScreen: React.FC = () => {
       return compressedResult.compressedUri;
     } catch (error) {
       console.error('[TipShortsUpload] Error compressing video:', error);
-      throw new Error('Failed to compress video. Please try again.');
+      console.warn('[TipShortsUpload] Compression failed, using original video for upload');
+
+      // Fallback to original video if compression fails
+      // This allows Stream upload to proceed even if compression has issues
+      try {
+        const stats = await RNFS.stat(videoUri);
+        setVideoSize(stats.size);
+        console.log('[TipShortsUpload] Using original video size:', stats.size);
+        return videoUri; // Return original video URI
+      } catch (statError) {
+        console.error('[TipShortsUpload] Error getting original video stats:', statError);
+        throw new Error('Failed to process video. Please try again.');
+      }
     } finally {
       setIsCompressing(false);
     }
@@ -616,15 +629,25 @@ const TipShortsUploadScreen: React.FC = () => {
           name: title.trim(),
           description: description.trim(),
           categoryId: categoryId,
-          channelId: channelId,
+          channelId: channelId || user.id, // Use user.id as fallback if channelId is null
           userId: user.id,
           isShot: true, // This is TipShorts
         },
       };
 
+      // Prepare user info for upload
+      const userInfo = {
+        userId: user.id.toString(),
+        userName: user.name || user.username || '',
+        channelId: user.id.toString(), // TipShorts typically use user ID as channel ID
+      };
+
+      console.log('[TipShortsUpload] User info for upload:', userInfo);
+
       // Use UnifiedUploadService for intelligent upload method selection
       const uploadResult = await UnifiedUploadService.uploadTipShorts(
         uploadData,
+        userInfo,
         (progress: UnifiedUploadProgress) => {
           setUploadProgress(progress.percentage);
 
@@ -681,7 +704,7 @@ const TipShortsUploadScreen: React.FC = () => {
       const requestData = {
         name: title.trim(),
         categoryId: categoryId,
-        channelId: channelId,
+        channelId: channelId || user.id, // Use user.id as fallback if channelId is null
         videoLink: videoUrl,
         videoDesciption: description.trim(),
         createdby: user.id,
@@ -781,11 +804,11 @@ const TipShortsUploadScreen: React.FC = () => {
 
       // Step 1: Compress video
       console.log('[TipShortsUpload] Step 1: Compressing video');
-      const compressedVideoUri = await compressVideo(selectedVideo);
+      const compressedVideoUri = await compressVideo(selectedVideo!); // Non-null assertion - validated above
 
       // Step 2: Upload media files
       console.log('[TipShortsUpload] Step 2: Uploading media files');
-      const { videoUrl, thumbnailUrl, streamVideoId } = await uploadMedia(compressedVideoUri, selectedThumbnail);
+      const { videoUrl, thumbnailUrl, streamVideoId } = await uploadMedia(compressedVideoUri, selectedThumbnail!);
 
       // Step 3: Create TipShot record
       console.log('[TipShortsUpload] Step 3: Creating short video record');

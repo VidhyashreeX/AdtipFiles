@@ -145,10 +145,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isOwn, showStatu
           </Text>
           <View style={styles.messageFooter}>
             <Text style={[styles.messageTime, { color: 'rgba(255, 255, 255, 0.8)' }]}>
-              {new Date(message.createdAt).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit'
-              })}
+              {formatMessageTimestamp(message.createdAt)}
             </Text>
             {showStatus && (() => {
               const StatusIcon = getStatusIcon();
@@ -174,16 +171,67 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isOwn, showStatu
           </Text>
           <View style={styles.messageFooter}>
             <Text style={[styles.messageTime, { color: colors.text.secondary }]}>
-              {new Date(message.createdAt).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit'
-              })}
+              {formatMessageTimestamp(message.createdAt)}
             </Text>
           </View>
         </LinearGradient>
       )}
     </Animated.View>
   );
+};
+
+// Format message timestamp to show date and time
+const formatMessageTimestamp = (timestamp: string | Date): string => {
+  // Ensure we have a valid date object
+  let date: Date;
+  if (typeof timestamp === 'string') {
+    date = new Date(timestamp);
+  } else {
+    date = timestamp;
+  }
+
+  // Validate the date
+  if (isNaN(date.getTime())) {
+    console.warn('[FCMChatScreen] Invalid timestamp received:', timestamp);
+    return 'Invalid date';
+  }
+
+  const now = new Date();
+
+  // Check if it's today
+  const isToday = date.toDateString() === now.toDateString();
+
+  // Check if it's yesterday
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+
+  // Check if it's this week (within 7 days)
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const isThisWeek = date > weekAgo;
+
+  if (isToday) {
+    // Today: show time only
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } else if (isYesterday) {
+    // Yesterday: show "Yesterday" + time
+    return `Yesterday ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  } else if (isThisWeek) {
+    // This week: show day + time
+    return date.toLocaleDateString([], {
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } else {
+    // Older: show date + time
+    return date.toLocaleDateString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
 };
 
 const FCMChatScreen: React.FC = () => {
