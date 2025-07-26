@@ -33,6 +33,7 @@ import { useUserDataContext, useUserPremiumStatus, useUserWallet } from '../../c
 import UserPremiumPlans from './UserPremiumPlans';
 import WithdrawalForm from '../../components/withdrawal/WithdrawalForm';
 import PremiumPopup from '../../components/common/PremiumPopup';
+import { queryClient } from '../../providers/QueryProvider';
 
 const WITHDRAWAL_THRESHOLD = {
   REGULAR: 100,
@@ -186,7 +187,25 @@ const WalletScreen = () => {
     setIsWithdrawalModalVisible(true);
   };
 
-  const handleWithdrawalSuccess = () => {
+  const handleWithdrawalSuccess = (newBalance?: number) => {
+    // If new balance is provided, update immediately for instant feedback
+    if (newBalance !== undefined) {
+      console.log('💰 [WalletScreen] Immediate balance update:', newBalance);
+      
+      // Immediately update the local balance state for instant UI feedback
+      // This will show the new balance immediately without waiting for server refresh
+      if (balanceData) {
+        // Update the balance data immediately
+        const updatedBalanceData = {
+          ...balanceData,
+          availableBalance: newBalance.toString()
+        };
+        
+        // Update the query cache immediately using the correct query key
+        queryClient.setQueryData(['wallet', 'balance', user?.id], updatedBalanceData);
+      }
+    }
+    
     // Refresh both balance and withdrawals after successful withdrawal
     if (refreshBalance) refreshBalance();
     if (refetchWithdrawals) refetchWithdrawals();

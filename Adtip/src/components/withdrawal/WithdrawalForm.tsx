@@ -15,11 +15,12 @@ import { useTheme } from '../../contexts/ThemeContext';
 import ApiService from '../../services/ApiService';
 import EarningsTimeline from '../earnings/EarningsTimeline';
 import { useUserPremiumStatus } from '../../contexts/UserDataContext';
+import { useWallet } from '../../contexts/WalletContext';
 
 interface WithdrawalFormProps {
   visible: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (newBalance?: number) => void;
   withdrawalType: 'wallet' | 'referral' | 'coupon' | 'content_earnings';
   availableBalance: number;
   userId: number;
@@ -44,6 +45,7 @@ const WithdrawalForm: React.FC<WithdrawalFormProps> = ({
 }) => {
   const { colors } = useTheme();
   const { isPremium } = useUserPremiumStatus();
+  const { refreshBalance } = useWallet();
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState<WithdrawalSettings | null>(null);
   const [amount, setAmount] = useState('');
@@ -75,24 +77,29 @@ const WithdrawalForm: React.FC<WithdrawalFormProps> = ({
     }
   };
 
+  // New withdrawal logic based on premium status
   const getMinimumAmount = () => {
-    if (!settings) return 100;
-    // For now, we'll use regular minimum. In a real app, you'd check user's premium status
-    return parseFloat(settings.min_withdrawal_regular);
+    if (isPremium) return 1000; // Premium users: ₹1000 minimum
+    return 5000; // Non-premium users: ₹5000 minimum
   };
 
-  const getChargesPercent = () => {
-    if (!settings) return 5;
-    return parseFloat(settings.withdrawal_charges_percent);
+  const getPlatformFeeRate = () => {
+    if (isPremium) return 0.3; // 30% for premium users
+    return 0.6; // 60% for non-premium users
   };
 
-  const calculateCharges = (amount: number) => {
-    const chargesPercent = getChargesPercent();
-    return (amount * chargesPercent) / 100;
+  const calculatePlatformFee = (amount: number) => {
+    return amount * getPlatformFeeRate();
+  };
+
+  const calculateGST = (platformFee: number) => {
+    return platformFee * 0.18; // 18% GST on platform fee
   };
 
   const calculateNetAmount = (amount: number) => {
-    return amount - calculateCharges(amount);
+    const platformFee = calculatePlatformFee(amount);
+    const gst = calculateGST(platformFee);
+    return amount - platformFee - gst;
   };
 
   const validateForm = () => {
@@ -105,7 +112,7 @@ const WithdrawalForm: React.FC<WithdrawalFormProps> = ({
     }
 
     if (amountNum < minAmount) {
-      Alert.alert('Error', `Minimum withdrawal amount is ₹${minAmount}`);
+      Alert.alert('Error', `Minimum withdrawal amount is ₹${minAmount} for ${isPremium ? 'premium' : 'non-premium'} users`);
       return false;
     }
 
@@ -135,7 +142,8 @@ const WithdrawalForm: React.FC<WithdrawalFormProps> = ({
     setLoading(true);
     try {
       const amountNum = parseFloat(amount);
-      const charges = calculateCharges(amountNum);
+      const platformFee = calculatePlatformFee(amountNum);
+      const gst = calculateGST(platformFee);
       const netAmount = calculateNetAmount(amountNum);
 
       let response;
@@ -175,14 +183,20 @@ const WithdrawalForm: React.FC<WithdrawalFormProps> = ({
       }
 
       if (response.status === 200) {
+        // Calculate new balance immediately
+        const newBalance = availableBalance - amountNum;
+        
+        // Immediately refresh wallet balance in context
+        await refreshBalance();
+        
         Alert.alert(
           'Success',
-          `Withdrawal request submitted successfully!\n\nAmount: ₹${amountNum}\nCharges: ₹${charges.toFixed(2)}\nNet Amount: ₹${netAmount.toFixed(2)}`,
+          `Withdrawal request submitted successfully!\n\nAmount: ₹${amountNum}\nPlatform Fee: ₹${platformFee.toFixed(2)}\nGST: ₹${gst.toFixed(2)}\nNet Amount: ₹${netAmount.toFixed(2)}\n\nNew Balance: ₹${newBalance.toFixed(2)}`,
           [
             {
               text: 'OK',
               onPress: () => {
-                onSuccess();
+                onSuccess(newBalance);
                 onClose();
                 resetForm();
               },
@@ -325,7 +339,10 @@ const WithdrawalForm: React.FC<WithdrawalFormProps> = ({
                   Amount: ₹{parseFloat(amount) || 0}
                 </Text>
                 <Text style={[styles.breakdownText, { color: colors.text.secondary }]}>
-                  Charges ({getChargesPercent()}%): ₹{calculateCharges(parseFloat(amount) || 0).toFixed(2)}
+                  Platform Fee ({getPlatformFeeRate() * 100}%): ₹{calculatePlatformFee(parseFloat(amount) || 0).toFixed(2)}
+                </Text>
+                <Text style={[styles.breakdownText, { color: colors.text.secondary }]}>
+                  GST (18%): ₹{calculateGST(calculatePlatformFee(parseFloat(amount) || 0)).toFixed(2)}
                 </Text>
                 <Text style={[styles.breakdownText, { color: colors.primary, fontWeight: 'bold' }]}>
                   Net Amount: ₹{calculateNetAmount(parseFloat(amount) || 0).toFixed(2)}
@@ -333,7 +350,7 @@ const WithdrawalForm: React.FC<WithdrawalFormProps> = ({
               </View>
             )}
             <Text style={[styles.minAmountText, { color: colors.text.tertiary }]}>
-              Minimum withdrawal: ₹{getMinimumAmount()}
+              Minimum withdrawal: ₹{getMinimumAmount()} ({isPremium ? 'premium' : 'non-premium'} users)
             </Text>
           </View>
 

@@ -410,7 +410,11 @@ const AnalyticsScreen: React.FC = () => {
       <WithdrawalForm
         visible={isWithdrawalModalVisible}
         onClose={() => setIsWithdrawalModalVisible(false)}
-        onSuccess={() => {
+        onSuccess={(newBalance?: number) => {
+          // If new balance is provided, update immediately for instant feedback
+          if (newBalance !== undefined) {
+            console.log('💰 [AnalyticsScreen] Immediate balance update:', newBalance);
+          }
           // Refresh analytics data after successful withdrawal
           loadAnalytics();
         }}

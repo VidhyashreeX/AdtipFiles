@@ -154,7 +154,14 @@ const ReferralScreen: React.FC = () => {
     setIsCouponWithdrawalModalVisible(true);
   };
 
-  const handleWithdrawalSuccess = () => {
+  const handleWithdrawalSuccess = (newBalance?: number) => {
+    // If new balance is provided, update immediately for instant feedback
+    if (newBalance !== undefined) {
+      console.log('💰 [ReferralScreen] Immediate balance update:', newBalance);
+      // Update the referral data immediately for instant UI feedback
+      // The loadReferralData() will refresh the data from server
+    }
+    
     // Refresh referral data after successful withdrawal
     loadReferralData();
   };
