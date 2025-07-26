@@ -239,7 +239,7 @@ const AnalyticsPremiumAlert: React.FC<AnalyticsPremiumAlertProps> = ({
             <BarChart3 size={20} color="#FFFFFF" />
           </LinearGradient>
           <Text style={[styles.featureText, { color: colors.text.primary }]}>
-            Detailed Analytics Dashboard
+            Paid video to earn for your videos download
           </Text>
         </View>
 
@@ -251,7 +251,7 @@ const AnalyticsPremiumAlert: React.FC<AnalyticsPremiumAlertProps> = ({
             <TrendingUp size={20} color="#FFFFFF" />
           </LinearGradient>
           <Text style={[styles.featureText, { color: colors.text.primary }]}>
-            Revenue Tracking & Insights
+            Earn money based on views
           </Text>
         </View>
 
@@ -263,7 +263,7 @@ const AnalyticsPremiumAlert: React.FC<AnalyticsPremiumAlertProps> = ({
             <Users size={20} color="#FFFFFF" />
           </LinearGradient>
           <Text style={[styles.featureText, { color: colors.text.primary }]}>
-            Audience Demographics
+            Talk to your fans to earn 4 rs per minute for voice call and 7 rs per minute for video call
           </Text>
         </View>
 

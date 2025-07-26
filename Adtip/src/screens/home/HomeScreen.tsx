@@ -24,7 +24,7 @@ import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 import { InfiniteData } from '@tanstack/react-query';
 // Import Lucide React Native icons
-import { PlayCircle, Gamepad2, WifiOff, Share2, HandCoins, Dices } from 'lucide-react-native';
+import { PlayCircle, Gamepad2, WifiOff, Share2, HandCoins, Dices, Mail } from 'lucide-react-native';
 import PostWithComments from '../../components/home/PostWithComments';
 import { FeedFlatList, useOptimizedRenderItem } from '../../components/common/OptimizedFlatList';
 
@@ -39,6 +39,7 @@ import {HOME_ENDPOINTS} from '../../constants/apiEndpoints';
 import shareService from '../../services/ShareService';
 import { usePosts, useGuestPosts, useLikeMutation, useFollowMutation, useSubscriptionStatus, useCategories, useSearchUsers } from '../../hooks/useQueries';
 import { useUserDataContext, useUserPremiumStatus, useUserWallet } from '../../contexts/UserDataContext';
+import { useFCMChat } from '../../contexts/FCMChatContext';
 import { getUserDisplayName, isPremiumUser } from '../../utils/userDataUtils';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
@@ -403,6 +404,7 @@ function shuffleArray<T>(array: T[]): T[] {
 const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}) => {
   const {colors, isDarkMode} = useTheme();
   const {user, isGuest, refreshUserData} = useAuth();
+  const { totalUnreadCount } = useFCMChat();
   const navigation = useNavigation<AppNavigationProps>();
   const {contentPaddingBottom} = useTabNavigator();
   const {clearCache, invalidateData} = useDataContext();
@@ -905,6 +907,26 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     setIsSearchActive(false);
   }, [navigation]);
 
+  // Inbox component for header
+  const renderInboxIcon = useCallback(() => (
+    <View style={{ position: 'relative' }}>
+      <TouchableOpacity
+        onPress={() => navigation.navigate('Inbox' as never)}
+        style={styles.headerIconButton}
+        activeOpacity={0.8}
+      >
+        <Mail size={20} color={colors.text.secondary} />
+      </TouchableOpacity>
+      {totalUnreadCount > 0 && (
+        <View style={[styles.inboxBadge, { backgroundColor: colors.primary }]}>
+          <Text style={styles.inboxBadgeText}>
+            {totalUnreadCount > 99 ? '99+' : totalUnreadCount.toString()}
+          </Text>
+        </View>
+      )}
+    </View>
+  ), [navigation, totalUnreadCount, colors, styles]);
+
   // Search results component
   const SearchResults = useMemo(() => {
     if (!isSearchActive || !debouncedSearchQuery) return null;
@@ -1163,6 +1185,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             showSearch={true}
             showWallet={true}
             showPremium={true}
+            showProfile={false}
+            rightComponent={renderInboxIcon()}
           />
           <ScrollView style={styles.content} contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}>
             <StoriesRow stories={[]} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} isLoading={true} />
@@ -1187,7 +1211,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
         <View style={[styles.container, {backgroundColor: colors.background}]}>
           <Header
             title=""
+            showProfile={false}
             onSearchSubmit={handleSearchSubmit}
+            rightComponent={renderInboxIcon()}
           />
           <View style={styles.errorContainer}>
             <WifiOff size={48} color={colors.danger || '#FF0000'} />
@@ -1213,9 +1239,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             showSearch={true}
             showWallet={true}
             showPremium={true}
+            showProfile={false}
             searchQuery={searchQuery}
             onSearchQueryChange={handleSearchQueryChange}
             onSearchSubmit={handleSearchSubmit}
+            rightComponent={renderInboxIcon()}
           />
           {SearchResults}
           <FeedFlatList
@@ -1649,6 +1677,28 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
   rushPlayGamesBannerIconContainer: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  headerIconButton: {
+    padding: 8,
+    borderRadius: 20,
+  },
+  inboxBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  inboxBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: 'bold',
   },
 });
 

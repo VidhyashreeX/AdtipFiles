@@ -23,6 +23,7 @@ import { launchImageLibrary, ImagePickerResponse, MediaType } from 'react-native
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useContentCreatorPremium } from '../../contexts/ContentCreatorPremiumContext';
 import Header from '../../components/common/Header';
 import VideoCompressionService, { VideoCompressionOptions } from '../../services/VideoCompressionService';
 import ApiService from '../../services/ApiService';
@@ -108,12 +109,14 @@ const TipShortsUploadScreen: React.FC = () => {
   const navigation = useNavigation();
   const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
+  const { isContentCreatorPremium } = useContentCreatorPremium();
 
   // Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState(1);
-  const [isPublic, setIsPublic] = useState(true);
+  const [isPaidVideo, setIsPaidVideo] = useState(false);
+  const [promotionalPrice, setPromotionalPrice] = useState('');
   const [selectedCompression, setSelectedCompression] = useState<'whatsapp' | 'balanced' | 'high'>('whatsapp');
 
   // Media State
@@ -710,6 +713,8 @@ const TipShortsUploadScreen: React.FC = () => {
         createdby: user.id,
         play_duration: videoDuration,
         video_Thumbnail: thumbnailUrl,
+        is_paid_promotional: isPaidVideo,
+        promotional_price: isPaidVideo ? parseFloat(promotionalPrice) : undefined,
       };
 
       console.log('[TipShortsUpload] Creating TipShot with new API:', requestData);
@@ -719,9 +724,14 @@ const TipShortsUploadScreen: React.FC = () => {
       console.log('[TipShortsUpload] TipShot created:', response);
 
       if (response.status === 200) {
+        // Show different success messages for paid vs free videos
+        const successMessage = isPaidVideo
+          ? `Your paid short video has been uploaded successfully! Price: ₹${promotionalPrice}`
+          : 'Your short video has been uploaded successfully.';
+
         Alert.alert(
           'Success! 🎉',
-          'Your short video has been uploaded successfully.',
+          successMessage,
           [
             {
               text: 'OK',
@@ -747,6 +757,12 @@ const TipShortsUploadScreen: React.FC = () => {
     if (!categoryId) return 'Please select a video category.';
     if (!channelId) return 'Channel information is required. Please wait for channel to load or try again.';
     if (!user?.id) return 'User authentication required. Please log in again.';
+    if (isPaidVideo && (!promotionalPrice || parseFloat(promotionalPrice) <= 0)) {
+      return 'Please enter a valid promotional price for paid video.';
+    }
+    if (isPaidVideo && parseFloat(promotionalPrice) > 1000) {
+      return 'Promotional price cannot exceed ₹1000.';
+    }
     return null;
   };
 
@@ -778,6 +794,33 @@ const TipShortsUploadScreen: React.FC = () => {
         [{ text: 'OK' }]
       );
       return false;
+    }
+  };
+
+  // Handle paid video toggle
+  const handlePaidVideoToggle = (value: boolean) => {
+    if (value && !isContentCreatorPremium) {
+      // Show premium required alert
+      Alert.alert(
+        'Content Creator Premium Required',
+        'Paid video feature is only available for Content Creator Premium users. Upgrade to unlock this feature.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Upgrade',
+            onPress: () => navigation.navigate('ContentCreatorPremium' as never),
+          },
+        ]
+      );
+      return;
+    }
+
+    setIsPaidVideo(value);
+    if (!value) {
+      setPromotionalPrice('');
     }
   };
 
@@ -1185,25 +1228,53 @@ const TipShortsUploadScreen: React.FC = () => {
                 </TouchableOpacity>
               </View>
 
-              {/* Privacy Setting */}
+              {/* Paid Video Setting */}
               <View style={styles.inputGroup}>
                 <View style={styles.switchRow}>
                   <View>
                     <Text style={[styles.switchLabel, { color: colors.text.primary }]}>
-                      Public Short
+                      Paid Video
                     </Text>
                     <Text style={[styles.switchDescription, { color: colors.text.secondary }]}>
-                      Anyone can view this short
+                      Enable to set a promotional price (Content Creator Premium required)
                     </Text>
                   </View>
                   <Switch
-                    value={isPublic}
-                    onValueChange={setIsPublic}
+                    value={isPaidVideo}
+                    onValueChange={handlePaidVideoToggle}
                     trackColor={{ false: colors.gray?.[300], true: colors.primary }}
                     thumbColor={colors.white}
                     disabled={isUploading || isCompressing}
                   />
                 </View>
+
+                {/* Promotional Price Input */}
+                {isPaidVideo && (
+                  <View style={styles.priceInputContainer}>
+                    <Text style={[styles.inputLabel, { color: colors.text.secondary, marginTop: 16 }]}>
+                      Promotional Price *
+                    </Text>
+                    <View style={[styles.priceInputWrapper, {
+                      borderColor: colors.border,
+                      backgroundColor: colors.background
+                    }]}>
+                      <Text style={[styles.currencySymbol, { color: colors.text.primary }]}>₹</Text>
+                      <TextInput
+                        style={[styles.priceInput, { color: colors.text.primary }]}
+                        value={promotionalPrice}
+                        onChangeText={setPromotionalPrice}
+                        placeholder="0.00"
+                        placeholderTextColor={colors.text.tertiary}
+                        keyboardType="numeric"
+                        maxLength={6}
+                        editable={!isUploading && !isCompressing}
+                      />
+                    </View>
+                    <Text style={[styles.priceHint, { color: colors.text.tertiary }]}>
+                      Maximum price: ₹1000
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
           )}
@@ -1261,13 +1332,13 @@ const TipShortsUploadScreen: React.FC = () => {
               style={[
                 styles.uploadBtn,
                 {
-                  backgroundColor: (!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing)
+                  backgroundColor: (!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing || isLoadingChannel || !channelId || (isPaidVideo && (!promotionalPrice || parseFloat(promotionalPrice) <= 0)))
                     ? colors.gray?.[400]
                     : colors.primary,
                 }
               ]}
               onPress={handleUpload}
-              disabled={!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing || isLoadingChannel || !channelId}
+              disabled={!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing || isLoadingChannel || !channelId || (isPaidVideo && (!promotionalPrice || parseFloat(promotionalPrice) <= 0))}
             >
               {(isUploading || isCompressing || isLoadingChannel) ? (
                 <ActivityIndicator size="small" color={colors.white} />
@@ -1701,6 +1772,34 @@ const styles = StyleSheet.create({
   modalCloseText: {
     fontSize: 16,
     fontWeight: '500',
+  },
+
+  // Price Input Styles
+  priceInputContainer: {
+    marginTop: 16,
+  },
+  priceInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 48,
+    marginTop: 8,
+  },
+  currencySymbol: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginRight: 8,
+  },
+  priceInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 0,
+  },
+  priceHint: {
+    fontSize: 12,
+    marginTop: 4,
   },
 });
 

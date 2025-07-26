@@ -16,9 +16,11 @@ import Icon from 'react-native-vector-icons/Feather';
 import { Star, Edit, BarChart3, Upload, MoreVertical, Trash2, Edit3 } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useContentCreatorPremium } from '../../contexts/ContentCreatorPremiumContext';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Header from '../../components/common/Header';
+import ContentCreatorPlanToggle from '../../components/common/ContentCreatorPlanToggle';
 import ApiService from '../../services/ApiService';
 import {
   ChannelInfo,
@@ -39,6 +41,7 @@ const VIDEO_CARD_HEIGHT = VIDEO_CARD_WIDTH * 0.6; // 16:10 aspect ratio
 const YourChannelScreen: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
+  const { isContentCreatorPremium, contentCreatorPremiumData } = useContentCreatorPremium();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [selectedTab, setSelectedTab] = useState('Home');
@@ -205,9 +208,25 @@ const YourChannelScreen: React.FC = () => {
   };
 
   const handlePaidVideoAnalytics = () => {
-    // Show coming soon modal for paid video analytics
-    setShowComingSoonModal(true);
+    // Navigate to analytics screen with proper channelId (same as regular analytics)
+    if (channel?.channelId) {
+      navigation.navigate('Analytics' as never, { channelId: channel.channelId });
+    } else {
+      console.warn('[YourChannelScreen] No channelId available for paid video analytics');
+      // If no channel found, redirect to create channel
+      navigation.navigate('CreateChannel' as never);
+    }
   };
+
+  // Content Creator Premium Toggle Handler
+  const handleTogglePremium = useCallback(() => {
+    console.log('🚀 [YourChannelScreen] User clicked content creator premium toggle');
+    console.log('📊 [YourChannelScreen] Current content creator premium status:', {
+      isContentCreatorPremium,
+      hasData: !!contentCreatorPremiumData
+    });
+    navigation.navigate('ContentCreatorPremium' as never);
+  }, [isContentCreatorPremium, contentCreatorPremiumData, navigation]);
 
   // Separate component for video card to properly use hooks
   const VideoCard = React.memo(({
@@ -550,6 +569,9 @@ const YourChannelScreen: React.FC = () => {
         showWallet={false}
         showPremium={false}
         showProfile={false}
+        rightComponent={
+          <ContentCreatorPlanToggle onPress={handleTogglePremium} />
+        }
       />
 
       <FlatList

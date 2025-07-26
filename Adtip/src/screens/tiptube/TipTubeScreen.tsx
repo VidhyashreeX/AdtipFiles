@@ -626,24 +626,30 @@ const TipTubeScreen = () => {
     };
 
     return (
-      <TouchableOpacity
-        onPress={handleProfilePress}
-        style={styles.channelProfileButton}
-        activeOpacity={0.8}
-      >
-        <Image
-          source={{
-            uri: channelProfileImage || getFallbackAvatarUrl(user?.id)
-          }}
-          style={styles.channelProfileImage}
-          onError={() => {
-            // Fallback to default avatar on error
-            setChannelProfileImage(getFallbackAvatarUrl(user?.id));
-          }}
-        />
-      </TouchableOpacity>
+      <View style={styles.headerRightContainer}>
+        {/* Content Creator Premium Toggle */}
+        <ContentCreatorPlanToggle onPress={handleTogglePremium} />
+
+        {/* Channel Profile */}
+        <TouchableOpacity
+          onPress={handleProfilePress}
+          style={styles.channelProfileButton}
+          activeOpacity={0.8}
+        >
+          <Image
+            source={{
+              uri: channelProfileImage || getFallbackAvatarUrl(user?.id)
+            }}
+            style={styles.channelProfileImage}
+            onError={() => {
+              // Fallback to default avatar on error
+              setChannelProfileImage(getFallbackAvatarUrl(user?.id));
+            }}
+          />
+        </TouchableOpacity>
+      </View>
     );
-  }, [isGuest, channelProfileImage, user?.id, userChannelId, navigation]);
+  }, [isGuest, channelProfileImage, user?.id, userChannelId, navigation, handleTogglePremium]);
 
   // New navigation handlers for TipTube screens
   const handleNavigateToYourChannel = useCallback(() => {
@@ -1795,6 +1801,11 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  headerRightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   channelProfileButton: {
     padding: 4,
