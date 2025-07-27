@@ -78,6 +78,7 @@ import { generateVideoDebugReport } from '../../utils/debugUtils';
 
 // Types
 import {AppNavigationProps} from '../../types/navigation';
+import { PostListResponse } from '../../types/api';
 
 // Get screen dimensions
 const { width: screenWidth } = Dimensions.get('window');
@@ -92,19 +93,9 @@ interface Post {
   user_profile_image: string | null; likeCount: number; commentCount: number;
   is_promoted?: number; created_at: string; is_premium?: boolean;
   is_liked?: boolean; last_active?: string | null;
+  duration_days?: number; remaining_budget?: number;
 }
 interface HomeScreenProps { walletBalance?: string; }
-
-interface PostListResponse {
-  status: boolean;
-  message: string;
-  data: Post[];
-  pagination: {
-    current_page: number;
-    total_page: number;
-    total_count: number;
-  };
-}
 
 // Helper Components
 interface StoriesRowProps { 
@@ -623,7 +614,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     if (isGuest) {
       return (postsData as { data: Post[] })?.data || [];
     } else if (postsData && 'pages' in postsData) {
-      return (postsData as InfiniteData<PostListResponse>)?.pages?.flatMap((page: unknown) => (page as PostListResponse)?.data || []) || [];
+      return (postsData as InfiniteData<PostListResponse>)?.pages?.flatMap((page: PostListResponse) => page?.data || []) || [];
     } else {
       return [];
     }
@@ -905,11 +896,25 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     setIsSearchActive(false);
   }, [navigation]);
 
+  // Debounce search query
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  // Search users query - moved before SearchResults to fix declaration order
+  const {
+    data: searchUsersData,
+    isLoading: searchUsersLoading,
+  } = useSearchUsers(debouncedSearchQuery, 1, 20);
+
   // Search results component
   const SearchResults = useMemo(() => {
     if (!isSearchActive || !debouncedSearchQuery) return null;
 
-    const users = searchUsersData?.data || [];
+    const users = searchUsersData?.data?.users || [];
 
     return (
       <View style={{
@@ -933,7 +938,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           <Text style={{
             fontSize: 16,
             fontWeight: '600',
-            color: colors.text,
+            color: colors.text.primary,
             flex: 1,
           }}>
             Search Results for "{debouncedSearchQuery}"
@@ -957,7 +962,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           </View>
         ) : users.length === 0 ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <Text style={{ color: colors.text, fontSize: 16 }}>No users found</Text>
+            <Text style={{ color: colors.text.primary, fontSize: 16 }}>No users found</Text>
           </View>
         ) : (
           <FlatList
@@ -976,7 +981,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
                 }}
               >
                 <Image
-                  source={{ uri: item.profile_picture || 'https://avatar.iran.liara.run/public' }}
+                  source={{ uri: item.profile_image || 'https://avatar.iran.liara.run/public' }}
                   style={{
                     width: 50,
                     height: 50,
@@ -988,19 +993,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
                   <Text style={{
                     fontSize: 16,
                     fontWeight: '600',
-                    color: colors.text,
+                    color: colors.text.primary,
                   }}>
-                    {item.username}
+                    {item.name}
                   </Text>
-                  {item.full_name && (
-                    <Text style={{
-                      fontSize: 14,
-                      color: colors.textSecondary,
-                      marginTop: 2,
-                    }}>
-                      {item.full_name}
-                    </Text>
-                  )}
                 </View>
               </TouchableOpacity>
             )}
@@ -1044,44 +1040,61 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   // Rewarded posts state
   const [rewardedPosts, setRewardedPosts] = useState<Set<number>>(new Set());
 
-  // Debounce search query
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery);
-    }, 300);
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery]);
-
-  // Search users query
-  const {
-    data: searchUsersData,
-    isLoading: searchUsersLoading,
-  } = useSearchUsers(debouncedSearchQuery, 1, 20);
-
   // Function to handle view of promoted posts
   const handlePromotedPostView = useCallback(async (postId: number) => {
     if (!user?.id || rewardedPosts.has(postId)) return;
+    
+    // Add to rewarded posts immediately to prevent multiple calls
     setRewardedPosts(prev => new Set(prev).add(postId));
+    
     try {
-      const response = await axios.post('/api/view-promoted-post', { user_id: user.id, post_id: postId });
-      if (response.data.status && response.data.earned_amount > 0) {
+      // Show loading state for 5 seconds
+      const response = await ApiService.post(HOME_ENDPOINTS.VIEW_PROMOTED_POST, { 
+        user_id: user.id, 
+        post_id: postId 
+      });
+      
+      if (response && response.data && response.data.status && response.data.earned_amount > 0) {
         const isPremium = response.data.earned_amount > 0.03;
         Alert.alert(
-          'Congratulations!',
+          'Congratulations! 🎉',
           isPremium
-            ? `You earned ₹${response.data.earned_amount.toFixed(2)}!`
-            : 'You earned ₹0.03. Upgrade to premium to earn more per ad.'
+            ? `You earned ₹${response.data.earned_amount.toFixed(2)}! Upgrade to premium to earn even more!`
+            : 'You earned ₹0.03! Upgrade to premium to earn more per ad.',
+          [
+            {
+              text: 'Upgrade to Premium',
+              onPress: () => navigation.navigate('PremiumUser' as never),
+              style: 'default'
+            },
+            {
+              text: 'Continue',
+              style: 'cancel'
+            }
+          ]
         );
-      } else if (response.data.message === 'Already rewarded for this post') {
-        // Optionally, do nothing or show a message
-      } else if (response.data.message === 'Ad budget exhausted') {
-        Alert.alert('Ad budget exhausted', 'No more rewards available for this ad.');
+      } else if (response && response.data && response.data.message === 'Already rewarded for this post') {
+        Alert.alert('Already Rewarded', 'You have already been rewarded for viewing this post.');
+      } else if (response && response.data && response.data.message === 'Ad budget exhausted') {
+        Alert.alert('Ad Budget Exhausted', 'No more rewards available for this ad.');
+      } else if (response && response.data && response.data.message === 'Ad owner wallet exhausted') {
+        Alert.alert('Ad Owner Wallet Exhausted', 'The ad owner has insufficient funds.');
+      } else if (response && response.data && response.data.message === 'Promotion not active') {
+        Alert.alert('Promotion Not Active', 'This promotion is not currently active.');
+      } else {
+        Alert.alert('No Reward', 'No reward available for this view.');
       }
     } catch (err) {
-      console.log("PromotedPostViewFailed!!!")
-      //Alert.alert('Error', 'Could not process your view.');
+      console.log("PromotedPostViewFailed!!!", err);
+      Alert.alert('Error', 'Could not process your view. Please try again.');
+      // Remove from rewarded posts if there was an error
+      setRewardedPosts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(postId);
+        return newSet;
+      });
     }
-  }, [user?.id, rewardedPosts]);
+  }, [user?.id, rewardedPosts, navigation]);
 
   // Render post item with enhanced data handling
   const renderPostItem = useCallback(({ item, index }: { item: Post; index: number }) => {
@@ -1122,6 +1135,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           onFollow={handleUserFollow}
           isPromoted={item.is_promoted === 1}
           onPromotedView={handlePromotedPostView}
+          duration_days={item.duration_days}
+          created_at={item.created_at}
+          remaining_budget={item.remaining_budget}
+          alreadyRewarded={rewardedPosts.has(item.id)}
         />
         
         {/* Rectangle ad after every 3rd post (starting from post 2) */}
@@ -1187,7 +1204,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
         <View style={[styles.container, {backgroundColor: colors.background}]}>
           <Header 
             title="" 
-            onSearchSubmit={handleSearchIconPress}
+            onSearchSubmit={handleSearchSubmit}
           />
           <View style={styles.errorContainer}>
             <WifiOff size={48} color={colors.danger || '#FF0000'} />

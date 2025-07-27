@@ -1,5 +1,5 @@
 // src/components/home/PostItem.tsx
-import React, {useRef, useEffect, useState, useCallback} from 'react';
+import React, {useRef, useEffect, useState, useCallback, useMemo} from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Dimensions,
   ActivityIndicator,
   TouchableWithoutFeedback,
+  Alert,
 } from 'react-native';
 import Video from 'react-native-video';
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Play, Pause, VolumeX, Volume2, AlertTriangle, Image as ImageIcon } from 'lucide-react-native';
@@ -58,6 +59,9 @@ interface PostItemProps {
   onToggleGlobalMute?: () => void;
   onPromotedView?: (postId: number) => void;
   isPromoted?: boolean;
+  duration_days?: number;
+  remaining_budget?: number;
+  alreadyRewarded?: boolean;
 }
 
 const PostItem: React.FC<PostItemProps> = ({
@@ -85,7 +89,19 @@ const PostItem: React.FC<PostItemProps> = ({
   onToggleGlobalMute,
   onPromotedView,
   isPromoted = false,
+  duration_days,
+  remaining_budget,
+  alreadyRewarded = false,
 }) => {
+  // Debug logging for profileImage type
+  if (profileImage && typeof profileImage !== 'string') {
+    console.warn(`[PostItem ${id}] profileImage is not a string:`, typeof profileImage, profileImage);
+  }
+  
+  // Debug logging for postImage type
+  if (postImage && typeof postImage !== 'string') {
+    console.warn(`[PostItem ${id}] postImage is not a string:`, typeof postImage, postImage);
+  }
   const { colors } = useTheme();
   const [secureProfileImage, setSecureProfileImage] = useState<any>(null);
   const [securePostImage, setSecurePostImage] = useState<any>(null);
@@ -97,6 +113,8 @@ const PostItem: React.FC<PostItemProps> = ({
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [hasRewarded, setHasRewarded] = useState(false);
+  const [showPromoModal, setShowPromoModal] = useState(false);
+  const [isPromoLoading, setIsPromoLoading] = useState(false);
 
   // Enhanced video URL testing and validation
   const testAndValidateVideoUrl = useCallback(async (url: string) => {
@@ -121,13 +139,13 @@ const PostItem: React.FC<PostItemProps> = ({
     const loadSecureMedia = async () => {
       try {
         // Load secure profile image
-        if (profileImage) {
+        if (profileImage && typeof profileImage === 'string') {
           const secureProfile = await createSecureImageSource(profileImage);
           setSecureProfileImage(secureProfile);
         }
 
         // Load secure post media
-        if (postImage) {
+        if (postImage && typeof postImage === 'string') {
           if (media_type === 'video') {
             console.log(`[PostItem ${id}] Loading video:`, postImage);
             
@@ -144,6 +162,10 @@ const PostItem: React.FC<PostItemProps> = ({
             setSecureVideoSource(secureVideo);
           } else {
             const secureImage = await createSecureImageSource(postImage);
+            console.log(`[PostItem ${id}] Created secure image source:`, {
+              hasUri: !!secureImage?.uri,
+              uri: secureImage?.uri
+            });
             setSecurePostImage(secureImage);
           }
         }
@@ -180,6 +202,42 @@ const PostItem: React.FC<PostItemProps> = ({
     }
     return () => clearTimeout(timer);
   }, [media_type, isPromoted, isVisible, hasRewarded, onPromotedView, id]);
+
+  // Check if promotional post is active
+  const isPromoActive = useMemo(() => {
+    if (!isPromoted) return false;
+    if (alreadyRewarded) return false;
+    
+    // Check duration
+    if (duration_days && timeAgo) {
+      // Use a fallback since we don't have created_at directly
+      const now = new Date();
+      const endDate = new Date();
+      endDate.setDate(now.getDate() + (duration_days || 0));
+      if (new Date() > endDate) return false;
+    }
+    
+    // Check budget
+    if (typeof remaining_budget === 'number' && remaining_budget <= 0) return false;
+    
+    return true;
+  }, [isPromoted, alreadyRewarded, duration_days, timeAgo, remaining_budget]);
+
+  // Handle promotional post view
+  const handlePromotedView = async () => {
+    if (!onPromotedView || isPromoLoading) return;
+    
+    setIsPromoLoading(true);
+    setShowPromoModal(false);
+    
+    try {
+      await onPromotedView(id);
+    } catch (error) {
+      console.error('Promoted view error:', error);
+    } finally {
+      setIsPromoLoading(false);
+    }
+  };
 
   const handlePostPress = useCallback(() => {
     onPostPress(id);
@@ -256,7 +314,7 @@ const PostItem: React.FC<PostItemProps> = ({
       <View style={styles.header}>
         <TouchableOpacity onPress={handleUserPress} style={styles.userInfo}>
           <ProfileFastImage
-            source={profileImage}
+            source={typeof profileImage === 'string' ? profileImage : null}
             size={32}
             style={styles.profileImage}
           />
@@ -273,72 +331,122 @@ const PostItem: React.FC<PostItemProps> = ({
       {/* Media Content */}
       <TouchableOpacity onPress={handlePostPress} activeOpacity={1}>
         <View style={styles.mediaContainer}>
-          {media_type === 'image' && postImage && (
-            <ContentFastImage
-              source={postImage}
-              style={styles.postMedia}
-            />
-          )}
+          {isPromoActive ? (
+            <View style={styles.promoButtonContainer}>
+              <TouchableOpacity
+                style={[styles.promoButton, hasRewarded && { backgroundColor: '#ccc' }]}
+                onPress={() => setShowPromoModal(true)}
+                activeOpacity={0.8}
+                disabled={isPromoLoading}
+              >
+                {isPromoLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.promoButtonText}>
+                    {hasRewarded ? 'View Again' : 'View Promotional Post'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+              
+              {/* Promo Modal */}
+              {showPromoModal && (
+                <View style={styles.promoModalOverlay}>
+                  <View style={styles.promoModal}>
+                    <Text style={styles.promoModalTitle}>Watch & Earn</Text>
+                    <Text style={styles.promoModalMessage}>
+                      Watch this promotional post for 5 seconds to earn rewards!
+                    </Text>
+                    <View style={styles.promoModalButtons}>
+                      <TouchableOpacity
+                        style={styles.promoModalButton}
+                        onPress={handlePromotedView}
+                      >
+                        <Text style={styles.promoModalButtonText}>Start Watching</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.promoModalButton, styles.promoModalCancelButton]}
+                        onPress={() => setShowPromoModal(false)}
+                      >
+                        <Text style={styles.promoModalCancelText}>Cancel</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              )}
+            </View>
+          ) : (
+            <TouchableWithoutFeedback onPress={handlePostPress}>
+              <View>
+                {media_type === 'image' && postImage && (
+                  <ContentFastImage
+                    source={typeof (securePostImage?.uri || postImage) === 'string' ? (securePostImage?.uri || postImage) : null}
+                    style={styles.postMedia}
+                    resizeMode="cover"
+                  />
+                )}
 
-          {media_type === 'video' && postImage && !videoError && (
-            <TouchableWithoutFeedback onPress={togglePlayPause}>
-              <View style={styles.videoPlayerContainer}>
-                <Video
-                  source={secureVideoSource}
-                  style={styles.postMedia}
-                  resizeMode="cover"
-                  repeat={true}
-                  paused={!isPlaying} // Instant pause/play response
-                  muted={isGloballyMuted}
-                  onLoadStart={handleVideoLoadStart}
-                  onLoad={handleVideoLoad}
-                  onProgress={handleVideoProgress}
-                  onEnd={handleVideoEnd}
-                  onError={handleVideoError}
-                  bufferConfig={{
-                    minBufferMs: 2000,
-                    maxBufferMs: 8000,
-                    bufferForPlaybackMs: 500,
-                    bufferForPlaybackAfterRebufferMs: 1000,
-                  }}
-                  playInBackground={false}
-                  playWhenInactive={false}
-                  ignoreSilentSwitch="ignore"
-                  mixWithOthers="duck"
-                />
-                {videoLoading && (
-                  <View style={styles.videoOverlay}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={[styles.loadingText, {color: colors.text.secondary}]}>
-                      Loading video...
+                {media_type === 'video' && postImage && !videoError && (
+                  <TouchableWithoutFeedback onPress={togglePlayPause}>
+                    <View style={styles.videoPlayerContainer}>
+                      <Video
+                        source={secureVideoSource || { uri: '' }}
+                        style={styles.postMedia}
+                        resizeMode="cover"
+                        paused={!isPlaying || !isVisible}
+                        muted={isGloballyMuted}
+                        repeat={false}
+                        onLoadStart={handleVideoLoadStart}
+                        onLoad={handleVideoLoad}
+                        onProgress={handleVideoProgress}
+                        onEnd={handleVideoEnd}
+                        onError={handleVideoError}
+                        bufferConfig={{
+                          minBufferMs: 2000,
+                          maxBufferMs: 8000,
+                          bufferForPlaybackMs: 500,
+                          bufferForPlaybackAfterRebufferMs: 1000,
+                        }}
+                        playInBackground={false}
+                        playWhenInactive={false}
+                        ignoreSilentSwitch="ignore"
+                        mixWithOthers="duck"
+                      />
+                      {videoLoading && (
+                        <View style={styles.videoOverlay}>
+                          <ActivityIndicator size="large" color={colors.primary} />
+                          <Text style={[styles.loadingText, {color: colors.text.secondary}]}>
+                            Loading video...
+                          </Text>
+                        </View>
+                      )}
+                      {!videoLoading && !isPlaying && (
+                        <View style={styles.playButton}>
+                          <Play size={40} color="#fff" />
+                        </View>
+                      )}
+                    </View>
+                  </TouchableWithoutFeedback>
+                )}
+
+                {media_type === 'video' && videoError && (
+                  <View style={styles.videoErrorContainer}>
+                    <AlertTriangle size={50} color={colors.text.tertiary} />
+                    <Text style={[styles.errorText, {color: colors.text.secondary}]}>
+                      Video unavailable
                     </Text>
                   </View>
                 )}
-                {!videoLoading && !isPlaying && (
-                  <View style={styles.playButton}>
-                    <Play size={40} color="#fff" />
+
+                {!postImage && media_type === 'image' && (
+                  <View style={styles.noImageContainer}>
+                    <ImageIcon size={50} color={colors.text.tertiary} />
+                    <Text style={[styles.noImageText, {color: colors.text.secondary}]}>
+                      No image available
+                    </Text>
                   </View>
                 )}
               </View>
             </TouchableWithoutFeedback>
-          )}
-
-          {media_type === 'video' && videoError && (
-            <View style={styles.videoErrorContainer}>
-              <AlertTriangle size={50} color={colors.text.tertiary || '#CCCCCC'} />
-              <Text style={[styles.errorText, {color: colors.text.secondary}]}>
-                Video unavailable
-              </Text>
-            </View>
-          )}
-
-          {!postImage && media_type === 'image' && (
-            <View style={styles.noImageContainer}>
-              <ImageIcon size={50} color={colors.text.tertiary || '#CCCCCC'} />
-              <Text style={[styles.noImageText, {color: colors.text.secondary}]}>
-                No image available
-              </Text>
-            </View>
           )}
         </View>
       </TouchableOpacity>
@@ -560,6 +668,81 @@ const styles = StyleSheet.create({
   premiumText: {
     color: '#fff',
     fontSize: 10,
+    fontWeight: '600',
+  },
+  promoButtonContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 1,
+  },
+  promoButton: {
+    backgroundColor: '#FF3040',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  promoButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  promoModalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    zIndex: 2,
+  },
+  promoModal: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    alignItems: 'center',
+    width: '80%',
+  },
+  promoModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  promoModalMessage: {
+    fontSize: 14,
+    color: '#555',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  promoModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+  },
+  promoModalButton: {
+    backgroundColor: '#FF3040',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  promoModalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  promoModalCancelButton: {
+    backgroundColor: '#ccc',
+  },
+  promoModalCancelText: {
+    color: '#333',
+    fontSize: 16,
     fontWeight: '600',
   },
 });

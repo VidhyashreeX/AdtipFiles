@@ -4,6 +4,12 @@ import { getProfileImageUrl } from './ProfileImageUtils';
 
 // Helper to convert string/null/undefined to FastImage source with proper URL handling
 function toSource(src: string | null | undefined, isProfile: boolean = false) {
+  // Debug logging for source type
+  if (src && typeof src !== 'string') {
+    console.warn('[FastImageOptimizer] toSource received non-string:', typeof src, src);
+    return undefined;
+  }
+  
   if (!src || src === 'null' || src === 'undefined') {
     return undefined;
   }

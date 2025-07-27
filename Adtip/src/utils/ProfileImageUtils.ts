@@ -22,6 +22,12 @@ export const getProfileImageUrl = (
     size
   } = options;
 
+  // Debug logging for input type
+  if (imageUrl && typeof imageUrl !== 'string') {
+    console.warn('[ProfileImageUtils] getProfileImageUrl received non-string:', typeof imageUrl, imageUrl);
+    return fallbackUrl;
+  }
+
   // Handle null, undefined, or invalid URLs
   if (!imageUrl || imageUrl === 'null' || imageUrl === 'undefined' || imageUrl.trim() === '') {
     return fallbackUrl;
