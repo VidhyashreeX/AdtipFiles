@@ -1,32 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { InterstitialAd, AdEventType, TestIds } from 'react-native-google-mobile-ads';
+import AdRotationService from '../services/AdRotationService';
 
 // Test Ad Unit ID (for development/testing)
 const TEST_INTERSTITIAL_AD_UNIT_ID = TestIds.INTERSTITIAL; // Official Google test ID for interstitial ads
-// For custom test ID, use a real ad unit ID, not the app ID:
-// const TEST_INTERSTITIAL_AD_UNIT_ID = 'ca-app-pub-3940256099942544/1033173712'; // Google's test interstitial ad unit
 
-// Production Ad Unit ID (for live app)
-const PROD_INTERSTITIAL_AD_UNIT_ID =
-  Platform.OS === 'android'
-    ? '/22387492205,23292119919/com.adtip.app.adtip_app.Interstitial0.1750928897'
-    : '/22387492205,23292119919/com.adtip.app.adtip_app.Interstitial0.1750928897';
-
-// Switch between test and production ad unit IDs
-const INTERSTITIAL_AD_UNIT_ID = __DEV__ ? TEST_INTERSTITIAL_AD_UNIT_ID : PROD_INTERSTITIAL_AD_UNIT_ID;
+// Get ad unit ID from rotation service
+const getInterstitialAdUnitId = () => {
+  if (__DEV__) {
+    return TEST_INTERSTITIAL_AD_UNIT_ID;
+  }
+  return AdRotationService.getInstance().getAdUnitId('interstitial');
+};
 
 let interstitialAd: InterstitialAd | null = null;
 
 export const useInterstitialAd = () => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentAdUnitId, setCurrentAdUnitId] = useState(getInterstitialAdUnitId());
 
   useEffect(() => {
     // Create interstitial ad instance
-    interstitialAd = InterstitialAd.createForAdRequest(INTERSTITIAL_AD_UNIT_ID, {
-      requestNonPersonalizedAdsOnly: true,
-      keywords: ['entertainment', 'gaming', 'lifestyle'],
+    interstitialAd = InterstitialAd.createForAdRequest(currentAdUnitId, {
+      requestNonPersonalizedAdsOnly: false, // Allow personalized ads for better fill rates
+      keywords: ['entertainment', 'social', 'communication', 'lifestyle'],
+      contentUrl: 'https://adtip.app',
     });
 
     const onLoaded = () => {
@@ -66,7 +66,7 @@ export const useInterstitialAd = () => {
       unsubscribeError();
       unsubscribeOpened();
     };
-  }, []);
+  }, [currentAdUnitId]); // Re-create ad when ad unit changes
 
   const loadAd = () => {
     if (interstitialAd && !isLoading && !isLoaded) {

@@ -18,9 +18,9 @@ const BannerAdComponent = () => {
   const [currentAdUnitId, setCurrentAdUnitId] = useState(getBannerAdUnitId());
   const [adFailed, setAdFailed] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
-  const maxRetries = 2; // Try each network up to 2 times before switching
+  const maxRetries = 2; // Try up to 2 times before giving up
 
-  // Rotate to next network when ad fails
+  // Handle ad failure
   const handleAdFailed = (error: any) => {
     console.log('Banner ad failed to load:', error);
     setAdFailed(true);
@@ -33,17 +33,12 @@ const BannerAdComponent = () => {
       console.log('❌ [BannerAd] Other ad error:', error.code, error.message);
     }
 
-    // If we've tried the current network enough times, switch to next network
-    if (retryCount >= maxRetries) {
-      console.log('🔄 [BannerAd] Switching to next ad network after max retries');
-      const nextAdUnitId = AdRotationService.getInstance().getNextAdUnitId('banner');
-      setCurrentAdUnitId(nextAdUnitId);
-      setRetryCount(0);
-      setAdFailed(false);
-    } else {
-      // Retry with same network
+    // Retry with same ad unit (no rotation)
+    if (retryCount < maxRetries) {
       setRetryCount(prev => prev + 1);
-      console.log(`🔄 [BannerAd] Retrying with same network (attempt ${retryCount + 1}/${maxRetries})`);
+      console.log(`🔄 [BannerAd] Retrying same ad unit (attempt ${retryCount + 1}/${maxRetries})`);
+    } else {
+      console.log('❌ [BannerAd] Max retries reached, keeping failed ad');
     }
   };
 
@@ -54,18 +49,17 @@ const BannerAdComponent = () => {
     setRetryCount(0);
   };
 
-  // Auto-rotate ads every 30 seconds for better fill rates
-  useEffect(() => {
-    const rotationInterval = setInterval(() => {
-      if (!adFailed) {
-        console.log('🔄 [BannerAd] Auto-rotating to next ad network');
-        const nextAdUnitId = AdRotationService.getInstance().getNextAdUnitId('banner');
-        setCurrentAdUnitId(nextAdUnitId);
-      }
-    }, 30000); // Rotate every 30 seconds
-
-    return () => clearInterval(rotationInterval);
-  }, [adFailed]);
+  // No auto-rotation - using PubScale only
+  // useEffect(() => {
+  //   const rotationInterval = setInterval(() => {
+  //     if (!adFailed) {
+  //       console.log('🔄 [BannerAd] Auto-rotating to next ad network');
+  //       const nextAdUnitId = AdRotationService.getInstance().getNextAdUnitId('banner');
+  //       setCurrentAdUnitId(nextAdUnitId);
+  //     }
+  //   }, 30000); // Rotate every 30 seconds
+  //   return () => clearInterval(rotationInterval);
+  // }, [adFailed]);
 
   return (
     <View style={styles.container}>
@@ -94,7 +88,7 @@ const BannerAdComponent = () => {
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    marginVertical: 8,
+    justifyContent: 'center',
   },
 });
 

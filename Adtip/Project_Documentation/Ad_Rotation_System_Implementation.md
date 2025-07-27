@@ -1,12 +1,12 @@
-# Ad Rotation System Implementation
+# Ad System Implementation - PubScale Only
 
 ## Overview
 
-This document describes the implementation of a recursive ad rotation system that alternates between two ad networks (PubScale and Business Collaboration) to maximize fill rates and revenue.
+This document describes the implementation of a simplified ad system that uses only PubScale ads. The rotation system has been removed to use a single ad network for better consistency and management.
 
-## Ad Networks Configuration
+## Ad Network Configuration
 
-### 1. PubScale Company (Bangalore)
+### PubScale Company (Bangalore) - Primary Network
 - **App ID**: `ca-app-pub-3206456546664189~6654042212`
 - **Ad Units**:
   - Banner: `/22387492205,23297313686/com.adtip.app.adtip_app.Banner0.1752230666`
@@ -16,19 +16,9 @@ This document describes the implementation of a recursive ad rotation system tha
   - Rewarded: `/22387492205,23297313686/com.adtip.app.adtip_app.Rewarded0.1752230221`
   - Native: `/22387492205,23297313686/com.adtip.app.adtip_app.Native0.1752230236`
 
-### 2. Business Collaboration Company
-- **App ID**: `ca-app-pub-7659347823138327~5340960546`
-- **Ad Units**:
-  - Banner: `/22387492205,23292119919/com.adtip.app.adtip_app.Banner0.1750928844`
-  - Rectangle: `/22387492205,23292119919/com.adtip.app.adtip_app.Mrec0.1750929251`
-  - Interstitial: `/22387492205,23292119919/com.adtip.app.adtip_app.Interstitial0.1750928897`
-  - App Open: `/22387492205,23292119919/com.adtip.app.adtip_app.AppOpen0.1750929051`
-  - Rewarded: `/22387492205,23292119919/com.adtip.app.adtip_app.Rewarded0.1750928989`
-  - Native: `/22387492205,23292119919/com.adtip.app.adtip_app.Native0.1750929216`
-
 ## Implementation Details
 
-### 1. AdRotationService Class
+### 1. AdRotationService Class (Simplified)
 **Location**: `src/services/AdRotationService.ts`
 
 ```typescript
@@ -36,29 +26,26 @@ class AdRotationService {
   // Singleton pattern for global state management
   static getInstance(): AdRotationService
   
-  // Get current ad network
+  // Get current ad network (always PubScale)
   getCurrentNetwork(): AdNetwork
-  
-  // Get next ad network in rotation
-  getNextNetwork(): AdNetwork
   
   // Get ad unit ID for specific ad type
   getAdUnitId(adType: keyof AdNetwork['adUnits']): string
   
-  // Get next ad unit ID (switches network)
+  // Get next ad unit ID (same as current - no rotation)
   getNextAdUnitId(adType: keyof AdNetwork['adUnits']): string
 }
 ```
 
-### 2. Rotation Logic
+### 2. Simplified Logic
 
-#### **Automatic Rotation**
-- **Banner Ads**: Rotate every 30 seconds
-- **Rectangle Ads**: Rotate every 45 seconds
-- **App Open Ads**: Rotate on failure after max retries
+#### **No Auto-Rotation**
+- **Banner Ads**: No automatic rotation
+- **Rectangle Ads**: No automatic rotation
+- **App Open Ads**: No automatic rotation
 
-#### **Failure-Based Rotation**
-- **Max Retries**: 2 attempts per network before switching
+#### **Failure-Based Retry**
+- **Max Retries**: 2 attempts before giving up
 - **Error Types**:
   - `no-fill`: Retry after 1 minute (normal for new ad units)
   - `network-error`: Retry after 15 seconds
@@ -66,7 +53,7 @@ class AdRotationService {
 
 #### **Success Reset**
 - When ad loads successfully, reset retry counter
-- Continue with current network until failure
+- Continue with same ad unit until failure
 
 ### 3. Component Integration
 
@@ -77,23 +64,21 @@ const BannerAdComponent = () => {
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 2;
 
-  // Auto-rotate every 30 seconds
-  useEffect(() => {
-    const rotationInterval = setInterval(() => {
-      const nextAdUnitId = AdRotationService.getInstance().getNextAdUnitId('banner');
-      setCurrentAdUnitId(nextAdUnitId);
-    }, 30000);
-    return () => clearInterval(rotationInterval);
-  }, []);
+  // No auto-rotation - PubScale only
+  // useEffect(() => {
+  //   const rotationInterval = setInterval(() => {
+  //     // Auto-rotation removed
+  //   }, 30000);
+  //   return () => clearInterval(rotationInterval);
+  // }, []);
 
-  // Failure-based rotation
+  // Failure-based retry only
   const handleAdFailed = (error: any) => {
-    if (retryCount >= maxRetries) {
-      const nextAdUnitId = AdRotationService.getInstance().getNextAdUnitId('banner');
-      setCurrentAdUnitId(nextAdUnitId);
-      setRetryCount(0);
-    } else {
+    if (retryCount < maxRetries) {
       setRetryCount(prev => prev + 1);
+      // Retry with same ad unit
+    } else {
+      console.log('Max retries reached, keeping failed ad');
     }
   };
 };
@@ -103,8 +88,8 @@ const BannerAdComponent = () => {
 ```typescript
 const RectangleAdComponent = () => {
   // Similar logic to BannerAdComponent
-  // Auto-rotate every 45 seconds
-  // Failure-based rotation with max 2 retries
+  // No auto-rotation
+  // Failure-based retry with max 2 retries
 };
 ```
 
@@ -118,20 +103,20 @@ export function useAppOpenAd() {
     adRef.current = AppOpenAd.createForAdRequest(currentAdUnitId, {...});
   }, [currentAdUnitId]);
   
-  // Failure-based rotation only (no auto-rotation for app open)
+  // Failure-based retry only (no auto-rotation)
 };
 ```
 
-## Rotation Strategy
+## Simplified Strategy
 
-### **1. Time-Based Rotation**
-- **Banner**: 30-second intervals
-- **Rectangle**: 45-second intervals
-- **App Open**: No auto-rotation (user experience)
+### **1. Single Network**
+- **PubScale Only**: All ads use PubScale ad units
+- **No Rotation**: Consistent ad experience
+- **Simplified Management**: Easier to track and optimize
 
-### **2. Failure-Based Rotation**
-- **Max Retries**: 2 per network
-- **Switch Network**: After max retries reached
+### **2. Failure-Based Retry**
+- **Max Retries**: 2 per ad unit
+- **No Network Switching**: Retry with same ad unit
 - **Reset Counter**: On successful load
 
 ### **3. Error Handling**
@@ -141,36 +126,35 @@ export function useAppOpenAd() {
 
 ## Benefits
 
-### **1. Higher Fill Rates**
-- If one network has no ads, the other can fill
-- Reduces "no-fill" errors by 50%+
+### **1. Simplified Management**
+- Single ad network to manage
+- Easier to track performance
+- Consistent user experience
 
-### **2. Better Revenue**
-- Competition between networks increases CPM
-- Multiple revenue streams
+### **2. Better Control**
+- No complex rotation logic
+- Predictable ad behavior
+- Easier debugging
 
-### **3. Geographic Coverage**
-- Different networks perform better in different regions
-- Global coverage optimization
-
-### **4. Redundancy**
-- If one network fails, others continue working
-- Improved app stability
+### **3. Focused Optimization**
+- Can optimize specifically for PubScale
+- Better understanding of performance
+- Targeted improvements
 
 ## Monitoring & Analytics
 
 ### **Console Logs**
 ```
-🔄 [AdRotation] Switched to PubScale (rotation #1)
 📱 [AdRotation] Using PubScale banner ad: /22387492205,23297313686/...
 🎯 [BannerAd] No-fill error - this is normal for new ad units
-🔄 [BannerAd] Switching to next ad network after max retries
+🔄 [BannerAd] Retrying same ad unit (attempt 1/2)
+❌ [BannerAd] Max retries reached, keeping failed ad
 ```
 
 ### **Rotation Statistics**
 ```typescript
 const stats = AdRotationService.getInstance().getRotationStats();
-// Returns: { currentNetwork: 'PubScale', totalRotations: 5, availableNetworks: 2 }
+// Returns: { currentNetwork: 'PubScale', totalRotations: 0, availableNetworks: 1 }
 ```
 
 ## Testing
@@ -181,55 +165,52 @@ const stats = AdRotationService.getInstance().getRotationStats();
 - Easy testing without affecting production
 
 ### **Production Mode**
-- Uses real ad unit IDs from both networks
-- Full rotation system active
+- Uses PubScale ad unit IDs
+- No rotation system active
 - Real-time monitoring and logging
 
 ## Future Enhancements
 
-### **1. Performance-Based Rotation**
-- Track fill rates per network
-- Automatically favor better-performing networks
+### **1. Performance-Based Optimization**
+- Track fill rates for PubScale
+- Optimize ad unit performance
 - A/B testing capabilities
 
 ### **2. Geographic Optimization**
 - Detect user location
-- Route to best-performing network for that region
-- Dynamic network selection
+- Optimize for specific regions
+- Localized ad content
 
 ### **3. Time-Based Optimization**
 - Track performance by time of day
-- Optimize rotation based on peak hours
+- Optimize based on peak hours
 - Seasonal adjustments
 
 ### **4. User Segmentation**
-- Different rotation strategies for different user types
+- Different ad experiences for different user types
 - Premium users get different ad experience
-- Personalized ad rotation
+- Personalized ad content
 
 ## Configuration
 
-### **Adding New Networks**
+### **Adding New Ad Units**
 ```typescript
-export const NEW_NETWORK: AdNetwork = {
-  name: 'New Network',
-  appId: 'ca-app-pub-xxxxxxxxxxxxxxxx~yyyyyyyyyy',
+// In AdRotationService.ts
+export const PUBSCALE_NETWORK: AdNetwork = {
+  name: 'PubScale',
+  appId: 'ca-app-pub-3206456546664189~6654042212',
   adUnits: {
-    banner: '/22387492205,xxxxxxxxx/com.adtip.app.adtip_app.Banner0.xxxxxxxxx',
-    // ... other ad types
+    banner: '/22387492205,23297313686/com.adtip.app.adtip_app.Banner0.1752230666',
+    // Add new ad units here
+    newAdType: '/22387492205,23297313686/com.adtip.app.adtip_app.NewAdType0.xxxxxxxxx',
   },
 };
-
-// Add to networks array
-const networks = [PUBSCALE_NETWORK, BUSINESS_COLLABORATION_NETWORK, NEW_NETWORK];
 ```
 
-### **Adjusting Rotation Intervals**
+### **Adjusting Retry Settings**
 ```typescript
 // In BannerAdComponent.tsx
-const rotationInterval = setInterval(() => {
-  // Change from 30000 to desired interval
-}, 30000); // 30 seconds
+const maxRetries = 3; // Change from 2 to desired retry count
 ```
 
-The ad rotation system is now fully implemented and will automatically alternate between PubScale and Business Collaboration ad units to maximize fill rates and revenue! 
+The ad system is now simplified to use only PubScale ads with no rotation, providing a consistent and manageable ad experience! 

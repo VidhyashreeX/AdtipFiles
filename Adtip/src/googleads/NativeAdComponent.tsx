@@ -1,20 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Platform, Text } from 'react-native';
 import { TestIds } from 'react-native-google-mobile-ads';
+import AdRotationService from '../services/AdRotationService';
 
 // Test Ad Unit ID (for development/testing)
 const TEST_NATIVE_AD_UNIT_ID = TestIds.NATIVE; // Official Google test ID for native ads
-// For custom test ID, use a real ad unit ID, not the app ID:
-// const TEST_NATIVE_AD_UNIT_ID = 'ca-app-pub-3940256099942544/2247696110'; // Google's test native ad unit
 
-// Production Ad Unit ID (for live app)
-const PROD_NATIVE_AD_UNIT_ID =
-  Platform.OS === 'android'
-    ? '/22387492205,23292119919/com.adtip.app.adtip_app.Native0.1750929216'
-    : '/22387492205,23292119919/com.adtip.app.adtip_app.Native0.1750929216';
-
-// Switch between test and production ad unit IDs
-const NATIVE_AD_UNIT_ID = __DEV__ ? TEST_NATIVE_AD_UNIT_ID : PROD_NATIVE_AD_UNIT_ID;
+// Get ad unit ID from rotation service
+const getNativeAdUnitId = () => {
+  if (__DEV__) {
+    return TEST_NATIVE_AD_UNIT_ID;
+  }
+  return AdRotationService.getInstance().getAdUnitId('native');
+};
 
 interface NativeAdComponentProps {
   style?: any;
@@ -25,10 +23,11 @@ interface NativeAdComponentProps {
 // you would need to use the AdLoader class and create custom native ad layouts
 const NativeAdComponent: React.FC<NativeAdComponentProps> = ({ style }) => {
   const [isLoaded, setIsLoaded] = useState(false);
+  const [currentAdUnitId, setCurrentAdUnitId] = useState(getNativeAdUnitId());
 
   useEffect(() => {
     // Native ads would be loaded using AdLoader here
-    console.log('Native ad component mounted with unit ID:', NATIVE_AD_UNIT_ID);
+    console.log('Native ad component mounted with unit ID:', currentAdUnitId);
     
     // Simulate loading for now
     const timer = setTimeout(() => {
@@ -37,7 +36,7 @@ const NativeAdComponent: React.FC<NativeAdComponentProps> = ({ style }) => {
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [currentAdUnitId]); // Re-create when ad unit changes
 
   return (
     <View style={[styles.container, style]}>

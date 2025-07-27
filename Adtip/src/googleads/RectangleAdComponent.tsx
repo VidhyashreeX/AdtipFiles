@@ -18,32 +18,27 @@ const RectangleAdComponent = () => {
   const [currentAdUnitId, setCurrentAdUnitId] = useState(getRectangleAdUnitId());
   const [adFailed, setAdFailed] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
-  const maxRetries = 2; // Try each network up to 2 times before switching
+  const maxRetries = 2; // Try up to 2 times before giving up
 
-  // Rotate to next network when ad fails
+  // Handle ad failure
   const handleAdFailed = (error: any) => {
     console.log('Rectangle ad failed to load:', error);
     setAdFailed(true);
 
     // Enhanced error logging for debugging
     if (error.code === 'no-fill') {
-      //console.log('🎯 [RectangleAd] No-fill error - this is normal for new ad units');
-      //console.log('📊 [RectangleAd] Ad inventory will improve over time');
+      console.log('🎯 [RectangleAd] No-fill error - this is normal for new ad units');
+      console.log('📊 [RectangleAd] Ad inventory will improve over time');
     } else {
-      //console.log('❌ [RectangleAd] Other ad error:', error.code, error.message);
+      console.log('❌ [RectangleAd] Other ad error:', error.code, error.message);
     }
 
-    // If we've tried the current network enough times, switch to next network
-    if (retryCount >= maxRetries) {
-      console.log('🔄 [RectangleAd] Switching to next ad network after max retries');
-      const nextAdUnitId = AdRotationService.getInstance().getNextAdUnitId('rectangle');
-      setCurrentAdUnitId(nextAdUnitId);
-      setRetryCount(0);
-      setAdFailed(false);
-    } else {
-      // Retry with same network
+    // Retry with same ad unit (no rotation)
+    if (retryCount < maxRetries) {
       setRetryCount(prev => prev + 1);
-      console.log(`🔄 [RectangleAd] Retrying with same network (attempt ${retryCount + 1}/${maxRetries})`);
+      console.log(`🔄 [RectangleAd] Retrying same ad unit (attempt ${retryCount + 1}/${maxRetries})`);
+    } else {
+      console.log('❌ [RectangleAd] Max retries reached, keeping failed ad');
     }
   };
 
@@ -54,18 +49,17 @@ const RectangleAdComponent = () => {
     setRetryCount(0);
   };
 
-  // Auto-rotate ads every 45 seconds for better fill rates
-  useEffect(() => {
-    const rotationInterval = setInterval(() => {
-      if (!adFailed) {
-        console.log('🔄 [RectangleAd] Auto-rotating to next ad network');
-        const nextAdUnitId = AdRotationService.getInstance().getNextAdUnitId('rectangle');
-        setCurrentAdUnitId(nextAdUnitId);
-      }
-    }, 45000); // Rotate every 45 seconds
-
-    return () => clearInterval(rotationInterval);
-  }, [adFailed]);
+  // No auto-rotation - using PubScale only
+  // useEffect(() => {
+  //   const rotationInterval = setInterval(() => {
+  //     if (!adFailed) {
+  //       console.log('🔄 [RectangleAd] Auto-rotating to next ad network');
+  //       const nextAdUnitId = AdRotationService.getInstance().getNextAdUnitId('rectangle');
+  //       setCurrentAdUnitId(nextAdUnitId);
+  //     }
+  //   }, 45000); // Rotate every 45 seconds
+  //   return () => clearInterval(rotationInterval);
+  // }, [adFailed]);
 
   return (
     <View style={styles.container}>
@@ -94,7 +88,7 @@ const RectangleAdComponent = () => {
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    marginVertical: 12,
+    justifyContent: 'center',
   },
 });
 

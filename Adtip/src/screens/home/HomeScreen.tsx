@@ -61,6 +61,7 @@ import PubScaleCreditAlert from '../../components/common/PubScaleCreditAlert';
 
 
 import ScreenTransition from '../../components/common/ScreenTransition';
+import RewardPopup from '../../components/RewardPopup';
 
 
 // Skeleton Components
@@ -94,6 +95,7 @@ interface Post {
   is_promoted?: number; created_at: string; is_premium?: boolean;
   is_liked?: boolean; last_active?: string | null;
   duration_days?: number; remaining_budget?: number;
+  is_promtion_post_viewed?: number;
 }
 interface HomeScreenProps { walletBalance?: string; }
 
@@ -1039,6 +1041,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
   // Rewarded posts state
   const [rewardedPosts, setRewardedPosts] = useState<Set<number>>(new Set());
+  const [showRewardPopup, setShowRewardPopup] = useState(false);
+  const [earnedAmount, setEarnedAmount] = useState(0);
 
   // Function to handle view of promoted posts
   const handlePromotedPostView = useCallback(async (postId: number) => {
@@ -1048,41 +1052,31 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     setRewardedPosts(prev => new Set(prev).add(postId));
     
     try {
-      // Show loading state for 5 seconds
+      // Log API request
+      console.log('[HomeScreen] Calling view-promoted-post API:', { user_id: user.id, post_id: postId });
+      
       const response = await ApiService.post(HOME_ENDPOINTS.VIEW_PROMOTED_POST, { 
         user_id: user.id, 
         post_id: postId 
       });
       
-      if (response && response.data && response.data.status && response.data.earned_amount > 0) {
-        const isPremium = response.data.earned_amount > 0.03;
-        Alert.alert(
-          'Congratulations! 🎉',
-          isPremium
-            ? `You earned ₹${response.data.earned_amount.toFixed(2)}! Upgrade to premium to earn even more!`
-            : 'You earned ₹0.03! Upgrade to premium to earn more per ad.',
-          [
-            {
-              text: 'Upgrade to Premium',
-              onPress: () => navigation.navigate('PremiumUser' as never),
-              style: 'default'
-            },
-            {
-              text: 'Continue',
-              style: 'cancel'
-            }
-          ]
-        );
-      } else if (response && response.data && response.data.message === 'Already rewarded for this post') {
+      // Log API response
+      console.log('[HomeScreen] view-promoted-post API response:', response);
+      
+      if (response && response.status && response.earned_amount > 0) {
+        // Show custom reward popup
+        setEarnedAmount(response.earned_amount);
+        setShowRewardPopup(true);
+      } else if (response && response.message === 'Already rewarded for this post') {
         Alert.alert('Already Rewarded', 'You have already been rewarded for viewing this post.');
-      } else if (response && response.data && response.data.message === 'Ad budget exhausted') {
+      } else if (response && response.message === 'Ad budget exhausted') {
         Alert.alert('Ad Budget Exhausted', 'No more rewards available for this ad.');
-      } else if (response && response.data && response.data.message === 'Ad owner wallet exhausted') {
+      } else if (response && response.message === 'Ad owner wallet exhausted') {
         Alert.alert('Ad Owner Wallet Exhausted', 'The ad owner has insufficient funds.');
-      } else if (response && response.data && response.data.message === 'Promotion not active') {
+      } else if (response && response.message === 'Promotion not active') {
         Alert.alert('Promotion Not Active', 'This promotion is not currently active.');
       } else {
-        Alert.alert('No Reward', 'No reward available for this view.');
+        Alert.alert('No reward', 'You have already been rewarded for viewing this post.');
       }
     } catch (err) {
       console.log("PromotedPostViewFailed!!!", err);
@@ -1139,6 +1133,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           created_at={item.created_at}
           remaining_budget={item.remaining_budget}
           alreadyRewarded={rewardedPosts.has(item.id)}
+          is_promtion_post_viewed={item.is_promtion_post_viewed}
         />
         
         {/* Rectangle ad after every 3rd post (starting from post 2) */}
@@ -1314,6 +1309,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           onClose={() => setShowPubScaleCreditAlert(false)}
           onViewWallet={handleViewWallet}
           onViewHistory={handleViewHistory}
+        />
+
+        {/* Custom Reward Popup */}
+        <RewardPopup
+          visible={showRewardPopup}
+          earnedAmount={earnedAmount}
+          onClose={() => setShowRewardPopup(false)}
+          onOpenWallet={() => {
+            setShowRewardPopup(false);
+            navigation.navigate('Wallet' as never);
+          }}
+          isPremium={isPremium}
+          onUpgradePremium={() => {
+            setShowRewardPopup(false);
+            navigation.navigate('PremiumUser' as never);
+          }}
         />
 
       </View>

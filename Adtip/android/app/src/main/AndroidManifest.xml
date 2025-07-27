@@ -89,8 +89,8 @@
             android:name="android.app.extract_native_libs"
             android:value="true" />
 
-        <!-- AdMob App ID - PubScale Primary -->
-        <!-- Note: Ad rotation system uses both PubScale and Business Collaboration ad units -->
+        <!-- AdMob App ID - PubScale Only -->
+        <!-- Note: Simplified ad system uses only PubScale ad units -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-3206456546664189~6654042212"

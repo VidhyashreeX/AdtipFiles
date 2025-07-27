@@ -28,12 +28,12 @@ export function useAppOpenAd() {
   const [currentAdUnitId, setCurrentAdUnitId] = useState(getAppOpenAdUnitId());
   const [adFailed, setAdFailed] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
-  const maxRetries = 2; // Try each network up to 2 times before switching
+  const maxRetries = 2; // Try up to 2 times before giving up
   const adRef = useRef<AppOpenAd | null>(null);
   const appStateRef = useRef(AppState.currentState);
   const isInitialMount = useRef(true);
 
-  // Rotate to next network when ad fails
+  // Handle ad failure (no rotation)
   const handleAdError = (error: any) => {
     console.log('App open ad failed to load:', error);
     setAdLoaded(false);
@@ -41,7 +41,7 @@ export function useAppOpenAd() {
     setAdFailed(true);
 
     // Add global retry limit to prevent infinite loops
-    const totalRetryLimit = 10; // Maximum total retries across all networks
+    const totalRetryLimit = 10; // Maximum total retries
     const currentTotalRetries = retryCount;
 
     if (currentTotalRetries >= totalRetryLimit) {
@@ -55,28 +55,17 @@ export function useAppOpenAd() {
       console.log('🎯 [AppOpenAd] No-fill error - this is normal for new ad units');
       console.log('📊 [AppOpenAd] Ad inventory will improve over time as the app gains users');
 
-      // If we've tried the current network enough times, switch to next network
-      if (retryCount >= maxRetries) {
-        console.log('🔄 [AppOpenAd] Switching to next ad network after max retries');
-        const nextAdUnitId = AdRotationService.getInstance().getNextAdUnitId('appOpen');
-        setCurrentAdUnitId(nextAdUnitId);
-        setRetryCount(0);
-        setAdFailed(false);
-
-        // Retry with new network
-        setTimeout(() => {
-          console.log('🔄 [AppOpenAd] Retrying with new network...');
-          adRef.current?.load();
-        }, 5000);
-      } else {
-        // Retry with same network
+      // Retry with same ad unit (no rotation)
+      if (retryCount < maxRetries) {
         setRetryCount(prev => prev + 1);
-        console.log(`🔄 [AppOpenAd] Retrying with same network (attempt ${retryCount + 1}/${maxRetries})`);
+        console.log(`🔄 [AppOpenAd] Retrying same ad unit (attempt ${retryCount + 1}/${maxRetries})`);
 
         setTimeout(() => {
           console.log('🔄 [AppOpenAd] Retrying ad load after no-fill...');
           adRef.current?.load();
         }, 60000); // Retry after 1 minute for no-fill
+      } else {
+        console.log('❌ [AppOpenAd] Max retries reached, keeping failed ad');
       }
     } else if (error.code === 'network-error' || error.message?.includes('Current Activity was null')) {
       console.log('🌐 [AppOpenAd] Network/Activity error - will retry with longer delay');
@@ -98,28 +87,17 @@ export function useAppOpenAd() {
     } else {
       console.log('❌ [AppOpenAd] Other ad error:', error.code, error.message);
 
-      // If we've tried the current network enough times, switch to next network
-      if (retryCount >= maxRetries) {
-        console.log('🔄 [AppOpenAd] Switching to next ad network after max retries');
-        const nextAdUnitId = AdRotationService.getInstance().getNextAdUnitId('appOpen');
-        setCurrentAdUnitId(nextAdUnitId);
-        setRetryCount(0);
-        setAdFailed(false);
-
-        // Retry with new network
-        setTimeout(() => {
-          console.log('🔄 [AppOpenAd] Retrying with new network...');
-          adRef.current?.load();
-        }, 5000);
-      } else {
-        // Retry with same network
+      // Retry with same ad unit (no rotation)
+      if (retryCount < maxRetries) {
         setRetryCount(prev => prev + 1);
-        console.log(`🔄 [AppOpenAd] Retrying with same network (attempt ${retryCount + 1}/${maxRetries})`);
+        console.log(`🔄 [AppOpenAd] Retrying same ad unit (attempt ${retryCount + 1}/${maxRetries})`);
 
         setTimeout(() => {
           console.log('🔄 [AppOpenAd] Retrying ad load after error...');
           adRef.current?.load();
         }, 15000); // Retry after 15 seconds for other errors
+      } else {
+        console.log('❌ [AppOpenAd] Max retries reached, keeping failed ad');
       }
     }
   };

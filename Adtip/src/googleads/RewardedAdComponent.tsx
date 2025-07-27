@@ -1,20 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { RewardedAd, RewardedAdEventType, TestIds } from 'react-native-google-mobile-ads';
+import AdRotationService from '../services/AdRotationService';
 
 // Test Ad Unit ID (for development/testing)
 const TEST_REWARDED_AD_UNIT_ID = TestIds.REWARDED; // Official Google test ID for rewarded ads
-// For custom test ID, use a real ad unit ID, not the app ID:
-// const TEST_REWARDED_AD_UNIT_ID = 'ca-app-pub-3940256099942544/5224354917'; // Google's test rewarded ad unit
 
-// Production Ad Unit ID (for live app)
-const PROD_REWARDED_AD_UNIT_ID =
-  Platform.OS === 'android'
-    ? '/22387492205,23292119919/com.adtip.app.adtip_app.Rewarded0.1750928989'
-    : '/22387492205,23292119919/com.adtip.app.adtip_app.Rewarded0.1750928989';
-
-// Switch between test and production ad unit IDs
-const REWARDED_AD_UNIT_ID = __DEV__ ? TEST_REWARDED_AD_UNIT_ID : PROD_REWARDED_AD_UNIT_ID;
+// Get ad unit ID from rotation service
+const getRewardedAdUnitId = () => {
+  if (__DEV__) {
+    return TEST_REWARDED_AD_UNIT_ID;
+  }
+  return AdRotationService.getInstance().getAdUnitId('rewarded');
+};
 
 let rewardedAd: RewardedAd | null = null;
 
@@ -24,14 +22,16 @@ export const useRewardedAd = () => {
   const [reward, setReward] = useState<any>(null);
   const [hasEarnedReward, setHasEarnedReward] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentAdUnitId, setCurrentAdUnitId] = useState(getRewardedAdUnitId());
 
   useEffect(() => {
     console.log('RewardedAdEventType available values:', Object.keys(RewardedAdEventType));
     
     // Create rewarded ad instance
-    rewardedAd = RewardedAd.createForAdRequest(REWARDED_AD_UNIT_ID, {
-      requestNonPersonalizedAdsOnly: true,
-      keywords: ['entertainment', 'gaming', 'rewards', 'coins'],
+    rewardedAd = RewardedAd.createForAdRequest(currentAdUnitId, {
+      requestNonPersonalizedAdsOnly: false, // Allow personalized ads for better fill rates
+      keywords: ['entertainment', 'social', 'communication', 'lifestyle'],
+      contentUrl: 'https://adtip.app',
     });
 
     const onLoaded = () => {
@@ -83,7 +83,7 @@ export const useRewardedAd = () => {
       if (unsubscribeLoaded) unsubscribeLoaded();
       if (unsubscribeEarnedReward) unsubscribeEarnedReward();
     };
-  }, []);
+  }, [currentAdUnitId]); // Re-create ad when ad unit changes
 
   const loadAd = () => {
     if (rewardedAd && !isLoading && !isLoaded) {
