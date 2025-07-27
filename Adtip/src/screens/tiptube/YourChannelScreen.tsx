@@ -16,9 +16,11 @@ import Icon from 'react-native-vector-icons/Feather';
 import { Star, Edit, BarChart3, Upload, MoreVertical, Trash2, Edit3 } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useContentCreatorPremium } from '../../contexts/ContentCreatorPremiumContext';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Header from '../../components/common/Header';
+import ContentCreatorPlanToggle from '../../components/common/ContentCreatorPlanToggle';
 import ApiService from '../../services/ApiService';
 import {
   ChannelInfo,
@@ -39,6 +41,7 @@ const VIDEO_CARD_HEIGHT = VIDEO_CARD_WIDTH * 0.6; // 16:10 aspect ratio
 const YourChannelScreen: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
+  const { isContentCreatorPremium, contentCreatorPremiumData } = useContentCreatorPremium();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [selectedTab, setSelectedTab] = useState('Home');
@@ -205,9 +208,25 @@ const YourChannelScreen: React.FC = () => {
   };
 
   const handlePaidVideoAnalytics = () => {
-    // Show coming soon modal for paid video analytics
-    setShowComingSoonModal(true);
+    // Navigate to analytics screen with proper channelId (same as regular analytics)
+    if (channel?.channelId) {
+      navigation.navigate('Analytics' as never, { channelId: channel.channelId });
+    } else {
+      console.warn('[YourChannelScreen] No channelId available for paid video analytics');
+      // If no channel found, redirect to create channel
+      navigation.navigate('CreateChannel' as never);
+    }
   };
+
+  // Content Creator Premium Toggle Handler
+  const handleTogglePremium = useCallback(() => {
+    console.log('🚀 [YourChannelScreen] User clicked content creator premium toggle');
+    console.log('📊 [YourChannelScreen] Current content creator premium status:', {
+      isContentCreatorPremium,
+      hasData: !!contentCreatorPremiumData
+    });
+    navigation.navigate('ContentCreatorPremium' as never);
+  }, [isContentCreatorPremium, contentCreatorPremiumData, navigation]);
 
   // Separate component for video card to properly use hooks
   const VideoCard = React.memo(({
@@ -221,26 +240,38 @@ const YourChannelScreen: React.FC = () => {
     onEdit: (item: Video) => void;
     onDelete: (item: Video) => void;
   }) => {
-    const [thumbnailUrl, setThumbnailUrl] = React.useState<string>(getFallbackThumbnailUrl());
+    const fallbackUrl = React.useMemo(() => getFallbackThumbnailUrl(item.id), [item.id]);
+    const [thumbnailUrl, setThumbnailUrl] = React.useState<string>(fallbackUrl);
     const [showOptions, setShowOptions] = React.useState(false);
+    const [isLoading, setIsLoading] = React.useState(false);
 
     React.useEffect(() => {
       const loadThumbnail = async () => {
         if (item.videoThumbnail) {
+          setIsLoading(true);
           try {
             const secureUrl = await getSecureMediaUrl(item.videoThumbnail);
             if (secureUrl) {
               setThumbnailUrl(secureUrl);
+            } else {
+              // If getSecureMediaUrl returns undefined, use fallback
+              setThumbnailUrl(fallbackUrl);
             }
           } catch (error) {
             console.warn('[YourChannelScreen] Failed to load video thumbnail:', error);
-            // Keep fallback URL
+            // Reset to fallback URL on error
+            setThumbnailUrl(fallbackUrl);
+          } finally {
+            setIsLoading(false);
           }
+        } else {
+          // No thumbnail URL provided, use fallback
+          setThumbnailUrl(fallbackUrl);
         }
       };
 
       loadThumbnail();
-    }, [item.videoThumbnail]);
+    }, [item.videoThumbnail, fallbackUrl]);
 
     const handleOptionsPress = () => {
       Alert.alert(
@@ -275,9 +306,12 @@ const YourChannelScreen: React.FC = () => {
           source={{ uri: thumbnailUrl }}
           style={styles.videoThumbnail}
           resizeMode="cover"
-          onError={() => {
-            // Fallback to placeholder on error
-            setThumbnailUrl(getFallbackThumbnailUrl());
+          onError={(error) => {
+            console.warn('[YourChannelScreen] Image load error for video', item.id, ':', error.nativeEvent?.error);
+            // Fallback to placeholder on error, only if not already using fallback
+            if (thumbnailUrl !== fallbackUrl) {
+              setThumbnailUrl(fallbackUrl);
+            }
           }}
         />
         <View style={styles.videoDurationOverlay}>
@@ -305,9 +339,110 @@ const YourChannelScreen: React.FC = () => {
     );
   });
 
-  const handleVideoPress = (item: Video) => {
-    // Navigate to video player
-    navigation.navigate('VideoPlayer' as never, { videoId: item.id });
+  const handleVideoPress = async (item: Video) => {
+    console.log('[YourChannelScreen] Video pressed:', { id: item.id, title: item.name, isPaid: item.isPaidPromotional });
+
+    try {
+      // --- IMPLEMENT SAME LOGIC AS TipTubeScreen: Three cases for paid/normal videos ---
+      if (item.isPaidPromotional === 1) {
+        if (item.hasContentCreatorPremium === 1) {
+          // Case 1: Paid video, owner has content creator premium
+          const response = await ApiService.viewSubscriptionPaidVideo(Number(item.id));
+          if (response.status === true) {
+            const videoUrl = response.data?.video_link || item.videoLink;
+            const videoForPlayer = {
+              id: Number(item.id),
+              title: item.name,
+              thumbnail: item.videoThumbnail,
+              videoUrl,
+              duration: 0,
+              views: item.views || 0,
+              posted: item.createdDate,
+              avatar: '', // Will be populated by channel data
+              creatorName: 'Your Channel',
+              isVerified: false,
+              channelId: String(item.channelId || ''),
+              price: item.promotionalPrice || 0,
+              isPaidPromotional: item.isPaidPromotional || 0,
+              contentCreatorPlanId: 0,
+            };
+
+            navigation.navigate('VideoPlayerModal' as never, {
+              video: videoForPlayer,
+              cardLayout: null,
+              upNextVideos: []
+            });
+          } else {
+            Alert.alert(
+              'Insufficient Balance',
+              'You do not have enough balance to watch this video.'
+            );
+          }
+        } else {
+          // Case 2: Paid video, owner does NOT have content creator premium
+          const response = await ApiService.viewPaidVideoNoPremium(Number(item.id));
+          if (response.status === true) {
+            const videoUrl = response.data?.video_link || item.videoLink;
+            const videoForPlayer = {
+              id: Number(item.id),
+              title: item.name,
+              thumbnail: item.videoThumbnail,
+              videoUrl,
+              duration: 0,
+              views: item.views || 0,
+              posted: item.createdDate,
+              avatar: '', // Will be populated by channel data
+              creatorName: 'Your Channel',
+              isVerified: false,
+              channelId: String(item.channelId || ''),
+              price: item.promotionalPrice || 0,
+              isPaidPromotional: item.isPaidPromotional || 0,
+              contentCreatorPlanId: 0,
+            };
+
+            navigation.navigate('VideoPlayerModal' as never, {
+              video: videoForPlayer,
+              cardLayout: null,
+              upNextVideos: []
+            });
+          } else {
+            Alert.alert(
+              'Insufficient Balance',
+              'You do not have enough balance to watch this video.'
+            );
+          }
+        }
+      } else {
+        // Case 3: Normal video
+        await ApiService.viewNormalVideo(Number(item.id));
+
+        const videoForPlayer = {
+          id: Number(item.id),
+          title: item.name,
+          thumbnail: item.videoThumbnail,
+          videoUrl: item.videoLink,
+          duration: 0,
+          views: item.views || 0,
+          posted: item.createdDate,
+          avatar: '', // Will be populated by channel data
+          creatorName: 'Your Channel',
+          isVerified: false,
+          channelId: String(item.channelId || ''),
+          price: 0,
+          isPaidPromotional: 0,
+          contentCreatorPlanId: 0,
+        };
+
+        navigation.navigate('VideoPlayerModal' as never, {
+          video: videoForPlayer,
+          cardLayout: null,
+          upNextVideos: []
+        });
+      }
+    } catch (error) {
+      console.error('[YourChannelScreen] Error handling video press:', error);
+      Alert.alert('Error', 'There was an issue accessing this video. Please try again later.');
+    }
   };
 
   const handleEditVideo = (item: Video) => {
@@ -549,7 +684,9 @@ const YourChannelScreen: React.FC = () => {
         showSearch={false}
         showWallet={false}
         showPremium={false}
-        showProfile={false}
+        rightComponent={
+          <ContentCreatorPlanToggle onPress={handleTogglePremium} />
+        }
       />
 
       <FlatList

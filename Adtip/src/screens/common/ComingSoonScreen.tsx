@@ -25,7 +25,6 @@ const ComingSoonScreen: React.FC = () => {
         showSearch={false}
         showWallet={false}
         showPremium={false}
-        showProfile={false}
         leftComponent={
           <TouchableOpacity
             onPress={() => navigation.goBack()}

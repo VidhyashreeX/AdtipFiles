@@ -613,6 +613,9 @@ export interface Video {
   createdBy?: number;
   likes?: number;
   isLiked?: boolean;
+  isPaidPromotional?: number; // 0 for normal, 1 for paid
+  promotionalPrice?: number; // Price for paid videos
+  hasContentCreatorPremium?: number; // 0 or 1
 }
 
 export interface VideoListResponse {

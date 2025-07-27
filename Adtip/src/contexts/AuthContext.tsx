@@ -7,6 +7,8 @@ import LastSeenService from '../services/LastSeenService'; // Ensure this import
 // UnifiedCallService removed - using simplified calling flow
 import FirebaseService from '../services/FirebaseService';
 import UserDataStorageService from '../services/UserDataStorageService';
+import { userDataManager, UserSessionData } from '../services/UserDataManager';
+import { Logger } from '../utils/ProductionLogger';
 import { ApiResponse, OtpLoginResponse as ApiOtpResponse, OtpVerifyResponse as ApiUserType, OtpVerifyApiResponse } from '../types/api';
 
 // Define user type (using the one from api.ts for consistency)
@@ -111,38 +113,47 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
   useEffect(() => {
     const loadUser = async () => {
       try {
-        console.log('[AuthContext] 🔄 Starting user initialization...');
+        Logger.info('AuthContext', '🔄 Starting user initialization...');
 
-        // setLoading(true); // No, this loading is for operations, not initialization
-        const userJson = await AsyncStorage.getItem('user');
-        const token = await AsyncStorage.getItem('accessToken');
+        // Initialize UserDataManager first
+        await userDataManager.initialize();
 
         // Clean up any existing guest mode state from previous versions
-        // Guest mode should not persist across app restarts
         await AsyncStorage.removeItem('@guest_mode');
 
-        console.log('[AuthContext] 📱 Loading user state:', {
-          hasUser: !!userJson,
-          hasToken: !!token,
+        // Get user data from UserDataManager
+        const sessionData = userDataManager.getCurrentUser();
+
+        Logger.info('AuthContext', '📱 Loading user state:', {
+          hasSessionData: !!sessionData,
+          hasToken: !!sessionData?.accessToken,
+          hasChannelData: userDataManager.hasChannelData(),
         });
 
         // Check if user is authenticated first
-        if (userJson && token) {
-          const userData = JSON.parse(userJson) as User;
+        if (sessionData && sessionData.accessToken) {
+          // Convert UserSessionData to User format for compatibility
+          const userData: User = {
+            id: sessionData.userId,
+            name: sessionData.userName,
+            is_premium: sessionData.isPremium,
+            premium_plan_id: sessionData.premiumPlanId,
+            content_creator_plan_id: sessionData.contentCreatorPlanId,
+            isSaveUserDetails: 1, // Assume complete if stored in UserDataManager
+            is_first_time: 0, // Assume not first time if stored
+            // Add other required User fields with defaults
+          } as User;
+
           setUser(userData);
-          if (userData.is_first_time === 0 || userData.isSaveUserDetails === 1) {
-            setIsAuthenticated(true);
-            console.log('[AuthContext] ✅ Authenticated user detected - routing to MainNavigator');
-          } else {
-            console.log('[AuthContext] 📝 User needs to complete profile - routing to AuthNavigator');
-          }
+          setIsAuthenticated(true);
+          Logger.info('AuthContext', '✅ Authenticated user detected - routing to MainNavigator');
 
           // Check channel status in background (non-blocking)
-          checkChannelStatus(userData.id.toString()).catch(err => {
-            console.warn('[AuthContext] ⚠️ Channel status check failed (non-critical):', err);
+          checkChannelStatus(sessionData.userId.toString()).catch(err => {
+            Logger.warn('AuthContext', '⚠️ Channel status check failed (non-critical)', err);
           });
         } else {
-          console.log('[AuthContext] 🆕 New user detected - routing to AuthNavigator (OnboardingScreen)');
+          Logger.info('AuthContext', '🆕 New user detected - routing to AuthNavigator (OnboardingScreen)');
         }
       } catch (err) {
         console.error('[AuthContext] ❌ Error loading user data:', err);
@@ -266,33 +277,36 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       }
 
       if (userData && userData.id) {
-        // Store user data
+        // Store user data using UserDataManager
         setUser(userData);
 
         // Clear guest mode if user was in guest mode
         if (isGuest) {
           setIsGuest(false);
-          console.log('[AuthContext] Cleared guest mode after successful login');
+          Logger.info('AuthContext', 'Cleared guest mode after successful login');
         }
 
-        // Store user ID and token
-        await AsyncStorage.setItem('userId', userData.id.toString());
-        await AsyncStorage.setItem('userName', userData.name || '');
-        await AsyncStorage.setItem('user', JSON.stringify(userData));
-        
-        if (response.accessToken) {
-          await AsyncStorage.setItem('accessToken', response.accessToken);
-        }
+        // Save user session data using UserDataManager (batched operations)
+        const sessionData: Partial<UserSessionData> = {
+          userId: userData.id,
+          userName: userData.name || '',
+          isPremium: !!userData.is_premium,
+          premiumPlanId: userData.premium_plan_id ?? 0,
+          contentCreatorPlanId: userData.content_creator_plan_id ?? 0,
+          walletBalance: '0', // Will be updated after wallet API call
+          accessToken: response.accessToken,
+          isVerified: userData.is_verified || false,
+          lastLoginTime: Date.now(),
+        };
+
+        await userDataManager.saveUserSession(sessionData);
 
         // Set authentication state - App.tsx will handle navigation based on isSaveUserDetails
         setIsAuthenticated(true);
-        
-        console.log('AuthContext - User authenticated, isSaveUserDetails:', userData.isSaveUserDetails);
-        
-        await AsyncStorage.setItem('is_premium', userData.is_premium ? '1' : '0');
-        await AsyncStorage.setItem('premium_plan_id', String(userData.premium_plan_id ?? 0));
-        await AsyncStorage.setItem('content_creator_plan_id', String(userData.content_creator_plan_id ?? 0));
-        // walletBalance is updated after wallet API call
+
+        Logger.info('AuthContext', 'User authenticated, isSaveUserDetails:', userData.isSaveUserDetails);
+
+        // Update premium state
         setPremiumState(prev => ({
           ...prev,
           isPremium: !!userData.is_premium,
@@ -316,16 +330,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     console.log('[AuthContext] Handling authentication error - clearing auth state');
 
     try {
-      // Clear all authentication data
-      await AsyncStorage.multiRemove([
-        'accessToken',
-        '@auth_token',
-        'user',
-        'userName',
-        'is_premium',
-        'premium_plan_id',
-        'content_creator_plan_id'
-      ]);
+      // Clear all authentication data using UserDataManager
+      await userDataManager.clearUserData();
 
       // Reset state
       setUser(null);
@@ -374,16 +380,24 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         console.warn('[AuthContext] Error cleaning up services during logout:', serviceError);
       }
 
-      // Clear user data cache
+      // Clear user data cache using UserDataManager
       try {
-        console.log('[AuthContext] Clearing user data cache...');
+        Logger.info('AuthContext', 'Clearing user data cache...');
+        await userDataManager.clearUserData();
         await UserDataStorageService.clearAllUserData();
       } catch (userDataError) {
-        console.warn('[AuthContext] Error clearing user data cache during logout:', userDataError);
+        Logger.warn('AuthContext', 'Error clearing user data cache during logout', userDataError);
       }
 
-      await AsyncStorage.clear();
-      console.log('[AuthContext] AsyncStorage cleared.');
+      // Clear remaining AsyncStorage data (keep essential app data)
+      const keysToKeep = ['@app_version', '@onboarding_completed', '@language_preference'];
+      const allKeys = await AsyncStorage.getAllKeys();
+      const keysToRemove = allKeys.filter(key => !keysToKeep.includes(key));
+
+      if (keysToRemove.length > 0) {
+        await AsyncStorage.multiRemove(keysToRemove);
+      }
+      Logger.info('AuthContext', 'User-specific AsyncStorage data cleared.');
 
       setUser(null);
       setIsAuthenticated(false);

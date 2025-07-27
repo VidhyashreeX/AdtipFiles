@@ -45,6 +45,9 @@ interface FCMChatContextType {
 
   // Chat availability alert actions (for testing)
   showChatUnavailableAlert: (recipientName: string) => void;
+
+  // WatermelonDB manager access
+  watermelonManager: WatermelonLocalChatManager | null;
 }
 
 const FCMChatContext = createContext<FCMChatContextType | undefined>(undefined);
@@ -112,6 +115,11 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
           console.log('[FCMChatContext] 🚫 Showing unavailable alert...');
           chatAvailabilityAlert.actions.showUnavailableAlert(recipientName);
           console.log('[FCMChatContext] 🚫 Alert state after trigger:', chatAvailabilityAlert.state);
+        },
+        onSyncStatusChanged: (status) => {
+          console.log('[FCMChatContext] 🔄 Sync status changed:', status);
+          // Sync status is handled per-conversation in FCMChatScreen
+          // This is just for logging and potential global sync status tracking
         }
       }, { disableFCMHandlers: true });
       setWatermelonManager(manager);
@@ -473,6 +481,7 @@ export const FCMChatProvider: React.FC<FCMChatProviderProps> = ({ children }) =>
     getUnreadCount,
     refreshMessages,
     showChatUnavailableAlert: chatAvailabilityAlert.actions.showUnavailableAlert,
+    watermelonManager,
   };
 
   return (

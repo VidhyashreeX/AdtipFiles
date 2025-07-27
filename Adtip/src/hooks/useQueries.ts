@@ -964,14 +964,17 @@ export const useUsers = (filters: {
       const limit = lastPage?.pagination?.limit || 20;
       const hasMore = currentPage * limit < totalRecords;
 
-      console.log('[useUsers] getNextPageParam:', {
-        totalRecords,
-        currentPage,
-        limit,
-        currentPageRecords: currentPage * limit,
-        hasMore,
-        nextPage: hasMore ? currentPage + 1 : undefined
-      });
+      // Only log in development and throttle logging to prevent spam
+      if (__DEV__ && Math.random() < 0.1) { // Log only 10% of calls in dev
+        console.log('[useUsers] getNextPageParam:', {
+          totalRecords,
+          currentPage,
+          limit,
+          currentPageRecords: currentPage * limit,
+          hasMore,
+          nextPage: hasMore ? currentPage + 1 : undefined
+        });
+      }
 
       return hasMore ? currentPage + 1 : undefined;
     },

@@ -59,10 +59,9 @@ const LibraryScreen: React.FC = () => {
     navigation.navigate('TipTubeUpload' as never);
   };
 
-  const handlePaidVideoAnalyticsPress = () => {
-    // For now, show coming soon or navigate to a placeholder
-    // This can be implemented when the PaidVideoAnalytics screen is ready
-    console.log('Paid Video Analytics - Coming Soon');
+  const handleEarnMoneyPress = () => {
+    // Navigate to EarnMoneyCreator to show earning opportunities
+    navigation.navigate('EarnMoneyCreator' as never);
   };
 
   const menuItems: LibraryMenuItem[] = [
@@ -102,10 +101,10 @@ const LibraryScreen: React.FC = () => {
       showChevron: true,
     },
     {
-      id: 'paid-video-analytics',
-      title: 'Paid Video Analytics',
+      id: 'earn-money',
+      title: 'How to earn money as a content creator',
       icon: <DollarSign size={24} color={colors.text.primary} />,
-      onPress: handlePaidVideoAnalyticsPress,
+      onPress: handleEarnMoneyPress,
       showChevron: true,
     },
   ];
@@ -140,7 +139,6 @@ const LibraryScreen: React.FC = () => {
         showSearch={false}
         showWallet={false}
         showPremium={false}
-        showProfile={false}
         leftComponent={
           <TouchableOpacity
             onPress={handleBackPress}

@@ -95,6 +95,7 @@ import ContentCreatorSubscriptionScreen from '../screens/packages/ContentCreator
 // Import FCM Chat Screens
 import ConversationsScreen from '../screens/chat/ConversationsScreen';
 import FCMChatScreen from '../screens/chat/FCMChatScreen';
+import InboxScreen from '../screens/chat/InboxScreen';
 
 // Import PrivacyPolicyScreen
 import PrivacyPolicyScreen from '../screens/Privacy/PrivacyPolicyScreen';
@@ -454,6 +455,16 @@ const MainNavigator = () => {
         component={FCMChatScreen}
         options={{
           headerShown: true,
+          animation: 'slide_from_right',
+          gestureEnabled: true,
+        }}
+      />
+      <Stack.Screen
+        name="Inbox"
+        component={InboxScreen}
+        options={{
+          headerShown: true,
+          title: 'Inbox',
           animation: 'slide_from_right',
           gestureEnabled: true,
         }}

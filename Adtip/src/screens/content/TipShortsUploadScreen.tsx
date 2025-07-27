@@ -23,10 +23,14 @@ import { launchImageLibrary, ImagePickerResponse, MediaType } from 'react-native
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useContentCreatorPremium } from '../../contexts/ContentCreatorPremiumContext';
 import Header from '../../components/common/Header';
 import VideoCompressionService, { VideoCompressionOptions } from '../../services/VideoCompressionService';
 import ApiService from '../../services/ApiService';
 import CloudflareUploadService from '../../services/CloudflareUploadService';
+import UnifiedUploadService, { UnifiedUploadProgress } from '../../services/UnifiedUploadService';
+import { ForceStreamUploads } from '../../utils/ForceStreamUploads';
+import { UploadConfigManager } from '../../config/UploadConfig';
 import RNFS from 'react-native-fs';
 import { EventRegister } from 'react-native-event-listeners';
 import { getVideoDurationProps } from '../../utils/videoUtils';
@@ -105,12 +109,14 @@ const TipShortsUploadScreen: React.FC = () => {
   const navigation = useNavigation();
   const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
+  const { isContentCreatorPremium } = useContentCreatorPremium();
 
   // Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState(1);
-  const [isPublic, setIsPublic] = useState(true);
+  const [isPaidVideo, setIsPaidVideo] = useState(false);
+  const [promotionalPrice, setPromotionalPrice] = useState('');
   const [selectedCompression, setSelectedCompression] = useState<'whatsapp' | 'balanced' | 'high'>('whatsapp');
 
   // Media State
@@ -591,59 +597,102 @@ const TipShortsUploadScreen: React.FC = () => {
       return compressedResult.compressedUri;
     } catch (error) {
       console.error('[TipShortsUpload] Error compressing video:', error);
-      throw new Error('Failed to compress video. Please try again.');
+      console.warn('[TipShortsUpload] Compression failed, using original video for upload');
+
+      // Fallback to original video if compression fails
+      // This allows Stream upload to proceed even if compression has issues
+      try {
+        const stats = await RNFS.stat(videoUri);
+        setVideoSize(stats.size);
+        console.log('[TipShortsUpload] Using original video size:', stats.size);
+        return videoUri; // Return original video URI
+      } catch (statError) {
+        console.error('[TipShortsUpload] Error getting original video stats:', statError);
+        throw new Error('Failed to process video. Please try again.');
+      }
     } finally {
       setIsCompressing(false);
     }
   };
 
-  // Upload media files using Cloudflare R2
-  const uploadMedia = async (videoUri: string, thumbnailUri: string): Promise<{ videoUrl: string; thumbnailUrl: string }> => {
+  // Upload media files using Unified Upload Service (Stream or R2)
+  const uploadMedia = async (videoUri: string, thumbnailUri: string): Promise<{ videoUrl: string; thumbnailUrl: string; streamVideoId?: string }> => {
     try {
-      console.log('[TipShortsUpload] Starting Cloudflare R2 upload');
+      console.log('[TipShortsUpload] Starting unified upload (Stream/R2)');
 
       if (!user || !user.id) {
         throw new Error('User not authenticated');
       }
 
-      // Run diagnostics if upload fails repeatedly
-      const diagnostics = await CloudflareUploadService.diagnoseUploadIssues();
-      if (!diagnostics.connectionOk || !diagnostics.configValid) {
-        console.warn('[TipShortsUpload] Upload diagnostics found issues:', diagnostics.issues);
-        if (diagnostics.issues.length > 0) {
-          throw new Error(`Upload configuration issue: ${diagnostics.issues.join(', ')}`);
-        }
-      }
-
-      // Use CloudflareUploadService for batch upload
-      const uploadResult = await CloudflareUploadService.uploadTipShort(
+      // Prepare upload data
+      const uploadData = {
         videoUri,
         thumbnailUri,
-        user.id,
-        (progress) => {
+        metadata: {
+          name: title.trim(),
+          description: description.trim(),
+          categoryId: categoryId,
+          channelId: channelId || user.id, // Use user.id as fallback if channelId is null
+          userId: user.id,
+          isShot: true, // This is TipShorts
+        },
+      };
+
+      // Prepare user info for upload
+      const userInfo = {
+        userId: user.id.toString(),
+        userName: user.name || user.username || '',
+        channelId: user.id.toString(), // TipShorts typically use user ID as channel ID
+      };
+
+      console.log('[TipShortsUpload] User info for upload:', userInfo);
+
+      // Use UnifiedUploadService for intelligent upload method selection
+      const uploadResult = await UnifiedUploadService.uploadTipShorts(
+        uploadData,
+        userInfo,
+        (progress: UnifiedUploadProgress) => {
           setUploadProgress(progress.percentage);
+
+          // Show upload method in progress
+          if (progress.method === 'stream') {
+            console.log(`[TipShortsUpload] Stream upload: ${progress.stage} (${progress.percentage}%)`);
+          } else {
+            console.log(`[TipShortsUpload] R2 upload: ${progress.stage} (${progress.percentage}%)`);
+          }
         }
       );
 
-      if (!uploadResult.allSuccessful) {
-        throw new Error(`Upload failed: ${uploadResult.errors.join(', ')}`);
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || 'Upload failed');
       }
 
-      if (!uploadResult.video?.url || !uploadResult.thumbnail?.url) {
-        throw new Error('Upload completed but URLs are missing');
+      if (!uploadResult.videoUrl) {
+        throw new Error('Upload completed but video URL is missing');
       }
 
-      console.log('[TipShortsUpload] Cloudflare upload successful:', {
-        video: uploadResult.video.url,
-        thumbnail: uploadResult.thumbnail.url,
+      console.log('[TipShortsUpload] Upload successful:', {
+        method: uploadResult.method,
+        videoUrl: uploadResult.videoUrl,
+        thumbnailUrl: uploadResult.thumbnailUrl,
+        streamVideoId: uploadResult.streamVideoId,
+        fallbackUsed: uploadResult.fallbackUsed,
       });
 
+      // Show success message with upload method info
+      if (uploadResult.method === 'stream') {
+        console.log('[TipShortsUpload] ✅ Uploaded using Cloudflare Stream (optimized for mobile)');
+      } else {
+        console.log('[TipShortsUpload] ✅ Uploaded using Cloudflare R2 (traditional method)');
+      }
+
       return {
-        videoUrl: uploadResult.video.url,
-        thumbnailUrl: uploadResult.thumbnail.url,
+        videoUrl: uploadResult.videoUrl,
+        thumbnailUrl: uploadResult.thumbnailUrl || thumbnailUri,
+        streamVideoId: uploadResult.streamVideoId,
       };
     } catch (error) {
-      console.error('[TipShortsUpload] Error uploading to Cloudflare:', error);
+      console.error('[TipShortsUpload] Error uploading media:', error);
       throw new Error('Failed to upload media files to cloud storage. Please check your connection and try again.');
     }
   };
@@ -658,12 +707,14 @@ const TipShortsUploadScreen: React.FC = () => {
       const requestData = {
         name: title.trim(),
         categoryId: categoryId,
-        channelId: channelId,
+        channelId: channelId || user.id, // Use user.id as fallback if channelId is null
         videoLink: videoUrl,
         videoDesciption: description.trim(),
         createdby: user.id,
         play_duration: videoDuration,
         video_Thumbnail: thumbnailUrl,
+        is_paid_promotional: isPaidVideo,
+        promotional_price: isPaidVideo ? parseFloat(promotionalPrice) : undefined,
       };
 
       console.log('[TipShortsUpload] Creating TipShot with new API:', requestData);
@@ -673,9 +724,14 @@ const TipShortsUploadScreen: React.FC = () => {
       console.log('[TipShortsUpload] TipShot created:', response);
 
       if (response.status === 200) {
+        // Show different success messages for paid vs free videos
+        const successMessage = isPaidVideo
+          ? `Your paid short video has been uploaded successfully! Price: ₹${promotionalPrice}`
+          : 'Your short video has been uploaded successfully.';
+
         Alert.alert(
           'Success! 🎉',
-          'Your short video has been uploaded successfully.',
+          successMessage,
           [
             {
               text: 'OK',
@@ -701,6 +757,12 @@ const TipShortsUploadScreen: React.FC = () => {
     if (!categoryId) return 'Please select a video category.';
     if (!channelId) return 'Channel information is required. Please wait for channel to load or try again.';
     if (!user?.id) return 'User authentication required. Please log in again.';
+    if (isPaidVideo && (!promotionalPrice || parseFloat(promotionalPrice) <= 0)) {
+      return 'Please enter a valid promotional price for paid video.';
+    }
+    if (isPaidVideo && parseFloat(promotionalPrice) > 1000) {
+      return 'Promotional price cannot exceed ₹1000.';
+    }
     return null;
   };
 
@@ -735,6 +797,33 @@ const TipShortsUploadScreen: React.FC = () => {
     }
   };
 
+  // Handle paid video toggle
+  const handlePaidVideoToggle = (value: boolean) => {
+    if (value && !isContentCreatorPremium) {
+      // Show premium required alert
+      Alert.alert(
+        'Content Creator Premium Required',
+        'Paid video feature is only available for Content Creator Premium users. Upgrade to unlock this feature.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Upgrade',
+            onPress: () => navigation.navigate('ContentCreatorPremium' as never),
+          },
+        ]
+      );
+      return;
+    }
+
+    setIsPaidVideo(value);
+    if (!value) {
+      setPromotionalPrice('');
+    }
+  };
+
   // Main upload function
   const handleUpload = async () => {
     try {
@@ -758,11 +847,11 @@ const TipShortsUploadScreen: React.FC = () => {
 
       // Step 1: Compress video
       console.log('[TipShortsUpload] Step 1: Compressing video');
-      const compressedVideoUri = await compressVideo(selectedVideo);
+      const compressedVideoUri = await compressVideo(selectedVideo!); // Non-null assertion - validated above
 
       // Step 2: Upload media files
       console.log('[TipShortsUpload] Step 2: Uploading media files');
-      const { videoUrl, thumbnailUrl } = await uploadMedia(compressedVideoUri, selectedThumbnail);
+      const { videoUrl, thumbnailUrl, streamVideoId } = await uploadMedia(compressedVideoUri, selectedThumbnail!);
 
       // Step 3: Create TipShot record
       console.log('[TipShortsUpload] Step 3: Creating short video record');
@@ -1139,25 +1228,53 @@ const TipShortsUploadScreen: React.FC = () => {
                 </TouchableOpacity>
               </View>
 
-              {/* Privacy Setting */}
+              {/* Paid Video Setting */}
               <View style={styles.inputGroup}>
                 <View style={styles.switchRow}>
                   <View>
                     <Text style={[styles.switchLabel, { color: colors.text.primary }]}>
-                      Public Short
+                      Paid Video
                     </Text>
                     <Text style={[styles.switchDescription, { color: colors.text.secondary }]}>
-                      Anyone can view this short
+                      Enable to set a promotional price{'\n'}(Content Creator Premium required)
                     </Text>
                   </View>
                   <Switch
-                    value={isPublic}
-                    onValueChange={setIsPublic}
+                    value={isPaidVideo}
+                    onValueChange={handlePaidVideoToggle}
                     trackColor={{ false: colors.gray?.[300], true: colors.primary }}
                     thumbColor={colors.white}
                     disabled={isUploading || isCompressing}
                   />
                 </View>
+
+                {/* Promotional Price Input */}
+                {isPaidVideo && (
+                  <View style={styles.priceInputContainer}>
+                    <Text style={[styles.inputLabel, { color: colors.text.secondary, marginTop: 16 }]}>
+                      Promotional Price *
+                    </Text>
+                    <View style={[styles.priceInputWrapper, {
+                      borderColor: colors.border,
+                      backgroundColor: colors.background
+                    }]}>
+                      <Text style={[styles.currencySymbol, { color: colors.text.primary }]}>₹</Text>
+                      <TextInput
+                        style={[styles.priceInput, { color: colors.text.primary }]}
+                        value={promotionalPrice}
+                        onChangeText={setPromotionalPrice}
+                        placeholder="0.00"
+                        placeholderTextColor={colors.text.tertiary}
+                        keyboardType="numeric"
+                        maxLength={6}
+                        editable={!isUploading && !isCompressing}
+                      />
+                    </View>
+                    <Text style={[styles.priceHint, { color: colors.text.tertiary }]}>
+                      Maximum price: ₹1000
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
           )}
@@ -1215,13 +1332,13 @@ const TipShortsUploadScreen: React.FC = () => {
               style={[
                 styles.uploadBtn,
                 {
-                  backgroundColor: (!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing)
+                  backgroundColor: (!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing || isLoadingChannel || !channelId || (isPaidVideo && (!promotionalPrice || parseFloat(promotionalPrice) <= 0)))
                     ? colors.gray?.[400]
                     : colors.primary,
                 }
               ]}
               onPress={handleUpload}
-              disabled={!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing || isLoadingChannel || !channelId}
+              disabled={!selectedVideo || !title.trim() || !selectedThumbnail || isUploading || isCompressing || isLoadingChannel || !channelId || (isPaidVideo && (!promotionalPrice || parseFloat(promotionalPrice) <= 0))}
             >
               {(isUploading || isCompressing || isLoadingChannel) ? (
                 <ActivityIndicator size="small" color={colors.white} />
@@ -1655,6 +1772,34 @@ const styles = StyleSheet.create({
   modalCloseText: {
     fontSize: 16,
     fontWeight: '500',
+  },
+
+  // Price Input Styles
+  priceInputContainer: {
+    marginTop: 16,
+  },
+  priceInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 48,
+    marginTop: 8,
+  },
+  currencySymbol: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginRight: 8,
+  },
+  priceInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 0,
+  },
+  priceHint: {
+    fontSize: 12,
+    marginTop: 4,
   },
 });
 

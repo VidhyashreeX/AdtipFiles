@@ -71,12 +71,21 @@ export interface CachedUserProfile {
   lastUpdated: string;
 }
 
+// Sync status types
+export interface ConversationSyncStatus {
+  conversationId: string;
+  status: 'idle' | 'syncing' | 'complete' | 'error';
+  lastSyncAt: Date | null;
+  error: string | null;
+}
+
 export interface LocalChatEventHandlers {
   onMessageReceived?: (message: LocalMessage) => void;
   onMessageSent?: (message: LocalMessage) => void;
   onConversationUpdated?: (conversation: LocalConversation) => void;
   onUnreadCountChanged?: (count: number) => void;
   onChatUnavailable?: (recipientName: string, error: any) => void;
+  onSyncStatusChanged?: (status: ConversationSyncStatus) => void;
 }
 
 export class WatermelonLocalChatManager {
@@ -90,6 +99,7 @@ export class WatermelonLocalChatManager {
   private currentParticipantId: string | null = null; // Store the current chat participant ID
   private eventHandlers: LocalChatEventHandlers = {};
   private isInitialized: boolean = false;
+  private conversationSyncStatuses: Map<string, ConversationSyncStatus> = new Map();
 
   constructor() {
     this.chatDb = new WatermelonChatDatabase();
@@ -361,6 +371,11 @@ export class WatermelonLocalChatManager {
     const recipientId = userId1 === this.currentUserId ? userId2 : userId1;
     Logger.info('[WatermelonLocalChatManager] 📨 User-based chat - recipient ID:', recipientId);
 
+    // Prevent self-messaging
+    if (recipientId === this.currentUserId) {
+      throw new Error('Cannot send message to yourself');
+    }
+
     const message = await this.chatDb.createMessage({
       id: messageId,
       chatId: conversationId, // conversationId is actually chatId in user-based system
@@ -472,7 +487,7 @@ export class WatermelonLocalChatManager {
   }
 
   /**
-   * Create or get conversation
+   * Create or get conversation (non-blocking, immediate return)
    */
   async createOrGetConversation(participantId: string): Promise<string> {
     if (!this.currentUserId) {
@@ -484,11 +499,191 @@ export class WatermelonLocalChatManager {
     // Use new user-based chat system
     const chatId = QueryHelpers.generateChatId(this.currentUserId, participantId);
 
-    // Ensure user chat exists
+    // Ensure user chat exists locally (immediate)
     await QueryHelpers.getOrCreateUserChat(this.currentUserId, participantId);
 
-    Logger.info('[WatermelonLocalChatManager] ✅ User chat ready:', chatId);
+    Logger.info('[WatermelonLocalChatManager] ✅ User chat ready locally:', chatId);
+
+    // Start background sync without blocking
+    this.syncConversationInBackground(chatId);
+
     return chatId;
+  }
+
+  /**
+   * Sync conversation messages in background (non-blocking)
+   */
+  private syncConversationInBackground(chatId: string): void {
+    // Check if sync is already in progress for this conversation
+    const currentStatus = this.conversationSyncStatuses.get(chatId);
+    if (currentStatus?.status === 'syncing') {
+      Logger.info(`[WatermelonLocalChatManager] 🔄 Sync already in progress for ${chatId}, skipping`);
+      return;
+    }
+
+    // Update sync status to indicate sync is starting
+    const syncStatus: ConversationSyncStatus = {
+      conversationId: chatId,
+      status: 'syncing',
+      lastSyncAt: null,
+      error: null
+    };
+
+    this.conversationSyncStatuses.set(chatId, syncStatus);
+    this.eventHandlers.onSyncStatusChanged?.(syncStatus);
+
+    Logger.info(`[WatermelonLocalChatManager] 🔄 Starting incremental sync for conversation: ${chatId}`);
+
+    // Perform incremental sync in background
+    this.syncService.syncConversationMessages(chatId)
+      .then((syncedMessages) => {
+        Logger.info(`[WatermelonLocalChatManager] ✅ Incremental sync completed: ${syncedMessages.length} new messages for ${chatId}`);
+
+        // Update sync status to indicate success
+        const completedStatus: ConversationSyncStatus = {
+          conversationId: chatId,
+          status: 'complete',
+          lastSyncAt: new Date(),
+          error: null
+        };
+
+        this.conversationSyncStatuses.set(chatId, completedStatus);
+        this.eventHandlers.onSyncStatusChanged?.(completedStatus);
+      })
+      .catch((syncError) => {
+        Logger.error('[WatermelonLocalChatManager] ⚠️ Incremental sync failed for conversation:', chatId, syncError);
+
+        // Update sync status to indicate error
+        const errorStatus: ConversationSyncStatus = {
+          conversationId: chatId,
+          status: 'error',
+          lastSyncAt: null,
+          error: syncError.message || 'Incremental sync failed'
+        };
+
+        this.conversationSyncStatuses.set(chatId, errorStatus);
+        this.eventHandlers.onSyncStatusChanged?.(errorStatus);
+
+        // Retry with exponential backoff for network errors
+        if (syncError.message?.includes('network') || syncError.message?.includes('fetch')) {
+          this.scheduleRetrySync(chatId, 1);
+        }
+      });
+  }
+
+  /**
+   * Schedule retry sync with exponential backoff
+   */
+  private scheduleRetrySync(chatId: string, attempt: number): void {
+    const maxAttempts = 3;
+    if (attempt > maxAttempts) {
+      Logger.warn(`[WatermelonLocalChatManager] ⚠️ Max retry attempts reached for ${chatId}`);
+      return;
+    }
+
+    const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+    Logger.info(`[WatermelonLocalChatManager] 🔄 Scheduling retry ${attempt}/${maxAttempts} for ${chatId} in ${delay}ms`);
+
+    setTimeout(() => {
+      Logger.info(`[WatermelonLocalChatManager] 🔄 Retrying sync for ${chatId} (attempt ${attempt})`);
+
+      this.syncService.syncConversationMessages(chatId)
+        .then((syncedMessages) => {
+          Logger.info(`[WatermelonLocalChatManager] ✅ Retry sync successful: ${syncedMessages.length} messages for ${chatId}`);
+
+          const completedStatus: ConversationSyncStatus = {
+            conversationId: chatId,
+            status: 'complete',
+            lastSyncAt: new Date(),
+            error: null
+          };
+
+          this.conversationSyncStatuses.set(chatId, completedStatus);
+          this.eventHandlers.onSyncStatusChanged?.(completedStatus);
+        })
+        .catch((retryError) => {
+          Logger.error(`[WatermelonLocalChatManager] ❌ Retry ${attempt} failed for ${chatId}:`, retryError);
+          this.scheduleRetrySync(chatId, attempt + 1);
+        });
+    }, delay);
+  }
+
+  /**
+   * Get sync status for a conversation
+   */
+  getSyncStatus(conversationId: string): ConversationSyncStatus {
+    return this.conversationSyncStatuses.get(conversationId) || {
+      conversationId,
+      status: 'idle',
+      lastSyncAt: null,
+      error: null
+    };
+  }
+
+  /**
+   * Get all sync statuses for debugging
+   */
+  getAllSyncStatuses(): Map<string, ConversationSyncStatus> {
+    return new Map(this.conversationSyncStatuses);
+  }
+
+  /**
+   * Clear sync status for a conversation
+   */
+  clearSyncStatus(conversationId: string): void {
+    this.conversationSyncStatuses.delete(conversationId);
+    Logger.info(`[WatermelonLocalChatManager] 🧹 Cleared sync status for: ${conversationId}`);
+  }
+
+  /**
+   * Force refresh conversation messages (for manual refresh)
+   */
+  async forceRefreshConversation(conversationId: string): Promise<void> {
+    try {
+      Logger.info('[WatermelonLocalChatManager] 🔄 Force refreshing conversation:', conversationId);
+
+      // Update sync status to indicate manual refresh
+      const refreshStatus: ConversationSyncStatus = {
+        conversationId,
+        status: 'syncing',
+        lastSyncAt: null,
+        error: null
+      };
+
+      this.conversationSyncStatuses.set(conversationId, refreshStatus);
+      this.eventHandlers.onSyncStatusChanged?.(refreshStatus);
+
+      // Force sync with backend
+      const syncedMessages = await this.syncService.syncConversationMessages(conversationId);
+
+      // Update sync status to indicate success
+      const completedStatus: ConversationSyncStatus = {
+        conversationId,
+        status: 'complete',
+        lastSyncAt: new Date(),
+        error: null
+      };
+
+      this.conversationSyncStatuses.set(conversationId, completedStatus);
+      this.eventHandlers.onSyncStatusChanged?.(completedStatus);
+
+      Logger.info('[WatermelonLocalChatManager] ✅ Force refresh completed for:', conversationId, `(${syncedMessages.length} messages)`);
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] ❌ Force refresh failed:', error);
+
+      // Update sync status to indicate error
+      const errorStatus: ConversationSyncStatus = {
+        conversationId,
+        status: 'error',
+        lastSyncAt: null,
+        error: error.message || 'Force refresh failed'
+      };
+
+      this.conversationSyncStatuses.set(conversationId, errorStatus);
+      this.eventHandlers.onSyncStatusChanged?.(errorStatus);
+
+      throw error;
+    }
   }
 
   /**
@@ -1297,18 +1492,28 @@ export class WatermelonLocalChatManager {
   }
 
   /**
-   * Pull messages from backend for a chat
+   * Pull messages from backend for a chat with incremental sync support
    */
-  async pullMessagesFromBackend(chatId: string, page: number = 1): Promise<LocalMessage[]> {
+  async pullMessagesFromBackend(chatId: string, page: number = 1, sinceTimestamp?: Date): Promise<LocalMessage[]> {
     try {
-      Logger.info('[WatermelonLocalChatManager] 📥 Pulling messages from backend for chat:', chatId);
+      Logger.info('[WatermelonLocalChatManager] 📥 Pulling messages from backend for chat:', chatId, {
+        page,
+        sinceTimestamp: sinceTimestamp?.toISOString(),
+        isIncremental: !!sinceTimestamp
+      });
 
       const authToken = await AsyncStorage.getItem('accessToken');
       if (!authToken) {
         throw new Error('No auth token available');
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/chat/messages/${chatId}?page=${page}&limit=50`, {
+      // Build URL with incremental sync support
+      let url = `${API_BASE_URL}/api/chat/messages/${chatId}?page=${page}&limit=50`;
+      if (sinceTimestamp) {
+        url += `&since_timestamp=${sinceTimestamp.toISOString()}`;
+      }
+
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${authToken}`
@@ -1322,27 +1527,35 @@ export class WatermelonLocalChatManager {
 
       const result = await response.json();
       const backendMessages = result.data?.messages || [];
+      const syncInfo = result.data?.sync || {};
 
-      Logger.info('[WatermelonLocalChatManager] 📥 Pulled', backendMessages.length, 'messages from backend');
+      Logger.info('[WatermelonLocalChatManager] 📊 Sync info:', {
+        isIncremental: syncInfo.isIncremental,
+        newMessagesCount: syncInfo.newMessagesCount,
+        totalFetched: backendMessages.length
+      });
 
       // Convert backend messages to local format and merge with local database
       const localMessages: LocalMessage[] = [];
       for (const backendMsg of backendMessages) {
         try {
-          // Check if message already exists locally
-          const existingMessage = await QueryHelpers.getMessageById(String(backendMsg.id));
+          // Enhanced deduplication logic - always check for duplicates
+          const isDuplicate = await this.checkForDuplicateMessage(backendMsg, sinceTimestamp);
 
-          if (!existingMessage) {
+          if (!isDuplicate) {
             // Create new local message from backend data
             const localMessage = await this.createMessageFromBackend(backendMsg);
             localMessages.push(this.convertMessageToLocal(localMessage));
+            Logger.info('[WatermelonLocalChatManager] ✅ Created new message from backend:', backendMsg.id);
+          } else {
+            Logger.info('[WatermelonLocalChatManager] 🔄 Skipped duplicate message:', backendMsg.id);
           }
         } catch (error) {
           Logger.error('[WatermelonLocalChatManager] ❌ Failed to process backend message:', error);
         }
       }
 
-      Logger.info('[WatermelonLocalChatManager] ✅ Successfully merged', localMessages.length, 'new messages from backend');
+      Logger.info('[WatermelonLocalChatManager] ✅ Successfully merged', localMessages.length, 'new messages from backend (incremental:', !!sinceTimestamp, ')');
       return localMessages;
 
     } catch (error) {
@@ -1352,10 +1565,89 @@ export class WatermelonLocalChatManager {
   }
 
   /**
+   * Check for duplicate message using multiple strategies
+   */
+  private async checkForDuplicateMessage(backendMessage: any, isIncrementalSync?: Date): Promise<boolean> {
+    try {
+      const messageId = String(backendMessage.id);
+      const tempId = backendMessage.temp_id;
+      const chatId = backendMessage.chat_id;
+      const content = backendMessage.content;
+      const senderId = String(backendMessage.sender_id);
+      const createdAt = new Date(backendMessage.created_at || backendMessage.timestamp);
+
+      // Strategy 1: Check by exact message ID
+      const existingById = await QueryHelpers.getMessageById(messageId);
+      if (existingById) {
+        Logger.info('[WatermelonLocalChatManager] 🔍 Duplicate found by ID:', messageId);
+        return true;
+      }
+
+      // Strategy 2: Check by temp ID if available
+      if (tempId) {
+        const existingByTempId = await QueryHelpers.getMessagesByTempId(tempId);
+        if (existingByTempId.length > 0) {
+          Logger.info('[WatermelonLocalChatManager] 🔍 Duplicate found by temp ID:', tempId);
+          return true;
+        }
+      }
+
+      // Strategy 3: Content-based duplicate detection (for edge cases)
+      // Only check recent messages to avoid false positives
+      const recentMessages = await QueryHelpers.getRecentMessagesForChat(chatId, 50);
+      const contentDuplicate = recentMessages.find(msg => {
+        const timeDiff = Math.abs(msg.createdAt.getTime() - createdAt.getTime());
+        return (
+          msg.senderId === senderId &&
+          msg.content === content &&
+          timeDiff < 10000 // Within 10 seconds
+        );
+      });
+
+      if (contentDuplicate) {
+        Logger.info('[WatermelonLocalChatManager] 🔍 Duplicate found by content:', {
+          existingId: contentDuplicate.id,
+          newId: messageId,
+          content: content.substring(0, 50) + '...'
+        });
+        return true;
+      }
+
+      // For incremental sync, we trust the backend to only send new messages
+      // But we still perform the above checks as a safety net
+      if (isIncrementalSync) {
+        Logger.info('[WatermelonLocalChatManager] ✅ No duplicate found (incremental sync):', messageId);
+      } else {
+        Logger.info('[WatermelonLocalChatManager] ✅ No duplicate found (full sync):', messageId);
+      }
+
+      return false;
+    } catch (error) {
+      Logger.error('[WatermelonLocalChatManager] ❌ Error checking for duplicates:', error);
+      // In case of error, assume it's not a duplicate to avoid losing messages
+      return false;
+    }
+  }
+
+  /**
    * Create local message from backend data
    */
   private async createMessageFromBackend(backendMessage: any): Promise<Message> {
     try {
+      // Parse the original creation timestamp from backend
+      let createdAt: Date;
+      if (backendMessage.created_at) {
+        // Backend provides created_at timestamp - use this for original message time
+        createdAt = new Date(backendMessage.created_at);
+      } else if (backendMessage.timestamp) {
+        // Fallback to timestamp field if available
+        createdAt = new Date(backendMessage.timestamp);
+      } else {
+        // Last resort - use current time (should not happen in normal flow)
+        createdAt = new Date();
+        Logger.warn('[WatermelonLocalChatManager] ⚠️ No timestamp found in backend message, using current time');
+      }
+
       const messageData = {
         id: String(backendMessage.id),
         chatId: backendMessage.chat_id,
@@ -1370,8 +1662,13 @@ export class WatermelonLocalChatManager {
         replyTo: backendMessage.reply_to_message_id ? String(backendMessage.reply_to_message_id) : undefined
       };
 
-      const message = await this.chatDb.createMessage(messageData);
-      Logger.info('[WatermelonLocalChatManager] ✅ Created local message from backend data:', message.id);
+      // Create message with proper timestamp handling
+      const message = await this.chatDb.createMessageWithTimestamp(messageData, createdAt);
+      Logger.info('[WatermelonLocalChatManager] ✅ Created local message from backend data with original timestamp:', {
+        messageId: message.id,
+        originalTimestamp: createdAt.toISOString(),
+        backendTimestamp: backendMessage.created_at
+      });
 
       return message;
     } catch (error) {

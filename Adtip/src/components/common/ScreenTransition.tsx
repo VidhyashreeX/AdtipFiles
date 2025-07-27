@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -28,40 +28,58 @@ const ScreenTransition: React.FC<ScreenTransitionProps> = ({
   const translateY = useSharedValue(isActive || skipAnimation ? 0 : 20);
   const scale = useSharedValue(isActive || skipAnimation ? 1 : 0.95);
 
+  // Track if component is mounted to prevent animations during initial render
+  const isMounted = useRef(false);
+  const hasCompletedInitialAnimation = useRef(false);
+
   // Skip animation logic for faster loading
   const shouldAnimate = useMemo(() => !skipAnimation && animationType !== 'none', [skipAnimation, animationType]);
 
+  // Stable callback reference to prevent useInsertionEffect warnings
+  const stableOnEnterComplete = useRef(onEnterComplete);
+  stableOnEnterComplete.current = onEnterComplete;
+
   useEffect(() => {
+    // Mark as mounted after first render
+    isMounted.current = true;
+
     if (skipAnimation) {
       // Immediately set final values without animation
       opacity.value = 1;
       translateY.value = 0;
       scale.value = 1;
-      if (onEnterComplete) {
-        onEnterComplete();
+      if (stableOnEnterComplete.current && !hasCompletedInitialAnimation.current) {
+        hasCompletedInitialAnimation.current = true;
+        // Use setTimeout to avoid scheduling updates during render
+        setTimeout(() => {
+          stableOnEnterComplete.current?.();
+        }, 0);
       }
       return;
     }
 
-    if (isActive && shouldAnimate) {
+    if (isActive && shouldAnimate && isMounted.current) {
       opacity.value = withTiming(1, {
         duration: 250, // Reduced from 300ms
         easing: Easing.out(Easing.quad), // Faster easing
       });
-      
+
       translateY.value = withSpring(0, {
         damping: 25, // Increased damping for faster settling
         stiffness: 150, // Increased stiffness
         mass: 0.6, // Reduced mass
       });
-      
+
       scale.value = withSpring(1, {
         damping: 22,
         stiffness: 130,
         mass: 0.7,
       }, (finished) => {
-        if (finished && onEnterComplete) {
-          runOnJS(onEnterComplete)();
+        if (finished && stableOnEnterComplete.current && !hasCompletedInitialAnimation.current) {
+          hasCompletedInitialAnimation.current = true;
+          runOnJS(() => {
+            stableOnEnterComplete.current?.();
+          })();
         }
       });
     }

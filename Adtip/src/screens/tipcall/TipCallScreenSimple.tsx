@@ -18,6 +18,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTabNavigator } from '../../contexts/TabNavigatorContext'
+import { useFCMChat } from '../../contexts/FCMChatContext'
 import { useUsers } from '../../hooks/useQueries'
 import { Contact } from '../../types/api'
 import Header from '../../components/common/Header'
@@ -25,7 +26,7 @@ import Icon from 'react-native-vector-icons/Feather'
 import { useBlocklist } from '../../hooks/useBlocklist'
 import { useMissedCallsCount } from '../../hooks/useMissedCalls'
 import { useWallet } from '../../hooks/useWallet'
-import { BanknoteArrowUp, Ban, MoreVertical } from 'lucide-react-native'
+import { BanknoteArrowUp, Ban, MoreVertical, Mail } from 'lucide-react-native'
 import { MainNavigatorParamList } from '../../types/navigation'
 import { CallType } from '../../stores/callStoreSimplified'
 import debounce from 'lodash.debounce'
@@ -303,6 +304,7 @@ const TipCallScreenSimple = () => {
   const { colors, isDarkMode } = useTheme()
   const { user } = useAuth()
   const { balance, isPremium } = useWallet()
+  const { totalUnreadCount } = useFCMChat()
   const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>()
   const { blockUser, isUserBlocked } = useBlocklist()
   const queryClient = useQueryClient()
@@ -579,7 +581,8 @@ const TipCallScreenSimple = () => {
     })
   }, [languageFilter, categoryFilter, debouncedSearch, user?.id])
 
-  // Live search data (only when search is active)
+  // Live search data (only when search is active and different from main search)
+  const shouldUseLiveSearch = liveSearchQuery && liveSearchQuery !== debouncedSearch;
   const {
     data: liveSearchData,
     isLoading: liveSearchLoading,
@@ -592,7 +595,7 @@ const TipCallScreenSimple = () => {
       categoryFilter,
       searchQuery: liveSearchQuery,
     },
-    user?.id,
+    shouldUseLiveSearch ? user?.id : undefined, // Only enable when needed
   )
 
   // Create service instances
@@ -1108,6 +1111,23 @@ const TipCallScreenSimple = () => {
         <Icon name="search" size={20} color={colors.text.secondary} />
       </TouchableOpacity>
 
+      {/* Inbox */}
+      <View style={{ position: 'relative' }}>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Inbox')}
+          style={styles.headerIconButton}
+        >
+          <Mail size={20} color={colors.text.secondary} />
+        </TouchableOpacity>
+        {totalUnreadCount > 0 && (
+          <View style={[styles.inboxBadge, { backgroundColor: colors.primary }]}>
+            <Text style={styles.inboxBadgeText}>
+              {totalUnreadCount > 99 ? '99+' : totalUnreadCount.toString()}
+            </Text>
+          </View>
+        )}
+      </View>
+
       {/* Menu Dropdown */}
       <View style={{ position: 'relative' }}>
         <TouchableOpacity
@@ -1261,6 +1281,25 @@ const TipCallScreenSimple = () => {
           </LinearGradient>
         </View>
       )}
+
+      {/* Call Acceptance Benefits Banner */}
+      <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+        <LinearGradient colors={['#4CAF50', '#45A049']} style={{ borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={{ fontSize: 20, marginRight: 12 }}>💰</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontWeight: '700', color: '#FFFFFF' }}>Earn by Accepting Calls</Text>
+            <Text style={{ color: '#FFFFFF', opacity: 0.9, fontSize: 12 }}>
+              Audio: {isPremium ? '₹2/min' : '₹0.60/min'} • Video: {isPremium ? '₹4/min' : '₹2/min'}
+            </Text>
+          </View>
+          <View style={{ alignItems: 'center' }}>
+            <Text style={{ fontSize: 12, color: '#FFFFFF', opacity: 0.8 }}>Per Min</Text>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#FFFFFF' }}>
+              {isPremium ? '₹2-4' : '₹0.60-2'}
+            </Text>
+          </View>
+        </LinearGradient>
+      </View>
 
       {/* Enhanced Filters Section with Languages and Interests */}
       <View style={[styles.filtersSection, { backgroundColor: colors.background }]}>
@@ -1873,6 +1912,24 @@ const styles = StyleSheet.create({
   dropdownBadgeText: {
     color: '#FFF',
     fontSize: 10,
+    fontWeight: 'bold',
+  },
+  inboxBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  inboxBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
     fontWeight: 'bold',
   },
 

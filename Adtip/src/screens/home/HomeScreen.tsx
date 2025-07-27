@@ -24,9 +24,11 @@ import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 import { InfiniteData } from '@tanstack/react-query';
 // Import Lucide React Native icons
-import { PlayCircle, Gamepad2, WifiOff, Share2, HandCoins, Dices } from 'lucide-react-native';
+import { PlayCircle, Gamepad2, WifiOff, Share2, HandCoins, Dices, Mail, Search, CreditCard } from 'lucide-react-native';
 import PostWithComments from '../../components/home/PostWithComments';
 import { FeedFlatList, useOptimizedRenderItem } from '../../components/common/OptimizedFlatList';
+import SurveyBanner, { CPXResearchProvider as CPXResearchComponent } from '../../components/home/SurveyBanner';
+import { CPXResearchProvider } from '../../contexts/CPXResearchContext';
 
 // Enhanced Contexts & Services
 import {useTheme} from '../../contexts/ThemeContext';
@@ -39,6 +41,7 @@ import {HOME_ENDPOINTS} from '../../constants/apiEndpoints';
 import shareService from '../../services/ShareService';
 import { usePosts, useGuestPosts, useLikeMutation, useFollowMutation, useSubscriptionStatus, useCategories, useSearchUsers } from '../../hooks/useQueries';
 import { useUserDataContext, useUserPremiumStatus, useUserWallet } from '../../contexts/UserDataContext';
+import { useFCMChat } from '../../contexts/FCMChatContext';
 import { getUserDisplayName, isPremiumUser } from '../../utils/userDataUtils';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
@@ -250,68 +253,7 @@ const ExternalLinkBanner: React.FC<ExternalLinkBannerProps> = ({ isPremium, onUp
   );
 };
 
-// Rush Play Games Banner Component
-interface RushPlayGamesBannerProps {
-  isPremium: boolean;
-  onUpgrade: () => void;
-}
-
-const RushPlayGamesBanner: React.FC<RushPlayGamesBannerProps> = ({ isPremium, onUpgrade }) => {
-  const { colors } = useTheme();
-  const styles = createHomeScreenStyles(colors);
-
-  const handleBannerPress = async () => {
-    // Allow all users to access the games - no premium restriction
-    try {
-      const url = 'https://439096e5.rushquiz.com/';
-      const supported = await Linking.canOpenURL(url);
-
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-        Alert.alert('Error', 'Cannot open the link. Please try again later.');
-      }
-    } catch (error) {
-      Logger.error('HomeScreen', 'Error opening external link:', error);
-      Alert.alert('Error', 'Failed to open the link. Please try again.');
-    }
-  };
-
-  return (
-    <View style={styles.earnCardsCarouselSection}>
-      <TouchableOpacity
-        style={styles.earnCardVerticalItem}
-        onPress={handleBannerPress}
-        activeOpacity={0.9}
-      >
-        <LinearGradient
-          colors={['#9C27B0', '#7B1FA2', '#4A148C']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.earnCardGradient}
-        >
-          <View style={styles.earnCardContent}>
-            <View style={styles.earnCardTextContainer}>
-              <Text style={styles.earnCardTitle}>🧠 Rush Play Games</Text>
-              <Text style={styles.earnCardDescription}>Test your knowledge with exciting quiz games!</Text>
-              <LinearGradient
-                colors={['#FFD700', '#FFA500', '#FF8C00']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.earnCardRewardBadge}
-              >
-                <Text style={styles.earnCardRewardText}>Quiz Now!</Text>
-              </LinearGradient>
-            </View>
-            <View style={styles.earnCardIconContainer}>
-              <Gamepad2 size={32} color="#FFFFFF" />
-            </View>
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
-    </View>
-  );
-};
+// Survey Banner Component - Replaced Rush Play Games with CPX Research Surveys
 
 const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onInstallToEarn, isLoading }) => {
   const {colors} = useTheme();
@@ -396,6 +338,7 @@ function shuffleArray<T>(array: T[]): T[] {
 const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}) => {
   const {colors, isDarkMode} = useTheme();
   const {user, isGuest, refreshUserData} = useAuth();
+  const { totalUnreadCount } = useFCMChat();
   const navigation = useNavigation<AppNavigationProps>();
   const {contentPaddingBottom} = useTabNavigator();
   const {clearCache, invalidateData} = useDataContext();
@@ -896,7 +839,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     // Clear search when navigating
     setSearchQuery('');
     setIsSearchActive(false);
-  }, [navigation]);
+    }, [navigation]);
 
   // Debounce search query
   useEffect(() => {
@@ -911,6 +854,73 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     data: searchUsersData,
     isLoading: searchUsersLoading,
   } = useSearchUsers(debouncedSearchQuery, 1, 20);
+
+  // Complete header right section with all icons
+  const renderHeaderRightSection = useCallback(() => (
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      {/* Search Icon */}
+      <TouchableOpacity
+        onPress={() => setIsSearchActive(true)}
+        style={[styles.headerIconButton, { marginLeft: 6 }]}
+        activeOpacity={0.8}
+      >
+        <Search size={20} color={colors.text.secondary} />
+      </TouchableOpacity>
+
+      {/* Premium Toggle */}
+      <TouchableOpacity
+        style={[styles.headerIconButton, { marginLeft: 6 }]}
+        onPress={() => navigation.navigate('SubscriptionScreen' as never)}
+        activeOpacity={0.8}
+      >
+        <View style={{
+          width: 44,
+          height: 24,
+          borderRadius: 12,
+          backgroundColor: isPremium ? '#4CAF50' : '#FF4444',
+          justifyContent: 'center',
+          alignItems: 'center',
+          flexDirection: 'row'
+        }}>
+          <View style={{
+            width: 20,
+            height: 20,
+            borderRadius: 10,
+            backgroundColor: '#FFFFFF',
+            position: 'absolute',
+            left: isPremium ? 22 : 2,
+          }} />
+        </View>
+      </TouchableOpacity>
+
+      {/* Wallet Icon */}
+      <TouchableOpacity
+        onPress={() => navigation.navigate('Wallet' as never)}
+        style={[styles.headerIconButton, { marginLeft: 6 }]}
+        activeOpacity={0.8}
+      >
+        <CreditCard size={20} color={colors.primary} />
+      </TouchableOpacity>
+
+      {/* Inbox Icon */}
+      <View style={{ position: 'relative', marginLeft: 6 }}>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Inbox' as never)}
+          style={styles.headerIconButton}
+          activeOpacity={0.8}
+        >
+          <Mail size={20} color={colors.text.secondary} />
+        </TouchableOpacity>
+        {totalUnreadCount > 0 && (
+          <View style={[styles.inboxBadge, { backgroundColor: colors.primary }]}>
+            <Text style={styles.inboxBadgeText}>
+              {totalUnreadCount > 99 ? '99+' : totalUnreadCount.toString()}
+            </Text>
+          </View>
+        )}
+      </View>
+    </View>
+  ), [navigation, totalUnreadCount, colors, styles, isPremium, setIsSearchActive]);
 
   // Search results component
   const SearchResults = useMemo(() => {
@@ -1167,14 +1177,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   // Render loading state
   if (initialLoading) {
     return (
-      <ScreenTransition>
+      <ScreenTransition skipAnimation={true}>
         <View style={[styles.container, {backgroundColor: colors.background}]}>
           <Header
             title=""
             showLogo={false}
-            showSearch={true}
-            showWallet={true}
-            showPremium={true}
+            rightComponent={renderHeaderRightSection()}
           />
           <ScrollView style={styles.content} contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}>
             <StoriesRow stories={[]} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} isLoading={true} />
@@ -1182,7 +1190,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             <BannerCarousel />
             <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onInstallToEarn={handleInstallToEarn} isLoading={true} />
             <ExternalLinkBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
-            <RushPlayGamesBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
+            <SurveyBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} renderCPXAtRoot={true} />
             <View style={styles.skeletonContainer}>
               {Array(6).fill(0).map((_, index) => <PostItemSkeleton key={`skeleton-${index}`} />)}
             </View>
@@ -1197,15 +1205,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     return (
       <ScreenTransition>
         <View style={[styles.container, {backgroundColor: colors.background}]}>
-          <Header 
-            title="" 
+          <Header
+            title=""
             onSearchSubmit={handleSearchSubmit}
+            rightComponent={renderHeaderRightSection()}
           />
           <View style={styles.errorContainer}>
             <WifiOff size={48} color={colors.danger || '#FF0000'} />
             <Text style={[styles.errorTitle, {color: colors.text.primary}]}>Something went wrong</Text>
             <Text style={[styles.errorMessage, {color: colors.text.secondary}]}>
-              {postsError.message || 'Failed to load posts'}
+              {postsError?.message || 'Failed to load posts'}
             </Text>
             <TouchableOpacity style={[styles.retryButton, {backgroundColor: colors.primary}]} onPress={handleRefresh}>
               <Text style={{color: colors.white}}>Try Again</Text>
@@ -1217,17 +1226,25 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   }
 
   return (
-          <ScreenTransition>
+    <CPXResearchProvider>
+      <ScreenTransition skipAnimation={true}>
         <View style={[styles.container, {backgroundColor: colors.background}]}>
+          {/* CPX Research Component at root level for full-screen modal */}
+          <CPXResearchComponent
+            isPremium={isPremium}
+            onRewardEarned={(amount, isPremium) => {
+              // Handle reward earned - could trigger wallet refresh, show notification, etc.
+              console.log('Survey reward earned:', amount, isPremium);
+            }}
+          />
+
           <Header
             title=""
             showLogo={false}
-            showSearch={true}
-            showWallet={true}
-            showPremium={true}
             searchQuery={searchQuery}
             onSearchQueryChange={handleSearchQueryChange}
             onSearchSubmit={handleSearchSubmit}
+            rightComponent={renderHeaderRightSection()}
           />
           {SearchResults}
           <FeedFlatList
@@ -1253,7 +1270,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
               <BannerCarousel onBannerPress={handleBannerPress} />
               <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onInstallToEarn={handleInstallToEarn} />
               <ExternalLinkBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
-              <RushPlayGamesBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
+              <SurveyBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} renderCPXAtRoot={true} />
             </>
           )}
           ListEmptyComponent={renderEmptyState}
@@ -1329,6 +1346,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
       </View>
     </ScreenTransition>
+    </CPXResearchProvider>
   );
 };
 
@@ -1375,9 +1393,6 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
   },
   // External link banner section
   externalLinkBannerSection: {
-    backgroundColor: colors.surface,
-  },
-  rushPlayGamesBannerSection: {
     backgroundColor: colors.surface,
   },
   earnCardsCarouselSkeletonContainer: {
@@ -1622,61 +1637,28 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
     alignItems: 'center',
   },
 
-  // Rush Play Games Banner styles
-  rushPlayGamesBannerContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+
+  headerIconButton: {
+    padding: 8,
+    borderRadius: 20,
   },
-  rushPlayGamesBanner: {
-    borderRadius: 12,
-    padding: 16,
-    minHeight: 100,
-  },
-  rushPlayGamesBannerGradient: {
-    borderRadius: 12,
-    padding: 16,
-    minHeight: 100,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  rushPlayGamesBannerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  rushPlayGamesBannerTextContainer: {
-    flex: 1,
-    paddingRight: 16,
-  },
-  rushPlayGamesBannerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  rushPlayGamesBannerDescription: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    opacity: 0.9,
-    marginBottom: 8,
-  },
-  rushPlayGamesBannerUpgradeBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  rushPlayGamesBannerUpgradeText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  rushPlayGamesBannerIconContainer: {
+  inboxBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  inboxBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: 'bold',
   },
 });
 

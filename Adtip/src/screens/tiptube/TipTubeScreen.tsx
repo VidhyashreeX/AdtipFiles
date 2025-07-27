@@ -22,7 +22,7 @@ import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/nativ
 import { useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
-import { CirclePlay, Gamepad2 } from 'lucide-react-native';
+import { CirclePlay, Gamepad2, Search } from 'lucide-react-native';
 import RazorpayCheckout from 'react-native-razorpay';
 import debounce from 'lodash.debounce';
 
@@ -626,24 +626,41 @@ const TipTubeScreen = () => {
     };
 
     return (
-      <TouchableOpacity
-        onPress={handleProfilePress}
-        style={styles.channelProfileButton}
-        activeOpacity={0.8}
-      >
-        <Image
-          source={{
-            uri: channelProfileImage || getFallbackAvatarUrl(user?.id)
+      <View style={styles.headerRightContainer}>
+        {/* Search Icon */}
+        <TouchableOpacity
+          onPress={() => {
+            setIsTipTubeSearchActive(true);
           }}
-          style={styles.channelProfileImage}
-          onError={() => {
-            // Fallback to default avatar on error
-            setChannelProfileImage(getFallbackAvatarUrl(user?.id));
-          }}
-        />
-      </TouchableOpacity>
+          style={styles.searchIconButton}
+          activeOpacity={0.8}
+        >
+          <Search size={20} color={colors.text.secondary} />
+        </TouchableOpacity>
+
+        {/* Content Creator Premium Toggle */}
+        <ContentCreatorPlanToggle onPress={handleTogglePremium} />
+
+        {/* Channel Profile */}
+        <TouchableOpacity
+          onPress={handleProfilePress}
+          style={styles.channelProfileButton}
+          activeOpacity={0.8}
+        >
+          <Image
+            source={{
+              uri: channelProfileImage || getFallbackAvatarUrl(user?.id)
+            }}
+            style={styles.channelProfileImage}
+            onError={() => {
+              // Fallback to default avatar on error
+              setChannelProfileImage(getFallbackAvatarUrl(user?.id));
+            }}
+          />
+        </TouchableOpacity>
+      </View>
     );
-  }, [isGuest, channelProfileImage, user?.id, userChannelId, navigation]);
+  }, [isGuest, channelProfileImage, user?.id, userChannelId, navigation, handleTogglePremium]);
 
   // New navigation handlers for TipTube screens
   const handleNavigateToYourChannel = useCallback(() => {
@@ -1154,7 +1171,6 @@ const TipTubeScreen = () => {
           showSearch={true}
           showWallet={true}
           showPremium={true}
-          showProfile={false}
           onSearchSubmit={(query) => {
             setSearchQuery(query);
             setIsTipTubeSearchActive(true);
@@ -1793,6 +1809,17 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
     height: 48,
     borderRadius: 24,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerRightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  searchIconButton: {
+    padding: 8,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
