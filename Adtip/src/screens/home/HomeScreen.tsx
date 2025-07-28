@@ -98,7 +98,7 @@ interface Post {
   duration_days?: number; remaining_budget?: number;
   is_promtion_post_viewed?: number;
 }
-interface HomeScreenProps { walletBalance?: string; }
+// Removed walletBalance prop - HOC removed for performance optimization
 
 // Helper Components
 
@@ -291,7 +291,7 @@ const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn: _onWatchAnd
 
 
 // MAIN COMPONENT - Enhanced with bulletproof navigation
-const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: _hocWalletBalance}) => {
+const HomeScreen: React.FC = () => {
   const {colors} = useTheme();
   const {user, isGuest} = useAuth();
   const { totalUnreadCount } = useFCMChat();

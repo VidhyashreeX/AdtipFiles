@@ -103,10 +103,15 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
   });
 
   const completeOnboarding = () => {
-    setIsAuthenticated(true);
-    if (user && user.is_first_time === 1 && user.isSaveUserDetails === 1) { 
+    // ✅ FIX: Do NOT set isAuthenticated here - this is only for onboarding completion
+    // Authentication should only be set after successful login/OTP verification
+    if (user && user.is_first_time === 1 && user.isSaveUserDetails === 1) {
          LastSeenService.startTracking();
     }
+    // Mark onboarding as completed in storage for future reference
+    AsyncStorage.setItem('@onboarding_completed', 'true').catch(error => {
+      Logger.error('AuthContext', 'Failed to mark onboarding completed:', error);
+    });
   };
 
   // Load user from storage on mount with timeout protection
@@ -295,7 +300,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
           contentCreatorPlanId: userData.content_creator_plan_id ?? 0,
           walletBalance: '0', // Will be updated after wallet API call
           accessToken: response.accessToken,
-          isVerified: userData.is_verified || false,
+          isVerified: Boolean(userData.isOtpVerified),
           lastLoginTime: Date.now(),
         };
 
@@ -411,12 +416,13 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       });
       Logger.debug('AuthContext', 'Local auth state reset.');
 
+      // ✅ SIMPLIFIED: Let navigation state machine handle logout navigation
       if (navigationRef.isReady()) {
         navigationRef.reset({
           index: 0,
-          routes: [{name: 'Onboarding'}], // This will take user to Onboarding, then to Login if not skipped
+          routes: [{name: 'Auth'}],
         });
-        Logger.debug('AuthContext', 'Navigation reset to Onboarding.');
+        Logger.debug('AuthContext', 'Navigation reset to Auth after logout.');
       }
     } catch (err) {
       Logger.error('AuthContext', 'Error during logout:', err);
@@ -590,7 +596,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         walletBalance: '0.00',
       });
 
-      // Note: No AsyncStorage operations needed since guest mode is not persisted
+      // ✅ SIMPLIFIED: Let navigation state machine handle guest mode exit
+      // The state machine will automatically detect the isGuest change and navigate appropriately
 
       Logger.info('AuthContext', 'Exited guest mode - state cleaned up');
     } catch (err) {

@@ -7,7 +7,7 @@
  * - Non-authenticated users see the onboarding screen
  * No loading screens, no blocking initialization - just immediate UI.
  */
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, StatusBar, Animated, BackHandler, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
@@ -17,6 +17,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { safeAreaStyles, statusBarConfig } from '../../utils/SafeAreaUtils';
 import { navigationRef, resetTo } from '../../navigation/NavigationService';
 import Sidebar from '../sidebar/Sidebar';
+import NavigationErrorBoundary from './NavigationErrorBoundary';
 import { Logger } from '../../utils/ProductionLogger';
 
 // Import navigation screens
@@ -24,6 +25,19 @@ import MainNavigator from '../../navigation/MainNavigator';
 import AuthNavigator from '../../navigation/AuthNavigator';
 import GuestNavigator from '../../navigation/GuestNavigator';
 import { RootStackParamList } from '../../types/navigation';
+
+// State machine for navigation
+import { useNavigationMachine } from '../../hooks/useNavigationMachine';
+import { useNavigationErrorHandler } from '../../hooks/useNavigationErrorHandler';
+
+// Navigation persistence
+import NavigationPersistenceService from '../../services/NavigationPersistenceService';
+
+// Simplified deep linking
+import SimplifiedDeepLinkService from '../../services/SimplifiedDeepLinkService';
+
+// Navigation analytics
+import NavigationAnalyticsService from '../../services/NavigationAnalyticsService';
 
 interface UltraFastLoaderProps {
   onInitializationComplete?: () => void;
@@ -49,7 +63,7 @@ const InitialLoadingScreen = () => {
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
       <Animated.Image
         // Assuming this is the correct path from LoginScreen.tsx
-        source={require('../../assets/images/logo.png')}
+        source={{ uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==' }}
         style={{ width: 150, height: 150, transform: [{ scale: pulseAnimation }] }}
         resizeMode="contain"
       />
@@ -57,46 +71,32 @@ const InitialLoadingScreen = () => {
   );
 };
 
-const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({ 
-  onInitializationComplete 
+const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
+  onInitializationComplete
 }) => {
   const { colors, isDarkMode } = useTheme();
-  const { isAuthenticated, isGuest, isInitialized, user, exitGuestMode } = useAuth();
-  //const session = useCallStore(state => state.session);
-  const [isVisible, setIsVisible] = useState(true);
-  const [hasInitialized, setHasInitialized] = useState(false);
+  const { exitGuestMode } = useAuth();
+
+  // ✅ PERFORMANCE FIX: Use navigation state machine instead of complex boolean logic
+  const {
+    currentState,
+    navigatorComponent,
+    isInitialized,
+    shouldShowSidebar,
+  } = useNavigationMachine();
+
+  // ✅ RELIABILITY FIX: Add navigation error handling
+  useNavigationErrorHandler();
+
+  // ✅ PERSISTENCE: Add navigation state persistence
+  const [initialState, setInitialState] = useState<any>(undefined);
+  const [isStateRestored, setIsStateRestored] = useState(false);
+
   const [isNavReady, setIsNavReady] = useState(false);
-  const initStartTime = useRef<number | null>(null);
-  const hasInitializedRef = useRef(false);
   const onInitializationCompleteRef = useRef<(() => void) | null>(null);
-  const previousStateRef = useRef<any>(null);
-
-  // Initialize start time only once
-  if (initStartTime.current === null) {
-    initStartTime.current = Date.now();
-  }
-
-  // Memoize user-related values to prevent unnecessary re-renders
-  const userHasName = !!user?.name;
-  const userSaveStatus = user?.isSaveUserDetails;
 
   // Store onInitializationComplete in ref to avoid effect re-runs
   onInitializationCompleteRef.current = onInitializationComplete || null;
-
-  // Memoize navigation state calculations for better performance
-  const navigationState = useMemo(() => {
-    const shouldShowMainApp = isAuthenticated && userHasName && userSaveStatus === 1;
-    const shouldShowGuestApp = isGuest;
-    const shouldShowAuth = !isAuthenticated && !isGuest;
-
-    return {
-      shouldShowMainApp,
-      shouldShowGuestApp,
-      shouldShowAuth,
-      renderingState: shouldShowMainApp ? 'MainApp' :
-                     shouldShowGuestApp ? 'GuestApp' : 'Auth'
-    };
-  }, [isAuthenticated, isGuest, userHasName, userSaveStatus]);
 
   // Global back button handler
   useEffect(() => {
@@ -113,7 +113,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
       }
 
       // Handle the case when there's no previous screen to go back to
-      if (navigationState.shouldShowMainApp) {
+      if (currentState === 'mainApp') {
         // For logged-in users: Show exit app alert
         Alert.alert(
           'Exit App',
@@ -124,7 +124,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
           ]
         );
         return true; // Prevent default back action
-      } else if (navigationState.shouldShowGuestApp) {
+      } else if (currentState === 'guestApp') {
         // For guest users: Exit guest mode and navigate back to onboarding screens
         try {
           Logger.debug('UltraFastLoader', 'Guest mode back button - exiting guest mode and returning to onboarding');
@@ -148,75 +148,69 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
     return () => backHandler.remove();
-  }, [isNavReady, isInitialized, navigationState.shouldShowMainApp, navigationState.shouldShowGuestApp, exitGuestMode]);
+  }, [isNavReady, isInitialized, currentState, exitGuestMode]);
 
-  // Use useMemo to prevent excessive logging - now using optimized navigationState
-  const renderingState = useMemo(() => ({
-    ...navigationState,
-    isAuthenticated,
-    isGuest,
-    hasUserName: userHasName,
-    isSaveUserDetails: userSaveStatus,
-    userProfileComplete: !!(userHasName && userSaveStatus === 1)
-  }), [navigationState, isAuthenticated, isGuest, userHasName, userSaveStatus]);
-
-  // Only log when state changes
+  // ✅ SIMPLIFIED: Log state changes using state machine
   useEffect(() => {
-    const currentState = JSON.stringify(renderingState);
-    const previousState = previousStateRef.current;
-    
-    if (previousState !== currentState) {
-      Logger.debug('UltraFastLoader', 'Rendering screen:', renderingState);
-      previousStateRef.current = currentState;
-    }
-  }, [renderingState]);
+    Logger.debug('UltraFastLoader', 'Navigation state changed:', {
+      currentState,
+      navigatorComponent,
+      isInitialized
+    });
+  }, [currentState, navigatorComponent, isInitialized]);
 
-  // Initialization effect - runs only once
+  // ✅ PERSISTENCE: Restore navigation state on app start
   useEffect(() => {
-    // Only run initialization once
-    if (hasInitializedRef.current) return;
-    
-    hasInitializedRef.current = true;
-    
-    // Immediate visibility - no delays
-    setIsVisible(true);
-    
-    // Background initialization without blocking UI
-    const initializeServices = async () => {
+    const restoreState = async () => {
       try {
-        // All services run in background - UI is already visible
-        const renderTime = Date.now() - (initStartTime.current || Date.now());
-        
-        // Only log significant render times to reduce console spam
-        if (renderTime > 100) {
-          Logger.debug('UltraFastLoader', `App rendered in: ${renderTime}ms`);
-        }
-
-        // Log authentication state once
-        Logger.debug('UltraFastLoader', 'Authentication state:', {
-          isAuthenticated,
-          isInitialized,
-          hasUserName: userHasName,
-          userStatus: userSaveStatus
-        });
-        
-        // Mark as initialized
-        setHasInitialized(true);
-        
-        // Notify completion if callback provided
-        if (onInitializationCompleteRef.current) {
-          onInitializationCompleteRef.current();
+        if (NavigationPersistenceService.shouldRestoreState()) {
+          const restoredState = await NavigationPersistenceService.restoreNavigationState();
+          if (restoredState) {
+            setInitialState(restoredState);
+            Logger.debug('UltraFastLoader', 'Navigation state restored from persistence');
+          }
         }
       } catch (error) {
-        console.error('[UltraFastLoader] Background initialization error:', error);
-        // Don't block UI even if services fail
-        setHasInitialized(true);
+        Logger.error('UltraFastLoader', 'Failed to restore navigation state:', error);
+      } finally {
+        setIsStateRestored(true);
       }
     };
 
-    // Start background initialization immediately
-    initializeServices();
-  }, []); // Empty dependency array - only run once on mount
+    restoreState();
+  }, []);
+
+  // ✅ DEEP LINKING: Initialize simplified deep link service
+  useEffect(() => {
+    const cleanup = SimplifiedDeepLinkService.initialize();
+    return cleanup;
+  }, []);
+
+  // ✅ ANALYTICS: Initialize navigation analytics
+  useEffect(() => {
+    const analytics = NavigationAnalyticsService.getInstance();
+    analytics.loadPersistedEvents();
+    analytics.resetSession();
+
+    return () => {
+      analytics.persistEvents();
+    };
+  }, []);
+
+  // ✅ DEEP LINKING: Process pending links when navigation is ready
+  useEffect(() => {
+    if (isNavReady) {
+      SimplifiedDeepLinkService.processPendingLink();
+    }
+  }, [isNavReady]);
+
+  // ✅ SIMPLIFIED: Initialization handled by state machine
+  useEffect(() => {
+    // Notify completion if callback provided
+    if (isInitialized && onInitializationCompleteRef.current) {
+      onInitializationCompleteRef.current();
+    }
+  }, [isInitialized]);
 
   /*
   // Handle active call navigation
@@ -274,20 +268,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
   }, [activeCall, isNavReady]);
   */
 
-  // Add fallback state for debugging
-  const [showFallback, setShowFallback] = useState(false);
-
-  // Fallback timer to prevent blank screen
-  useEffect(() => {
-    const fallbackTimer = setTimeout(() => {
-      if (!isInitialized) {
-        console.warn('[UltraFastLoader] ⚠️ Initialization taking too long, showing fallback');
-        setShowFallback(true);
-      }
-    }, 15000); // 15 second fallback
-
-    return () => clearTimeout(fallbackTimer);
-  }, [isInitialized]);
+  // ✅ REMOVED: Fallback logic handled by state machine
 
   // --- START: Replace the entire return logic with this ---
   return (
@@ -302,46 +283,65 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
         {...(isDarkMode ? statusBarConfig.dark : statusBarConfig.light)}
       />
 
-      <NavigationContainer
-        ref={navigationRef}
-        onReady={() => {
-          Logger.info('UltraFastLoader', '✅ Navigation is ready');
-          setIsNavReady(true);
-        }}
-        fallback={<InitialLoadingScreen />}
-      >
+      <NavigationErrorBoundary>
+        <NavigationContainer
+          ref={navigationRef}
+          initialState={initialState}
+          onStateChange={(state) => {
+            // Save navigation state for persistence
+            if (state && isStateRestored) {
+              NavigationPersistenceService.saveNavigationState(state);
+            }
+
+            // Track navigation analytics
+            if (state) {
+              const currentRoute = state.routes[state.index];
+              if (currentRoute) {
+                NavigationAnalyticsService.getInstance().trackScreenView(
+                  currentRoute.name,
+                  currentRoute.params
+                );
+              }
+            }
+          }}
+          onReady={() => {
+            Logger.info('UltraFastLoader', '✅ Navigation is ready');
+            setIsNavReady(true);
+          }}
+          fallback={<InitialLoadingScreen />}
+        >
         <RootStack.Navigator screenOptions={{ headerShown: false }}>
-          {!isInitialized && !showFallback ? (
+          {/* ✅ PERFORMANCE FIX: Simplified rendering using state machine */}
+          {navigatorComponent === 'InitialLoading' && (
             <>
-              {Logger.debug('UltraFastLoader', '🔄 Showing InitialLoading screen - isInitialized:', isInitialized)}
+              {Logger.debug('UltraFastLoader', '🔄 Showing InitialLoading screen')}
               <RootStack.Screen name="InitialLoading" component={InitialLoadingScreen} />
             </>
-          ) : showFallback ? (
+          )}
+          {navigatorComponent === 'Main' && (
             <>
-              {Logger.warn('UltraFastLoader', '🚨 Showing fallback AuthNavigator due to initialization timeout')}
-              <RootStack.Screen name="Auth" component={AuthNavigator} />
-            </>
-          ) : navigationState.shouldShowMainApp ? (
-            <>
-              {Math.random() < 0.1 && Logger.debug('UltraFastLoader', '✅ Rendering MainNavigator for authenticated user')}
+              {Logger.debug('UltraFastLoader', '✅ Rendering MainNavigator for authenticated user')}
               <RootStack.Screen name="Main" component={MainNavigator} />
             </>
-          ) : navigationState.shouldShowGuestApp ? (
+          )}
+          {navigatorComponent === 'Guest' && (
             <>
               {Logger.debug('UltraFastLoader', '👤 Rendering GuestNavigator for guest user')}
               <RootStack.Screen name="Guest" component={GuestNavigator} />
             </>
-          ) : (
+          )}
+          {navigatorComponent === 'Auth' && (
             <>
-              {Logger.debug('UltraFastLoader', '🆕 Rendering AuthNavigator (OnboardingScreen) for new user')}
+              {Logger.debug('UltraFastLoader', '🆕 Rendering AuthNavigator')}
               <RootStack.Screen name="Auth" component={AuthNavigator} />
             </>
           )}
         </RootStack.Navigator>
         
-        {/* Show sidebar when initialized and in the main app or guest mode */}
-        {isInitialized && (navigationState.shouldShowMainApp || navigationState.shouldShowGuestApp) && <Sidebar />}
-      </NavigationContainer>
+        {/* ✅ SIMPLIFIED: Show sidebar using state machine */}
+        {shouldShowSidebar && <Sidebar />}
+        </NavigationContainer>
+      </NavigationErrorBoundary>
     </SafeAreaView>
   );
   // --- END: Replacement ---

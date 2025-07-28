@@ -13,8 +13,7 @@ import useCallKeepInitializer from '../hooks/useCallKeepInitializer';
 // Import navigators
 import TabNavigator from './TabNavigator';
 
-// Import the withWalletBalance HOC
-import { withWalletBalance } from '../components/hoc/withWalletBalance';
+// Remove HOC import - using direct useWallet hook in components instead
 
 // Import screens
 import HomeScreen from '../screens/home/HomeScreen';
@@ -124,49 +123,8 @@ import FollowersFollowingScreen from '../screens/profile/FollowersFollowingScree
 // Create stack navigator with proper typing
 const Stack = createNativeStackNavigator<MainNavigatorParamList>();
 
-// ✅ SOLUTION: Define HOC-wrapped components OUTSIDE the MainNavigator component
-const EnhancedCreatePostScreen = withWalletBalance(CreatePostScreen);
-const EnhancedSelectCategoryScreen = withWalletBalance(SelectCategoryScreen);
-const EnhancedTipTubeUploadScreen = withWalletBalance(TipTubeUploadScreen);
-const EnhancedTipShortsUploadScreen = withWalletBalance(TipShortsUploadScreen);
-const EnhancedPromotePostScreen = withWalletBalance(PromotePostScreen);
-const EnhancedVideoPreviewScreen = withWalletBalance(VideoPreviewScreen);
-const EnhancedVideoScreen = withWalletBalance(VideoScreen);
-const EnhancedShortsScreen = withWalletBalance(ShortsScreen);
-const EnhancedTipShortsScreen = withWalletBalance(TipShortsEnhanced);
-const EnhancedChannelScreen = withWalletBalance(ChannelScreen);
-const EnhancedCreateChannelScreen = withWalletBalance(CreateChannelScreen);
-const EnhancedPackagesScreen = withWalletBalance(PackagesScreen);
-const EnhancedChoosePackagesScreen = withWalletBalance(ChoosePackagesScreen);
-const EnhancedCheckoutScreen = withWalletBalance(CheckoutScreen);
-const EnhancedAnalyticsScreen = withWalletBalance(AnalyticsScreen);
-const EnhancedUserProfileScreen = withWalletBalance(UserProfileScreen);
-const EnhancedEditProfileScreen = withWalletBalance(EditProfile);
-const EnhancedTrackOrderScreen = withWalletBalance(TrackOrderScreen);
-const EnhancedSearchScreen = withWalletBalance(SearchScreen);
-const EnhancedNotificationScreen = withWalletBalance(NotificationScreen);
-const EnhancedSettingsScreen = withWalletBalance(SettingsScreen);
-const EnhancedEarningsScreen = withWalletBalance(EarningsScreen);
-const EnhancedEarnMoneyUserScreen = withWalletBalance(EarnMoneyUserScreen);
-const EnhancedEarnMoneyCreatorScreen = withWalletBalance(EarnMoneyCreatorScreen);
-const EnhancedReferralScreen = withWalletBalance(ReferralScreen);
-const EnhancedPlayToEarnScreen = withWalletBalance(InstallToEarnScreen);
-const EnhancedLudoGameScreen = withWalletBalance(LudoGameScreen);
-const EnhancedWatchToEarnScreen = withWalletBalance(WatchToEarnScreen);
-const EnhancedAdPassbookScreen = withWalletBalance(AdPassbookScreen);
-const EnhancedSupportScreen = withWalletBalance(SupportScreen);
-const EnhancedContactFormScreen = withWalletBalance(ContactFormScreen);
-const EnhancedCreateCampaignScreen = withWalletBalance(CreateCampaignScreen);
-const EnhancedCommentsScreen = withWalletBalance(CommentsScreen);
-const EnhancedFollowersList = withWalletBalance(FollowersList);
-const EnhancedFollowingsList = withWalletBalance(FollowingsList);
-const EnhancedExploreScreen = withWalletBalance(ExploreScreen);
-const EnhancedPremiumUserScreen = withWalletBalance(PremiumUserScreen);
-const EnhancedVideoPlayerModalScreen = withWalletBalance(VideoPlayerModalScreen);
-const EnhancedTipCallScreen = withWalletBalance(TipCallScreenSimple);
-const EnhancedMissedCallsScreen = withWalletBalance(MissedCallsScreen);
-const EnhancedInstagramProfileScreen = withWalletBalance(InstagramProfileScreen);
-const EnhancedPostViewerScreen = withWalletBalance(PostViewerScreen);
+// ✅ PERFORMANCE FIX: Removed HOC cascade - components now use useWallet hook directly
+// This eliminates 43 HOC wrappers that were causing re-render storms on wallet balance updates
 
 // Custom transition configuration with Reanimated easing
 const customTransitionConfig = {
@@ -390,20 +348,20 @@ const MainNavigator = () => {
         component={FastPlayToEarnScreen}
         options={fastTransitionConfig}
       />
-      <Stack.Screen 
-        name="LudoGame" 
-        component={EnhancedLudoGameScreen}
+      <Stack.Screen
+        name="LudoGame"
+        component={LudoGameScreen}
         options={standardFastTransitionConfig}
       />
-      <Stack.Screen 
-        name="Home" 
+      <Stack.Screen
+        name="Home"
         component={withFastLoading(HomeScreen, { priority: 'high' })}
         options={fastTransitionConfig}
       />
         {/* TipCall screens - Fix these */}
-      <Stack.Screen 
-        name="TipCall" 
-        component={EnhancedTipCallScreen}
+      <Stack.Screen
+        name="TipCall"
+        component={TipCallScreenSimple}
         options={standardFastTransitionConfig}
       />
       <Stack.Screen
@@ -412,9 +370,9 @@ const MainNavigator = () => {
         options={{ headerShown: false }}
       />
       {/* MissedCalls screen with standard transition */}
-      <Stack.Screen 
-        name="MissedCalls" 
-        component={EnhancedMissedCallsScreen}
+      <Stack.Screen
+        name="MissedCalls"
+        component={MissedCallsScreen}
         options={standardFastTransitionConfig}
       />
       {/* Meeting screen (simple version) */}
@@ -483,7 +441,7 @@ const MainNavigator = () => {
       {/* Content creation with slide up animation */}
       <Stack.Screen
         name="CreatePost"
-        component={EnhancedCreatePostScreen}
+        component={CreatePostScreen}
         options={slideUpTransitionConfig}
       />
       <Stack.Screen
@@ -493,27 +451,27 @@ const MainNavigator = () => {
       />
       <Stack.Screen
         name="SelectCategory"
-        component={EnhancedSelectCategoryScreen}
+        component={SelectCategoryScreen}
       />
-      <Stack.Screen 
-        name="TipTubeUpload" 
-        component={EnhancedTipTubeUploadScreen}
+      <Stack.Screen
+        name="TipTubeUpload"
+        component={TipTubeUploadScreen}
         options={slideUpTransitionConfig}
       />
-      <Stack.Screen 
-        name="TipShortsUpload" 
-        component={EnhancedTipShortsUploadScreen}
+      <Stack.Screen
+        name="TipShortsUpload"
+        component={TipShortsUploadScreen}
         options={slideUpTransitionConfig}
       />
-      <Stack.Screen name="PromotePost" component={EnhancedPromotePostScreen} />
+      <Stack.Screen name="PromotePost" component={PromotePostScreen} />
       
       {/* Media viewing with custom transitions */}
-      <Stack.Screen name="VideoPreview" component={EnhancedVideoPreviewScreen} />
-      <Stack.Screen name="Video" component={EnhancedVideoScreen} />
+      <Stack.Screen name="VideoPreview" component={VideoPreviewScreen} />
+      <Stack.Screen name="Video" component={VideoScreen} />
       {/* Replace TipShorts screen with TipShortsEnhanced - keep ultra-smooth transition */}
       <Stack.Screen
         name="TipShorts"
-        component={EnhancedTipShortsScreen}
+        component={TipShortsEnhanced}
         options={{
           ...fastTransitionConfig, // Use fastest transition for smooth Reels experience
           gestureEnabled: true,
@@ -522,33 +480,33 @@ const MainNavigator = () => {
           headerShown: false, // Hide header for fullscreen experience
         }}
       />
-      <Stack.Screen name="Shorts" component={EnhancedShortsScreen} />
-      
+      <Stack.Screen name="Shorts" component={ShortsScreen} />
+
       {/* Comments with slide up */}
-      <Stack.Screen 
-        name="Comments" 
-        component={EnhancedCommentsScreen as any}
+      <Stack.Screen
+        name="Comments"
+        component={CommentsScreen as any}
         options={slideUpTransitionConfig}
       />
       
       {/* Channel screens */}
-      <Stack.Screen name="Channel" component={EnhancedChannelScreen} />
+      <Stack.Screen name="Channel" component={ChannelScreen} />
       <Stack.Screen name="MyChannel" component={MyChannelScreen} />
       <Stack.Screen name="EditChannel" component={EditChannelScreen} />
       <Stack.Screen name="ChannelSettings" component={ChannelSettingsScreen} />
       <Stack.Screen
         name="CreateChannel"
-        component={EnhancedCreateChannelScreen}
+        component={CreateChannelScreen}
         options={slideUpTransitionConfig}
       />
-      
+
       {/* Packages and checkout */}
-      <Stack.Screen name="Packages" component={EnhancedPackagesScreen} />
-      <Stack.Screen name="ChoosePackages" component={EnhancedChoosePackagesScreen} />
-      <Stack.Screen name="Checkout" component={EnhancedCheckoutScreen} />
-      
+      <Stack.Screen name="Packages" component={PackagesScreen} />
+      <Stack.Screen name="ChoosePackages" component={ChoosePackagesScreen} />
+      <Stack.Screen name="Checkout" component={CheckoutScreen} />
+
       {/* Other screens with standard transition */}
-      <Stack.Screen name="Analytics" component={EnhancedAnalyticsScreen} />
+      <Stack.Screen name="Analytics" component={AnalyticsScreen} />
       <Stack.Screen
         name="Profile"
         component={({
@@ -564,14 +522,14 @@ const MainNavigator = () => {
             // Optionally render a fallback or null if userId is not valid
             return null;
           }
-          return <EnhancedUserProfileScreen userId={userId} />;
+          return <UserProfileScreen userId={userId} />;
         }}
       />
-      <Stack.Screen name="InstagramProfile" component={EnhancedInstagramProfileScreen} />
+      <Stack.Screen name="InstagramProfile" component={InstagramProfileScreen} />
       <Stack.Screen name="FollowersFollowing" component={FollowersFollowingScreen} />
       <Stack.Screen
         name="PostViewer"
-        component={EnhancedPostViewerScreen}
+        component={PostViewerScreen}
         options={{
           presentation: 'fullScreenModal',
           headerShown: false,
@@ -580,38 +538,38 @@ const MainNavigator = () => {
           animation: 'slide_from_bottom',
         }}
       />
-      <Stack.Screen name="EditProfile" component={EnhancedEditProfileScreen} />
+      <Stack.Screen name="EditProfile" component={EditProfile} />
       <Stack.Screen name="Wallet" component={WalletScreen} />
       <Stack.Screen name="AddFundsScreen" component={AddFundsScreen} />
       <Stack.Screen name="WithdrawalAmountScreen" component={WithdrawalAmountScreen} />
       <Stack.Screen name="WithdrawalMethodScreen" component={WithdrawalMethodScreen} />
       <Stack.Screen name="WithdrawalConfirmationScreen" component={WithdrawalConfirmationScreen} />
-      <Stack.Screen name="TrackOrder" component={EnhancedTrackOrderScreen} />
-      <Stack.Screen name="Search" component={EnhancedSearchScreen} />
-      <Stack.Screen name="Notifications" component={EnhancedNotificationScreen} />
-      <Stack.Screen name="Settings" component={EnhancedSettingsScreen} />
+      <Stack.Screen name="TrackOrder" component={TrackOrderScreen} />
+      <Stack.Screen name="Search" component={SearchScreen} />
+      <Stack.Screen name="Notifications" component={NotificationScreen} />
+      <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={standardFastTransitionConfig} />
-      <Stack.Screen name="Earnings" component={EnhancedEarningsScreen} />
-      <Stack.Screen name="EarnMoneyUser" component={EnhancedEarnMoneyUserScreen} />
-      <Stack.Screen name="EarnMoneyCreator" component={EnhancedEarnMoneyCreatorScreen} />
-      <Stack.Screen name="Referral" component={EnhancedReferralScreen} />
-      <Stack.Screen name="WatchToEarn" component={EnhancedWatchToEarnScreen} />
-      <Stack.Screen name="AdPassbook" component={EnhancedAdPassbookScreen} />
-      <Stack.Screen name="Support" component={EnhancedSupportScreen} />
-      <Stack.Screen name="ContactForm" component={EnhancedContactFormScreen} />
+      <Stack.Screen name="Earnings" component={EarningsScreen} />
+      <Stack.Screen name="EarnMoneyUser" component={EarnMoneyUserScreen} />
+      <Stack.Screen name="EarnMoneyCreator" component={EarnMoneyCreatorScreen} />
+      <Stack.Screen name="Referral" component={ReferralScreen} />
+      <Stack.Screen name="WatchToEarn" component={WatchToEarnScreen} />
+      <Stack.Screen name="AdPassbook" component={AdPassbookScreen} />
+      <Stack.Screen name="Support" component={SupportScreen} />
+      <Stack.Screen name="ContactForm" component={ContactFormScreen} />
       <Stack.Screen
         name="CreateCampaign"
-        component={EnhancedCreateCampaignScreen}
+        component={CreateCampaignScreen}
         options={slideUpTransitionConfig}
       />
-      <Stack.Screen name="FollowersList" component={EnhancedFollowersList} />
-      <Stack.Screen name="FollowingsList" component={EnhancedFollowingsList} />
-      <Stack.Screen name="Explore" component={EnhancedExploreScreen} />
+      <Stack.Screen name="FollowersList" component={FollowersList} />
+      <Stack.Screen name="FollowingsList" component={FollowingsList} />
+      <Stack.Screen name="Explore" component={ExploreScreen} />
       
       {/* FIXED VIDEO PLAYER MODAL SCREEN */}
-      <Stack.Screen 
-        name="VideoPlayerModal" 
-        component={EnhancedVideoPlayerModalScreen}
+      <Stack.Screen
+        name="VideoPlayerModal"
+        component={VideoPlayerModalScreen}
         options={{
           presentation: 'transparentModal',
           headerShown: false,
@@ -634,7 +592,7 @@ const MainNavigator = () => {
       {/* Add UpgradePremiumScreen */}
       <Stack.Screen name="UpgradePremiumScreen" component={UpgradePremiumScreen} />
       <Stack.Screen name="SubscriptionScreen" component={SubscriptionScreen} />
-      <Stack.Screen name="PremiumUser" component={EnhancedPremiumUserScreen} />
+      <Stack.Screen name="PremiumUser" component={PremiumUserScreen} />
       <Stack.Screen name="ContentCreatorPremium" component={ContentCreatorPremiumScreen} />
       <Stack.Screen name="ContentCreatorSubscriptionScreen" component={ContentCreatorSubscriptionScreen} />
       <Stack.Screen

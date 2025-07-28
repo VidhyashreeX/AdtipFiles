@@ -62,7 +62,7 @@ const UserDetailsScreen = () => {
   // Navigation
   const navigation = useNavigation<UserDetailsScreenNavigationProp>();
   // Auth context
-  const {user, updateUserDetails, loading: authLoading, completeOnboarding} = useAuth();
+  const {user, updateUserDetails, loading: authLoading, completeOnboarding, refreshUserData} = useAuth();
   
   // Local loading state for form submission
   const [loading, setLoading] = useState(false);
@@ -425,11 +425,12 @@ const UserDetailsScreen = () => {
           }));
         }
 
-        // Complete onboarding and navigate to home
-        completeOnboarding();
-        
-        // Navigate to home screen immediately
-        navigation.navigate('Main' as never);
+        // ✅ FIX: Don't call completeOnboarding or force navigation
+        // The navigation state machine will automatically detect the user data change
+        // and navigate to the appropriate screen based on authentication status
+
+        // Refresh user data in AuthContext to trigger navigation state machine
+        await refreshUserData();
         
         Alert.alert(
           'Success', 

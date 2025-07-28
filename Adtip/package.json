@@ -51,6 +51,7 @@
     "@types/lodash.debounce": "^4.0.9",
     "@videosdk.live/react-native-sdk": "^0.3.7",
     "@videosdk.live/react-native-webrtc": "^0.0.19",
+    "@xstate/react": "^6.0.0",
     "axios": "^1.9.0",
     "cpx-research-sdk-react-native": "^2.0.25",
     "date-fns": "^4.1.0",
@@ -114,6 +115,7 @@
     "tailwindcss": "^3.4.17",
     "use-immer": "^0.7.0",
     "victory-native": "^41.17.3",
+    "xstate": "^5.20.1",
     "zustand": "^5.0.5"
   },
   "devDependencies": {

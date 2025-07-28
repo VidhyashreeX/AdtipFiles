@@ -98,9 +98,8 @@ const ThemeAwareStatusBar = () => {
   );
 };
 
-// Import comprehensive deep linking configuration
+// Import simplified deep linking configuration
 import { DEEP_LINK_CONFIG } from './src/config/deepLinkConfig';
-import deepLinkService from './src/services/DeepLinkService';
 
 // AppNavigator with Services - Ultra Fast with Authentication-aware UltraFastLoader
 const AppNavigator = () => {
@@ -117,16 +116,7 @@ const AppNavigator = () => {
     Logger.debug('App', 'Ultra-fast initialization complete');
   }, []);
 
-  // Initialize comprehensive deep linking service
-  useEffect(() => {
-    // Initialize the deep link service
-    deepLinkService.initialize();
-
-    // Cleanup on unmount
-    return () => {
-      deepLinkService.cleanup();
-    };
-  }, []);
+  // ✅ SIMPLIFIED: Deep linking now handled in UltraFastLoader
 
   // Set all services as ready immediately - they'll initialize in background
   useEffect(() => {

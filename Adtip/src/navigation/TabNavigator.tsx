@@ -17,16 +17,14 @@ import TipShortsEnhanced from '../screens/tipshorts/TipShortsEnhanced';
 // Import theme and contexts
 import {useTheme} from '../contexts/ThemeContext';
 import {TabNavigatorProvider} from '../contexts/TabNavigatorContext';
-import {withWalletBalance} from '../components/hoc/withWalletBalance';
+// Removed withWalletBalance HOC import - using direct useWallet hook in components instead
 import {Logger} from '../utils/ProductionLogger';
 
 // Create tab navigator
 const Tab = createBottomTabNavigator();
 
-// ✅ SOLUTION: Define HOC-wrapped components OUTSIDE the TabNavigator component with memoization
-const EnhancedHomeScreen = memo(withWalletBalance(HomeScreen));
-const EnhancedTipTubeScreen = memo(withWalletBalance(TipTubeScreen));
-const EnhancedTipCallScreen = memo(withWalletBalance(TipCallScreenSimple));
+// ✅ PERFORMANCE FIX: Removed HOC wrappers - components now use useWallet hook directly
+// This eliminates unnecessary re-renders on wallet balance updates
 
 /**
  * Bottom tab navigator component
@@ -39,20 +37,19 @@ const TabNavigator = () => {
 
   // REMOVED: Memoized enhanced components are now defined outside.
 
-  // Memoize tab bar height calculation
-  const tabBarHeight = useMemo(() => 60 + Math.min(insets.bottom, 20), [insets.bottom]);
+  // ✅ PERFORMANCE FIX: Simplified calculations without unnecessary memoization
+  const tabBarHeight = 60 + Math.min(insets.bottom, 20);
 
-  // Memoize tab bar style
-  const tabBarStyle = useMemo(() => ({
+  const tabBarStyle = {
     position: 'absolute' as const,
     borderTopWidth: 0,
     elevation: 0,
     height: tabBarHeight,
     backgroundColor: 'transparent',
-    marginBottom: 0, 
-  }), [tabBarHeight]);
+    marginBottom: 0,
+  };
 
-  // Memoize tab bar background component
+  // Only memoize expensive components that actually benefit from it
   const TabBarBackground = useCallback(() =>
     Platform.OS === 'ios' ? (
       <BlurView
@@ -66,19 +63,18 @@ const TabNavigator = () => {
           StyleSheet.absoluteFill,
           {
             backgroundColor: isDarkMode
-              ? colors.card + 'F0' 
-              : colors.white + 'F0', 
+              ? colors.card + 'F0'
+              : colors.white + 'F0',
           },
         ]}
       />
     ), [isDarkMode, colors.card, colors.white]);
 
-  // Memoize tab bar item style
-  const tabBarItemStyle = useMemo(() => ({
+  const tabBarItemStyle = {
     paddingBottom: Math.min(insets.bottom, 10),
-  }), [insets.bottom]);
+  };
 
-  // Memoize screen options
+  // ✅ SIMPLIFIED: Only memoize when colors change (actual expensive operation)
   const screenOptions = useMemo(() => ({
     headerShown: false,
     tabBarActiveTintColor: colors.primary,
@@ -86,30 +82,30 @@ const TabNavigator = () => {
     tabBarStyle,
     tabBarBackground: TabBarBackground,
     tabBarItemStyle,
-  }), [colors.primary, colors.text.tertiary, tabBarStyle, TabBarBackground, tabBarItemStyle]);
+  }), [colors.primary, colors.text.tertiary, TabBarBackground]);
 
-  // Memoize icon renderers
-  const HomeIcon = useCallback(({color, size}: {color: string, size: number}) => (
+  // ✅ SIMPLIFIED: Simple icon renderers don't need memoization
+  const HomeIcon = ({color, size}: {color: string, size: number}) => (
     <Icon name="home" color={color} size={size} />
-  ), []);
+  );
 
-  const TipTubeIcon = useCallback(({color, size}: {color: string, size: number}) => (
+  const TipTubeIcon = ({color, size}: {color: string, size: number}) => (
     <Airplay color={color} size={size} />
-  ), []);
+  );
 
-  const TipShortsIcon = useCallback(({color, size}: {color: string, size: number}) => (
+  const TipShortsIcon = ({color, size}: {color: string, size: number}) => (
     <CirclePlay color={color} size={size} />
-  ), []);
+  );
 
-  const TipCallIcon = useCallback(({color, size}: {color: string, size: number}) => (
+  const TipCallIcon = ({color, size}: {color: string, size: number}) => (
     <Icon name="phone" color={color} size={size} />
-  ), []);
+  );
 
-  const ProfileIcon = useCallback(({color, size}: {color: string, size: number}) => (
+  const ProfileIcon = ({color, size}: {color: string, size: number}) => (
     <Icon name="user" color={color} size={size} />
-  ), []);
+  );
 
-  // Memoize the function that renders the CreateContentButton
+  // Only memoize components that have complex logic
   const renderCreateButton = useCallback(() => <CreateContentButton />, []);
 
   // Instant navigation handlers - prioritize navigation over data loading
@@ -152,7 +148,7 @@ const TabNavigator = () => {
       <Tab.Navigator screenOptions={screenOptions}>
         <Tab.Screen
           name="Home"
-          component={EnhancedHomeScreen}
+          component={HomeScreen}
           options={{
             tabBarIcon: HomeIcon,
           }}
@@ -162,7 +158,7 @@ const TabNavigator = () => {
         />
         <Tab.Screen
           name="TipTube"
-          component={EnhancedTipTubeScreen}
+          component={TipTubeScreen}
           options={{
             tabBarIcon: TipTubeIcon,
           }}
@@ -183,7 +179,7 @@ const TabNavigator = () => {
         />
         <Tab.Screen
           name="TipCall"
-          component={EnhancedTipCallScreen}
+          component={TipCallScreenSimple}
           options={{
             tabBarIcon: TipCallIcon,
           }}
