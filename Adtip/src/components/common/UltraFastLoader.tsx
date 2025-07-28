@@ -29,8 +29,8 @@ import { RootStackParamList } from '../../types/navigation';
 // State machine for navigation
 import { useNavigationMachine } from '../../hooks/useNavigationMachine';
 
-// ✅ STANDARDIZED LOADING
-import StandardizedLoading from './StandardizedLoading';
+// ✅ ENHANCED LOADING
+import AppLaunchLoader from './AppLaunchLoader';
 import { useNavigationErrorHandler } from '../../hooks/useNavigationErrorHandler';
 
 // Navigation persistence
@@ -49,19 +49,16 @@ interface UltraFastLoaderProps {
 // Create the RootStack inside UltraFastLoader
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
-// ✅ STANDARDIZED LOADING SCREEN - Using unified loading component
+// ✅ ENHANCED LOADING SCREEN - App logo with pulsing animation
 const InitialLoadingScreen = () => {
   const { colors } = useTheme();
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <StandardizedLoading
-        type="pulse"
-        size="large"
-        message="Loading..."
-        fullScreen
-        color={colors.primary}
-      />
+    <View style={{
+      flex: 1,
+      backgroundColor: colors.background,
+    }}>
+      <AppLaunchLoader message="Initializing..." />
     </View>
   );
 };

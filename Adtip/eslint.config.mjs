@@ -41,6 +41,7 @@ export default [
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-empty-function": "off",
+      "@typescript-eslint/no-require-imports": "off", // Allow require for assets
       "no-console": "off",
       "prefer-const": "warn",
       "no-var": "error",
