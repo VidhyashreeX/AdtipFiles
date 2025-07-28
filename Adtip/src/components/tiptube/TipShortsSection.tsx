@@ -88,20 +88,30 @@ const TipShortsSection: React.FC<TipShortsSectionProps> = ({
     // Use useMemo to ensure fallback URL is stable and doesn't change on every render
     const fallbackUrl = React.useMemo(() => getFallbackThumbnailUrl(item.id), [item.id]);
     const [thumbnailUrl, setThumbnailUrl] = React.useState<string>(fallbackUrl);
+    const [isLoading, setIsLoading] = React.useState<boolean>(true);
 
     React.useEffect(() => {
       const loadThumbnail = async () => {
         if (item.thumbnail) {
           try {
+            setIsLoading(true);
             const secureUrl = await getSecureMediaUrl(item.thumbnail);
             if (secureUrl) {
+              console.log('[TipShortsSection] Loaded secure thumbnail URL for short:', item.id);
               setThumbnailUrl(secureUrl);
+            } else {
+              console.warn('[TipShortsSection] No secure URL returned, using fallback');
+              setThumbnailUrl(fallbackUrl);
             }
           } catch (error) {
             console.warn('[TipShortsSection] Failed to load thumbnail:', error);
             // Reset to stable fallback URL
             setThumbnailUrl(fallbackUrl);
+          } finally {
+            setIsLoading(false);
           }
+        } else {
+          setIsLoading(false);
         }
       };
 
@@ -118,11 +128,21 @@ const TipShortsSection: React.FC<TipShortsSectionProps> = ({
           source={{ uri: thumbnailUrl }}
           style={styles.shortThumbnail}
           resizeMode="cover"
+          onLoadStart={() => setIsLoading(true)}
+          onLoadEnd={() => setIsLoading(false)}
           onError={() => {
-            // Fallback to stable placeholder on error
+            console.warn('[TipShortsSection] Image failed to load, using fallback for short:', item.id);
             setThumbnailUrl(fallbackUrl);
+            setIsLoading(false);
           }}
         />
+
+        {/* Loading indicator */}
+        {isLoading && (
+          <View style={styles.loadingIndicator}>
+            <ActivityIndicator size="small" color="#fff" />
+          </View>
+        )}
 
         {/* Play indicator for shorts - matching explore screen design */}
         <View style={styles.shortIndicator}>
@@ -220,6 +240,15 @@ const createStyles = (colors: any, isDarkMode: boolean) =>
       position: 'absolute',
       top: 8,
       right: 8,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      borderRadius: 12,
+      padding: 4,
+    },
+    loadingIndicator: {
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      transform: [{ translateX: -12 }, { translateY: -12 }],
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       borderRadius: 12,
       padding: 4,

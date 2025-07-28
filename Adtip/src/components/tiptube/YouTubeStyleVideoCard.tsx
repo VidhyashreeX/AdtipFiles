@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import { IndianRupee } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
-import { getFallbackAvatarUrl, getFallbackThumbnailUrl } from '../../utils/mediaUtils';
+import { getFallbackAvatarUrl, getFallbackThumbnailUrl, getSecureMediaUrl } from '../../utils/mediaUtils';
 import { TIPTUBE_THEME, getVideoCardDimensions } from '../../utils/tiptubeTheme';
 
 interface Video {
@@ -49,6 +49,41 @@ const YouTubeStyleVideoCard: React.FC<YouTubeStyleVideoCardProps> = ({
 }) => {
   const { colors, isDarkMode } = useTheme();
   const styles = createStyles(colors, isDarkMode);
+
+  // State for secure media URLs
+  const [thumbnailUrl, setThumbnailUrl] = useState<string>(getFallbackThumbnailUrl(video.id));
+  const [avatarUrl, setAvatarUrl] = useState<string>(getFallbackAvatarUrl(video.channelId));
+
+  // Load secure media URLs
+  useEffect(() => {
+    const loadSecureUrls = async () => {
+      // Load thumbnail
+      if (video.thumbnail) {
+        try {
+          const secureThumbnail = await getSecureMediaUrl(video.thumbnail);
+          if (secureThumbnail) {
+            setThumbnailUrl(secureThumbnail);
+          }
+        } catch (error) {
+          console.warn('[YouTubeStyleVideoCard] Failed to load thumbnail:', error);
+        }
+      }
+
+      // Load avatar
+      if (video.avatar) {
+        try {
+          const secureAvatar = await getSecureMediaUrl(video.avatar);
+          if (secureAvatar) {
+            setAvatarUrl(secureAvatar);
+          }
+        } catch (error) {
+          console.warn('[YouTubeStyleVideoCard] Failed to load avatar:', error);
+        }
+      }
+    };
+
+    loadSecureUrls();
+  }, [video.thumbnail, video.avatar, video.id, video.channelId]);
 
   // Format view count (e.g., 1.2k, 3.4M)
   const formatViewCount = (count: number): string => {
@@ -98,11 +133,13 @@ const YouTubeStyleVideoCard: React.FC<YouTubeStyleVideoCardProps> = ({
         activeOpacity={0.9}
       >
         <Image
-          source={{
-            uri: video.thumbnail || getFallbackThumbnailUrl(video.id),
-          }}
+          source={{ uri: thumbnailUrl }}
           style={styles.thumbnail}
           resizeMode="cover"
+          onError={() => {
+            console.warn('[YouTubeStyleVideoCard] Thumbnail failed to load, using fallback');
+            setThumbnailUrl(getFallbackThumbnailUrl(video.id));
+          }}
         />
         
         {/* Duration Overlay */}
@@ -126,10 +163,12 @@ const YouTubeStyleVideoCard: React.FC<YouTubeStyleVideoCardProps> = ({
         {/* Creator Avatar */}
         <TouchableOpacity onPress={handleChannelPress}>
           <Image
-            source={{
-              uri: video.avatar || getFallbackAvatarUrl(video.channelId),
-            }}
+            source={{ uri: avatarUrl }}
             style={styles.avatar}
+            onError={() => {
+              console.warn('[YouTubeStyleVideoCard] Avatar failed to load, using fallback');
+              setAvatarUrl(getFallbackAvatarUrl(video.channelId));
+            }}
           />
         </TouchableOpacity>
 

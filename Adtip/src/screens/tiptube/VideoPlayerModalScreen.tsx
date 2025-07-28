@@ -331,7 +331,12 @@ const VideoPlayerModalScreen: React.FC = () => {
                   onReadyForDisplay={() => setIsVideoReady(true)}
                   onError={(error) => {
                     console.error('[VideoPlayerModal] Video playback error:', error);
-                    setVideoError('Video playback failed');
+                    console.log('[VideoPlayerModal] Switching to portrait mode');
+                    setVideoError('Video playback failed. Please check your internet connection.');
+                    // Try to switch to portrait mode on error
+                    if (isFullscreen) {
+                      setIsFullscreen(false);
+                    }
                   }}
                   onLoadStart={() => {
                     console.log('[VideoPlayerModal] Video loading started');

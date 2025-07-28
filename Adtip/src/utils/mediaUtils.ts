@@ -21,7 +21,7 @@ export const isCloudflareUrl = (url: string): boolean => {
 
 /**
  * Converts a relative or partial URL to a fully qualified URL with authentication
- * Now handles Cloudflare URLs by generating presigned URLs
+ * Now handles Cloudflare URLs by generating presigned URLs with better error handling
  */
 export const getSecureMediaUrl = async (mediaUrl?: string | null): Promise<string | undefined> => {
   if (!mediaUrl || mediaUrl === 'null' || mediaUrl === 'undefined') {
@@ -31,21 +31,25 @@ export const getSecureMediaUrl = async (mediaUrl?: string | null): Promise<strin
   // If it's a Cloudflare URL, generate presigned URL
   if (mediaUrl.startsWith('http://') || mediaUrl.startsWith('https://')) {
     if (isCloudflareUrl(mediaUrl)) {
-      //console.log('[MediaUtils] Detected Cloudflare URL, generating presigned URL:', mediaUrl);
+      console.log('[MediaUtils] Detected Cloudflare URL, generating presigned URL:', mediaUrl);
       try {
         const presignedUrl = await CloudflareUploadService.generatePresignedUrlFromPublicUrl(mediaUrl);
         if (presignedUrl) {
-          //console.log('[MediaUtils] Generated presigned URL successfully');
+          console.log('[MediaUtils] Generated presigned URL successfully');
           return presignedUrl;
         } else {
-          console.warn('[MediaUtils] Failed to generate presigned URL, falling back to original');
-          // Return original URL as fallback - it might work if bucket becomes public
-          return mediaUrl;
+          console.warn('[MediaUtils] Failed to generate presigned URL, using fallback strategy');
+          // Try to construct a direct access URL as fallback
+          const fallbackUrl = mediaUrl.replace('theadtip.in', '94e2ffe1e7d5daf0d3de8d11c55dd2d6.r2.cloudflarestorage.com');
+          console.log('[MediaUtils] Using fallback URL:', fallbackUrl);
+          return fallbackUrl;
         }
       } catch (error) {
         console.error('[MediaUtils] Error generating presigned URL:', error);
-        // Return original URL as fallback
-        return mediaUrl;
+        // Try to construct a direct access URL as fallback
+        const fallbackUrl = mediaUrl.replace('theadtip.in', '94e2ffe1e7d5daf0d3de8d11c55dd2d6.r2.cloudflarestorage.com');
+        console.log('[MediaUtils] Using fallback URL after error:', fallbackUrl);
+        return fallbackUrl;
       }
     }
     return mediaUrl;
@@ -76,7 +80,7 @@ export const getMediaHeaders = async (): Promise<Record<string, string>> => {
 };
 
 /**
- * Enhanced video URL validation and correction
+ * Enhanced video URL validation and correction with better Cloudflare handling
  */
 export const validateAndFixVideoUrl = async (videoUrl?: string | null): Promise<string | null> => {
   if (!videoUrl || videoUrl === 'null' || videoUrl === 'undefined') {
@@ -86,11 +90,11 @@ export const validateAndFixVideoUrl = async (videoUrl?: string | null): Promise<
 
   // Clean the URL
   let cleanUrl = videoUrl.trim();
-  
+
   // Check if URL contains common video file extensions
   const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v'];
   const hasVideoExtension = videoExtensions.some(ext => cleanUrl.toLowerCase().includes(ext));
-  
+
   if (!hasVideoExtension) {
     console.warn('[MediaUtils] URL does not appear to be a video file:', cleanUrl);
   }
@@ -102,18 +106,27 @@ export const validateAndFixVideoUrl = async (videoUrl?: string | null): Promise<
 
       // If it's a Cloudflare URL, generate presigned URL
       if (isCloudflareUrl(cleanUrl)) {
-        //console.log('[MediaUtils] Cloudflare video URL detected, generating presigned URL');
-        const presignedUrl = await CloudflareUploadService.generatePresignedUrlFromPublicUrl(cleanUrl);
-        if (presignedUrl) {
-          //console.log('[MediaUtils] Generated presigned video URL successfully');
-          return presignedUrl;
-        } else {
-          console.warn('[MediaUtils] Failed to generate presigned video URL, using original');
-          return url.href;
+        console.log('[MediaUtils] Cloudflare video URL detected, generating presigned URL');
+        try {
+          const presignedUrl = await CloudflareUploadService.generatePresignedUrlFromPublicUrl(cleanUrl);
+          if (presignedUrl) {
+            console.log('[MediaUtils] Generated presigned video URL successfully');
+            return presignedUrl;
+          } else {
+            console.warn('[MediaUtils] Failed to generate presigned video URL, using fallback');
+            // Try fallback URL construction
+            const fallbackUrl = cleanUrl.replace('theadtip.in', '94e2ffe1e7d5daf0d3de8d11c55dd2d6.r2.cloudflarestorage.com');
+            return fallbackUrl;
+          }
+        } catch (error) {
+          console.error('[MediaUtils] Error generating presigned video URL:', error);
+          // Try fallback URL construction
+          const fallbackUrl = cleanUrl.replace('theadtip.in', '94e2ffe1e7d5daf0d3de8d11c55dd2d6.r2.cloudflarestorage.com');
+          return fallbackUrl;
         }
       }
 
-      //console.log('[MediaUtils] Validated external video URL:', url.href);
+      console.log('[MediaUtils] Validated external video URL:', url.href);
       return url.href;
     } catch (error) {
       console.error('[MediaUtils] Invalid URL format:', cleanUrl, error);
@@ -125,7 +138,7 @@ export const validateAndFixVideoUrl = async (videoUrl?: string | null): Promise<
   try {
     const fullUrl = `${API_BASE_URL}${cleanUrl.startsWith('/') ? '' : '/'}${cleanUrl}`;
     const url = new URL(fullUrl);
-    //console.log('[MediaUtils] Constructed video URL:', url.href);
+    console.log('[MediaUtils] Constructed video URL:', url.href);
     return url.href;
   } catch (error) {
     console.error('[MediaUtils] Failed to construct valid URL:', cleanUrl, error);
@@ -152,7 +165,7 @@ export const createSecureVideoSource = async (videoUrl?: string | null) => {
   // Check if this is a Cloudflare presigned URL (contains signature parameters)
   const isPresignedUrl = safeUri.includes('X-Amz-Signature') || safeUri.includes('Signature=');
 
-  let source: any = {
+  const source: any = {
     uri: safeUri,
   };
 
@@ -185,7 +198,7 @@ export const createSecureImageSource = async (imageUrl?: string | null) => {
   // Check if this is a Cloudflare presigned URL (contains signature parameters)
   const isPresignedUrl = secureUrl.includes('X-Amz-Signature') || secureUrl.includes('Signature=');
 
-  let source: any = {
+  const source: any = {
     uri: secureUrl,
   };
 
@@ -293,4 +306,44 @@ export const getFallbackThumbnailUrl = (videoId?: string | number): string => {
 export const getFallbackVideoUrl = (): string => {
   // Return a test video URL that should work
   return 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+};
+
+/**
+ * Test if a URL is accessible and return appropriate fallback
+ */
+export const testAndGetWorkingUrl = async (primaryUrl: string, fallbackUrl?: string): Promise<string> => {
+  try {
+    console.log('[MediaUtils] Testing URL accessibility:', primaryUrl);
+
+    // Create a timeout promise
+    const timeoutPromise = new Promise<Response>((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout')), 5000);
+    });
+
+    // Test primary URL with a quick HEAD request
+    const fetchPromise = fetch(primaryUrl, {
+      method: 'HEAD',
+    });
+
+    const response = await Promise.race([fetchPromise, timeoutPromise]);
+
+    if (response.ok) {
+      console.log('[MediaUtils] Primary URL is accessible');
+      return primaryUrl;
+    } else {
+      console.warn('[MediaUtils] Primary URL returned status:', response.status);
+      if (fallbackUrl) {
+        console.log('[MediaUtils] Trying fallback URL:', fallbackUrl);
+        return fallbackUrl;
+      }
+      return primaryUrl; // Return original if no fallback
+    }
+  } catch (error) {
+    console.error('[MediaUtils] Error testing URL accessibility:', error);
+    if (fallbackUrl) {
+      console.log('[MediaUtils] Using fallback URL due to error:', fallbackUrl);
+      return fallbackUrl;
+    }
+    return primaryUrl; // Return original if no fallback
+  }
 };

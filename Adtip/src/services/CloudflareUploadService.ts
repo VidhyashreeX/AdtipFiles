@@ -731,7 +731,7 @@ class CloudflareUploadService {
   }
 
   /**
-   * Generate presigned download URL from public Cloudflare URL with caching
+   * Generate presigned download URL from public Cloudflare URL with caching and fallback
    */
   static async generatePresignedUrlFromPublicUrl(
     cloudflareUrl: string,
@@ -742,7 +742,8 @@ class CloudflareUploadService {
 
       if (!key) {
         console.warn('[CloudflareUpload] Could not extract key from URL:', cloudflareUrl);
-        return null;
+        // Return original URL as fallback
+        return cloudflareUrl;
       }
 
       // Check cache first
@@ -750,30 +751,43 @@ class CloudflareUploadService {
       const cached = this.presignedUrlCache.get(cacheKey);
 
       if (cached && cached.expiresAt > Date.now()) {
-        //console.log('[CloudflareUpload] Using cached presigned URL for key:', key);
+        console.log('[CloudflareUpload] Using cached presigned URL for key:', key);
         return cached.url;
       }
 
       // Generate new presigned URL
       const instance = new CloudflareUploadService();
-      const presignedUrl = await instance.generatePresignedDownloadUrl(key, expiresIn);
 
-      if (presignedUrl) {
-        // Cache the URL (expire 5 minutes before actual expiry for safety)
-        const expiresAt = Date.now() + (expiresIn - 300) * 1000;
-        this.presignedUrlCache.set(cacheKey, {
-          url: presignedUrl,
-          expiresAt
-        });
+      try {
+        const presignedUrl = await instance.generatePresignedDownloadUrl(key, expiresIn);
 
-        //console.log('[CloudflareUpload] Generated and cached presigned URL for key:', key);
+        if (presignedUrl) {
+          // Cache the URL (expire 5 minutes before actual expiry for safety)
+          const expiresAt = Date.now() + (expiresIn - 300) * 1000;
+          this.presignedUrlCache.set(cacheKey, {
+            url: presignedUrl,
+            expiresAt
+          });
+
+          console.log('[CloudflareUpload] Generated and cached presigned URL for key:', key);
+          return presignedUrl;
+        }
+      } catch (presignedError) {
+        console.error('[CloudflareUpload] Failed to generate presigned URL, trying fallback:', presignedError);
+
+        // Try direct R2 URL as fallback
+        const fallbackUrl = cloudflareUrl.replace('theadtip.in', '94e2ffe1e7d5daf0d3de8d11c55dd2d6.r2.cloudflarestorage.com');
+        console.log('[CloudflareUpload] Using fallback R2 URL:', fallbackUrl);
+        return fallbackUrl;
       }
 
-      return presignedUrl;
+      // If all else fails, return original URL
+      return cloudflareUrl;
 
     } catch (error: any) {
       console.error('[CloudflareUpload] Failed to generate presigned URL from public URL:', error);
-      return null;
+      // Return original URL as last resort
+      return cloudflareUrl;
     }
   }
 
