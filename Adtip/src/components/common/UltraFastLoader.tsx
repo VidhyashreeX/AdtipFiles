@@ -8,7 +8,7 @@
  * No loading screens, no blocking initialization - just immediate UI.
  */
 import React, { useEffect, useState, useRef } from 'react';
-import { View, StatusBar, Animated, BackHandler, Alert } from 'react-native';
+import { View, StatusBar, BackHandler, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -28,6 +28,9 @@ import { RootStackParamList } from '../../types/navigation';
 
 // State machine for navigation
 import { useNavigationMachine } from '../../hooks/useNavigationMachine';
+
+// ✅ STANDARDIZED LOADING
+import StandardizedLoading from './StandardizedLoading';
 import { useNavigationErrorHandler } from '../../hooks/useNavigationErrorHandler';
 
 // Navigation persistence
@@ -46,26 +49,18 @@ interface UltraFastLoaderProps {
 // Create the RootStack inside UltraFastLoader
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
+// ✅ STANDARDIZED LOADING SCREEN - Using unified loading component
 const InitialLoadingScreen = () => {
   const { colors } = useTheme();
-  const pulseAnimation = useRef(new Animated.Value(0.95)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnimation, { toValue: 1, duration: 800, useNativeDriver: true }),
-        Animated.timing(pulseAnimation, { toValue: 0.95, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
 
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
-      <Animated.Image
-        // Assuming this is the correct path from LoginScreen.tsx
-        source={{ uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==' }}
-        style={{ width: 150, height: 150, transform: [{ scale: pulseAnimation }] }}
-        resizeMode="contain"
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StandardizedLoading
+        type="pulse"
+        size="large"
+        message="Loading..."
+        fullScreen
+        color={colors.primary}
       />
     </View>
   );

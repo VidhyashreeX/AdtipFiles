@@ -1,17 +1,15 @@
-import React, { useEffect } from 'react';
-import { Platform, TouchableOpacity } from 'react-native';
+import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Easing } from 'react-native-reanimated';
-import Icon from 'react-native-vector-icons/Feather';
 import { withFastLoading } from '../components/hoc/withFastLoading';
 import { MainNavigatorParamList } from '../types/navigation';
-// Import the navigation ref for global navigation
-import { navigationRef } from './NavigationService';
 // Import CallKeep initializer hook
 import useCallKeepInitializer from '../hooks/useCallKeepInitializer';
 
 // Import navigators
 import TabNavigator from './TabNavigator';
+
+
 
 // Remove HOC import - using direct useWallet hook in components instead
 
@@ -48,7 +46,7 @@ import EarningsScreen from '../screens/earnings/EarningsScreen';
 import EarnMoneyUserScreen from '../screens/earnings/EarnMoneyUserScreen';
 import EarnMoneyCreatorScreen from '../screens/earnings/EarnMoneyCreatorScreen';
 import ReferralScreen from '../screens/referral/ReferralScreen';
-import ChooseGameScreen from '../screens/playtoEarn/ChooseGamesScreen';
+
 import LudoGameScreen from '../screens/playtoEarn/LudoGameScreen';
 import InstallToEarnScreen from '../screens/installToEarn/InstallToEarnScreen';
 import WatchToEarnScreen from '../screens/watchToEarn/WatchToEarnScreen';
@@ -104,7 +102,7 @@ import YourChannelScreen from '../screens/tiptube/YourChannelScreen';
 import FollowedChannelScreen from '../screens/tiptube/FollowedChannelScreen';
 import LibraryScreen from '../screens/tiptube/LibraryScreen';
 import EditChannelScreen from '../screens/channel/EditChannelScreen';
-import ComingSoonScreen from '../screens/common/ComingSoonScreen';
+
 
 // Import PremiumUserScreen
 import PremiumUserScreen from '../screens/premium/PremiumUserScreen';
@@ -126,115 +124,8 @@ const Stack = createNativeStackNavigator<MainNavigatorParamList>();
 // ✅ PERFORMANCE FIX: Removed HOC cascade - components now use useWallet hook directly
 // This eliminates 43 HOC wrappers that were causing re-render storms on wallet balance updates
 
-// Custom transition configuration with Reanimated easing
-const customTransitionConfig = {
-  headerShown: false,
-  animation: 'slide_from_right' as const,
-  animationDuration: 350, // Optimized duration for smoothness
-  gestureEnabled: true,
-  gestureDirection: 'horizontal' as const,
-  transitionSpec: {
-    open: {
-      animation: 'timing',
-      config: {
-        duration: 350,
-        easing: Easing.bezier(0.25, 0.1, 0.25, 1), // Custom cubic-bezier for ultra-smooth animation
-      },
-    },
-    close: {
-      animation: 'timing', 
-      config: {
-        duration: 280,
-        easing: Easing.bezier(0.4, 0.0, 0.2, 1), // Accelerated decelerate curve
-      },
-    },
-  },
-  cardStyleInterpolator: ({ current, next, layouts }: { current: any; next: any; layouts: any }) => {
-    const translateX = current.progress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [layouts.screen.width, 0],
-      extrapolate: 'clamp',
-    });
 
-    const overlayOpacity = current.progress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, 0.1],
-      extrapolate: 'clamp',
-    });
 
-    const scale = current.progress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0.92, 1],
-      extrapolate: 'clamp',
-    });
-
-    const opacity = current.progress.interpolate({
-      inputRange: [0, 0.3, 1],
-      outputRange: [0, 0.85, 1],
-      extrapolate: 'clamp',
-    });
-
-    // Previous screen animation (slide out to left with scale)
-    const prevTranslateX = next ? 
-      next.progress.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, -layouts.screen.width * 0.3],
-        extrapolate: 'clamp',
-      }) : 0;
-
-    const prevScale = next ?
-      next.progress.interpolate({
-        inputRange: [0, 1],
-        outputRange: [1, 0.95],
-        extrapolate: 'clamp',
-      }) : 1;
-
-    const prevOpacity = next ?
-      next.progress.interpolate({
-        inputRange: [0, 1],
-        outputRange: [1, 0.7],
-        extrapolate: 'clamp',
-      }) : 1;
-
-    return {
-      cardStyle: {
-        transform: [
-          { translateX },
-          { scale },
-        ],
-        opacity,
-      },
-      overlayStyle: {
-        backgroundColor: 'rgba(0, 0, 0, 0.1)',
-        opacity: overlayOpacity,
-      },
-      shadowStyle: {
-        shadowColor: '#000',
-        shadowOffset: {
-          width: -2,
-          height: 0,
-        },
-        shadowOpacity: current.progress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, 0.15],
-          extrapolate: 'clamp',
-        }),
-        shadowRadius: 8,
-        elevation: 5,
-      },
-      // Apply to previous screen when a new one is pushed
-      ...(next && {
-        cardStyle: {
-          transform: [
-            { translateX: prevTranslateX },
-            { scale: prevScale },
-          ],
-          opacity: prevOpacity,
-        },
-      }),
-    };
-  },
-};
 
 // Enhanced transition config for special screens that need different animations
 const slideUpTransitionConfig = {
@@ -268,60 +159,10 @@ const FastPlayToEarnScreen = withFastLoading(InstallToEarnScreen, {
   priority: 'high' // High priority screen
 });
 
-// Ultra-fast transition config (no animations)
-const fastTransitionConfig = {
-  headerShown: false,
-  animation: 'none' as const,
-  animationDuration: 0,
-  gestureEnabled: false,
-};
-
-// Standard fast transition config (minimal animations)
-const standardFastTransitionConfig = {
+// ✅ SIMPLE NATIVE STACK OPTIONS
+const defaultScreenOptions = {
   headerShown: false,
   animation: 'slide_from_right' as const,
-  animationDuration: 200, // Reduced from 350ms
-  gestureEnabled: true,
-  transitionSpec: {
-    open: {
-      animation: 'timing',
-      config: {
-        duration: 200,
-        easing: Easing.out(Easing.quad), // Faster easing
-      },
-    },
-    close: {
-      animation: 'timing',
-      config: {
-        duration: 150,
-        easing: Easing.in(Easing.quad),
-      },
-    },
-  },
-};
-
-// Call-specific transition config for immediate navigation
-const callTransitionConfig = {
-  headerShown: false,
-  animation: 'fade' as const,
-  animationDuration: 150, // Very fast for calls
-  gestureEnabled: false, // Disable gestures during calls
-  transitionSpec: {
-    open: {
-      animation: 'timing',
-      config: {
-        duration: 150,
-        easing: Easing.out(Easing.ease),
-      },
-    },
-    close: {
-      animation: 'timing',
-      config: {
-        duration: 100,
-        easing: Easing.in(Easing.ease),
-      },
-    },
-  },
 };
 
 /**
@@ -338,31 +179,31 @@ const MainNavigator = () => {
 
   return (
     <Stack.Navigator
-      screenOptions={standardFastTransitionConfig}
+      screenOptions={defaultScreenOptions}
     >
       <Stack.Screen name="TabHome" component={TabNavigator} />
-      
+
       {/* High-priority screens with no animation */}
-      <Stack.Screen 
-        name="PlayToEarn" 
+      <Stack.Screen
+        name="PlayToEarn"
         component={FastPlayToEarnScreen}
-        options={fastTransitionConfig}
+        options={defaultScreenOptions}
       />
       <Stack.Screen
         name="LudoGame"
         component={LudoGameScreen}
-        options={standardFastTransitionConfig}
+        options={defaultScreenOptions}
       />
       <Stack.Screen
         name="Home"
         component={withFastLoading(HomeScreen, { priority: 'high' })}
-        options={fastTransitionConfig}
+        options={defaultScreenOptions}
       />
         {/* TipCall screens - Fix these */}
       <Stack.Screen
         name="TipCall"
         component={TipCallScreenSimple}
-        options={standardFastTransitionConfig}
+        options={defaultScreenOptions}
       />
       <Stack.Screen
         name="TipCallSimple"
@@ -373,7 +214,7 @@ const MainNavigator = () => {
       <Stack.Screen
         name="MissedCalls"
         component={MissedCallsScreen}
-        options={standardFastTransitionConfig}
+        options={defaultScreenOptions}
       />
       {/* Meeting screen (simple version) */}
       <Stack.Screen 
@@ -473,7 +314,7 @@ const MainNavigator = () => {
         name="TipShorts"
         component={TipShortsEnhanced}
         options={{
-          ...fastTransitionConfig, // Use fastest transition for smooth Reels experience
+          ...defaultScreenOptions, // Use default transition for smooth Reels experience
           gestureEnabled: true,
           gestureDirection: 'vertical' as const, // Allow vertical gesture for better UX
           presentation: 'fullScreenModal', // Fullscreen modal presentation
@@ -548,7 +389,7 @@ const MainNavigator = () => {
       <Stack.Screen name="Search" component={SearchScreen} />
       <Stack.Screen name="Notifications" component={NotificationScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
-      <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={standardFastTransitionConfig} />
+      <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={defaultScreenOptions} />
       <Stack.Screen name="Earnings" component={EarningsScreen} />
       <Stack.Screen name="EarnMoneyUser" component={EarnMoneyUserScreen} />
       <Stack.Screen name="EarnMoneyCreator" component={EarnMoneyCreatorScreen} />
@@ -606,17 +447,17 @@ const MainNavigator = () => {
       <Stack.Screen
         name="YourChannel"
         component={YourChannelScreen}
-        options={standardFastTransitionConfig}
+        options={defaultScreenOptions}
       />
       <Stack.Screen
         name="FollowedChannel"
         component={FollowedChannelScreen}
-        options={standardFastTransitionConfig}
+        options={defaultScreenOptions}
       />
       <Stack.Screen
         name="Library"
         component={LibraryScreen}
-        options={standardFastTransitionConfig}
+        options={defaultScreenOptions}
       />
     </Stack.Navigator>
   );
