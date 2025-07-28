@@ -107,7 +107,7 @@ const PostItem: React.FC<PostItemProps> = ({
     console.warn(`[PostItem ${id}] postImage is not a string:`, typeof postImage, postImage);
   }
   const { colors } = useTheme();
-  const [secureProfileImage, setSecureProfileImage] = useState<any>(null);
+
   const [securePostImage, setSecurePostImage] = useState<any>(null);
   const [secureVideoSource, setSecureVideoSource] = useState<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -143,11 +143,8 @@ const PostItem: React.FC<PostItemProps> = ({
   useEffect(() => {
     const loadSecureMedia = async () => {
       try {
-        // Load secure profile image
-        if (profileImage && typeof profileImage === 'string') {
-          const secureProfile = await createSecureImageSource(profileImage);
-          setSecureProfileImage(secureProfile);
-        }
+        // Profile images are handled directly by ProfileFastImage component
+        // No need to pre-process them here as ProfileFastImage handles URL processing and fallbacks
 
         // Load secure post media
         if (postImage && typeof postImage === 'string') {
@@ -183,7 +180,7 @@ const PostItem: React.FC<PostItemProps> = ({
     };
 
     loadSecureMedia();
-  }, [profileImage, postImage, media_type, id, testAndValidateVideoUrl]);
+  }, [postImage, media_type, id, testAndValidateVideoUrl]);
 
   // Enhanced Video Playback Logic - INSTANT play/pause on visibility change
   useEffect(() => {
@@ -349,7 +346,7 @@ const PostItem: React.FC<PostItemProps> = ({
       <View style={styles.header}>
         <TouchableOpacity onPress={handleUserPress} style={styles.userInfo}>
           <ProfileFastImage
-            source={typeof profileImage === 'string' ? profileImage : null}
+            source={profileImage}
             size={32}
             style={styles.profileImage}
           />

@@ -24,9 +24,9 @@ import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 import { InfiniteData } from '@tanstack/react-query';
 // Import Lucide React Native icons
-import { PlayCircle, Gamepad2, WifiOff, Share2, HandCoins, Dices, Mail, Search, CreditCard } from 'lucide-react-native';
+import { Gamepad2, WifiOff, Dices, Mail, Search, CreditCard } from 'lucide-react-native';
 import PostWithComments from '../../components/home/PostWithComments';
-import { FeedFlatList, useOptimizedRenderItem } from '../../components/common/OptimizedFlatList';
+import { FeedFlatList } from '../../components/common/OptimizedFlatList';
 import SurveyBanner, { CPXResearchProvider as CPXResearchComponent } from '../../components/home/SurveyBanner';
 import { CPXResearchProvider } from '../../contexts/CPXResearchContext';
 
@@ -36,28 +36,26 @@ import {useAuth} from '../../contexts/AuthContext';
 import {useTabNavigator} from '../../contexts/TabNavigatorContext';
 import {useDataContext} from '../../providers/DataProvider';
 import ApiService from '../../services/ApiService';
-import {API_BASE_URL} from '../../constants/api';
+
 import {HOME_ENDPOINTS} from '../../constants/apiEndpoints';
 import shareService from '../../services/ShareService';
 import { usePosts, useGuestPosts, useLikeMutation, useFollowMutation, useSubscriptionStatus, useCategories, useSearchUsers } from '../../hooks/useQueries';
-import { useUserDataContext, useUserPremiumStatus, useUserWallet } from '../../contexts/UserDataContext';
+
 import { useFCMChat } from '../../contexts/FCMChatContext';
-import { getUserDisplayName, isPremiumUser } from '../../utils/userDataUtils';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
 import PubScaleService from '../../services/PubScaleService';
-import VersionCheckService from '../../services/VersionCheckService';
-import axios from 'axios';
 import Logger from '../../utils/logger';
 
 // Components
 import Header from '../../components/common/Header';
 import PostItem from '../../components/home/PostItem';
-import StoryItem from '../../components/home/StoryItem';
+
 import CategoryItem from '../../components/home/CategoryItem';
 import EarnCard from '../../components/home/EarnCard';
 import BannerCarousel from '../../components/home/BannerCarousel';
-import PremiumPopup from '../../components/common/PremiumPopup';
+
+import PremiumUpgradeAlert from '../../components/common/PremiumUpgradeAlert';
 import LoginPromptModal from '../../components/modals/LoginPromptModal';
 import PubScaleCreditAlert from '../../components/common/PubScaleCreditAlert';
 
@@ -68,7 +66,7 @@ import RewardPopup from '../../components/RewardPopup';
 
 
 // Skeleton Components
-import StoryItemSkeleton from '../../components/skeletons/StoryItemSkeleton';
+
 import CategorySkeleton from '../../components/skeletons/CategoryItemSkeleton';
 import EarnCardSkeleton from '../../components/skeletons/EarnCardSkeleton';
 import PostItemSkeleton from '../../components/skeletons/PostItemSkeleton';
@@ -88,7 +86,7 @@ import { PostListResponse } from '../../types/api';
 const { width: screenWidth } = Dimensions.get('window');
 
 // Interfaces
-interface Story { id: string; username: string; imageUrl: string | null; }
+
 interface Category { id: string; name: string; }
 interface ApiCategory { category_id: number; category_name: string; }
 interface Post {
@@ -103,50 +101,6 @@ interface Post {
 interface HomeScreenProps { walletBalance?: string; }
 
 // Helper Components
-interface StoriesRowProps { 
-  stories: Story[]; 
-  onStoryPress: (storyId: string) => void; 
-  onAddStoryPress: () => void; 
-  isLoading?: boolean; 
-}
-
-const StoriesRow: React.FC<StoriesRowProps> = ({ stories, onStoryPress, onAddStoryPress, isLoading }) => {
-  const {colors} = useTheme();
-  const styles = createHomeScreenStyles(colors);
-
-  if (isLoading) {
-    return (
-      <View style={styles.storiesSection}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
-          style={styles.storiesContainer} 
-          contentContainerStyle={styles.storiesContentContainer}
-        >
-          <StoryItemSkeleton isAddStory={true} />
-          {Array(5).fill(0).map((_, index) => (
-            <StoryItemSkeleton key={`story-skel-${index}`} />
-          ))}
-        </ScrollView>
-      </View>
-    );
-  }
-  return (
-    <View style={styles.storiesSection}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.storiesContainer} contentContainerStyle={styles.storiesContentContainer}>
-        <StoryItem isAddStory={true} onPress={onAddStoryPress} key="add-story" />
-        {stories.map((story: Story, idx: number) => (
-          <StoryItem 
-            key={`${story.id}-${idx}`} 
-            imageUrl={story.imageUrl || undefined} 
-            username={story.username ? String(story.username) : ''} 
-            onPress={() => onStoryPress(story.id)} 
-          />
-        ))}
-      </ScrollView>
-    </View>
-  );
-};
 
 interface CategoriesRowProps { 
   categories: Category[]; 
@@ -194,14 +148,20 @@ interface EarnCardsRowProps {
 interface ExternalLinkBannerProps {
   isPremium: boolean;
   onUpgrade: () => void;
+  onShowPremiumAlert: () => void;
 }
 
-const ExternalLinkBanner: React.FC<ExternalLinkBannerProps> = ({ isPremium, onUpgrade }) => {
+const ExternalLinkBanner: React.FC<ExternalLinkBannerProps> = ({ isPremium, onUpgrade, onShowPremiumAlert }) => {
   const { colors } = useTheme();
   const styles = createHomeScreenStyles(colors);
 
   const handleBannerPress = async () => {
-    // Allow all users to access the games - no premium restriction
+    // Premium restriction for games section
+    if (!isPremium) {
+      onShowPremiumAlert();
+      return;
+    }
+
     try {
       const url = 'https://37b802eb.epicplay.in/';
       const supported = await Linking.canOpenURL(url);
@@ -225,7 +185,7 @@ const ExternalLinkBanner: React.FC<ExternalLinkBannerProps> = ({ isPremium, onUp
         activeOpacity={0.9}
       >
         <LinearGradient
-          colors={['#4CAF50', '#45A049', '#2E7D32']}
+          colors={isPremium ? ['#4CAF50', '#45A049', '#2E7D32'] : ['#9E9E9E', '#757575', '#424242']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.earnCardGradient}
@@ -233,18 +193,22 @@ const ExternalLinkBanner: React.FC<ExternalLinkBannerProps> = ({ isPremium, onUp
           <View style={styles.earnCardContent}>
             <View style={styles.earnCardTextContainer}>
               <Text style={styles.earnCardTitle}>🎮 Epic Play Games</Text>
-              <Text style={styles.earnCardDescription}>Click to play exciting games and earn rewards!</Text>
+              <Text style={styles.earnCardDescription}>
+                {isPremium ? 'Click to play exciting games and earn rewards!' : 'Premium feature - Upgrade to unlock games!'}
+              </Text>
               <LinearGradient
-                colors={['#FFD700', '#FFA500', '#FF8C00']}
+                colors={isPremium ? ['#FFD700', '#FFA500', '#FF8C00'] : ['#FFD700', '#FFA500', '#FF8C00']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.earnCardRewardBadge}
               >
-                <Text style={styles.earnCardRewardText}>Play Now!</Text>
+                <Text style={styles.earnCardRewardText}>
+                  {isPremium ? 'Play Now!' : '👑 Premium Only'}
+                </Text>
               </LinearGradient>
             </View>
             <View style={styles.earnCardIconContainer}>
-              <Dices size={32} color="#FFFFFF" />
+              <Gamepad2 size={32} color="#FFFFFF" />
             </View>
           </View>
         </LinearGradient>
@@ -255,7 +219,7 @@ const ExternalLinkBanner: React.FC<ExternalLinkBannerProps> = ({ isPremium, onUp
 
 // Survey Banner Component - Replaced Rush Play Games with CPX Research Surveys
 
-const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onInstallToEarn, isLoading }) => {
+const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn: _onWatchAndEarn, onInstallToEarn, isLoading }) => {
   const {colors} = useTheme();
   const styles = createHomeScreenStyles(colors);
   
@@ -290,7 +254,7 @@ const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onInstallTo
               <Text style={styles.earnCardTitle}>{item.title}</Text>
               <Text style={styles.earnCardDescription}>{item.description}</Text>
               <LinearGradient
-                colors={['#FFD700', '#FFA500', '#FF8C00']} // Gold gradient
+                colors={['#FFD700', '#FFA500', '#FF8C00']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.earnCardRewardBadge}
@@ -299,7 +263,7 @@ const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onInstallTo
               </LinearGradient>
             </View>
             <View style={styles.earnCardIconContainer}>
-              <Gamepad2 size={32} color="#FFFFFF" />
+              <CreditCard size={32} color="#FFFFFF" />
             </View>
           </View>
         </LinearGradient>
@@ -324,31 +288,20 @@ const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn, onInstallTo
   );
 };
 
-// Utility function
-function shuffleArray<T>(array: T[]): T[] {
-  const newArray = [...array];
-  for (let i = newArray.length - 1; i > 0; i--) { 
-    const j = Math.floor(Math.random() * (i + 1)); 
-    [newArray[i], newArray[j]] = [newArray[j], newArray[i]]; 
-  }
-  return newArray;
-}
+
 
 // MAIN COMPONENT - Enhanced with bulletproof navigation
-const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}) => {
-  const {colors, isDarkMode} = useTheme();
-  const {user, isGuest, refreshUserData} = useAuth();
+const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: _hocWalletBalance}) => {
+  const {colors} = useTheme();
+  const {user, isGuest} = useAuth();
   const { totalUnreadCount } = useFCMChat();
   const navigation = useNavigation<AppNavigationProps>();
   const {contentPaddingBottom} = useTabNavigator();
-  const {clearCache, invalidateData} = useDataContext();
+  const {clearCache} = useDataContext();
   const queryClient = useQueryClient();
   const styles = createHomeScreenStyles(colors);
 
-  // Enhanced user data from new system (only for authenticated users)
-  const { userData, isLoading: userDataLoading } = useUserDataContext();
-  const { isPremium: isPremiumNew, premiumExpiresAt } = useUserPremiumStatus();
-  const { walletBalance: userWalletBalance } = useUserWallet();
+  // Enhanced user data from new system (only for authenticated users) - removed unused hooks
 
   // UI state management (never blocks navigation)
   const [selectedCategoryState, setSelectedCategoryState] = useState<string>('0');
@@ -362,7 +315,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const {
     data: categoriesData,
     isLoading: categoriesLoading,
-    error: categoriesError,
   } = useCategories();
 
   // Transform API categories to match the expected format
@@ -380,21 +332,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     
     return [allCategory, ...apiCategories];
   }, [categoriesData]);
-  const [walletAmount] = useState(hocWalletBalance || '0.00');
   const [visiblePostIds, setVisiblePostIds] = useState<number[]>([]);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [selectedCommentPostId, setSelectedCommentPostId] = useState<number | null>(null);
   // Removed modal states - now using direct navigation to Profile screen
   const [isGloballyMuted, setIsGloballyMuted] = useState(true);
-  const [offerwallLoading, setOfferwallLoading] = useState(false);
   const [showPubScaleCreditAlert, setShowPubScaleCreditAlert] = useState(false);
 
   // Add premium state
   const [isPremium, setIsPremium] = useState<boolean>(false);
   const [premiumData, setPremiumData] = useState<any>(null);
 
-  // Version check and premium popup state
-  const [showPremiumPopup, setShowPremiumPopup] = useState<boolean>(false);
+  // Version check state
   const [hasCheckedVersion, setHasCheckedVersion] = useState<boolean>(false);
 
 
@@ -403,14 +352,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [loginPromptMessage, setLoginPromptMessage] = useState('Login to unlock all features');
 
+  // Premium upgrade alert state
+  const [showPremiumUpgradeAlert, setShowPremiumUpgradeAlert] = useState(false);
+
   // Log when HomeScreen mounts
   useEffect(() => {
     Logger.debug('HomeScreen', 'Component mounted with user:', user?.id);
   }, [user?.id]);
 
-  // Banner state
-  const [banners, setBanners] = useState<any[]>([]);
-  const [bannersLoading, setBannersLoading] = useState<boolean>(true);
+  // Banner state - removed unused banner variables
 
   // Enhanced data layer using React Query v5 hooks
   // Use guest posts for guest users, regular posts for authenticated users
@@ -501,10 +451,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
       console.log('🔍 [HomeScreen] Starting version check and premium validation...');
       
       try {
-        // Check premium status and show popup if needed
+        // Check premium status - removed automatic popup
         if (subscriptionResponse && !subscriptionResponse.status && !subscriptionLoading) {
-          console.log('💎 [HomeScreen] No premium subscription found, showing premium popup');
-          setShowPremiumPopup(true);
+          console.log('💎 [HomeScreen] No premium subscription found');
         }
       } catch (error) {
         console.error('❌ [HomeScreen] Error in premium validation:', error);
@@ -519,13 +468,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     }
   }, [user?.id, subscriptionResponse, subscriptionLoading, hasCheckedVersion]);
 
-  // Show premium popup when subscription is not active
-  useEffect(() => {
-    if (subscriptionResponse && !subscriptionResponse.status && !subscriptionLoading && !hasCheckedVersion) {
-      console.log('💎 [HomeScreen] Showing premium popup for non-premium user');
-      setShowPremiumPopup(true);
-    }
-  }, [subscriptionResponse, subscriptionLoading, hasCheckedVersion]);
+  // Removed automatic premium popup - users can upgrade manually when needed
 
   const isFirstRun = useRef(true);
 
@@ -554,16 +497,80 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     }
   }, [user?.id]);
 
-  // Transform posts data for compatibility
-  const posts = useMemo(() => {
-    if (isGuest) {
-      return (postsData as { data: Post[] })?.data || [];
-    } else if (postsData && 'pages' in postsData) {
-      return (postsData as InfiniteData<PostListResponse>)?.pages?.flatMap((page: PostListResponse) => page?.data || []) || [];
-    } else {
-      return [];
+  // Helper function to validate media URL and detect potential loading errors
+  const isValidMediaUrl = useCallback((url?: string | null): boolean => {
+    if (!url || url === 'null' || url === 'undefined' || url.trim() === '') {
+      return false;
     }
-  }, [postsData, isGuest]);
+
+    const trimmedUrl = url.trim();
+
+    // Check for common invalid patterns
+    const invalidPatterns = [
+      /^null$/i,
+      /^undefined$/i,
+      /^\s*$/,
+      /^data:image\/.*;base64,$/,
+      /^blob:/,
+      /^file:\/\//,
+      /^\/\/$/,
+      /^https?:\/\/$/,
+      /^https?:\/\/\s*$/,
+      /error/i,
+      /404/,
+      /not.?found/i,
+      /invalid/i,
+      /broken/i,
+    ];
+
+    // Check if URL has valid format
+    try {
+      if (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://')) {
+        new URL(trimmedUrl); // This will throw if URL is malformed
+      } else if (!trimmedUrl.startsWith('/')) {
+        // Relative URLs should start with /
+        return false;
+      }
+    } catch {
+      console.warn('[HomeScreen] Invalid media URL detected:', trimmedUrl);
+      return false;
+    }
+
+    return !invalidPatterns.some(pattern => pattern.test(trimmedUrl));
+  }, []);
+
+  // Transform posts data for compatibility and filter out posts with invalid media
+  const posts = useMemo(() => {
+    let rawPosts: Post[] = [];
+
+    if (isGuest) {
+      rawPosts = (postsData as { data: Post[] })?.data || [];
+    } else if (postsData && 'pages' in postsData) {
+      rawPosts = (postsData as InfiniteData<PostListResponse>)?.pages?.flatMap((page: PostListResponse) => page?.data || []) || [];
+    }
+
+    // Filter out posts with invalid media URLs
+    const filteredPosts = rawPosts.filter((post) => {
+      // If post has media, validate the URL
+      if (post.media_url && post.media_url !== 'null') {
+        const isValid = isValidMediaUrl(post.media_url);
+        if (!isValid) {
+          console.log(`[HomeScreen] Filtering out post ${post.id} with invalid media URL:`, post.media_url);
+        }
+        return isValid;
+      }
+      // If post has no media, include it
+      return true;
+    });
+
+    // Log filtering results
+    const filteredCount = rawPosts.length - filteredPosts.length;
+    if (filteredCount > 0) {
+      console.log(`[HomeScreen] Filtered out ${filteredCount} posts with invalid media URLs`);
+    }
+
+    return filteredPosts;
+  }, [postsData, isGuest, isValidMediaUrl]);
 
   // Like and Follow mutations
   const likeMutation = useLikeMutation();
@@ -575,8 +582,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const netInfo = useNetInfo();
   const isOnline = netInfo.isConnected;
 
-  // Static data for now - can be enhanced later with API calls
-  const stories: Story[] = [];
+
 
 
 
@@ -607,77 +613,19 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     followMutation.mutate({ userId, isFollowing });
   }, [followMutation, isGuest, showLoginPromptForAction]);
 
-  // Handle post press
-  const handlePostPress = useCallback((postId: number, userId: number) => {
-    // Navigate to post details - use 'as any' to handle navigation typing
-    navigation.navigate('PostDetail' as any, { postId, userId });
-  }, [navigation]);
-
-  // Network-aware retry logic
-  const handleRetry = useCallback(async () => {
-    if (!isOnline) {
-      Alert.alert('No Internet', 'Please check your internet connection and try again.');
-      return;
-    }
-    
-    // Retry logic here
-    refreshPosts();
-  }, [isOnline, refreshPosts]);
+  // Removed unused handlers: handlePostPress, handleRetry
   
-  // Premium banner render function
-  const renderPremiumBanner = useCallback(() => {
-    if (subscriptionLoading) return null;
-    if (!isPremium) {
-      return (
-        <View style={[styles.premiumContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}> 
-          <LinearGradient colors={['#FFD700', '#FFB300']} style={styles.premiumBanner}>
-            <Text style={styles.crownIcon}>👑</Text>
-            <View style={styles.premiumTextContainer}>
-              <Text style={styles.premiumTitle}>Upgrade to Premium</Text>
-              <Text style={styles.premiumSubtitle}>Earn More Now!</Text>
-            </View>
-            <TouchableOpacity style={styles.upgradeButton} onPress={() => navigation.navigate('PremiumUser' as never)} activeOpacity={0.8}>
-              <Text style={styles.upgradeButtonText}>Upgrade</Text>
-            </TouchableOpacity>
-          </LinearGradient>
-        </View>
-      );
-    } else {
-      // Show premium active banner with expiry date
-      return (
-        <View style={[styles.premiumContainer, { backgroundColor: isDarkMode ? colors.card : '#fff' }]}>
-          <LinearGradient colors={['#4CAF50', '#45A049']} style={styles.premiumBanner}>
-            <Text style={styles.crownIcon}>👑</Text>
-            <View style={styles.premiumTextContainer}>
-              <Text style={styles.premiumTitle}>Premium Active</Text>
-              <Text style={styles.premiumSubtitle}>
-                {premiumData?.end_time ? `Expires: ${formatPremiumExpiryDate(premiumData.end_time)}` : 'Premium Features Unlocked'}
-              </Text>
-            </View>
-            <TouchableOpacity style={styles.upgradeButton} onPress={() => navigation.navigate('PremiumUser' as never)} activeOpacity={0.8}>
-              <Text style={styles.upgradeButtonText}>Manage</Text>
-            </TouchableOpacity>
-          </LinearGradient>
-        </View>
-      );
-    }
-  }, [subscriptionLoading, isPremium, premiumData, isDarkMode, colors, navigation]);
+  // Removed renderPremiumBanner function - status section no longer needed
 
   // Use categories from API
   const displayCategories = categories;
-  const displayStories = stories || [];
   const displayPosts = posts || [];
 
   // Derived state for UI
   const initialLoading = postsLoading && displayPosts.length === 0;
   const isRefreshing = false; // Managed by data layer
 
-  // Instant event handlers - never block navigation
-  const getFullImageUrl = useCallback((url?: string | null) => {
-    if (!url || url === 'null' || url === 'undefined') return null;
-    if (url.startsWith('http')) return url;
-    return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
-  }, []);
+  // Removed unused getFullImageUrl function
 
   const getTimeAgo = useCallback((timestamp: string) => {
     const now = new Date(); 
@@ -699,15 +647,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     clearCache(`home-posts-${user?.id || 0}`);
   }, [user?.id, clearCache]);
 
-  const handleStoryPress = useCallback((storyId: string) => {
-    console.log('Story pressed:', storyId);
-    // Navigate instantly without waiting for data
-    // navigation.navigate('StoryViewer', { storyId });
-  }, []);
 
-  const handleAddStoryPress = useCallback(() => {
-    Alert.alert('Coming Soon', 'The Add Story feature is coming soon!');
-  }, []);
 
   const handleWatchAndEarn = useCallback(() => {
     console.log('Watch and earn pressed');
@@ -719,7 +659,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
   const handleInstallToEarn = useCallback(async () => {
     // Allow all users to access PubScale - no premium restriction
     try {
-      setOfferwallLoading(true);
       await PubScaleService.showOfferwall();
       console.log('Offerwall launched successfully');
 
@@ -728,8 +667,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
     } catch (error) {
       console.error('Failed to show offerwall:', error);
       Alert.alert('Error', 'Failed to load offerwall. Please try again later.', [{ text: 'OK' }]);
-    } finally {
-      setOfferwallLoading(false);
     }
   }, []);
 
@@ -953,7 +890,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             color: colors.text.primary,
             flex: 1,
           }}>
-            Search Results for "{debouncedSearchQuery}"
+            Search Results for &ldquo;{debouncedSearchQuery}&rdquo;
           </Text>
           <TouchableOpacity
             onPress={() => {
@@ -1185,12 +1122,17 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             rightComponent={renderHeaderRightSection()}
           />
           <ScrollView style={styles.content} contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}>
-            <StoriesRow stories={[]} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} isLoading={true} />
+
             <CategoriesRow categories={[]} selectedCategory={null} onCategoryPress={handleCategoryPress} isLoading={true} />
+            {/* Rearranged banner sections: Carousel (first), Survey banners (second), Games section (third) */}
             <BannerCarousel />
-            <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onInstallToEarn={handleInstallToEarn} isLoading={true} />
-            <ExternalLinkBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
             <SurveyBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} renderCPXAtRoot={true} />
+            <ExternalLinkBanner
+              isPremium={isPremium}
+              onUpgrade={() => navigation.navigate('PremiumUser' as never)}
+              onShowPremiumAlert={() => setShowPremiumUpgradeAlert(true)}
+            />
+            <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onInstallToEarn={handleInstallToEarn} isLoading={true} />
             <View style={styles.skeletonContainer}>
               {Array(6).fill(0).map((_, index) => <PostItemSkeleton key={`skeleton-${index}`} />)}
             </View>
@@ -1265,12 +1207,17 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           }}
           ListHeaderComponent={() => (
             <>
-              <StoriesRow stories={displayStories} onStoryPress={handleStoryPress} onAddStoryPress={handleAddStoryPress} />
+
               <CategoriesRow categories={displayCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} isLoading={categoriesLoading} />
+              {/* Rearranged banner sections: Carousel (first), Survey banners (second), Games section (third) */}
               <BannerCarousel onBannerPress={handleBannerPress} />
-              <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onInstallToEarn={handleInstallToEarn} />
-              <ExternalLinkBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} />
               <SurveyBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} renderCPXAtRoot={true} />
+              <ExternalLinkBanner
+                isPremium={isPremium}
+                onUpgrade={() => navigation.navigate('PremiumUser' as never)}
+                onShowPremiumAlert={() => setShowPremiumUpgradeAlert(true)}
+              />
+              <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onInstallToEarn={handleInstallToEarn} />
             </>
           )}
           ListEmptyComponent={renderEmptyState}
@@ -1294,7 +1241,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
             }}
             postId={selectedCommentPostId}
             userId={user?.id ? Number(user.id) : 0}
-            //@ts-ignore
+            //@ts-expect-error - PostWithComments component prop type mismatch
             initialCommentCount={
               displayPosts.find(post => post.id === selectedCommentPostId)?.commentCount || 0
             }
@@ -1303,15 +1250,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
 
         {/* Removed User Profile Modal - now using direct navigation */}
 
-        {/* Premium Popup */}
-        <PremiumPopup
-          visible={showPremiumPopup}
-          onClose={() => setShowPremiumPopup(false)}
-          onUpgrade={() => {
-            console.log('🚀 [HomeScreen] Premium upgrade initiated from popup');
-            setShowPremiumPopup(false);
-          }}
-        />
+        {/* Removed automatic Premium Popup - users can upgrade manually when needed */}
 
         {/* Login Prompt Modal for Guest Users */}
         <LoginPromptModal
@@ -1344,6 +1283,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: hocWalletBalance}
           }}
         />
 
+        {/* Premium Upgrade Alert for Games */}
+        <PremiumUpgradeAlert
+          visible={showPremiumUpgradeAlert}
+          onClose={() => setShowPremiumUpgradeAlert(false)}
+          onUpgrade={() => {
+            setShowPremiumUpgradeAlert(false);
+            navigation.navigate('PremiumUser' as never);
+          }}
+          title="🎮 Premium Games Unlocked!"
+          description="Upgrade to Premium to access exciting games and earn more rewards!"
+        />
+
       </View>
     </ScreenTransition>
     </CPXResearchProvider>
@@ -1363,17 +1314,7 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
     flexGrow: 1,
   },
 
-  // Stories section
-  storiesSection: {
-    paddingVertical: 16,
-    backgroundColor: colors.background,
-  },
-  storiesContainer: {
-    paddingLeft: 16,
-  },
-  storiesContentContainer: {
-    paddingRight: 16,
-  },
+
 
   // Categories section
   categoriesSection: {
@@ -1659,6 +1600,93 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 9,
     fontWeight: 'bold',
+  },
+
+  // Modern Banner Styles
+  modernBannerContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  modernBannerItem: {
+    marginBottom: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  modernBannerGradient: {
+    padding: 20,
+    minHeight: 120,
+  },
+  modernBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modernBannerTextContainer: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  modernBannerBadge: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  modernBannerBadgeText: {
+    color: '#000',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  modernBannerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  modernBannerDescription: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    opacity: 0.9,
+    marginBottom: 16,
+    lineHeight: 22,
+  },
+  modernBannerButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    alignSelf: 'flex-start',
+  },
+  modernBannerButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modernBannerIconContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modernBannerAppIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modernBannerAppIconText: {
+    fontSize: 30,
   },
 });
 
