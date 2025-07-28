@@ -7,17 +7,17 @@
  * - Non-authenticated users see the onboarding screen
  * No loading screens, no blocking initialization - just immediate UI.
  */
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { View, StatusBar, Animated, Image, BackHandler, Alert } from 'react-native';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { View, StatusBar, Animated, BackHandler, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { useCallStore } from '../../stores/callStoreSimplified';
 import { safeAreaStyles, statusBarConfig } from '../../utils/SafeAreaUtils';
 import { navigationRef, resetTo } from '../../navigation/NavigationService';
 import Sidebar from '../sidebar/Sidebar';
+import { Logger } from '../../utils/ProductionLogger';
 
 // Import navigation screens
 import MainNavigator from '../../navigation/MainNavigator';
@@ -62,7 +62,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
 }) => {
   const { colors, isDarkMode } = useTheme();
   const { isAuthenticated, isGuest, isInitialized, user, exitGuestMode } = useAuth();
-  const session = useCallStore(state => state.session);
+  //const session = useCallStore(state => state.session);
   const [isVisible, setIsVisible] = useState(true);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [isNavReady, setIsNavReady] = useState(false);
@@ -83,10 +83,20 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
   // Store onInitializationComplete in ref to avoid effect re-runs
   onInitializationCompleteRef.current = onInitializationComplete || null;
 
-  // Determine which screen to show based on authentication state
-  // Authenticated users go to MainNavigator, guest users go to GuestNavigator
-  const shouldShowMainApp = isAuthenticated && userHasName && userSaveStatus === 1;
-  const shouldShowGuestApp = isGuest;
+  // Memoize navigation state calculations for better performance
+  const navigationState = useMemo(() => {
+    const shouldShowMainApp = isAuthenticated && userHasName && userSaveStatus === 1;
+    const shouldShowGuestApp = isGuest;
+    const shouldShowAuth = !isAuthenticated && !isGuest;
+
+    return {
+      shouldShowMainApp,
+      shouldShowGuestApp,
+      shouldShowAuth,
+      renderingState: shouldShowMainApp ? 'MainApp' :
+                     shouldShowGuestApp ? 'GuestApp' : 'Auth'
+    };
+  }, [isAuthenticated, isGuest, userHasName, userSaveStatus]);
 
   // Global back button handler
   useEffect(() => {
@@ -103,7 +113,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
       }
 
       // Handle the case when there's no previous screen to go back to
-      if (shouldShowMainApp) {
+      if (navigationState.shouldShowMainApp) {
         // For logged-in users: Show exit app alert
         Alert.alert(
           'Exit App',
@@ -114,20 +124,20 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
           ]
         );
         return true; // Prevent default back action
-      } else if (shouldShowGuestApp) {
+      } else if (navigationState.shouldShowGuestApp) {
         // For guest users: Exit guest mode and navigate back to onboarding screens
         try {
-          console.log('[UltraFastLoader] Guest mode back button - exiting guest mode and returning to onboarding');
+          Logger.debug('UltraFastLoader', 'Guest mode back button - exiting guest mode and returning to onboarding');
           exitGuestMode().then(() => {
             resetTo('Auth');
           }).catch((error) => {
-            console.error('[UltraFastLoader] Error exiting guest mode:', error);
+            Logger.error('UltraFastLoader', 'Error exiting guest mode:', error);
             // Still try to navigate to onboarding even if exitGuestMode fails
             resetTo('Auth');
           });
           return true; // Prevent default back action
         } catch (error) {
-          console.error('[UltraFastLoader] Error handling guest mode back button:', error);
+          Logger.error('UltraFastLoader', 'Error handling guest mode back button:', error);
           return false;
         }
       }
@@ -138,18 +148,17 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
     return () => backHandler.remove();
-  }, [isNavReady, isInitialized, shouldShowMainApp, shouldShowGuestApp, exitGuestMode]);
+  }, [isNavReady, isInitialized, navigationState.shouldShowMainApp, navigationState.shouldShowGuestApp, exitGuestMode]);
 
-  // Use useMemo to prevent excessive logging
+  // Use useMemo to prevent excessive logging - now using optimized navigationState
   const renderingState = useMemo(() => ({
-    shouldShowMainApp,
-    shouldShowGuestApp,
+    ...navigationState,
     isAuthenticated,
     isGuest,
     hasUserName: userHasName,
     isSaveUserDetails: userSaveStatus,
     userProfileComplete: !!(userHasName && userSaveStatus === 1)
-  }), [shouldShowMainApp, shouldShowGuestApp, isAuthenticated, isGuest, userHasName, userSaveStatus]);
+  }), [navigationState, isAuthenticated, isGuest, userHasName, userSaveStatus]);
 
   // Only log when state changes
   useEffect(() => {
@@ -157,7 +166,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
     const previousState = previousStateRef.current;
     
     if (previousState !== currentState) {
-      console.log('[UltraFastLoader] Rendering screen:', renderingState);
+      Logger.debug('UltraFastLoader', 'Rendering screen:', renderingState);
       previousStateRef.current = currentState;
     }
   }, [renderingState]);
@@ -180,11 +189,11 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
         
         // Only log significant render times to reduce console spam
         if (renderTime > 100) {
-          console.log('[UltraFastLoader] App rendered in:', renderTime, 'ms');
+          Logger.debug('UltraFastLoader', `App rendered in: ${renderTime}ms`);
         }
-        
+
         // Log authentication state once
-        console.log('[UltraFastLoader] Authentication state:', {
+        Logger.debug('UltraFastLoader', 'Authentication state:', {
           isAuthenticated,
           isInitialized,
           hasUserName: userHasName,
@@ -296,7 +305,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
       <NavigationContainer
         ref={navigationRef}
         onReady={() => {
-          console.log('[UltraFastLoader] ✅ Navigation is ready');
+          Logger.info('UltraFastLoader', '✅ Navigation is ready');
           setIsNavReady(true);
         }}
         fallback={<InitialLoadingScreen />}
@@ -304,34 +313,34 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
         <RootStack.Navigator screenOptions={{ headerShown: false }}>
           {!isInitialized && !showFallback ? (
             <>
-              {console.log('[UltraFastLoader] 🔄 Showing InitialLoading screen - isInitialized:', isInitialized)}
+              {Logger.debug('UltraFastLoader', '🔄 Showing InitialLoading screen - isInitialized:', isInitialized)}
               <RootStack.Screen name="InitialLoading" component={InitialLoadingScreen} />
             </>
           ) : showFallback ? (
             <>
-              {console.log('[UltraFastLoader] 🚨 Showing fallback AuthNavigator due to initialization timeout')}
+              {Logger.warn('UltraFastLoader', '🚨 Showing fallback AuthNavigator due to initialization timeout')}
               <RootStack.Screen name="Auth" component={AuthNavigator} />
             </>
-          ) : shouldShowMainApp ? (
+          ) : navigationState.shouldShowMainApp ? (
             <>
-              {__DEV__ && Math.random() < 0.1 && console.log('[UltraFastLoader] ✅ Rendering MainNavigator for authenticated user')}
+              {Math.random() < 0.1 && Logger.debug('UltraFastLoader', '✅ Rendering MainNavigator for authenticated user')}
               <RootStack.Screen name="Main" component={MainNavigator} />
             </>
-          ) : shouldShowGuestApp ? (
+          ) : navigationState.shouldShowGuestApp ? (
             <>
-              {__DEV__ && console.log('[UltraFastLoader] 👤 Rendering GuestNavigator for guest user')}
+              {Logger.debug('UltraFastLoader', '👤 Rendering GuestNavigator for guest user')}
               <RootStack.Screen name="Guest" component={GuestNavigator} />
             </>
           ) : (
             <>
-              {__DEV__ && console.log('[UltraFastLoader] 🆕 Rendering AuthNavigator (OnboardingScreen) for new user')}
+              {Logger.debug('UltraFastLoader', '🆕 Rendering AuthNavigator (OnboardingScreen) for new user')}
               <RootStack.Screen name="Auth" component={AuthNavigator} />
             </>
           )}
         </RootStack.Navigator>
         
         {/* Show sidebar when initialized and in the main app or guest mode */}
-        {isInitialized && (shouldShowMainApp || shouldShowGuestApp) && <Sidebar />}
+        {isInitialized && (navigationState.shouldShowMainApp || navigationState.shouldShowGuestApp) && <Sidebar />}
       </NavigationContainer>
     </SafeAreaView>
   );

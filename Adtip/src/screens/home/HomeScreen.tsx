@@ -1202,8 +1202,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({walletBalance: _hocWalletBalance
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
           customOptimizations={{
-            removeClippedSubviews: false, // Keep false for complex post items
-            initialNumToRender: 8,
+            removeClippedSubviews: true, // Enable for better memory management
+            initialNumToRender: 6, // Optimized for typical screen size
+            maxToRenderPerBatch: 5, // Smaller batches for smoother scrolling
+            windowSize: 10, // Balanced memory vs performance
+            updateCellsBatchingPeriod: 50, // Faster updates for better responsiveness
           }}
           ListHeaderComponent={() => (
             <>

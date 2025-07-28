@@ -16,6 +16,7 @@ import { Share2, Heart, MessageCircle, Play, Pause, VolumeX, Volume2 } from 'luc
 import shareService from '../../../services/ShareService';
 import VideoErrorBoundary from '../../../components/common/VideoErrorBoundary';
 import CloudflareStreamPlayer from '../../../components/CloudflareStreamPlayer';
+import {Logger} from '../../../utils/ProductionLogger';
 import VideoPlaybackService, { VideoMetadata } from '../../../services/VideoPlaybackService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -101,7 +102,20 @@ const OptimizedVideoPlayer = memo(({
   // Cleanup on unmount to prevent memory leaks
   useEffect(() => {
     return () => {
+      // Mark component as unmounted
       isMountedRef.current = false;
+
+      // Force cleanup video resources
+      if (videoRef.current) {
+        try {
+          // Pause and reset video position
+          videoRef.current.seek(0);
+          // Release video resources
+          videoRef.current.paused = true;
+        } catch (error) {
+          Logger.warn('OptimizedVideoPlayer', 'Error during cleanup:', error);
+        }
+      }
     };
   }, []);
 
@@ -112,7 +126,7 @@ const OptimizedVideoPlayer = memo(({
       try {
         videoRef.current.seek(0); // Reset to beginning for better UX
       } catch (error) {
-        console.warn('[OptimizedVideoPlayer] Error seeking video:', error);
+        Logger.warn('OptimizedVideoPlayer', 'Error seeking video:', error);
       }
     }
   }, [isActive]);
@@ -124,7 +138,7 @@ const OptimizedVideoPlayer = memo(({
       try {
         videoRef.current.seek(0);
       } catch (error) {
-        console.warn('[OptimizedVideoPlayer] Error in global pause control:', error);
+        Logger.warn('OptimizedVideoPlayer', 'Error in global pause control:', error);
       }
     }
   }, [isPaused, isActive]);
@@ -184,7 +198,18 @@ const OptimizedVideoPlayer = memo(({
       isMountedRef.current = false;
 
       // Force stop video when component unmounts
-      console.log('[OptimizedVideoPlayer] Component unmounting - stopping video');
+      Logger.debug('OptimizedVideoPlayer', 'Component unmounting - stopping video');
+
+      // Complete video cleanup
+      if (videoRef.current) {
+        try {
+          // Stop video playback
+          videoRef.current.seek(0);
+          videoRef.current.paused = true;
+        } catch (error) {
+          Logger.warn('OptimizedVideoPlayer', 'Error stopping video on unmount:', error);
+        }
+      }
 
       // Reset state to prevent memory leaks
       setIsLoaded(false);

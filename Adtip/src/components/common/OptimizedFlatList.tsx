@@ -1,6 +1,7 @@
 import React, { memo, useMemo, useCallback } from 'react';
 import { FlatList, FlatListProps, ListRenderItem } from 'react-native';
 import { createOptimizedFlatListProps, createKeyExtractor, createFixedHeightLayout, createGridLayout } from '../../utils/PerformanceUtils';
+import { Logger } from '../../utils/ProductionLogger';
 
 // Optimization presets
 export type OptimizationPreset = 'FEED' | 'GRID' | 'CHAT' | 'SEARCH' | 'USER_LIST' | 'CUSTOM';
@@ -108,11 +109,11 @@ function OptimizedFlatList<T>({
     };
 
     // Log optimizations in development with throttling to prevent spam
-    if (enablePerformanceLogging && debugName && __DEV__) {
+    if (enablePerformanceLogging && debugName) {
       // Only log occasionally to prevent console spam
       const shouldLog = Math.random() < 0.05; // Log only 5% of the time
       if (shouldLog) {
-        console.log(`[OptimizedFlatList:${debugName}] Applied optimizations:`, {
+        Logger.debug('OptimizedFlatList', `${debugName} Applied optimizations:`, {
           preset,
           itemHeight,
           numColumns,

@@ -1,4 +1,4 @@
-import React, {useState, useCallback, useMemo} from 'react'; // Add useMemo
+import React, {useState, useCallback, useMemo, memo} from 'react'; // Add memo for performance
 import {StyleSheet, View, TouchableOpacity, Platform, Text} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {BlurView} from '@react-native-community/blur';
@@ -18,14 +18,15 @@ import TipShortsEnhanced from '../screens/tipshorts/TipShortsEnhanced';
 import {useTheme} from '../contexts/ThemeContext';
 import {TabNavigatorProvider} from '../contexts/TabNavigatorContext';
 import {withWalletBalance} from '../components/hoc/withWalletBalance';
+import {Logger} from '../utils/ProductionLogger';
 
 // Create tab navigator
 const Tab = createBottomTabNavigator();
 
-// ✅ SOLUTION: Define HOC-wrapped components OUTSIDE the TabNavigator component
-const EnhancedHomeScreen = withWalletBalance(HomeScreen);
-const EnhancedTipTubeScreen = withWalletBalance(TipTubeScreen);
-const EnhancedTipCallScreen = withWalletBalance(TipCallScreenSimple);
+// ✅ SOLUTION: Define HOC-wrapped components OUTSIDE the TabNavigator component with memoization
+const EnhancedHomeScreen = memo(withWalletBalance(HomeScreen));
+const EnhancedTipTubeScreen = memo(withWalletBalance(TipTubeScreen));
+const EnhancedTipCallScreen = memo(withWalletBalance(TipCallScreenSimple));
 
 /**
  * Bottom tab navigator component
@@ -116,8 +117,8 @@ const TabNavigator = () => {
     return (e: any) => {
       // Don't prevent default navigation - let it proceed immediately
       // This ensures instant navigation regardless of current screen's loading state
-      console.log(`TabNavigator: Instant navigation to ${routeName}`);
-      
+      Logger.debug('TabNavigator', `Instant navigation to ${routeName}`);
+
       // Force immediate navigation without waiting for current screen data
       setTimeout(() => {
         // Use the tab navigator's jumpTo method for instant tab switching
@@ -137,7 +138,7 @@ const TabNavigator = () => {
   // Custom handler for TipShorts - navigate to fullscreen version
   const tipShortsTabPress = useCallback((e: any) => {
     e.preventDefault(); // Prevent default tab navigation
-    console.log('TipShorts tab pressed - navigating to fullscreen');
+    Logger.debug('TabNavigator', 'TipShorts tab pressed - navigating to fullscreen');
     navigation.navigate('TipShorts'); // Navigate to the stack screen for fullscreen experience
   }, [navigation]);
 
@@ -213,12 +214,12 @@ const CreateContentButton = () => {
   const [modalVisible, setModalVisible] = useState(false);
 
   const handlePress = useCallback(() => {
-    console.log('CreateContentButton: handlePress called');
+    Logger.debug('CreateContentButton', 'handlePress called');
     setModalVisible(true);
   }, []);
 
   const handleCloseModal = useCallback(() => {
-    console.log('CreateContentButton: handleCloseModal called');
+    Logger.debug('CreateContentButton', 'handleCloseModal called');
     setModalVisible(false);
   }, []);
 

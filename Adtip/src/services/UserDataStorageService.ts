@@ -1,6 +1,7 @@
 // src/services/UserDataStorageService.ts
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import OptimizedAsyncStorage from './OptimizedAsyncStorage';
 import { ComprehensiveUserData } from '../types/api';
+import { Logger } from '../utils/ProductionLogger';
 
 /**
  * Service for managing user data persistence in AsyncStorage
@@ -20,14 +21,15 @@ class UserDataStorageService {
       const timestampKey = `${this.USER_DATA_TIMESTAMP_PREFIX}${userId}`;
       const timestamp = Date.now();
 
-      await Promise.all([
-        AsyncStorage.setItem(key, JSON.stringify(userData)),
-        AsyncStorage.setItem(timestampKey, timestamp.toString()),
+      // Use optimized batch operation
+      await OptimizedAsyncStorage.multiSet([
+        [key, JSON.stringify(userData)],
+        [timestampKey, timestamp.toString()],
       ]);
 
-      console.log('[UserDataStorageService] User data stored successfully for userId:', userId);
+      Logger.debug('UserDataStorageService', 'User data stored successfully for userId:', userId);
     } catch (error) {
-      console.error('[UserDataStorageService] Failed to store user data:', error);
+      Logger.error('UserDataStorageService', 'Failed to store user data:', error);
       throw error;
     }
   }
@@ -38,18 +40,18 @@ class UserDataStorageService {
   static async getUserData(userId: number): Promise<ComprehensiveUserData | null> {
     try {
       const key = `${this.USER_DATA_PREFIX}${userId}`;
-      const data = await AsyncStorage.getItem(key);
+      const data = await OptimizedAsyncStorage.getItem(key);
 
       if (!data) {
-        console.log('[UserDataStorageService] No cached user data found for userId:', userId);
+        Logger.debug('UserDataStorageService', 'No cached user data found for userId:', userId);
         return null;
       }
 
       const userData = JSON.parse(data) as ComprehensiveUserData;
-      console.log('[UserDataStorageService] Retrieved cached user data for userId:', userId);
+      Logger.debug('UserDataStorageService', 'Retrieved cached user data for userId:', userId);
       return userData;
     } catch (error) {
-      console.error('[UserDataStorageService] Failed to retrieve user data:', error);
+      Logger.error('UserDataStorageService', 'Failed to retrieve user data:', error);
       return null;
     }
   }
@@ -60,7 +62,7 @@ class UserDataStorageService {
   static async isUserDataValid(userId: number): Promise<boolean> {
     try {
       const timestampKey = `${this.USER_DATA_TIMESTAMP_PREFIX}${userId}`;
-      const timestampStr = await AsyncStorage.getItem(timestampKey);
+      const timestampStr = await OptimizedAsyncStorage.getItem(timestampKey);
 
       if (!timestampStr) {
         return false;
@@ -70,10 +72,10 @@ class UserDataStorageService {
       const now = Date.now();
       const isValid = (now - timestamp) < this.CACHE_EXPIRY_TIME;
 
-      console.log('[UserDataStorageService] Cache validity check for userId:', userId, 'isValid:', isValid);
+      Logger.debug('UserDataStorageService', 'Cache validity check for userId:', userId, 'isValid:', isValid);
       return isValid;
     } catch (error) {
-      console.error('[UserDataStorageService] Failed to check cache validity:', error);
+      Logger.error('UserDataStorageService', 'Failed to check cache validity:', error);
       return false;
     }
   }
@@ -84,7 +86,7 @@ class UserDataStorageService {
   static async getValidUserData(userId: number): Promise<ComprehensiveUserData | null> {
     const isValid = await this.isUserDataValid(userId);
     if (!isValid) {
-      console.log('[UserDataStorageService] Cached data is expired for userId:', userId);
+      Logger.debug('UserDataStorageService', 'Cached data is expired for userId:', userId);
       return null;
     }
 
@@ -99,14 +101,12 @@ class UserDataStorageService {
       const key = `${this.USER_DATA_PREFIX}${userId}`;
       const timestampKey = `${this.USER_DATA_TIMESTAMP_PREFIX}${userId}`;
 
-      await Promise.all([
-        AsyncStorage.removeItem(key),
-        AsyncStorage.removeItem(timestampKey),
-      ]);
+      // Use optimized batch removal
+      await OptimizedAsyncStorage.multiRemove([key, timestampKey]);
 
-      console.log('[UserDataStorageService] User data cleared for userId:', userId);
+      Logger.debug('UserDataStorageService', 'User data cleared for userId:', userId);
     } catch (error) {
-      console.error('[UserDataStorageService] Failed to clear user data:', error);
+      Logger.error('UserDataStorageService', 'Failed to clear user data:', error);
       throw error;
     }
   }
@@ -116,17 +116,17 @@ class UserDataStorageService {
    */
   static async clearAllUserData(): Promise<void> {
     try {
-      const keys = await AsyncStorage.getAllKeys();
+      const keys = await OptimizedAsyncStorage.getAllKeys();
       const userDataKeys = keys.filter(
         key => key.startsWith(this.USER_DATA_PREFIX) || key.startsWith(this.USER_DATA_TIMESTAMP_PREFIX)
       );
 
       if (userDataKeys.length > 0) {
-        await AsyncStorage.multiRemove(userDataKeys);
-        console.log('[UserDataStorageService] All user data cleared, removed keys:', userDataKeys.length);
+        await OptimizedAsyncStorage.multiRemove(userDataKeys);
+        Logger.debug('UserDataStorageService', 'All user data cleared, removed keys:', userDataKeys.length);
       }
     } catch (error) {
-      console.error('[UserDataStorageService] Failed to clear all user data:', error);
+      Logger.error('UserDataStorageService', 'Failed to clear all user data:', error);
       throw error;
     }
   }
@@ -144,7 +144,7 @@ class UserDataStorageService {
       const userData = await this.getUserData(userId);
       const isValid = await this.isUserDataValid(userId);
       const timestampKey = `${this.USER_DATA_TIMESTAMP_PREFIX}${userId}`;
-      const timestampStr = await AsyncStorage.getItem(timestampKey);
+      const timestampStr = await OptimizedAsyncStorage.getItem(timestampKey);
       
       const timestamp = timestampStr ? parseInt(timestampStr, 10) : null;
       const ageInMinutes = timestamp ? Math.floor((Date.now() - timestamp) / (1000 * 60)) : null;
@@ -156,7 +156,7 @@ class UserDataStorageService {
         ageInMinutes,
       };
     } catch (error) {
-      console.error('[UserDataStorageService] Failed to get cache info:', error);
+      Logger.error('UserDataStorageService', 'Failed to get cache info:', error);
       return {
         hasData: false,
         isValid: false,
@@ -176,15 +176,15 @@ class UserDataStorageService {
     try {
       const existingData = await this.getUserData(userId);
       if (!existingData) {
-        console.warn('[UserDataStorageService] No existing data to update for userId:', userId);
+        Logger.warn('UserDataStorageService', 'No existing data to update for userId:', userId);
         return;
       }
 
       const updatedData = { ...existingData, ...updates };
       await this.storeUserData(userId, updatedData);
-      console.log('[UserDataStorageService] User data fields updated for userId:', userId);
+      Logger.debug('UserDataStorageService', 'User data fields updated for userId:', userId);
     } catch (error) {
-      console.error('[UserDataStorageService] Failed to update user data fields:', error);
+      Logger.error('UserDataStorageService', 'Failed to update user data fields:', error);
       throw error;
     }
   }
@@ -195,7 +195,7 @@ class UserDataStorageService {
   static async migrateUserDataIfNeeded(userId: number): Promise<void> {
     try {
       // Check for old format user data (from AuthContext)
-      const oldUserData = await AsyncStorage.getItem('user');
+      const oldUserData = await OptimizedAsyncStorage.getItem('user');
       if (oldUserData) {
         const parsedOldData = JSON.parse(oldUserData);
         if (parsedOldData.id === userId) {
@@ -209,11 +209,11 @@ class UserDataStorageService {
           };
 
           await this.storeUserData(userId, comprehensiveData as ComprehensiveUserData);
-          console.log('[UserDataStorageService] Migrated old user data format for userId:', userId);
+          Logger.info('UserDataStorageService', 'Migrated old user data format for userId:', userId);
         }
       }
     } catch (error) {
-      console.error('[UserDataStorageService] Failed to migrate user data:', error);
+      Logger.error('UserDataStorageService', 'Failed to migrate user data:', error);
       // Don't throw error for migration failures
     }
   }

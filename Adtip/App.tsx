@@ -63,6 +63,9 @@ import IncomingCallService from './src/services/IncomingCallService';
 // Constants
 import { COLORS } from './src/constants/colors';
 
+// Import ProductionLogger for performance-optimized logging
+import { Logger } from './src/utils/ProductionLogger';
+
 // Import required screens
 import UserDetailsScreen from './src/screens/auth/UserDetailsScreen';
 //import ChatScreen from './src/screens/chat/ChatScreen';
@@ -111,7 +114,7 @@ const AppNavigator = () => {
 
   // Memoize the initialization complete callback to prevent re-renders
   const handleInitializationComplete = useCallback(() => {
-    console.log('[App] Ultra-fast initialization complete');
+    Logger.debug('App', 'Ultra-fast initialization complete');
   }, []);
 
   // Initialize comprehensive deep linking service
@@ -128,7 +131,7 @@ const AppNavigator = () => {
   // Set all services as ready immediately - they'll initialize in background
   useEffect(() => {
     // Initialize all services as ready immediately for ultra-fast app start
-    console.log('[App] All services marked as ready for instant app start');
+    Logger.debug('App', 'All services marked as ready for instant app start');
   }, []);
 
   // Background initialization - no blocking with delayed execution
@@ -139,19 +142,19 @@ const AppNavigator = () => {
     setTimeout(() => {
       (async () => {
         try {
-          console.log('[App] Background: Initializing Firebase service...');
+          Logger.debug('App', 'Background: Initializing Firebase service...');
           const apps = getApps();
           if (apps.length === 0) {
-            console.warn('[App] Background: No Firebase apps found');
+            Logger.warn('App', 'Background: No Firebase apps found');
           } else {
-            console.log(`[App] Background: Found ${apps.length} Firebase app(s)`);
+            Logger.debug('App', `Background: Found ${apps.length} Firebase app(s)`);
           }
-          
+
           const firebaseService = FirebaseService.getInstance();
           const success = await firebaseService.initializeMessaging();
-          
+
           if (success) {
-            console.log('[App] Background: Firebase service initialized successfully');
+            Logger.info('App', 'Background: Firebase service initialized successfully');
             // Setup notifications when ready
             if (isAuthenticated) {
               await firebaseService.setupNotifications();
@@ -159,10 +162,10 @@ const AppNavigator = () => {
               firebaseService.executeDelayedNavigation();
             }
           } else {
-            console.warn('[App] Background: Firebase service initialization failed');
+            Logger.warn('App', 'Background: Firebase service initialization failed');
           }
         } catch (error) {
-          console.error('[App] Background: Firebase initialization error:', error);
+          Logger.error('App', 'Background: Firebase initialization error:', error);
         }
       })();
     }, 100); // Minimal delay for UI responsiveness
@@ -171,17 +174,17 @@ const AppNavigator = () => {
     setTimeout(() => {
       (async () => {
         try {
-          console.log('[App] Background: Initializing VideoSDK service...');
+          Logger.debug('App', 'Background: Initializing VideoSDK service...');
           const videoSDKService = VideoSDKService.getInstance();
           const success = await videoSDKService.initialize();
-          
+
           if (success) {
-            console.log('[App] Background: VideoSDK service initialized successfully');
+            Logger.info('App', 'Background: VideoSDK service initialized successfully');
           } else {
-            console.warn('[App] Background: VideoSDK service initialization failed');
+            Logger.warn('App', 'Background: VideoSDK service initialization failed');
           }
         } catch (error) {
-          console.error('[App] Background: VideoSDK initialization error:', error);
+          Logger.error('App', 'Background: VideoSDK initialization error:', error);
         }
       })();
     }, 200);
@@ -191,14 +194,14 @@ const AppNavigator = () => {
       (async () => {
         try {
           // Request notification permissions using centralized service
-          console.log('[App] Background: Requesting notification permissions...');
+          Logger.debug('App', 'Background: Requesting notification permissions...');
           const permissionManager = PermissionManagerService.getInstance();
           const notificationResult = await permissionManager.requestNotificationPermissions();
-          console.log('[App] Background: Notification permissions result:', notificationResult);
+          Logger.debug('App', 'Background: Notification permissions result:', notificationResult);
 
-          console.log('[App] Background: Call services initialized via CallController (auto-init)');
+          Logger.debug('App', 'Background: Call services initialized via CallController (auto-init)');
         } catch (error) {
-          console.error('[App] Background: Unified Call Service initialization error:', error);
+          Logger.error('App', 'Background: Unified Call Service initialization error:', error);
         }
       })();
     }, 300);
@@ -210,9 +213,9 @@ const AppNavigator = () => {
           const PermissionsServiceModule = await import('./src/services/PermissionsService');
           const PermissionsService = PermissionsServiceModule.default;
           await PermissionsService.requestPhoneCallForegroundServicePermission();
-          console.log('[App] Background: Phone call permissions requested');
+          Logger.debug('App', 'Background: Phone call permissions requested');
         } catch (error) {
-          console.log('[App] Background: Phone call permissions request failed (not critical):', error);
+          Logger.debug('App', 'Background: Phone call permissions request failed (not critical):', error);
         }
       }, 1000); // Reduced from 2000ms to 1000ms
     }
@@ -221,11 +224,11 @@ const AppNavigator = () => {
     if (isAuthenticated && user?.id) {
       setTimeout(async () => {
         try {
-          console.log('[App] Background: Initializing PubScale service...');
+          Logger.debug('App', 'Background: Initializing PubScale service...');
           await PubScaleService.initialize(String(user.id));
-          console.log('[App] Background: PubScale service initialized successfully');
+          Logger.info('App', 'Background: PubScale service initialized successfully');
         } catch (error) {
-          console.log('[App] Background: PubScale service initialization failed (not critical):', error);
+          Logger.debug('App', 'Background: PubScale service initialization failed (not critical):', error);
         }
       }, 1500); // Initialize after other services
     }
@@ -233,12 +236,12 @@ const AppNavigator = () => {
     // Background Cloudflare cache cleanup initialization
     setTimeout(async () => {
       try {
-        console.log('[App] Background: Initializing Cloudflare cache cleanup...');
+        Logger.debug('App', 'Background: Initializing Cloudflare cache cleanup...');
         const { CloudflareUploadService } = await import('./src/services/CloudflareUploadService');
         CloudflareUploadService.initializeCacheCleanup();
-        console.log('[App] Background: Cloudflare cache cleanup initialized successfully');
+        Logger.info('App', 'Background: Cloudflare cache cleanup initialized successfully');
       } catch (error) {
-        console.log('[App] Background: Cloudflare cache cleanup initialization failed (not critical):', error);
+        Logger.debug('App', 'Background: Cloudflare cache cleanup initialization failed (not critical):', error);
       }
     }, 2000); // Initialize after other services
   }, [isInitialized, isAuthenticated]);
@@ -246,14 +249,14 @@ const AppNavigator = () => {
   // Setup incoming call handling with Unified Call Service
   useEffect(() => {
     const handleIncomingCallBroadcast = async (data: any) => {
-      console.log('[App] Received incoming call broadcast:', data);
-      
+      Logger.debug('App', 'Received incoming call broadcast:', data);
+
       if (data && data.isIncomingCall) {
         try {
           // Incoming calls are now handled by CallSignalingService via FCM
-          console.log('[App] ✅ Incoming call handled by CallSignalingService');
+          Logger.info('App', '✅ Incoming call handled by CallSignalingService');
         } catch (error) {
-          console.error('[App] Error handling incoming call broadcast:', error);
+          Logger.error('App', 'Error handling incoming call broadcast:', error);
         }
       }
     };
@@ -284,7 +287,7 @@ const AppNavigator = () => {
         // TODO: Fetch call details using sessionId if needed
         // Example: const callDetails = await ApiService.getCallDetails(event.sessionId);
         // if (callDetails) { CallController.getInstance().handleIncomingCall(callDetails); }
-        console.log('[App] Native answered call, sessionId:', event.sessionId);
+        Logger.debug('App', 'Native answered call, sessionId:', event.sessionId);
       } else if (event.action === 'DECLINE') {
         CallController.getInstance().declineCall();
       }
@@ -322,7 +325,7 @@ function App(): React.JSX.Element {
   // Initialize call configuration for simplified flow
   useEffect(() => {
     CallConfig.enableSimplifiedFlow();
-    console.log('[App] Call configuration initialized for simplified flow');
+    Logger.debug('App', 'Call configuration initialized for simplified flow');
   }, []);
 
   // Add reliable call manager for FCM call handling
@@ -338,21 +341,21 @@ function App(): React.JSX.Element {
     const initBackgroundHandler = () => {
       setTimeout(async () => {
         try {
-          console.log('[App] 🔄 Starting lightweight background call handler initialization...');
+          Logger.debug('App', '🔄 Starting lightweight background call handler initialization...');
 
           // Initialize background call handler first (lightweight)
           try {
             const { BackgroundCallHandler } = await import('./src/services/calling/BackgroundCallHandler');
             const handler = BackgroundCallHandler.getInstance();
             await handler.loadPendingCall();
-            console.log('[App] ✅ Background call handler initialized');
+            Logger.info('App', '✅ Background call handler initialized');
           } catch (handlerError) {
-            console.warn('[App] ⚠️ Background call handler initialization failed:', handlerError);
+            Logger.warn('App', '⚠️ Background call handler initialization failed:', handlerError);
           }
 
-          console.log('[App] ✅ Background services initialization complete');
+          Logger.info('App', '✅ Background services initialization complete');
         } catch (error) {
-          console.warn('[App] ⚠️ Background services setup error (non-critical):', error);
+          Logger.warn('App', '⚠️ Background services setup error (non-critical):', error);
         }
       }, 1000); // Reduced delay to 1 second for faster startup
     };
@@ -371,7 +374,7 @@ function App(): React.JSX.Element {
 
   // Debug app state for blank screen issues - TEMPORARILY DISABLED
   useEffect(() => {
-    console.log('[App] ⚠️ Debug utilities temporarily disabled to prevent blank screen');
+    Logger.debug('App', '⚠️ Debug utilities temporarily disabled to prevent blank screen');
 
     // TODO: Re-enable once the blank screen issue is resolved
     // const startDebugging = async () => {
@@ -415,7 +418,7 @@ function App(): React.JSX.Element {
     const FORCE_LOAD_COOLDOWN = 2 * 60 * 1000; // 2 minutes
 
     if (!adLoaded && lastForceLoad > FORCE_LOAD_COOLDOWN) {
-      if (__DEV__) console.log('App.tsx: Ensuring app open ad is loaded');
+      Logger.debug('App', 'Ensuring app open ad is loaded');
       global.lastAdForceLoad = Date.now();
       forceLoadAd();
     }

@@ -5,10 +5,10 @@ import {
   StyleSheet,
   Image,
   TouchableOpacity,
-  FlatList,
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
+import { FeedFlatList } from '../common/OptimizedFlatList';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
@@ -175,12 +175,19 @@ const TipShortsSection: React.FC<TipShortsSectionProps> = ({
           </Text>
         </View>
       ) : displayShorts.length > 0 ? (
-        <FlatList
+        <FeedFlatList
           data={displayShorts}
           renderItem={renderShortCard}
-          keyExtractor={(item) => `short-${item.id}`}
+          idField="id"
+          debugName="TipShortsHorizontal"
           horizontal={true}
-          showsHorizontalScrollIndicator={false}
+          customOptimizations={{
+            removeClippedSubviews: true,
+            initialNumToRender: 4,
+            maxToRenderPerBatch: 3,
+            windowSize: 6,
+            showsHorizontalScrollIndicator: false,
+          }}
           ItemSeparatorComponent={() => <View style={styles.horizontalSeparator} />}
           contentContainerStyle={styles.horizontalContent}
         />

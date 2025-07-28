@@ -15,6 +15,7 @@ import {
 import { WebView } from 'react-native-webview';
 import Video from 'react-native-video';
 import { CLOUDFLARE_STREAM_CONFIG } from '../config/cloudflareConfig';
+import { Logger } from '../utils/ProductionLogger';
 
 interface CloudflareStreamPlayerProps {
   streamVideoId?: string;
@@ -68,7 +69,7 @@ const CloudflareStreamPlayer: React.FC<CloudflareStreamPlayerProps> = ({
   // Generate Stream Player URL with validation
   const getStreamPlayerUrl = () => {
     if (!isStreamReady) {
-      console.warn('[CloudflareStreamPlayer] Cannot generate Stream URL - invalid stream data:', {
+      Logger.warn('CloudflareStreamPlayer', 'Cannot generate Stream URL - invalid stream data:', {
         streamVideoId,
         streamStatus,
         isStreamReady
@@ -90,7 +91,7 @@ const CloudflareStreamPlayer: React.FC<CloudflareStreamPlayerProps> = ({
   // Generate HLS manifest URL for react-native-video with validation
   const getHLSUrl = () => {
     if (!isStreamReady) {
-      console.warn('[CloudflareStreamPlayer] Cannot generate HLS URL - invalid stream data:', {
+      Logger.warn('CloudflareStreamPlayer', 'Cannot generate HLS URL - invalid stream data:', {
         streamVideoId,
         streamStatus,
         isStreamReady
@@ -157,18 +158,18 @@ const CloudflareStreamPlayer: React.FC<CloudflareStreamPlayerProps> = ({
           onLoad?.();
           break;
         case 'error':
-          console.warn('[CloudflareStreamPlayer] WebView error:', data.error);
+          Logger.warn('CloudflareStreamPlayer', 'WebView error:', data.error);
           handleStreamError(data.error);
           break;
       }
     } catch (error) {
-      console.warn('[CloudflareStreamPlayer] Failed to parse WebView message:', error);
+      Logger.warn('CloudflareStreamPlayer', 'Failed to parse WebView message:', error);
     }
   };
 
   // Handle Stream errors and fallback
   const handleStreamError = (error: any) => {
-    console.error('[CloudflareStreamPlayer] Stream error, falling back to direct video:', {
+    Logger.error('CloudflareStreamPlayer', 'Stream error, falling back to direct video:', {
       error,
       streamVideoId,
       streamStatus,
@@ -187,7 +188,7 @@ const CloudflareStreamPlayer: React.FC<CloudflareStreamPlayerProps> = ({
   };
 
   const handleVideoError = (error: any) => {
-    console.error('[CloudflareStreamPlayer] Video playback error:', error);
+    Logger.error('CloudflareStreamPlayer', 'Video playback error:', error);
     setHasError(true);
     onError?.(error);
   };
@@ -198,18 +199,18 @@ const CloudflareStreamPlayer: React.FC<CloudflareStreamPlayerProps> = ({
     if (shouldUseStream && useWebView) {
       const hlsUrl = getHLSUrl();
       if (hlsUrl) {
-        console.log('[CloudflareStreamPlayer] Using Stream HLS URL:', hlsUrl);
+        Logger.debug('CloudflareStreamPlayer', 'Using Stream HLS URL:', hlsUrl);
         return { uri: hlsUrl };
       }
     }
 
     // Fall back to direct video URL
     if (fallbackVideoUrl) {
-      console.log('[CloudflareStreamPlayer] Using fallback video URL:', fallbackVideoUrl);
+      Logger.debug('CloudflareStreamPlayer', 'Using fallback video URL:', fallbackVideoUrl);
       return { uri: fallbackVideoUrl };
     }
 
-    console.warn('[CloudflareStreamPlayer] No valid video source available:', {
+    Logger.warn('CloudflareStreamPlayer', 'No valid video source available:', {
       shouldUseStream,
       useWebView,
       streamVideoId,
@@ -222,13 +223,13 @@ const CloudflareStreamPlayer: React.FC<CloudflareStreamPlayerProps> = ({
   // Retry with Stream (only if stream is ready)
   const retryWithStream = () => {
     if (!isStreamReady) {
-      console.warn('[CloudflareStreamPlayer] Cannot retry - stream not ready:', {
+      Logger.warn('CloudflareStreamPlayer', 'Cannot retry - stream not ready:', {
         streamVideoId,
         streamStatus
       });
       return;
     }
-    console.log('[CloudflareStreamPlayer] Retrying with Stream player');
+    Logger.debug('CloudflareStreamPlayer', 'Retrying with Stream player');
     setHasError(false);
     setIsLoading(true);
     setUseWebView(true);
@@ -254,14 +255,14 @@ const CloudflareStreamPlayer: React.FC<CloudflareStreamPlayerProps> = ({
   React.useEffect(() => {
     setUseWebView(shouldUseStream);
     if (!shouldUseStream && streamVideoId) {
-      console.warn('[CloudflareStreamPlayer] Stream not ready, using fallback:', {
+      Logger.warn('CloudflareStreamPlayer', 'Stream not ready, using fallback:', {
         streamVideoId,
         streamStatus,
         shouldUseStream,
         reason: streamStatus !== 'ready' ? 'Stream not ready' : 'No stream ID'
       });
     } else if (shouldUseStream) {
-      console.log('[CloudflareStreamPlayer] Using Cloudflare Stream player:', {
+      Logger.debug('CloudflareStreamPlayer', 'Using Cloudflare Stream player:', {
         streamVideoId,
         streamStatus,
         autoplay
@@ -273,7 +274,7 @@ const CloudflareStreamPlayer: React.FC<CloudflareStreamPlayerProps> = ({
   if (useWebView && shouldUseStream && !hasError) {
     const streamUrl = getStreamPlayerUrl();
     if (!streamUrl) {
-      console.error('[CloudflareStreamPlayer] Failed to generate stream URL');
+      Logger.error('CloudflareStreamPlayer', 'Failed to generate stream URL');
       setHasError(true);
       return null;
     }

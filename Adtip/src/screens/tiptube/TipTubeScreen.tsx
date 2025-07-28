@@ -2,7 +2,6 @@ import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import {
   View,
   Text,
-  FlatList,
   TouchableOpacity,
   StyleSheet,
   RefreshControl,
@@ -17,6 +16,7 @@ import {
   Modal,
   ViewToken,
 } from 'react-native';
+import { FeedFlatList } from '../../components/common/OptimizedFlatList';
 import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -1183,14 +1183,21 @@ const TipTubeScreen = () => {
         {initialLoading ? (
           renderSkeletonLoading()
         ) : (
-          <FlatList
+          <FeedFlatList
             ref={flatListRef}
             data={videos}
-            keyExtractor={(item) => `video-${item.id}`}
+            idField="id"
+            debugName="TipTubeVideos"
             renderItem={renderVideoItem}
             ListHeaderComponent={renderCategoryHeader}
             ListFooterComponent={renderFooter}
             ListEmptyComponent={renderEmptyState}
+            customOptimizations={{
+              removeClippedSubviews: true,
+              initialNumToRender: 8,
+              maxToRenderPerBatch: 6,
+              windowSize: 12,
+            }}
             refreshControl={
               <RefreshControl
                 refreshing={false} // Managed by React Query

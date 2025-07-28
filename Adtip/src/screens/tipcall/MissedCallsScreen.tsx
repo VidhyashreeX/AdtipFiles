@@ -3,13 +3,13 @@ import {
   View,
   Text,
   TouchableOpacity,
-  FlatList,
   ActivityIndicator,
   StatusBar,
   RefreshControl,
   StyleSheet,
   Alert,
 } from 'react-native';
+import { FeedFlatList } from '../../components/common/OptimizedFlatList';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -356,12 +356,20 @@ export default function MissedCallsScreen() {
           {isLoading ? (
             <MissedCallsSkeleton colors={colors} isDarkMode={isDarkMode} />
           ) : (
-            <FlatList
+            <FeedFlatList
               data={missedCalls}
               renderItem={renderMissedCallItem}
-              keyExtractor={(item) => `missed-call-${item.id}`}
+              idField="id"
+              debugName="MissedCalls"
               onEndReached={handleLoadMore}
               onEndReachedThreshold={0.3}
+              customOptimizations={{
+                removeClippedSubviews: true,
+                initialNumToRender: 10,
+                maxToRenderPerBatch: 8,
+                windowSize: 12,
+                showsVerticalScrollIndicator: false,
+              }}
               ListFooterComponent={renderFooter}
               ListEmptyComponent={renderEmptyState}
               refreshControl={
@@ -372,7 +380,6 @@ export default function MissedCallsScreen() {
                   tintColor={colors.primary}
                 />
               }
-              showsVerticalScrollIndicator={false}
               contentContainerStyle={[
                 styles.listContainer,
                 missedCalls.length === 0 && styles.emptyListContainer

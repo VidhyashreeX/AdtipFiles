@@ -6,12 +6,12 @@ import {
   Image,
   TouchableOpacity,
   ScrollView,
-  FlatList,
   Dimensions,
   ActivityIndicator,
   RefreshControl,
   Alert,
 } from 'react-native';
+import { GridFlatList } from '../../components/common/OptimizedFlatList';
 import Icon from 'react-native-vector-icons/Feather';
 import { Star, Edit, BarChart3, Upload, MoreVertical, Trash2, Edit3 } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -689,15 +689,22 @@ const YourChannelScreen: React.FC = () => {
         }
       />
 
-      <FlatList
+      <GridFlatList
         data={currentData}
         renderItem={renderVideoCard}
-        keyExtractor={(item) => `${selectedTab}-${item.id}`}
+        idField="id"
+        debugName="YourChannelVideos"
         numColumns={2}
+        customOptimizations={{
+          removeClippedSubviews: true,
+          initialNumToRender: 8,
+          maxToRenderPerBatch: 6,
+          windowSize: 10,
+          showsVerticalScrollIndicator: false,
+        }}
         ItemSeparatorComponent={() => <View style={styles.videoSeparator} />}
         columnWrapperStyle={currentData.length > 0 ? styles.videoRow : undefined}
         contentContainerStyle={styles.videoGrid}
-        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
         }

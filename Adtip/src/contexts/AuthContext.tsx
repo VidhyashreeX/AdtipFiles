@@ -1,4 +1,4 @@
-import React, {createContext, useState, useContext, useEffect, useMemo} from 'react';
+import React, {createContext, useState, useContext, useEffect, useMemo, useCallback} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {API_BASE_URL, ENDPOINTS} from '../constants/api';
 import ApiService from '../services/ApiService';
@@ -156,11 +156,11 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
           Logger.info('AuthContext', '🆕 New user detected - routing to AuthNavigator (OnboardingScreen)');
         }
       } catch (err) {
-        console.error('[AuthContext] ❌ Error loading user data:', err);
+        Logger.error('AuthContext', '❌ Error loading user data:', err);
         setError('Failed to load user data');
       } finally {
         // setLoading(false); // Not this loading
-        console.log('[AuthContext] ✅ Marking as initialized');
+        Logger.debug('AuthContext', '✅ Marking as initialized');
         setIsInitialized(true); // <-- Mark as initialized
       }
     };
@@ -169,7 +169,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     const initWithTimeout = async () => {
       const timeoutPromise = new Promise((resolve) => {
         setTimeout(() => {
-          console.warn('[AuthContext] ⚠️ Initialization timeout - forcing completion');
+          Logger.warn('AuthContext', '⚠️ Initialization timeout - forcing completion');
           setIsInitialized(true);
           resolve(null);
         }, 10000); // 10 second timeout
@@ -217,36 +217,36 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         setHasChannel(false);
       }
     } catch (err) {
-      console.error('Error checking channel status:', err);
+      Logger.error('AuthContext', 'Error checking channel status:', err);
       setHasChannel(false);
     }
   };
   // Login - Send OTP
-  const login = async (mobileNumber: string): Promise<ApiResponse<OtpResponse[]>> => {
+  const login = useCallback(async (mobileNumber: string): Promise<ApiResponse<OtpResponse[]>> => {
     setLoading(true);
     setError(null);
 
     try {
-      console.log(`[AuthContext] Attempting login with number: ${mobileNumber}`);
-      
+      Logger.debug('AuthContext', `Attempting login with number: ${mobileNumber}`);
+
       const apiResponse = await ApiService.post<ApiResponse<OtpResponse[]>>(ENDPOINTS.OTP_LOGIN, {
         mobileNumber,
         userType: '2',
       });
-      
-      console.log('[AuthContext] Login API response:', JSON.stringify(apiResponse));
+
+      Logger.debug('AuthContext', 'Login API response:', JSON.stringify(apiResponse));
 
       if (apiResponse.status !== 200 || !apiResponse.data || !Array.isArray(apiResponse.data) || apiResponse.data.length === 0) {
         throw new Error(apiResponse.message || 'Failed to send OTP or invalid response structure');
       }
-      
+
       // Return the response instead of handling navigation
       return apiResponse;
-      
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to send OTP';
       setError(errorMessage);
-      console.error('[AuthContext] Login error details:', {
+      Logger.error('AuthContext', 'Login error details:', {
         message: errorMessage,
         error: err,
       });
@@ -254,9 +254,9 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, []); // No dependencies needed as it only uses props and stable functions
   // Verify OTP
-  const verifyOtp = async (mobileNumber: string, otp: string, id: string): Promise<OtpVerifyApiResponse> => {
+  const verifyOtp = useCallback(async (mobileNumber: string, otp: string, id: string): Promise<OtpVerifyApiResponse> => {
     try {
       setLoading(true);
       
@@ -266,7 +266,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         id: id,
       });
 
-      console.log('AuthContext - OTP verification response:', response);
+      Logger.debug('AuthContext', 'OTP verification response:', response);
 
       // Handle both response formats
       let userData: User | null = null;
@@ -319,15 +319,15 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         throw new Error('Invalid response format');
       }
     } catch (error) {
-      console.error('AuthContext - OTP verification error:', error);
+      Logger.error('AuthContext', 'OTP verification error:', error);
       throw error;
     } finally {
       setLoading(false);
     }
-  };
+  }, [isGuest]); // Dependencies: isGuest state
   // Handle authentication errors and token refresh
-  const handleAuthError = async (): Promise<void> => {
-    console.log('[AuthContext] Handling authentication error - clearing auth state');
+  /*const handleAuthError = useCallback(async (): Promise<void> => {
+    Logger.debug('AuthContext', 'Handling authentication error - clearing auth state');
 
     try {
       // Clear all authentication data using UserDataManager
@@ -343,14 +343,14 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         walletBalance: '0.00',
       });
 
-      console.log('[AuthContext] ✅ Auth state cleared due to authentication error');
+      Logger.info('AuthContext', '✅ Auth state cleared due to authentication error');
     } catch (error) {
-      console.error('[AuthContext] ❌ Error clearing auth state:', error);
+      Logger.error('AuthContext', '❌ Error clearing auth state:', error);
     }
-  };
+  }, []);*/
 
   // Logout
-  const logout = async (): Promise<void> => {
+  const logout = useCallback(async (): Promise<void> => {
     // setLoading(true); // This is the AuthContext's general 'loading' state,
                       // which is fine if you want a global loading indicator for auth operations.
                       // SettingsScreen uses its own 'authLoading' derived from this.
@@ -362,22 +362,22 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       LastSeenService.stopTracking();
 
       if (currentUserId) { // Check if there was a user to log out
-        console.log(`[AuthContext] Attempting to call API logout for user ID: ${currentUserId}`);
+        Logger.debug('AuthContext', `Attempting to call API logout for user ID: ${currentUserId}`);
 
         // Use the proper ApiService.logout method which handles FCM token cleanup
         await ApiService.logout(String(currentUserId));
-        console.log(`[AuthContext] API logout call successful for user ID: ${currentUserId}`);
+        Logger.info('AuthContext', `API logout call successful for user ID: ${currentUserId}`);
       } else {
-        console.log('[AuthContext] No user was signed in, proceeding to clear local data.');
+        Logger.debug('AuthContext', 'No user was signed in, proceeding to clear local data.');
       }
       
       // Clean up all services before clearing storage
       try {
-        console.log('[AuthContext] Resetting FirebaseService...');
+        Logger.debug('AuthContext', 'Resetting FirebaseService...');
         const firebaseService = FirebaseService.getInstance();
         firebaseService.reset();
       } catch (serviceError) {
-        console.warn('[AuthContext] Error cleaning up services during logout:', serviceError);
+        Logger.warn('AuthContext', 'Error cleaning up services during logout:', serviceError);
       }
 
       // Clear user data cache using UserDataManager
@@ -409,17 +409,17 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         contentCreatorPlanId: 0,
         walletBalance: '0.00',
       });
-      console.log('[AuthContext] Local auth state reset.');
+      Logger.debug('AuthContext', 'Local auth state reset.');
 
       if (navigationRef.isReady()) {
         navigationRef.reset({
           index: 0,
           routes: [{name: 'Onboarding'}], // This will take user to Onboarding, then to Login if not skipped
         });
-        console.log('[AuthContext] Navigation reset to Onboarding.');
+        Logger.debug('AuthContext', 'Navigation reset to Onboarding.');
       }
     } catch (err) {
-      console.error('[AuthContext] Error during logout:', err);
+      Logger.error('AuthContext', 'Error during logout:', err);
       // Even if API logout fails, proceed to clear local data and log out locally
       
       // Still try to clean up services
@@ -427,7 +427,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         const firebaseService = FirebaseService.getInstance();
         firebaseService.reset();
       } catch (serviceError) {
-        console.warn('[AuthContext] Error cleaning up services during logout fallback:', serviceError);
+        Logger.warn('AuthContext', 'Error cleaning up services during logout fallback:', serviceError);
       }
       
       await AsyncStorage.clear();
@@ -453,7 +453,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     } finally {
       // setLoading(false);
     }
-  };
+  }, [user?.id]); // Dependencies: user.id for logout API call
 
   // Update user details
   const updateUserDetails = async (userData: Partial<User> & {
@@ -515,7 +515,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     const currentUserId = user?.id;
 
     if (!currentUserId) {
-      console.log('No user to refresh.');
+      Logger.debug('AuthContext', 'No user to refresh.');
       return;
     }
 
@@ -560,7 +560,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
       // Guest mode should be temporary and reset on app restart
       // This ensures users always see OnboardingScreens first
 
-      console.log('[AuthContext] Entered guest mode (temporary session)');
+      Logger.info('AuthContext', 'Entered guest mode (temporary session)');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to enter guest mode';
       setError(errorMessage);
@@ -592,7 +592,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
 
       // Note: No AsyncStorage operations needed since guest mode is not persisted
 
-      console.log('[AuthContext] Exited guest mode - state cleaned up');
+      Logger.info('AuthContext', 'Exited guest mode - state cleaned up');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to exit guest mode';
       setError(errorMessage);
@@ -617,7 +617,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
 
     try {
       setHasChannel(true);
-      console.log('Creating channel:', {name, description});
+      Logger.debug('AuthContext', 'Creating channel:', {name, description});
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to create channel';
@@ -663,13 +663,13 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
   // Add this to the AuthContext component where user state is managed
   useEffect(() => {
     if (isAuthenticated && user?.id) {
-      console.log(`🔄 User authenticated, starting services for user ${user.id}`);
+      Logger.info('AuthContext', `🔄 User authenticated, starting services for user ${user.id}`);
 
       // Start ping service for online status
       LastSeenService.startTracking();
 
       return () => {
-        console.log('🔄 Cleaning up services on auth context unmount');
+        Logger.debug('AuthContext', '🔄 Cleaning up services on auth context unmount');
         LastSeenService.stopTracking();
       };
     }

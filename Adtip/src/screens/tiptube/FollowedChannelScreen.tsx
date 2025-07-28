@@ -5,11 +5,11 @@ import {
   StyleSheet,
   Image,
   TouchableOpacity,
-  FlatList,
   Dimensions,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { GridFlatList } from '../../components/common/OptimizedFlatList';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -232,15 +232,22 @@ const FollowedChannelScreen: React.FC = () => {
       />
 
       {/* Channels Grid */}
-      <FlatList
+      <GridFlatList
         data={channels}
         renderItem={renderChannelCard}
-        keyExtractor={(item) => `channel-${item.id}`}
+        idField="id"
+        debugName="FollowedChannels"
         numColumns={2}
+        customOptimizations={{
+          removeClippedSubviews: true,
+          initialNumToRender: 8,
+          maxToRenderPerBatch: 6,
+          windowSize: 10,
+          showsVerticalScrollIndicator: false,
+        }}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         columnWrapperStyle={styles.row}
         contentContainerStyle={styles.gridContent}
-        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
         }

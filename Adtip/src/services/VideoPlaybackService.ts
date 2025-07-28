@@ -3,6 +3,7 @@
 // Automatically selects optimal playback method based on video metadata
 
 import { CLOUDFLARE_STREAM_CONFIG } from '../config/cloudflareConfig';
+import { Logger } from '../utils/ProductionLogger';
 
 export interface VideoMetadata {
   id: number;
@@ -363,7 +364,7 @@ class VideoPlaybackService {
       ...additionalData,
     };
 
-    console.log('[VideoPlaybackService] Analytics:', analytics);
+    Logger.debug('VideoPlaybackService', 'Analytics:', analytics);
     
     // Here you could send analytics to your backend
     // this.sendAnalytics(analytics);

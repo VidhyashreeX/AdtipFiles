@@ -7,6 +7,7 @@ import { FCM_SERVER_URL, FCM_CHAT_SERVER_URL } from '../constants/api';
 import { Platform } from 'react-native';
 import messaging, { AuthorizationStatus } from '@react-native-firebase/messaging';
 import FirebaseService from './FirebaseService';
+import { Logger } from '../utils/ProductionLogger';
 import {
   ApiResponse,
   OtpLoginRequest,
@@ -280,18 +281,18 @@ apiClient.interceptors.request.use(
 // Add response interceptor for logging and error handling
 apiClient.interceptors.response.use(
   response => {
-    // Log raw response details
-    console.log('📥 API RESPONSE:', {
-      method: response.config.method?.toUpperCase(),
-      url: response.config.url,
-      baseURL: response.config.baseURL,
-      fullURL: `${response.config.baseURL || ''}${response.config.url || ''}`,
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers,
-      data: response.data,
-      timestamp: new Date().toISOString()
-    });
+    // Log raw response details using ProductionLogger
+    Logger.network('ApiService',
+      response.config.method?.toUpperCase() || 'UNKNOWN',
+      `${response.config.baseURL || ''}${response.config.url || ''}`,
+      response.status,
+      {
+        statusText: response.statusText,
+        headers: response.headers,
+        data: response.data,
+        timestamp: new Date().toISOString()
+      }
+    );
     return response;
   },
   async error => {
@@ -1695,8 +1696,8 @@ export default class ApiService {
    */
   static async sendChatMessage(payload: SendChatMessageRequest): Promise<SendChatMessageResponse> {
     try {
-      console.log('🚀 [ApiService] Making direct call to FCM Chat Server for send-message:', FCM_CHAT_SERVER_URL);
-      console.log('🚀 [ApiService] Chat payload:', JSON.stringify(payload, null, 2));
+      Logger.debug('ApiService', 'Making direct call to FCM Chat Server for send-message:', FCM_CHAT_SERVER_URL);
+      Logger.debug('ApiService', 'Chat payload:', JSON.stringify(payload, null, 2));
 
       // Get auth token for authenticated requests
       const authToken = await AsyncStorage.getItem('accessToken') || await AsyncStorage.getItem('@auth_token');
