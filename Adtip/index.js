@@ -13,8 +13,16 @@ import messaging from '@react-native-firebase/messaging';
 import ReliableCallManager from './src/services/calling/ReliableCallManager';
 
 // Register VideoSDK FIRST - Critical for proper initialization
-register();
-console.log('[Index] VideoSDK registered successfully');
+// Enhanced registration with error handling for WebSocket stability
+try {
+  console.log('[Index] Registering VideoSDK...');
+  register();
+  console.log('[Index] VideoSDK registered successfully');
+} catch (error) {
+  console.error('[Index] VideoSDK registration failed:', error);
+  // Don't throw here as it would prevent app startup
+  // The VideoSDKService will handle re-initialization if needed
+}
 
 // Initialize Firebase if not already initialized (v22.2.1 compatible)
 if (getApps().length === 0) {

@@ -28,7 +28,7 @@ import { useCallStore, CallSession } from '../../stores/callStoreSimplified'
 import CallController from '../../services/calling/CallController'
 import { MainNavigatorParamList } from '../../types/navigation'
 import VideoSDKService from '../../services/videosdk/VideoSDKService'
-import { logError } from '../../utils/ProductionLogger'
+import { logError, logWarn, logVideoSDK, logCall } from '../../utils/ProductionLogger'
 import SafeAreaEnforcer from '../../components/common/SafeAreaEnforcer'
 import { useSafeAreaStyle } from '../../utils/SafeAreaUtils'
 
@@ -423,7 +423,7 @@ const MeetingContent = () => {
             await backgroundMediaService.initializeForBackgroundCall(session.type)
           }
         } catch (error) {
-          console.warn('[MeetingContent] Error initializing background media:', error)
+          logWarn('MeetingContent', 'Error initializing background media', error)
         }
       }
       
@@ -435,7 +435,7 @@ const MeetingContent = () => {
       try {
         // Ensure we have a valid meeting and session before joining
         if (!meeting || !session?.sessionId) {
-          console.warn('[MeetingContent] Cannot join - missing meeting or session')
+          logWarn('MeetingContent', 'Cannot join - missing meeting or session')
           return
         }
 
@@ -473,7 +473,7 @@ const MeetingContent = () => {
           actions.setStatus('in_call')
         }
       } catch (err: any) {
-        console.warn(`[MeetingContent] Join attempt ${joinAttemptsRef.current} failed`, err?.message || err)
+        logWarn('MeetingContent', `Join attempt ${joinAttemptsRef.current} failed: ${err?.message || err}`)
 
         // Check for WebSocket specific errors
         const errorMessage = err?.message || String(err)
@@ -491,7 +491,7 @@ const MeetingContent = () => {
         if (joinAttemptsRef.current < MAX_ATTEMPTS) {
           // Enhanced retry logic with WebSocket reconnection
           if (isWebSocketError || isVideoSDKError) {
-            console.log('[MeetingContent] WebSocket/VideoSDK error detected, attempting reconnection')
+            logVideoSDK('MeetingContent', 'WebSocket/VideoSDK error detected, attempting reconnection')
 
             try {
               // Try to reconnect VideoSDK WebSocket
@@ -499,25 +499,25 @@ const MeetingContent = () => {
               const reconnected = await videoSDK.handleWebSocketReconnection(err, 1, 2)
 
               if (reconnected) {
-                console.log('[MeetingContent] WebSocket reconnection successful, retrying join')
+                logVideoSDK('MeetingContent', 'WebSocket reconnection successful, retrying join')
                 // Longer delay after reconnection to ensure stability
                 setTimeout(joinWithRetry, RETRY_DELAY_MS * 3)
               } else {
-                console.warn('[MeetingContent] WebSocket reconnection failed, using extended retry delay')
+                logWarn('MeetingContent', 'WebSocket reconnection failed, using extended retry delay')
                 setTimeout(joinWithRetry, RETRY_DELAY_MS * 2)
               }
             } catch (reconnectError) {
-              console.error('[MeetingContent] Error during WebSocket reconnection:', reconnectError)
+              logError('MeetingContent', 'Error during WebSocket reconnection', reconnectError)
               setTimeout(joinWithRetry, RETRY_DELAY_MS * 2)
             }
           } else {
             // Standard retry for non-WebSocket errors
             const retryDelay = RETRY_DELAY_MS
-            console.log(`[MeetingContent] Retrying in ${retryDelay}ms`)
+            logVideoSDK('MeetingContent', `Retrying in ${retryDelay}ms`)
             setTimeout(joinWithRetry, retryDelay)
           }
         } else {
-          console.error('[MeetingContent] All join attempts failed – ending call')
+          logError('MeetingContent', 'All join attempts failed – ending call')
           actions.setStatus('ended')
         }
       }
@@ -546,10 +546,10 @@ const MeetingContent = () => {
           ]).then(() => {
             logCall('[MeetingContent] Successfully left meeting on cleanup');
           }).catch((error) => {
-            console.warn('[MeetingContent] Error or timeout leaving meeting on cleanup:', error);
+            logWarn('MeetingContent', 'Error or timeout leaving meeting on cleanup', error);
           });
         } catch (error) {
-          console.warn('[MeetingContent] Error leaving meeting on cleanup:', error);
+          logWarn('MeetingContent', 'Error leaving meeting on cleanup', error);
         }
       }
 
@@ -750,22 +750,60 @@ const MeetingScreenSimple = () => {
   const isComponentActive = useRef(false) // Start as inactive until validated
   const hasInitialized = useRef(false)
   const isMountedRef = useRef(true)
+  const [videoSDKReady, setVideoSDKReady] = React.useState(false)
   
   // More comprehensive session validation
   const sessionIsValid = session?.sessionId && session?.meetingId && session?.token
   const callIsActive = status === 'in_call' || status === 'connecting' || status === 'outgoing'
 
+  // Initialize VideoSDK before creating MeetingProvider
+  useEffect(() => {
+    const initializeVideoSDK = async () => {
+      if (!sessionIsValid || !callIsActive) {
+        return
+      }
+
+      try {
+        logVideoSDK('MeetingScreenSimple', 'Initializing VideoSDK before MeetingProvider creation')
+        const videoSDK = VideoSDKService.getInstance()
+
+        if (!videoSDK.getInitializationStatus().initialized) {
+          logVideoSDK('MeetingScreenSimple', 'VideoSDK not initialized, initializing now...')
+          const success = await videoSDK.initialize()
+
+          if (!success) {
+            logError('MeetingScreenSimple', 'VideoSDK initialization failed', new Error('VideoSDK initialization returned false'))
+            return
+          }
+
+          // Wait for WebSocket to be ready
+          logVideoSDK('MeetingScreenSimple', 'Waiting for VideoSDK WebSocket to be ready...')
+          await videoSDK.waitForWebSocketReady()
+        }
+
+        logVideoSDK('MeetingScreenSimple', 'VideoSDK is ready, setting videoSDKReady to true')
+        setVideoSDKReady(true)
+      } catch (error) {
+        logError('MeetingScreenSimple', 'VideoSDK initialization error', error)
+        setVideoSDKReady(false)
+      }
+    }
+
+    initializeVideoSDK()
+  }, [sessionIsValid, callIsActive])
+
   // Debug logging for state changes
   useEffect(() => {
-    logCall('[MeetingScreenSimple] State changed:', {
+    logCall('MeetingScreenSimple', 'State changed', {
       sessionId: session?.sessionId,
       status,
       sessionIsValid,
       callIsActive,
+      videoSDKReady,
       isComponentActive: isComponentActive.current,
       hasInitialized: hasInitialized.current
     })
-  }, [session?.sessionId, status, sessionIsValid, callIsActive])
+  }, [session?.sessionId, status, sessionIsValid, callIsActive, videoSDKReady])
   
   // Global component tracking key
   const globalComponentKey = sessionIsValid ? `meeting-${session.sessionId}` : null
@@ -804,7 +842,7 @@ const MeetingScreenSimple = () => {
     // Check if another component is already handling this session
     const existingComponentId = global.meetingComponentInstances[globalComponentKey]
     if (existingComponentId && existingComponentId !== componentId.current) {
-      console.warn('[MeetingScreenSimple] Another component instance already exists for session:', session.sessionId, 'Existing ID:', existingComponentId, 'Current ID:', componentId.current, 'NOT ACTIVATING')
+      logWarn('MeetingScreenSimple', `Another component instance already exists for session: ${session.sessionId}. Existing ID: ${existingComponentId}, Current ID: ${componentId.current}. NOT ACTIVATING`)
       isComponentActive.current = false
       return
     }
@@ -868,12 +906,23 @@ const MeetingScreenSimple = () => {
   }
   
   if (!isComponentActive.current || !hasInitialized.current) {
-    logCall('[MeetingScreenSimple] Component not active or not initialized, returning null')
+    logCall('MeetingScreenSimple', 'Component not active or not initialized, returning null')
     return null
   }
-  
+
+  // Check if VideoSDK is ready before creating MeetingProvider
+  if (!videoSDKReady) {
+    logVideoSDK('MeetingScreenSimple', 'VideoSDK not ready yet, showing loading...')
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#1178F8" />
+        <Text style={styles.loadingText}>Initializing VideoSDK...</Text>
+      </View>
+    )
+  }
+
   // Only create MeetingProvider if this is the active component instance AND we have a valid session
-  logCall('[MeetingScreenSimple] Rendering active component for session:', session.sessionId, 'componentId:', componentId.current)
+  logCall('MeetingScreenSimple', 'Rendering active component for session', { sessionId: session.sessionId, componentId: componentId.current })
 
   const meetingConfig = {
     meetingId: session.meetingId,
@@ -886,7 +935,7 @@ const MeetingScreenSimple = () => {
     }
   }
 
-  logCall('[MeetingScreenSimple] MeetingProvider config:', {
+  logCall('MeetingScreenSimple', 'MeetingProvider config', {
     token: session.token ? 'present' : 'missing',
     config: meetingConfig
   })

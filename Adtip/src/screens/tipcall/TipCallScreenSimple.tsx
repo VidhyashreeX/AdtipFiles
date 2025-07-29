@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   ScrollView,
   TextInput,
-  Animated,
   Modal,
 } from 'react-native'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
@@ -1406,7 +1405,7 @@ const TipCallScreenSimple = () => {
 
       {/* Enhanced Search indicator */}
       {debouncedSearch !== '' && (
-        <Animated.View style={[
+        <View style={[
           styles.searchIndicator,
           { backgroundColor: colors.card, borderColor: colors.border }
         ]}>
@@ -1420,7 +1419,7 @@ const TipCallScreenSimple = () => {
           >
             <Icon name="x" size={14} color={colors.text.secondary} />
           </TouchableOpacity>
-        </Animated.View>
+        </View>
       )}
 
       {/* Premium banner render */}

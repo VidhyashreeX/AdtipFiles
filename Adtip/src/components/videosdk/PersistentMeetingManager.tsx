@@ -273,7 +273,7 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
         logCall('[PersistentMeetingContent] Joining meeting with ID:', config.meetingId)
         await meeting.join()
         joinedRef.current = true
-        logCall('[PersistentMeetingContent] Successfully joined meeting')
+        logCall('[PersistentMeetingContent] Successfully joined meeting', config.meetingId)
         
         // Update status based on call direction
         if (status === 'outgoing') {
@@ -303,21 +303,32 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
             logCall('PersistentMeetingContent', 'WebSocket/VideoSDK error detected, attempting reconnection')
 
             try {
-              // Try to reconnect VideoSDK WebSocket
+              // Ensure VideoSDK is properly initialized before reconnection
               const videoSDK = VideoSDKService.getInstance()
-              const reconnected = await videoSDK.handleWebSocketReconnection(err, 1, 2)
 
-              if (reconnected) {
+              // Check if VideoSDK needs re-initialization
+              const status = videoSDK.getInitializationStatus()
+              if (!status.initialized || !status.websocketReady) {
+                logCall('PersistentMeetingContent', 'Re-initializing VideoSDK before reconnection')
+                await videoSDK.initialize()
+              }
+
+              // Attempt WebSocket reconnection with enhanced error handling
+              const reconnected = await videoSDK.handleWebSocketReconnection(err, 1, 3)
+
+              if (reconnected && videoSDK.isWebSocketHealthy()) {
                 logCall('PersistentMeetingContent', 'WebSocket reconnection successful, retrying join')
                 // Longer delay after reconnection to ensure stability
-                setTimeout(joinMeeting, 2000)
+                setTimeout(joinMeeting, 3000)
               } else {
-                logWarn('PersistentMeetingContent', 'WebSocket reconnection failed, using standard retry')
-                setTimeout(joinMeeting, 1500)
+                logWarn('PersistentMeetingContent', 'WebSocket reconnection failed, using extended retry')
+                setTimeout(joinMeeting, 2500)
               }
             } catch (reconnectError) {
               logError('PersistentMeetingContent', 'Error during WebSocket reconnection', reconnectError)
-              setTimeout(joinMeeting, 1500)
+              // Fallback to standard retry with progressive delay
+              const retryDelay = 1500 * joinAttemptsRef.current
+              setTimeout(joinMeeting, retryDelay)
             }
           } else {
             // Standard retry for non-WebSocket errors
@@ -498,17 +509,18 @@ const PersistentMeetingManager: React.FC = () => {
           meetingId: currentConfig.meetingId,
           micEnabled: true,
           webcamEnabled: currentConfig.callType === 'video',
-          name: "User",
+          name: currentConfig.peerName || "User",
+          // Standard notification configuration
           notification: {
             title: `${currentConfig.callType} call`,
             message: `with ${currentConfig.peerName}`
           }
         }}
       >
-        <PersistentMeetingContent 
+        <PersistentMeetingContent
           ref={meetingContentRef}
-          config={currentConfig} 
-          status={status} 
+          config={currentConfig}
+          status={status}
         />
       </MeetingProvider>
     </View>
@@ -522,11 +534,11 @@ export const startPersistentCall = (config: MeetingConfig) => {
 
     // Validate config
     if (!config.sessionId || !config.meetingId || !config.token) {
-      logError('[PersistentMeetingManager] Invalid config provided:', {
+      logError('[PersistentMeetingManager] Invalid config provided:', JSON.stringify({
         sessionId: !!config.sessionId,
         meetingId: !!config.meetingId,
         token: !!config.token
-      })
+      }))
       throw new Error('Invalid meeting configuration')
     }
 
@@ -535,7 +547,7 @@ export const startPersistentCall = (config: MeetingConfig) => {
       try {
         globalStateSetters.resetCall()
       } catch (resetError) {
-        logWarn('[PersistentMeetingManager] Error resetting previous call:', resetError)
+        logWarn('[PersistentMeetingManager] Error resetting previous call:', String(resetError))
       }
     }
 
@@ -543,13 +555,13 @@ export const startPersistentCall = (config: MeetingConfig) => {
       globalStateSetters.setCurrentConfig(config)
       globalStateSetters.setStatus(config.direction === 'outgoing' ? 'connecting' : 'connecting')
       globalStateSetters.setIsVisible(true)
-      logCall('[PersistentMeetingManager] Persistent call started successfully')
+      logCall('[PersistentMeetingManager] Persistent call started successfully', config.sessionId)
     } else {
-      logError('[PersistentMeetingManager] Global state setters not available')
+      logError('[PersistentMeetingManager] Global state setters not available', 'Missing global state')
       throw new Error('Persistent meeting manager not initialized')
     }
   } catch (error) {
-    logError('[PersistentMeetingManager] Error starting persistent call:', error)
+    logError('[PersistentMeetingManager] Error starting persistent call:', String(error))
 
     // Try to update call store to indicate error
     try {
@@ -557,7 +569,7 @@ export const startPersistentCall = (config: MeetingConfig) => {
       const store = useCallStore.getState()
       store.actions.setStatus('ended')
     } catch (storeError) {
-      logError('[PersistentMeetingManager] Error updating call store on failure:', storeError)
+      logError('[PersistentMeetingManager] Error updating call store on failure:', String(storeError))
     }
 
     throw error

@@ -7,6 +7,7 @@ import {
   Constants
 } from '@videosdk.live/react-native-sdk';
 import { CallSettings, CallStatus, CallMetrics } from '../../types/videosdk';
+import { logError, logWarn, logVideoSDK } from '../../utils/ProductionLogger';
 
 export interface UseVideoSDKMeetingProps {
   // Add required configuration properties
@@ -69,7 +70,7 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
     onParticipantJoined: () => updateParticipantCount(),
     onParticipantLeft: () => updateParticipantCount(),
     onError: async (error) => {
-      console.error('[VideoSDKMeeting] Meeting error:', error);
+      logError('VideoSDKMeeting', 'Meeting error', error);
 
       // Enhanced error handling for WebSocket and VideoSDK errors
       const errorMessage = error?.message || String(error)
@@ -87,7 +88,7 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
       )
 
       if (isWebSocketError || isVideoSDKError) {
-        console.log('[VideoSDKMeeting] WebSocket/VideoSDK error detected, attempting recovery');
+        logVideoSDK('VideoSDKMeeting', 'WebSocket/VideoSDK error detected, attempting recovery');
 
         try {
           // Import VideoSDKService dynamically to avoid circular dependency
@@ -98,14 +99,14 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
           const reconnected = await videoSDK.handleWebSocketReconnection(error, 1, 2);
 
           if (reconnected) {
-            console.log('[VideoSDKMeeting] WebSocket reconnection successful');
+            logVideoSDK('VideoSDKMeeting', 'WebSocket reconnection successful');
             // Don't set status to failed immediately, let the meeting retry
             return;
           } else {
-            console.warn('[VideoSDKMeeting] WebSocket reconnection failed');
+            logWarn('VideoSDKMeeting', 'WebSocket reconnection failed');
           }
         } catch (reconnectError) {
-          console.error('[VideoSDKMeeting] Error during WebSocket reconnection:', reconnectError);
+          logError('VideoSDKMeeting', 'Error during WebSocket reconnection', reconnectError);
         }
       }
 
@@ -153,7 +154,7 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
   // IMPORTANT: Join function implementation
   const joinMeeting = useCallback(() => {
     if (!meetingConfig.meetingId || !meetingConfig.token) {
-      console.error('[VideoSDKMeeting] Cannot join meeting: Missing meetingId or token');
+      logError('VideoSDKMeeting', 'Cannot join meeting: Missing meetingId or token');
       return;
     }
     if (hasJoinedRef.current) {
@@ -166,12 +167,12 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
         mMeeting.join();
         hasJoinedRef.current = true;
       } else {
-        console.error('[VideoSDKMeeting] join method is not available on mMeeting object:', mMeeting);
+        logError('VideoSDKMeeting', 'join method is not available on mMeeting object', mMeeting);
         setCallStatus('failed');
         props.onError?.(new Error('Join method not available'));
       }
     } catch (error) {
-      console.error('[VideoSDKMeeting] Error joining meeting:', error);
+      logError('VideoSDKMeeting', 'Error joining meeting', error);
       setCallStatus('failed');
       props.onError?.(error);
     }
@@ -217,7 +218,7 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
           logCall('[VideoSDKMeeting] Leaving meeting on unmount');
           mMeeting.leave();
         } catch (e) {
-          console.error('[VideoSDKMeeting] Error leaving meeting on unmount:', e);
+          logError('VideoSDKMeeting', 'Error leaving meeting on unmount', e);
         }
       }
       // Reset hasJoinedRef
