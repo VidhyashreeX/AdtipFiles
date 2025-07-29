@@ -18,6 +18,7 @@ import {
   CLOUDFLARE_PUBLIC_DOMAIN,
   UPLOAD_CONFIG
 } from '../config/cloudflareConfig';
+import { logDebug, logInfo, logWarn, logError } from '../utils/ProductionLogger';
 
 // Upload interfaces
 export interface UploadProgress {
@@ -158,7 +159,7 @@ class CloudflareUploadService {
       if (isVideo) {
         // For videos, use the file URI directly to avoid memory issues
         // This works with AWS SDK v3 and React Native
-        console.log('[CloudflareUpload] Using direct file URI for video upload:', normalizedPath);
+        logDebug('CloudflareUpload', 'Using direct file URI for video upload', { normalizedPath });
 
         // For React Native, we can use the file URI directly with fetch
         // which handles large files better than reading into memory
@@ -208,7 +209,7 @@ class CloudflareUploadService {
         return bytes;
       }
     } catch (error) {
-      console.error('[CloudflareUpload] Error reading file:', error);
+      logError('CloudflareUpload', 'Error reading file', error);
       throw new Error(`Failed to read file for upload: ${error.message}`);
     }
   }
@@ -218,7 +219,7 @@ class CloudflareUploadService {
    * Read file as Uint8Array for upload (React Native compatible)
    */
   private async readFileAsUint8Array(filePath: string): Promise<Uint8Array> {
-    console.warn('[CloudflareUpload] readFileAsUint8Array is deprecated, use readFileForUpload instead');
+    logWarn('CloudflareUpload', 'readFileAsUint8Array is deprecated, use readFileForUpload instead');
     return this.readFileForUpload(filePath, false) as Promise<Uint8Array>;
   }
 
@@ -233,7 +234,7 @@ class CloudflareUploadService {
     onProgress?: (progress: UploadProgress) => void
   ): Promise<UploadResult> {
     try {
-      console.log('[CloudflareUpload] Starting upload:', filePath);
+      logInfo('CloudflareUpload', 'Starting upload', { filePath });
 
       // Determine file type and validation rules based on file extension
       const fileExtension = filePath.split('.').pop()?.toLowerCase() || '';
@@ -259,14 +260,14 @@ class CloudflareUploadService {
       await this.validateFile(filePath, maxSize, allowedFormats);
 
       // Get file info and validate
-      console.log('[CloudflareUpload] Checking file before upload:', filePath);
+      logDebug('CloudflareUpload', 'Checking file before upload', { filePath });
       const fileExists = await RNFS.exists(filePath);
       if (!fileExists) {
         throw new Error(`File does not exist: ${filePath}`);
       }
 
       const fileInfo = await RNFS.stat(filePath);
-      console.log('[CloudflareUpload] File info from RNFS.stat:', {
+      logDebug('CloudflareUpload', 'File info from RNFS.stat', {
         path: filePath,
         size: fileInfo.size,
         isFile: fileInfo.isFile(),
@@ -283,7 +284,7 @@ class CloudflareUploadService {
 
       // For large videos, use presigned URL upload method
       if (isVideo && fileInfo.size > UPLOAD_CONFIG.VIDEO_PRESIGNED_THRESHOLD) {
-        //console.log('[CloudflareUpload] Large video detected, using presigned URL method');
+        logDebug('CloudflareUpload', 'Large video detected, using presigned URL method');
         return this.uploadVideoWithPresignedUrl(filePath, folder, fileName, userId, onProgress);
       }
       
@@ -294,7 +295,7 @@ class CloudflareUploadService {
       const contentType = this.getContentType(filePath);
 
       // Read file using appropriate method for file type
-      console.log('[CloudflareUpload] Reading file data, isVideo:', isVideo, 'fileSize:', fileInfo.size);
+      logDebug('CloudflareUpload', 'Reading file data', { isVideo, fileSize: fileInfo.size });
       const fileData = await this.readFileForUpload(filePath, isVideo);
 
       // Simulate progress if callback provided
@@ -303,7 +304,7 @@ class CloudflareUploadService {
       }
 
       // Log upload details for debugging
-      console.log('[CloudflareUpload] Preparing upload command:', {
+      logDebug('CloudflareUpload', 'Preparing upload command', {
         bucket: this.bucketName,
         key,
         contentType,
@@ -329,9 +330,9 @@ class CloudflareUploadService {
         },
       });
 
-      console.log('[CloudflareUpload] Sending upload command to R2...');
+      logDebug('CloudflareUpload', 'Sending upload command to R2...');
       const response = await this.s3Client.send(command);
-      console.log('[CloudflareUpload] R2 response:', response);
+      logDebug('CloudflareUpload', 'R2 response received', { response });
 
       // Simulate progress completion
       if (onProgress) {
@@ -341,7 +342,7 @@ class CloudflareUploadService {
       // Generate public URL using custom domain (matches backend ReelsService.js)
       const publicUrl = `${CLOUDFLARE_PUBLIC_DOMAIN}/${key}`;
 
-      console.log('[CloudflareUpload] Upload successful:', {
+      logInfo('CloudflareUpload', 'Upload successful', {
         key,
         size: fileInfo.size,
         contentType,
@@ -357,7 +358,7 @@ class CloudflareUploadService {
       };
 
     } catch (error: any) {
-      console.error('[CloudflareUpload] Upload failed:', error);
+      logError('CloudflareUpload', 'Upload failed', error);
 
       // Enhanced error handling with specific error types
       let errorMessage = 'Upload failed';
@@ -404,7 +405,7 @@ class CloudflareUploadService {
     onProgress?: (progress: UploadProgress) => void
   ): Promise<UploadResult> {
     try {
-      console.log('[CloudflareUpload] Starting presigned URL upload for video:', filePath);
+      logInfo('CloudflareUpload', 'Starting presigned URL upload for video', { filePath });
 
       // Get file info
       const fileInfo = await RNFS.stat(filePath);
@@ -419,7 +420,7 @@ class CloudflareUploadService {
         userId
       );
 
-      console.log('[CloudflareUpload] Generated presigned URL for upload');
+      logDebug('CloudflareUpload', 'Generated presigned URL for upload');
 
       // Normalize file path for React Native
       let normalizedPath = filePath;
@@ -452,7 +453,7 @@ class CloudflareUploadService {
         onProgress({ loaded: fileInfo.size, total: fileInfo.size, percentage: 100 });
       }
 
-      console.log('[CloudflareUpload] Presigned URL upload successful');
+      logInfo('CloudflareUpload', 'Presigned URL upload successful');
 
       return {
         success: true,
@@ -462,7 +463,7 @@ class CloudflareUploadService {
         contentType,
       };
     } catch (error) {
-      console.error('[CloudflareUpload] Presigned URL upload failed:', error);
+      logError('CloudflareUpload', 'Presigned URL upload failed', error);
       return {
         success: false,
         url: '',
@@ -488,7 +489,7 @@ class CloudflareUploadService {
     let thumbnailResult: UploadResult | undefined;
 
     try {
-      console.log('[CloudflareUpload] Starting TipShorts batch upload', {
+      logInfo('CloudflareUpload', 'Starting TipShorts batch upload', {
         videoPath,
         thumbnailPath,
         userId
@@ -497,7 +498,7 @@ class CloudflareUploadService {
       // Upload video directly to /videos folder
       if (onProgress) onProgress({ loaded: 0, total: 100, percentage: 0 });
       
-      console.log('[CloudflareUpload] Uploading TipShorts video to /videos...');
+      logDebug('CloudflareUpload', 'Uploading TipShorts video to /videos...');
       videoResult = await this.uploadFile(
         videoPath,
         'videos', // Direct to videos folder
@@ -515,14 +516,14 @@ class CloudflareUploadService {
       );
 
       if (!videoResult.success) {
-        console.error('[CloudflareUpload] TipShorts video upload failed:', videoResult.error);
+        logError('CloudflareUpload', 'TipShorts video upload failed', { error: videoResult.error });
         errors.push(`Video upload failed: ${videoResult.error}`);
       } else {
-        console.log('[CloudflareUpload] TipShorts video upload successful:', videoResult.url);
+        logInfo('CloudflareUpload', 'TipShorts video upload successful', { url: videoResult.url });
       }
 
       // Upload thumbnail directly to /images folder
-      console.log('[CloudflareUpload] Uploading TipShorts thumbnail to /images...');
+      logDebug('CloudflareUpload', 'Uploading TipShorts thumbnail to /images...');
       thumbnailResult = await this.uploadFile(
         thumbnailPath,
         'images', // Direct to images folder
@@ -540,10 +541,10 @@ class CloudflareUploadService {
       );
 
       if (!thumbnailResult.success) {
-        console.error('[CloudflareUpload] TipShorts thumbnail upload failed:', thumbnailResult.error);
+        logError('CloudflareUpload', 'TipShorts thumbnail upload failed', { error: thumbnailResult.error });
         errors.push(`Thumbnail upload failed: ${thumbnailResult.error}`);
       } else {
-        console.log('[CloudflareUpload] TipShorts thumbnail upload successful:', thumbnailResult.url);
+        logInfo('CloudflareUpload', 'TipShorts thumbnail upload successful', { url: thumbnailResult.url });
       }
 
     } catch (error: any) {
@@ -572,7 +573,7 @@ class CloudflareUploadService {
     let thumbnailResult: UploadResult | undefined;
 
     try {
-      console.log('[CloudflareUpload] Starting TipTube batch upload', {
+      logInfo('CloudflareUpload', 'Starting TipTube batch upload', {
         videoPath,
         thumbnailPath,
         userId
@@ -581,7 +582,7 @@ class CloudflareUploadService {
       // Upload video directly to /videos folder
       if (onProgress) onProgress({ loaded: 0, total: 100, percentage: 0 });
       
-      console.log('[CloudflareUpload] Uploading TipTube video to /videos...');
+      logDebug('CloudflareUpload', 'Uploading TipTube video to /videos...');
       videoResult = await this.uploadFile(
         videoPath,
         'videos', // Direct to videos folder
@@ -599,14 +600,14 @@ class CloudflareUploadService {
       );
 
       if (!videoResult.success) {
-        console.error('[CloudflareUpload] TipTube video upload failed:', videoResult.error);
+        logError('CloudflareUpload', 'TipTube video upload failed', { error: videoResult.error });
         errors.push(`Video upload failed: ${videoResult.error}`);
       } else {
-        console.log('[CloudflareUpload] TipTube video upload successful:', videoResult.url);
+        logInfo('CloudflareUpload', 'TipTube video upload successful', { url: videoResult.url });
       }
 
       // Upload thumbnail directly to /images folder
-      console.log('[CloudflareUpload] Uploading TipTube thumbnail to /images...');
+      logDebug('CloudflareUpload', 'Uploading TipTube thumbnail to /images...');
       thumbnailResult = await this.uploadFile(
         thumbnailPath,
         'images', // Direct to images folder
@@ -624,10 +625,10 @@ class CloudflareUploadService {
       );
 
       if (!thumbnailResult.success) {
-        console.error('[CloudflareUpload] TipTube thumbnail upload failed:', thumbnailResult.error);
+        logError('CloudflareUpload', 'TipTube thumbnail upload failed', { error: thumbnailResult.error });
         errors.push(`Thumbnail upload failed: ${thumbnailResult.error}`);
       } else {
-        console.log('[CloudflareUpload] TipTube thumbnail upload successful:', thumbnailResult.url);
+        logInfo('CloudflareUpload', 'TipTube thumbnail upload successful', { url: thumbnailResult.url });
       }
 
     } catch (error: any) {
@@ -675,7 +676,7 @@ class CloudflareUploadService {
       };
 
     } catch (error: any) {
-      console.error('[CloudflareUpload] Presigned URL generation failed:', error);
+      logError('CloudflareUpload', 'Presigned URL generation failed', error);
       throw new Error(`Failed to generate presigned URL: ${error.message}`);
     }
   }
@@ -696,7 +697,7 @@ class CloudflareUploadService {
       return await getSignedUrl(this.s3Client, getCommand, { expiresIn });
 
     } catch (error: any) {
-      console.error('[CloudflareUpload] Presigned download URL generation failed:', error);
+      logError('CloudflareUpload', 'Presigned download URL generation failed', error);
       throw new Error(`Failed to generate download URL: ${error.message}`);
     }
   }
@@ -718,14 +719,14 @@ class CloudflareUploadService {
       // Extract the key (path without leading slash)
       const key = url.pathname.startsWith('/') ? url.pathname.slice(1) : url.pathname;
 
-      /* console.log('[CloudflareUpload] Extracted key from URL:', {
+      logDebug('CloudflareUpload', 'Extracted key from URL', {
         originalUrl: cloudflareUrl,
         extractedKey: key
-      });*/
+      });
 
       return key || null;
     } catch (error) {
-      console.error('[CloudflareUpload] Failed to extract key from URL:', cloudflareUrl, error);
+      logError('CloudflareUpload', 'Failed to extract key from URL', error, { cloudflareUrl });
       return null;
     }
   }
@@ -741,7 +742,7 @@ class CloudflareUploadService {
       const key = this.extractKeyFromUrl(cloudflareUrl);
 
       if (!key) {
-        console.warn('[CloudflareUpload] Could not extract key from URL:', cloudflareUrl);
+        logWarn('CloudflareUpload', 'Could not extract key from URL', { cloudflareUrl });
         // Return original URL as fallback
         return cloudflareUrl;
       }
@@ -751,7 +752,7 @@ class CloudflareUploadService {
       const cached = this.presignedUrlCache.get(cacheKey);
 
       if (cached && cached.expiresAt > Date.now()) {
-        console.log('[CloudflareUpload] Using cached presigned URL for key:', key);
+        logDebug('CloudflareUpload', 'Using cached presigned URL for key', { key });
         return cached.url;
       }
 
@@ -769,15 +770,15 @@ class CloudflareUploadService {
             expiresAt
           });
 
-          console.log('[CloudflareUpload] Generated and cached presigned URL for key:', key);
+          logDebug('CloudflareUpload', 'Generated and cached presigned URL for key', { key });
           return presignedUrl;
         }
       } catch (presignedError) {
-        console.error('[CloudflareUpload] Failed to generate presigned URL, trying fallback:', presignedError);
+        logError('CloudflareUpload', 'Failed to generate presigned URL, trying fallback', presignedError);
 
         // Try direct R2 URL as fallback
         const fallbackUrl = cloudflareUrl.replace('theadtip.in', '94e2ffe1e7d5daf0d3de8d11c55dd2d6.r2.cloudflarestorage.com');
-        console.log('[CloudflareUpload] Using fallback R2 URL:', fallbackUrl);
+        logDebug('CloudflareUpload', 'Using fallback R2 URL', { fallbackUrl });
         return fallbackUrl;
       }
 
@@ -785,7 +786,7 @@ class CloudflareUploadService {
       return cloudflareUrl;
 
     } catch (error: any) {
-      console.error('[CloudflareUpload] Failed to generate presigned URL from public URL:', error);
+      logError('CloudflareUpload', 'Failed to generate presigned URL from public URL', error);
       // Return original URL as last resort
       return cloudflareUrl;
     }
@@ -814,11 +815,11 @@ class CloudflareUploadService {
       });
 
       await this.s3Client.send(command);
-      console.log('[CloudflareUpload] File deleted successfully:', key);
+      logInfo('CloudflareUpload', 'File deleted successfully', { key });
       return true;
 
     } catch (error: any) {
-      console.error('[CloudflareUpload] File deletion failed:', error);
+      logError('CloudflareUpload', 'File deletion failed', error);
       return false;
     }
   }
@@ -842,7 +843,7 @@ class CloudflareUploadService {
    */
   async testFileReading(filePath: string): Promise<{ success: boolean; error?: string; details?: any }> {
     try {
-      console.log('[CloudflareUpload] Testing file reading for:', filePath);
+      logDebug('CloudflareUpload', 'Testing file reading for', { filePath });
 
       // Check if file exists
       const exists = await RNFS.exists(filePath);
@@ -852,7 +853,7 @@ class CloudflareUploadService {
 
       // Get file stats
       const stats = await RNFS.stat(filePath);
-      console.log('[CloudflareUpload] File stats:', stats);
+      logDebug('CloudflareUpload', 'File stats', { stats });
 
       // Test different reading methods
       const results: any = {
@@ -921,16 +922,16 @@ class CloudflareUploadService {
    */
   async testConnection(): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log('[CloudflareUpload] Testing connection to Cloudflare R2...');
+      logDebug('CloudflareUpload', 'Testing connection to Cloudflare R2...');
 
       // Try to list buckets (this will validate our credentials)
       const result = await this.s3Client.send(new ListBucketsCommand({}));
 
-      console.log('[CloudflareUpload] Connection test successful. Buckets found:', result.Buckets?.length || 0);
+      logInfo('CloudflareUpload', 'Connection test successful', { bucketsFound: result.Buckets?.length || 0 });
       return { success: true };
 
     } catch (error: any) {
-      console.error('[CloudflareUpload] Connection test failed:', error);
+      logError('CloudflareUpload', 'Connection test failed', error);
 
       let errorMessage = 'Connection test failed';
       if (error.code === 'CredentialsError') {

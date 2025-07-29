@@ -1,15 +1,21 @@
 import React from 'react';
 import FastImage, { FastImageProps } from '@d11/react-native-fast-image';
 import { getProfileImageUrl } from './ProfileImageUtils';
+import { logWarn } from './ProductionLogger';
 
-// Helper to convert string/null/undefined to FastImage source with proper URL handling
-function toSource(src: string | null | undefined, isProfile: boolean = false) {
-  // Debug logging for source type
+// Helper to convert string/object/null/undefined to FastImage source with proper URL handling
+function toSource(src: string | { uri: string } | null | undefined, isProfile: boolean = false) {
+  // Handle object sources (e.g., {uri: string})
+  if (src && typeof src === 'object' && 'uri' in src) {
+    return toSource(src.uri, isProfile); // Recursively process the URI string
+  }
+
+  // Debug logging for unexpected source types
   if (src && typeof src !== 'string') {
-    console.warn('[FastImageOptimizer] toSource received non-string:', typeof src, src);
+    logWarn('FastImageOptimizer', 'toSource received unexpected type', { type: typeof src, src });
     return undefined;
   }
-  
+
   if (!src || src === 'null' || src === 'undefined') {
     return undefined;
   }
@@ -24,7 +30,7 @@ function toSource(src: string | null | undefined, isProfile: boolean = false) {
 }
 
 type ImgProps = {
-  source: string | null | undefined;
+  source: string | { uri: string } | null | undefined;
   style?: any;
 } & Omit<FastImageProps, 'source' | 'style'>;
 
