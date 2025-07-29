@@ -182,8 +182,8 @@ class VideoSDKService {
       meetingId,
       token,
       participantName,
-      micEnabled: options.micEnabled ?? false,
-      webcamEnabled: options.webcamEnabled ?? false,
+      micEnabled: options.micEnabled ?? true, // Default to unmuted for better UX
+      webcamEnabled: options.webcamEnabled ?? false, // Keep camera off by default for privacy
     };
   }
 

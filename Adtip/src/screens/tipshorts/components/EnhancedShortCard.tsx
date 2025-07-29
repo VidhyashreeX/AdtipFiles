@@ -99,49 +99,63 @@ const OptimizedVideoPlayer = memo(({
     }
   }, [isValidUri, source?.uri, safeSetHasError, safeSetIsLoaded]);
 
-  // Cleanup on unmount to prevent memory leaks
+  // Throttled seeking to prevent excessive operations
+  const lastSeekTimeRef = useRef(0);
+  const SEEK_THROTTLE_MS = 500; // Minimum time between seek operations
+
+  const throttledSeek = useCallback((position: number) => {
+    const now = Date.now();
+    if (now - lastSeekTimeRef.current < SEEK_THROTTLE_MS) {
+      return; // Skip if too soon since last seek
+    }
+
+    if (videoRef.current && isMountedRef.current) {
+      try {
+        lastSeekTimeRef.current = now;
+        videoRef.current.seek(position);
+      } catch (error) {
+        Logger.warn('OptimizedVideoPlayer', 'Error during throttled seek:', error);
+      }
+    }
+  }, []);
+
+  // Consolidated cleanup on unmount to prevent memory leaks
   useEffect(() => {
+    // Mark component as mounted
+    isMountedRef.current = true;
+
     return () => {
       // Mark component as unmounted
       isMountedRef.current = false;
 
-      // Force cleanup video resources
+      // Force cleanup video resources with error handling
       if (videoRef.current) {
         try {
-          // Pause and reset video position
-          videoRef.current.seek(0);
-          // Release video resources
+          // Stop video playback immediately
           videoRef.current.paused = true;
+          // Reset to beginning for next use
+          throttledSeek(0);
+          Logger.debug('OptimizedVideoPlayer', 'Video cleanup completed');
         } catch (error) {
-          Logger.warn('OptimizedVideoPlayer', 'Error during cleanup:', error);
+          Logger.warn('OptimizedVideoPlayer', 'Error during video cleanup:', error);
         }
       }
+
+      // Reset state to prevent memory leaks
+      setIsLoaded(false);
+      setHasError(false);
     };
-  }, []);
+  }, [throttledSeek]);
 
-  // Strict pause control - force pause when not active
+  // Optimized pause control - only when necessary
   useEffect(() => {
-    if (!isActive && videoRef.current) {
-      // Force pause the video immediately when it becomes inactive
-      try {
-        videoRef.current.seek(0); // Reset to beginning for better UX
-      } catch (error) {
-        Logger.warn('OptimizedVideoPlayer', 'Error seeking video:', error);
+    if (!isActive && videoRef.current && isMountedRef.current) {
+      // Only reset video if it was actually playing
+      if (!isPaused) {
+        throttledSeek(0);
       }
     }
-  }, [isActive]);
-
-  // Additional pause control based on global play state
-  useEffect(() => {
-    if (!isPaused && !isActive && videoRef.current) {
-      // Force pause if this video is not active but global state says it should play
-      try {
-        videoRef.current.seek(0);
-      } catch (error) {
-        Logger.warn('OptimizedVideoPlayer', 'Error in global pause control:', error);
-      }
-    }
-  }, [isPaused, isActive]);
+  }, [isActive, isPaused, throttledSeek]);
 
   const shouldPlay = isActive && !isPaused && isLoaded && !hasError && isValidUri;
 
@@ -188,34 +202,30 @@ const OptimizedVideoPlayer = memo(({
     );
   }
 
-  // Enhanced cleanup effect with proper memory management
-  useEffect(() => {
-    // Mark component as mounted
-    isMountedRef.current = true;
+  // Device capability detection for adaptive video settings
+  const getOptimizedVideoSettings = useCallback(() => {
+    // Basic device capability detection
+    const isLowEndDevice = Platform.OS === 'android' &&
+      (Platform.constants?.Release < '8.0' || Platform.constants?.Model?.includes('Go'));
 
-    return () => {
-      // Mark component as unmounted
-      isMountedRef.current = false;
-
-      // Force stop video when component unmounts
-      Logger.debug('OptimizedVideoPlayer', 'Component unmounting - stopping video');
-
-      // Complete video cleanup
-      if (videoRef.current) {
-        try {
-          // Stop video playback
-          videoRef.current.seek(0);
-          videoRef.current.paused = true;
-        } catch (error) {
-          Logger.warn('OptimizedVideoPlayer', 'Error stopping video on unmount:', error);
-        }
+    return {
+      maxBitRate: isLowEndDevice ? 1000000 : 2000000, // 1Mbps for low-end, 2Mbps for others
+      bufferConfig: isLowEndDevice ? {
+        minBufferMs: 1000,
+        maxBufferMs: 3000,
+        bufferForPlaybackMs: 500,
+        bufferForPlaybackAfterRebufferMs: 1000,
+      } : {
+        minBufferMs: 1500,
+        maxBufferMs: 5000,
+        bufferForPlaybackMs: 1000,
+        bufferForPlaybackAfterRebufferMs: 1500,
       }
-
-      // Reset state to prevent memory leaks
-      setIsLoaded(false);
-      setHasError(false);
     };
   }, []);
+
+  // Get optimized settings based on device capabilities
+  const videoSettings = useMemo(() => getOptimizedVideoSettings(), [getOptimizedVideoSettings]);
 
   return (
     <Video
@@ -229,13 +239,8 @@ const OptimizedVideoPlayer = memo(({
       onLoad={handleLoad}
       onProgress={handleProgress}
       onError={handleError}
-      onEnd={handleCompletion} // Add onEnd handler
-      bufferConfig={{
-        minBufferMs: 1500,
-        maxBufferMs: 5000,
-        bufferForPlaybackMs: 1000,
-        bufferForPlaybackAfterRebufferMs: 1500,
-      }}
+      onEnd={handleCompletion}
+      bufferConfig={videoSettings.bufferConfig}
       ignoreSilentSwitch="ignore"
       playInBackground={false}
       playWhenInactive={false}
@@ -243,8 +248,8 @@ const OptimizedVideoPlayer = memo(({
       disableFocus={true}
       fullscreen={false}
       hideShutterView={true}
-      // Additional memory optimization settings
-      maxBitRate={2000000} // Limit bitrate to 2Mbps for memory efficiency
+      // Adaptive memory optimization settings
+      maxBitRate={videoSettings.maxBitRate}
       reportBandwidth={false} // Disable bandwidth reporting to save memory
       preventsDisplaySleepDuringVideoPlayback={false} // Allow display sleep to save battery
     />

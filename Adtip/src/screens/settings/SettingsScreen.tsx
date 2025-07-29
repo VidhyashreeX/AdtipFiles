@@ -18,6 +18,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import ScreenTransition from '../../components/common/ScreenTransition';
 import ApiService from '../../services/ApiService';
 import { getSetting, setSetting, getSettings } from '../../utils/settingsStorage';
+import { useUserData } from '../../contexts/UserDataContext';
 // import {useUserSettings, useUpdateUserSettings} from '../../hooks/useQueries';
 
 interface SettingItem {
@@ -35,6 +36,7 @@ const SettingsScreen: React.FC = () => {
   const {colors, isDarkMode, toggleTheme, setDarkMode} = useTheme();
   const navigation = useNavigation();
   const { logout, loading: authLoading, user } = useAuth();
+  const { userData, refetch: refetchUserData } = useUserData();
   const userId = user?.id || 0;
 
   // TanStack Query hooks
@@ -49,6 +51,7 @@ const SettingsScreen: React.FC = () => {
     cellularData: false,
     analytics: true,
     autoRotation: true,
+    dnd: userData?.dnd === 1 || false,
   });
 
   // Subscription management state
@@ -94,6 +97,16 @@ const SettingsScreen: React.FC = () => {
     console.log('🏠 [SettingsScreen] Component mounted for user:', user?.id);
     fetchSubscriptionStatus();
   }, [fetchSubscriptionStatus]);
+
+  // Sync DND state when userData changes
+  useEffect(() => {
+    if (userData) {
+      setLocalSettings(prev => ({
+        ...prev,
+        dnd: userData.dnd === 1,
+      }));
+    }
+  }, [userData]);
 
   const updateSetting = useCallback(async (key: string, value: boolean) => {
     setLocalSettings(prev => ({...prev, [key]: value}));
@@ -235,6 +248,32 @@ const SettingsScreen: React.FC = () => {
     );
   };
 
+  const handleDNDToggle = useCallback(async (value: boolean) => {
+    try {
+      setLocalSettings(prev => ({...prev, dnd: value}));
+
+      const response = await ApiService.updateUser({
+        id: userId,
+        dnd: value ? 1 : 0,
+      });
+
+      if (response.status) {
+        console.log('[SettingsScreen] DND updated successfully:', value);
+        // Refresh user data to sync with backend
+        await refetchUserData();
+      } else {
+        // Revert on failure
+        setLocalSettings(prev => ({...prev, dnd: !value}));
+        Alert.alert('Error', 'Failed to update Do Not Disturb setting. Please try again.');
+      }
+    } catch (error) {
+      console.error('[SettingsScreen] Error updating DND:', error);
+      // Revert on error
+      setLocalSettings(prev => ({...prev, dnd: !value}));
+      Alert.alert('Error', 'Failed to update Do Not Disturb setting. Please try again.');
+    }
+  }, [userId, refetchUserData]);
+
   const settingSections = [
     {
       title: 'Permissions',
@@ -273,7 +312,17 @@ const SettingsScreen: React.FC = () => {
     }] : []),
     {
       title: 'Preferences',
-      items: [        {
+      items: [
+        {
+          id: 'dnd',
+          title: 'Do Not Disturb',
+          subtitle: 'Block incoming calls when enabled',
+          type: 'toggle',
+          icon: 'phone-off',
+          value: localSettings.dnd,
+          onToggle: handleDNDToggle,
+        },
+        {
           id: 'darkMode',
           title: 'Dark Mode',
           subtitle: 'Use dark theme',

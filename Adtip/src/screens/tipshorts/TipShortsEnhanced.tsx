@@ -294,10 +294,30 @@ const TipShortsEnhanced = () => {
   // Enhanced viewability config for strict video control
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 80, // Higher threshold for stricter control
-    minimumViewTime: 0, // Immediate response
+    minimumViewTime: 100, // Small delay to prevent rapid changes
     waitForInteraction: false,
   }).current;
-  // Enhanced viewability change handler with aggressive pause control
+
+  // Debounced state update to prevent rapid changes during scrolling
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastActiveIndexRef = useRef(activeIndex);
+
+  const debouncedSetActiveIndex = useCallback((newIndex: number) => {
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+
+    debounceTimeoutRef.current = setTimeout(() => {
+      if (newIndex !== lastActiveIndexRef.current) {
+        TipShortsLogger.debug(`Debounced activeIndex update from ${lastActiveIndexRef.current} to ${newIndex}`);
+        setActiveIndex(newIndex);
+        lastActiveIndexRef.current = newIndex;
+        handleVideoViewed();
+      }
+    }, 150); // 150ms debounce delay
+  }, [handleVideoViewed]);
+
+  // Enhanced viewability change handler with debouncing
   const onViewableItemsChanged = useRef(({viewableItems}: {viewableItems: ViewToken[]}) => {
     const mostVisibleItem = viewableItems.find(item => item.isViewable);
     if (mostVisibleItem && mostVisibleItem.index !== null) {
@@ -327,12 +347,8 @@ const TipShortsEnhanced = () => {
         return;
       }
 
-      if (newActiveIndex !== activeIndex) {
-        TipShortsLogger.debug(`Updating activeIndex from ${activeIndex} to ${newActiveIndex}`);
-        setActiveIndex(newActiveIndex);
-        // ADD THIS LINE to count every short viewed:
-        handleVideoViewed();
-      }
+      // Use debounced update to prevent rapid state changes
+      debouncedSetActiveIndex(newActiveIndex);
     }
   }).current;
 
@@ -558,6 +574,10 @@ const TipShortsEnhanced = () => {
   useEffect(() => {
     return () => {
       TipShortsLogger.debug('Component unmounting - stopping all audio');
+      // Clear any pending debounced updates
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
       setGlobalPlayState(false);
     };
   }, [setGlobalPlayState]);

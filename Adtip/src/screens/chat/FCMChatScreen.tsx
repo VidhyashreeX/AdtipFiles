@@ -21,7 +21,7 @@ import {
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { Clock, Check, CheckCheck, Send, CircleAlert, ArrowLeft } from 'lucide-react-native';
+import { Clock, Check, CheckCheck, Send, CircleAlert, ArrowLeft, Phone, Video } from 'lucide-react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { KeyboardAvoiderScrollView, KeyboardAvoiderView } from '@good-react-native/keyboard-avoider';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -31,6 +31,7 @@ import { Message } from '../../services/FCMChatServiceLocal';
 import { RealTimeMessageHandler, useRealTimeMessages } from '../../components/chat/RealTimeMessageHandler';
 import { COLORS } from '../../constants/colors';
 import Header from '../../components/common/Header';
+import CallController from '../../services/calling/CallController';
 
 type RootStackParamList = {
   FCMChat: {
@@ -282,6 +283,74 @@ const FCMChatScreen: React.FC = () => {
     // Auto-scroll to new message
     scrollToBottom();
   }, [scrollToBottom]);
+
+  // Handle voice call initiation
+  const handleVoiceCall = useCallback(async () => {
+    if (!participantId || !participantName) {
+      Alert.alert('Error', 'Cannot start call - missing participant information');
+      return;
+    }
+
+    try {
+      console.log('[FCMChatScreen] Initiating voice call to:', participantName);
+      const callController = CallController.getInstance();
+      const success = await callController.startCall(participantId, participantName, 'audio');
+
+      if (success) {
+        console.log('[FCMChatScreen] Voice call initiated successfully');
+      } else {
+        Alert.alert('Call Failed', 'Unable to start voice call. Please try again.');
+      }
+    } catch (error) {
+      console.error('[FCMChatScreen] Voice call error:', error);
+      Alert.alert('Call Error', 'An error occurred while starting the call.');
+    }
+  }, [participantId, participantName]);
+
+  // Handle video call initiation
+  const handleVideoCall = useCallback(async () => {
+    if (!participantId || !participantName) {
+      Alert.alert('Error', 'Cannot start call - missing participant information');
+      return;
+    }
+
+    try {
+      console.log('[FCMChatScreen] Initiating video call to:', participantName);
+      const callController = CallController.getInstance();
+      const success = await callController.startCall(participantId, participantName, 'video');
+
+      if (success) {
+        console.log('[FCMChatScreen] Video call initiated successfully');
+      } else {
+        Alert.alert('Call Failed', 'Unable to start video call. Please try again.');
+      }
+    } catch (error) {
+      console.error('[FCMChatScreen] Video call error:', error);
+      Alert.alert('Call Error', 'An error occurred while starting the call.');
+    }
+  }, [participantId, participantName]);
+
+  // Create call buttons component
+  const getCallButtons = useCallback(() => {
+    return (
+      <View style={styles.callButtonsContainer}>
+        <TouchableOpacity
+          onPress={handleVoiceCall}
+          style={[styles.callButton, { backgroundColor: colors.surface }]}
+          activeOpacity={0.7}
+        >
+          <Phone size={20} color={colors.text.primary} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={handleVideoCall}
+          style={[styles.callButton, { backgroundColor: colors.surface }]}
+          activeOpacity={0.7}
+        >
+          <Video size={20} color={colors.text.primary} />
+        </TouchableOpacity>
+      </View>
+    );
+  }, [handleVoiceCall, handleVideoCall, colors.surface, colors.text.primary]);
 
   // Create sync indicator component with consistent width
   const getSyncIndicator = useCallback(() => {
@@ -633,7 +702,12 @@ const FCMChatScreen: React.FC = () => {
               </Text>
             </View>
           }
-          rightComponent={getSyncIndicator()}
+          rightComponent={
+            <View style={styles.headerRightContainer}>
+              {getCallButtons()}
+              {getSyncIndicator()}
+            </View>
+          }
           showLogo={false}
           showWallet={false}
           showSearch={false}
@@ -782,6 +856,30 @@ const styles = StyleSheet.create({
   centered: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  headerRightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  callButtonsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  callButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.41,
   },
   syncIndicatorContainer: {
     minWidth: 80, // Fixed minimum width to prevent layout shifts

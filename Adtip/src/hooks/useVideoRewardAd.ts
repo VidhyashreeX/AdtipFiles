@@ -141,10 +141,13 @@ export const useVideoRewardAd = ({
       }
     }
 
-    // Handle wallet navigation
+    // Handle navigation actions
     if (action === 'wallet') {
       console.log('🚀 [useVideoRewardAd] Navigating to wallet screen');
       navigation.navigate('Wallet' as never);
+    } else if (action === 'upgrade') {
+      console.log('🚀 [useVideoRewardAd] Navigating to premium upgrade screen');
+      navigation.navigate('PremiumUser' as never);
     }
   }, [creditWallet, navigation, hasBeenCredited]);
 

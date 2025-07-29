@@ -12,7 +12,7 @@ import {
   ViewabilityConfig,
   ViewToken,
   TouchableOpacity,
-
+  TextInput,
   Dimensions,
   Image,
   Alert,
@@ -806,7 +806,10 @@ const HomeScreen: React.FC = () => {
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
       {/* Search Icon */}
       <TouchableOpacity
-        onPress={() => setIsSearchActive(true)}
+        onPress={() => {
+          console.log('[HomeScreen] Search button pressed, setting isSearchActive to true');
+          setIsSearchActive(true);
+        }}
         style={[styles.headerIconButton, { marginLeft: 6 }]}
         activeOpacity={0.8}
       >
@@ -882,7 +885,8 @@ const HomeScreen: React.FC = () => {
 
   // Search results component
   const SearchResults = useMemo(() => {
-    if (!isSearchActive || !debouncedSearchQuery) return null;
+    console.log('[HomeScreen] SearchResults render check:', { isSearchActive, debouncedSearchQuery });
+    if (!isSearchActive) return null;
 
     const users = searchUsersData?.data?.users || [];
 
@@ -905,14 +909,27 @@ const HomeScreen: React.FC = () => {
           borderBottomWidth: 1,
           borderBottomColor: colors.border,
         }}>
-          <Text style={{
-            fontSize: 16,
-            fontWeight: '600',
-            color: colors.text.primary,
-            flex: 1,
-          }}>
-            Search Results for &ldquo;{debouncedSearchQuery}&rdquo;
-          </Text>
+          <TextInput
+            style={{
+              flex: 1,
+              height: 40,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 20,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+              color: colors.text.primary,
+              fontSize: 16,
+            }}
+            placeholder="Search users..."
+            placeholderTextColor={colors.text.tertiary}
+            value={searchQuery}
+            onChangeText={handleSearchQueryChange}
+            autoFocus={true}
+            returnKeyType="search"
+            onSubmitEditing={handleSearchSubmit}
+          />
           <TouchableOpacity
             onPress={() => {
               setSearchQuery('');
@@ -920,19 +937,27 @@ const HomeScreen: React.FC = () => {
             }}
             style={{
               padding: 8,
+              marginLeft: 8,
             }}
           >
             <Text style={{ color: colors.primary, fontSize: 16 }}>Cancel</Text>
           </TouchableOpacity>
         </View>
 
-        {searchUsersLoading ? (
+        {!debouncedSearchQuery ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <Search size={48} color={colors.text.tertiary} />
+            <Text style={{ color: colors.text.secondary, fontSize: 16, marginTop: 16 }}>
+              Start typing to search for users
+            </Text>
+          </View>
+        ) : searchUsersLoading ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
         ) : users.length === 0 ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <Text style={{ color: colors.text.primary, fontSize: 16 }}>No users found</Text>
+            <Text style={{ color: colors.text.primary, fontSize: 16 }}>No users found for "{debouncedSearchQuery}"</Text>
           </View>
         ) : (
           <FlatList
@@ -1204,9 +1229,6 @@ const HomeScreen: React.FC = () => {
           <Header
             title=""
             showLogo={false}
-            searchQuery={searchQuery}
-            onSearchQueryChange={handleSearchQueryChange}
-            onSearchSubmit={handleSearchSubmit}
             rightComponent={renderHeaderRightSection()}
           />
           {SearchResults}
