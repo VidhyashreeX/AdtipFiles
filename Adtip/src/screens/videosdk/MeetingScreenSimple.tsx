@@ -6,8 +6,7 @@ import {
   TouchableOpacity,
   StatusBar,
   SafeAreaView,
-  ActivityIndicator,
-  Alert
+  ActivityIndicator
 } from 'react-native'
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -19,15 +18,19 @@ import {
   MediaStream
 } from '@videosdk.live/react-native-sdk'
 import { ParticipantView, VideoSDKCallTimer } from '../../components/videosdk'
-import { 
-  Mic, MicOff, Camera, CameraOff, Phone, 
-  Speaker
+import WhatsAppStyleVideoLayout from '../../components/videosdk/WhatsAppStyleVideoLayout'
+import {
+  Mic, MicOff, Camera, CameraOff, Phone,
+  Volume2
 } from 'lucide-react-native'
 
 import { useCallStore, CallSession } from '../../stores/callStoreSimplified'
 import CallController from '../../services/calling/CallController'
 import { MainNavigatorParamList } from '../../types/navigation'
 import VideoSDKService from '../../services/videosdk/VideoSDKService'
+import { logError } from '../../utils/ProductionLogger'
+import SafeAreaEnforcer from '../../components/common/SafeAreaEnforcer'
+import { useSafeAreaStyle } from '../../utils/SafeAreaUtils'
 
 // Layout components
 
@@ -110,17 +113,57 @@ const ParticipantVideo = ({ participantId, isLocal = false }: { participantId: s
 
 const Controls = () => {
   const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>()
-  const { status, session } = useCallStore()
+  const { status, session, media } = useCallStore()
   const { toggleMic, toggleWebcam, leave, localParticipant } = useMeeting()
   const actions = useCallStore(state => state.actions)
   const controller = CallController.getInstance()
 
-  // Use actual VideoSDK state instead of call store state
+  // Use actual VideoSDK state instead of call store state for mic/camera
   const micOn = localParticipant?.micOn ?? false
   const webcamOn = localParticipant?.webcamOn ?? false
 
+  // Subscribe to speaker state from call store for real-time updates
+  const speakerOn = media.speaker
+
   const handleEndCall = async () => {
-    await controller.endCall()
+    try {
+      await controller.endCall()
+      // Navigate back to TipCall screen after ending call
+      if (navigation.canGoBack()) {
+        navigation.goBack()
+      } else {
+        // If can't go back, reset to TipCall screen
+        navigation.reset({
+          index: 0,
+          routes: [
+            {
+              name: 'Main',
+              params: {
+                screen: 'TipCallSimple'
+              }
+            }
+          ],
+        })
+      }
+    } catch (error) {
+      logError('MeetingScreenSimple', 'Error ending call', error);
+      // Still navigate back even if endCall fails
+      if (navigation.canGoBack()) {
+        navigation.goBack()
+      } else {
+        navigation.reset({
+          index: 0,
+          routes: [
+            {
+              name: 'Main',
+              params: {
+                screen: 'TipCallSimple'
+              }
+            }
+          ],
+        })
+      }
+    }
   }
 
   const handleToggleMic = () => {
@@ -137,7 +180,7 @@ const Controls = () => {
   
   const handleToggleSpeaker = () => {
     // TODO: implement speaker toggle
-    actions.updateMedia({ speaker: !useCallStore.getState().media.speaker })
+    actions.updateMedia({ speaker: !speakerOn })
   }
   
   return (
@@ -172,11 +215,18 @@ const Controls = () => {
         </TouchableOpacity>
       )}
       
-      <TouchableOpacity 
-        style={styles.controlButton} 
+      <TouchableOpacity
+        style={[
+          styles.controlButton,
+          { backgroundColor: speakerOn ? '#00D4AA' : '#333' }
+        ]}
         onPress={handleToggleSpeaker}
       >
-        <Speaker size={22} color="#fff" style={{ opacity: useCallStore.getState().media.speaker ? 1 : 0.5 }} />
+        <Volume2
+          size={22}
+          color="#fff"
+          fill={speakerOn ? '#fff' : 'transparent'}
+        />
       </TouchableOpacity>
       
       <TouchableOpacity 
@@ -336,7 +386,7 @@ const MeetingContent = () => {
   useEffect(() => {
     const MAX_ATTEMPTS = 3
     const RETRY_DELAY_MS = 1000
-    const INITIAL_DELAY_MS = 1500 // Add delay for first join after app load
+    const INITIAL_DELAY_MS = 2500 // Increased delay for first join after app load to ensure WebSocket stability
 
     const joinWithRetry = async () => {
       // Enhanced validation before attempting to join
@@ -400,7 +450,8 @@ const MeetingContent = () => {
         // If this is the first join after app load, add extra delay
         // to ensure WebSocket is fully connected
         if (initialLoadRef.current) {
-          console.log('[MeetingContent] First join after app load - adding extra delay for WebSocket stability')
+          console.log('[MeetingContent] First join after app load - ensuring WebSocket is ready')
+          await videoSDK.waitForWebSocketReady()
           await new Promise(resolve => setTimeout(resolve, INITIAL_DELAY_MS))
           initialLoadRef.current = false
         }
@@ -492,25 +543,55 @@ const MeetingContent = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionIsValid, callIsActive, isActiveInstance, meeting])
   
-  // Handle back button or hardware back
+  // Handle back button or hardware back - direct call end without confirmation
   useEffect(() => {
     const backAction = () => {
-      Alert.alert(
-        "End Call",
-        "Are you sure you want to end the call?",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "End", style: "destructive", onPress: () => controller.endCall() }
-        ]
-      )
+      // End call immediately without confirmation dialog
+      controller.endCall().then(() => {
+        // Navigate back to TipCall screen after ending call
+        if (navigation.canGoBack()) {
+          navigation.goBack()
+        } else {
+          // If can't go back, reset to TipCall screen
+          navigation.reset({
+            index: 0,
+            routes: [
+              {
+                name: 'Main',
+                params: {
+                  screen: 'TipCallSimple'
+                }
+              }
+            ],
+          })
+        }
+      }).catch((error) => {
+        logError('MeetingScreenSimple', 'Error ending call on back press', error);
+        // Still navigate back even if endCall fails
+        if (navigation.canGoBack()) {
+          navigation.goBack()
+        } else {
+          navigation.reset({
+            index: 0,
+            routes: [
+              {
+                name: 'Main',
+                params: {
+                  screen: 'TipCallSimple'
+                }
+              }
+            ],
+          })
+        }
+      })
       return true // Prevent default back action
     }
-    
+
     // Add back button handler
     const backHandler = require('react-native').BackHandler.addEventListener('hardwareBackPress', backAction)
-    
+
     return () => backHandler.remove()
-  }, [controller])
+  }, [controller, navigation])
   
   // Get remote participants (excluding local) and ensure they are valid
   // Use a more robust check to ensure we don't mix up local and remote participants
@@ -558,8 +639,12 @@ const MeetingContent = () => {
   const isVideo = session?.type === 'video'
   
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
+    <SafeAreaEnforcer
+      statusBarStyle="light"
+      fullScreen={false}
+      edges={['top', 'left', 'right']}
+    >
+      <View style={styles.container}>
       
       {/* Header info */}
       <View style={styles.header}>
@@ -582,30 +667,12 @@ const MeetingContent = () => {
       
       {/* Video content for video calls */}
       {isVideo ? (
-        <View style={styles.participantsContainer}>
-          {/* Remote participant (big) */}
-          <View style={styles.remoteParticipant}>
-            {remoteParticipants.length > 0 ? (
-              <ParticipantVideo participantId={remoteParticipants[0].id} isLocal={false} />
-            ) : (
-              <View style={styles.videoPlaceholder}>
-                <ActivityIndicator size="large" color="#fff" />
-                <Text style={styles.placeholderText}>
-                  {status === 'outgoing' ? 'Calling...' :
-                   status === 'connecting' ? 'Connecting...' :
-                   'Waiting for participant...'}
-                </Text>
-              </View>
-            )}
-          </View>
-          
-          {/* Local participant (small) */}
-          {localParticipantId && (
-            <View style={styles.localParticipant}>
-              <ParticipantVideo participantId={localParticipantId} isLocal={true} />
-            </View>
-          )}
-        </View>
+        <WhatsAppStyleVideoLayout
+          localParticipantId={localParticipantId || ''}
+          remoteParticipantId={remoteParticipants.length > 0 ? remoteParticipants[0].id : ''}
+          localWebcamOn={localWebcamOn}
+          remoteWebcamOn={remoteParticipants.length > 0 && remoteParticipants[0].webcamOn}
+        />
       ) : (
         /* Audio call UI */
         <View style={styles.audioContainer}>
@@ -627,7 +694,8 @@ const MeetingContent = () => {
       
       {/* Controls */}
       <Controls />
-    </SafeAreaView>
+      </View>
+    </SafeAreaEnforcer>
   )
 }
 

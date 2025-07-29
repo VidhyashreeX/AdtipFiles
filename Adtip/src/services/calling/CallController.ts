@@ -19,6 +19,7 @@ import ApiService from '../ApiService'
 import CallStateCleanup from '../../utils/callStateCleanup'
 import { startPersistentCall, updatePersistentCallStatus, endPersistentCall } from '../../components/videosdk/PersistentMeetingManager'
 import PermissionManagerService from '../PermissionManagerService'
+import { logCall, logError, logWarn } from '../../utils/ProductionLogger'
 
 /**
  * CallController - Main orchestration layer for call flows
@@ -40,6 +41,7 @@ class CallController {
   
   private vibrateInterval: NodeJS.Timeout | null = null
   private lastCallId?: number; // <-- Store last callId for bulletproof end call
+  private pendingIncomingCall: any = null; // Store pending incoming call for concurrent call handling
 
   static getInstance() {
     if (!CallController._instance) CallController._instance = new CallController()
@@ -206,10 +208,17 @@ class CallController {
   
   /**
    * Start phone vibration
+   * @param isConcurrentCall - Use different pattern for concurrent calls
    */
-  private startVibrate() {
+  private startVibrate(isConcurrentCall: boolean = false) {
     this.stopVibrate()
-    Vibration.vibrate([1000, 500, 1000, 500], true)
+    if (isConcurrentCall) {
+      // Shorter, more urgent pattern for concurrent calls
+      Vibration.vibrate([500, 200, 500, 200, 500, 200], true)
+    } else {
+      // Normal incoming call pattern
+      Vibration.vibrate([1000, 500, 1000, 500], true)
+    }
   }
   
   /**
@@ -430,7 +439,227 @@ class CallController {
       return false
     }
   }
-  
+
+  /**
+   * Start an outgoing call with optimized performance (TanStack Query version)
+   * Navigates immediately and handles API calls asynchronously
+   */
+  async startCallOptimized(recipientId: string, recipientName: string, callType: CallType): Promise<boolean> {
+    try {
+      logCall('CallController', 'Starting optimized call flow', { recipientId, recipientName, callType });
+
+      // Validate permissions before starting call
+      const permissionManager = PermissionManagerService.getInstance()
+      const permissionResult = await permissionManager.requestCallPermissions(callType === 'video')
+
+      if (!permissionResult.microphone) {
+        logError('CallController', 'Microphone permission not granted');
+        throw new Error('Microphone permission is required to make calls')
+      }
+
+      if (callType === 'video' && !permissionResult.camera) {
+        logError('CallController', 'Camera permission not granted for video call');
+        throw new Error('Camera permission is required to make video calls')
+      }
+
+      // Ensure comprehensive cleanup before starting new call
+      await this.cleanup()
+      await this.videoSDK.initialize()
+      await this.videoSDK.clearExistingMeetingState()
+
+      // Get local user info
+      const { userId, userName } = await this.getUserInfo()
+
+      // Generate session ID for this call
+      const backendSessionId = uuid.v4() as string
+      logCall('CallController', 'Generated session ID', { sessionId: backendSessionId });
+
+      // OPTIMIZATION: Navigate immediately with temporary session data
+      const store = useCallStore.getState()
+      store.actions.setSession({
+        sessionId: backendSessionId,
+        meetingId: 'temp-' + backendSessionId, // Temporary meeting ID
+        token: 'temp-token', // Temporary token
+        peerId: recipientId,
+        peerName: recipientName,
+        direction: 'outgoing',
+        type: callType,
+        startedAt: Date.now(),
+        callId: undefined // Will be set when API responds
+      })
+
+      // Set status to outgoing and immediately transition to connecting
+      store.actions.setStatus('outgoing')
+      store.actions.setStatus('connecting')
+
+      // Initialize media
+      await this.media.initialize()
+
+      // Show outgoing call notification
+      this.notification.showOngoingCall(backendSessionId, recipientName, callType)
+
+      // Start persistent call with temporary data - this will show the meeting screen immediately
+      startPersistentCall({
+        sessionId: backendSessionId,
+        meetingId: 'temp-' + backendSessionId,
+        token: 'temp-token',
+        peerName: recipientName,
+        callType,
+        direction: 'outgoing'
+      })
+
+      // ASYNC: Make API call in background and update session when ready
+      this.handleAsyncCallInitiation(userId, recipientId, callType, backendSessionId)
+
+      return true
+    } catch (error) {
+      logError('CallController', 'startCallOptimized error', error);
+
+      // Reset call state
+      const store = useCallStore.getState()
+      store.actions.reset()
+
+      return false
+    }
+  }
+
+  /**
+   * Handle API call initiation asynchronously
+   * Updates session data when API responds or fails gracefully
+   */
+  private async handleAsyncCallInitiation(
+    userId: string,
+    recipientId: string,
+    callType: CallType,
+    sessionId: string
+  ): Promise<void> {
+    try {
+      logCall('CallController', 'Making async consolidated call API request', {
+        callerId: parseInt(userId),
+        receiverId: parseInt(recipientId),
+        callType,
+        platform: require('react-native').Platform.OS === 'ios' ? 'IOS' : 'ANDROID'
+      });
+
+      const consolidatedResponse = await ApiService.initiateConsolidatedCall({
+        callerId: parseInt(userId),
+        receiverId: parseInt(recipientId),
+        callType,
+        platform: require('react-native').Platform.OS === 'ios' ? 'IOS' : 'ANDROID'
+      });
+
+      logCall('CallController', 'Async consolidated call API response', {
+        success: consolidatedResponse.success,
+        sessionId: consolidatedResponse.data?.sessionId,
+        meetingId: consolidatedResponse.data?.meetingId
+      });
+
+      if (!consolidatedResponse.success || !consolidatedResponse.data) {
+        logError('CallController', 'Consolidated call API failed', new Error(consolidatedResponse.message));
+
+        // API failed - exit meeting screen with failed status
+        const store = useCallStore.getState()
+        store.actions.setStatus('failed')
+
+        // End the persistent call
+        setTimeout(() => {
+          endPersistentCall()
+          store.actions.reset()
+        }, 2000) // Show failed status for 2 seconds before cleanup
+
+        return
+      }
+
+      const {
+        sessionId: apiSessionId,
+        meetingId,
+        token,
+        callId: backendCallId
+      } = consolidatedResponse.data
+
+      logCall('CallController', 'Updating session with real API data', {
+        apiSessionId,
+        meetingId,
+        backendCallId
+      });
+
+      // Update call store with real session info
+      const store = useCallStore.getState()
+      const currentSession = store.session
+
+      if (currentSession && currentSession.sessionId === sessionId) {
+        // Update the session with real data
+        store.actions.setSession({
+          ...currentSession,
+          meetingId,
+          token,
+          callId: backendCallId
+        })
+
+        // Update persistent call with real meeting data
+        updatePersistentCallStatus({
+          sessionId,
+          meetingId,
+          token,
+          status: 'connected'
+        })
+
+        logCall('CallController', 'Session updated successfully with real API data');
+      } else {
+        logWarn('CallController', 'Session mismatch or call already ended', {
+          expectedSessionId: sessionId,
+          currentSessionId: currentSession?.sessionId
+        });
+      }
+
+    } catch (error) {
+      logError('CallController', 'Async call initiation error', error);
+
+      // API error - exit meeting screen with failed status
+      const store = useCallStore.getState()
+      store.actions.setStatus('failed')
+
+      // End the persistent call
+      setTimeout(() => {
+        endPersistentCall()
+        store.actions.reset()
+      }, 2000) // Show failed status for 2 seconds before cleanup
+    }
+  }
+
+  /**
+   * Accept concurrent incoming call (ends current call)
+   */
+  async acceptConcurrentCall(): Promise<boolean> {
+    console.log('[CallController] Accepting concurrent call - ending current call first')
+
+    try {
+      // End current call first
+      await this.endCall()
+
+      // Wait a moment for cleanup
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // Accept the pending call
+      if (this.pendingIncomingCall) {
+        const store = useCallStore.getState()
+        store.actions.setSession(this.pendingIncomingCall)
+        store.actions.setStatus('ringing')
+
+        // Clear pending call
+        this.pendingIncomingCall = null
+
+        // Now accept the new call
+        return await this.acceptCall()
+      }
+
+      return false
+    } catch (error) {
+      console.error('[CallController] Error accepting concurrent call:', error)
+      return false
+    }
+  }
+
   /**
    * Accept incoming call
    */
@@ -757,14 +986,44 @@ class CallController {
       const meetingId = data.meetingId
       const token = data.token
       const callerId = data.callerId
+      const allowsConcurrentCalls = data.allowsConcurrentCalls === "true"
 
       if (!sessionId || !meetingId || !token) {
         console.error('[CallController] Missing required call data in FCM message')
         return
       }
 
-      // Update call store with incoming call
+      // Check if there's already an active call
       const store = useCallStore.getState()
+      const currentStatus = store.status
+      const hasActiveCall = ['connecting', 'in_call'].includes(currentStatus)
+
+      if (hasActiveCall && allowsConcurrentCalls) {
+        console.log('[CallController] Incoming call while already in active call - concurrent calls supported')
+        // Store the incoming call data for potential acceptance
+        // The user can choose to accept (ending current call), decline, or ignore
+        this.pendingIncomingCall = {
+          sessionId,
+          meetingId,
+          token,
+          peerId: callerId,
+          peerName: callerName,
+          direction: 'incoming',
+          type: callType as CallType,
+          startedAt: Date.now()
+        }
+
+        // Show incoming call notification with concurrent call context
+        this.notification.showIncomingCall(sessionId, callerName, callType, true) // true indicates concurrent call
+
+        // Use a different vibration pattern for concurrent calls
+        this.startVibrate(true) // true for concurrent call pattern
+
+        console.log('[CallController] Concurrent incoming call stored and notification shown')
+        return
+      }
+
+      // Normal incoming call handling (no active call or concurrent calls not supported)
       store.actions.setSession({
         sessionId,
         meetingId,

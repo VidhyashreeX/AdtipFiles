@@ -833,7 +833,7 @@ const TipCallScreenSimple = () => {
         timestamp: new Date().toISOString()
       });
 
-      const success = await callController.startCall(
+      const success = await callController.startCallOptimized(
         pendingCallData.recipientId,
         pendingCallData.recipientName,
         pendingCallData.callType

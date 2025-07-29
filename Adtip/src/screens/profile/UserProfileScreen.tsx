@@ -156,7 +156,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
             {
               text: 'Call Now',
               onPress: async () => {
-                const success = await callController.startCall(
+                const success = await callController.startCallOptimized(
                   userId.toString(),
                   user.name,
                   callType

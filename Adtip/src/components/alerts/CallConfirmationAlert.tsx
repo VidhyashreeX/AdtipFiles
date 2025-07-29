@@ -47,7 +47,12 @@ const CallConfirmationAlert: React.FC<CallConfirmationAlertProps> = ({
   const slideAnim = useRef(new Animated.Value(50)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
+  // Ref to track if component is mounted to prevent state updates during unmounting
+  const isMountedRef = useRef(true);
+
   useEffect(() => {
+    isMountedRef.current = true;
+
     if (visible) {
       // Start entrance animations
       Animated.parallel([
@@ -100,6 +105,10 @@ const CallConfirmationAlert: React.FC<CallConfirmationAlertProps> = ({
       slideAnim.setValue(50);
       pulseAnim.setValue(1);
     }
+
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [visible]);
 
   const handleClose = () => {
@@ -115,7 +124,10 @@ const CallConfirmationAlert: React.FC<CallConfirmationAlertProps> = ({
         useNativeDriver: true,
       }),
     ]).start(() => {
-      onClose();
+      // Only call onClose if component is still mounted
+      if (isMountedRef.current) {
+        onClose();
+      }
     });
   };
 

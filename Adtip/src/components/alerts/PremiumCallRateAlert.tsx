@@ -107,18 +107,51 @@ const PremiumCallRateAlert: React.FC<PremiumCallRateAlertProps> = ({
         useNativeDriver: true,
       }),
     ]).start(() => {
-      onClose();
+      // Use setTimeout to avoid scheduling updates during React's commit phase
+      setTimeout(() => {
+        onClose();
+      }, 0);
     });
   };
 
   const handleUpgrade = () => {
-    handleClose();
-    setTimeout(() => onUpgrade(), 50);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      // Use setTimeout to avoid scheduling updates during React's commit phase
+      setTimeout(() => {
+        onUpgrade();
+      }, 0);
+    });
   };
 
   const handleContinue = () => {
-    handleClose();
-    setTimeout(() => onContinue(), 50);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      // Use setTimeout to avoid scheduling updates during React's commit phase
+      setTimeout(() => {
+        onContinue();
+      }, 0);
+    });
   };
 
   const CallIcon = callType === 'video' ? Video : Phone;

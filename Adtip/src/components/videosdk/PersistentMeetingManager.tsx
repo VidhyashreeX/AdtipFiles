@@ -16,9 +16,9 @@ import {
   RTCView,
   MediaStream
 } from '@videosdk.live/react-native-sdk'
-import { 
-  Mic, MicOff, Camera, CameraOff, Phone, 
-  Speaker
+import {
+  Mic, MicOff, Camera, CameraOff, Phone,
+  Volume2
 } from 'lucide-react-native'
 
 import { useCallStore, CallSession } from '../../stores/callStoreSimplified'
@@ -96,11 +96,13 @@ const PersistentParticipantVideo = ({ participantId, isLocal = false }: { partic
 // Persistent Controls Component
 const PersistentControls = ({ config }: { config: MeetingConfig | null }) => {
   const { toggleMic, toggleWebcam, localParticipant } = useMeeting()
+  const { media } = useCallStore()
   const actions = useCallStore(state => state.actions)
   const controller = CallController.getInstance()
 
   const micOn = localParticipant?.micOn ?? false
   const webcamOn = localParticipant?.webcamOn ?? false
+  const speakerOn = media.speaker
 
   const handleEndCall = async () => {
     // Stop media streams before ending call
@@ -136,7 +138,7 @@ const PersistentControls = ({ config }: { config: MeetingConfig | null }) => {
   }
   
   const handleToggleSpeaker = () => {
-    actions.updateMedia({ speaker: !useCallStore.getState().media.speaker })
+    actions.updateMedia({ speaker: !speakerOn })
   }
   
   return (
@@ -165,11 +167,18 @@ const PersistentControls = ({ config }: { config: MeetingConfig | null }) => {
         </TouchableOpacity>
       )}
       
-      <TouchableOpacity 
-        style={styles.controlButton} 
+      <TouchableOpacity
+        style={[
+          styles.controlButton,
+          { backgroundColor: speakerOn ? '#00D4AA' : '#333' }
+        ]}
         onPress={handleToggleSpeaker}
       >
-        <Speaker size={22} color="#fff" style={{ opacity: useCallStore.getState().media.speaker ? 1 : 0.5 }} />
+        <Volume2
+          size={22}
+          color="#fff"
+          fill={speakerOn ? '#fff' : 'transparent'}
+        />
       </TouchableOpacity>
       
       <TouchableOpacity 

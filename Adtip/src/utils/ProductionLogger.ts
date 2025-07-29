@@ -97,6 +97,36 @@ class ProductionLogger {
     }
   }
 
+  /**
+   * API logging - only in development
+   */
+  api(tag: string, endpoint: string, payload?: any, response?: any): void {
+    if (__DEV__) {
+      console.group(`[API:${tag}] ${endpoint}`);
+      if (payload) console.log('Request:', payload);
+      if (response) console.log('Response:', response);
+      console.groupEnd();
+    }
+  }
+
+  /**
+   * Call-specific logging for video calling system
+   */
+  call(tag: string, message: string, data?: any): void {
+    if (__DEV__) {
+      console.log(`[CALL:${tag}] ${message}`, data);
+    }
+  }
+
+  /**
+   * VideoSDK-specific logging
+   */
+  videoSDK(tag: string, message: string, data?: any): void {
+    if (__DEV__) {
+      console.log(`[VideoSDK:${tag}] ${message}`, data);
+    }
+  }
+
   private shouldLog(level: string): boolean {
     return this.enabledLevels.has(level);
   }
@@ -135,8 +165,17 @@ export const logError = (tag: string, message: string, error?: any, ...args: any
 export const logPerformance = (tag: string, message: string, data?: any) => 
   Logger.performance(tag, message, data);
 
-export const logNetwork = (tag: string, method: string, url: string, status?: number, data?: any) => 
+export const logNetwork = (tag: string, method: string, url: string, status?: number, data?: any) =>
   Logger.network(tag, method, url, status, data);
+
+export const logApi = (tag: string, endpoint: string, payload?: any, response?: any) =>
+  Logger.api(tag, endpoint, payload, response);
+
+export const logCall = (tag: string, message: string, data?: any) =>
+  Logger.call(tag, message, data);
+
+export const logVideoSDK = (tag: string, message: string, data?: any) =>
+  Logger.videoSDK(tag, message, data);
 
 // Override global console in production
 if (!__DEV__) {

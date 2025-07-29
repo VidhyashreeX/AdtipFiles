@@ -29,8 +29,8 @@ class NotificationService {
     await notifee.createChannel({ id: this.ongoingChannel, name: 'Ongoing Calls', importance: AndroidImportance.DEFAULT })
   }
 
-  async showIncomingCall(sessionId: string, callerName: string, type: CallType, meetingId?: string, token?: string) {
-    console.log('[NotificationService] Showing incoming call notification:', { sessionId, callerName, type })
+  async showIncomingCall(sessionId: string, callerName: string, type: CallType, isConcurrentCall: boolean = false, meetingId?: string, token?: string) {
+    console.log('[NotificationService] Showing incoming call notification:', { sessionId, callerName, type, isConcurrentCall })
 
     // Check if CallKeep is handling the call first
     const callKeepService = await this.getCallKeepService()
@@ -91,27 +91,31 @@ class NotificationService {
       try {
         await notifee.displayNotification({
           id: sessionId,
-          title: `Incoming ${type} call`,
-          body: callerName,
+          title: isConcurrentCall ? `New ${type} call (while in call)` : `Incoming ${type} call`,
+          body: isConcurrentCall ? `${callerName} - Accept to end current call` : callerName,
           android: {
             channelId: this.incomingChannel,
             category: 'call' as any,
             fullScreenAction: { id: 'default' },
-            actions: [
+            actions: isConcurrentCall ? [
+              { title: 'Accept & End Current', pressAction: { id: 'answer' } },
+              { title: 'Decline', pressAction: { id: 'decline' } },
+            ] : [
               { title: 'Answer', pressAction: { id: 'answer' } },
               { title: 'Decline', pressAction: { id: 'decline' } },
             ],
             importance: AndroidImportance.HIGH,
             pressAction: { id: 'default' },
             sound: 'default',
-            vibrationPattern: [300, 1000, 300, 1000],
+            vibrationPattern: isConcurrentCall ? [200, 300, 200, 300, 200, 300] : [300, 1000, 300, 1000],
           },
           data: {
             sessionId,
             callerName,
             type,
             meetingId: meetingId || '',
-            token: token || ''
+            token: token || '',
+            isConcurrentCall: isConcurrentCall.toString()
           },
         })
 

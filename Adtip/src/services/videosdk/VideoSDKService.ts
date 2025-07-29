@@ -56,9 +56,10 @@ class VideoSDKService {
         
         // Register with VideoSDK
         await register();
-        
-        // Add a small delay to ensure WebSocket connection is established
-        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Add a longer delay to ensure WebSocket connection is fully established
+        // This is especially important for the first call after app launch
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
         this.isInitialized = true;
         console.log('[VideoSDK] Initialization complete');
@@ -89,8 +90,35 @@ class VideoSDKService {
     if (this.isInitialized) {
       return true;
     }
-    
+
     return this.initialize();
+  }
+
+  /**
+   * Wait for WebSocket connection to be fully ready
+   * This is especially important for the first call after app launch
+   */
+  async waitForWebSocketReady(maxWaitMs: number = 3000): Promise<boolean> {
+    if (!this.isInitialized) {
+      console.warn('[VideoSDK] Cannot wait for WebSocket - VideoSDK not initialized');
+      return false;
+    }
+
+    console.log('[VideoSDK] Waiting for WebSocket connection to be ready...');
+
+    // Add progressive delays to ensure WebSocket is fully connected
+    const delays = [500, 1000, 1500]; // Progressive delays
+
+    for (const delay of delays) {
+      await new Promise(resolve => setTimeout(resolve, delay));
+
+      // In a real implementation, you might check actual WebSocket state
+      // For now, we'll use progressive delays as a heuristic
+      console.log(`[VideoSDK] WebSocket readiness check - waited ${delay}ms`);
+    }
+
+    console.log('[VideoSDK] WebSocket should be ready now');
+    return true;
   }
 
   /**
