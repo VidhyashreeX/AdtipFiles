@@ -31,7 +31,7 @@ import { CallType } from '../../stores/callStoreSimplified'
 import debounce from 'lodash.debounce'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import LinearGradient from 'react-native-linear-gradient'
-import PremiumPopup from '../../components/common/PremiumPopup'
+
 import PremiumCallRateModal from '../../components/modals/PremiumCallRateModal'
 import PremiumCallRateAlert from '../../components/alerts/PremiumCallRateAlert'
 import CallConfirmationAlert from '../../components/alerts/CallConfirmationAlert'
@@ -45,6 +45,9 @@ import ApiService from '../../services/ApiService'
 import CallController from '../../services/calling/CallController'
 import CallBillingService from '../../services/calling/CallBillingService'
 import TipCallLogger  from '../../utils/logger'
+
+// Import premium access utilities
+import { checkPremiumAccess, logPremiumAccessAttempt, PremiumAccessModal } from '../../utils/premiumAccessUtils'
 
 /**
  * Elegant and minimalistic ContactCard with professional design
@@ -313,6 +316,7 @@ const TipCallScreenSimple = () => {
 
   // -------------------- Premium --------------------
   const [showPremiumPopup, setShowPremiumPopup] = useState(false)
+  const [premiumFeature, setPremiumFeature] = useState<'voice_call' | 'video_call' | 'chat' | 'general'>('general')
   const [showPremiumCallRateModal, setShowPremiumCallRateModal] = useState(false)
   const [showPremiumCallRateAlert, setShowPremiumCallRateAlert] = useState(false)
   const [showCallConfirmationAlert, setShowCallConfirmationAlert] = useState(false)
@@ -633,15 +637,30 @@ const TipCallScreenSimple = () => {
     return allUsers.filter(contact => contact.id !== user?.id && !isUserBlocked(contact.id.toString()))
   }, [liveSearchData, user?.id, isUserBlocked])
 
-  // Handle call initiation with billing check
+  // Handle call initiation with premium access check
   const handleStartCall = useCallback(
     async (recipientId: string, recipientName: string, callType: CallType) => {
       try {
-        // Check if user is premium - if not, show premium rate alert first
-        if (!isPremium) {
-          TipCallLogger.debug('Non-premium user, showing rate comparison alert')
-          setPendingCallData({ recipientId, recipientName, callType })
-          setShowPremiumCallRateAlert(true)
+        // Check premium access for calling features
+        const accessResult = checkPremiumAccess({
+          feature: callType === 'video' ? 'video_call' : 'voice_call',
+          isPremium,
+          userId: user?.id,
+        });
+
+        // Log the access attempt for analytics
+        logPremiumAccessAttempt(
+          callType === 'video' ? 'video_call' : 'voice_call',
+          isPremium,
+          user?.id,
+          { recipientId, recipientName }
+        );
+
+        // If user doesn't have premium access, show upgrade modal
+        if (!accessResult.hasAccess) {
+          TipCallLogger.debug('Non-premium user attempting call, showing premium popup')
+          setPremiumFeature(callType === 'video' ? 'video_call' : 'voice_call')
+          setShowPremiumPopup(true)
           return
         }
 
@@ -927,13 +946,30 @@ const TipCallScreenSimple = () => {
     [blockUser]
   )
 
-  // Handle chat - Updated to use FCM chat system
+  // Handle chat - Updated to use FCM chat system with premium access check
   const handleChatNavigation = useCallback(async (contact: Contact) => {
-    //Testing Chat
-    /*if (!isPremium) {
+    // Check premium access for chat features
+    const accessResult = checkPremiumAccess({
+      feature: 'chat',
+      isPremium,
+      userId: user?.id,
+    });
+
+    // Log the access attempt for analytics
+    logPremiumAccessAttempt(
+      'chat',
+      isPremium,
+      user?.id,
+      { contactId: contact.id, contactName: contact.name }
+    );
+
+    // If user doesn't have premium access, show upgrade modal
+    if (!accessResult.hasAccess) {
+      TipCallLogger.debug('Non-premium user attempting chat, showing premium popup')
+      setPremiumFeature('chat')
       setShowPremiumPopup(true)
       return
-    }*/
+    }
 
     try {
       // Navigate to FCM chat system - create conversation with the contact
@@ -1436,13 +1472,14 @@ const TipCallScreenSimple = () => {
         )}
       </Modal>
 
-      {/* Premium Popup */}
-      <PremiumPopup
+      {/* Premium Access Modal */}
+      <PremiumAccessModal
         visible={showPremiumPopup}
+        feature={premiumFeature}
         onClose={() => setShowPremiumPopup(false)}
         onUpgrade={() => {
           setShowPremiumPopup(false)
-          navigation.navigate('SubscriptionScreen' as never)
+          navigation.navigate('PremiumUser' as never)
         }}
       />
 

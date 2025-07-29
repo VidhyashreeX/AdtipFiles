@@ -22,8 +22,11 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
 import { useFCMChat } from '../../contexts/FCMChatContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { useWallet } from '../../hooks/useWallet';
 import { Conversation } from '../../services/FCMChatService';
 import { COLORS } from '../../constants/colors';
+import { checkPremiumAccess, logPremiumAccessAttempt, PremiumAccessModal } from '../../utils/premiumAccessUtils';
 
 type ConversationsNavigationProp = StackNavigationProp<any, 'Conversations'>;
 
@@ -130,7 +133,9 @@ const ConversationItem: React.FC<ConversationItemProps> = ({ conversation, onPre
 
 const ConversationsScreen: React.FC = () => {
   const navigation = useNavigation<ConversationsNavigationProp>();
-  
+  const { user } = useAuth();
+  const { isPremium } = useWallet();
+
   const {
     conversations,
     loadingConversations,
@@ -138,6 +143,8 @@ const ConversationsScreen: React.FC = () => {
     loadConversations,
     totalUnreadCount
   } = useFCMChat();
+
+  const [showPremiumPopup, setShowPremiumPopup] = React.useState(false);
 
   // Set navigation options with unread count
   useEffect(() => {
@@ -164,14 +171,41 @@ const ConversationsScreen: React.FC = () => {
     }
   }, [isInitialized, loadConversations]);
 
-  // Handle conversation press
+  // Handle conversation press with premium access check
   const handleConversationPress = useCallback((conversation: Conversation) => {
+    // Check premium access for chat features
+    const accessResult = checkPremiumAccess({
+      feature: 'chat',
+      isPremium,
+      userId: user?.id,
+    });
+
+    // Log the access attempt for analytics
+    logPremiumAccessAttempt(
+      'chat',
+      isPremium,
+      user?.id,
+      {
+        conversationId: conversation.id,
+        participantId: conversation.participants[0]?.id,
+        participantName: conversation.participants[0]?.name || conversation.title,
+        source: 'ConversationsScreen'
+      }
+    );
+
+    // If user doesn't have premium access, show upgrade modal
+    if (!accessResult.hasAccess) {
+      console.log('[ConversationsScreen] Non-premium user attempting chat, showing premium popup');
+      setShowPremiumPopup(true);
+      return;
+    }
+
     navigation.navigate('FCMChat', {
       conversationId: conversation.id,
       participantId: conversation.participants[0]?.id,
       participantName: conversation.participants[0]?.name || conversation.title
     });
-  }, [navigation]);
+  }, [navigation, isPremium, user?.id]);
 
   // Handle refresh
   const handleRefresh = useCallback(() => {
@@ -231,6 +265,17 @@ const ConversationsScreen: React.FC = () => {
         }
         ListEmptyComponent={!loadingConversations ? renderEmptyState : null}
         showsVerticalScrollIndicator={false}
+      />
+
+      {/* Premium Access Modal */}
+      <PremiumAccessModal
+        visible={showPremiumPopup}
+        feature="chat"
+        onClose={() => setShowPremiumPopup(false)}
+        onUpgrade={() => {
+          setShowPremiumPopup(false);
+          navigation.navigate('PremiumUser' as never);
+        }}
       />
     </SafeAreaView>
   );

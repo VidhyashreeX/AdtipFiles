@@ -25,10 +25,12 @@ import { Mail } from 'lucide-react-native';
 
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useWallet } from '../../hooks/useWallet';
 import Header from '../../components/common/Header';
 import { MainNavigatorParamList } from '../../types/navigation';
 import ApiService from '../../services/ApiService';
 import Logger from '../../utils/LogUtils';
+import { checkPremiumAccess, logPremiumAccessAttempt, PremiumAccessModal } from '../../utils/premiumAccessUtils';
 
 type InboxScreenNavigationProp = StackNavigationProp<MainNavigatorParamList, 'Inbox'>;
 
@@ -52,6 +54,7 @@ const InboxScreen: React.FC = () => {
   const navigation = useNavigation<InboxScreenNavigationProp>();
   const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
+  const { isPremium } = useWallet();
 
   // State management
   const [conversations, setConversations] = useState<InboxConversation[]>([]);
@@ -62,6 +65,7 @@ const InboxScreen: React.FC = () => {
   const [sortBy] = useState<'date' | 'sender'>('date');
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(false);
+  const [showPremiumPopup, setShowPremiumPopup] = useState(false);
 
   // Generate consistent avatar colors based on name
   const getAvatarColor = (name: string): string => {
@@ -151,6 +155,33 @@ const InboxScreen: React.FC = () => {
   }, [navigation]);
 
   const navigateToChat = useCallback((conversation: InboxConversation) => {
+    // Check premium access for chat features
+    const accessResult = checkPremiumAccess({
+      feature: 'chat',
+      isPremium,
+      userId: user?.id,
+    });
+
+    // Log the access attempt for analytics
+    logPremiumAccessAttempt(
+      'chat',
+      isPremium,
+      user?.id,
+      {
+        conversationId: conversation.id,
+        senderId: conversation.senderId,
+        senderName: conversation.senderName,
+        source: 'InboxScreen'
+      }
+    );
+
+    // If user doesn't have premium access, show upgrade modal
+    if (!accessResult.hasAccess) {
+      console.log('[InboxScreen] Non-premium user attempting chat, showing premium popup');
+      setShowPremiumPopup(true);
+      return;
+    }
+
     // Mark as read if has unread messages
     if (conversation.unreadCount > 0) {
       markMessageAsRead(conversation.id);
@@ -161,7 +192,7 @@ const InboxScreen: React.FC = () => {
       participantId: conversation.senderId.toString(),
       participantName: conversation.senderName,
     });
-  }, [navigation, markMessageAsRead]);
+  }, [navigation, markMessageAsRead, isPremium, user?.id]);
 
   // Use conversations directly without search filtering
   const filteredConversations = conversations;
@@ -401,6 +432,17 @@ const InboxScreen: React.FC = () => {
           }
         />
       )}
+
+      {/* Premium Access Modal */}
+      <PremiumAccessModal
+        visible={showPremiumPopup}
+        feature="chat"
+        onClose={() => setShowPremiumPopup(false)}
+        onUpgrade={() => {
+          setShowPremiumPopup(false);
+          navigation.navigate('PremiumUser' as never);
+        }}
+      />
     </View>
   );
 };

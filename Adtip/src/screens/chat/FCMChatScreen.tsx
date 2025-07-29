@@ -27,11 +27,13 @@ import { KeyboardAvoiderScrollView, KeyboardAvoiderView } from '@good-react-nati
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFCMChat } from '../../contexts/FCMChatContext';
+import { useWallet } from '../../hooks/useWallet';
 import { Message } from '../../services/FCMChatServiceLocal';
 import { RealTimeMessageHandler, useRealTimeMessages } from '../../components/chat/RealTimeMessageHandler';
 import { COLORS } from '../../constants/colors';
 import Header from '../../components/common/Header';
 import CallController from '../../services/calling/CallController';
+import { checkPremiumAccess, logPremiumAccessAttempt, PremiumAccessModal } from '../../utils/premiumAccessUtils';
 
 type RootStackParamList = {
   FCMChat: {
@@ -240,6 +242,7 @@ const FCMChatScreen: React.FC = () => {
   const navigation = useNavigation<FCMChatScreenNavigationProp>();
   const { user } = useAuth();
   const { colors } = useTheme();
+  const { isPremium } = useWallet();
 
   const {
     currentMessages,
@@ -259,6 +262,8 @@ const FCMChatScreen: React.FC = () => {
   const [inputHeight, setInputHeight] = useState(50);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'complete' | 'error'>('idle');
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [showPremiumPopup, setShowPremiumPopup] = useState(false);
+  const [premiumFeature, setPremiumFeature] = useState<'voice_call' | 'video_call' | 'chat' | 'general'>('general');
   const textInputRef = useRef<TextInput>(null);
   const sendButtonScale = useRef(new Animated.Value(1)).current;
 
@@ -284,10 +289,33 @@ const FCMChatScreen: React.FC = () => {
     scrollToBottom();
   }, [scrollToBottom]);
 
-  // Handle voice call initiation
+  // Handle voice call initiation with premium access check
   const handleVoiceCall = useCallback(async () => {
     if (!participantId || !participantName) {
       Alert.alert('Error', 'Cannot start call - missing participant information');
+      return;
+    }
+
+    // Check premium access for voice calls
+    const accessResult = checkPremiumAccess({
+      feature: 'voice_call',
+      isPremium,
+      userId: user?.id,
+    });
+
+    // Log the access attempt for analytics
+    logPremiumAccessAttempt(
+      'voice_call',
+      isPremium,
+      user?.id,
+      { participantId, participantName, source: 'FCMChatScreen' }
+    );
+
+    // If user doesn't have premium access, show upgrade modal
+    if (!accessResult.hasAccess) {
+      console.log('[FCMChatScreen] Non-premium user attempting voice call, showing premium popup');
+      setPremiumFeature('voice_call');
+      setShowPremiumPopup(true);
       return;
     }
 
@@ -305,12 +333,35 @@ const FCMChatScreen: React.FC = () => {
       console.error('[FCMChatScreen] Voice call error:', error);
       Alert.alert('Call Error', 'An error occurred while starting the call.');
     }
-  }, [participantId, participantName]);
+  }, [participantId, participantName, isPremium, user?.id]);
 
-  // Handle video call initiation
+  // Handle video call initiation with premium access check
   const handleVideoCall = useCallback(async () => {
     if (!participantId || !participantName) {
       Alert.alert('Error', 'Cannot start call - missing participant information');
+      return;
+    }
+
+    // Check premium access for video calls
+    const accessResult = checkPremiumAccess({
+      feature: 'video_call',
+      isPremium,
+      userId: user?.id,
+    });
+
+    // Log the access attempt for analytics
+    logPremiumAccessAttempt(
+      'video_call',
+      isPremium,
+      user?.id,
+      { participantId, participantName, source: 'FCMChatScreen' }
+    );
+
+    // If user doesn't have premium access, show upgrade modal
+    if (!accessResult.hasAccess) {
+      console.log('[FCMChatScreen] Non-premium user attempting video call, showing premium popup');
+      setPremiumFeature('video_call');
+      setShowPremiumPopup(true);
       return;
     }
 
@@ -328,7 +379,7 @@ const FCMChatScreen: React.FC = () => {
       console.error('[FCMChatScreen] Video call error:', error);
       Alert.alert('Call Error', 'An error occurred while starting the call.');
     }
-  }, [participantId, participantName]);
+  }, [participantId, participantName, isPremium, user?.id]);
 
   // Create call buttons component
   const getCallButtons = useCallback(() => {
@@ -824,6 +875,17 @@ const FCMChatScreen: React.FC = () => {
           </Animated.View>
         </Animated.View>
       </KeyboardAvoiderView>
+
+      {/* Premium Access Modal */}
+      <PremiumAccessModal
+        visible={showPremiumPopup}
+        feature={premiumFeature}
+        onClose={() => setShowPremiumPopup(false)}
+        onUpgrade={() => {
+          setShowPremiumPopup(false);
+          navigation.navigate('PremiumUser' as never);
+        }}
+      />
     </View>
   );
 };
