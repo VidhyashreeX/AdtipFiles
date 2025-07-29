@@ -2831,6 +2831,34 @@ export default class ApiService {
     return this.get(`/api/video-call/history/${userId}?page=${page}&limit=${limit}`);
   }
 
+  // Consolidated Call API (combines token generation, meeting creation, and call initiation)
+  static async initiateConsolidatedCall(data: {
+    callerId: number;
+    receiverId: number;
+    callType: 'voice' | 'video';
+    platform?: 'ANDROID' | 'IOS';
+  }): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      callId: number;
+      sessionId: string;
+      meetingId: string;
+      token: string;
+      channelName: string;
+      maxDuration: number;
+      maxDurationMinutes: number;
+      callerInfo: { id: number; name: string };
+      receiverInfo: { id: number; name: string };
+      callType: string;
+      platform: string;
+      startTime: string;
+      maxEndTime: string;
+    };
+  }> {
+    return this.post('/api/adtipcall', data);
+  }
+
   // ===== WITHDRAWAL APIs =====
 
   // Get withdrawal settings

@@ -143,7 +143,10 @@ const Controls = () => {
   return (
     <View style={styles.controlsContainer}>
       <TouchableOpacity
-        style={styles.controlButton}
+        style={[
+          styles.controlButton,
+          { backgroundColor: micOn ? '#00D4AA' : '#FF3B30' }
+        ]}
         onPress={handleToggleMic}
       >
         {micOn ? (
@@ -155,7 +158,10 @@ const Controls = () => {
 
       {session?.type === 'video' && (
         <TouchableOpacity
-          style={styles.controlButton}
+          style={[
+            styles.controlButton,
+            { backgroundColor: webcamOn ? '#00D4AA' : '#FF3B30' }
+          ]}
           onPress={handleToggleCamera}
         >
           {webcamOn ? (

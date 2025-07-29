@@ -333,114 +333,62 @@ class CallController {
 
       // Clear any existing meeting state to prevent conflicts
       await this.videoSDK.clearExistingMeetingState()
-      
-      // Generate session ID for this call
-      const sessionId = `call-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-      
-      // Check if we can set this as the active meeting session
-      if (!this.videoSDK.setActiveMeetingSession(sessionId)) {
-        throw new Error('Another meeting session is already active')
-      }
-      
-      // Generate token for VideoSDK
-      const token = await this.videoSDK.generateParticipantToken()
-      if (!token) throw new Error('Failed to generate VideoSDK token')
-      
-      // Create meeting ID with state isolation
-      const meetingId = await this.videoSDK.createMeeting(token)
-      if (!meetingId) throw new Error('Failed to create meeting')
-      
+
       // Get local user info
       const { userId, userName } = await this.getUserInfo()
-      
-      // Fetch FCM tokens separately
-      const callerToken = await this.fetchFcmToken(userId)
-      const recipientToken = await this.fetchFcmToken(recipientId)
-      if (!callerToken || !recipientToken) throw new Error('FCM token(s) missing')
-      
-      // Build payload & call initiate-call API (FCM notification)
-      const initiateCallPayload = {
-        calleeInfo: {
-          platform: require('react-native').Platform.OS === 'ios' ? 'IOS' : 'ANDROID',
-          token: recipientToken,
-        },
-        callerInfo: {
-          name: userName,
-          token: callerToken,
-        },
-        videoSDKInfo: {
-          meetingId,
-          token,
-          callType,
-        },
-      };
 
-      console.log('🚀 [CallController] Making initiate-call API request:', {
-        recipientId,
+      // Use consolidated API that combines token generation, meeting creation, and call initiation
+      console.log('🚀 [CallController] Making consolidated call API request:', {
+        callerId: parseInt(userId),
+        receiverId: parseInt(recipientId),
         callType,
-        meetingId,
-        callerName: userName,
-        platform: require('react-native').Platform.OS,
+        platform: require('react-native').Platform.OS === 'ios' ? 'IOS' : 'ANDROID',
         timestamp: new Date().toISOString()
       });
 
-      await ApiService.initiateCall(initiateCallPayload);
+      const consolidatedResponse = await ApiService.initiateConsolidatedCall({
+        callerId: parseInt(userId),
+        receiverId: parseInt(recipientId),
+        callType,
+        platform: require('react-native').Platform.OS === 'ios' ? 'IOS' : 'ANDROID'
+      });
 
-      console.log('✅ [CallController] initiate-call API request completed successfully');
+      console.log('✅ [CallController] Consolidated call API response received:', {
+        success: consolidatedResponse.success,
+        callId: consolidatedResponse.data.callId,
+        meetingId: consolidatedResponse.data.meetingId,
+        sessionId: consolidatedResponse.data.sessionId,
+        timestamp: new Date().toISOString()
+      });
 
-      // Call payment API to start billing and get callId
-      let callId: number | undefined
-      try {
-        console.log(`🚀 [CallController] Making payment API request for ${callType} call:`, {
-          callerId: parseInt(userId),
-          receiverId: parseInt(recipientId),
-          action: 'start',
-          timestamp: new Date().toISOString()
-        });
-
-        const paymentResponse = callType === 'video'
-          ? await ApiService.initiateVideoCall({
-              callerId: parseInt(userId),
-              receiverId: parseInt(recipientId),
-              action: 'start'
-            })
-          : await ApiService.initiateVoiceCall({
-              callerId: parseInt(userId),
-              receiverId: parseInt(recipientId),
-              action: 'start'
-            });
-
-        console.log('✅ [CallController] Payment API response received:', {
-          callType,
-          response: paymentResponse,
-          timestamp: new Date().toISOString()
-        });
-
-        // Fix: Support both callId and call_id from backend
-        callId = paymentResponse.callId || paymentResponse.call_id;
-        if (!callId) {
-          console.warn('[CallController] No callId returned from payment API', paymentResponse);
-        } else {
-          this.lastCallId = callId; // <-- Store callId for later use
-          // Always update session with callId after payment API
-          const store = useCallStore.getState();
-          if (!store.session?.callId) {
-            store.actions.setSession({
-              ...store.session!,
-              callId,
-            });
-            console.log('[CallController] callId set in session after payment API:', callId);
-          }
-        }
-      } catch (paymentError) {
-        console.error('[CallController] Failed to start payment tracking:', paymentError)
-        // Continue with call even if payment tracking fails - this prevents call failures due to payment API issues
+      if (!consolidatedResponse.success) {
+        throw new Error(consolidatedResponse.message || 'Failed to initiate call');
       }
 
-      // Update store with outgoing call (use the same sessionId from VideoSDK tracking)
+      // Extract data from consolidated response
+      const {
+        callId,
+        meetingId,
+        token,
+        sessionId: backendSessionId,
+        channelName,
+        maxDuration
+      } = consolidatedResponse.data;
+
+      // Store callId for later use
+      this.lastCallId = callId;
+
+      // Set the backend sessionId as the active meeting session
+      if (!this.videoSDK.setActiveMeetingSession(backendSessionId)) {
+        throw new Error('Another meeting session is already active')
+      }
+
+      console.log('✅ [CallController] Consolidated API completed successfully - token generated, meeting created, FCM sent, payment tracked');
+
+      // Update store with outgoing call (use sessionId from consolidated API response)
       const store = useCallStore.getState()
       store.actions.setSession({
-        sessionId,
+        sessionId: backendSessionId, // Use sessionId from backend for consistency
         meetingId,
         token,
         peerId: recipientId,
@@ -456,14 +404,14 @@ class CallController {
       await this.media.initialize()
       
       // Show outgoing call notification
-      this.notification.showOngoingCall(sessionId, recipientName, callType)
-      
+      this.notification.showOngoingCall(backendSessionId, recipientName, callType)
+
       // For outgoing calls, immediately transition to connecting so the meeting screen can render
       store.actions.setStatus('connecting')
-      
+
       // Start persistent call instead of navigating
       startPersistentCall({
-        sessionId,
+        sessionId: backendSessionId,
         meetingId,
         token,
         peerName: recipientName,

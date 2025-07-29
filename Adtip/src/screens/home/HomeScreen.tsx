@@ -39,7 +39,7 @@ import ApiService from '../../services/ApiService';
 
 import {HOME_ENDPOINTS} from '../../constants/apiEndpoints';
 import shareService from '../../services/ShareService';
-import { usePosts, useGuestPosts, useLikeMutation, useFollowMutation, useSubscriptionStatus, useCategories, useSearchUsers } from '../../hooks/useQueries';
+import { usePosts, useGuestPosts, useLikeMutation, useFollowMutation, useSubscriptionStatus, useCategories, useSearchUsers, useWalletBalance } from '../../hooks/useQueries';
 import { useUserWallet } from '../../contexts/UserDataContext';
 
 import { useFCMChat } from '../../contexts/FCMChatContext';
@@ -296,12 +296,19 @@ const HomeScreen: React.FC = () => {
   const {colors} = useTheme();
   const {user, isGuest} = useAuth();
   const { totalUnreadCount } = useFCMChat();
-  const { walletBalance } = useUserWallet();
+  const { walletBalance: contextWalletBalance } = useUserWallet();
+
+  // Use the same wallet balance source as WalletScreen
+  const { data: walletBalanceData } = useWalletBalance(user?.id || 0);
+  const walletBalance = walletBalanceData?.availableBalance || contextWalletBalance || 0;
+
   const navigation = useNavigation<AppNavigationProps>();
 
   // Debug wallet balance
   console.log('[HomeScreen] Wallet balance debug:', {
-    walletBalance,
+    contextWalletBalance,
+    walletBalanceData: walletBalanceData?.availableBalance,
+    finalWalletBalance: walletBalance,
     userId: user?.id,
     isGuest
   });
@@ -854,11 +861,11 @@ const HomeScreen: React.FC = () => {
             backgroundColor: colors.primary + '20',
             borderColor: colors.primary,
             // Dynamic width based on balance - minimum 40, scales with balance
-            width: Math.max(40, Math.min(80, 40 + (walletBalance / 100) * 20)),
+            width: Math.max(40, Math.min(80, 40 + (Number(walletBalance) / 100) * 20)),
           }
         ]}>
           <Text style={[styles.balanceText, { color: colors.primary }]} numberOfLines={1}>
-            ₹{walletBalance.toFixed(0)}
+            ₹{Number(walletBalance).toFixed(2)}
           </Text>
         </View>
       </TouchableOpacity>
@@ -1329,6 +1336,19 @@ const HomeScreen: React.FC = () => {
           }}
         />
 
+        {/* Debug Button for Reward Popup - Only visible in debug builds */}
+        {__DEV__ && (
+          <TouchableOpacity
+            style={styles.debugButton}
+            onPress={() => {
+              setEarnedAmount(isPremium ? 10.0 : 3.0);
+              setShowRewardPopup(true);
+            }}
+          >
+            <Text style={styles.debugButtonText}>🐛</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Premium Upgrade Alert for Games */}
         <PremiumUpgradeAlert
           visible={showPremiumUpgradeAlert}
@@ -1746,6 +1766,27 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
   },
   modernBannerAppIconText: {
     fontSize: 30,
+  },
+  debugButton: {
+    position: 'absolute',
+    bottom: 100,
+    right: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#FF6B35',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    zIndex: 1000,
+  },
+  debugButtonText: {
+    fontSize: 20,
+    textAlign: 'center',
   },
 });
 
