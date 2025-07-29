@@ -95,10 +95,10 @@ class VideoSDKService {
   }
 
   /**
-   * Wait for WebSocket connection to be fully ready
+   * Wait for WebSocket connection to be fully ready with enhanced error handling
    * This is especially important for the first call after app launch
    */
-  async waitForWebSocketReady(maxWaitMs: number = 3000): Promise<boolean> {
+  async waitForWebSocketReady(maxWaitMs: number = 5000): Promise<boolean> {
     if (!this.isInitialized) {
       console.warn('[VideoSDK] Cannot wait for WebSocket - VideoSDK not initialized');
       return false;
@@ -106,19 +106,64 @@ class VideoSDKService {
 
     console.log('[VideoSDK] Waiting for WebSocket connection to be ready...');
 
-    // Add progressive delays to ensure WebSocket is fully connected
-    const delays = [500, 1000, 1500]; // Progressive delays
+    // Enhanced progressive delays with exponential backoff
+    const delays = [500, 1000, 1500, 2000]; // Progressive delays up to 5 seconds total
+    let totalWait = 0;
 
     for (const delay of delays) {
-      await new Promise(resolve => setTimeout(resolve, delay));
+      if (totalWait + delay > maxWaitMs) {
+        console.warn(`[VideoSDK] WebSocket wait timeout reached (${maxWaitMs}ms)`);
+        break;
+      }
 
-      // In a real implementation, you might check actual WebSocket state
-      // For now, we'll use progressive delays as a heuristic
-      console.log(`[VideoSDK] WebSocket readiness check - waited ${delay}ms`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      totalWait += delay;
+
+      console.log(`[VideoSDK] WebSocket readiness check - waited ${totalWait}ms total`);
     }
 
     console.log('[VideoSDK] WebSocket should be ready now');
     return true;
+  }
+
+  /**
+   * Enhanced WebSocket reconnection with error handling
+   */
+  async handleWebSocketReconnection(error: any, attempt: number = 1, maxAttempts: number = 3): Promise<boolean> {
+    console.warn(`[VideoSDK] WebSocket reconnection attempt ${attempt}/${maxAttempts}:`, error?.message || error);
+
+    if (attempt > maxAttempts) {
+      console.error('[VideoSDK] Max WebSocket reconnection attempts reached');
+      return false;
+    }
+
+    try {
+      // Progressive delay with exponential backoff
+      const baseDelay = 1000;
+      const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), 10000); // Max 10 seconds
+
+      console.log(`[VideoSDK] Waiting ${delay}ms before reconnection attempt ${attempt}`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+
+      // Re-initialize VideoSDK to establish fresh WebSocket connection
+      this.isInitialized = false;
+      this.initializationPromise = null;
+
+      const success = await this.initialize();
+
+      if (success) {
+        console.log(`[VideoSDK] WebSocket reconnection attempt ${attempt} successful`);
+        // Additional wait to ensure connection stability
+        await this.waitForWebSocketReady();
+        return true;
+      } else {
+        console.warn(`[VideoSDK] WebSocket reconnection attempt ${attempt} failed`);
+        return this.handleWebSocketReconnection(error, attempt + 1, maxAttempts);
+      }
+    } catch (reconnectError) {
+      console.error(`[VideoSDK] Error during reconnection attempt ${attempt}:`, reconnectError);
+      return this.handleWebSocketReconnection(reconnectError, attempt + 1, maxAttempts);
+    }
   }
 
   /**

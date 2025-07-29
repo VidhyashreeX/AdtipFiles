@@ -52,7 +52,7 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
   // Set up meeting configuration
   const mMeeting = useMeeting({
     onMeetingJoined: () => {
-      console.log('[VideoSDKMeeting] Meeting joined successfully');
+      logCall('[VideoSDKMeeting] Meeting joined successfully');
       setCallStatus('connected');
       startTimeRef.current = Date.now();
       startDurationTimer();
@@ -60,7 +60,7 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
       hasJoinedRef.current = true;
     },
     onMeetingLeft: () => {
-      console.log('[VideoSDKMeeting] Meeting left');
+      logCall('[VideoSDKMeeting] Meeting left');
       setCallStatus('ended');
       stopDurationTimer();
       props.onMeetingLeft?.();
@@ -68,8 +68,47 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
     },
     onParticipantJoined: () => updateParticipantCount(),
     onParticipantLeft: () => updateParticipantCount(),
-    onError: (error) => {
+    onError: async (error) => {
       console.error('[VideoSDKMeeting] Meeting error:', error);
+
+      // Enhanced error handling for WebSocket and VideoSDK errors
+      const errorMessage = error?.message || String(error)
+      const errorCode = error?.code
+
+      // Check for WebSocket reconnection errors
+      const isWebSocketError = errorMessage.includes('websocket') ||
+                              errorMessage.includes('WebSocket') ||
+                              errorMessage.includes('connection') ||
+                              errorMessage.includes('reconnect')
+
+      // Check for VideoSDK specific error codes
+      const isVideoSDKError = errorCode && (
+        errorCode >= 4001 && errorCode <= 5006 // VideoSDK error code range
+      )
+
+      if (isWebSocketError || isVideoSDKError) {
+        console.log('[VideoSDKMeeting] WebSocket/VideoSDK error detected, attempting recovery');
+
+        try {
+          // Import VideoSDKService dynamically to avoid circular dependency
+          const { default: VideoSDKService } = await import('../../services/videosdk/VideoSDKService');
+          const videoSDK = VideoSDKService.getInstance();
+
+          // Attempt WebSocket reconnection
+          const reconnected = await videoSDK.handleWebSocketReconnection(error, 1, 2);
+
+          if (reconnected) {
+            console.log('[VideoSDKMeeting] WebSocket reconnection successful');
+            // Don't set status to failed immediately, let the meeting retry
+            return;
+          } else {
+            console.warn('[VideoSDKMeeting] WebSocket reconnection failed');
+          }
+        } catch (reconnectError) {
+          console.error('[VideoSDKMeeting] Error during WebSocket reconnection:', reconnectError);
+        }
+      }
+
       setCallStatus('failed');
       props.onError?.(error);
     },
@@ -118,11 +157,11 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
       return;
     }
     if (hasJoinedRef.current) {
-      console.log('[VideoSDKMeeting] joinMeeting already called, skipping.');
+      logCall('[VideoSDKMeeting] joinMeeting already called, skipping.');
       return;
     }
     try {
-      console.log('[VideoSDKMeeting] Joining meeting:', meetingConfig.meetingId);
+      logCall('[VideoSDKMeeting] Joining meeting:', meetingConfig.meetingId);
       if (mMeeting && typeof mMeeting.join === 'function') {
         mMeeting.join();
         hasJoinedRef.current = true;
@@ -170,12 +209,12 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
   // Cleanup on unmount ONLY - no dependencies to prevent cleanup running on state changes
   useEffect(() => {
     return () => {
-      console.log('[VideoSDKMeeting] Component unmounting - cleaning up');
+      logCall('[VideoSDKMeeting] Component unmounting - cleaning up');
       stopDurationTimer();
       // Attempt to leave meeting if still connected
       if (hasJoinedRef.current && mMeeting && typeof mMeeting.leave === 'function') {
         try {
-          console.log('[VideoSDKMeeting] Leaving meeting on unmount');
+          logCall('[VideoSDKMeeting] Leaving meeting on unmount');
           mMeeting.leave();
         } catch (e) {
           console.error('[VideoSDKMeeting] Error leaving meeting on unmount:', e);

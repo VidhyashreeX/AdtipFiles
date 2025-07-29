@@ -70,8 +70,8 @@ class CallController {
     subscribe(
       state => state.status,
       (status, prevStatus) => {
-        console.log(`[CallController] Status changed: ${prevStatus} -> ${status}`)
-        
+        logCall('CallController', `Status changed: ${prevStatus} -> ${status}`)
+
         switch (status) {
           case 'ringing': {
             const session = getState().session
@@ -161,11 +161,11 @@ class CallController {
         const sessionId = detail.notification?.data?.sessionId as string
 
         if (!sessionId) {
-          console.warn('[CallController] No sessionId in notification data')
+          logWarn('CallController', 'No sessionId in notification data')
           return
         }
 
-        console.log('[CallController] Notification action pressed:', detail.pressAction?.id)
+        logCall('CallController', 'Notification action pressed', { action: detail.pressAction?.id })
 
         switch (detail.pressAction?.id) {
           case 'answer':
@@ -178,7 +178,7 @@ class CallController {
             break
 
           default:
-            console.warn('[CallController] Unknown notification action:', detail.pressAction?.id)
+            logWarn('CallController', 'Unknown notification action', { action: detail.pressAction?.id })
         }
       }
     })
@@ -190,7 +190,7 @@ class CallController {
 
         if (!sessionId) return
 
-        console.log('[CallController] Background notification action:', detail.pressAction?.id)
+        logCall('CallController', 'Background notification action', { action: detail.pressAction?.id })
 
         switch (detail.pressAction?.id) {
           case 'answer':
@@ -236,16 +236,16 @@ class CallController {
    * Clean up call resources with comprehensive state reset
    */
   private async cleanup() {
-    console.log('[CallController] Starting comprehensive cleanup');
+    logCall('CallController', 'Starting comprehensive cleanup');
 
     try {
       // Use the comprehensive cleanup utility
       const cleanupService = CallStateCleanup.getInstance();
       await cleanupService.performComprehensiveCleanup();
 
-      console.log('[CallController] Comprehensive cleanup complete');
+      logCall('CallController', 'Comprehensive cleanup complete');
     } catch (error) {
-      console.error('[CallController] Error during comprehensive cleanup:', error);
+      logError('CallController', 'Error during comprehensive cleanup', error);
 
       // Fallback to emergency cleanup
       const cleanupService = CallStateCleanup.getInstance();
@@ -270,7 +270,7 @@ class CallController {
       const response = await ApiService.getFCMToken(peerId)
       return response?.token
     } catch (err) {
-      console.warn('[CallController] Failed to get peer FCM token', err)
+      logWarn('CallController', 'Failed to get peer FCM token', err)
       return null
     }
   }
@@ -283,7 +283,7 @@ class CallController {
       const res = await ApiService.getFCMToken(userId)
       return res?.token || null
     } catch (error) {
-      console.warn('[CallController] Failed to fetch FCM token for', userId, error)
+      logWarn('CallController', 'Failed to fetch FCM token', { userId, error })
       return null
     }
   }
@@ -306,7 +306,7 @@ class CallController {
         type,
       })
     } catch (err) {
-      console.warn('[CallController] sendCallStatusUpdate error', err)
+      logWarn('CallController', 'sendCallStatusUpdate error', err)
     }
   }
   
@@ -314,25 +314,25 @@ class CallController {
    * Start an outgoing call
    */
   async startCall(recipientId: string, recipientName: string, callType: CallType) {
-    console.log(`[CallController] Starting ${callType} call to ${recipientName}`)
+    logCall('CallController', `Starting ${callType} call to ${recipientName}`)
 
     try {
       // Validate permissions before starting call
-      console.log('[CallController] Validating call permissions...')
+      logCall('CallController', 'Validating call permissions...')
       const permissionManager = PermissionManagerService.getInstance()
       const permissionResult = await permissionManager.requestCallPermissions(callType === 'video')
 
       if (!permissionResult.microphone) {
-        console.error('[CallController] Microphone permission not granted')
+        logError('CallController', 'Microphone permission not granted')
         throw new Error('Microphone permission is required to make calls')
       }
 
       if (callType === 'video' && !permissionResult.camera) {
-        console.error('[CallController] Camera permission not granted for video call')
+        logError('CallController', 'Camera permission not granted for video call')
         throw new Error('Camera permission is required to make video calls')
       }
 
-      console.log('[CallController] Call permissions validated successfully:', permissionResult)
+      logCall('CallController', 'Call permissions validated successfully', permissionResult)
 
       // Ensure comprehensive cleanup before starting new call
       await this.cleanup()
@@ -347,7 +347,7 @@ class CallController {
       const { userId, userName } = await this.getUserInfo()
 
       // Use consolidated API that combines token generation, meeting creation, and call initiation
-      console.log('🚀 [CallController] Making consolidated call API request:', {
+      logCall('CallController', 'Making consolidated call API request', {
         callerId: parseInt(userId),
         receiverId: parseInt(recipientId),
         callType,
@@ -362,7 +362,7 @@ class CallController {
         platform: require('react-native').Platform.OS === 'ios' ? 'IOS' : 'ANDROID'
       });
 
-      console.log('✅ [CallController] Consolidated call API response received:', {
+      logCall('CallController', 'Consolidated call API response received', {
         success: consolidatedResponse.success,
         callId: consolidatedResponse.data.callId,
         meetingId: consolidatedResponse.data.meetingId,
@@ -392,7 +392,7 @@ class CallController {
         throw new Error('Another meeting session is already active')
       }
 
-      console.log('✅ [CallController] Consolidated API completed successfully - token generated, meeting created, FCM sent, payment tracked');
+      logCall('CallController', 'Consolidated API completed successfully - token generated, meeting created, FCM sent, payment tracked');
 
       // Update store with outgoing call (use sessionId from consolidated API response)
       const store = useCallStore.getState()
@@ -430,7 +430,7 @@ class CallController {
       
       return true
     } catch (error) {
-      console.error('[CallController] startCall error', error)
+      logError('CallController', 'startCall error', error)
       
       // Reset call state
       const store = useCallStore.getState()
@@ -631,7 +631,7 @@ class CallController {
    * Accept concurrent incoming call (ends current call)
    */
   async acceptConcurrentCall(): Promise<boolean> {
-    console.log('[CallController] Accepting concurrent call - ending current call first')
+    logCall('CallController', 'Accepting concurrent call - ending current call first')
 
     try {
       // End current call first
@@ -655,7 +655,7 @@ class CallController {
 
       return false
     } catch (error) {
-      console.error('[CallController] Error accepting concurrent call:', error)
+      logError('CallController', 'Error accepting concurrent call', error)
       return false
     }
   }
@@ -668,33 +668,33 @@ class CallController {
     const session = store.session
 
     if (!session || store.status !== 'ringing') {
-      console.warn('[CallController] Cannot accept call - no session or not ringing')
+      logWarn('CallController', 'Cannot accept call - no session or not ringing')
       return false
     }
 
     try {
-      console.log('[CallController] Accepting call:', session.sessionId)
+      logCall('CallController', 'Accepting call', { sessionId: session.sessionId })
 
       // Validate permissions before accepting call
-      console.log('[CallController] Validating call permissions for incoming call...')
+      logCall('CallController', 'Validating call permissions for incoming call...')
       const permissionManager = PermissionManagerService.getInstance()
       const permissionResult = await permissionManager.requestCallPermissions(session.type === 'video')
 
       if (!permissionResult.microphone) {
-        console.error('[CallController] Microphone permission not granted for accepting call')
+        logError('CallController', 'Microphone permission not granted for accepting call')
         // Decline the call if permissions are not granted
         await this.declineCall()
         return false
       }
 
       if (session.type === 'video' && !permissionResult.camera) {
-        console.error('[CallController] Camera permission not granted for accepting video call')
+        logError('CallController', 'Camera permission not granted for accepting video call')
         // Decline the call if camera permission is not granted for video call
         await this.declineCall()
         return false
       }
 
-      console.log('[CallController] Call permissions validated for accepting call:', permissionResult)
+      logCall('CallController', 'Call permissions validated for accepting call', permissionResult)
 
       // Stop vibrating
       this.stopVibrate()
@@ -722,13 +722,13 @@ class CallController {
       try {
         await this.signaling.sendAccept(session.peerId, session.sessionId)
       } catch (signalError) {
-        console.error('[CallController] Failed to send accept signal:', signalError)
+        logError('CallController', 'Failed to send accept signal', signalError)
       }
 
       // Start payment tracking for accepted call (if not already started)
       if (!session.callId) {
         try {
-          console.log(`[CallController] Starting payment tracking for accepted ${session.type} call`)
+          logCall('CallController', `Starting payment tracking for accepted ${session.type} call`)
           const { userId } = await this.getUserInfo()
 
           const paymentResponse = session.type === 'video'
@@ -752,12 +752,12 @@ class CallController {
               ...session,
               callId
             })
-            console.log(`[CallController] Payment tracking started for accepted call, callId: ${callId}`)
+            logCall('CallController', `Payment tracking started for accepted call, callId: ${callId}`)
           } else {
-            console.warn('[CallController] Payment API call succeeded but no callId returned:', paymentResponse)
+            logWarn('CallController', 'Payment API call succeeded but no callId returned', paymentResponse)
           }
         } catch (paymentError) {
-          console.error('[CallController] Failed to start payment tracking for accepted call:', paymentError)
+          logError('CallController', 'Failed to start payment tracking for accepted call', paymentError)
           // Continue with call even if payment tracking fails
         }
       }
@@ -766,7 +766,7 @@ class CallController {
       try {
         await this.sendCallStatusUpdate('CALL_ACCEPTED')
       } catch (statusError) {
-        console.error('[CallController] Failed to send call status update:', statusError)
+        logError('CallController', 'Failed to send call status update', statusError)
       }
 
       // Update status to in_call
@@ -774,7 +774,7 @@ class CallController {
 
       return true
     } catch (error) {
-      console.error('[CallController] acceptCall error', error)
+      logError('CallController', 'acceptCall error', error)
       return false
     }
   }
@@ -799,25 +799,25 @@ class CallController {
       try {
         await this.signaling.sendEnd(session.peerId, session.sessionId)
       } catch (signalError) {
-        console.error('[CallController] Failed to send decline signal:', signalError)
+        logError('CallController', 'Failed to send decline signal', signalError)
       }
 
       // Notify server of missed/declined call
       try {
         await this.sendCallStatusUpdate('CALL_MISSED')
       } catch (statusError) {
-        console.error('[CallController] Failed to send call status update:', statusError)
+        logError('CallController', 'Failed to send call status update', statusError)
       }
 
       // CallManagerService removed - billing handled by CallBillingService
-      console.log('ℹ️ [CallController] Missed call cleanup completed')
+      logCall('CallController', 'Missed call cleanup completed')
       
       // Update status
       store.actions.setStatus('ended')
       
       return true
     } catch (error) {
-      console.error('[CallController] declineCall error', error)
+      logError('CallController', 'declineCall error', error)
       return false
     }
   }
@@ -830,17 +830,17 @@ class CallController {
     let session = store.session
 
     if (!session) {
-      console.warn('[CallController] No session found in store on endCall');
+      logWarn('CallController', 'No session found in store on endCall');
       return false;
     }
 
     // Debug: Log session object
-    console.log('[CallController] Session object on endCall:', session);
+    logCall('CallController', 'Session object on endCall', session);
 
     // Use lastCallId if available, otherwise session.callId
     const callIdToUse = this.lastCallId || session.callId;
     if (!callIdToUse) {
-      console.warn('[CallController] No callId available for end call', session);
+      logWarn('CallController', 'No callId available for end call', session);
     } else {
       // Call the end API (voice or video)
       const { userId } = await this.getUserInfo();
@@ -860,27 +860,28 @@ class CallController {
           callId: callIdToUse
         };
         
-        console.log('[CallController] 🚀 Calling end API with payload:', payload);
-        console.log('[CallController] 📞 Call type:', session.type);
-        console.log('[CallController] 📤 Call direction:', session.direction);
-        console.log('[CallController] 👤 Original caller ID:', originalCallerId);
-        console.log('[CallController] 👥 Original receiver ID:', originalReceiverId);
-        console.log('[CallController] 🆔 Call ID:', callIdToUse);
+        logCall('CallController', 'Calling end API with payload', {
+          payload,
+          callType: session.type,
+          direction: session.direction,
+          originalCallerId,
+          originalReceiverId,
+          callId: callIdToUse
+        });
         
         if (session.type === 'video') {
-          console.log('[CallController] 📹 Making video call end API call...');
+          logCall('CallController', 'Making video call end API call...');
           await ApiService.initiateVideoCall(payload);
-          console.log('[CallController] ✅ Video call end API called successfully');
+          logCall('CallController', 'Video call end API called successfully');
         } else {
-          console.log('[CallController] 📞 Making voice call end API call...');
+          logCall('CallController', 'Making voice call end API call...');
           await ApiService.initiateVoiceCall(payload);
-          console.log('[CallController] ✅ Voice call end API called successfully');
+          logCall('CallController', 'Voice call end API called successfully');
         }
-        
-        console.log('[CallController] 🎉 End call API completed successfully');
+
+        logCall('CallController', 'End call API completed successfully');
       } catch (err) {
-        console.error('[CallController] ❌ End call API error:', err);
-        console.error('[CallController] 📋 Error details:', {
+        logError('CallController', 'End call API error', {
           error: err,
           payload: {
             callerId: session.direction === 'outgoing' ? parseInt(userId) : parseInt(session.peerId),
@@ -911,13 +912,13 @@ class CallController {
           await this.signaling.sendEnd(session.peerId, session.sessionId)
         }
       } catch (signalError) {
-        console.error('[CallController] Failed to send end signal:', signalError)
+        logError('CallController', 'Failed to send end signal', signalError)
       }
       // Leave meeting
       try {
         await this.media.leaveMeeting()
       } catch (mediaError) {
-        console.error('[CallController] Failed to leave meeting:', mediaError)
+        logError('CallController', 'Failed to leave meeting', mediaError)
       }
       // Hide notifications and stop foreground service
       try {
@@ -929,11 +930,11 @@ class CallController {
         }
         await notifee.stopForegroundService()
       } catch (notificationError) {
-        console.error('[CallController] Failed to cleanup notifications:', notificationError)
+        logError('CallController', 'Failed to cleanup notifications', notificationError)
       }
-      console.log('ℹ️ [CallController] Call cleanup completed')
+      logCall('CallController', 'Call cleanup completed')
     } catch (cleanupError) {
-      console.error('[CallController] Error during call cleanup:', cleanupError)
+      logError('CallController', 'Error during call cleanup', cleanupError)
     }
     return true;
   }
@@ -942,17 +943,17 @@ class CallController {
    * Handle incoming FCM message for call
    */
   handleFCMMessage(message: FirebaseMessagingTypes.RemoteMessage) {
-    console.log('[CallController] Handling FCM message', message.data)
+    logCall('CallController', 'Handling FCM message', message.data)
 
     try {
       const data = message.data
       if (!data || !data.type) {
-        console.log('[CallController] No call data in FCM message, ignoring')
+        logCall('CallController', 'No call data in FCM message, ignoring')
         return
       }
 
       const messageType = data.type
-      console.log('[CallController] Processing FCM message type:', messageType)
+      logCall('CallController', 'Processing FCM message type', { messageType })
 
       switch (messageType) {
         case 'CALL_INITIATE':
@@ -965,10 +966,10 @@ class CallController {
           this.handleCallEndFCM(data)
           break
         default:
-          console.log('[CallController] Unknown FCM message type:', messageType)
+          logCall('CallController', 'Unknown FCM message type', { messageType })
       }
     } catch (error) {
-      console.error('[CallController] Error handling FCM message:', error)
+      logError('CallController', 'Error handling FCM message', error)
       // Don't throw - just log the error to prevent app crashes
     }
   }
@@ -978,7 +979,7 @@ class CallController {
    */
   private handleIncomingCallFCM(data: any) {
     try {
-      console.log('[CallController] Handling incoming call FCM:', data)
+      logCall('CallController', 'Handling incoming call FCM', data)
 
       const sessionId = data.sessionId
       const callerName = data.callerName || 'Unknown Caller'
@@ -989,7 +990,7 @@ class CallController {
       const allowsConcurrentCalls = data.allowsConcurrentCalls === "true"
 
       if (!sessionId || !meetingId || !token) {
-        console.error('[CallController] Missing required call data in FCM message')
+        logError('CallController', 'Missing required call data in FCM message')
         return
       }
 
@@ -999,7 +1000,7 @@ class CallController {
       const hasActiveCall = ['connecting', 'in_call'].includes(currentStatus)
 
       if (hasActiveCall && allowsConcurrentCalls) {
-        console.log('[CallController] Incoming call while already in active call - concurrent calls supported')
+        logCall('CallController', 'Incoming call while already in active call - concurrent calls supported')
         // Store the incoming call data for potential acceptance
         // The user can choose to accept (ending current call), decline, or ignore
         this.pendingIncomingCall = {
@@ -1019,7 +1020,7 @@ class CallController {
         // Use a different vibration pattern for concurrent calls
         this.startVibrate(true) // true for concurrent call pattern
 
-        console.log('[CallController] Concurrent incoming call stored and notification shown')
+        logCall('CallController', 'Concurrent incoming call stored and notification shown')
         return
       }
 
@@ -1042,9 +1043,9 @@ class CallController {
       // Start vibration
       this.startVibrate()
 
-      console.log('[CallController] Incoming call FCM processed successfully')
+      logCall('CallController', 'Incoming call FCM processed successfully')
     } catch (error) {
-      console.error('[CallController] Error handling incoming call FCM:', error)
+      logError('CallController', 'Error handling incoming call FCM', error)
     }
   }
 
@@ -1053,17 +1054,17 @@ class CallController {
    */
   private handleCallAcceptFCM(data: any) {
     try {
-      console.log('[CallController] Handling call accept FCM:', data)
+      logCall('CallController', 'Handling call accept FCM', data)
 
       const sessionId = data.sessionId
       const store = useCallStore.getState()
 
       if (store.session?.sessionId === sessionId) {
         store.actions.setStatus('connecting')
-        console.log('[CallController] Call accept FCM processed successfully')
+        logCall('CallController', 'Call accept FCM processed successfully')
       }
     } catch (error) {
-      console.error('[CallController] Error handling call accept FCM:', error)
+      logError('CallController', 'Error handling call accept FCM', error)
     }
   }
 
@@ -1072,7 +1073,7 @@ class CallController {
    */
   private handleCallEndFCM(data: any) {
     try {
-      console.log('[CallController] Handling call end FCM:', data)
+      logCall('CallController', 'Handling call end FCM', data)
 
       const sessionId = data.sessionId
       const store = useCallStore.getState()
@@ -1087,10 +1088,10 @@ class CallController {
         // Update status to ended
         store.actions.setStatus('ended')
 
-        console.log('[CallController] Call end FCM processed successfully')
+        logCall('CallController', 'Call end FCM processed successfully')
       }
     } catch (error) {
-      console.error('[CallController] Error handling call end FCM:', error)
+      logError('CallController', 'Error handling call end FCM', error)
     }
   }
 

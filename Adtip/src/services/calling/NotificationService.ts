@@ -3,6 +3,7 @@ import { CallType } from '../../stores/callStoreSimplified'
 import { NativeModules, Platform } from 'react-native'
 import CallKitService from './CallKitService'
 import NotificationPersistenceService from './NotificationPersistenceService'
+import { logCall, logError, logWarn } from '../../utils/ProductionLogger'
 
 const { IncomingCallModule } = NativeModules
 
@@ -20,7 +21,7 @@ class NotificationService {
     this.createChannels()
     // Also initialize enhanced channels
     this.initializeEnhancedChannels().catch(error => {
-      console.warn('[NotificationService] Failed to initialize enhanced channels:', error)
+      logWarn('NotificationService', 'Failed to initialize enhanced channels', error)
     })
   }
 
@@ -30,12 +31,12 @@ class NotificationService {
   }
 
   async showIncomingCall(sessionId: string, callerName: string, type: CallType, isConcurrentCall: boolean = false, meetingId?: string, token?: string) {
-    console.log('[NotificationService] Showing incoming call notification:', { sessionId, callerName, type, isConcurrentCall })
+    logCall('NotificationService', 'Showing incoming call notification', { sessionId, callerName, type, isConcurrentCall })
 
     // Check if CallKeep is handling the call first
     const callKeepService = await this.getCallKeepService()
     if (callKeepService && callKeepService.isAvailable()) {
-      console.log('[NotificationService] CallKeep is available, skipping custom notification')
+      logCall('NotificationService', 'CallKeep is available, skipping custom notification')
       return // Let CallKeep handle the call UI
     }
 
@@ -65,13 +66,13 @@ class NotificationService {
           })
 
           if (success) {
-            console.log('[NotificationService] CallKit incoming call displayed')
+            logCall('NotificationService', 'CallKit incoming call displayed')
             notificationShown = true
             // Remove from persistence queue since CallKit handled it
             await persistenceService.removePendingCall(sessionId)
           }
         } catch (error) {
-          console.warn('[NotificationService] Failed to display CallKit call:', error)
+          logWarn('NotificationService', 'Failed to display CallKit call', error)
         }
       }
     }
@@ -80,9 +81,9 @@ class NotificationService {
     if (Platform.OS === 'android' && IncomingCallModule) {
       try {
         await IncomingCallModule.triggerIncomingCall(sessionId, callerName, type, meetingId || '', token || '')
-        console.log('[NotificationService] Native incoming call triggered')
+        logCall('NotificationService', 'Native incoming call triggered')
       } catch (error) {
-        console.warn('[NotificationService] Failed to trigger native call:', error)
+        logWarn('NotificationService', 'Failed to trigger native call', error)
       }
     }
 
@@ -119,14 +120,14 @@ class NotificationService {
           },
         })
 
-        console.log('[NotificationService] Notifee notification displayed successfully')
+        logCall('NotificationService', 'Notifee notification displayed successfully')
         notificationShown = true
 
         // Remove from persistence queue since notification was shown
         await persistenceService.removePendingCall(sessionId)
 
       } catch (error) {
-        console.error('[NotificationService] Failed to show Notifee notification:', error)
+        logError('NotificationService', 'Failed to show Notifee notification', error)
 
         // Create fallback notification
         await persistenceService.createFallbackNotification(sessionId, callerName, type)
@@ -148,40 +149,40 @@ class NotificationService {
   }
 
   async hideNotification(id: string) {
-    console.log('[NotificationService] Hiding notification:', id)
+    logCall('NotificationService', 'Hiding notification', { id })
 
     // End native call handling
     if (Platform.OS === 'android' && IncomingCallModule) {
       try {
         await IncomingCallModule.endCall()
-        console.log('[NotificationService] Native call ended')
+        logCall('NotificationService', 'Native call ended')
       } catch (error) {
-        console.warn('[NotificationService] Failed to end native call:', error)
+        logWarn('NotificationService', 'Failed to end native call', error)
       }
     }
 
     try {
       // Cancel the specific notification
       await notifee.cancelNotification(id)
-      console.log('[NotificationService] Cancelled notification:', id)
+      logCall('NotificationService', 'Cancelled notification', { id })
     } catch (error) {
-      console.warn('[NotificationService] Failed to cancel notification:', error)
+      logWarn('NotificationService', 'Failed to cancel notification', error)
     }
 
     // Also try to stop any ongoing foreground service
     try {
       await notifee.stopForegroundService()
-      console.log('[NotificationService] Stopped foreground service')
+      logCall('NotificationService', 'Stopped foreground service')
     } catch (error) {
-      console.warn('[NotificationService] Failed to stop foreground service:', error)
+      logWarn('NotificationService', 'Failed to stop foreground service', error)
     }
 
     // Clear all notifications for this app as a fallback for persistent notifications
     try {
       await notifee.cancelAllNotifications()
-      console.log('[NotificationService] Cleared all notifications as fallback')
+      logCall('NotificationService', 'Cleared all notifications as fallback')
     } catch (error) {
-      console.warn('[NotificationService] Failed to clear all notifications:', error)
+      logWarn('NotificationService', 'Failed to clear all notifications', error)
     }
   }
 
@@ -209,7 +210,7 @@ class NotificationService {
       vibration: false,
     })
 
-    console.log('[NotificationService] Enhanced notification channels created')
+    logCall('NotificationService', 'Enhanced notification channels created')
   }
 
   /**
@@ -221,7 +222,7 @@ class NotificationService {
       const CallKeepService = CallKeepServiceModule.CallKeepService
       return CallKeepService.getInstance()
     } catch (error) {
-      console.warn('[NotificationService] CallKeepService not available:', error)
+      logWarn('NotificationService', 'CallKeepService not available', error)
       return null
     }
   }
