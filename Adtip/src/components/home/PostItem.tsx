@@ -64,6 +64,9 @@ interface PostItemProps {
   remaining_budget?: number;
   alreadyRewarded?: boolean;
   is_promtion_post_viewed?: number;
+  showMenu?: boolean;
+  onEdit?: (id: number) => void;
+  onDelete?: (id: number) => void;
 }
 
 const PostItem: React.FC<PostItemProps> = ({
@@ -96,6 +99,9 @@ const PostItem: React.FC<PostItemProps> = ({
   remaining_budget,
   alreadyRewarded = false,
   is_promtion_post_viewed,
+  showMenu = false,
+  onEdit,
+  onDelete,
 }) => {
   // Debug logging for profileImage type
   if (profileImage && typeof profileImage !== 'string') {
@@ -120,6 +126,7 @@ const PostItem: React.FC<PostItemProps> = ({
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [promoTimer, setPromoTimer] = useState(5);
   const [canClosePromoModal, setCanClosePromoModal] = useState(false);
+  const [showDropdownMenu, setShowDropdownMenu] = useState(false);
 
   // Enhanced video URL testing and validation
   const testAndValidateVideoUrl = useCallback(async (url: string) => {
@@ -360,9 +367,40 @@ const PostItem: React.FC<PostItemProps> = ({
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => {}} style={styles.moreButton}>
-          <MoreHorizontal size={20} color={colors.text.primary} />
-        </TouchableOpacity>
+        {showMenu && (
+          <View style={styles.menuContainer}>
+            <TouchableOpacity
+              onPress={() => setShowDropdownMenu(!showDropdownMenu)}
+              style={styles.moreButton}
+            >
+              <MoreHorizontal size={20} color={colors.text.primary} />
+            </TouchableOpacity>
+
+            {/* Dropdown Menu */}
+            {showDropdownMenu && (
+              <View style={[styles.dropdownMenu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    setShowDropdownMenu(false);
+                    onEdit?.(id);
+                  }}
+                >
+                  <Text style={[styles.menuItemText, { color: colors.text.primary }]}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    setShowDropdownMenu(false);
+                    onDelete?.(id);
+                  }}
+                >
+                  <Text style={[styles.menuItemText, { color: colors.error }]}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
       </View>
 
       {/* Media Content or Promo Button */}
@@ -775,6 +813,31 @@ const styles = StyleSheet.create({
     color: '#333',
     fontWeight: 'bold',
     marginTop: 8,
+  },
+  menuContainer: {
+    position: 'relative',
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: 30,
+    right: 0,
+    borderRadius: 8,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 1000,
+  },
+  menuItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minWidth: 100,
+  },
+  menuItemText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 

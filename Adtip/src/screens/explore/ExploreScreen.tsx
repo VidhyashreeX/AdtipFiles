@@ -225,9 +225,12 @@ const ExploreScreen: React.FC = () => {
     );
   }
 
+  // Extract key prop to pass directly to FlatList
+  const { key: flatListKey, ...flatListProps } = optimizedFlatListProps;
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <FlatList {...optimizedFlatListProps} />
+      <FlatList key={flatListKey} {...flatListProps} />
     </View>
   );
 };

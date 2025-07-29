@@ -24,7 +24,7 @@ import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 import { InfiniteData } from '@tanstack/react-query';
 // Import Lucide React Native icons
-import { Gamepad2, WifiOff, Dices, Mail, Search, CreditCard } from 'lucide-react-native';
+import { Gamepad2, WifiOff, Dices, Mail, MessageCircle, Search, CreditCard } from 'lucide-react-native';
 import PostWithComments from '../../components/home/PostWithComments';
 import { FeedFlatList } from '../../components/common/OptimizedFlatList';
 import SurveyBanner, { CPXResearchProvider as CPXResearchComponent } from '../../components/home/SurveyBanner';
@@ -298,6 +298,13 @@ const HomeScreen: React.FC = () => {
   const { totalUnreadCount } = useFCMChat();
   const { walletBalance } = useUserWallet();
   const navigation = useNavigation<AppNavigationProps>();
+
+  // Debug wallet balance
+  console.log('[HomeScreen] Wallet balance debug:', {
+    walletBalance,
+    userId: user?.id,
+    isGuest
+  });
   const {contentPaddingBottom} = useTabNavigator();
   const {clearCache} = useDataContext();
   const queryClient = useQueryClient();
@@ -860,7 +867,7 @@ const HomeScreen: React.FC = () => {
           style={styles.headerIconButton}
           activeOpacity={0.8}
         >
-          <Mail size={20} color={colors.text.secondary} />
+          <MessageCircle size={20} color={colors.text.secondary} />
         </TouchableOpacity>
         {totalUnreadCount > 0 && (
           <View style={[styles.inboxBadge, { backgroundColor: colors.primary }]}>

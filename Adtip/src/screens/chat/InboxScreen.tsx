@@ -129,13 +129,13 @@ const InboxScreen: React.FC = () => {
     try {
       await ApiService.put(`/api/inbox/mark-read/${messageId}`);
 
-      // Update local state - reduce unread count for the conversation
+      // Update local state - reduce unread count and remove conversations with 0 unread count
       setConversations(prev =>
         prev.map(conv =>
           conv.id === messageId
             ? { ...conv, unreadCount: Math.max(0, conv.unreadCount - 1) }
             : conv
-        )
+        ).filter(conv => conv.unreadCount > 0) // Remove conversations with no unread messages
       );
     } catch (error) {
       Logger.error('[InboxScreen] Error marking message as read:', error);
@@ -282,15 +282,8 @@ const InboxScreen: React.FC = () => {
               {item.latestContent}
             </Text>
 
-          {/* Message Count and Unread Badge */}
+          {/* Unread Badge */}
           <View style={styles.badgeContainer}>
-            {item.totalMessages > 1 && (
-              <View style={[styles.messageBadge, { backgroundColor: colors.text.secondary }]}>
-                <Text style={[styles.badgeText, { color: colors.background }]}>
-                  {item.totalMessages}
-                </Text>
-              </View>
-            )}
             {item.unreadCount > 0 && (
               <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
                 <Text style={[styles.badgeText, { color: '#FFFFFF' }]}>

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
@@ -19,6 +18,7 @@ import {
   type ShortVideo as TanStackShortVideo
 } from '../../hooks/useShortsQuery';
 import { getSecureMediaUrl, getFallbackThumbnailUrl } from '../../utils/mediaUtils';
+import { ThumbnailFastImage } from '../../utils/FastImageOptimizer';
 
 // Use the same type as TipShortsEnhanced
 type ShortVideo = TanStackShortVideo;
@@ -124,7 +124,7 @@ const TipShortsSection: React.FC<TipShortsSectionProps> = ({
         onPress={() => onPress(item)}
         activeOpacity={0.9}
       >
-        <Image
+        <ThumbnailFastImage
           source={{ uri: thumbnailUrl }}
           style={styles.shortThumbnail}
           resizeMode="cover"

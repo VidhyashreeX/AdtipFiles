@@ -261,6 +261,41 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
     (navigation as any).navigate('Profile', { userId });
   }, [currentUser?.id, showLoginPromptForAction, navigation]);
 
+  // Handle edit post
+  const handleEditPost = useCallback((postId: number) => {
+    Alert.alert(
+      'Edit Post',
+      'Edit functionality will be implemented soon.',
+      [{ text: 'OK' }]
+    );
+  }, []);
+
+  // Handle delete post
+  const handleDeletePost = useCallback((postId: number) => {
+    Alert.alert(
+      'Delete Post',
+      'Are you sure you want to delete this post? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await ApiService.delete(`/api/posts/${postId}`);
+              // Remove the post from local state
+              setPosts(prev => prev.filter((post: any) => post.id !== postId));
+              Alert.alert('Success', 'Post deleted successfully.');
+            } catch (error) {
+              console.error('Error deleting post:', error);
+              Alert.alert('Error', 'Failed to delete post. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  }, []);
+
   // Get time ago helper
   const getTimeAgo = useCallback((dateString: string) => {
     const date = new Date(dateString);
@@ -278,11 +313,14 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
     // Determine if this post is visible and screen is focused
     const isVisible = visiblePostIds.includes(item.id) && isScreenFocused;
 
+    // Check if this is the current user's post
+    const isOwnPost = currentUser?.id && item.user_id === Number(currentUser.id);
+
     return (
       <PostItem
         key={`post-${item.id}-${index}`}
         id={item.id}
-        username={item.user_name ? String(item.user_name) : "Unknown"}
+        username={item.user_name ? String(item.user_name) : (currentUser?.name || "Unknown")}
         profileImage={item.user_profile_image}
         postImage={item.media_url}
         caption={item.content}
@@ -303,9 +341,12 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
         onPostPress={(postId: number) => console.log('Post pressed:', postId)}
         onUserPress={handleUserProfilePress}
         onFollow={handleUserFollowWrapper}
+        showMenu={isOwnPost}
+        onEdit={handleEditPost}
+        onDelete={handleDeletePost}
       />
     );
-  }, [visiblePostIds, isScreenFocused, isGloballyMuted, getTimeAgo, handleLike, handleComment, handleShare, handleUserProfilePress, handleUserFollowWrapper, handleToggleGlobalMute]);
+  }, [visiblePostIds, isScreenFocused, isGloballyMuted, getTimeAgo, handleLike, handleComment, handleShare, handleUserProfilePress, handleUserFollowWrapper, handleToggleGlobalMute, currentUser?.id, handleEditPost, handleDeletePost]);
 
 
 

@@ -132,6 +132,18 @@ export const UserDataProvider: React.FC<UserDataProviderProps> = ({ children }) 
     const isFirstTime = userData?.is_first_time === 1;
     const hasCompletedProfile = userData?.isSaveUserDetails === 1;
 
+    // Debug wallet balance calculation
+    console.log('[UserDataContext] Wallet balance debug:', {
+      userData: userData ? {
+        id: userData.id,
+        referal_earnings: userData.referal_earnings,
+        total_withdrawals: userData.total_withdrawals,
+      } : null,
+      calculatedWalletBalance: walletBalance,
+      isLoading,
+      isError,
+    });
+
     return {
       userData: userData || null,
       isLoading,
