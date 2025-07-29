@@ -43,10 +43,12 @@ import AnimatedVideoCard from './AnimatedVideoCard';
 import CategoryTabs from '../../components/tiptube/CategoryTabs';
 import YouTubeStyleVideoCard from '../../components/tiptube/YouTubeStyleVideoCard';
 import TipShortsSection from '../../components/tiptube/TipShortsSection';
-import { 
-  getSecureMediaUrl, 
-  getFallbackAvatarUrl, 
-  getFallbackThumbnailUrl 
+import SurveyBanner, { CPXResearchProvider as CPXResearchComponent } from '../../components/home/SurveyBanner';
+import { CPXResearchProvider } from '../../contexts/CPXResearchContext';
+import {
+  getSecureMediaUrl,
+  getFallbackAvatarUrl,
+  getFallbackThumbnailUrl
 } from '../../utils/mediaUtils';
 
 import ApiService from '../../services/ApiService';
@@ -57,9 +59,7 @@ import ContentCreatorPlanToggle from '../../components/common/ContentCreatorPlan
 import VideoCommentsModal from '../../components/tiptube/VideoCommentsModal';
 import LoginPromptModal from '../../components/modals/LoginPromptModal';
 import PubScaleCreditAlert from '../../components/common/PubScaleCreditAlert';
-import useSimpleRewardedAd from '../../googleads/SimpleRewardedAd';
 import AnalyticsPremiumAlert from '../../components/alerts/AnalyticsPremiumAlertNew';
-import ModernRewardPopup from '../../components/common/ModernRewardPopup';
 import { TipTubeLogger } from '../../utils/logger';
 
 // Get screen dimensions and create constants
@@ -71,10 +71,7 @@ const VERTICAL_SPACING = 16;
 const CARD_WIDTH = SCREEN_WIDTH - (HORIZONTAL_PADDING * 2);
 const THUMBNAIL_HEIGHT = (CARD_WIDTH * 9) / 16; // 16:9 aspect ratio
 
-// Reward constants
-const REWARD_INTERVAL = 5;
-const NON_PREMIUM_REWARD = 0.03;
-const PREMIUM_REWARD = 0.06;
+
 
 // Define interfaces
 interface Video {
@@ -727,84 +724,13 @@ const TipTubeScreen = () => {
   // Get premium status using the same logic as the header toggle
   const { isPremium } = useUserPremiumStatus();
 
-  // Reward ads state
-  const [videoCount, setVideoCount] = useState(0);
-  const [showRewardPopup, setShowRewardPopup] = useState(false);
-  const [earnedAmount, setEarnedAmount] = useState(0);
 
-  // Handle video view for reward ads (triggered on scroll/view, not completion)
-  const handleVideoView = useCallback(() => {
-    setVideoCount(prev => {
-      const newCount = prev + 1;
-      TipTubeLogger.debug(`Video viewed. Count: ${newCount}`);
-      // Only show reward ad after exactly 5th video
-      if (newCount === 5) {
-        TipTubeLogger.debug('5th video reached! Showing reward ad...');
-        // Check if we have ads available
-        const hasAds = videos.length > 0;
-        if (hasAds) {
-          // Show reward ad immediately
-          showRewardAd();
-        } else {
-          TipTubeLogger.warn('No ads available, skipping reward');
-        }
-        // Reset counter after showing reward
-        return 0;
-      }
-      return newCount;
-    });
-  }, [videos.length]);
 
-  // Show reward ad
-  const showRewardAd = useCallback(() => {
-    TipTubeLogger.debug('Showing reward ad...');
 
-    // Determine reward amount based on premium status
-    const rewardAmount = isPremium ? 0.10 : 0.03;
-    setEarnedAmount(rewardAmount);
 
-    // Show reward popup (production mode)
-    TipTubeLogger.debug('Production mode: Showing reward popup');
-    setShowRewardPopup(true);
-  }, [isPremium]);
 
-  // Handle reward popup actions
-  const handleRewardPopupAction = useCallback(async (action: 'upgrade' | 'cancel' | 'gotit' | 'wallet') => {
-    console.log(`🎁 [TipTube] Reward popup action: ${action}`);
 
-    // Close popup first
-    setShowRewardPopup(false);
 
-    if (action === 'upgrade') {
-      // Navigate to premium upgrade
-      navigation.navigate('Packages' as never);
-    } else if (action === 'wallet') {
-      // Navigate to wallet
-      navigation.navigate('Wallet');
-    }
-    
-    // Credit wallet for all actions except cancel
-    if (action !== 'cancel' && user?.id) {
-      try {
-        console.log('💰 [TipTube] Crediting wallet with amount:', earnedAmount);
-
-        // Use ApiService instead of direct fetch
-        await ApiService.creditAdReward({
-          userId: Number(user.id),
-          amount: earnedAmount
-        });
-
-        console.log('✅ [TipTube] Wallet credited successfully');
-      } catch (error) {
-        console.error('❌ [TipTube] Error crediting wallet:', error);
-      }
-    }
-  }, [earnedAmount, navigation, user?.id]);
-
-  // Close reward popup
-  const closeRewardPopup = useCallback(() => {
-    setShowRewardPopup(false);
-  }, []);
 
   // Handle video press with view API calls
   const handleVideoPress = useCallback(async (video: Video) => {
@@ -829,7 +755,6 @@ const TipTubeScreen = () => {
               video: { ...video, videoUrl },
               upNextVideos: shuffleArray(videos.filter((v: Video) => v.id !== video.id)).slice(0, 10)
             });
-            handleVideoView();
           } else {
             Alert.alert(
               'Insufficient Balance',
@@ -845,7 +770,6 @@ const TipTubeScreen = () => {
               video: { ...video, videoUrl },
               upNextVideos: shuffleArray(videos.filter((v: Video) => v.id !== video.id)).slice(0, 10)
             });
-            handleVideoView();
           } else {
             Alert.alert(
               'Insufficient Balance',
@@ -860,17 +784,12 @@ const TipTubeScreen = () => {
           video,
           upNextVideos: shuffleArray(videos.filter((v: Video) => v.id !== video.id)).slice(0, 10)
         });
-        handleVideoView();
       }
-      // Simulate video completion after a delay (for reward ads)
-      setTimeout(() => {
-        handleVideoView();
-      }, 5000);
     } catch (error) {
       TipTubeLogger.error('Error handling video press:', error);
       Alert.alert('Error', 'There was an issue accessing this video. Please try again later.');
     }
-  }, [videos, navigation, isGuest, showLoginPromptForAction, handleVideoView]);
+  }, [videos, navigation, isGuest, showLoginPromptForAction]);
 
   // Render helper functions
   const renderSkeletonLoading = useCallback(() => (
@@ -1012,6 +931,13 @@ const TipTubeScreen = () => {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* CPX Survey Banner */}
+      <SurveyBanner
+        isPremium={isPremium}
+        onUpgrade={() => navigation.navigate('PremiumUser' as never)}
+        renderCPXAtRoot={true}
+      />
 
       {/* TipShorts Section */}
       <TipShortsSection onSeeAllPress={handleNavigateToTipShorts} />
@@ -1164,8 +1090,17 @@ const TipTubeScreen = () => {
   }
 
   return (
-    <ScreenTransition animationType="slide" skipAnimation={false}>
-      <View style={styles.container}>
+    <CPXResearchProvider>
+      <ScreenTransition animationType="slide" skipAnimation={false}>
+        <View style={styles.container}>
+          {/* CPX Research Component at root level for full-screen modal */}
+          <CPXResearchComponent
+            isPremium={isPremium}
+            onRewardEarned={(amount, isPremium) => {
+              // Handle reward earned - could trigger wallet refresh, show notification, etc.
+              console.log('Survey reward earned:', amount, isPremium);
+            }}
+          />
         <Header
           title=""
           showSearch={true}
@@ -1260,37 +1195,10 @@ const TipTubeScreen = () => {
           onGoBack={handleAnalyticsPremiumGoBack}
         />
 
-        {/* Modern Reward Popup */}
-        <ModernRewardPopup
-          visible={showRewardPopup}
-          onClose={closeRewardPopup}
-          isPremium={isPremium}
-          earnedAmount={earnedAmount}
-          onAction={handleRewardPopupAction}
-        />
 
-        {/* Test button for reward ads (DEV only) */}
-        {__DEV__ === true && (
-          <TouchableOpacity 
-            onPress={() => {
-              TipTubeLogger.debug('Manual reward ad trigger');
-              handleVideoView();
-            }}
-            style={{
-              position: 'absolute',
-              top: 100,
-              right: 20,
-              backgroundColor: '#FF3040',
-              padding: 12,
-              borderRadius: 8,
-              zIndex: 1000,
-            }}
-          >
-            <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Test Reward Ad</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </ScreenTransition>
+        </View>
+      </ScreenTransition>
+    </CPXResearchProvider>
   );
 };
 

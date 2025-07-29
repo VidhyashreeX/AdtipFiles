@@ -40,6 +40,7 @@ import ApiService from '../../services/ApiService';
 import {HOME_ENDPOINTS} from '../../constants/apiEndpoints';
 import shareService from '../../services/ShareService';
 import { usePosts, useGuestPosts, useLikeMutation, useFollowMutation, useSubscriptionStatus, useCategories, useSearchUsers } from '../../hooks/useQueries';
+import { useUserWallet } from '../../contexts/UserDataContext';
 
 import { useFCMChat } from '../../contexts/FCMChatContext';
 import { useNetInfo } from '@react-native-community/netinfo';
@@ -295,6 +296,7 @@ const HomeScreen: React.FC = () => {
   const {colors} = useTheme();
   const {user, isGuest} = useAuth();
   const { totalUnreadCount } = useFCMChat();
+  const { walletBalance } = useUserWallet();
   const navigation = useNavigation<AppNavigationProps>();
   const {contentPaddingBottom} = useTabNavigator();
   const {clearCache} = useDataContext();
@@ -830,13 +832,25 @@ const HomeScreen: React.FC = () => {
         </View>
       </TouchableOpacity>
 
-      {/* Wallet Icon */}
+      {/* Dynamic Balance Oval */}
       <TouchableOpacity
         onPress={() => navigation.navigate('Wallet' as never)}
         style={[styles.headerIconButton, { marginLeft: 6 }]}
         activeOpacity={0.8}
       >
-        <CreditCard size={20} color={colors.primary} />
+        <View style={[
+          styles.balanceOval,
+          {
+            backgroundColor: colors.primary + '20',
+            borderColor: colors.primary,
+            // Dynamic width based on balance - minimum 40, scales with balance
+            width: Math.max(40, Math.min(80, 40 + (walletBalance / 100) * 20)),
+          }
+        ]}>
+          <Text style={[styles.balanceText, { color: colors.primary }]} numberOfLines={1}>
+            ₹{walletBalance.toFixed(0)}
+          </Text>
+        </View>
       </TouchableOpacity>
 
       {/* Inbox Icon */}
@@ -1585,6 +1599,19 @@ const createHomeScreenStyles = (colors: any) => StyleSheet.create({
   headerIconButton: {
     padding: 8,
     borderRadius: 20,
+  },
+  balanceOval: {
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    minWidth: 40,
+  },
+  balanceText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   inboxBadge: {
     position: 'absolute',

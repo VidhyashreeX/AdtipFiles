@@ -251,6 +251,67 @@ const SubscriptionScreen = () => {
           </Text>
         </View>
 
+        {/* Premium vs Non-Premium Comparison */}
+        <View style={[styles.comparisonSection, { backgroundColor: colors.card }]}>
+          <Text style={[styles.comparisonTitle, { color: colors.text.primary }]}>
+            Why Choose Premium?
+          </Text>
+
+          {/* Earning Advantages */}
+          <View style={styles.comparisonCategory}>
+            <Text style={[styles.categoryTitle, { color: colors.primary }]}>
+              💰 Earning Advantages
+            </Text>
+
+            <View style={styles.comparisonRow}>
+              <View style={styles.comparisonItem}>
+                <Text style={[styles.featureLabel, { color: colors.text.secondary }]}>Ad View Earnings</Text>
+                <Text style={[styles.nonPremiumValue, { color: '#FF6B35' }]}>₹0.03 per ad</Text>
+                <Text style={[styles.premiumValue, { color: '#4CAF50' }]}>Up to ₹10 per ad</Text>
+              </View>
+            </View>
+
+            <View style={styles.comparisonRow}>
+              <View style={styles.comparisonItem}>
+                <Text style={[styles.featureLabel, { color: colors.text.secondary }]}>Platform Commission</Text>
+                <Text style={[styles.nonPremiumValue, { color: '#FF6B35' }]}>60% commission</Text>
+                <Text style={[styles.premiumValue, { color: '#4CAF50' }]}>30% commission</Text>
+              </View>
+            </View>
+
+            <View style={styles.comparisonRow}>
+              <View style={styles.comparisonItem}>
+                <Text style={[styles.featureLabel, { color: colors.text.secondary }]}>Call Earnings</Text>
+                <Text style={[styles.nonPremiumValue, { color: '#FF6B35' }]}>₹0.60-₹2/min</Text>
+                <Text style={[styles.premiumValue, { color: '#4CAF50' }]}>₹2-₹4/min</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Withdrawal Benefits */}
+          <View style={styles.comparisonCategory}>
+            <Text style={[styles.categoryTitle, { color: colors.primary }]}>
+              💳 Withdrawal Benefits
+            </Text>
+
+            <View style={styles.comparisonRow}>
+              <View style={styles.comparisonItem}>
+                <Text style={[styles.featureLabel, { color: colors.text.secondary }]}>Minimum Withdrawal</Text>
+                <Text style={[styles.nonPremiumValue, { color: '#FF6B35' }]}>₹5,000</Text>
+                <Text style={[styles.premiumValue, { color: '#4CAF50' }]}>₹1,000</Text>
+              </View>
+            </View>
+
+            <View style={styles.comparisonRow}>
+              <View style={styles.comparisonItem}>
+                <Text style={[styles.featureLabel, { color: colors.text.secondary }]}>Processing Time</Text>
+                <Text style={[styles.nonPremiumValue, { color: '#FF6B35' }]}>21 business days</Text>
+                <Text style={[styles.premiumValue, { color: '#4CAF50' }]}>5 business days</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
         <View style={styles.plansContainer}>
           {plans.map((plan, index) => renderPlan(plan, index))}
         </View>
@@ -355,6 +416,60 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 16,
     lineHeight: 22,
+  },
+  comparisonSection: {
+    marginHorizontal: 20,
+    marginBottom: 30,
+    borderRadius: 12,
+    padding: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  comparisonTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  comparisonCategory: {
+    marginBottom: 20,
+  },
+  categoryTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  comparisonRow: {
+    marginBottom: 8,
+  },
+  comparisonItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderRadius: 8,
+  },
+  featureLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    flex: 1,
+  },
+  nonPremiumValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    flex: 1,
+  },
+  premiumValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    flex: 1,
   },
   plansContainer: {
     paddingHorizontal: 20,

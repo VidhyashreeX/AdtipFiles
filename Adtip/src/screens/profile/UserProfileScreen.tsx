@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
-import { Play } from 'lucide-react-native';
+import { Play, MoreVertical } from 'lucide-react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -82,6 +82,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
   const [selectedTab, setSelectedTab] = useState<'posts'>('posts'); // Instagram-style tab navigation
+  const [dropdownVisible, setDropdownVisible] = useState<number | null>(null); // Track which post's dropdown is visible
 
 
   const blocklistService = BlocklistService.getInstance();
@@ -553,6 +554,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
         key="profile-grid-3" // Force re-render when numColumns changes
         keyExtractor={(item) => item.id.toString()}
         showsVerticalScrollIndicator={false}
+        onScroll={() => setDropdownVisible(null)} // Close dropdown on scroll
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -567,13 +569,13 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
             <View style={styles.profileHeader}>
               <View style={styles.profileInfo}>
                 <ProfileFastImage
-                  source={getFullImageUrl(user?.profile_image)}
+                  source={getFullImageUrl(user?.profile_image || (isOwnProfile ? currentUser?.profile_image : null))}
                   size={AVATAR_SIZE}
                   style={styles.profileImage}
                 />
                 <View style={styles.profileDetails}>
                   <Text style={[styles.username, { color: colors.text.primary }]}>
-                    {user?.name || 'User'}
+                    {user?.name || (isOwnProfile ? currentUser?.name : null) || 'User'}
                   </Text>
                   {user?.bio && (
                     <Text style={[styles.bio, { color: colors.text.secondary }]}>
@@ -796,27 +798,46 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
               </View>
             )}
 
-            {/* Post Management Buttons - Show for own profile and both videos and images */}
+            {/* 3-Dot Menu for Post Management - Show for own profile */}
             {isOwnProfile && (post.media_type === 'video' || post.media_type === 'image') && (
-              <View style={styles.videoManagementOverlay}>
+              <View style={styles.postMenuContainer}>
                 <TouchableOpacity
-                  style={[styles.managementButton, styles.editButton]}
+                  style={styles.menuButton}
                   onPress={(e) => {
                     e.stopPropagation();
-                    handleEditPost(post);
+                    setDropdownVisible(dropdownVisible === post.id ? null : post.id);
                   }}
                 >
-                  <Icon name="edit-2" size={14} color="#fff" />
+                  <MoreVertical size={16} color="#fff" />
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.managementButton, styles.deleteButton]}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleDeletePost(post);
-                  }}
-                >
-                  <Icon name="trash-2" size={14} color="#fff" />
-                </TouchableOpacity>
+
+                {/* Dropdown Menu */}
+                {dropdownVisible === post.id && (
+                  <View style={[styles.dropdownMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <TouchableOpacity
+                      style={styles.dropdownItem}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        setDropdownVisible(null);
+                        handleEditPost(post);
+                      }}
+                    >
+                      <Icon name="edit-2" size={16} color={colors.text.primary} />
+                      <Text style={[styles.dropdownText, { color: colors.text.primary }]}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.dropdownItem}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        setDropdownVisible(null);
+                        handleDeletePost(post);
+                      }}
+                    >
+                      <Icon name="trash-2" size={16} color="#FF4444" />
+                      <Text style={[styles.dropdownText, { color: '#FF4444' }]}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             )}
           </TouchableOpacity>
@@ -977,14 +998,13 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 4,
   },
-  videoManagementOverlay: {
+  postMenuContainer: {
     position: 'absolute',
     top: 4,
     right: 4,
-    flexDirection: 'row',
-    gap: 4,
+    zIndex: 10,
   },
-  managementButton: {
+  menuButton: {
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -992,11 +1012,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
   },
-  editButton: {
-    backgroundColor: 'rgba(59, 130, 246, 0.9)', // Blue
+  dropdownMenu: {
+    position: 'absolute',
+    top: 32,
+    right: 0,
+    borderRadius: 8,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    minWidth: 120,
   },
-  deleteButton: {
-    backgroundColor: 'rgba(239, 68, 68, 0.9)', // Red
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  dropdownText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   emptyContainer: {
     flex: 1,

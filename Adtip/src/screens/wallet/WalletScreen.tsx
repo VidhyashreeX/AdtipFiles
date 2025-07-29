@@ -259,6 +259,27 @@ const WalletScreen = () => {
             <Text style={[styles.withdrawButtonText, {color: '#FFFFFF'}, !canWithdraw && styles.disabledButtonText]}>Withdraw</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Withdrawal Minimum Info Section */}
+        <View style={styles.withdrawalInfoContainer}>
+          <Text style={[styles.withdrawalInfoTitle, { color: colors.text.primary }]}>
+            Withdrawal Information
+          </Text>
+          <View style={styles.withdrawalInfoItem}>
+            <Text style={[styles.withdrawalInfoLabel, { color: colors.text.secondary }]}>
+              Minimum withdrawal:
+            </Text>
+            <Text style={[styles.withdrawalInfoValue, { color: isPremium ? '#4CAF50' : colors.text.primary }]}>
+              ₹{isPremium ? '1,000' : '5,000'} {isPremium ? '(Premium)' : '(Non-premium)'}
+            </Text>
+          </View>
+          <Text style={[styles.withdrawalInfoNote, { color: colors.text.tertiary }]}>
+            {isPremium
+              ? 'As a premium user, you enjoy lower withdrawal minimums and faster processing.'
+              : 'Upgrade to premium for lower withdrawal minimums and faster processing.'
+            }
+          </Text>
+        </View>
       </LinearGradient>
     );
   };
@@ -515,7 +536,39 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   disabledButton: {
-    opacity: 0.6, 
+    opacity: 0.6,
+  },
+  withdrawalInfoContainer: {
+    marginTop: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    marginHorizontal: 16,
+  },
+  withdrawalInfoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  withdrawalInfoItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  withdrawalInfoLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  withdrawalInfoValue: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  withdrawalInfoNote: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    lineHeight: 16,
   },
   disabledButtonText: {
     opacity: 0.6,
