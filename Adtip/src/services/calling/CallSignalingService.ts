@@ -156,6 +156,21 @@ class CallSignalingService {
       await ApiService.sendCallSignal(recipientId, payload)
     } catch (err) {
       console.warn('[CallSignalingService] sendSignal error', err)
+
+      // Enhanced error handling for signaling failures
+      if (err instanceof Error) {
+        if (err.message.includes('No FCM token found')) {
+          console.warn('[CallSignalingService] FCM token not found for recipient, they may be offline or have uninstalled the app');
+        } else if (err.message.includes('User not found')) {
+          console.warn('[CallSignalingService] Recipient user not found, they may have deleted their account');
+        } else if (err.message.includes('Request failed with status code 404')) {
+          console.warn('[CallSignalingService] Recipient not found on server');
+        } else {
+          console.warn('[CallSignalingService] Unknown signaling error:', err.message);
+        }
+      }
+
+      // Don't throw - let the calling code handle the failure gracefully
     }
   }
 

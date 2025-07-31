@@ -7,9 +7,9 @@ import {
   ScrollView,
   SafeAreaView,
   Share,
-  Clipboard,
   Alert,
 } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
 import Icon from 'react-native-vector-icons/Feather';
 import {useTheme} from '../../contexts/ThemeContext';
 import {useAuth} from '../../contexts/AuthContext';

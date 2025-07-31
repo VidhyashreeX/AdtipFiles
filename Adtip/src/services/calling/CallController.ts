@@ -233,15 +233,55 @@ class CallController {
   }
   
   /**
+   * Emergency recovery for critical errors
+   */
+  public async emergencyRecovery(error: Error): Promise<void> {
+    logError('CallController', 'Performing emergency recovery due to critical error', error);
+
+    try {
+      // Force cleanup of all call state
+      const cleanupService = CallStateCleanup.getInstance();
+      cleanupService.emergencyCleanup();
+
+      // Reset VideoSDK with force
+      const videoSDK = VideoSDKService.getInstance();
+      videoSDK.reset(true);
+
+      // Reset store state
+      const store = useCallStore.getState();
+      store.actions.reset();
+
+      logCall('CallController', 'Emergency recovery completed');
+    } catch (recoveryError) {
+      logError('CallController', 'Emergency recovery failed', recoveryError);
+    }
+  }
+
+  /**
    * Clean up call resources with comprehensive state reset
    */
   private async cleanup() {
     logCall('CallController', 'Starting comprehensive cleanup');
 
     try {
+      // Get current session for validation
+      const store = useCallStore.getState();
+      const currentSession = store.session;
+
+      // Validate session before cleanup to prevent conflicts
+      if (currentSession) {
+        logCall('CallController', 'Cleaning up session:', currentSession.sessionId);
+
+        // Clear active meeting session in VideoSDK service first
+        this.videoSDK.clearActiveMeetingSession(currentSession.sessionId);
+      }
+
       // Use the comprehensive cleanup utility
       const cleanupService = CallStateCleanup.getInstance();
       await cleanupService.performComprehensiveCleanup();
+
+      // Ensure store is reset after cleanup
+      store.actions.reset();
 
       logCall('CallController', 'Comprehensive cleanup complete');
     } catch (error) {
@@ -250,6 +290,14 @@ class CallController {
       // Fallback to emergency cleanup
       const cleanupService = CallStateCleanup.getInstance();
       cleanupService.emergencyCleanup();
+
+      // Force store reset even on error
+      try {
+        const store = useCallStore.getState();
+        store.actions.reset();
+      } catch (storeError) {
+        logError('CallController', 'Failed to reset store during emergency cleanup', storeError);
+      }
     }
   }
   
@@ -588,30 +636,57 @@ class CallController {
       const store = useCallStore.getState()
       const currentSession = store.session
 
-      if (currentSession && currentSession.sessionId === sessionId) {
-        // Update the session with real data
-        store.actions.setSession({
-          ...currentSession,
-          meetingId,
-          token,
-          callId: backendCallId
-        })
-
-        // Update persistent call with real meeting data
-        updatePersistentCallConfig({
-          sessionId,
-          meetingId,
-          token,
-          status: 'connected'
-        })
-
-        logCall('CallController', 'Session updated successfully with real API data');
-      } else {
-        logWarn('CallController', 'Session mismatch or call already ended', {
+      // Enhanced session validation with detailed logging
+      if (!currentSession) {
+        logWarn('CallController', 'No current session found when updating with API data', {
           expectedSessionId: sessionId,
-          currentSessionId: currentSession?.sessionId
+          currentSession: null
         });
+        return;
       }
+
+      if (currentSession.sessionId !== sessionId) {
+        logWarn('CallController', 'Session ID mismatch when updating with API data', {
+          expectedSessionId: sessionId,
+          currentSessionId: currentSession.sessionId,
+          sessionDirection: currentSession.direction,
+          sessionType: currentSession.type
+        });
+        return;
+      }
+
+      // Validate that we're not overwriting a different call
+      if (currentSession.direction === 'incoming' && currentSession.peerId !== undefined) {
+        logWarn('CallController', 'Attempting to update incoming call session with outgoing call data', {
+          sessionId,
+          currentDirection: currentSession.direction,
+          currentPeerId: currentSession.peerId
+        });
+        return;
+      }
+
+      // Update the session with real data
+      store.actions.setSession({
+        ...currentSession,
+        meetingId,
+        token,
+        callId: backendCallId
+      })
+
+      // Update persistent call with real meeting data
+      updatePersistentCallConfig({
+        sessionId,
+        meetingId,
+        token,
+        status: 'connected'
+      })
+
+      logCall('CallController', 'Session updated successfully with real API data', {
+        sessionId,
+        meetingId,
+        hasToken: !!token,
+        callId: backendCallId
+      });
 
     } catch (error) {
       logError('CallController', 'Async call initiation error', error);
@@ -759,7 +834,21 @@ class CallController {
           }
         } catch (paymentError) {
           logError('CallController', 'Failed to start payment tracking for accepted call', paymentError)
-          // Continue with call even if payment tracking fails
+
+          // Enhanced error handling for payment tracking failures
+          if (paymentError instanceof Error) {
+            if (paymentError.message.includes('Missing required parameters')) {
+              logWarn('CallController', 'Payment tracking failed due to missing parameters, call will continue without billing');
+            } else if (paymentError.message.includes('User not found')) {
+              logWarn('CallController', 'Payment tracking failed due to user not found, call will continue');
+            } else if (paymentError.message.includes('Request failed with status code 400')) {
+              logWarn('CallController', 'Payment tracking failed due to invalid request, call will continue');
+            } else {
+              logWarn('CallController', 'Payment tracking failed with unknown error, call will continue');
+            }
+          }
+
+          // Continue with call even if payment tracking fails - this is non-critical
         }
       }
 

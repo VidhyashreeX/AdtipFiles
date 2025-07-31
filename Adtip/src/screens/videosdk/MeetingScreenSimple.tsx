@@ -32,6 +32,41 @@ import { logError, logWarn, logVideoSDK, logCall } from '../../utils/ProductionL
 import SafeAreaEnforcer from '../../components/common/SafeAreaEnforcer'
 import { useSafeAreaStyle } from '../../utils/SafeAreaUtils'
 
+// Error boundary for VideoSDK-specific errors
+class VideoSDKErrorBoundary extends React.Component<
+  { children: React.ReactNode; onError?: (error: Error) => void },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    logError('VideoSDKErrorBoundary', 'VideoSDK component error caught', error);
+    this.props.onError?.(error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Call Connection Error</Text>
+          <Text style={styles.errorMessage}>
+            Unable to establish video connection. Please try again.
+          </Text>
+        </View>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 // Layout components
 
 const ParticipantVideo = ({ participantId, isLocal = false }: { participantId: string; isLocal?: boolean }) => {
@@ -244,6 +279,7 @@ const Controls = () => {
 const MeetingContent = () => {
   logCall('[MeetingContent] Component rendering...')
 
+  const navigation = useNavigation() // Add navigation hook
   const meeting = useMeeting()
   const { participants, localParticipant, join, leave } = meeting
   const localParticipantId = localParticipant?.id
@@ -441,8 +477,10 @@ const MeetingContent = () => {
 
         // Make sure VideoSDK is ready before each attempt
         const videoSDK = VideoSDKService.getInstance()
-        if (!videoSDK.getInitializationStatus()) {
-          await videoSDK.initialize()
+        const status = videoSDK.getInitializationStatus()
+        if (!status.initialized || !status.websocketReady) {
+          logVideoSDK('MeetingContent', 'VideoSDK not ready, ensuring initialization', status)
+          await videoSDK.ensureInitialized()
           // Add extra delay after initialization
           await new Promise(resolve => setTimeout(resolve, 500))
         }
@@ -751,9 +789,39 @@ const MeetingScreenSimple = () => {
   const hasInitialized = useRef(false)
   const isMountedRef = useRef(true)
   const [videoSDKReady, setVideoSDKReady] = React.useState(false)
-  
-  // More comprehensive session validation
-  const sessionIsValid = session?.sessionId && session?.meetingId && session?.token
+
+  // More comprehensive session validation with detailed checks
+  const sessionIsValid = useMemo(() => {
+    if (!session) {
+      logCall('[MeetingScreenSimple] Session validation failed: no session');
+      return false;
+    }
+
+    if (!session.sessionId) {
+      logCall('[MeetingScreenSimple] Session validation failed: no sessionId');
+      return false;
+    }
+
+    if (!session.meetingId || session.meetingId.startsWith('temp-')) {
+      logCall('[MeetingScreenSimple] Session validation failed: invalid meetingId', session.meetingId);
+      return false;
+    }
+
+    if (!session.token || session.token === 'temp-token') {
+      logCall('[MeetingScreenSimple] Session validation failed: invalid token');
+      return false;
+    }
+
+    logCall('[MeetingScreenSimple] Session validation passed', {
+      sessionId: session.sessionId,
+      meetingId: session.meetingId,
+      hasToken: !!session.token,
+      direction: session.direction,
+      type: session.type
+    });
+    return true;
+  }, [session]);
+
   const callIsActive = status === 'in_call' || status === 'connecting' || status === 'outgoing'
 
   // Initialize VideoSDK before creating MeetingProvider
@@ -767,9 +835,10 @@ const MeetingScreenSimple = () => {
         logVideoSDK('MeetingScreenSimple', 'Initializing VideoSDK before MeetingProvider creation')
         const videoSDK = VideoSDKService.getInstance()
 
-        if (!videoSDK.getInitializationStatus().initialized) {
-          logVideoSDK('MeetingScreenSimple', 'VideoSDK not initialized, initializing now...')
-          const success = await videoSDK.initialize()
+        const status = videoSDK.getInitializationStatus()
+        if (!status.initialized || !status.websocketReady) {
+          logVideoSDK('MeetingScreenSimple', 'VideoSDK not ready, ensuring initialization', status)
+          const success = await videoSDK.ensureInitialized()
 
           if (!success) {
             logError('MeetingScreenSimple', 'VideoSDK initialization failed', new Error('VideoSDK initialization returned false'))
@@ -856,15 +925,29 @@ const MeetingScreenSimple = () => {
     
     return () => {
       if (!isMountedRef.current) return
-      
+
       logCall('[MeetingScreenSimple] Component cleanup for session:', session?.sessionId, 'Component ID:', componentId.current)
-      
+
+      // Enhanced cleanup with state validation
+      const currentSessionId = session?.sessionId;
+
       // Only cleanup if this component was the active one
       if (globalComponentKey && global.meetingComponentInstances?.[globalComponentKey] === componentId.current) {
         delete global.meetingComponentInstances[globalComponentKey]
-        logCall('[MeetingScreenSimple] Cleaned up global component registration')
+        logCall('[MeetingScreenSimple] Cleaned up global component registration for session:', currentSessionId)
       }
-      
+
+      // Clear VideoSDK active meeting session if this component owns it
+      if (currentSessionId && isComponentActive.current) {
+        try {
+          const videoSDK = VideoSDKService.getInstance();
+          videoSDK.clearActiveMeetingSession(currentSessionId);
+          logCall('[MeetingScreenSimple] Cleared VideoSDK active meeting session:', currentSessionId);
+        } catch (error) {
+          logError('[MeetingScreenSimple] Error clearing VideoSDK session during cleanup', error);
+        }
+      }
+
       isComponentActive.current = false
       hasInitialized.current = false
     }
@@ -1112,6 +1195,48 @@ const styles = StyleSheet.create({
   statusIcon: {
     fontSize: 12,
   },
+  // Error boundary styles
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
+    padding: 20,
+  },
+  errorTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  errorMessage: {
+    color: '#ccc',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 })
 
-export default MeetingScreenSimple
+// Enhanced export with error boundary
+const MeetingScreenSimpleWithErrorBoundary: React.FC<{ route: any }> = ({ route }) => {
+  const handleVideoSDKError = (error: Error) => {
+    logError('MeetingScreenSimple', 'VideoSDK error occurred, attempting recovery', error);
+
+    // Attempt to recover by resetting VideoSDK
+    try {
+      const videoSDK = VideoSDKService.getInstance();
+      videoSDK.reset(true); // Force reset
+    } catch (resetError) {
+      logError('MeetingScreenSimple', 'Failed to reset VideoSDK during error recovery', resetError);
+    }
+  };
+
+  return (
+    <VideoSDKErrorBoundary onError={handleVideoSDKError}>
+      <MeetingScreenSimple route={route} />
+    </VideoSDKErrorBoundary>
+  );
+};
+
+export default MeetingScreenSimpleWithErrorBoundary

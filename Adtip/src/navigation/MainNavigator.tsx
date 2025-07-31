@@ -118,6 +118,21 @@ import InstagramProfileScreen from '../screens/profile/InstagramProfileScreen';
 import PostViewerScreen from '../screens/profile/PostViewerScreen';
 import FollowersFollowingScreen from '../screens/profile/FollowersFollowingScreen';
 
+// Profile component wrapper to avoid inline function
+const ProfileScreenWrapper: React.FC<{
+  route: import('@react-navigation/native').RouteProp<
+    MainNavigatorParamList,
+    'Profile'
+  >;
+}> = ({ route }) => {
+  const userId = route.params.userId;
+  if (typeof userId !== 'number') {
+    // Optionally render a fallback or null if userId is not valid
+    return null;
+  }
+  return <UserProfileScreen userId={userId} />;
+};
+
 // Create stack navigator with proper typing
 const Stack = createNativeStackNavigator<MainNavigatorParamList>();
 
@@ -350,21 +365,7 @@ const MainNavigator = () => {
       <Stack.Screen name="Analytics" component={AnalyticsScreen} />
       <Stack.Screen
         name="Profile"
-        component={({
-          route,
-        }: {
-          route: import('@react-navigation/native').RouteProp<
-            MainNavigatorParamList,
-            'Profile'
-          >;
-        }) => {
-          const userId = route.params.userId;
-          if (typeof userId !== 'number') {
-            // Optionally render a fallback or null if userId is not valid
-            return null;
-          }
-          return <UserProfileScreen userId={userId} />;
-        }}
+        component={ProfileScreenWrapper}
       />
       <Stack.Screen name="InstagramProfile" component={InstagramProfileScreen} />
       <Stack.Screen name="FollowersFollowing" component={FollowersFollowingScreen} />

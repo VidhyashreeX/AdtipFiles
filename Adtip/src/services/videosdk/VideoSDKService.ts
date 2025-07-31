@@ -44,6 +44,10 @@ class VideoSDKService {
   private activeMeetingSession: string | null = null;
   private meetingStateCleanupTimestamp: number = 0;
 
+  // Reset prevention to avoid unnecessary re-initializations
+  private lastResetTimestamp: number = 0;
+  private resetCooldownMs: number = 2000; // Prevent resets within 2 seconds
+
   private constructor() {}
 
   public static getInstance(): VideoSDKService {
@@ -100,6 +104,18 @@ class VideoSDKService {
         logError('VideoSDKService', 'VideoSDK initialization failed', error);
         this.isInitialized = false;
         this.websocketReady = false;
+
+        // Enhanced error handling with recovery attempts
+        if (error instanceof Error) {
+          if (error.message.includes('WebSocket')) {
+            logWarn('VideoSDKService', 'WebSocket connection failed, will retry on next call');
+          } else if (error.message.includes('network')) {
+            logWarn('VideoSDKService', 'Network error during initialization, will retry on next call');
+          } else {
+            logWarn('VideoSDKService', 'Unknown initialization error, will retry on next call');
+          }
+        }
+
         return false;
       } finally {
         this.initializationPromise = null;
@@ -425,10 +441,25 @@ class VideoSDKService {
 
   /**
    * Reset service (for logout or cleanup)
-   * Enhanced to handle WebSocket state properly
+   * Enhanced to handle WebSocket state properly with cooldown protection
    */
-  public reset(): void {
-    logVideoSDK('VideoSDKService', 'Starting comprehensive service reset');
+  public reset(force: boolean = false): void {
+    // Prevent unnecessary resets within cooldown period unless forced
+    const now = Date.now();
+    if (!force && (now - this.lastResetTimestamp) < this.resetCooldownMs) {
+      logVideoSDK('VideoSDKService', 'Reset skipped - within cooldown period', {
+        timeSinceLastReset: now - this.lastResetTimestamp,
+        cooldownMs: this.resetCooldownMs
+      });
+      return;
+    }
+
+    logVideoSDK('VideoSDKService', 'Starting comprehensive service reset', {
+      forced: force,
+      timeSinceLastReset: now - this.lastResetTimestamp
+    });
+
+    this.lastResetTimestamp = now;
 
     // Reset initialization and WebSocket state
     this.isInitialized = false;
@@ -491,6 +522,43 @@ class VideoSDKService {
     }
 
     logVideoSDK('VideoSDKService', 'Service reset complete');
+  }
+
+  /**
+   * Smart reset that only resets when necessary
+   * Use this instead of reset() for most cleanup scenarios
+   */
+  public smartReset(sessionId?: string): void {
+    // Only reset if there's an active meeting session that's different
+    if (this.activeMeetingSession && sessionId && this.activeMeetingSession !== sessionId) {
+      logVideoSDK('VideoSDKService', 'Smart reset: Different session detected', {
+        currentSession: this.activeMeetingSession,
+        newSession: sessionId
+      });
+      this.reset(false); // Use cooldown protection
+      return;
+    }
+
+    // Only reset if VideoSDK is in an error state
+    if (this.isInitialized && !this.websocketReady) {
+      logVideoSDK('VideoSDKService', 'Smart reset: WebSocket not ready, resetting');
+      this.reset(false); // Use cooldown protection
+      return;
+    }
+
+    // Clear meeting session without full reset if just cleaning up
+    if (!sessionId && this.activeMeetingSession) {
+      logVideoSDK('VideoSDKService', 'Smart reset: Clearing meeting session only');
+      this.clearActiveMeetingSession();
+      return;
+    }
+
+    logVideoSDK('VideoSDKService', 'Smart reset: No reset needed', {
+      isInitialized: this.isInitialized,
+      websocketReady: this.websocketReady,
+      activeMeetingSession: this.activeMeetingSession,
+      requestedSession: sessionId
+    });
   }
 
   /**

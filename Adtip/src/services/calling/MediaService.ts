@@ -28,8 +28,8 @@ class MediaService {
       // Ensure complete state isolation from previous calls
       await this.ensureCleanState()
 
-      // Reset VideoSDK service to ensure clean state for new meeting
-      this.videoSDK.reset()
+      // Use smart reset to avoid unnecessary re-initialization
+      this.videoSDK.smartReset(meetingId)
       await this.initialize()
 
       // Store meeting config for later use
@@ -102,8 +102,8 @@ class MediaService {
     // Clear meeting config
     this.currentMeetingConfig = null
 
-    // Reset VideoSDK service to ensure clean participant state
-    this.videoSDK.reset()
+    // Use smart reset to avoid unnecessary re-initialization
+    this.videoSDK.smartReset()
 
     // Add delay to ensure cleanup is complete before next meeting
     await new Promise(resolve => setTimeout(resolve, 200))
@@ -156,8 +156,8 @@ class MediaService {
       // Step 3: Clear meeting config
       this.currentMeetingConfig = null;
 
-      // Step 4: Reset VideoSDK service to ensure clean state for next meeting
-      this.videoSDK.reset();
+      // Step 4: Use smart reset to avoid unnecessary re-initialization
+      this.videoSDK.smartReset();
 
       // Step 5: Force garbage collection hint
       if (global.gc) {
@@ -174,7 +174,7 @@ class MediaService {
       // Force cleanup even on error
       this.meeting = null;
       this.currentMeetingConfig = null;
-      this.videoSDK.reset();
+      this.videoSDK.smartReset();
     }
   }
 

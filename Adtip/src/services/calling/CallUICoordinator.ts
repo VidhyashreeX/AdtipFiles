@@ -176,7 +176,7 @@ export class CallUICoordinator {
       await this.notificationService.showIncomingCall(
         options.sessionId,
         options.callerName,
-        options.callType === 'audio' ? 'voice' : 'video',
+        options.callType === 'audio' || options.callType === 'voice' ? 'voice' : 'video',
         options.meetingId,
         options.token
       )

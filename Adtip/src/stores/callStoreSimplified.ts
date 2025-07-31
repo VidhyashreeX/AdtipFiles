@@ -63,9 +63,42 @@ export const useCallStore = create<CallStore>()(
           });
           console.log('[CallStore] Reset complete');
         },
-        setStatus: (s: CallStatus) => set({ status: s }),
-        setSession: (session: CallSession | null) => set({ session }),
-        updateMedia: (updates: Partial<MediaState>) => set((state: CallStore) => ({ media: { ...state.media, ...updates } })),
+        setStatus: (s: CallStatus) => {
+          console.log('[CallStore] Status change:', s);
+          set({ status: s });
+        },
+        setSession: (session: CallSession | null) => {
+          // Enhanced session validation and logging
+          if (session) {
+            console.log('[CallStore] Setting session:', {
+              sessionId: session.sessionId,
+              direction: session.direction,
+              type: session.type,
+              peerId: session.peerId,
+              hasToken: !!session.token,
+              hasMeetingId: !!session.meetingId
+            });
+
+            // Validate session data integrity
+            if (!session.sessionId) {
+              console.warn('[CallStore] Warning: Setting session without sessionId');
+            }
+            if (!session.peerId) {
+              console.warn('[CallStore] Warning: Setting session without peerId');
+            }
+            if (session.direction === 'outgoing' && (!session.token || session.token === 'temp-token')) {
+              console.log('[CallStore] Note: Setting outgoing session with temporary token (will be updated)');
+            }
+          } else {
+            console.log('[CallStore] Clearing session');
+          }
+
+          set({ session });
+        },
+        updateMedia: (updates: Partial<MediaState>) => {
+          console.log('[CallStore] Updating media state:', updates);
+          set((state: CallStore) => ({ media: { ...state.media, ...updates } }));
+        },
       },
     }))
   )

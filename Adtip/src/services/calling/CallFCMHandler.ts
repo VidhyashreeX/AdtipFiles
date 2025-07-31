@@ -90,18 +90,30 @@ export class CallFCMHandler implements FCMHandler {
     try {
       console.log('[CallFCMHandler] Handling incoming call with UI coordinator:', callData)
 
-      // Update call store
-      const store = useCallStore.getState()
-      store.actions.setStatus('ringing')
-      store.actions.setSession({
+      // Create session object
+      const session = {
         sessionId: callData.sessionId,
         meetingId: callData.meetingId,
         token: callData.token,
         peerId: callData.callerId || 'unknown',
         peerName: callData.callerName,
         type: callData.callType || 'video',
-        direction: 'incoming'
-      })
+        direction: 'incoming' as const
+      }
+
+      // Update call store
+      const store = useCallStore.getState()
+      store.actions.setStatus('ringing')
+      store.actions.setSession(session)
+
+      // Inform ReliableCallManager about the session for notification action handling
+      const ReliableCallManager = (await import('./ReliableCallManager')).default
+      const reliableCallManager = ReliableCallManager.getInstance()
+      if (reliableCallManager.isReady()) {
+        // Set the current session in ReliableCallManager so it can handle notification actions
+        ;(reliableCallManager as any).currentCallSession = session
+        console.log('[CallFCMHandler] Informed ReliableCallManager about session:', session.sessionId)
+      }
 
       // Initialize CallUICoordinator
       await this.callUICoordinator.initialize()

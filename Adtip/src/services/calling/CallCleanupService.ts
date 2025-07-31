@@ -135,12 +135,12 @@ export class CallCleanupService {
     try {
       console.log('[CallCleanupService] Cleaning up VideoSDK')
       const videoSDKService = VideoSDKService.getInstance()
-      
+
       // Clear active meeting session
       videoSDKService.clearActiveMeetingSession()
-      
-      // Reset VideoSDK state
-      videoSDKService.reset()
+
+      // Use smart reset to avoid unnecessary re-initialization
+      videoSDKService.smartReset()
     } catch (error) {
       console.error('[CallCleanupService] Error cleaning up VideoSDK:', error)
     }

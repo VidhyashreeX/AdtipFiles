@@ -128,15 +128,15 @@ export class CallStateCleanup {
   }
 
   /**
-   * Reset VideoSDK service completely
+   * Reset VideoSDK service intelligently
    * @private
    * @returns Promise that resolves when reset is complete
    */
   private async resetVideoSDKService(): Promise<void> {
-    console.log('[CallStateCleanup] Resetting VideoSDK service');
+    console.log('[CallStateCleanup] Smart resetting VideoSDK service');
 
     const videoSDKService = VideoSDKService.getInstance();
-    videoSDKService.reset();
+    videoSDKService.smartReset();
 
     // Add small delay to ensure reset is complete
     await new Promise<void>(resolve => setTimeout(resolve, 100));
