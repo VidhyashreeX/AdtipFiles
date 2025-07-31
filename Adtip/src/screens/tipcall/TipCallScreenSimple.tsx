@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useMemo } from 'react'
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react'
 import {
   View,
   Text,
@@ -11,7 +11,9 @@ import {
   ScrollView,
   TextInput,
   Modal,
+  Dimensions,
 } from 'react-native'
+import LinearGradient from 'react-native-linear-gradient'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -25,12 +27,11 @@ import Icon from 'react-native-vector-icons/Feather'
 import { useBlocklist } from '../../hooks/useBlocklist'
 import { useMissedCallsCount } from '../../hooks/useMissedCalls'
 import { useWallet } from '../../hooks/useWallet'
-import { BanknoteArrowUp, Ban, MoreVertical, Mail } from 'lucide-react-native'
+import { BanknoteArrowUp, Ban, MoreVertical, Mail, PhoneCall, Video } from 'lucide-react-native'
 import { MainNavigatorParamList } from '../../types/navigation'
 import { CallType } from '../../stores/callStoreSimplified'
 import debounce from 'lodash.debounce'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import LinearGradient from 'react-native-linear-gradient'
 
 import PremiumCallRateModal from '../../components/modals/PremiumCallRateModal'
 import PremiumCallRateAlert from '../../components/alerts/PremiumCallRateAlert'
@@ -48,6 +49,8 @@ import TipCallLogger  from '../../utils/logger'
 
 // Import premium access utilities
 import { checkPremiumAccess, logPremiumAccessAttempt, PremiumAccessModal } from '../../utils/premiumAccessUtils'
+
+const { width: screenWidth } = Dimensions.get('window')
 
 /**
  * Elegant and minimalistic ContactCard with professional design
@@ -1317,24 +1320,8 @@ const TipCallScreenSimple = () => {
         </View>
       )}
 
-      {/* Call Acceptance Benefits Banner */}
-      <View style={{ marginHorizontal: 16, marginTop: 8 }}>
-        <LinearGradient colors={['#4CAF50', '#45A049']} style={{ borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center' }}>
-          <Text style={{ fontSize: 20, marginRight: 12 }}>💰</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontWeight: '700', color: '#FFFFFF' }}>Earn by Accepting Calls</Text>
-            <Text style={{ color: '#FFFFFF', opacity: 0.9, fontSize: 12 }}>
-              Audio: {isPremium ? '₹2/min' : '₹0.60/min'} • Video: {isPremium ? '₹4/min' : '₹2/min'}
-            </Text>
-          </View>
-          <View style={{ alignItems: 'center' }}>
-            <Text style={{ fontSize: 12, color: '#FFFFFF', opacity: 0.8 }}>Per Min</Text>
-            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#FFFFFF' }}>
-              {isPremium ? '₹2-4' : '₹0.60-2'}
-            </Text>
-          </View>
-        </LinearGradient>
-      </View>
+      {/* TipCall Earning Banners Carousel */}
+      <TipCallBannersCarousel isPremium={isPremium} />
 
       {/* Enhanced Filters Section with Languages and Interests */}
       <View style={[styles.filtersSection, { backgroundColor: colors.background }]}>
@@ -1516,6 +1503,227 @@ const TipCallScreenSimple = () => {
     </View>
   )
 }
+
+// TipCall Banners Carousel Component
+interface TipCallBannersCarouselProps {
+  isPremium: boolean;
+}
+
+const TipCallBannersCarousel: React.FC<TipCallBannersCarouselProps> = ({ isPremium }) => {
+  const { colors } = useTheme();
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const flatListRef = useRef<any>(null);
+
+  const TIPCALL_BANNERS = [
+    {
+      id: 1,
+      title: 'Audio Calls',
+      description: isPremium
+        ? 'Free Users: Earn ₹0.60/minute.\nPremium Users: Boost it to \n₹2/minute—3X the rewards!'
+        : 'Free Users: Earn ₹0.60/minute\nPremium Users: Boost it to \n₹2/minute—3X the rewards!',
+      icon: <PhoneCall size={32} color="#fff" />,
+      gradient: ['#667eea', '#7d3dbdff'],
+      rate: isPremium ? '₹2' : '₹0.60'
+    },
+    {
+      id: 2,
+      title: 'Video Calls',
+      description: isPremium
+        ? 'Free Users: Earn ₹2/minute.\nPremium Users: Double it to \n₹4/minute!'
+        : 'Free Users: Earn ₹2/minute.\nPremium Users: Double it to \n₹4/minute!',
+      icon: <Video size={32} color="#fff" />,
+      gradient: ['#dd2c2cff', '#e96518ff'],
+      rate: isPremium ? '₹4' : '₹2'
+    },
+  ];
+
+  // Auto-scroll every 4 seconds
+  useEffect(() => {
+    if (TIPCALL_BANNERS.length <= 1) return;
+    const interval = setInterval(() => {
+      const nextIndex = (currentIndex + 1) % TIPCALL_BANNERS.length;
+      setCurrentIndex(nextIndex);
+      flatListRef.current?.scrollToIndex({
+        index: nextIndex,
+        animated: true,
+      });
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [currentIndex]);
+
+  const handleScroll = (event: any) => {
+    const contentOffset = event.nativeEvent.contentOffset.x;
+    const screenWidth = event.nativeEvent.layoutMeasurement.width;
+    const index = Math.round(contentOffset / screenWidth);
+    setCurrentIndex(index);
+  };
+
+  const handleDotPress = (index: number) => {
+    setCurrentIndex(index);
+    flatListRef.current?.scrollToIndex({
+      index,
+      animated: true,
+    });
+  };
+
+  return (
+    <View style={tipCallCarouselStyles.container}>
+      <View style={tipCallCarouselStyles.carouselContainer}>
+        <FlatList
+          ref={flatListRef}
+          data={TIPCALL_BANNERS}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          pagingEnabled={true}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={({ item }) => (
+            <View style={tipCallCarouselStyles.bannerWrapper}>
+              <LinearGradient
+                colors={item.gradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={tipCallCarouselStyles.bannerCard}
+              >
+                <View style={tipCallCarouselStyles.bannerContent}>
+                  <View style={tipCallCarouselStyles.iconContainer}>
+                    {item.icon}
+                  </View>
+                  <View style={tipCallCarouselStyles.textContainer}>
+                    <Text style={tipCallCarouselStyles.bannerTitle}>{item.title}</Text>
+                    <Text style={tipCallCarouselStyles.bannerDescription}>{item.description}</Text>
+                  </View>
+                  <View style={tipCallCarouselStyles.rateContainer}>
+                    <Text style={tipCallCarouselStyles.rateLabel}>Per Min</Text>
+                    <Text style={tipCallCarouselStyles.rateValue}>{item.rate}</Text>
+                  </View>
+                </View>
+              </LinearGradient>
+            </View>
+          )}
+        />
+      </View>
+      {/* Dots Indicator */}
+      {TIPCALL_BANNERS.length > 1 && (
+        <View style={tipCallCarouselStyles.dotsContainer}>
+          {TIPCALL_BANNERS.map((banner, index) => (
+            <TouchableOpacity
+              key={index}
+              onPress={() => handleDotPress(index)}
+            >
+              {index === currentIndex ? (
+                <LinearGradient
+                  colors={banner.gradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[
+                    tipCallCarouselStyles.dot,
+                    {
+                      transform: [{ scale: 1.3 }],
+                    },
+                  ]}
+                />
+              ) : (
+                <View
+                  style={[
+                    tipCallCarouselStyles.dot,
+                    {
+                      backgroundColor: 'rgba(255, 255, 255, 0.4)',
+                      transform: [{ scale: 1 }],
+                    },
+                  ]}
+                />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+};
+
+const tipCallCarouselStyles = StyleSheet.create({
+  container: {
+    backgroundColor: 'transparent',
+    marginTop: 8,
+  },
+  carouselContainer: {
+    height: 120,
+  },
+  bannerWrapper: {
+    width: screenWidth,
+    paddingHorizontal: 16,
+  },
+  bannerCard: {
+    height: 100,
+    borderRadius: 12,
+    padding: 16,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  bannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: '100%',
+  },
+  iconContainer: {
+    marginRight: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  textContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  bannerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  bannerDescription: {
+    fontSize: 13,
+    color: '#fff',
+    opacity: 0.95,
+    lineHeight: 18,
+  },
+  rateContainer: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  rateLabel: {
+    fontSize: 11,
+    color: '#FFFFFF',
+    opacity: 0.9,
+  },
+  rateValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  dotsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 4,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginHorizontal: 3,
+  },
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -1764,13 +1972,15 @@ const styles = StyleSheet.create({
 
   // Minimalist Filters
   filtersSection: {
-    paddingVertical: 16,
+    paddingVertical: 0,
+    paddingBottom: 0,
+    paddingTop: 0,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E5E7EB',
   },
   filterScroll: {
     paddingHorizontal: 12,
-    paddingBottom: 12,
+    paddingBottom: 0,
   },
   filterChip: {
     paddingHorizontal: 18,
@@ -1778,7 +1988,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 2,
     marginRight: 12,
-    marginBottom: 6,
+    marginBottom: 0,
   },
   filterChipText: {
     fontSize: 14,

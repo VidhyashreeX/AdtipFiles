@@ -425,17 +425,32 @@ const UserDetailsScreen = () => {
           }));
         }
 
-        // ✅ FIX: Don't call completeOnboarding or force navigation
-        // The navigation state machine will automatically detect the user data change
-        // and navigate to the appropriate screen based on authentication status
+        // ✅ FIX: Update user data immediately to trigger navigation
+        // Update the user object with the saved details to ensure proper navigation
+        const updatedUserData = {
+          ...userData,
+          name: formData.name,
+          firstname: formData.firstName,
+          lastname: formData.lastName,
+          isSaveUserDetails: 1, // Mark as completed
+        };
 
-        // Refresh user data in AuthContext to trigger navigation state machine
+        // Update user in AuthContext using the proper method
+        await updateUserDetails(updatedUserData);
+
+        // Also refresh from server to get any additional data
         await refreshUserData();
-        
+
         Alert.alert(
-          'Success', 
+          'Success',
           'Profile completed successfully!',
-          [{ text: 'OK' }]
+          [{
+            text: 'OK',
+            onPress: () => {
+              // The App.tsx logic will now see the updated user data and navigate properly
+              // No need for manual navigation as the state machine will handle it
+            }
+          }]
         );
       } else {
         throw new Error(response.message || 'Failed to save user details');

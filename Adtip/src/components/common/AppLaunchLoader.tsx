@@ -12,7 +12,7 @@ import Animated, {
 import { useTheme } from '../../contexts/ThemeContext';
 
 // Import app logo
-const AppLogo = require('../../../assets/icon/app_logo.png');
+const AppLogo = require('../../assets/images/AdTipLogoFinal.png');
 
 // Screen dimensions available if needed
 // const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');

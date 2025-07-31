@@ -495,11 +495,11 @@ const Sidebar: React.FC = () => {
             <Animated.View style={[styles.sidebarHeader, headerAnimatedStyle, {paddingHorizontal: sizes.headerPadding}]}>
               <View style={styles.logoSection}>
                 <Image
-                  source={require('../../assets/images/logo.png')}
+                  source={require('../../assets/images/AdTipLogoFinal.png')}
                   style={[styles.logoImage, { width: sizes.headerIconSize * 1.2, height: sizes.headerIconSize * 1.2 }]}
                 />
                 <Text style={[styles.logoText, { color: colors.text.primary, fontSize: sizes.welcomeTextSize * 1.1 }]}>
-                  Adtip
+                  AdTip
                 </Text>
               </View>
             </Animated.View>

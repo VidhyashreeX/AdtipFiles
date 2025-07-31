@@ -34,7 +34,7 @@ const PremiumUpgradeAlert: React.FC<PremiumUpgradeAlertProps> = ({
   visible,
   onClose,
   onUpgrade,
-  title = "🎮 Premium Games Unlocked!",
+  title = "🎮 Premium Games Locked!",
   description = "Upgrade to Premium to access exciting games and earn more rewards!"
 }) => {
   const { colors, isDarkMode } = useTheme();

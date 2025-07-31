@@ -193,7 +193,7 @@ const ExternalLinkBanner: React.FC<ExternalLinkBannerProps> = ({ isPremium, onUp
         >
           <View style={styles.earnCardContent}>
             <View style={styles.earnCardTextContainer}>
-              <Text style={styles.earnCardTitle}>🎮 Epic Play Games</Text>
+              <Text style={styles.earnCardTitle}>Epic Play Games</Text>
               <Text style={styles.earnCardDescription}>
                 {isPremium ? 'Click to play exciting games and earn rewards!' : 'Premium feature - Upgrade to unlock games!'}
               </Text>
@@ -1357,7 +1357,7 @@ const HomeScreen: React.FC = () => {
             setShowPremiumUpgradeAlert(false);
             navigation.navigate('PremiumUser' as never);
           }}
-          title="🎮 Premium Games Unlocked!"
+          title="🎮 Premium Games Locked!"
           description="Upgrade to Premium to access exciting games and earn more rewards!"
         />
 

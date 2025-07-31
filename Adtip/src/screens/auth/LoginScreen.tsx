@@ -139,7 +139,7 @@ const LoginScreen = ({ navigation }: { navigation: LoginScreenNavigationProp }) 
       >
         {/* App logo */}
         <Image
-          source={require('../../assets/images/logo.png')}
+          source={require('../../assets/images/AdTipLogoFinal.png')}
           style={styles.logo}
           resizeMode="contain"
         />

@@ -18,7 +18,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import ScreenTransition from '../../components/common/ScreenTransition';
 import ApiService from '../../services/ApiService';
 import { getSetting, setSetting, getSettings } from '../../utils/settingsStorage';
-import { useUserData } from '../../contexts/UserDataContext';
+import { useUserDataContext } from '../../contexts/UserDataContext';
 // import {useUserSettings, useUpdateUserSettings} from '../../hooks/useQueries';
 
 interface SettingItem {
@@ -36,7 +36,7 @@ const SettingsScreen: React.FC = () => {
   const {colors, isDarkMode, toggleTheme, setDarkMode} = useTheme();
   const navigation = useNavigation();
   const { logout, loading: authLoading, user } = useAuth();
-  const { userData, refetch: refetchUserData } = useUserData();
+  const { userData, refetch: refetchUserData } = useUserDataContext();
   const userId = user?.id || 0;
 
   // TanStack Query hooks

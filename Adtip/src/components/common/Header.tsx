@@ -320,8 +320,8 @@ const Header: React.FC<HeaderProps> = ({
             </TouchableOpacity>
             {actualShowLogo && (
               <View style={styles.logoContainer}>
-                <Image 
-                  source={require('../../../assets/images/logo.png')} 
+                <Image
+                  source={require('../../assets/images/AdTipLogoFinal.png')}
                   style={[styles.logoImage, {width: sizes.menuIconSize + 4, height: sizes.menuIconSize + 4}]}
                   resizeMode="contain"
                 />

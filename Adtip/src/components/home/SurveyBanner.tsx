@@ -248,8 +248,8 @@ const SurveyBanner: React.FC<SurveyBannerProps> = ({
   const getBannerContent = () => {
     if (isGuest) {
       return {
-        title: '📊 Surveys Available',
-        description: 'Login to complete surveys and earn rewards!',
+        title: 'Complete Surveys—Cash for Opinions!',
+        description: 'Login to share your thoughts and get paid',
         buttonText: 'Login to Start',
         gradientColors: ['#6b48ff', '#5A67D8', '#4C51BF'], // App's secondary purple
         icon: Users,
@@ -258,8 +258,8 @@ const SurveyBanner: React.FC<SurveyBannerProps> = ({
 
     if (isPremium) {
       return {
-        title: '💎 Premium Surveys',
-        description: `Earn 4x more! ${surveyCount > 0 ? `${surveyCount} surveys available` : 'Loading surveys...'}`,
+        title: '💎 Complete Surveys—Cash for Opinions!',
+        description: 'Share your thoughts and get paid\nEarn rewards with every survey',
         buttonText: 'Earn 4x Now!',
         gradientColors: ['#FFD700', '#FFA500', '#FF8C00'], // Gold gradient for premium
         icon: Crown,
@@ -267,10 +267,10 @@ const SurveyBanner: React.FC<SurveyBannerProps> = ({
     }
 
     return {
-      title: '📊 Complete Surveys',
-      description: `Earn rewards! ${surveyCount > 0 ? `${surveyCount} surveys available` : 'Loading surveys...'}`,
+      title: 'Complete Surveys—Cash for Opinions!',
+      description: 'Share your thoughts and get paid\nEarn rewards with every survey',
       buttonText: 'Start Survey',
-      gradientColors: ['#24d05a', '#00C853', '#1B5E20'], // App's green gradient
+      gradientColors: ['#667eea', '#764ba2'], // Elegant purple gradient
       icon: BarChart3,
     };
   };
@@ -321,16 +321,6 @@ const SurveyBanner: React.FC<SurveyBannerProps> = ({
             <View style={styles.textContainer}>
               <Text style={styles.title}>{bannerContent.title}</Text>
               <Text style={styles.description}>{bannerContent.description}</Text>
-              <LinearGradient
-                colors={['#FFFFFF', '#F0F0F0']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.rewardBadge}
-              >
-                <Text style={styles.rewardText}>
-                  {isLoading ? 'Loading...' : bannerContent.buttonText}
-                </Text>
-              </LinearGradient>
             </View>
             <View style={styles.iconContainer}>
               <IconComponent size={32} color="#FFFFFF" />
