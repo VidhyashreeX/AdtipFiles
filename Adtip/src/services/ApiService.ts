@@ -2837,6 +2837,7 @@ export default class ApiService {
     receiverId: number;
     callType: 'voice' | 'video';
     platform?: 'ANDROID' | 'IOS';
+    sessionId?: string;
   }): Promise<{
     success: boolean;
     message: string;

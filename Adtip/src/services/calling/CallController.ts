@@ -17,7 +17,7 @@ import VideoSDKService from '../videosdk/VideoSDKService'
 import * as NavigationService from '../../navigation/NavigationService'
 import ApiService from '../ApiService'
 import CallStateCleanup from '../../utils/callStateCleanup'
-import { startPersistentCall, updatePersistentCallStatus, endPersistentCall } from '../../components/videosdk/PersistentMeetingManager'
+import { startPersistentCall, updatePersistentCallStatus, updatePersistentCallConfig, endPersistentCall } from '../../components/videosdk/PersistentMeetingManager'
 import PermissionManagerService from '../PermissionManagerService'
 import { logCall, logError, logWarn } from '../../utils/ProductionLogger'
 
@@ -545,7 +545,8 @@ class CallController {
         callerId: parseInt(userId),
         receiverId: parseInt(recipientId),
         callType,
-        platform: require('react-native').Platform.OS === 'ios' ? 'IOS' : 'ANDROID'
+        platform: require('react-native').Platform.OS === 'ios' ? 'IOS' : 'ANDROID',
+        sessionId: sessionId
       });
 
       logCall('CallController', 'Async consolidated call API response', {
@@ -597,7 +598,7 @@ class CallController {
         })
 
         // Update persistent call with real meeting data
-        updatePersistentCallStatus({
+        updatePersistentCallConfig({
           sessionId,
           meetingId,
           token,

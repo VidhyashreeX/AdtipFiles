@@ -45,7 +45,7 @@ const PersistentParticipantVideo = ({ participantId, isLocal = false }: { partic
   } = useParticipant(participantId)
 
   const meeting = useMeeting()
-  const actualIsLocal = meeting.localParticipant?.id === participantId
+  const actualIsLocal = meeting?.localParticipant?.id === participantId
   const finalIsLocal = actualIsLocal
 
   // Show placeholder when no video
@@ -193,10 +193,12 @@ const PersistentControls = ({ config }: { config: MeetingConfig | null }) => {
 }
 
 // Persistent Meeting Content Component
-const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig | null; status: string }>(
-  ({ config, status }, ref) => {
-  const meeting = useMeeting()
-  const { participants, localParticipant, join } = meeting
+const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig | null; status: string; meeting?: any }>(
+  ({ config, status, meeting: providedMeeting }, ref) => {
+  // Only use useMeeting() if no meeting is provided (i.e., when we have real credentials)
+  const meetingFromHook = providedMeeting === undefined ? useMeeting() : null
+  const meeting = providedMeeting || meetingFromHook
+  const { participants, localParticipant, join } = meeting || {}
   const localParticipantId = localParticipant?.id
   const controller = CallController.getInstance()
   const mediaService = controller.getMediaService()
@@ -259,7 +261,36 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
     }
   }, [meeting, mediaService, config])
 
-  // Join meeting logic
+  // Reset join state when config changes (for meetingId updates)
+  useEffect(() => {
+    if (config && currentSessionRef.current !== config.sessionId) {
+      logCall('[PersistentMeetingContent] Session changed, resetting join state', {
+        oldSession: currentSessionRef.current,
+        newSession: config.sessionId,
+        meetingId: config.meetingId
+      });
+
+      // Reset join state for new session
+      joinedRef.current = false;
+      joinAttemptsRef.current = 0;
+      hasSetMeetingRef.current = false;
+      currentSessionRef.current = config.sessionId;
+    }
+
+    // Also reset join state when meetingId changes from temp to real
+    if (config && config.meetingId && !config.meetingId.startsWith('temp-') &&
+        config.token !== 'temp-token' && joinedRef.current === false) {
+      logCall('[PersistentMeetingContent] Real meetingId and token received, ready to join', {
+        meetingId: config.meetingId,
+        hasRealToken: config.token !== 'temp-token'
+      });
+
+      // Reset attempts to allow fresh join with real credentials
+      joinAttemptsRef.current = 0;
+    }
+  }, [config?.sessionId, config?.meetingId, config?.token]);
+
+  // Join meeting logic - now only called with real credentials
   useEffect(() => {
     if (!config || !meeting || joinedRef.current) return
 
@@ -353,8 +384,37 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
     )
   }
 
-  // Get participants
-  const allParticipants = [...participants.values()].filter(p => p && p.id && p.displayName)
+  // Handle case where meeting is null (waiting for real credentials)
+  if (!meeting) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#000" />
+
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>
+            {config?.peerName || 'Connecting...'}
+          </Text>
+          <Text style={styles.headerSubtitle}>
+            Preparing call...
+          </Text>
+        </View>
+
+        {/* Loading state */}
+        <View style={styles.participantsContainer}>
+          <View style={styles.videoPlaceholder}>
+            <ActivityIndicator size="large" color="#fff" />
+            <Text style={styles.placeholderText}>
+              Preparing call...
+            </Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Get participants (with null checks)
+  const allParticipants = participants ? [...participants.values()].filter(p => p && p.id && p.displayName) : []
   const remoteParticipants = allParticipants.filter(p => p.id !== localParticipantId)
   const isVideo = config.callType === 'video'
 
@@ -500,10 +560,43 @@ const PersistentMeetingManager: React.FC = () => {
     return null
   }
 
+  // CRITICAL FIX: Only create MeetingProvider when we have REAL credentials
+  // This prevents WebSocket reconnection errors caused by multiple MeetingProvider recreations
+  const hasRealCredentials = currentConfig.token !== 'temp-token' &&
+                            !currentConfig.meetingId.startsWith('temp-');
+
+  if (!hasRealCredentials) {
+    logCall('[PersistentMeetingManager] Waiting for real credentials before creating MeetingProvider', {
+      meetingId: currentConfig.meetingId,
+      token: currentConfig.token,
+      sessionId: currentConfig.sessionId
+    });
+
+    // Show connecting state without MeetingProvider to prevent WebSocket issues
+    return (
+      <View style={StyleSheet.absoluteFillObject}>
+        <PersistentMeetingContent
+          config={currentConfig}
+          status={status}
+          meeting={null} // Explicitly null - don't use useMeeting hook
+        />
+      </View>
+    );
+  }
+
+  // Use stable key based only on sessionId since we now only create once with real credentials
+  const meetingProviderKey = `persistent-meeting-${currentConfig.sessionId}`;
+  logCall('[PersistentMeetingManager] Creating MeetingProvider with real credentials', {
+    key: meetingProviderKey,
+    meetingId: currentConfig.meetingId,
+    token: currentConfig.token ? 'present' : 'missing',
+    sessionId: currentConfig.sessionId
+  });
+
   return (
     <View style={StyleSheet.absoluteFillObject}>
       <MeetingProvider
-        key={`persistent-meeting-${currentConfig.sessionId}`}
+        key={meetingProviderKey}
         token={currentConfig.token}
         config={{
           meetingId: currentConfig.meetingId,
@@ -579,6 +672,42 @@ export const startPersistentCall = (config: MeetingConfig) => {
 export const updatePersistentCallStatus = (status: string) => {
   if (globalStateSetters) {
     globalStateSetters.setStatus(status)
+  }
+}
+
+export const updatePersistentCallConfig = (updates: {
+  sessionId?: string;
+  meetingId?: string;
+  token?: string;
+  status?: string;
+}) => {
+  if (globalStateSetters && globalState.currentConfig) {
+    logCall('[PersistentMeetingManager] Updating call config:', {
+      currentMeetingId: globalState.currentConfig.meetingId,
+      newMeetingId: updates.meetingId,
+      currentToken: globalState.currentConfig.token ? 'present' : 'missing',
+      newToken: updates.token ? 'present' : 'missing',
+      status: updates.status
+    });
+
+    // Update the config with new values
+    const updatedConfig = {
+      ...globalState.currentConfig,
+      ...updates
+    };
+
+    globalStateSetters.setCurrentConfig(updatedConfig);
+
+    if (updates.status) {
+      globalStateSetters.setStatus(updates.status);
+    }
+
+    logCall('[PersistentMeetingManager] Call config updated successfully', {
+      finalMeetingId: updatedConfig.meetingId,
+      finalToken: updatedConfig.token ? 'present' : 'missing'
+    });
+  } else {
+    logWarn('[PersistentMeetingManager] Cannot update config - missing setters or config');
   }
 }
 
