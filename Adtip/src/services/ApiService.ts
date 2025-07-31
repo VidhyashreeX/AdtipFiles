@@ -2782,24 +2782,27 @@ export default class ApiService {
     } catch (error: any) {
       console.error('❌ [ApiService] Error checking app version:', error);
 
-      // Handle 426 Upgrade Required status - this means force update is required
-      if (error?.response?.status === 426) {
-        console.log('🚨 [ApiService] Force update required (426 status)');
-        const errorData = error.response.data;
+      // Check if this is an Axios error with a response (not a network error)
+      if (axios.isAxiosError(error) && error.response) {
+        // Handle 426 Upgrade Required status - this means force update is required
+        if (error.response.status === 426) {
+          console.log('🚨 [ApiService] Force update required (426 status)');
+          const errorData = error.response.data;
 
-        // Convert 426 error to successful update detection response
-        return {
-          status: true,
-          message: errorData?.message || 'A critical update is required to continue using the app.',
-          data: {
-            latest_version: 'Unknown', // Backend doesn't provide version in 426 response
-            force_update: true,
-            update_message: errorData?.message || 'A critical update is required to continue using the app.',
-            store_url: this.getDefaultStoreUrl(data.platform),
-            update_url: this.getDefaultStoreUrl(data.platform),
-            release_notes: 'Critical update required for continued app usage.'
-          }
-        };
+          // Convert 426 error to successful update detection response
+          return {
+            status: true,
+            message: errorData?.message || 'A critical update is required to continue using the app.',
+            data: {
+              latest_version: 'Unknown', // Backend doesn't provide version in 426 response
+              force_update: true,
+              update_message: errorData?.message || 'A critical update is required to continue using the app.',
+              store_url: this.getDefaultStoreUrl(data.platform),
+              update_url: this.getDefaultStoreUrl(data.platform),
+              release_notes: 'Critical update required for continued app usage.'
+            }
+          };
+        }
       }
 
       throw this.handleError(error);
