@@ -2779,10 +2779,39 @@ export default class ApiService {
       const response = await this.post('/api/check-app-version', data);
       console.log('📥 [ApiService] App version check response:', response);
       return response;
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ [ApiService] Error checking app version:', error);
+
+      // Handle 426 Upgrade Required status - this means force update is required
+      if (error?.response?.status === 426) {
+        console.log('🚨 [ApiService] Force update required (426 status)');
+        const errorData = error.response.data;
+
+        // Convert 426 error to successful update detection response
+        return {
+          status: true,
+          message: errorData?.message || 'A critical update is required to continue using the app.',
+          data: {
+            latest_version: 'Unknown', // Backend doesn't provide version in 426 response
+            force_update: true,
+            update_message: errorData?.message || 'A critical update is required to continue using the app.',
+            store_url: this.getDefaultStoreUrl(data.platform),
+            update_url: this.getDefaultStoreUrl(data.platform),
+            release_notes: 'Critical update required for continued app usage.'
+          }
+        };
+      }
+
       throw this.handleError(error);
     }
+  }
+
+  // Helper method to get default store URL based on platform
+  private static getDefaultStoreUrl(platform: string): string {
+    if (platform === 'ios') {
+      return 'https://apps.apple.com/app/adtip-watch-to-earn/id1234567890';
+    }
+    return 'https://play.google.com/store/apps/details?id=com.adtip.app.adtip_app';
   }
 
   static async getLanguages(): Promise<any> {

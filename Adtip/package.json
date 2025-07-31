@@ -1,6 +1,6 @@
 {
   "name": "adtip",
-  "version": "1.0.0",
+  "version": "33.0.0",
   "private": true,
   "scripts": {
     "test": "node ../testing/scripts/runAllTests.js",

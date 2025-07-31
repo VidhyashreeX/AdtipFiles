@@ -30,17 +30,15 @@ INSERT INTO app_versions (platform, latest_version, force_update, update_url, re
 SELECT * FROM app_versions WHERE platform IN ('android', 'ios') ORDER BY platform, id DESC;
 
 -- Test scenarios you can create by updating the data:
+-- Note: All updates are now mandatory (force_update = 1)
 
--- Scenario 1: Force update required (current setup)
+-- Scenario 1: Mandatory update required (current setup)
 -- UPDATE app_versions SET force_update = 1, latest_version = '33.0.0' WHERE platform = 'android';
 
--- Scenario 2: Optional update available
--- UPDATE app_versions SET force_update = 0, latest_version = '33.0.0' WHERE platform = 'android';
+-- Scenario 2: No update needed (set latest_version to current app version)
+-- UPDATE app_versions SET force_update = 1, latest_version = '1.0.0' WHERE platform = 'android';
 
--- Scenario 3: No update needed (set latest_version to current app version)
--- UPDATE app_versions SET force_update = 0, latest_version = '1.0.0' WHERE platform = 'android';
-
--- Scenario 4: Critical force update
+-- Scenario 3: Major mandatory update
 -- UPDATE app_versions SET force_update = 1, latest_version = '34.0.0' WHERE platform = 'android';
 
 -- Note: The current app version in package.json is 1.0.0

@@ -29,34 +29,34 @@ interface DebugScenario {
 
 const DEBUG_SCENARIOS: DebugScenario[] = [
   {
-    name: 'Force Update Required',
-    description: 'Simulates a critical update that blocks the app',
+    name: 'Critical Security Update',
+    description: 'Simulates a critical security update (mandatory)',
     mockData: {
       latest_version: '99.0.0',
       force_update: true,
-      update_message: 'A critical security update is required to continue using Adtip.',
+      update_message: 'A critical security update is required to continue using Adtip.\n\nPlease reach out to support@adtip.in for any issues.',
       store_url: 'https://play.google.com/store/apps/details?id=com.adtip.app.adtip_app',
       release_notes: '🚨 Critical Security Update\n\n🔒 Security Fixes:\n• Fixed critical vulnerability\n• Enhanced data protection\n• Improved authentication\n\n✨ New Features:\n• Better performance\n• UI improvements\n• Bug fixes'
     }
   },
   {
-    name: 'Optional Update',
-    description: 'Simulates an optional update that can be dismissed',
+    name: 'Feature Update',
+    description: 'Simulates a feature update (mandatory)',
     mockData: {
       latest_version: '98.0.0',
-      force_update: false,
-      update_message: 'A new version with exciting features is available!',
+      force_update: true,
+      update_message: 'A critical update is required to continue using Adtip. Please update now to access all features.\n\nPlease reach out to support@adtip.in for any issues.',
       store_url: 'https://play.google.com/store/apps/details?id=com.adtip.app.adtip_app',
-      release_notes: '✨ New Features Update\n\n🎉 What\'s New:\n• Dark mode improvements\n• New earning opportunities\n• Enhanced video player\n• Better notifications\n\n🐛 Bug Fixes:\n• Performance improvements\n• Stability enhancements'
+      release_notes: '✨ New Features Update\n\n🎉 What&apos;s New:\n• Dark mode improvements\n• New earning opportunities\n• Enhanced video player\n• Better notifications\n\n🐛 Bug Fixes:\n• Performance improvements\n• Stability enhancements'
     }
   },
   {
-    name: 'Major Version Jump',
-    description: 'Simulates a major version update with extensive changes',
+    name: 'Major Version Update',
+    description: 'Simulates a major version update (mandatory)',
     mockData: {
       latest_version: '100.0.0',
       force_update: true,
-      update_message: 'Welcome to Adtip 100.0! This major update includes revolutionary changes.',
+      update_message: 'Welcome to Adtip 100.0! This major update includes revolutionary changes.\n\nPlease reach out to support@adtip.in for any issues.',
       store_url: 'https://play.google.com/store/apps/details?id=com.adtip.app.adtip_app',
       release_notes: '🎉 Adtip 100.0 - Revolutionary Update!\n\n🚀 Major Features:\n• Complete UI redesign\n• AI-powered recommendations\n• Advanced earning system\n• Social features\n• Live streaming\n\n💰 Earning Improvements:\n• Higher ad rewards\n• New earning methods\n• Faster withdrawals\n\n🔧 Technical:\n• 50% faster performance\n• Reduced battery usage\n• Better stability'
     }
@@ -92,16 +92,29 @@ const ForceUpdateDebugButton: React.FC = () => {
   const handleTestRealAPI = async () => {
     try {
       const versionService = VersionCheckService.getInstance();
+
+      // Get current version for debugging
+      const currentVersion = await versionService.getCurrentVersion();
+      const currentBuild = await versionService.getCurrentBuildNumber();
+
+      console.log('🔧 [Debug] Testing real API with:', {
+        currentVersion,
+        currentBuild,
+        platform: 'android'
+      });
+
       const result = await versionService.forceCheckForUpdates();
-      
+
+      console.log('🔧 [Debug] API Result:', result);
+
       if (result && result.status && result.data) {
         Alert.alert(
-          'Real API Test',
-          `Update detected!\n\nLatest: ${result.data.latest_version}\nForce: ${result.data.force_update}\n\nMessage: ${result.message}`,
+          'Real API Test - Update Detected',
+          `✅ Update Available!\n\nCurrent: ${currentVersion}\nLatest: ${result.data.latest_version}\nForce: ${result.data.force_update}\nBuild: ${currentBuild}\n\nMessage: ${result.message}`,
           [
             { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Show Modal', 
+            {
+              text: 'Show Modal',
               onPress: () => {
                 setCurrentMockData(result.data);
                 setShowForceUpdateModal(true);
@@ -110,16 +123,30 @@ const ForceUpdateDebugButton: React.FC = () => {
           ]
         );
       } else {
+        // Show detailed debug info even when no update
         Alert.alert(
-          'Real API Test',
-          'No update required. App is up to date.',
-          [{ text: 'OK' }]
+          'Real API Test - No Update',
+          `ℹ️ Debug Info:\n\nCurrent Version: ${currentVersion}\nCurrent Build: ${currentBuild}\nPlatform: android\n\nAPI Response:\nStatus: ${result?.status || 'false'}\nData: ${result?.data ? 'present' : 'null'}\nMessage: ${result?.message || 'none'}\n\n${result ? 'API responded but no update needed' : 'API returned null/undefined'}`,
+          [
+            { text: 'OK' },
+            {
+              text: 'Check Console',
+              onPress: () => {
+                console.log('🔧 [Debug] Full API Response:', result);
+                console.log('🔧 [Debug] Version Service State:', {
+                  forceUpdateRequired: versionService.isForceUpdateRequired(),
+                  updateInfo: versionService.getUpdateInfo()
+                });
+              }
+            }
+          ]
         );
       }
     } catch (error) {
+      console.error('🔧 [Debug] API Test Error:', error);
       Alert.alert(
         'Real API Test Error',
-        `Failed to check for updates: ${error}`,
+        `❌ Failed to check for updates:\n\n${error}\n\nCheck console for details.`,
         [{ text: 'OK' }]
       );
     }
@@ -168,7 +195,7 @@ const ForceUpdateDebugButton: React.FC = () => {
                     {scenario.description}
                   </Text>
                   <Text style={[styles.scenarioDetails, { color: colors.textSecondary }]}>
-                    Version: {scenario.mockData.latest_version} | Force: {scenario.mockData.force_update ? 'Yes' : 'No'}
+                    Version: {scenario.mockData.latest_version} | Mandatory Update
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -194,6 +221,26 @@ const ForceUpdateDebugButton: React.FC = () => {
               >
                 <Text style={styles.utilityButtonText}>
                   🔄 Reset Version Service
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.utilityButton, { backgroundColor: '#9B59B6' }]}
+                onPress={async () => {
+                  const versionService = VersionCheckService.getInstance();
+                  const currentVersion = await versionService.getCurrentVersion();
+                  const currentBuild = await versionService.getCurrentBuildNumber();
+
+                  Alert.alert(
+                    'Version Info',
+                    `Current Version: ${currentVersion}\nCurrent Build: ${currentBuild}\nPlatform: android\n\nVersion Comparison Tests:\n• ${currentVersion} vs 33.0.0 = ${currentVersion === '33.0.0' ? 'Equal' : currentVersion < '33.0.0' ? 'Older' : 'Newer'}\n• ${currentVersion} vs 1.0.0 = ${currentVersion === '1.0.0' ? 'Equal' : currentVersion < '1.0.0' ? 'Older' : 'Newer'}`,
+                    [{ text: 'OK' }]
+                  );
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.utilityButtonText}>
+                  📊 Version Info
                 </Text>
               </TouchableOpacity>
             </ScrollView>

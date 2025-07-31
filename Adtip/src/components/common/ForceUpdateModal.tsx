@@ -60,8 +60,6 @@ const ForceUpdateModal: React.FC<ForceUpdateModalProps> = ({
     return null;
   }
 
-  const isForceUpdate = updateInfo.force_update;
-
   return (
     <Modal
       visible={visible}
@@ -87,10 +85,7 @@ const ForceUpdateModal: React.FC<ForceUpdateModalProps> = ({
           
           {/* Header with gradient */}
           <LinearGradient
-            colors={isForceUpdate 
-              ? ['#FF6B6B', '#FF8E53'] 
-              : ['#4ECDC4', '#44A08D']
-            }
+            colors={['#FF6B6B', '#FF8E53']}
             style={styles.header}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -99,7 +94,7 @@ const ForceUpdateModal: React.FC<ForceUpdateModalProps> = ({
               <Text style={styles.iconText}>🚀</Text>
             </View>
             <Text style={styles.headerTitle}>
-              {isForceUpdate ? 'Update Required' : 'Update Available'}
+              Update Required
             </Text>
             <Text style={styles.headerSubtitle}>
               Version {updateInfo.latest_version}
@@ -110,10 +105,7 @@ const ForceUpdateModal: React.FC<ForceUpdateModalProps> = ({
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
             <Text style={[styles.message, { color: colors.text.primary }]}>
               {updateInfo.update_message ||
-                (isForceUpdate
-                  ? 'A critical update is required to continue using Adtip. Please update now to access all features.'
-                  : 'A new version of Adtip is available with exciting new features and improvements!'
-                )
+                'A critical update is required to continue using Adtip. Please update now to access all features.\n\nPlease reach out to support@adtip.in for any issues.'
               }
             </Text>
 
@@ -158,16 +150,13 @@ const ForceUpdateModal: React.FC<ForceUpdateModalProps> = ({
           <View style={styles.buttonContainer}>
             <TouchableOpacity
               style={[styles.updateButton, {
-                backgroundColor: isForceUpdate ? '#FF6B6B' : '#4ECDC4'
+                backgroundColor: '#FF6B6B'
               }]}
               onPress={handleUpdatePress}
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={isForceUpdate 
-                  ? ['#FF6B6B', '#FF8E53'] 
-                  : ['#4ECDC4', '#44A08D']
-                }
+                colors={['#FF6B6B', '#FF8E53']}
                 style={styles.updateButtonGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -178,20 +167,7 @@ const ForceUpdateModal: React.FC<ForceUpdateModalProps> = ({
               </LinearGradient>
             </TouchableOpacity>
 
-            {!isForceUpdate && (
-              <TouchableOpacity
-                style={[styles.laterButton, { borderColor: colors.border }]}
-                onPress={() => {
-                  // For non-force updates, we could add a "later" option
-                  // But since this is a force update modal, we'll keep it simple
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.laterButtonText, { color: colors.text.secondary }]}>
-                  Remind Me Later
-                </Text>
-              </TouchableOpacity>
-            )}
+
           </View>
         </View>
       </View>
