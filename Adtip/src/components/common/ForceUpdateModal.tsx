@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Dimensions,
   StatusBar,
-  Image,
   ScrollView,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
@@ -34,6 +33,19 @@ const ForceUpdateModal: React.FC<ForceUpdateModalProps> = ({
 }) => {
   const { colors, isDarkMode } = useTheme();
 
+  // Debug logging for theme colors
+  React.useEffect(() => {
+    if (visible && __DEV__) {
+      console.log('🎨 [ForceUpdateModal] Theme colors:', {
+        isDarkMode,
+        text: colors.text,
+        textSecondary: colors.textSecondary,
+        background: colors.background,
+        border: colors.border
+      });
+    }
+  }, [visible, isDarkMode, colors]);
+
   const handleUpdatePress = async () => {
     if (updateInfo?.store_url || updateInfo?.update_url) {
       await VersionCheckService.getInstance().openStore(
@@ -59,13 +71,19 @@ const ForceUpdateModal: React.FC<ForceUpdateModalProps> = ({
     >
       <StatusBar
         backgroundColor="rgba(0,0,0,0.8)"
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+        barStyle="light-content"
         translucent={true}
       />
       
       {/* Full screen overlay */}
       <View style={styles.overlay}>
-        <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+        <View style={[
+          styles.modalContainer,
+          {
+            backgroundColor: colors.background,
+            shadowColor: isDarkMode ? '#FFFFFF' : '#000000',
+          }
+        ]}>
           
           {/* Header with gradient */}
           <LinearGradient
@@ -90,9 +108,9 @@ const ForceUpdateModal: React.FC<ForceUpdateModalProps> = ({
 
           {/* Content */}
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-            <Text style={[styles.message, { color: colors.text }]}>
-              {updateInfo.update_message || 
-                (isForceUpdate 
+            <Text style={[styles.message, { color: colors.text.primary }]}>
+              {updateInfo.update_message ||
+                (isForceUpdate
                   ? 'A critical update is required to continue using Adtip. Please update now to access all features.'
                   : 'A new version of Adtip is available with exciting new features and improvements!'
                 )
@@ -101,10 +119,10 @@ const ForceUpdateModal: React.FC<ForceUpdateModalProps> = ({
 
             {updateInfo.release_notes && (
               <View style={styles.releaseNotesContainer}>
-                <Text style={[styles.releaseNotesTitle, { color: colors.text }]}>
-                  What's New:
+                <Text style={[styles.releaseNotesTitle, { color: colors.text.primary }]}>
+                  What&apos;s New:
                 </Text>
-                <Text style={[styles.releaseNotes, { color: colors.textSecondary }]}>
+                <Text style={[styles.releaseNotes, { color: colors.text.secondary }]}>
                   {updateInfo.release_notes}
                 </Text>
               </View>
@@ -112,24 +130,24 @@ const ForceUpdateModal: React.FC<ForceUpdateModalProps> = ({
 
             {/* Features list */}
             <View style={styles.featuresContainer}>
-              <Text style={[styles.featuresTitle, { color: colors.text }]}>
+              <Text style={[styles.featuresTitle, { color: colors.text.primary }]}>
                 Why Update?
               </Text>
               <View style={styles.featureItem}>
                 <Text style={styles.featureIcon}>✨</Text>
-                <Text style={[styles.featureText, { color: colors.textSecondary }]}>
+                <Text style={[styles.featureText, { color: colors.text.secondary }]}>
                   Latest features and improvements
                 </Text>
               </View>
               <View style={styles.featureItem}>
                 <Text style={styles.featureIcon}>🔒</Text>
-                <Text style={[styles.featureText, { color: colors.textSecondary }]}>
+                <Text style={[styles.featureText, { color: colors.text.secondary }]}>
                   Enhanced security and performance
                 </Text>
               </View>
               <View style={styles.featureItem}>
                 <Text style={styles.featureIcon}>🐛</Text>
-                <Text style={[styles.featureText, { color: colors.textSecondary }]}>
+                <Text style={[styles.featureText, { color: colors.text.secondary }]}>
                   Bug fixes and stability improvements
                 </Text>
               </View>
@@ -169,7 +187,7 @@ const ForceUpdateModal: React.FC<ForceUpdateModalProps> = ({
                 }}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.laterButtonText, { color: colors.textSecondary }]}>
+                <Text style={[styles.laterButtonText, { color: colors.text.secondary }]}>
                   Remind Me Later
                 </Text>
               </TouchableOpacity>

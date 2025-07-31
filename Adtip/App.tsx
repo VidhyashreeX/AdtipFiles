@@ -75,6 +75,8 @@ import UltraFastLoader from './src/components/common/UltraFastLoader';
 import AppErrorBoundary from './src/components/common/AppErrorBoundary';
 import ForceUpdateModal from './src/components/common/ForceUpdateModal';
 import VersionCheckService from './src/services/VersionCheckService';
+import ForceUpdateDebugButton from './src/components/debug/ForceUpdateDebugButton';
+import ThemeTestModal from './src/components/debug/ThemeTestModal';
 
 import { RootStackParamList } from 'src/types/navigation';
 import useReliableCallManager from './src/hooks/useReliableCallManager';
@@ -483,6 +485,12 @@ function App(): React.JSX.Element {
                                 visible={showForceUpdate}
                                 updateInfo={updateInfo}
                               />
+
+                              {/* Debug button for testing force updates (only in debug builds) */}
+                              <ForceUpdateDebugButton />
+
+                              {/* Theme test modal for debugging dark mode issues (only in debug builds) */}
+                              <ThemeTestModal />
                               </GestureHandlerRootView>
                             </SidebarProvider>
                           </TabNavigatorProvider>

@@ -32,7 +32,9 @@ This guide explains the complete force update implementation that prevents users
 
 ### New Files
 - `src/components/common/ForceUpdateModal.tsx` - Force update modal component
+- `src/components/debug/ForceUpdateDebugButton.tsx` - Debug button for testing (debug builds only)
 - `test-force-update.js` - Comprehensive test script
+- `test-debug-button.js` - Debug button test script
 - `setup-force-update-test-data.sql` - Database setup script
 - `FORCE_UPDATE_IMPLEMENTATION_GUIDE.md` - This documentation
 
