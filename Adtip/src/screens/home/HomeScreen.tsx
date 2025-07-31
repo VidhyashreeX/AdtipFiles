@@ -47,6 +47,7 @@ import { useNetInfo } from '@react-native-community/netinfo';
 import { formatPremiumExpiryDate } from '../../utils/dateUtils';
 import PubScaleService from '../../services/PubScaleService';
 import Logger from '../../utils/logger';
+import VersionCheckService from '../../services/VersionCheckService';
 
 // Components
 import Header from '../../components/common/Header';
@@ -463,16 +464,32 @@ const HomeScreen: React.FC = () => {
   useEffect(() => {
     const checkVersionAndPremium = async () => {
       if (hasCheckedVersion) return;
-      
+
       console.log('🔍 [HomeScreen] Starting version check and premium validation...');
-      
+
       try {
+        // Check app version for updates
+        const versionService = VersionCheckService.getInstance();
+        const updateResult = await versionService.checkForUpdates();
+
+        if (updateResult && updateResult.status && updateResult.data) {
+          console.log('⚠️ [HomeScreen] Update available:', updateResult.data);
+
+          // For non-force updates, show the update dialog
+          if (!updateResult.data.force_update) {
+            versionService.showUpdateDialog(updateResult.data);
+          }
+          // Force updates are handled at the App level
+        } else {
+          console.log('✅ [HomeScreen] App is up to date');
+        }
+
         // Check premium status - removed automatic popup
         if (subscriptionResponse && !subscriptionResponse.status && !subscriptionLoading) {
           console.log('💎 [HomeScreen] No premium subscription found');
         }
       } catch (error) {
-        console.error('❌ [HomeScreen] Error in premium validation:', error);
+        console.error('❌ [HomeScreen] Error in version check or premium validation:', error);
       } finally {
         setHasCheckedVersion(true);
       }

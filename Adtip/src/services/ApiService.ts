@@ -2766,10 +2766,12 @@ export default class ApiService {
     message: string;
     data?: {
       latest_version: string;
-      minimum_version: string;
+      minimum_version?: string;
       force_update: boolean;
       update_message?: string;
       store_url?: string;
+      update_url?: string;
+      release_notes?: string;
     };
   }> {
     try {

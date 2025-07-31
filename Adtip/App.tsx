@@ -73,6 +73,8 @@ import UserDetailsScreen from './src/screens/auth/UserDetailsScreen';
 // Ultra Fast Loader for instant app initialization
 import UltraFastLoader from './src/components/common/UltraFastLoader';
 import AppErrorBoundary from './src/components/common/AppErrorBoundary';
+import ForceUpdateModal from './src/components/common/ForceUpdateModal';
+import VersionCheckService from './src/services/VersionCheckService';
 
 import { RootStackParamList } from 'src/types/navigation';
 import useReliableCallManager from './src/hooks/useReliableCallManager';
@@ -312,10 +314,48 @@ function App(): React.JSX.Element {
   const tabRouteRef = useRef<string | null>(null);
   const [initialRoute, setInitialRoute] = useState<string | undefined>();
 
+  // Force update state
+  const [showForceUpdate, setShowForceUpdate] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<any>(null);
+
   // Initialize call configuration for simplified flow
   useEffect(() => {
     CallConfig.enableSimplifiedFlow();
     Logger.debug('App', 'Call configuration initialized for simplified flow');
+  }, []);
+
+  // Version check on app start - critical for force updates
+  useEffect(() => {
+    const checkAppVersion = async () => {
+      try {
+        Logger.debug('App', '🔍 Starting critical version check...');
+        const versionService = VersionCheckService.getInstance();
+        const updateResult = await versionService.forceCheckForUpdates();
+
+        if (updateResult && updateResult.status && updateResult.data) {
+          Logger.warn('App', '⚠️ Update required:', updateResult.data);
+          setUpdateInfo(updateResult.data);
+
+          if (updateResult.data.force_update) {
+            Logger.error('App', '🚨 FORCE UPDATE REQUIRED - Blocking app access');
+            setShowForceUpdate(true);
+          } else {
+            Logger.info('App', '📱 Optional update available');
+            // For optional updates, we could show a less intrusive notification
+            // For now, we'll still show the modal but allow dismissal
+            setShowForceUpdate(true);
+          }
+        } else {
+          Logger.info('App', '✅ App version is up to date');
+        }
+      } catch (error) {
+        Logger.error('App', '❌ Version check failed:', error);
+        // Don't block the app if version check fails
+      }
+    };
+
+    // Run version check immediately on app start
+    checkAppVersion();
   }, []);
 
   // Add reliable call manager for FCM call handling
@@ -437,6 +477,12 @@ function App(): React.JSX.Element {
 
                               {/* Ad Debugger - only shows in development */}
                               {/*<AdDebugger />*/}
+
+                              {/* Force Update Modal - blocks entire app when force update is required */}
+                              <ForceUpdateModal
+                                visible={showForceUpdate}
+                                updateInfo={updateInfo}
+                              />
                               </GestureHandlerRootView>
                             </SidebarProvider>
                           </TabNavigatorProvider>
