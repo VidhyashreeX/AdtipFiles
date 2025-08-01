@@ -14,6 +14,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useChannelData } from '../../hooks/useQueries';
 import Header from '../../components/common/Header';
+import ContentCreatorPlanToggle from '../../components/common/ContentCreatorPlanToggle';
+import { useGuestGuard } from '../../hooks/useGuestGuard';
 
 interface LibraryMenuItem {
   id: string;
@@ -62,6 +64,17 @@ const LibraryScreen: React.FC = () => {
   const handleEarnMoneyPress = () => {
     // Navigate to EarnMoneyCreator to show earning opportunities
     navigation.navigate('EarnMoneyCreator' as never);
+  };
+
+  // Guest guard hook
+  const { requireAuth } = useGuestGuard();
+
+  // Content Creator Premium Toggle Handler
+  const handleTogglePremium = () => {
+    requireAuth('premium', () => {
+      console.log('🚀 [LibraryScreen] User clicked content creator premium toggle');
+      navigation.navigate('ContentCreatorPremium' as never);
+    });
   };
 
   const menuItems: LibraryMenuItem[] = [
@@ -146,6 +159,9 @@ const LibraryScreen: React.FC = () => {
           >
             <Icon name="arrow-left" size={24} color={colors.text.primary} />
           </TouchableOpacity>
+        }
+        rightComponent={
+          <ContentCreatorPlanToggle onPress={handleTogglePremium} />
         }
       />
 

@@ -1301,6 +1301,8 @@ const TipCallScreenSimple = () => {
         title=""
         showWallet={true}
         showSearch={false} // We handle search ourselves
+        showPremium={true}
+        onPremiumPress={() => navigation.navigate('SubscriptionScreen' as never)}
         rightComponent={<HeaderRight />}
       />
 

@@ -10,11 +10,7 @@ import {
   Alert,
   Image,
   TextInput,
-  StatusBar,
-  SafeAreaView,
-  Switch,
-  Modal,
-  ViewToken,
+  FlatList,
 } from 'react-native';
 import { FeedFlatList } from '../../components/common/OptimizedFlatList';
 import LinearGradient from 'react-native-linear-gradient';
@@ -687,7 +683,7 @@ const TipTubeScreen = () => {
   // Handle analytics premium alert actions
   const handleAnalyticsPremiumUpgrade = useCallback(() => {
     setShowAnalyticsPremiumAlert(false);
-    navigation.navigate('ContentCreatorPremium');
+    navigation.navigate('SubscriptionScreen');
   }, [navigation]);
 
   const handleAnalyticsPremiumGoBack = useCallback(() => {
@@ -984,7 +980,7 @@ const TipTubeScreen = () => {
         isContentCreatorPremium,
         hasData: !!contentCreatorPremiumData
       });
-      navigation.navigate('ContentCreatorPremium');
+      navigation.navigate('SubscriptionScreen');
     });
   };
 
@@ -1106,6 +1102,7 @@ const TipTubeScreen = () => {
           showSearch={true}
           showWallet={true}
           showPremium={true}
+          onPremiumPress={() => navigation.navigate('SubscriptionScreen' as never)}
           onSearchSubmit={(query) => {
             setSearchQuery(query);
             setIsTipTubeSearchActive(true);

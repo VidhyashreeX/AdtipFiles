@@ -31,6 +31,7 @@ export interface HeaderProps {
   showSearch?: boolean;
   showPremium?: boolean; // New prop to control premium button visibility
   showProfile?: boolean; // New prop to control profile icon visibility
+  onPremiumPress?: () => void; // Custom premium toggle handler
 }
 
 // Utility to help decide default logo visibility
@@ -88,6 +89,7 @@ const Header: React.FC<HeaderProps> = ({
   showSearch = true,
   showPremium = true,
   showProfile = true,
+  onPremiumPress,
 }) => {
   const navigation = useNavigation();
   const route = useRoute();
@@ -263,7 +265,7 @@ const Header: React.FC<HeaderProps> = ({
     return (
       <TouchableOpacity
         style={[styles.premiumToggleContainer, { marginLeft: sizes.iconSpacing / 2 }]}
-        onPress={() => requireAuth('premium', navigateToPremium)}
+        onPress={() => requireAuth('premium', onPremiumPress || navigateToPremium)}
         activeOpacity={0.8}
       >
         <Animated.View
