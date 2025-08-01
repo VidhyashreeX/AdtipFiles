@@ -116,11 +116,16 @@ class MediaService {
 
   async leaveMeeting() {
     try {
-      console.log('[MediaService] Starting comprehensive meeting cleanup');
+      console.log('[MediaService] 🚀 STARTING COMPREHENSIVE MEETING CLEANUP');
+      console.log('[MediaService] 🚀 Meeting state:', {
+        meetingExists: !!this.meeting,
+        hasEndMethod: !!(this.meeting?.end),
+        hasLeaveMethod: !!(this.meeting?.leave)
+      });
 
       // Step 1: End the meeting for all participants with timeout protection
       if (this.meeting?.end) {
-        console.log('[MediaService] Ending meeting for all participants with timeout protection');
+        console.log('[MediaService] 🚀 ENDING MEETING FOR ALL PARTICIPANTS with timeout protection');
         try {
           await Promise.race([
             this.meeting.end(),
@@ -128,12 +133,12 @@ class MediaService {
               setTimeout(() => reject(new Error('End meeting timeout')), 3000)
             )
           ]);
-          console.log('[MediaService] Successfully ended meeting for all participants');
+          console.log('[MediaService] 🚀 SUCCESSFULLY ENDED MEETING FOR ALL PARTICIPANTS');
         } catch (endError) {
-          console.warn('[MediaService] End meeting timeout or error:', endError);
+          console.warn('[MediaService] 🚀 End meeting timeout or error:', endError);
           // Fallback to leave if end fails
           if (this.meeting?.leave) {
-            console.log('[MediaService] Falling back to leave meeting');
+            console.log('[MediaService] 🚀 FALLING BACK TO LEAVE MEETING');
             try {
               await Promise.race([
                 this.meeting.leave(),
@@ -141,15 +146,15 @@ class MediaService {
                   setTimeout(() => reject(new Error('Leave timeout')), 2000)
                 )
               ]);
-              console.log('[MediaService] Successfully left meeting as fallback');
+              console.log('[MediaService] 🚀 Successfully left meeting as fallback');
             } catch (leaveError) {
-              console.warn('[MediaService] Leave meeting fallback also failed:', leaveError);
+              console.warn('[MediaService] 🚀 Leave meeting fallback also failed:', leaveError);
             }
           }
         }
       } else if (this.meeting?.leave) {
         // Fallback to leave if end is not available
-        console.log('[MediaService] End method not available, using leave as fallback');
+        console.log('[MediaService] 🚀 END METHOD NOT AVAILABLE, using leave as fallback');
         try {
           await Promise.race([
             this.meeting.leave(),
@@ -157,10 +162,12 @@ class MediaService {
               setTimeout(() => reject(new Error('Leave timeout')), 3000)
             )
           ]);
-          console.log('[MediaService] Successfully left meeting');
+          console.log('[MediaService] 🚀 Successfully left meeting');
         } catch (leaveError) {
-          console.warn('[MediaService] Leave meeting timeout or error:', leaveError);
+          console.warn('[MediaService] 🚀 Leave meeting timeout or error:', leaveError);
         }
+      } else {
+        console.error('[MediaService] 🚀 NO END OR LEAVE METHODS AVAILABLE ON MEETING OBJECT');
       }
 
       // Step 2: Force cleanup of meeting reference
@@ -266,6 +273,13 @@ class MediaService {
 
   isMeetingActive() {
     return !!this.meeting && !!this.currentMeetingConfig
+  }
+
+  /**
+   * Get the raw meeting object for direct VideoSDK operations
+   */
+  getMeetingObject() {
+    return this.meeting;
   }
 }
 

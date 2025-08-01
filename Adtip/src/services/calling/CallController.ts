@@ -989,14 +989,53 @@ class CallController {
       }
     }
 
-    // Proceed with comprehensive UI cleanup immediately
+    // CRITICAL FIX: End VideoSDK meeting FIRST before any cleanup
+    try {
+      logCall('CallController', '🚀 ENDING VIDEOSDK MEETING BEFORE CLEANUP');
+
+      // Get the meeting object before any cleanup happens
+      let meetingObject = this.media.getMeetingObject();
+
+      logCall('CallController', '🚀 Meeting object from MediaService:', {
+        exists: !!meetingObject,
+        hasEnd: !!(meetingObject && typeof meetingObject.end === 'function'),
+        hasLeave: !!(meetingObject && typeof meetingObject.leave === 'function')
+      });
+
+      if (meetingObject && typeof meetingObject.end === 'function') {
+        logCall('CallController', '🚀 CALLING meeting.end() to end meeting for all participants');
+        try {
+          meetingObject.end();
+          logCall('CallController', '🚀 meeting.end() called successfully');
+        } catch (endError) {
+          logError('CallController', '🚀 Error calling meeting.end()', endError);
+          // Try leave as fallback
+          if (typeof meetingObject.leave === 'function') {
+            logCall('CallController', '🚀 Fallback: calling meeting.leave()');
+            meetingObject.leave();
+          }
+        }
+      } else {
+        logCall('CallController', '🚀 No meeting object available from MediaService to end');
+      }
+
+      // Small delay to allow VideoSDK events to propagate
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+    } catch (meetingEndError) {
+      logError('CallController', '🚀 Error ending VideoSDK meeting', meetingEndError);
+    }
+
+    // Proceed with comprehensive UI cleanup after ending meeting
     try {
       // Stop vibrating immediately
       this.stopVibrate()
 
       // Update status to ended immediately
+      logCall('CallController', '🚀 SETTING CALL STATUS TO ENDED');
       store.actions.setStatus('ended')
-      
+      logCall('CallController', '🚀 Call status set to ended, current status:', store.getState().status);
+
       // Clear active meeting session in VideoSDK service
       if (session && session.sessionId) {
         this.videoSDK.clearActiveMeetingSession(session.sessionId)
@@ -1023,13 +1062,13 @@ class CallController {
         }
       }
       
-      // Leave meeting with timeout protection
+      // Meeting already ended above, just clean up media service
       try {
-        logCall('CallController', 'Leaving meeting');
+        logCall('CallController', '🚀 CLEANING UP MEDIA SERVICE (meeting already ended)');
         await this.media.leaveMeeting()
-        logCall('CallController', 'Meeting left successfully');
+        logCall('CallController', '🚀 MEDIA SERVICE CLEANUP COMPLETED');
       } catch (mediaError) {
-        logError('CallController', 'Failed to leave meeting', mediaError)
+        logError('CallController', '🚀 FAILED TO CLEANUP MEDIA SERVICE', mediaError)
       }
       
       // Comprehensive notification cleanup

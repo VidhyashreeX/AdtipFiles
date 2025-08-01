@@ -25,6 +25,7 @@ import { useCallStore, CallSession } from '../../stores/callStoreSimplified'
 import CallController from '../../services/calling/CallController'
 import VideoSDKService from '../../services/videosdk/VideoSDKService'
 import { logCall, logError, logWarn } from '../../utils/ProductionLogger'
+import { navigateToTipCall } from '../../navigation/NavigationService'
 
 interface MeetingConfig {
   sessionId: string
@@ -195,8 +196,97 @@ const PersistentControls = ({ config }: { config: MeetingConfig | null }) => {
 // Persistent Meeting Content Component
 const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig | null; status: string; meeting?: any }>(
   ({ config, status, meeting: providedMeeting }, ref) => {
+  // VideoSDK Event Handlers - CRITICAL FIX for call termination
+  const onMeetingJoined = () => {
+    logCall('PersistentMeetingContent', '🟢 MEETING JOINED EVENT FIRED');
+  };
+
+  const onMeetingLeft = () => {
+    logCall('PersistentMeetingContent', '🔴 MEETING LEFT EVENT FIRED - CRITICAL DIAGNOSTIC');
+    logCall('PersistentMeetingContent', '🔴 Meeting left - auto-navigating back to TipCall screen');
+
+    // Automatically navigate back to TipCall screen when meeting ends
+    // This ensures that when one participant ends the call, all participants are taken back to the main screen
+    setTimeout(() => {
+      try {
+        logCall('PersistentMeetingContent', '🔴 EXECUTING AUTO-NAVIGATION back to TipCall screen');
+        navigateToTipCall();
+        logCall('PersistentMeetingContent', '🔴 Auto-navigation call completed');
+      } catch (error) {
+        logError('PersistentMeetingContent', '🔴 Error auto-navigating after meeting left', error);
+      }
+    }, 500); // Small delay to ensure cleanup completes
+  };
+
+  const onParticipantJoined = (participant: any) => {
+    logCall('PersistentMeetingContent', '🟢 PARTICIPANT JOINED EVENT FIRED', {
+      participantId: participant?.id,
+      displayName: participant?.displayName
+    });
+  };
+
+  const onParticipantLeft = (participant: any) => {
+    logCall('PersistentMeetingContent', '🟡 PARTICIPANT LEFT EVENT FIRED - CRITICAL DIAGNOSTIC', {
+      participantId: participant?.id,
+      displayName: participant?.displayName
+    });
+
+    // Check if this was the other participant in a 1-on-1 call
+    // If so, we should end the meeting for the remaining participant
+    logCall('PersistentMeetingContent', '🟡 Setting up participant count check timeout');
+    setTimeout(() => {
+      if (meeting?.participants) {
+        const participantCount = Object.keys(meeting.participants).length;
+
+        logCall('PersistentMeetingContent', '🟡 PARTICIPANT COUNT CHECK AFTER PARTICIPANT LEFT', {
+          participantCount,
+          participants: Object.keys(meeting.participants),
+          meetingExists: !!meeting
+        });
+
+        // If only 1 participant remains (the local participant) and we're in an active call
+        if (participantCount <= 1) {
+          logCall('PersistentMeetingContent', '🟡 ONLY LOCAL PARTICIPANT REMAINS - ENDING MEETING FOR ALL');
+          try {
+            if (meeting && typeof meeting.end === 'function') {
+              logCall('PersistentMeetingContent', '🟡 Calling meeting.end() to end meeting for all participants');
+              meeting.end();
+              logCall('PersistentMeetingContent', '🟡 meeting.end() call completed');
+            } else if (meeting && typeof meeting.leave === 'function') {
+              logCall('PersistentMeetingContent', '🟡 end() not available, calling meeting.leave() as fallback');
+              meeting.leave();
+              logCall('PersistentMeetingContent', '🟡 meeting.leave() call completed');
+            } else {
+              logError('PersistentMeetingContent', '🟡 Neither end() nor leave() methods available on meeting object');
+            }
+          } catch (error) {
+            logError('PersistentMeetingContent', '🟡 Error ending meeting when last participant left', error);
+          }
+        } else {
+          logCall('PersistentMeetingContent', '🟡 Not ending meeting - multiple participants still present', {
+            participantCount
+          });
+        }
+      }
+    }, 1000); // Small delay to ensure participant count is updated
+
+    logCall('PersistentMeetingContent', '🟡 PARTICIPANT LEFT EVENT PROCESSING COMPLETE');
+  };
+
+  const onError = (error: any) => {
+    logError('PersistentMeetingContent', '🔥 VIDEOSDK ERROR EVENT FIRED', error);
+  };
+
   // Only use useMeeting() if no meeting is provided (i.e., when we have real credentials)
-  const meetingFromHook = providedMeeting === undefined ? useMeeting() : null
+  // CRITICAL FIX: Add proper event handlers to the useMeeting hook
+  const meetingFromHook = providedMeeting === undefined ? useMeeting({
+    onMeetingJoined,
+    onMeetingLeft,
+    onParticipantJoined,
+    onParticipantLeft,
+    onError
+  }) : null;
+
   const meeting = providedMeeting || meetingFromHook
   const { participants, localParticipant, join } = meeting || {}
   const localParticipantId = localParticipant?.id

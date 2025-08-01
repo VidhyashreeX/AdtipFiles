@@ -162,13 +162,20 @@ const Controls = () => {
 
   const handleEndCall = async () => {
     try {
+      logCall('MeetingScreenSimple', '🔥 HANDLE END CALL - PERSON A MANUALLY ENDING CALL');
+      logCall('MeetingScreenSimple', '🔥 About to call controller.endCall()');
+
       await controller.endCall()
+
+      logCall('MeetingScreenSimple', '🔥 controller.endCall() completed, now navigating');
       // Navigate back to TipCall screen after ending call
       if (navigation.canGoBack()) {
+        logCall('MeetingScreenSimple', '🔥 Using navigation.goBack()');
         navigation.goBack()
       } else {
+        logCall('MeetingScreenSimple', '🔥 Using navigation.reset()');
         // If can't go back, reset to TipCall screen
-        navigation.reset({
+        (navigation as any).reset({
           index: 0,
           routes: [
             {
@@ -180,13 +187,14 @@ const Controls = () => {
           ],
         })
       }
+      logCall('MeetingScreenSimple', '🔥 handleEndCall navigation completed');
     } catch (error) {
-      logError('MeetingScreenSimple', 'Error ending call', error);
+      logError('MeetingScreenSimple', '🔥 Error ending call', error);
       // Still navigate back even if endCall fails
       if (navigation.canGoBack()) {
         navigation.goBack()
       } else {
-        navigation.reset({
+        (navigation as any).reset({
           index: 0,
           routes: [
             {
@@ -636,7 +644,43 @@ const MeetingContent = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionIsValid, callIsActive, isActiveInstance, meeting])
-  
+
+  // Monitor call status and automatically navigate when call ends
+  useEffect(() => {
+    logCall('MeetingScreenSimple', '📱 STATUS MONITOR - Current status:', { status });
+
+    if (status === 'ended') {
+      logCall('MeetingScreenSimple', '📱 CALL STATUS CHANGED TO ENDED - NAVIGATING BACK');
+      // Small delay to ensure any cleanup is complete
+      const timeoutId = setTimeout(() => {
+        logCall('MeetingScreenSimple', '📱 EXECUTING NAVIGATION BACK TO TIPCALL');
+        if (navigation.canGoBack()) {
+          logCall('MeetingScreenSimple', '📱 Using navigation.goBack()');
+          navigation.goBack();
+        } else {
+          logCall('MeetingScreenSimple', '📱 Using navigation.reset() to TipCallSimple');
+          (navigation as any).reset({
+            index: 0,
+            routes: [
+              {
+                name: 'Main',
+                params: {
+                  screen: 'TipCallSimple'
+                }
+              }
+            ],
+          });
+        }
+        logCall('MeetingScreenSimple', '📱 Navigation call completed');
+      }, 300);
+
+      return () => {
+        logCall('MeetingScreenSimple', '📱 Clearing navigation timeout');
+        clearTimeout(timeoutId);
+      };
+    }
+  }, [status, navigation]);
+
   // Handle back button or hardware back - direct call end without confirmation
   useEffect(() => {
     const backAction = () => {
