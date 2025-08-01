@@ -572,10 +572,40 @@ const MeetingContent = () => {
       
       logCall('[MeetingContent] Component unmounting, performing comprehensive cleanup for session:', session?.sessionId);
 
-      // Step 1: Leave meeting with timeout protection
-      if (joinedRef.current && meeting.leave) {
+      // Step 1: End meeting for all participants with timeout protection
+      if (joinedRef.current && meeting.end) {
         try {
-          logCall('[MeetingContent] Leaving meeting on cleanup');
+          logCall('[MeetingContent] Ending meeting for all participants on cleanup');
+          Promise.race([
+            meeting.end(),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Cleanup end timeout')), 2000)
+            )
+          ]).then(() => {
+            logCall('[MeetingContent] Successfully ended meeting for all participants on cleanup');
+          }).catch((error) => {
+            logWarn('MeetingContent', 'Error or timeout ending meeting on cleanup, trying leave as fallback', error);
+            // Fallback to leave if end fails
+            if (meeting.leave) {
+              Promise.race([
+                meeting.leave(),
+                new Promise((_, reject) =>
+                  setTimeout(() => reject(new Error('Cleanup leave timeout')), 1000)
+                )
+              ]).then(() => {
+                logCall('[MeetingContent] Successfully left meeting as fallback on cleanup');
+              }).catch((leaveError) => {
+                logWarn('MeetingContent', 'Error or timeout with leave fallback on cleanup', leaveError);
+              });
+            }
+          });
+        } catch (error) {
+          logWarn('MeetingContent', 'Error ending meeting on cleanup', error);
+        }
+      } else if (joinedRef.current && meeting.leave) {
+        // Fallback to leave if end is not available
+        try {
+          logCall('[MeetingContent] End method not available, using leave as fallback on cleanup');
           Promise.race([
             meeting.leave(),
             new Promise((_, reject) =>

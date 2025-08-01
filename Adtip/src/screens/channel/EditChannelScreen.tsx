@@ -87,8 +87,14 @@ const EditChannelScreen: React.FC = () => {
 
     try {
       setIsLoading(true);
-      const response = await ApiService.getChannelByUserId(Number(channelId));
-      
+
+      if (!user?.id) {
+        throw new Error('User not authenticated');
+      }
+
+      // Use getChannelById instead of getChannelByUserId since we have channelId, not userId
+      const response = await ApiService.getChannelById(channelId, user.id);
+
       if (response.data && response.data.length > 0) {
         const channelData = response.data[0];
         const channel: ChannelData = {
@@ -98,16 +104,18 @@ const EditChannelScreen: React.FC = () => {
           profileImage: channelData.profileImage,
           coverImage: channelData.coverImage,
         };
-        
+
         setChannel(channel);
         setChannelName(channel.channelName);
         setDescription(channel.description);
         setProfileImage(channel.profileImage);
         setCoverImage(channel.coverImage);
+      } else {
+        throw new Error('Channel not found or you do not have permission to edit this channel');
       }
     } catch (error) {
       console.error('Error loading channel data:', error);
-      Alert.alert('Error', 'Failed to load channel data');
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to load channel data');
     } finally {
       setIsLoading(false);
     }

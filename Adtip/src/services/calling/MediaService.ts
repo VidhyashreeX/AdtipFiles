@@ -118,9 +118,38 @@ class MediaService {
     try {
       console.log('[MediaService] Starting comprehensive meeting cleanup');
 
-      // Step 1: Leave the meeting with timeout protection
-      if (this.meeting?.leave) {
-        console.log('[MediaService] Leaving meeting with timeout protection');
+      // Step 1: End the meeting for all participants with timeout protection
+      if (this.meeting?.end) {
+        console.log('[MediaService] Ending meeting for all participants with timeout protection');
+        try {
+          await Promise.race([
+            this.meeting.end(),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('End meeting timeout')), 3000)
+            )
+          ]);
+          console.log('[MediaService] Successfully ended meeting for all participants');
+        } catch (endError) {
+          console.warn('[MediaService] End meeting timeout or error:', endError);
+          // Fallback to leave if end fails
+          if (this.meeting?.leave) {
+            console.log('[MediaService] Falling back to leave meeting');
+            try {
+              await Promise.race([
+                this.meeting.leave(),
+                new Promise((_, reject) =>
+                  setTimeout(() => reject(new Error('Leave timeout')), 2000)
+                )
+              ]);
+              console.log('[MediaService] Successfully left meeting as fallback');
+            } catch (leaveError) {
+              console.warn('[MediaService] Leave meeting fallback also failed:', leaveError);
+            }
+          }
+        }
+      } else if (this.meeting?.leave) {
+        // Fallback to leave if end is not available
+        console.log('[MediaService] End method not available, using leave as fallback');
         try {
           await Promise.race([
             this.meeting.leave(),
@@ -131,7 +160,6 @@ class MediaService {
           console.log('[MediaService] Successfully left meeting');
         } catch (leaveError) {
           console.warn('[MediaService] Leave meeting timeout or error:', leaveError);
-          // Continue with cleanup even if leave fails
         }
       }
 

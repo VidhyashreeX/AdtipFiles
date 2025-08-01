@@ -1133,6 +1133,32 @@ const TipCallScreenSimple = () => {
   // Header right icons component
   const HeaderRight = () => (
     <View style={styles.headerRightContainer}>
+      {/* Premium Toggle Switch */}
+      <TouchableOpacity
+        onPress={() => navigation.navigate('SubscriptionScreen' as never)}
+        style={[styles.headerIconButton, { marginRight: 4 }]}
+      >
+        <View style={[
+          styles.premiumToggle,
+          {
+            backgroundColor: isPremium ? '#4CAF50' : '#FF4444',
+            width: 44,
+            height: 24,
+            borderRadius: 12,
+            justifyContent: 'center',
+            alignItems: isPremium ? 'flex-end' : 'flex-start',
+            paddingHorizontal: 2,
+          }
+        ]}>
+          <View style={{
+            width: 20,
+            height: 20,
+            borderRadius: 10,
+            backgroundColor: '#FFFFFF',
+          }} />
+        </View>
+      </TouchableOpacity>
+
       {/* Add Funds */}
       <TouchableOpacity
         onPress={() => navigation.navigate('AddFundsScreen')}
@@ -1954,6 +1980,9 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     position: 'relative',
     borderRadius: 20,
+  },
+  premiumToggle: {
+    // Premium toggle switch styles are defined inline for dynamic colors
   },
   missedBadge: {
     position: 'absolute',

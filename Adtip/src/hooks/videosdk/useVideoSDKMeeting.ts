@@ -222,8 +222,9 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
   };
 
   const endCall = () => {
-    if (mMeeting && typeof mMeeting.leave === 'function') {
-      mMeeting.leave();
+    if (mMeeting && typeof mMeeting.end === 'function') {
+      logCall('VideoSDKMeeting', 'Ending meeting for all participants');
+      mMeeting.end();
     }
   };
 
@@ -236,10 +237,27 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
     return () => {
       logCall('VideoSDKMeeting', 'Component unmounting - cleaning up');
       stopDurationTimer();
-      // Attempt to leave meeting if still connected
-      if (hasJoinedRef.current && mMeeting && typeof mMeeting.leave === 'function') {
+      // Attempt to end meeting for all participants if still connected
+      if (hasJoinedRef.current && mMeeting && typeof mMeeting.end === 'function') {
         try {
-          logCall('VideoSDKMeeting', 'Leaving meeting on unmount');
+          logCall('VideoSDKMeeting', 'Ending meeting for all participants on unmount');
+          mMeeting.end();
+        } catch (e) {
+          logError('VideoSDKMeeting', 'Error ending meeting on unmount, trying leave as fallback', e);
+          // Fallback to leave if end fails
+          if (typeof mMeeting.leave === 'function') {
+            try {
+              logCall('VideoSDKMeeting', 'Using leave as fallback on unmount');
+              mMeeting.leave();
+            } catch (leaveError) {
+              logError('VideoSDKMeeting', 'Error with leave fallback on unmount', leaveError);
+            }
+          }
+        }
+      } else if (hasJoinedRef.current && mMeeting && typeof mMeeting.leave === 'function') {
+        // Fallback to leave if end is not available
+        try {
+          logCall('VideoSDKMeeting', 'End method not available, using leave as fallback on unmount');
           mMeeting.leave();
         } catch (e) {
           logError('VideoSDKMeeting', 'Error leaving meeting on unmount', e);

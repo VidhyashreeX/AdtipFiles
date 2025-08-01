@@ -1100,6 +1100,13 @@ export default class ApiService {
     );
   }
 
+  /**
+   * Get channel by channel ID
+   */
+  static async getChannelById(channelId: string | number, userId: string | number): Promise<any> {
+    return this.get(`/api/channel/${channelId}/${userId}`);
+  }
+
   // ===== TIP-TUBE SERVICES =====
 
   /**
