@@ -285,6 +285,25 @@ public class IncomingCallModule extends ReactContextBaseJavaModule {
         releaseWakeLock();
     }
 
+    @ReactMethod
+    public void playBeep() {
+        try {
+            // Play a simple beep sound using ToneGenerator
+            android.media.ToneGenerator toneGenerator = new android.media.ToneGenerator(
+                android.media.AudioManager.STREAM_VOICE_CALL, 50);
+            toneGenerator.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 200);
+
+            // Release after a short delay
+            new android.os.Handler().postDelayed(() -> {
+                toneGenerator.release();
+            }, 300);
+
+            Log.d(TAG, "Beep sound played");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to play beep sound", e);
+        }
+    }
+
     @Override
     public void onCatalystInstanceDestroy() {
         super.onCatalystInstanceDestroy();

@@ -76,9 +76,15 @@ const ContactCard = ({
   onProfilePress?: () => void
   onBlockUser?: () => void
 }) => {
-  // Show all users as online - no need to differentiate between offline and online
-  const isOnline = true // Always show as online
-  const avatarColor = colors.success // Always use success color
+  // Check if user is actually online based on their status
+  const isOnline = contact.online_status === 1 || contact.online_status === true
+  const isAvailable = contact.is_available === 1 || contact.is_available === true
+  const isDndEnabled = contact.dnd === 1 || contact.dnd === true
+
+  // User is considered online and available if they are online, available, and not in DND mode
+  const isUserOnlineAndAvailable = isOnline && isAvailable && !isDndEnabled
+
+  const avatarColor = isUserOnlineAndAvailable ? colors.success : colors.text.tertiary
 
   // Debug log for status checking
   TipCallLogger.debug(
@@ -88,7 +94,10 @@ const ContactCard = ({
       is_available: contact.is_available,
       dnd: contact.dnd,
       online_status: contact.online_status,
-      isOnline: 'forced_online'
+      isOnline,
+      isAvailable,
+      isDndEnabled,
+      isUserOnlineAndAvailable
     }
   )
 
@@ -106,7 +115,7 @@ const ContactCard = ({
       activeOpacity={0.96}
     >
       {/* Subtle top accent for online users */}
-      {isOnline && (
+      {isUserOnlineAndAvailable && (
         <View style={[styles.onlineAccent, { backgroundColor: colors.success }]} />
       )}
 
@@ -120,7 +129,7 @@ const ContactCard = ({
                 {contact.name ? contact.name.charAt(0).toUpperCase() : 'U'}
               </Text>
             </View>
-            {isOnline && (
+            {isUserOnlineAndAvailable && (
               <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
             )}
           </View>
@@ -137,7 +146,9 @@ const ContactCard = ({
               style={[styles.contactStatus, { color: colors.text.secondary }]}
               numberOfLines={1}
             >
-              Available for calls
+              {isUserOnlineAndAvailable ? 'Available for calls' :
+               isDndEnabled ? 'Do not disturb' :
+               !isOnline ? 'Offline' : 'Unavailable'}
             </Text>
           </View>
         </View>
@@ -166,19 +177,35 @@ const ContactCard = ({
           {/* Left group - main actions */}
           <View style={styles.actionGroup}>
             <TouchableOpacity
-              style={styles.actionButton}
-              onPress={onVideoCall}
-              activeOpacity={0.6}
+              style={[
+                styles.actionButton,
+                !isUserOnlineAndAvailable && styles.disabledActionButton
+              ]}
+              onPress={isUserOnlineAndAvailable ? onVideoCall : undefined}
+              activeOpacity={isUserOnlineAndAvailable ? 0.6 : 1}
+              disabled={!isUserOnlineAndAvailable}
             >
-              <Icon name="video" size={20} color={colors.text.primary} />
+              <Icon
+                name="video"
+                size={20}
+                color={isUserOnlineAndAvailable ? colors.text.primary : colors.text.tertiary}
+              />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.actionButton}
-              onPress={onVoiceCall}
-              activeOpacity={0.6}
+              style={[
+                styles.actionButton,
+                !isUserOnlineAndAvailable && styles.disabledActionButton
+              ]}
+              onPress={isUserOnlineAndAvailable ? onVoiceCall : undefined}
+              activeOpacity={isUserOnlineAndAvailable ? 0.6 : 1}
+              disabled={!isUserOnlineAndAvailable}
             >
-              <Icon name="phone" size={20} color={colors.text.primary} />
+              <Icon
+                name="phone"
+                size={20}
+                color={isUserOnlineAndAvailable ? colors.text.primary : colors.text.tertiary}
+              />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1958,6 +1985,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+  },
+  disabledActionButton: {
+    opacity: 0.4,
+    backgroundColor: 'rgba(128, 128, 128, 0.1)',
   },
   notificationDot: {
     position: 'absolute',

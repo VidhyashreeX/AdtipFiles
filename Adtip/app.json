@@ -1,7 +1,7 @@
 {
   "name": "Adtip",
   "displayName": "Adtip",
-  "version": "33.0.0",
+  "version": "34.0.0",
   "react-native-google-mobile-ads": {
     "android_app_id": "ca-app-pub-3206456546664189~6654042212",
     "ios_app_id": "ca-app-pub-3206456546664189~6654042212"

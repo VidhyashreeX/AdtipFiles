@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useMemo } from 'react'
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ import { MainNavigatorParamList } from '../../types/navigation'
 import VideoSDKService from '../../services/videosdk/VideoSDKService'
 import { logError, logWarn, logVideoSDK, logCall } from '../../utils/ProductionLogger'
 import SafeAreaEnforcer from '../../components/common/SafeAreaEnforcer'
+import RingingAudioService from '../../services/audio/RingingAudioService'
 
 
 // Error boundary for VideoSDK-specific errors
@@ -160,13 +161,13 @@ const Controls = () => {
 
   const handleEndCall = async () => {
     try {
-      logCall('MeetingScreenSimple', '🔥 HANDLE END CALL - PERSON A MANUALLY ENDING CALL');
-      logCall('MeetingScreenSimple', '🔥 About to call controller.endCall()');
+      logCall('MeetingScreenSimple', '🔥 HANDLE END CALL - INSTANT UI NAVIGATION');
 
-      await controller.endCall()
+      // Stop ringing immediately
+      ringingAudioService.stopRinging()
 
-      logCall('MeetingScreenSimple', '🔥 controller.endCall() completed, now navigating');
-      // Navigate back to TipCall screen after ending call
+      // Navigate immediately for instant UI response
+      logCall('MeetingScreenSimple', '🔥 Navigating immediately for instant UI');
       if (navigation.canGoBack()) {
         logCall('MeetingScreenSimple', '🔥 Using navigation.goBack()');
         navigation.goBack()
@@ -185,10 +186,19 @@ const Controls = () => {
           ],
         })
       }
-      logCall('MeetingScreenSimple', '🔥 handleEndCall navigation completed');
+
+      // Run endCall in background without waiting
+      logCall('MeetingScreenSimple', '🔥 Starting background endCall process');
+      controller.endCall().then(() => {
+        logCall('MeetingScreenSimple', '🔥 Background endCall completed successfully');
+      }).catch((error) => {
+        logError('MeetingScreenSimple', '🔥 Background endCall error', error);
+      });
+
+      logCall('MeetingScreenSimple', '🔥 handleEndCall instant navigation completed');
     } catch (error) {
-      logError('MeetingScreenSimple', '🔥 Error ending call', error);
-      // Still navigate back even if endCall fails
+      logError('MeetingScreenSimple', '🔥 Error in handleEndCall', error);
+      // Still navigate back even if there's an error
       if (navigation.canGoBack()) {
         navigation.goBack()
       } else {
@@ -289,11 +299,15 @@ const MeetingContent = () => {
   const meeting = useMeeting()
   const { participants, localParticipant, join, leave } = meeting
   const localParticipantId = localParticipant?.id
+  const localWebcamOn = localParticipant?.webcamOn ?? false
   const controller = CallController.getInstance()
   const mediaService = controller.getMediaService()
   const session = useCallStore(state => state.session)
   const status = useCallStore(state => state.status)
   const actions = useCallStore(state => state.actions)
+
+  // Ringing audio service for outgoing calls
+  const ringingAudioService = RingingAudioService.getInstance()
 
   logCall('[MeetingContent]', 'Initial state:', {
     sessionId: session?.sessionId,
@@ -677,47 +691,37 @@ const MeetingContent = () => {
     }
   }, [status, navigation]);
 
-  // Handle back button or hardware back - direct call end without confirmation
+  // Handle back button or hardware back - instant navigation with background cleanup
   useEffect(() => {
     const backAction = () => {
-      // End call immediately without confirmation dialog
+      // Stop ringing immediately
+      ringingAudioService.stopRinging()
+
+      // Navigate immediately for instant UI response
+      if (navigation.canGoBack()) {
+        navigation.goBack()
+      } else {
+        // If can't go back, reset to TipCall screen
+        navigation.reset({
+          index: 0,
+          routes: [
+            {
+              name: 'Main',
+              params: {
+                screen: 'TipCallSimple'
+              }
+            }
+          ],
+        })
+      }
+
+      // Run endCall in background without waiting
       controller.endCall().then(() => {
-        // Navigate back to TipCall screen after ending call
-        if (navigation.canGoBack()) {
-          navigation.goBack()
-        } else {
-          // If can't go back, reset to TipCall screen
-          navigation.reset({
-            index: 0,
-            routes: [
-              {
-                name: 'Main',
-                params: {
-                  screen: 'TipCallSimple'
-                }
-              }
-            ],
-          })
-        }
+        console.log('[MeetingScreenSimple] Background endCall on back press completed');
       }).catch((error) => {
-        logError('MeetingScreenSimple', 'Error ending call on back press', error);
-        // Still navigate back even if endCall fails
-        if (navigation.canGoBack()) {
-          navigation.goBack()
-        } else {
-          navigation.reset({
-            index: 0,
-            routes: [
-              {
-                name: 'Main',
-                params: {
-                  screen: 'TipCallSimple'
-                }
-              }
-            ],
-          })
-        }
-      })
+        console.error('[MeetingScreenSimple] Background endCall on back press error:', error);
+      });
+
       return true // Prevent default back action
     }
 
@@ -769,7 +773,35 @@ const MeetingContent = () => {
   
   // Use the validated remote participants
   const remoteParticipants = validRemoteParticipants
-  
+
+  // Ringing logic: Start ringing when connecting and no remote participants, stop when remote participant joins
+  useEffect(() => {
+    const isOutgoingCall = session?.direction === 'outgoing'
+    const isConnecting = status === 'connecting' || status === 'outgoing'
+    const hasRemoteParticipants = remoteParticipants.length > 0
+
+    if (isOutgoingCall && isConnecting && !hasRemoteParticipants) {
+      // Start ringing sound in earpiece for outgoing calls when connecting and no remote participant yet
+      if (!ringingAudioService.isCurrentlyRinging()) {
+        console.log('[MeetingScreen] Starting ringing sound - waiting for remote participant to join')
+        ringingAudioService.startRinging()
+      }
+    } else {
+      // Stop ringing when remote participant joins or call status changes
+      if (ringingAudioService.isCurrentlyRinging()) {
+        console.log('[MeetingScreen] Stopping ringing sound - remote participant joined or call status changed')
+        ringingAudioService.stopRinging()
+      }
+    }
+  }, [session?.direction, status, remoteParticipants.length, ringingAudioService])
+
+  // Cleanup ringing on unmount
+  useEffect(() => {
+    return () => {
+      ringingAudioService.stopRinging()
+    }
+  }, [ringingAudioService])
+
   const isVideo = session?.type === 'video'
   
   return (

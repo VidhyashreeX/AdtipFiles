@@ -1,6 +1,7 @@
 import Foundation
 import CallKit
 import AVFoundation
+import AudioToolbox
 import React
 
 @objc(AdtipCallKitManager)
@@ -236,5 +237,11 @@ extension AdtipCallKitManager: CXProviderDelegate {
         } catch {
             print("[AdtipCallKit] Failed to configure audio session: \(error)")
         }
+    }
+
+    @objc func playBeep() {
+        // Play a simple system beep sound
+        AudioServicesPlaySystemSound(1000) // System beep sound
+        print("[AdtipCallKit] Beep sound played")
     }
 }
