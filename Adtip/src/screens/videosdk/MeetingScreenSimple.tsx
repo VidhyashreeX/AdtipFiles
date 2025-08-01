@@ -4,8 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  StatusBar,
-  SafeAreaView,
   ActivityIndicator
 } from 'react-native'
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native'
@@ -17,20 +15,20 @@ import {
   RTCView,
   MediaStream
 } from '@videosdk.live/react-native-sdk'
-import { ParticipantView, VideoSDKCallTimer } from '../../components/videosdk'
+import { VideoSDKCallTimer } from '../../components/videosdk'
 import WhatsAppStyleVideoLayout from '../../components/videosdk/WhatsAppStyleVideoLayout'
 import {
   Mic, MicOff, Camera, CameraOff, Phone,
   Volume2
 } from 'lucide-react-native'
 
-import { useCallStore, CallSession } from '../../stores/callStoreSimplified'
+import { useCallStore } from '../../stores/callStoreSimplified'
 import CallController from '../../services/calling/CallController'
 import { MainNavigatorParamList } from '../../types/navigation'
 import VideoSDKService from '../../services/videosdk/VideoSDKService'
 import { logError, logWarn, logVideoSDK, logCall } from '../../utils/ProductionLogger'
 import SafeAreaEnforcer from '../../components/common/SafeAreaEnforcer'
-import { useSafeAreaStyle } from '../../utils/SafeAreaUtils'
+
 
 // Error boundary for VideoSDK-specific errors
 class VideoSDKErrorBoundary extends React.Component<
@@ -46,7 +44,7 @@ class VideoSDKErrorBoundary extends React.Component<
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+  componentDidCatch(error: Error, _errorInfo: React.ErrorInfo) {
     logError('VideoSDKErrorBoundary', 'VideoSDK component error caught', error);
     this.props.onError?.(error);
   }
@@ -86,7 +84,7 @@ const ParticipantVideo = ({ participantId, isLocal = false }: { participantId: s
 
   // Debug logging like your working component
   useEffect(() => {
-    logCall(`[ParticipantVideo] Participant ${participantId}:`, {
+    logCall(`[ParticipantVideo] Participant ${participantId}`, 'State:', {
       displayName,
       webcamOn,
       hasStream: !!webcamStream,
@@ -285,7 +283,7 @@ const Controls = () => {
 // Main component
 
 const MeetingContent = () => {
-  logCall('[MeetingContent] Component rendering...')
+  logCall('[MeetingContent]', 'Component rendering...')
 
   const navigation = useNavigation() // Add navigation hook
   const meeting = useMeeting()
@@ -297,7 +295,7 @@ const MeetingContent = () => {
   const status = useCallStore(state => state.status)
   const actions = useCallStore(state => state.actions)
 
-  logCall('[MeetingContent] Initial state:', {
+  logCall('[MeetingContent]', 'Initial state:', {
     sessionId: session?.sessionId,
     status,
     meetingId: session?.meetingId,
@@ -326,7 +324,7 @@ const MeetingContent = () => {
   // Debug logging for isActiveInstance check
   useEffect(() => {
     if (sessionIsValid && globalComponentKey) {
-      logCall('[MeetingContent] Active instance check:', {
+      logCall('[MeetingContent] Active instance check', {
         globalComponentKey,
         hasGlobalInstance: !!global.meetingComponentInstances?.[globalComponentKey],
         globalInstanceValue: global.meetingComponentInstances?.[globalComponentKey],
@@ -344,7 +342,7 @@ const MeetingContent = () => {
   // Validate and reset participant state for new sessions
   useEffect(() => {
     if (session?.sessionId && session.sessionId !== lastSessionId.current) {
-      logCall('[MeetingScreen] New session detected, validating participant state:', {
+      logCall('[MeetingScreen] New session detected, validating participant state', {
         newSessionId: session.sessionId,
         lastSessionId: lastSessionId.current,
         localParticipantId,
@@ -357,7 +355,7 @@ const MeetingContent = () => {
       // Force participant state validation after a brief delay
       setTimeout(() => {
         const currentParticipants = [...participants.values()]
-        logCall('[MeetingScreen] Post-session-change participant validation:', {
+        logCall('[MeetingScreen] Post-session-change participant validation', {
           sessionId: session.sessionId,
           localId: localParticipant?.id,
           totalParticipants: currentParticipants.length,
@@ -386,7 +384,7 @@ const MeetingContent = () => {
     return () => {
       // Only clear if this component set the reference
       if (hasSetMeetingRef.current) {
-        logCall('[MeetingContent] Clearing meeting reference for session:', session?.sessionId);
+        logCall('[MeetingContent] Clearing meeting reference for session', session?.sessionId);
         mediaService.setMeetingRef(null);
         hasSetMeetingRef.current = false;
       }
@@ -483,22 +481,44 @@ const MeetingContent = () => {
           return
         }
 
-        // Make sure VideoSDK is ready before each attempt
+        // Make sure VideoSDK is ready before each attempt with enhanced first-time handling
         const videoSDK = VideoSDKService.getInstance()
         const status = videoSDK.getInitializationStatus()
-        if (!status.initialized || !status.websocketReady) {
-          logVideoSDK('MeetingContent', 'VideoSDK not ready, ensuring initialization', status)
-          await videoSDK.ensureInitialized()
-          // Add extra delay after initialization
-          await new Promise(resolve => setTimeout(resolve, 500))
+        const isFirstTimeOrColdStart = videoSDK.isFirstTimeOrColdStart()
+
+        if (!status.initialized || !status.websocketReady || isFirstTimeOrColdStart) {
+          logVideoSDK('MeetingContent', 'VideoSDK not ready or first-time/cold start, ensuring initialization', {
+            status,
+            isFirstTimeOrColdStart,
+            initialLoad: initialLoadRef.current
+          })
+
+          // Use enhanced initialization for first-time users
+          const success = await videoSDK.ensureInitialized()
+          if (!success) {
+            throw new Error('VideoSDK initialization failed')
+          }
+
+          // Add extra delay after initialization for stability
+          await new Promise(resolve => setTimeout(resolve, 1000))
         }
 
-        // If this is the first join after app load, add extra delay
-        // to ensure WebSocket is fully connected
+        // If this is the first join after app load, add extra delay and validation
+        // to ensure WebSocket is fully connected and stable
         if (initialLoadRef.current) {
-          logCall('[MeetingContent] First join after app load - ensuring WebSocket is ready')
-          await videoSDK.waitForWebSocketReady()
-          await new Promise(resolve => setTimeout(resolve, INITIAL_DELAY_MS))
+          logCall('[MeetingContent] First join after app load - ensuring WebSocket is ready with enhanced validation')
+
+          // Use longer timeout for first-time users
+          const websocketReady = await videoSDK.waitForWebSocketReady(15000)
+          if (!websocketReady) {
+            throw new Error('WebSocket failed to become ready within timeout')
+          }
+
+          // Additional delay for first-time stability
+          const extraDelay = isFirstTimeOrColdStart ? INITIAL_DELAY_MS * 2 : INITIAL_DELAY_MS
+          logCall(`[MeetingContent] Adding ${extraDelay}ms stability delay for first join`)
+          await new Promise(resolve => setTimeout(resolve, extraDelay))
+
           initialLoadRef.current = false
         }
 
@@ -645,39 +665,15 @@ const MeetingContent = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionIsValid, callIsActive, isActiveInstance, meeting])
 
-  // Monitor call status and automatically navigate when call ends
+  // Monitor call status - navigation now handled by comprehensive cleanup
   useEffect(() => {
     logCall('MeetingScreenSimple', '📱 STATUS MONITOR - Current status:', { status });
 
     if (status === 'ended') {
-      logCall('MeetingScreenSimple', '📱 CALL STATUS CHANGED TO ENDED - NAVIGATING BACK');
-      // Small delay to ensure any cleanup is complete
-      const timeoutId = setTimeout(() => {
-        logCall('MeetingScreenSimple', '📱 EXECUTING NAVIGATION BACK TO TIPCALL');
-        if (navigation.canGoBack()) {
-          logCall('MeetingScreenSimple', '📱 Using navigation.goBack()');
-          navigation.goBack();
-        } else {
-          logCall('MeetingScreenSimple', '📱 Using navigation.reset() to TipCallSimple');
-          (navigation as any).reset({
-            index: 0,
-            routes: [
-              {
-                name: 'Main',
-                params: {
-                  screen: 'TipCallSimple'
-                }
-              }
-            ],
-          });
-        }
-        logCall('MeetingScreenSimple', '📱 Navigation call completed');
-      }, 300);
-
-      return () => {
-        logCall('MeetingScreenSimple', '📱 Clearing navigation timeout');
-        clearTimeout(timeoutId);
-      };
+      logCall('MeetingScreenSimple', '📱 CALL STATUS CHANGED TO ENDED');
+      logCall('MeetingScreenSimple', '📱 Navigation handled by comprehensive cleanup process');
+      // Navigation is now handled by the comprehensive cleanup process
+      // triggered by VideoSDK onMeetingLeft event calling controller.endCall()
     }
   }, [status, navigation]);
 
@@ -910,8 +906,14 @@ const MeetingScreenSimple = () => {
         const videoSDK = VideoSDKService.getInstance()
 
         const status = videoSDK.getInitializationStatus()
-        if (!status.initialized || !status.websocketReady) {
-          logVideoSDK('MeetingScreenSimple', 'VideoSDK not ready, ensuring initialization', status)
+        const isFirstTimeOrColdStart = videoSDK.isFirstTimeOrColdStart()
+
+        if (!status.initialized || !status.websocketReady || isFirstTimeOrColdStart) {
+          logVideoSDK('MeetingScreenSimple', 'VideoSDK not ready or first-time/cold start, ensuring initialization', {
+            status,
+            isFirstTimeOrColdStart
+          })
+
           const success = await videoSDK.ensureInitialized()
 
           if (!success) {
@@ -919,9 +921,15 @@ const MeetingScreenSimple = () => {
             return
           }
 
-          // Wait for WebSocket to be ready
-          logVideoSDK('MeetingScreenSimple', 'Waiting for VideoSDK WebSocket to be ready...')
-          await videoSDK.waitForWebSocketReady()
+          // Wait for WebSocket to be ready with enhanced timeout for first-time users
+          const timeout = isFirstTimeOrColdStart ? 15000 : 8000
+          logVideoSDK('MeetingScreenSimple', `Waiting for VideoSDK WebSocket to be ready (timeout: ${timeout}ms)...`)
+          const websocketReady = await videoSDK.waitForWebSocketReady(timeout)
+
+          if (!websocketReady) {
+            logError('MeetingScreenSimple', 'WebSocket failed to become ready within timeout')
+            return
+          }
         }
 
         logVideoSDK('MeetingScreenSimple', 'VideoSDK is ready, setting videoSDKReady to true')
@@ -949,17 +957,21 @@ const MeetingScreenSimple = () => {
   }, [session?.sessionId, status, sessionIsValid, callIsActive, videoSDKReady])
   
   // Global component tracking key
-  const globalComponentKey = sessionIsValid ? `meeting-${session.sessionId}` : null
+  const globalComponentKey = sessionIsValid && session ? `meeting-${session.sessionId}` : null
   
   // STRICT component instance management - prevent multiple renders entirely
   useEffect(() => {
     if (!isMountedRef.current) return
     
-    logCall('[MeetingScreenSimple] Component mounted with ID:', componentId.current, 'Session:', session?.sessionId, 'Status:', status)
+    logCall('[MeetingScreenSimple] Component mounted with details', {
+      componentId: componentId.current,
+      sessionId: session?.sessionId,
+      status
+    })
     
     // Comprehensive validation before allowing component to become active
     if (!sessionIsValid) {
-      logCall('[MeetingScreenSimple] Session invalid, not activating component:', { 
+      logCall('[MeetingScreenSimple] Session invalid, not activating component', {
         sessionId: session?.sessionId,
         meetingId: session?.meetingId,
         hasToken: !!session?.token

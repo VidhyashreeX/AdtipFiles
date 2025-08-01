@@ -248,8 +248,8 @@ class CallController {
       videoSDK.reset(true);
 
       // Reset store state
-      const store = useCallStore.getState();
-      store.actions.reset();
+      const { actions } = useCallStore.getState();
+      actions.reset();
 
       logCall('CallController', 'Emergency recovery completed');
     } catch (recoveryError) {
@@ -281,7 +281,8 @@ class CallController {
       await cleanupService.performComprehensiveCleanup();
 
       // Ensure store is reset after cleanup
-      store.actions.reset();
+      const { actions } = useCallStore.getState();
+      actions.reset();
 
       logCall('CallController', 'Comprehensive cleanup complete');
     } catch (error) {
@@ -293,8 +294,8 @@ class CallController {
 
       // Force store reset even on error
       try {
-        const store = useCallStore.getState();
-        store.actions.reset();
+        const { actions } = useCallStore.getState();
+        actions.reset();
       } catch (storeError) {
         logError('CallController', 'Failed to reset store during emergency cleanup', storeError);
       }
@@ -443,8 +444,8 @@ class CallController {
       logCall('CallController', 'Consolidated API completed successfully - token generated, meeting created, FCM sent, payment tracked');
 
       // Update store with outgoing call (use sessionId from consolidated API response)
-      const store = useCallStore.getState()
-      store.actions.setSession({
+      const { actions } = useCallStore.getState()
+      actions.setSession({
         sessionId: backendSessionId, // Use sessionId from backend for consistency
         meetingId,
         token,
@@ -455,7 +456,7 @@ class CallController {
         startedAt: Date.now(),
         callId // Store the callId for payment processing when ending the call
       })
-      store.actions.setStatus('outgoing')
+      actions.setStatus('outgoing')
       
       // Initialize media
       await this.media.initialize()
@@ -464,7 +465,7 @@ class CallController {
       this.notification.showOngoingCall(backendSessionId, recipientName, callType)
 
       // For outgoing calls, immediately transition to connecting so the meeting screen can render
-      store.actions.setStatus('connecting')
+      actions.setStatus('connecting')
 
       // Start persistent call instead of navigating
       startPersistentCall({
@@ -481,8 +482,8 @@ class CallController {
       logError('CallController', 'startCall error', error)
       
       // Reset call state
-      const store = useCallStore.getState()
-      store.actions.reset()
+      const { actions } = useCallStore.getState()
+      actions.reset()
       
       return false
     }
@@ -523,8 +524,8 @@ class CallController {
       logCall('CallController', 'Generated session ID', { sessionId: backendSessionId });
 
       // OPTIMIZATION: Navigate immediately with temporary session data
-      const store = useCallStore.getState()
-      store.actions.setSession({
+      const { actions } = useCallStore.getState()
+      actions.setSession({
         sessionId: backendSessionId,
         meetingId: 'temp-' + backendSessionId, // Temporary meeting ID
         token: 'temp-token', // Temporary token
@@ -537,8 +538,8 @@ class CallController {
       })
 
       // Set status to outgoing and immediately transition to connecting
-      store.actions.setStatus('outgoing')
-      store.actions.setStatus('connecting')
+      actions.setStatus('outgoing')
+      actions.setStatus('connecting')
 
       // Initialize media
       await this.media.initialize()
@@ -564,8 +565,8 @@ class CallController {
       logError('CallController', 'startCallOptimized error', error);
 
       // Reset call state
-      const store = useCallStore.getState()
-      store.actions.reset()
+      const { actions } = useCallStore.getState()
+      actions.reset()
 
       return false
     }
@@ -607,13 +608,14 @@ class CallController {
         logError('CallController', 'Consolidated call API failed', new Error(consolidatedResponse.message));
 
         // API failed - exit meeting screen with failed status
-        const store = useCallStore.getState()
-        store.actions.setStatus('failed')
+        const { actions } = useCallStore.getState()
+        actions.setStatus('failed')
 
         // End the persistent call
         setTimeout(() => {
           endPersistentCall()
-          store.actions.reset()
+          const { actions: resetActions } = useCallStore.getState()
+          resetActions.reset()
         }, 2000) // Show failed status for 2 seconds before cleanup
 
         return
@@ -666,7 +668,8 @@ class CallController {
       }
 
       // Update the session with real data
-      store.actions.setSession({
+      const { actions } = useCallStore.getState()
+      actions.setSession({
         ...currentSession,
         meetingId,
         token,
@@ -692,13 +695,14 @@ class CallController {
       logError('CallController', 'Async call initiation error', error);
 
       // API error - exit meeting screen with failed status
-      const store = useCallStore.getState()
-      store.actions.setStatus('failed')
+      const { actions } = useCallStore.getState()
+      actions.setStatus('failed')
 
       // End the persistent call
       setTimeout(() => {
         endPersistentCall()
-        store.actions.reset()
+        const { actions: resetActions } = useCallStore.getState()
+        resetActions.reset()
       }, 2000) // Show failed status for 2 seconds before cleanup
     }
   }
@@ -718,9 +722,9 @@ class CallController {
 
       // Accept the pending call
       if (this.pendingIncomingCall) {
-        const store = useCallStore.getState()
-        store.actions.setSession(this.pendingIncomingCall)
-        store.actions.setStatus('ringing')
+        const { actions } = useCallStore.getState()
+        actions.setSession(this.pendingIncomingCall)
+        actions.setStatus('ringing')
 
         // Clear pending call
         this.pendingIncomingCall = null
@@ -779,7 +783,8 @@ class CallController {
       this.notification.hideNotification(session.sessionId)
 
       // Update status to connecting (not in_call yet)
-      store.actions.setStatus('connecting')
+      const { actions } = useCallStore.getState()
+      actions.setStatus('connecting')
 
       // Initialize media and join meeting
       await this.media.initialize()
@@ -825,7 +830,8 @@ class CallController {
           if (paymentResponse.status && callId) {
             this.lastCallId = callId; // <-- Store callId for later use
             // Update session with callId
-            store.actions.setSession({
+            const { actions: sessionActions } = useCallStore.getState()
+            sessionActions.setSession({
               ...session,
               callId
             })
@@ -862,7 +868,7 @@ class CallController {
       }
 
       // Update status to in_call only after everything is set up
-      store.actions.setStatus('in_call')
+      actions.setStatus('in_call')
 
       return true
     } catch (error) {
@@ -907,7 +913,8 @@ class CallController {
       logCall('CallController', 'Missed call cleanup completed')
       
       // Update status
-      store.actions.setStatus('ended')
+      const { actions } = useCallStore.getState()
+      actions.setStatus('ended')
       
       return true
     } catch (error) {
@@ -916,36 +923,48 @@ class CallController {
     }
   }
   
+  // Flag to prevent duplicate endCall operations
+  private isEndingCall = false;
+
   /**
    * End active call
    */
   async endCall() {
-    const store = useCallStore.getState()
-    let session = store.session
-
-    if (!session) {
-      logWarn('CallController', 'No session found in store on endCall');
-      return false;
+    // Prevent duplicate endCall operations
+    if (this.isEndingCall) {
+      logCall('CallController', 'endCall already in progress, skipping duplicate call');
+      return true;
     }
 
-    // Debug: Log session object
-    logCall('CallController', 'Session object on endCall', session);
+    this.isEndingCall = true;
 
-    // Use lastCallId if available, otherwise session.callId
-    const callIdToUse = this.lastCallId || session.callId;
-    if (!callIdToUse) {
-      logWarn('CallController', 'No callId available for end call', session);
-    } else {
-      // Call the end API (voice or video)
-      const { userId } = await this.getUserInfo();
-      
-      try {
-        // Always use the original caller and receiver from when call started
-        // For outgoing calls: current user is caller, peer is receiver
-        // For incoming calls: peer is caller, current user is receiver
-        const isOutgoingCall = session.direction === 'outgoing';
-        const originalCallerId = isOutgoingCall ? parseInt(userId) : parseInt(session.peerId);
-        const originalReceiverId = isOutgoingCall ? parseInt(session.peerId) : parseInt(userId);
+    try {
+      const store = useCallStore.getState()
+      let session = store.session
+
+      if (!session) {
+        logWarn('CallController', 'No session found in store on endCall');
+        return false;
+      }
+
+      // Debug: Log session object
+      logCall('CallController', 'Session object on endCall', session);
+
+      // Use lastCallId if available, otherwise session.callId
+      const callIdToUse = this.lastCallId || session.callId;
+      if (!callIdToUse) {
+        logWarn('CallController', 'No callId available for end call', session);
+      } else {
+        // Call the end API (voice or video)
+        const { userId } = await this.getUserInfo();
+
+        try {
+          // Always use the original caller and receiver from when call started
+          // For outgoing calls: current user is caller, peer is receiver
+          // For incoming calls: peer is caller, current user is receiver
+          const isOutgoingCall = session.direction === 'outgoing';
+          const originalCallerId = isOutgoingCall ? parseInt(userId) : parseInt(session.peerId);
+          const originalReceiverId = isOutgoingCall ? parseInt(session.peerId) : parseInt(userId);
         
         const payload = {
           callerId: originalCallerId,
@@ -987,6 +1006,9 @@ class CallController {
           sessionDirection: session.direction
         });
       }
+    }
+    } catch (sessionError) {
+      logError('CallController', 'Error handling session during endCall', sessionError);
     }
 
     // CRITICAL FIX: End VideoSDK meeting FIRST before any cleanup
@@ -1031,30 +1053,35 @@ class CallController {
       // Stop vibrating immediately
       this.stopVibrate()
 
+      // Get current session for cleanup operations
+      const currentStore = useCallStore.getState();
+      const currentSession = currentStore.session;
+
       // Update status to ended immediately
       logCall('CallController', '🚀 SETTING CALL STATUS TO ENDED');
-      store.actions.setStatus('ended')
-      logCall('CallController', '🚀 Call status set to ended, current status:', store.getState().status);
+      const { actions: endActions } = useCallStore.getState();
+      endActions.setStatus('ended');
+      logCall('CallController', '🚀 Call status set to ended, current status:', useCallStore.getState().status);
 
       // Clear active meeting session in VideoSDK service
-      if (session && session.sessionId) {
-        this.videoSDK.clearActiveMeetingSession(session.sessionId)
+      if (currentSession && currentSession.sessionId) {
+        this.videoSDK.clearActiveMeetingSession(currentSession.sessionId)
       }
-      
+
       // Send end signal to the other party with retry
       try {
-        if (session && session.peerId && session.sessionId) {
+        if (currentSession && currentSession.peerId && currentSession.sessionId) {
           logCall('CallController', 'Sending end signal to peer');
-          await this.signaling.sendEnd(session.peerId, session.sessionId)
+          await this.signaling.sendEnd(currentSession.peerId, currentSession.sessionId)
           logCall('CallController', 'End signal sent successfully');
         }
       } catch (signalError) {
         logError('CallController', 'Failed to send end signal', signalError)
         // Retry sending end signal once
         try {
-          if (session && session.peerId && session.sessionId) {
+          if (currentSession && currentSession.peerId && currentSession.sessionId) {
             logCall('CallController', 'Retrying end signal to peer');
-            await this.signaling.sendEnd(session.peerId, session.sessionId)
+            await this.signaling.sendEnd(currentSession.peerId, currentSession.sessionId)
             logCall('CallController', 'End signal retry successful');
           }
         } catch (retryError) {
@@ -1073,9 +1100,9 @@ class CallController {
       
       // Comprehensive notification cleanup
       try {
-        if (session && session.sessionId) {
+        if (currentSession && currentSession.sessionId) {
           logCall('CallController', 'Hiding notifications');
-          this.notification.hideNotification(session.sessionId)
+          this.notification.hideNotification(currentSession.sessionId)
         }
         
         // Stop foreground service
@@ -1095,6 +1122,9 @@ class CallController {
       logCall('CallController', 'Call cleanup completed')
     } catch (cleanupError) {
       logError('CallController', 'Error during call cleanup', cleanupError)
+    } finally {
+      // Reset the flag to allow future endCall operations
+      this.isEndingCall = false;
     }
     return true;
   }
@@ -1185,7 +1215,8 @@ class CallController {
       }
 
       // Normal incoming call handling (no active call or concurrent calls not supported)
-      store.actions.setSession({
+      const { actions } = useCallStore.getState()
+      actions.setSession({
         sessionId,
         meetingId,
         token,
@@ -1195,7 +1226,7 @@ class CallController {
         type: callType as CallType,
         startedAt: Date.now()
       })
-      store.actions.setStatus('ringing')
+      actions.setStatus('ringing')
 
       // Show incoming call notification
       this.notification.showIncomingCall(sessionId, callerName, callType)
@@ -1220,7 +1251,8 @@ class CallController {
       const store = useCallStore.getState()
 
       if (store.session?.sessionId === sessionId) {
-        store.actions.setStatus('connecting')
+        const { actions } = useCallStore.getState()
+        actions.setStatus('connecting')
         logCall('CallController', 'Call accept FCM processed successfully')
       }
     } catch (error) {
@@ -1246,7 +1278,8 @@ class CallController {
         this.notification.hideNotification(sessionId)
 
         // Update status to ended
-        store.actions.setStatus('ended')
+        const { actions } = useCallStore.getState()
+        actions.setStatus('ended')
 
         logCall('CallController', 'Call end FCM processed successfully')
       }

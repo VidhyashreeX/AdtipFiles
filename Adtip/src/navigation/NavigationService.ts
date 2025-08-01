@@ -309,19 +309,36 @@ export function navigateToTipCall() {
     resetMeetingNavigationState();
 
     if (navigationRef.isReady()) {
-      // Reset to TipCall screen - this ensures we're back to the main call screen
-      (navigationRef as any).reset({
-        index: 0,
-        routes: [
-          {
-            name: 'Main',
-            params: {
-              screen: 'TipCallSimple'
-            }
-          }
-        ],
-      });
-      console.log('[NavigationService] Successfully navigated back to TipCallSimple');
+      // Try to navigate to proper tab structure first
+      try {
+        console.log('[NavigationService] Attempting navigation to Main tab with TipCallSimple');
+        (navigationRef as any).navigate('Main', {
+          screen: 'TipCallSimple'
+        });
+        console.log('[NavigationService] Successfully navigated to TipCallSimple with tab structure');
+      } catch (navError) {
+        console.warn('[NavigationService] Direct navigation failed, trying goBack()');
+        // Try going back first to see if we can return to the tab structure
+        try {
+          (navigationRef as any).goBack();
+          console.log('[NavigationService] Successfully went back using goBack()');
+        } catch (goBackError) {
+          console.warn('[NavigationService] goBack() failed, using reset as last resort');
+          // Last resort: Reset but try to maintain tab structure
+          (navigationRef as any).reset({
+            index: 0,
+            routes: [
+              {
+                name: 'Main',
+                params: {
+                  screen: 'TipCallSimple'
+                }
+              }
+            ],
+          });
+          console.log('[NavigationService] Reset navigation to TipCallSimple');
+        }
+      }
     } else {
       console.warn('[NavigationService] Navigation not ready, retrying in 200ms');
       setTimeout(navigateToTipCall, 200);

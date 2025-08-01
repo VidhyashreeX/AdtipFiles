@@ -25,7 +25,6 @@ import { useCallStore, CallSession } from '../../stores/callStoreSimplified'
 import CallController from '../../services/calling/CallController'
 import VideoSDKService from '../../services/videosdk/VideoSDKService'
 import { logCall, logError, logWarn } from '../../utils/ProductionLogger'
-import { navigateToTipCall } from '../../navigation/NavigationService'
 
 interface MeetingConfig {
   sessionId: string
@@ -203,19 +202,28 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
 
   const onMeetingLeft = () => {
     logCall('PersistentMeetingContent', '🔴 MEETING LEFT EVENT FIRED - CRITICAL DIAGNOSTIC');
-    logCall('PersistentMeetingContent', '🔴 Meeting left - auto-navigating back to TipCall screen');
+    logCall('PersistentMeetingContent', '🔴 Meeting left - triggering same cleanup as manual end call');
 
-    // Automatically navigate back to TipCall screen when meeting ends
-    // This ensures that when one participant ends the call, all participants are taken back to the main screen
-    setTimeout(() => {
+    // CRITICAL FIX: Trigger the same comprehensive cleanup as manual end call button
+    // This ensures that when one participant ends the call, all participants get the same cleanup
+    setTimeout(async () => {
       try {
-        logCall('PersistentMeetingContent', '🔴 EXECUTING AUTO-NAVIGATION back to TipCall screen');
-        navigateToTipCall();
-        logCall('PersistentMeetingContent', '🔴 Auto-navigation call completed');
+        logCall('PersistentMeetingContent', '🔴 EXECUTING COMPREHENSIVE CLEANUP like manual end call');
+
+        // Get the CallController instance and trigger the same endCall process
+        const controller = CallController.getInstance();
+        if (controller) {
+          logCall('PersistentMeetingContent', '🔴 Calling controller.endCall() for comprehensive cleanup');
+          await controller.endCall();
+          logCall('PersistentMeetingContent', '🔴 Comprehensive cleanup completed - same as manual end call');
+        } else {
+          logError('PersistentMeetingContent', '🔴 CallController instance not available');
+        }
+
       } catch (error) {
-        logError('PersistentMeetingContent', '🔴 Error auto-navigating after meeting left', error);
+        logError('PersistentMeetingContent', '🔴 Error during comprehensive cleanup', error);
       }
-    }, 500); // Small delay to ensure cleanup completes
+    }, 100); // Small delay to ensure VideoSDK event processing completes
   };
 
   const onParticipantJoined = (participant: any) => {
