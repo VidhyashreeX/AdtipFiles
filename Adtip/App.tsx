@@ -177,26 +177,28 @@ const AppNavigator = () => {
 
             // Start WebSocket pre-warming after successful VideoSDK initialization
             try {
-              Logger.debug('App', 'Background: Starting VideoSDK WebSocket pre-warming...');
+              Logger.debug('App', '🔥 Background: Starting VideoSDK WebSocket pre-warming...');
               const { VideoSDKPrewarmingService } = await import('./src/services/videosdk/VideoSDKPrewarmingService');
               const prewarmingService = VideoSDKPrewarmingService.getInstance();
 
+              Logger.debug('App', '🔥 Background: Initializing pre-warming service...');
               // Initialize pre-warming service
               await prewarmingService.initialize();
 
+              Logger.debug('App', '🔥 Background: Starting pre-warming process...');
               // Start pre-warming process in background (non-blocking)
               prewarmingService.startPrewarming().then((prewarmSuccess) => {
                 if (prewarmSuccess) {
-                  Logger.info('App', 'Background: VideoSDK WebSocket pre-warming completed successfully');
+                  Logger.info('App', '🔥 Background: VideoSDK WebSocket pre-warming completed successfully');
                 } else {
-                  Logger.warn('App', 'Background: VideoSDK WebSocket pre-warming failed (non-critical)');
+                  Logger.warn('App', '🔥 Background: VideoSDK WebSocket pre-warming failed (non-critical)');
                 }
               }).catch((prewarmError) => {
-                Logger.warn('App', 'Background: VideoSDK WebSocket pre-warming error (non-critical):', prewarmError);
+                Logger.warn('App', '🔥 Background: VideoSDK WebSocket pre-warming error (non-critical):', prewarmError);
               });
 
             } catch (prewarmingError) {
-              Logger.warn('App', 'Background: VideoSDK pre-warming service initialization failed (non-critical):', prewarmingError);
+              Logger.warn('App', '🔥 Background: VideoSDK pre-warming service initialization failed (non-critical):', prewarmingError);
             }
           } else {
             Logger.warn('App', 'Background: VideoSDK service initialization failed');

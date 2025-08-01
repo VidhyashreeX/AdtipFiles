@@ -53,14 +53,14 @@ function testPrewarmingServiceImplementation() {
   if (!content) return;
 
   // Test 1: Check for singleton pattern
-  const hasSingleton = content.includes('private static instance') && 
+  const hasSingleton = content.includes('private static instance') &&
                       content.includes('getInstance()');
   logTest('Pre-warming service uses singleton pattern', hasSingleton);
 
-  // Test 2: Check for background dummy meeting creation
-  const hasDummyMeeting = content.includes('createAndValidateDummyMeeting') && 
-                         content.includes('ApiService.createVideoSDKMeeting');
-  logTest('Pre-warming service creates dummy meetings', hasDummyMeeting);
+  // Test 2: Check for silent dummy call creation
+  const hasDummyCall = content.includes('triggerDummyCall') &&
+                      content.includes('Silent dummy call');
+  logTest('Pre-warming service creates silent dummy calls', hasDummyCall);
 
   // Test 3: Check for WebSocket validation
   const hasWebSocketValidation = content.includes('validateWebSocketConnection') && 
