@@ -772,13 +772,13 @@ class CallController {
 
       logCall('CallController', 'Call permissions validated for accepting call', permissionResult)
 
-      // Stop vibrating
+      // Stop vibrating immediately when call is accepted
       this.stopVibrate()
 
-      // Hide incoming notification
+      // Hide incoming notification immediately
       this.notification.hideNotification(session.sessionId)
 
-      // Update status
+      // Update status to connecting (not in_call yet)
       store.actions.setStatus('connecting')
 
       // Initialize media and join meeting
@@ -794,9 +794,10 @@ class CallController {
         )
       }
 
-      // Send accept signal
+      // Send accept signal to the other party
       try {
         await this.signaling.sendAccept(session.peerId, session.sessionId)
+        logCall('CallController', 'Accept signal sent successfully')
       } catch (signalError) {
         logError('CallController', 'Failed to send accept signal', signalError)
       }
@@ -855,16 +856,19 @@ class CallController {
       // Notify server of accepted call
       try {
         await this.sendCallStatusUpdate('CALL_ACCEPTED')
+        logCall('CallController', 'Call status update sent successfully')
       } catch (statusError) {
         logError('CallController', 'Failed to send call status update', statusError)
       }
 
-      // Update status to in_call
+      // Update status to in_call only after everything is set up
       store.actions.setStatus('in_call')
 
       return true
     } catch (error) {
       logError('CallController', 'acceptCall error', error)
+      // If accept fails, ensure we clean up
+      await this.declineCall()
       return false
     }
   }
@@ -985,43 +989,70 @@ class CallController {
       }
     }
 
-    // Proceed with UI cleanup immediately
+    // Proceed with comprehensive UI cleanup immediately
     try {
-      // Stop vibrating
+      // Stop vibrating immediately
       this.stopVibrate()
 
-      // Update status
+      // Update status to ended immediately
       store.actions.setStatus('ended')
+      
       // Clear active meeting session in VideoSDK service
       if (session && session.sessionId) {
         this.videoSDK.clearActiveMeetingSession(session.sessionId)
       }
-      // Send end signal
+      
+      // Send end signal to the other party with retry
       try {
         if (session && session.peerId && session.sessionId) {
+          logCall('CallController', 'Sending end signal to peer');
           await this.signaling.sendEnd(session.peerId, session.sessionId)
+          logCall('CallController', 'End signal sent successfully');
         }
       } catch (signalError) {
         logError('CallController', 'Failed to send end signal', signalError)
+        // Retry sending end signal once
+        try {
+          if (session && session.peerId && session.sessionId) {
+            logCall('CallController', 'Retrying end signal to peer');
+            await this.signaling.sendEnd(session.peerId, session.sessionId)
+            logCall('CallController', 'End signal retry successful');
+          }
+        } catch (retryError) {
+          logError('CallController', 'End signal retry also failed', retryError)
+        }
       }
-      // Leave meeting
+      
+      // Leave meeting with timeout protection
       try {
+        logCall('CallController', 'Leaving meeting');
         await this.media.leaveMeeting()
+        logCall('CallController', 'Meeting left successfully');
       } catch (mediaError) {
         logError('CallController', 'Failed to leave meeting', mediaError)
       }
-      // Hide notifications and stop foreground service
+      
+      // Comprehensive notification cleanup
       try {
         if (session && session.sessionId) {
+          logCall('CallController', 'Hiding notifications');
           this.notification.hideNotification(session.sessionId)
         }
+        
+        // Stop foreground service
         if (global.resolveForegroundService) {
           global.resolveForegroundService()
         }
         await notifee.stopForegroundService()
+        
+        // Clear all call-related notifications as fallback
+        await notifee.cancelAllNotifications()
+        
+        logCall('CallController', 'Notification cleanup completed');
       } catch (notificationError) {
         logError('CallController', 'Failed to cleanup notifications', notificationError)
       }
+      
       logCall('CallController', 'Call cleanup completed')
     } catch (cleanupError) {
       logError('CallController', 'Error during call cleanup', cleanupError)

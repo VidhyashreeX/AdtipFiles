@@ -7,7 +7,7 @@ import {
   Constants
 } from '@videosdk.live/react-native-sdk';
 import { CallSettings, CallStatus, CallMetrics } from '../../types/videosdk';
-import { logError, logWarn, logVideoSDK } from '../../utils/ProductionLogger';
+import { logError, logWarn, logVideoSDK, logCall } from '../../utils/ProductionLogger';
 
 export interface UseVideoSDKMeetingProps {
   // Add required configuration properties
@@ -53,7 +53,7 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
   // Set up meeting configuration
   const mMeeting = useMeeting({
     onMeetingJoined: () => {
-      logCall('[VideoSDKMeeting] Meeting joined successfully');
+      logCall('VideoSDKMeeting', 'Meeting joined successfully');
       setCallStatus('connected');
       startTimeRef.current = Date.now();
       startDurationTimer();
@@ -61,9 +61,33 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
       hasJoinedRef.current = true;
     },
     onMeetingLeft: () => {
-      logCall('[VideoSDKMeeting] Meeting left');
+      logCall('VideoSDKMeeting', 'Meeting left - cleaning up notifications');
       setCallStatus('ended');
       stopDurationTimer();
+      
+      // Comprehensive notification cleanup when meeting ends
+      const cleanupNotifications = async () => {
+        try {
+          // Import notification service dynamically
+          const { default: NotificationService } = await import('../../services/calling/NotificationService');
+          const notificationService = NotificationService.getInstance();
+          
+          // Hide all call notifications
+          await notificationService.hideAllNotifications();
+          
+          // Clear all notifications as fallback
+          const notifee = await import('@notifee/react-native');
+          await notifee.default.cancelAllNotifications();
+          
+          logCall('VideoSDKMeeting', 'Notifications cleaned up on meeting left');
+        } catch (error) {
+          logError('VideoSDKMeeting', 'Error cleaning up notifications on meeting left', error);
+        }
+      };
+      
+      // Execute notification cleanup
+      cleanupNotifications();
+      
       props.onMeetingLeft?.();
       hasJoinedRef.current = false;
     },
@@ -84,7 +108,7 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
 
       // Check for VideoSDK specific error codes
       const isVideoSDKError = errorCode && (
-        errorCode >= 4001 && errorCode <= 5006 // VideoSDK error code range
+        Number(errorCode) >= 4001 && Number(errorCode) <= 5006 // VideoSDK error code range
       )
 
       if (isWebSocketError || isVideoSDKError) {
@@ -158,11 +182,11 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
       return;
     }
     if (hasJoinedRef.current) {
-      logCall('[VideoSDKMeeting] joinMeeting already called, skipping.');
+      logCall('VideoSDKMeeting', 'joinMeeting already called, skipping.');
       return;
     }
     try {
-      logCall('[VideoSDKMeeting] Joining meeting:', meetingConfig.meetingId);
+      logCall('VideoSDKMeeting', 'Joining meeting:', meetingConfig.meetingId);
       if (mMeeting && typeof mMeeting.join === 'function') {
         mMeeting.join();
         hasJoinedRef.current = true;
@@ -210,12 +234,12 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
   // Cleanup on unmount ONLY - no dependencies to prevent cleanup running on state changes
   useEffect(() => {
     return () => {
-      logCall('[VideoSDKMeeting] Component unmounting - cleaning up');
+      logCall('VideoSDKMeeting', 'Component unmounting - cleaning up');
       stopDurationTimer();
       // Attempt to leave meeting if still connected
       if (hasJoinedRef.current && mMeeting && typeof mMeeting.leave === 'function') {
         try {
-          logCall('[VideoSDKMeeting] Leaving meeting on unmount');
+          logCall('VideoSDKMeeting', 'Leaving meeting on unmount');
           mMeeting.leave();
         } catch (e) {
           logError('VideoSDKMeeting', 'Error leaving meeting on unmount', e);

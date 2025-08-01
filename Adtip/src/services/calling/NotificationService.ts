@@ -187,6 +187,50 @@ class NotificationService {
   }
 
   /**
+   * Hide all call-related notifications
+   */
+  async hideAllNotifications() {
+    logCall('NotificationService', 'Hiding all call notifications')
+
+    // End native call handling
+    if (Platform.OS === 'android' && IncomingCallModule) {
+      try {
+        await IncomingCallModule.endCall()
+        logCall('NotificationService', 'Native call ended')
+      } catch (error) {
+        logWarn('NotificationService', 'Failed to end native call', error)
+      }
+    }
+
+    try {
+      // Cancel all notifications
+      await notifee.cancelAllNotifications()
+      logCall('NotificationService', 'Cancelled all notifications')
+    } catch (error) {
+      logWarn('NotificationService', 'Failed to cancel all notifications', error)
+    }
+
+    // Stop any ongoing foreground service
+    try {
+      await notifee.stopForegroundService()
+      logCall('NotificationService', 'Stopped foreground service')
+    } catch (error) {
+      logWarn('NotificationService', 'Failed to stop foreground service', error)
+    }
+
+    // Clear CallKeep if available
+    try {
+      const callKeepService = await this.getCallKeepService()
+      if (callKeepService) {
+        await callKeepService.endAllCalls()
+        logCall('NotificationService', 'CallKeep calls ended')
+      }
+    } catch (error) {
+      logWarn('NotificationService', 'Failed to end CallKeep calls', error)
+    }
+  }
+
+  /**
    * Initialize notification channels with enhanced settings
    */
   async initializeEnhancedChannels() {
