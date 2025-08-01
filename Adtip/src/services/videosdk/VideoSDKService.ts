@@ -401,6 +401,22 @@ class VideoSDKService {
   }
 
   /**
+   * Check if WebSocket connection has been pre-warmed
+   * This integrates with the VideoSDKPrewarmingService
+   */
+  isWebSocketPrewarmed(): boolean {
+    try {
+      // Dynamically import to avoid circular dependencies
+      const { VideoSDKPrewarmingService } = require('./VideoSDKPrewarmingService');
+      const prewarmingService = VideoSDKPrewarmingService.getInstance();
+      return prewarmingService.isPrewarmed();
+    } catch (error) {
+      // If pre-warming service is not available, return false
+      return false;
+    }
+  }
+
+  /**
    * Enhanced initialization for first-time users with extra validation
    */
   async initializeForFirstTimeUser(): Promise<boolean> {

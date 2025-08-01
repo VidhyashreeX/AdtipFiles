@@ -164,7 +164,7 @@ const AppNavigator = () => {
       })();
     }, 100); // Minimal delay for UI responsiveness
 
-    // Background VideoSDK initialization
+    // Background VideoSDK initialization with pre-warming
     setTimeout(() => {
       (async () => {
         try {
@@ -174,6 +174,30 @@ const AppNavigator = () => {
 
           if (success) {
             Logger.info('App', 'Background: VideoSDK service initialized successfully');
+
+            // Start WebSocket pre-warming after successful VideoSDK initialization
+            try {
+              Logger.debug('App', 'Background: Starting VideoSDK WebSocket pre-warming...');
+              const { VideoSDKPrewarmingService } = await import('./src/services/videosdk/VideoSDKPrewarmingService');
+              const prewarmingService = VideoSDKPrewarmingService.getInstance();
+
+              // Initialize pre-warming service
+              await prewarmingService.initialize();
+
+              // Start pre-warming process in background (non-blocking)
+              prewarmingService.startPrewarming().then((prewarmSuccess) => {
+                if (prewarmSuccess) {
+                  Logger.info('App', 'Background: VideoSDK WebSocket pre-warming completed successfully');
+                } else {
+                  Logger.warn('App', 'Background: VideoSDK WebSocket pre-warming failed (non-critical)');
+                }
+              }).catch((prewarmError) => {
+                Logger.warn('App', 'Background: VideoSDK WebSocket pre-warming error (non-critical):', prewarmError);
+              });
+
+            } catch (prewarmingError) {
+              Logger.warn('App', 'Background: VideoSDK pre-warming service initialization failed (non-critical):', prewarmingError);
+            }
           } else {
             Logger.warn('App', 'Background: VideoSDK service initialization failed');
           }
@@ -365,6 +389,23 @@ function App(): React.JSX.Element {
 
   // Add centralized FCM message router for both call and chat messages
   useFCMMessageRouter();
+
+  // Cleanup pre-warming service on app unmount
+  useEffect(() => {
+    return () => {
+      // Cleanup pre-warming service when app is unmounted
+      try {
+        import('./src/services/videosdk/VideoSDKPrewarmingService').then(({ VideoSDKPrewarmingService }) => {
+          const prewarmingService = VideoSDKPrewarmingService.getInstance();
+          prewarmingService.cleanup();
+        }).catch(() => {
+          // Ignore cleanup errors during app termination
+        });
+      } catch (error) {
+        // Ignore cleanup errors during app termination
+      }
+    };
+  }, []);
 
   // Initialize background call handler only (lightweight, non-blocking)
   useEffect(() => {
