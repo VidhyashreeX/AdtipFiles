@@ -45,10 +45,11 @@ import ApiService from '../../services/ApiService'
 // Import our new call controller and billing service
 import CallController from '../../services/calling/CallController'
 import CallBillingService from '../../services/calling/CallBillingService'
-import TipCallLogger  from '../../utils/logger'
+import Logger from '../../utils/logger'
 
 // Import premium access utilities
-import { checkPremiumAccess, logPremiumAccessAttempt, PremiumAccessModal } from '../../utils/premiumAccessUtils'
+import { checkPremiumAccess, logPremiumAccessAttempt } from '../../utils/premiumAccessUtils'
+import PremiumAccessModal from '../../components/modals/PremiumAccessModal'
 
 const { width: screenWidth } = Dimensions.get('window')
 
@@ -87,8 +88,8 @@ const ContactCard = ({
   const avatarColor = isUserOnlineAndAvailable ? colors.success : colors.text.tertiary
 
   // Debug log for status checking
-  TipCallLogger.debug(
-    `ContactCard`,
+  Logger.debug(
+    'ContactCard',
     `${contact.name} status:`,
     {
       is_available: contact.is_available,
@@ -641,10 +642,10 @@ const TipCallScreenSimple = () => {
   // Debug: Log the raw data from API
   useEffect(() => {
     if (usersData?.pages) {
-      TipCallLogger.debug('Raw API response pages:', usersData.pages.length)
-      TipCallLogger.debug('Total contacts from API:', contacts.length)
-      TipCallLogger.debug('Sample contacts:', contacts.slice(0, 3))
-      TipCallLogger.debug('Pagination info:', {
+      Logger.debug('TipCallScreen', 'Raw API response pages: ' + usersData.pages.length)
+      Logger.debug('TipCallScreen', 'Total contacts from API: ' + contacts.length)
+      Logger.debug('TipCallScreen', 'Sample contacts:', contacts.slice(0, 3))
+      Logger.debug('TipCallScreen', 'Pagination info:', {
         hasMoreUsers,
         usersLoadingMore,
         lastPagePagination: usersData.pages[usersData.pages.length - 1]?.pagination
@@ -688,7 +689,7 @@ const TipCallScreenSimple = () => {
 
         // If user doesn't have premium access, show upgrade modal
         /*if (!accessResult.hasAccess) {
-          TipCallLogger.debug('Non-premium user attempting call, showing premium popup')
+          Logger.debug('Non-premium user attempting call, showing premium popup')
           setPremiumFeature(callType === 'video' ? 'video_call' : 'voice_call')
           setShowPremiumPopup(true)
           return
@@ -756,10 +757,10 @@ const TipCallScreenSimple = () => {
           currentBalance: billingService.formatCurrency(numericBalance)
         })
         setShowCallConfirmationAlert(true)
-      } catch (error) {
-        TipCallLogger.error('Start call error:', error)
-        Alert.alert('Error', 'Failed to start call. Please try again.')
-      }
+              } catch (error) {
+          Logger.error('TipCallScreen', 'Start call error:', error)
+          Alert.alert('Error', 'Failed to start call. Please try again.')
+        }
     },
     [callController, billingService, balance, isPremium, user?.id, navigation]
   )
@@ -831,7 +832,7 @@ const TipCallScreenSimple = () => {
         })
         setShowCallConfirmationAlert(true)
       } catch (error) {
-        TipCallLogger.error('Start call error:', error)
+        Logger.error('TipCallScreen', 'Start call error:', error)
         Alert.alert('Error', 'Failed to start call. Please try again.')
       }
     },
@@ -903,13 +904,13 @@ const TipCallScreenSimple = () => {
           'Unable to start the call. The user may be unavailable.'
         )
       }
-    } catch (error) {
-      console.error('💥 [TipCallScreenSimple] Call confirmation error:', error);
-      TipCallLogger.error('Call confirmation error:', error)
-      Alert.alert('Error', 'Failed to start call. Please try again.')
-    } finally {
-      setPendingCallData(null)
-    }
+          } catch (error) {
+        console.error('💥 [TipCallScreenSimple] Call confirmation error:', error);
+        Logger.error('TipCallScreen', 'Call confirmation error:', error)
+        Alert.alert('Error', 'Failed to start call. Please try again.')
+      } finally {
+        setPendingCallData(null)
+      }
   }, [pendingCallData, callController])
 
   const handleCallCancel = useCallback(() => {
@@ -995,7 +996,7 @@ const TipCallScreenSimple = () => {
 
     // If user doesn't have premium access, show upgrade modal
     if (!accessResult.hasAccess) {
-      TipCallLogger.debug('Non-premium user attempting chat, showing premium popup')
+      Logger.debug('TipCallScreen', 'Non-premium user attempting chat, showing premium popup')
       setPremiumFeature('chat')
       setShowPremiumPopup(true)
       return
@@ -1015,7 +1016,7 @@ const TipCallScreenSimple = () => {
         })
       }
     } catch (error) {
-      TipCallLogger.error('Failed to navigate to FCM chat:', error);
+      Logger.error('TipCallScreen', 'Failed to navigate to FCM chat:', error);
       // Fallback to conversations screen
       navigation.navigate('Conversations');
     }

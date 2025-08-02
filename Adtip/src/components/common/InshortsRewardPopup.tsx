@@ -147,7 +147,7 @@ const InshortsRewardPopup: React.FC<InshortsRewardPopupProps> = ({
                     style={styles.buttonGradient}
                   >
                     <Star size={16} color="#FFFFFF" />
-                    <Text style={styles.primaryButtonText}>Start Now</Text>
+                    <Text style={styles.primaryButtonText}>Upgrade Now</Text>
                   </LinearGradient>
                 </TouchableOpacity>
 

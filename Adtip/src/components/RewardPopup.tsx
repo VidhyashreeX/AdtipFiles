@@ -66,24 +66,25 @@ const RewardPopup: React.FC<RewardPopupProps> = ({
             You've successfully earned ₹{earnedAmount.toFixed(2)} for viewing this content!
           </Text>
 
-          {/* Upgrade message for non-premium users */}
-          {!isPremium && (
-            <View style={styles.upgradeContainer}>
-              <Text style={[styles.upgradeMessage, { color: colors.primary }]}>
-                💎 Upgrade to Premium to earn up to ₹10 per view!
-              </Text>
-            </View>
-          )}
-          
+          {/* Upgrade message for all users */}
+          <View style={styles.upgradeContainer}>
+            <Text style={[styles.upgradeMessage, { color: colors.primary }]}>
+              💎 Upgrade to Premium to earn up to ₹10 per view!
+            </Text>
+          </View>
+
           {/* Buttons */}
           <View style={styles.buttonContainer}>
             <TouchableOpacity
-              style={[styles.button, styles.cancelButton, { borderColor: colors.border }]}
-              onPress={onClose}
+              style={[styles.button, styles.upgradeButton]}
+              onPress={onUpgradePremium || (() => {})}
             >
-              <Text style={[styles.cancelButtonText, { color: colors.text.secondary }]}>
-                Got it!
-              </Text>
+              <LinearGradient
+                colors={['#FF6B35', '#FF5722']}
+                style={styles.gradientButton}
+              >
+                <Text style={styles.upgradeButtonText}>🚀 Upgrade Now</Text>
+              </LinearGradient>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -98,21 +99,6 @@ const RewardPopup: React.FC<RewardPopupProps> = ({
               </LinearGradient>
             </TouchableOpacity>
           </View>
-
-          {/* Upgrade button for non-premium users */}
-          {!isPremium && onUpgradePremium && (
-            <TouchableOpacity
-              style={[styles.button, styles.upgradeButton]}
-              onPress={onUpgradePremium}
-            >
-              <LinearGradient
-                colors={['#FF6B35', '#FF5722']}
-                style={styles.gradientButton}
-              >
-                <Text style={styles.upgradeButtonText}>🚀 Upgrade Now</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          )}
         </View>
       </View>
     </Modal>
@@ -235,9 +221,14 @@ const styles = StyleSheet.create({
   walletButton: {
     // Gradient styling handled by LinearGradient
   },
+  upgradeButtonContainer: {
+    width: '100%',
+    marginBottom: 16,
+  },
   upgradeButton: {
     width: '100%',
-    marginTop: 8,
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   cancelButtonText: {
     fontSize: 16,
