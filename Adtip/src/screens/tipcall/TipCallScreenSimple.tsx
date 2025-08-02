@@ -1162,7 +1162,7 @@ const TipCallScreenSimple = () => {
     <View style={styles.headerRightContainer}>
       {/* Premium Toggle Switch */}
       <TouchableOpacity
-        onPress={() => navigation.navigate('SubscriptionScreen' as never)}
+        onPress={() => navigation.navigate('PremiumUser' as never)}
         style={[styles.headerIconButton, { marginRight: 4 }]}
       >
         <View style={[
@@ -1355,7 +1355,7 @@ const TipCallScreenSimple = () => {
         showWallet={true}
         showSearch={false} // We handle search ourselves
         showPremium={true}
-        onPremiumPress={() => navigation.navigate('SubscriptionScreen' as never)}
+        onPremiumPress={() => navigation.navigate('PremiumUser' as never)}
         rightComponent={<HeaderRight />}
       />
 
@@ -1368,7 +1368,7 @@ const TipCallScreenSimple = () => {
               <Text style={{ fontWeight: '700' }}>Upgrade to Premium</Text>
               <Text>Lower call rates & ₹2 per call acceptance</Text>
             </View>
-            <TouchableOpacity onPress={() => navigation.navigate('SubscriptionScreen' as never)} style={{ backgroundColor: 'rgba(0,0,0,0.1)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}>
+            <TouchableOpacity onPress={() => navigation.navigate('PremiumUser' as never)} style={{ backgroundColor: 'rgba(0,0,0,0.1)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}>
               <Text style={{ fontWeight: '600' }}>Upgrade</Text>
             </TouchableOpacity>
           </LinearGradient>

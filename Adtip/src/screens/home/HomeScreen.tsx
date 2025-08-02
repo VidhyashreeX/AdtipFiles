@@ -194,7 +194,7 @@ const ExternalLinkBanner: React.FC<ExternalLinkBannerProps> = ({ isPremium, onUp
         >
           <View style={styles.earnCardContent}>
             <View style={styles.earnCardTextContainer}>
-              <Text style={styles.earnCardTitle}>Play the games to earn money</Text>
+              <Text style={styles.earnCardTitle}>Play games to earn up to ₹10000</Text>
               <Text style={styles.earnCardDescription}>
                 {isPremium ? 'Click to play exciting games and earn rewards!' : 'Premium feature - Upgrade to unlock games!'}
               </Text>
@@ -229,7 +229,7 @@ const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn: _onWatchAnd
   const earnCardsData = [
     {
       id: '3',
-      title: 'Install to Earn to get up to ₹200',
+      title: 'Install to Earn upto ₹2000 per task',
       description: 'Complete tasks to earn rewards',
       iconName: 'coins',
       onPress: onInstallToEarn,

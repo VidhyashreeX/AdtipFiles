@@ -48,11 +48,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import EnhancedShortCard from './components/EnhancedShortCard';
 import LoginPromptModal from '../../components/modals/LoginPromptModal';
 import VideoCommentsModal from '../../components/tiptube/VideoCommentsModal';
-import useVideoRewardAd from '../../hooks/useVideoRewardAd';
+
 import VideoErrorBoundary from '../../components/common/VideoErrorBoundary';
 import ApiService from '../../services/ApiService';
-import ModernRewardPopup from '../../components/common/ModernRewardPopup';
+import InshortsRewardPopup from '../../components/common/InshortsRewardPopup';
 import { useUserPremiumStatus } from '../../contexts/UserDataContext';
+import { useInshortsReward } from '../../hooks/useInshortsReward';
 import { TipShortsLogger } from '../../utils/logger';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -111,31 +112,31 @@ const TipShortsEnhanced = () => {
 
   // Get premium status using the same logic as the header toggle
   const { isPremium } = useUserPremiumStatus();
-  // Use the reward hook
+  
+  // Use the Inshorts reward hook
   const {
-    showRewardPopup,
+    shortsCount,
+    showInshortsRewardPopup,
     earnedAmount,
-    handleVideoViewed,
-    handleRewardPopupAction,
-    closeRewardPopup,
-    showRewardAd,
-    videoCount,
-  } = useVideoRewardAd({
+    handleShortViewed,
+    handleInshortsRewardAction,
+    closeInshortsRewardPopup,
+  } = useInshortsReward({
     isGuest,
     userId: user?.id,
   });
 
-  // Debug reward ad state changes
+  // Debug Inshorts reward state changes
   useEffect(() => {
-    console.log('🎁 [TipShortsEnhanced] Reward state changed:', {
-      showRewardPopup,
+    console.log('🎁 [TipShortsEnhanced] Inshorts reward state changed:', {
+      shortsCount,
+      showInshortsRewardPopup,
       earnedAmount,
-      videoCount,
       isPremium,
       userId: user?.id,
       isGuest
     });
-  }, [showRewardPopup, earnedAmount, videoCount, isPremium, user?.id, isGuest]);
+  }, [shortsCount, showInshortsRewardPopup, earnedAmount, isPremium, user?.id, isGuest]);
 
   // Safe parameter destructuring to prevent undefined access
   const { shorts: passedShorts, startIndex = 0, shortId } = route.params || {};
@@ -285,11 +286,11 @@ const TipShortsEnhanced = () => {
     TipShortsLogger.debug('error:', error);
   }, [shorts, isGuest, data, isLoading, error]);
 
-  // Handle video view for reward ads (now using custom hook)
+  // Handle video view for Inshorts reward system
   const handleVideoView = useCallback(() => {
-    TipShortsLogger.debug('Video completed, triggering reward ad check');
-    handleVideoViewed();
-  }, [handleVideoViewed]);
+    TipShortsLogger.debug('Video completed, triggering Inshorts reward check');
+    handleShortViewed();
+  }, [handleShortViewed]);
 
   // Enhanced viewability config for strict video control
   const viewabilityConfig = useRef({
@@ -312,10 +313,10 @@ const TipShortsEnhanced = () => {
         TipShortsLogger.debug(`Debounced activeIndex update from ${lastActiveIndexRef.current} to ${newIndex}`);
         setActiveIndex(newIndex);
         lastActiveIndexRef.current = newIndex;
-        handleVideoViewed();
+        handleShortViewed();
       }
     }, 150); // 150ms debounce delay
-  }, [handleVideoViewed]);
+  }, [handleShortViewed]);
 
   // Enhanced viewability change handler with debouncing
   const onViewableItemsChanged = useRef(({viewableItems}: {viewableItems: ViewToken[]}) => {
@@ -812,13 +813,13 @@ const TipShortsEnhanced = () => {
         />
       )}
 
-      {/* Modern Reward Popup */}
-      <ModernRewardPopup
-        visible={showRewardPopup}
-        onClose={closeRewardPopup}
+      {/* Inshorts Reward Popup */}
+      <InshortsRewardPopup
+        visible={showInshortsRewardPopup}
+        onClose={closeInshortsRewardPopup}
         isPremium={isPremium}
         earnedAmount={earnedAmount}
-        onAction={handleRewardPopupAction}
+        onAction={handleInshortsRewardAction}
       />
     </SafeAreaView>
   );

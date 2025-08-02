@@ -16,8 +16,8 @@ const { width: screenWidth } = Dimensions.get('window');
 const STATIC_BANNERS = [
   {
     id: 1,
-    title: 'Talk to Earn',
-    description: 'Earn on Every Call: ₹2/min (Premium)\n₹0.60/min (Free)',
+    title: 'Talk to Earn upto ₹10000',
+    description: 'let’s upgrade now to earn 10000/- in AdTip',
     icon: <Headphones size={32} color="#fff" />,
     gradient: ['#114357', '#f29492'],       
   },
