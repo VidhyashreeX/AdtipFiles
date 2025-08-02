@@ -8,7 +8,7 @@ import {
   FlatList,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { Headphones, PlayCircle, Users, UploadCloud } from 'lucide-react-native';
+import { Headphones, PlayCircle, Users, UploadCloud, Crown } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -43,6 +43,14 @@ const STATIC_BANNERS = [
     icon: <UploadCloud size={32} color="#fff" />,
     gradient: ['#6a3093', '#a044ff'],    //#6a3093
   },
+  {
+    id: 5,
+    title: 'Upgrade Your Premium',
+    description: 'upgrade the premium to earn up to ₹10,000',
+    icon: <Crown size={32} color="#fff" />,
+    gradient: ["#D4AF37", "#8B7500"],    //#6a3093
+  },
+
 ];
 
 interface BannerCarouselProps {

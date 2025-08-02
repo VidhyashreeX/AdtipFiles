@@ -217,7 +217,7 @@ const PostItem: React.FC<PostItemProps> = ({
             setHasRewarded(true);
             setTimeout(() => {
               // Log API request
-              console.log('[PostItem] Calling view-promoted-post API:', { user_id: userId, post_id: id });
+              console.log('[PostItem] Calling view-promoted-post API for post:', id);
               onPromotedView(id);
             }, 0);
             setTimeout(() => {
@@ -239,7 +239,7 @@ const PostItem: React.FC<PostItemProps> = ({
     if (isPromoted && !hasBeenViewed && onPromotedView) {
       setHasRewarded(true);
       setTimeout(() => {
-        console.log('[PostItem] Calling view-promoted-post API for video:', { user_id: userId, post_id: id });
+        console.log('[PostItem] Calling view-promoted-post API for video:', id);
         onPromotedView(id);
       }, 0);
       setTimeout(() => {
@@ -434,7 +434,11 @@ const PostItem: React.FC<PostItemProps> = ({
                 </TouchableOpacity>
                 {media_type === 'image' && postImage && (
                   <>
-                    <ContentFastImage source={postImage} style={styles.promoMedia} />
+                    <ContentFastImage 
+                      source={postImage} 
+                      style={styles.promoMediaFullScreen} 
+                      resizeMode="contain"
+                    />
                     {!hasBeenViewed && (
                       <Text style={styles.promoTimerText}>Please wait {promoTimer} seconds...</Text>
                     )}
@@ -444,20 +448,27 @@ const PostItem: React.FC<PostItemProps> = ({
                   </>
                 )}
                 {media_type === 'video' && postImage && !videoError && (
-                  <Video
-                    source={secureVideoSource}
-                    style={styles.promoMedia}
-                    resizeMode="cover"
-                    repeat={false}
-                    paused={false}
-                    muted={isGloballyMuted}
-                    onEnd={hasBeenViewed ? undefined : handlePromoVideoEnd}
-                    onError={handleVideoError}
-                    playInBackground={false}
-                    playWhenInactive={false}
-                    ignoreSilentSwitch="ignore"
-                    mixWithOthers="duck"
-                  />
+                  <>
+                    <Video
+                      source={secureVideoSource}
+                      style={styles.promoMediaFullScreen}
+                      resizeMode="contain"
+                      repeat={false}
+                      paused={false}
+                      muted={false} // Enable audio for promotional videos
+                      onEnd={hasBeenViewed ? undefined : handlePromoVideoEnd}
+                      onError={handleVideoError}
+                      playInBackground={false}
+                      playWhenInactive={false}
+                      ignoreSilentSwitch="ignore"
+                      mixWithOthers="duck"
+                    />
+                    {!hasBeenViewed && (
+                      <View style={styles.videoRewardTextContainer}>
+                        <Text style={styles.videoRewardText}>Watch full video to get reward</Text>
+                      </View>
+                    )}
+                  </>
                 )}
                 {media_type === 'video' && videoError && (
                   <View style={styles.videoErrorContainer}>
@@ -474,15 +485,19 @@ const PostItem: React.FC<PostItemProps> = ({
         <TouchableOpacity onPress={handlePostPress} activeOpacity={1}>
           <View style={styles.mediaContainer}>
             {media_type === 'image' && postImage && (
-              <ContentFastImage source={postImage} style={styles.postMedia} />
+              <ContentFastImage 
+                source={postImage} 
+                style={styles.postMediaFull} 
+                resizeMode="contain"
+              />
             )}
             {media_type === 'video' && postImage && !videoError && (
               <TouchableWithoutFeedback onPress={togglePlayPause}>
                 <View style={styles.videoPlayerContainer}>
                   <Video
                     source={secureVideoSource}
-                    style={styles.postMedia}
-                    resizeMode="cover"
+                    style={styles.postMediaFull}
+                    resizeMode="contain"
                     repeat={true}
                     paused={!isPlaying}
                     muted={isGloballyMuted}
@@ -511,6 +526,12 @@ const PostItem: React.FC<PostItemProps> = ({
                   {!videoLoading && !isPlaying && (
                     <View style={styles.playButton}>
                       <Play size={40} color="#fff" />
+                    </View>
+                  )}
+                  {/* Add reward text for promotional videos */}
+                  {isPromoted && !hasBeenViewed && (
+                    <View style={styles.videoRewardTextContainer}>
+                      <Text style={styles.videoRewardText}>Watch full video to get reward</Text>
                     </View>
                   )}
                 </View>
@@ -641,9 +662,10 @@ const styles = StyleSheet.create({
   mediaContainer: {
     position: 'relative',
     width: '100%',
-    height: width, // Square aspect ratio like Instagram
+    minHeight: width * 0.8, // Allow flexible height for better image display
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f8f8f8', // Light background for better contrast
   },
   postMedia: {
     width: '100%',
@@ -652,6 +674,8 @@ const styles = StyleSheet.create({
   },
   videoPlayerContainer: {
     position: 'relative',
+    width: '100%',
+    height: '100%',
   },
   videoOverlay: {
     position: 'absolute',
@@ -680,7 +704,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   videoErrorContainer: {
-    height: width,
+    width: '100%',
+    minHeight: width * 0.8,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
@@ -690,7 +715,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   noImageContainer: {
-    height: width,
+    width: '100%',
+    minHeight: width * 0.8,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
@@ -765,10 +791,11 @@ const styles = StyleSheet.create({
   },
   promoButtonContainer: {
     width: '100%',
-    height: width, // Match media area
+    minHeight: width * 0.8, // Match media area height
     justifyContent: 'center',
     alignItems: 'center',
     marginVertical: 0, // Remove extra margin
+    backgroundColor: '#f8f8f8', // Light background for consistency
   },
   promoButton: {
     backgroundColor: '#007bff',
@@ -790,10 +817,12 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    width: '90%',
+    borderRadius: 0, // Remove border radius for full screen
+    padding: 0, // Remove padding for full screen
+    width: '100%', // Full width
+    height: '100%', // Full height
     alignItems: 'center',
+    justifyContent: 'center',
     position: 'relative',
   },
   modalClose: {
@@ -808,11 +837,34 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 16,
   },
+  promoMediaFullScreen: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 0,
+    marginBottom: 0,
+  },
   promoTimerText: {
     fontSize: 16,
     color: '#333',
     fontWeight: 'bold',
     marginTop: 8,
+  },
+  videoRewardTextContainer: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  videoRewardText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
   menuContainer: {
     position: 'relative',
@@ -838,6 +890,11 @@ const styles = StyleSheet.create({
   menuItemText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  postMediaFull: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 0, // No border radius for full-screen media
   },
 });
 

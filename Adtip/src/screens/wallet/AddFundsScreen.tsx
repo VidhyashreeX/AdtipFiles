@@ -13,7 +13,7 @@ import FeatherIcon from 'react-native-vector-icons/Feather';
 import { Zap } from 'lucide-react-native';
 import Header from '../../components/common/Header';
 
-const AMOUNTS = [50, 200, 500, 1000, 5000, 10000, 50000, 100000];
+const AMOUNTS = [200, 500, 1000, 5000, 10000, 50000, 100000];
 const API_BASE_URL = 'https://api.adtip.in/api';
 const CELEBRATION_ANIMATION = require('../../../assets/lottie/money_rain.json');
 const { width, height } = Dimensions.get('window');

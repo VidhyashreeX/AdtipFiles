@@ -248,7 +248,7 @@ const SurveyBanner: React.FC<SurveyBannerProps> = ({
   const getBannerContent = () => {
     if (isGuest) {
       return {
-        title: 'Complete Surveys—Cash for Opinions!',
+        title: 'Submit surveys to get up to ₹200',
         description: 'Login to share your thoughts and get paid',
         buttonText: 'Login to Start',
         gradientColors: ['#6b48ff', '#5A67D8', '#4C51BF'], // App's secondary purple
@@ -258,7 +258,7 @@ const SurveyBanner: React.FC<SurveyBannerProps> = ({
 
     if (isPremium) {
       return {
-        title: '💎 Complete Surveys—Cash for Opinions!',
+        title: '💎 Submit surveys to get up to ₹200',
         description: 'Share your thoughts and get paid\nEarn rewards with every survey',
         buttonText: 'Earn 4x Now!',
         gradientColors: ['#FFD700', '#FFA500', '#FF8C00'], // Gold gradient for premium
@@ -267,7 +267,7 @@ const SurveyBanner: React.FC<SurveyBannerProps> = ({
     }
 
     return {
-      title: 'Complete Surveys—Cash for Opinions!',
+      title: 'Submit surveys to get up to ₹200',
       description: 'Share your thoughts and get paid\nEarn rewards with every survey',
       buttonText: 'Start Survey',
       gradientColors: ['#667eea', '#764ba2'], // Elegant purple gradient
