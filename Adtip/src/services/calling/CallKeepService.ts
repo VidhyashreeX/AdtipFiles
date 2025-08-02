@@ -18,7 +18,7 @@ export class CallKeepService {
   private initializationAttempts = 0
   private maxInitializationAttempts = 3
   private callKeepAvailable = true
-  private static DISABLE_CALLKEEP = false // Emergency disable flag
+  private static DISABLE_CALLKEEP = true // Emergency disable flag - TEMPORARILY ENABLED TO FIX CRASH
   private static DISABLE_VIVO_CALLKEEP = true // Emergency disable for Vivo devices to prevent blank screen
   private needsManualPermissionSetup = false // Track if manual setup is needed
 
