@@ -11,15 +11,24 @@ import {
 } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { MainNavigatorParamList } from '../../types/navigation';
 import Icon from 'react-native-vector-icons/Feather';
 import LinearGradient from 'react-native-linear-gradient';
-import Header from '../../components/common/Header';
+//import Header from '../../components/common/Header';
+import ContentCreatorPlanToggle from '../../components/common/ContentCreatorPlanToggle';
 
 const { width, height } = Dimensions.get('window');
 
 const ContentCreatorPremiumBenefitsScreen = () => {
   const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
+  const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
+
+  const handleTogglePress = () => {
+    navigation.navigate('ContentCreatorPremium');
+  };
 
   const renderFeatureComparison = () => {
     const freeFeatures = [
@@ -113,7 +122,19 @@ const ContentCreatorPremiumBenefitsScreen = () => {
         barStyle={isDarkMode ? 'light-content' : 'dark-content'} 
       />
       
-      <Header title="Content Creator Premium Benefits" showSearch={false} showWallet={false} />
+      
+      {/* Content Creator Plan Toggle */}
+      <View style={styles.toggleContainer}>
+        <View style={styles.toggleHeader}>
+          <Text style={[styles.toggleTitle, { color: colors.text.primary }]}>
+            Premium Status
+          </Text>
+          <Text style={[styles.toggleSubtitle, { color: colors.text.secondary }]}>
+            Tap to view subscription details
+          </Text>
+        </View>
+        <ContentCreatorPlanToggle onPress={handleTogglePress} />
+      </View>
       
       <ScrollView 
         style={styles.scrollView}
@@ -192,6 +213,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     lineHeight: 18,
+  },
+  toggleContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  toggleHeader: {
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  toggleTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  toggleSubtitle: {
+    fontSize: 12,
+    textAlign: 'center',
   },
 });
 
