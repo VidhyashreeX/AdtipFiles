@@ -980,7 +980,7 @@ const TipTubeScreen = () => {
         isContentCreatorPremium,
         hasData: !!contentCreatorPremiumData
       });
-      navigation.navigate('SubscriptionScreen');
+      navigation.navigate('ContentCreatorPremium');
     });
   };
 

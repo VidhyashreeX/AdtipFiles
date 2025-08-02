@@ -133,6 +133,9 @@ export type MainNavigatorParamList = {
   };
   Channel: { channelId: string | number };
   MyChannel: undefined;
+  YourChannel: undefined;
+  FollowedChannel: undefined;
+  Library: undefined;
   EditChannel: { channelId: string };
   ChannelSettings: undefined;
   AddFundsScreen: undefined;
@@ -158,12 +161,13 @@ export type MainNavigatorParamList = {
   ContentCreatorSubscriptionScreen: undefined;
   PremiumUser: undefined;
   ContentCreatorPremium: undefined;
+  UserPremiumBenefits: undefined;
+  ContentCreatorPremiumBenefits: undefined;
   PrivacyPolicy: undefined; // Add this line
   BlockedUsers: undefined; // Screen for managing blocked users
   PermissionsScreen: undefined; // Add PermissionsScreen to navigation types
   UploadVideo: undefined; // Upload video screen
   PaidVideoAnalytics: undefined; // Paid video analytics screen
-  EditChannel: { channelId: string }; // Edit channel screen
 };
 
 // This is the RootStackParamList for the Stack.Navigator in App.tsx

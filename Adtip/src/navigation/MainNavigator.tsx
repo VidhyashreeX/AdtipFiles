@@ -89,6 +89,10 @@ import SubscriptionScreen from '../screens/packages/SubscriptionScreen';
 
 import ContentCreatorSubscriptionScreen from '../screens/packages/ContentCreatorSubscriptionScreen';
 
+// Import new benefit screens
+import UserPremiumBenefitsScreen from '../screens/packages/UserPremiumBenefitsScreen';
+import ContentCreatorPremiumBenefitsScreen from '../screens/packages/ContentCreatorPremiumBenefitsScreen';
+
 // Import FCM Chat Screens
 import ConversationsScreen from '../screens/chat/ConversationsScreen';
 import FCMChatScreen from '../screens/chat/FCMChatScreen';
@@ -437,6 +441,8 @@ const MainNavigator = () => {
       <Stack.Screen name="PremiumUser" component={PremiumUserScreen} />
       <Stack.Screen name="ContentCreatorPremium" component={ContentCreatorPremiumScreen} />
       <Stack.Screen name="ContentCreatorSubscriptionScreen" component={ContentCreatorSubscriptionScreen} />
+      <Stack.Screen name="UserPremiumBenefits" component={UserPremiumBenefitsScreen} />
+      <Stack.Screen name="ContentCreatorPremiumBenefits" component={ContentCreatorPremiumBenefitsScreen} />
       <Stack.Screen
         name="PrivacyPolicy"
         component={PrivacyPolicyScreen}

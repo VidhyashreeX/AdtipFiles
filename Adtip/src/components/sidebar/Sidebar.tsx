@@ -300,7 +300,9 @@ const Sidebar: React.FC = () => {
     //{icon: 'video', label: 'Tip Shorts', screen: 'TipShorts'},
     {icon: 'trending-up', label: 'Earn as a User', screen: 'EarnMoneyUser'},
     {icon: 'star', label: 'Earn as a Content Creator', screen: 'EarnMoneyCreator'},
+    {icon: 'award', label: 'User Premium Benifits', screen: 'UserPremiumBenefits'},
     {icon: 'award', label: 'User Premium', screen: 'PremiumUser'},
+    {icon: 'award', label: 'Creator Premium Benifits', screen: 'ContentCreatorPremiumBenefits'},
     {icon: 'award', label: 'Content Creator Premium', screen: 'ContentCreatorPremium'},
     {icon: 'settings', label: 'Settings', screen: 'Settings'},
 
@@ -319,6 +321,8 @@ const Sidebar: React.FC = () => {
         'FollowersFollowing': 'view your followers and following',
         'PremiumUser': 'access premium features',
         'ContentCreatorPremium': 'access content creator premium',
+        'UserPremiumBenefits': 'view user premium benefits',
+        'ContentCreatorPremiumBenefits': 'view content creator premium benefits',
         'Settings': 'access settings',
         'Earnings': 'view your earnings',
         'EarnMoneyUser': 'view earning opportunities',
