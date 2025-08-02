@@ -37,17 +37,14 @@ const ContentCreatorSubscriptionScreen = () => {
   useEffect(() => {
     const fetchPlans = async () => {
       try {
-        // Fetch plans (amounts already include GST)
-        const plansResponse = await ApiService.getContentSubscriptionPlans();
-
-        if (plansResponse.status) {
-          setPlans(plansResponse.plans);
-          
+        const response = await ApiService.getContentSubscriptionPlans();
+        if (response.status) {
+          setPlans(response.plans);
           // Pre-select the middle plan
-          if (plansResponse.plans.length > 1) {
-            setSelectedPlanId(plansResponse.plans[1].id);
-          } else if (plansResponse.plans.length > 0) {
-            setSelectedPlanId(plansResponse.plans[0].id);
+          if (response.plans.length > 1) {
+            setSelectedPlanId(response.plans[1].id);
+          } else if (response.plans.length > 0) {
+            setSelectedPlanId(response.plans[0].id);
           }
         } else {
           Alert.alert('Error', 'Could not fetch subscription plans.');
@@ -76,16 +73,16 @@ const ContentCreatorSubscriptionScreen = () => {
 
     try {
       // Step 1: Create a subscription on your backend
-      const subResponse = await ApiService.createContentPremiumSubscription(selectedPlanId, user.id);
+      const subResponse = await ApiService.createSubscription(selectedPlanId, user.id);
 
       if (!subResponse.status || !subResponse.subscription_id) {
         throw new Error(subResponse.message || 'Failed to create subscription.');
       }
 
-      const { subscription_id, amount_details } = subResponse;
+      const { subscription_id } = subResponse;
 
       // Step 2: Fetch Razorpay key from backend
-      const razorpayDetails = await ApiService.getContentPremiumRazorpayDetails();
+      const razorpayDetails = await ApiService.getRazorpayDetails();
       const key = razorpayDetails.api_key;
       if (!key) {
         throw new Error('Could not fetch Razorpay key.');
@@ -95,7 +92,7 @@ const ContentCreatorSubscriptionScreen = () => {
       const options = {
         key,
         subscription_id: subscription_id,
-        name: 'Adtip Content Creator Premium',
+        name: 'Adtip Premium',
         description: 'Your Content Creator subscription',
         prefill: {
           email: user.emailId,
@@ -106,8 +103,6 @@ const ContentCreatorSubscriptionScreen = () => {
       };
 
       console.log('Razorpay options:', options);
-      console.log('Amount details:', amount_details);
-      
       RazorpayCheckout.open(options)
         .then((data: any) => {
             // Payment is successful, webhook will handle the rest.
@@ -135,73 +130,154 @@ const ContentCreatorSubscriptionScreen = () => {
     }
   };
 
-  const renderPlan = (plan: any, index: number) => {
-    const isSelected = selectedPlanId === plan.id;
+  const renderFeatureComparison = () => {
+    const freeFeatures = [
+      { label: 'Uploads on TipTube & TipShort', value: 'No earnings' },
+      { label: 'Video upload type', value: 'Free videos only' },
+      { label: 'Ad view earnings', value: '₹0.0006 (0.06 paisa)' },
+      { label: 'Fan Call earnings', value: '₹0.006 per minute' },
+      { label: 'Fan Video earnings', value: '₹1 per video' },
+    ];
     
+    const premiumFeatures = [
+      { label: 'Uploads on TipTube & TipShort', value: 'Earnings available' },
+      { label: 'Video upload type', value: 'Free & Paid videos' },
+      { label: 'Ad view earnings', value: 'Upto ₹10,000 per add' },
+      { label: 'Fan Call earnings', value: '₹4 per minute' },
+      { label: 'Fan Video earnings', value: '₹8 per video' },
+    ];
+
+    return (
+      <View style={styles.comparisonSection}>
+        <Text style={[styles.comparisonTitle, { color: colors.text.primary }]}>
+          Free vs Premium Benefits
+        </Text>
+        
+        <View style={styles.comparisonContainer}>
+          {/* Free Column */}
+          <View style={[styles.comparisonColumn, { backgroundColor: isDarkMode ? colors.card : colors.surface }]}>
+            <View style={styles.planTypeHeader}>
+              <Text style={[styles.planTypeTitle, { color: colors.text.secondary }]}>FREE</Text>
+              <View style={[styles.planTypeBadge, { backgroundColor: colors.text.tertiary + '20' }]}>
+                <Text style={[styles.planTypeBadgeText, { color: colors.text.tertiary }]}>Current</Text>
+              </View>
+            </View>
+            
+            {freeFeatures.map((feature, index) => (
+              <View key={index} style={styles.featureRow}>
+                <Text style={[styles.featureLabel, { color: colors.text.secondary }]}>
+                  {feature.label}
+                </Text>
+                <Text style={[styles.featureValue, { color: colors.text.primary }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {feature.value}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Premium Column */}
+          <View
+            style={[
+              styles.comparisonColumn,
+              { backgroundColor: colors.primary + '10', borderColor: colors.primary, borderWidth: 1 }
+            ]}
+            pointerEvents={user?.is_premium ? 'none' : 'auto'}
+          >
+            <View style={styles.planTypeHeader}>
+              <Text style={[styles.planTypeTitle, { color: colors.primary }]}>PREMIUM</Text>
+              <LinearGradient
+                colors={[colors.primary, colors.secondary]}
+                style={styles.planTypeBadge}
+              >
+                <Text style={styles.premiumBadgeText}>Upgrade</Text>
+              </LinearGradient>
+            </View>
+            
+            {premiumFeatures.map((feature, index) => (
+              <View key={index} style={styles.featureRow}>
+                <Text style={[styles.featureLabel, { color: colors.text.secondary }]}>
+                  {feature.label}
+                </Text>
+                <Text style={[styles.featureValue, { color: colors.primary, fontWeight: '600' }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {feature.value}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderPlan = (plan: any, index: number) => {
+    const isSelected = plan.id === selectedPlanId;
+    const isPopular = index === 1; // Assuming the middle plan is most popular
+
     return (
       <TouchableOpacity
         key={plan.id}
         style={[
-          styles.planCard,
+          styles.planContainer,
           {
-            backgroundColor: isSelected ? colors.primary : colors.card,
-            borderColor: isSelected ? colors.primary : colors.border,
+            backgroundColor: isSelected 
+              ? (isDarkMode ? colors.primary + '20' : colors.primary + '10') 
+              : (isDarkMode ? colors.card : colors.surface),
+            borderColor: isSelected ? colors.primary : 'transparent',
           },
+          isSelected && styles.selectedPlan,
+          !isDarkMode && styles.shadowLight
         ]}
         onPress={() => setSelectedPlanId(plan.id)}
-        activeOpacity={0.8}
+        activeOpacity={0.7}
       >
-        <View style={styles.planHeader}>
-          <Text
-            style={[
-              styles.planName,
-              { color: isSelected ? '#FFFFFF' : colors.text.primary },
-            ]}
-            numberOfLines={2}
-            ellipsizeMode="tail"
+        {isPopular && (
+          <LinearGradient
+            colors={['#FF6B6B', '#FF8E53']}
+            style={styles.popularBadge}
           >
-            {plan.name}
-          </Text>
-          {isSelected && (
-            <View style={styles.selectedIndicator}>
-              <Icon name="check" size={16} color="#FFFFFF" />
-            </View>
-          )}
+            <Text style={styles.popularText}>Most Popular</Text>
+          </LinearGradient>
+        )}
+        
+        <View style={styles.planHeader}>
+          <View style={styles.planNameContainer}>
+            <Text style={[styles.planName, { color: colors.text.primary }]}>
+              {plan.name}
+            </Text>
+            <Text style={[styles.planDescription, { color: colors.text.secondary }]}>
+              {plan.description}
+            </Text>
+          </View>
+          
+          <View style={[
+            styles.radioCircle,
+            {
+              borderColor: isSelected ? colors.primary : colors.text.tertiary,
+              backgroundColor: isSelected ? colors.primary : 'transparent'
+            }
+          ]}>
+            {isSelected && <Icon name="check" size={12} color="#fff" />}
+          </View>
         </View>
 
-        <Text
-          style={[
-            styles.planDescription,
-            { color: isSelected ? '#FFFFFF' : colors.text.secondary },
-          ]}
-          numberOfLines={2}
-          ellipsizeMode="tail"
-        >
-          {plan.description}
-        </Text>
-
         <View style={styles.priceContainer}>
-          <Text style={[styles.planPrice, { color: isSelected ? '#FFFFFF' : colors.primary }]}
+          <Text style={[styles.planPrice, { color: colors.primary }]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
             ₹{plan.amount}
           </Text>
-          <Text style={[styles.planInterval, { color: isSelected ? '#FFFFFF' : colors.text.tertiary }]}
+          <Text style={[styles.planInterval, { color: colors.text.tertiary }]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
-            / {plan.plan_interval === 1 ? '' : plan.plan_interval} {plan.billing_cycle}
-          </Text>
-        </View>
-
-        {/* Show GST breakdown */}
-        <View style={styles.gstBreakdown}>
-          <Text style={[styles.gstText, { color: isSelected ? '#FFFFFF' : colors.text.secondary }]}>
-            Base: ₹{(plan.amount / 1.18).toFixed(0)} + GST (18%): ₹{(plan.amount - (plan.amount / 1.18)).toFixed(0)}
-          </Text>
-          <Text style={[styles.totalText, { color: isSelected ? '#FFFFFF' : colors.primary }]}>
-            Total: ₹{plan.amount}
+            / {plan.interval === 1 ? '' : plan.interval} {plan.period}
           </Text>
         </View>
       </TouchableOpacity>
@@ -211,7 +287,7 @@ const ContentCreatorSubscriptionScreen = () => {
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <Header title="Content Creator Premium" showSearch={false} showWallet={false} />
+        <Header title="Subscription Plans" showSearch={false} showWallet={false} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
@@ -226,54 +302,80 @@ const ContentCreatorSubscriptionScreen = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header title="Content Creator Premium" showSearch={false} showWallet={false} />
+      <StatusBar 
+        backgroundColor={colors.background} 
+        barStyle={isDarkMode ? 'light-content' : 'dark-content'} 
+      />
       
-      <ScrollView
+      <Header title="Subscription Plans" showSearch={false} showWallet={false} />
+      
+      <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.headerSection}>
-          <Text style={[styles.headerTitle, { color: colors.text.primary }]}>
-            Choose Your Content Creator Plan
+        {/* Header Section
+        <LinearGradient
+          colors={isDarkMode ? ['#1a1a2e', '#16213e'] : ['#667eea', '#764ba2']}
+          style={styles.headerGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <Text style={styles.headerTitle}>Unlock Premium Features</Text>
+          <Text style={styles.headerSubtitle}>
+            Join thousands of users enjoying premium benefits
           </Text>
-          <Text style={[styles.headerSubtitle, { color: colors.text.secondary }]}>
-            Unlock premium content creation features and monetization tools
+          <View style={styles.premiumIcon}>
+            <Icon name="star" size={32} color="#FFD700" />
+          </View>
+        </LinearGradient>
+         */} 
+        {/* Feature Comparison Section */}
+        {renderFeatureComparison()}
+
+        {/* Plans Section */}
+        <View style={styles.plansSection}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+            Choose Your Plan
           </Text>
+          <Text style={[styles.sectionSubtitle, { color: colors.text.secondary }]}>
+            Cancel anytime. No hidden fees.
+          </Text>
+          
+          <View style={styles.plansContainer}>
+            {plans.map(renderPlan)}
+          </View>
         </View>
 
-        <View style={styles.plansContainer}>
-          {plans.map((plan, index) => renderPlan(plan, index))}
-        </View>
-
+        {/* Selected Plan Summary */}
         {selectedPlan && (
-          <View style={[styles.selectedPlanInfo, { backgroundColor: colors.card }]}>
-            <Text style={[styles.selectedPlanTitle, { color: colors.text.primary }]}>
-              Selected Plan: {selectedPlan.name}
+          <View style={[styles.summaryContainer, { backgroundColor: isDarkMode ? colors.card : colors.surface }]}>
+            <Text style={[styles.summaryTitle, { color: colors.text.primary }]}>
+              Order Summary
             </Text>
-            <Text style={[styles.selectedPlanPrice, { color: colors.primary }]}>
-              ₹{selectedPlan.amount} / {selectedPlan.billing_cycle}
-            </Text>
-            {selectedPlan && (
-              <View style={styles.selectedPlanGST}>
-                <Text style={[styles.gstBreakdownText, { color: colors.text.secondary }]}>
-                  Price Breakdown:
-                </Text>
-                <Text style={[styles.gstBreakdownText, { color: colors.text.secondary }]}>
-                  Base Amount: ₹{(selectedPlan.amount / 1.18).toFixed(0)}
-                </Text>
-                <Text style={[styles.gstBreakdownText, { color: colors.text.secondary }]}>
-                  GST (18%): ₹{(selectedPlan.amount - (selectedPlan.amount / 1.18)).toFixed(0)}
-                </Text>
-                <Text style={[styles.gstTotalText, { color: colors.primary }]}>
-                  Total Amount: ₹{selectedPlan.amount}
-                </Text>
-              </View>
-            )}
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: colors.text.secondary }]}>
+                Plan: {selectedPlan.name}
+              </Text>
+
+            </View>
+            <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryTotal, { color: colors.text.primary }]}>
+                Total
+              </Text>
+              <Text style={[styles.summaryTotal, { color: colors.primary }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                ₹{selectedPlan.amount} + GST
+              </Text>
+            </View>
           </View>
         )}
       </ScrollView>
 
+      {/* Bottom Action */}
       <View style={[styles.bottomContainer, { backgroundColor: colors.background }]}>
         <TouchableOpacity
           style={[styles.paymentButton, { opacity: paymentProcessing ? 0.6 : 1 }]}
@@ -328,168 +430,260 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
   },
-  headerSection: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 30,
+  headerGradient: {
+    padding: 24,
+    alignItems: 'center',
+    position: 'relative',
+    marginBottom: 24,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
     marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 16,
-    lineHeight: 22,
+    color: 'rgba(255, 255, 255, 0.9)',
+    textAlign: 'center',
+    maxWidth: '85%',
+  },
+  premiumIcon: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+  },
+  comparisonSection: {
+    paddingHorizontal: 20,
+    marginBottom: 32,
+  },
+  comparisonTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  comparisonContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  comparisonColumn: {
+    flex: 1,
+    borderRadius: 16,
+    padding: 16,
+  },
+  planTypeHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  planTypeTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  planTypeBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  planTypeBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  premiumBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  featureRow: {
+    marginBottom: 12,
+  },
+  featureLabel: {
+    fontSize: 12,
+    marginBottom: 2,
+    lineHeight: 16,
+  },
+  featureValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  plansSection: {
+    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  sectionSubtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
   },
   plansContainer: {
-    paddingHorizontal: 20,
     gap: 16,
   },
-  planCard: {
-    borderRadius: 12,
+  planContainer: {
+    borderRadius: 16,
     padding: 20,
     borderWidth: 2,
-    elevation: 2,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  selectedPlan: {
+    borderWidth: 2,
+    transform: [{ scale: 1.02 }],
+  },
+  shadowLight: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  popularBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderBottomLeftRadius: 12,
+    borderTopRightRadius: 14,
+  },
+  popularText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 12,
   },
   planHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8,
+    marginBottom: 16,
+  },
+  planNameContainer: {
+    flex: 1,
+    marginRight: 16,
   },
   planName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    flex: 1,
-  },
-  selectedIndicator: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    marginBottom: 4,
   },
   planDescription: {
     fontSize: 14,
     lineHeight: 20,
-    marginBottom: 16,
+  },
+  radioCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   priceContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginBottom: 8,
   },
   planPrice: {
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: 'bold',
+    marginRight: 8,
   },
   planInterval: {
     fontSize: 16,
-    marginLeft: 4,
+    fontWeight: '500',
   },
-  gstBreakdown: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  gstText: {
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  totalText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  selectedPlanInfo: {
+  summaryContainer: {
     marginHorizontal: 20,
-    marginTop: 20,
-    padding: 16,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
+    padding: 20,
+    marginBottom: 20,
   },
-  selectedPlanTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  selectedPlanPrice: {
+  summaryTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 8,
+    marginBottom: 16,
   },
-  selectedPlanGST: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.1)',
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  gstBreakdownText: {
-    fontSize: 12,
-    marginBottom: 2,
+  summaryLabel: {
+    fontSize: 16,
   },
-  gstTotalText: {
-    fontSize: 14,
+  summaryValue: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  summaryDivider: {
+    height: 1,
+    marginVertical: 12,
+  },
+  summaryTotal: {
+    fontSize: 18,
     fontWeight: 'bold',
-    marginTop: 4,
   },
   bottomContainer: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.1)',
+    borderTopColor: 'rgba(0,0,0,0.1)',
   },
   paymentButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
+    height: 56,
+    borderRadius: 16,
     marginBottom: 12,
   },
   buttonGradient: {
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    flex: 1,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   buttonContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 8,
   },
   paymentButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
-    marginLeft: 8,
   },
   loadingButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 12,
   },
   loadingButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
+    fontWeight: '600',
   },
   securityNote: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
   },
   securityText: {
     fontSize: 12,
-    marginLeft: 4,
+    fontWeight: '500',
   },
 });
 
