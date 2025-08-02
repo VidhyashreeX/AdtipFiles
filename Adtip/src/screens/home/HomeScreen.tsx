@@ -584,23 +584,17 @@ const HomeScreen: React.FC = () => {
 
     // Filter out posts with invalid media URLs
     const filteredPosts = rawPosts.filter((post) => {
-      // If post has media, validate the URL
-      if (post.media_url && post.media_url !== 'null') {
-        const isValid = isValidMediaUrl(post.media_url);
-        if (!isValid) {
-          console.log(`[HomeScreen] Filtering out post ${post.id} with invalid media URL:`, post.media_url);
+              // If post has media, validate the URL
+        if (post.media_url && post.media_url !== 'null') {
+          const isValid = isValidMediaUrl(post.media_url);
+          return isValid;
         }
-        return isValid;
-      }
       // If post has no media, include it
       return true;
     });
 
     // Log filtering results
     const filteredCount = rawPosts.length - filteredPosts.length;
-    if (filteredCount > 0) {
-      console.log(`[HomeScreen] Filtered out ${filteredCount} posts with invalid media URLs`);
-    }
 
     return filteredPosts;
   }, [postsData, isGuest, isValidMediaUrl]);
@@ -807,7 +801,6 @@ const HomeScreen: React.FC = () => {
   }, [navigation]);
 
   const handleUserPress = useCallback((userId: number) => {
-    console.log('[HomeScreen] Navigating to Profile with userId:', userId);
     (navigation as any).navigate('Profile', { userId });
     // Clear search when navigating
     setSearchQuery('');
@@ -834,7 +827,6 @@ const HomeScreen: React.FC = () => {
       {/* Search Icon */}
       <TouchableOpacity
         onPress={() => {
-          console.log('[HomeScreen] Search button pressed, setting isSearchActive to true');
           setIsSearchActive(true);
         }}
         style={[styles.headerIconButton, { marginLeft: 6 }]}
@@ -912,7 +904,6 @@ const HomeScreen: React.FC = () => {
 
   // Search results component
   const SearchResults = useMemo(() => {
-    console.log('[HomeScreen] SearchResults render check:', { isSearchActive, debouncedSearchQuery });
     if (!isSearchActive) return null;
 
     const users = searchUsersData?.data?.users || [];
@@ -1072,16 +1063,10 @@ const HomeScreen: React.FC = () => {
     setRewardedPosts(prev => new Set(prev).add(postId));
     
     try {
-      // Log API request
-      console.log('[HomeScreen] Calling view-promoted-post API:', { user_id: user.id, post_id: postId });
-      
       const response = await ApiService.post(HOME_ENDPOINTS.VIEW_PROMOTED_POST, { 
         user_id: user.id, 
         post_id: postId 
       });
-      
-      // Log API response
-      console.log('[HomeScreen] view-promoted-post API response:', response);
       
       if (response && response.status && response.earned_amount > 0) {
         // Show custom reward popup
@@ -1272,11 +1257,11 @@ const HomeScreen: React.FC = () => {
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
           customOptimizations={{
-            removeClippedSubviews: true, // Enable for better memory management
-            initialNumToRender: 6, // Optimized for typical screen size
-            maxToRenderPerBatch: 5, // Smaller batches for smoother scrolling
-            windowSize: 10, // Balanced memory vs performance
-            updateCellsBatchingPeriod: 50, // Faster updates for better responsiveness
+            removeClippedSubviews: true,
+            initialNumToRender: 6,
+            maxToRenderPerBatch: 5,
+            windowSize: 10,
+            updateCellsBatchingPeriod: 50,
           }}
           ListHeaderComponent={() => (
             <>

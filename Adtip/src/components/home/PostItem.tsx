@@ -103,15 +103,7 @@ const PostItem: React.FC<PostItemProps> = ({
   onEdit,
   onDelete,
 }) => {
-  // Debug logging for profileImage type
-  if (profileImage && typeof profileImage !== 'string') {
-    console.warn(`[PostItem ${id}] profileImage is not a string:`, typeof profileImage, profileImage);
-  }
-  
-  // Debug logging for postImage type
-  if (postImage && typeof postImage !== 'string') {
-    console.warn(`[PostItem ${id}] postImage is not a string:`, typeof postImage, postImage);
-  }
+
   const { colors } = useTheme();
 
   const [securePostImage, setSecurePostImage] = useState<any>(null);
@@ -135,13 +127,11 @@ const PostItem: React.FC<PostItemProps> = ({
       if (!isValid) {
         const fixedUrl = await validateAndFixVideoUrl(url);
         if (fixedUrl) {
-          console.log(`[PostItem ${id}] Fixed video URL:`, fixedUrl);
           return fixedUrl;
         }
       }
       return url;
     } catch (error) {
-      console.error(`[PostItem ${id}] Video URL validation error:`, error);
       return url;
     }
   }, [id]);
@@ -156,30 +146,18 @@ const PostItem: React.FC<PostItemProps> = ({
         // Load secure post media
         if (postImage && typeof postImage === 'string') {
           if (media_type === 'video') {
-            console.log(`[PostItem ${id}] Loading video:`, postImage);
-            
             // Test the video URL first
             await testAndValidateVideoUrl(postImage);
             
             // Create secure video source
             const secureVideo = await createSecureVideoSource(postImage);
-            console.log(`[PostItem ${id}] Created secure video source:`, {
-              hasUri: !!secureVideo.uri,
-              uri: secureVideo.uri,
-              hasHeaders: !!(secureVideo as any).headers
-            });
             setSecureVideoSource(secureVideo);
           } else {
             const secureImage = await createSecureImageSource(postImage);
-            console.log(`[PostItem ${id}] Created secure image source:`, {
-              hasUri: !!secureImage?.uri,
-              uri: secureImage?.uri
-            });
             setSecurePostImage(secureImage);
           }
         }
       } catch (error) {
-        console.error(`[PostItem ${id}] Failed to load secure media:`, error);
         if (media_type === 'video') {
           setVideoError(true);
         }
@@ -216,8 +194,6 @@ const PostItem: React.FC<PostItemProps> = ({
             clearInterval(interval);
             setHasRewarded(true);
             setTimeout(() => {
-              // Log API request
-              console.log('[PostItem] Calling view-promoted-post API for post:', id);
               onPromotedView(id);
             }, 0);
             setTimeout(() => {
@@ -239,7 +215,6 @@ const PostItem: React.FC<PostItemProps> = ({
     if (isPromoted && !hasBeenViewed && onPromotedView) {
       setHasRewarded(true);
       setTimeout(() => {
-        console.log('[PostItem] Calling view-promoted-post API for video:', id);
         onPromotedView(id);
       }, 0);
       setTimeout(() => {
@@ -342,7 +317,6 @@ const PostItem: React.FC<PostItemProps> = ({
   }, [isPromoted, hasBeenViewed, onPromotedView, id]);
 
   const handleVideoError = useCallback((error: any) => {
-    console.error(`[PostItem ${id}] Video error:`, error);
     setVideoLoading(false);
     setVideoError(true);
   }, [id]);
@@ -662,10 +636,9 @@ const styles = StyleSheet.create({
   mediaContainer: {
     position: 'relative',
     width: '100%',
-    minHeight: width * 0.8, // Allow flexible height for better image display
+    height: width, // Square aspect ratio like Instagram
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f8f8', // Light background for better contrast
   },
   postMedia: {
     width: '100%',
@@ -704,8 +677,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   videoErrorContainer: {
-    width: '100%',
-    minHeight: width * 0.8,
+    height: width,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
@@ -715,8 +687,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   noImageContainer: {
-    width: '100%',
-    minHeight: width * 0.8,
+    height: width,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
@@ -791,11 +762,10 @@ const styles = StyleSheet.create({
   },
   promoButtonContainer: {
     width: '100%',
-    minHeight: width * 0.8, // Match media area height
+    height: width, // Match media area
     justifyContent: 'center',
     alignItems: 'center',
     marginVertical: 0, // Remove extra margin
-    backgroundColor: '#f8f8f8', // Light background for consistency
   },
   promoButton: {
     backgroundColor: '#007bff',
