@@ -42,6 +42,12 @@ class CallController {
   private vibrateInterval: NodeJS.Timeout | null = null
   private lastCallId?: number; // <-- Store last callId for bulletproof end call
   private pendingIncomingCall: any = null; // Store pending incoming call for concurrent call handling
+  
+  // Call timeout management for internet issues and auto-end functionality
+  private callTimeoutId: NodeJS.Timeout | null = null
+  private maxCallDurationMs: number = 10 * 60 * 1000 // 10 minutes
+  private callStartTime: number | null = null
+  private isCallTimedOut: boolean = false
 
   static getInstance() {
     if (!CallController._instance) CallController._instance = new CallController()
@@ -105,6 +111,9 @@ class CallController {
                 session.peerName, 
                 session.type
               )
+              
+              // Start call timeout monitoring to prevent VideoSDK charges
+              this.startCallTimeout()
             }
             break
           }
@@ -112,6 +121,9 @@ class CallController {
           case 'ended': {
             // Stop vibrating
             this.stopVibrate()
+            
+            // Clear call timeout monitoring
+            this.clearCallTimeout()
             
             // Hide notifications
             const session = getState().session
@@ -230,6 +242,55 @@ class CallController {
       this.vibrateInterval = null
     }
     Vibration.cancel()
+  }
+
+  /**
+   * Start call timeout monitoring
+   */
+  private startCallTimeout() {
+    this.clearCallTimeout()
+    this.callStartTime = Date.now()
+    this.isCallTimedOut = false
+    
+    logCall('CallController', `Starting call timeout monitoring (${this.maxCallDurationMs / 60000} minutes)`)
+    
+    this.callTimeoutId = setTimeout(async () => {
+      if (!this.isCallTimedOut) {
+        this.isCallTimedOut = true
+        logCall('CallController', '⚠️ Call timeout reached - auto-ending call to prevent VideoSDK charges')
+        
+        try {
+          await this.endCall()
+          logCall('CallController', '✅ Call auto-ended successfully due to timeout')
+        } catch (error) {
+          logError('CallController', '❌ Failed to auto-end call on timeout', error)
+        }
+      }
+    }, this.maxCallDurationMs)
+  }
+
+  /**
+   * Clear call timeout monitoring
+   */
+  private clearCallTimeout() {
+    if (this.callTimeoutId) {
+      clearTimeout(this.callTimeoutId)
+      this.callTimeoutId = null
+    }
+    this.callStartTime = null
+    this.isCallTimedOut = false
+  }
+
+  /**
+   * Get remaining call time in seconds
+   */
+  private getRemainingCallTime(): number {
+    if (!this.callStartTime || this.isCallTimedOut) {
+      return 0
+    }
+    const elapsed = Date.now() - this.callStartTime
+    const remaining = this.maxCallDurationMs - elapsed
+    return Math.max(0, Math.floor(remaining / 1000))
   }
   
   /**
@@ -807,55 +868,22 @@ class CallController {
         logError('CallController', 'Failed to send accept signal', signalError)
       }
 
-      // Start payment tracking for accepted call (if not already started)
-      if (!session.callId) {
+      // Use consolidated API to accept the call (payment tracking is handled automatically)
+      if (session.callId) {
         try {
-          logCall('CallController', `Starting payment tracking for accepted ${session.type} call`)
+          logCall('CallController', `Accepting ${session.type} call using consolidated API`)
           const { userId } = await this.getUserInfo()
 
-          const paymentResponse = session.type === 'video'
-            ? await ApiService.initiateVideoCall({
-                callerId: parseInt(session.peerId), // The original caller
-                receiverId: parseInt(userId), // Current user (receiver)
-                action: 'start'
-              })
-            : await ApiService.initiateVoiceCall({
-                callerId: parseInt(session.peerId), // The original caller
-                receiverId: parseInt(userId), // Current user (receiver)
-                action: 'start'
-              })
+          await ApiService.updateConsolidatedCallStatus({
+            callId: session.callId,
+            action: 'accept',
+            userId: parseInt(userId)
+          })
 
-          // Fix: Support both callId and call_id from backend
-          const callId = paymentResponse.callId || paymentResponse.call_id;
-          if (paymentResponse.status && callId) {
-            this.lastCallId = callId; // <-- Store callId for later use
-            // Update session with callId
-            const { actions: sessionActions } = useCallStore.getState()
-            sessionActions.setSession({
-              ...session,
-              callId
-            })
-            logCall('CallController', `Payment tracking started for accepted call, callId: ${callId}`)
-          } else {
-            logWarn('CallController', 'Payment API call succeeded but no callId returned', paymentResponse)
-          }
-        } catch (paymentError) {
-          logError('CallController', 'Failed to start payment tracking for accepted call', paymentError)
-
-          // Enhanced error handling for payment tracking failures
-          if (paymentError instanceof Error) {
-            if (paymentError.message.includes('Missing required parameters')) {
-              logWarn('CallController', 'Payment tracking failed due to missing parameters, call will continue without billing');
-            } else if (paymentError.message.includes('User not found')) {
-              logWarn('CallController', 'Payment tracking failed due to user not found, call will continue');
-            } else if (paymentError.message.includes('Request failed with status code 400')) {
-              logWarn('CallController', 'Payment tracking failed due to invalid request, call will continue');
-            } else {
-              logWarn('CallController', 'Payment tracking failed with unknown error, call will continue');
-            }
-          }
-
-          // Continue with call even if payment tracking fails - this is non-critical
+          logCall('CallController', `Call accepted successfully via consolidated API`)
+        } catch (acceptError) {
+          logError('CallController', 'Failed to accept call via consolidated API', acceptError)
+          // Continue with call even if acceptance API fails - this is non-critical
         }
       }
 
@@ -902,11 +930,19 @@ class CallController {
         logError('CallController', 'Failed to send decline signal', signalError)
       }
 
-      // Notify server of missed/declined call
-      try {
-        await this.sendCallStatusUpdate('CALL_MISSED')
-      } catch (statusError) {
-        logError('CallController', 'Failed to send call status update', statusError)
+      // Notify server of missed/declined call using consolidated API
+      if (session.callId) {
+        try {
+          const { userId } = await this.getUserInfo()
+          await ApiService.updateConsolidatedCallStatus({
+            callId: session.callId,
+            action: 'missed',
+            userId: parseInt(userId)
+          })
+          logCall('CallController', 'Call declined successfully via consolidated API')
+        } catch (statusError) {
+          logError('CallController', 'Failed to decline call via consolidated API', statusError)
+        }
       }
 
       // CallManagerService removed - billing handled by CallBillingService
@@ -937,6 +973,9 @@ class CallController {
     }
 
     this.isEndingCall = true;
+    
+    // Clear call timeout monitoring immediately
+    this.clearCallTimeout()
 
     try {
       const store = useCallStore.getState()
@@ -982,15 +1021,15 @@ class CallController {
           callId: callIdToUse
         });
         
-        if (session.type === 'video') {
-          logCall('CallController', 'Making video call end API call...');
-          await ApiService.initiateVideoCall(payload);
-          logCall('CallController', 'Video call end API called successfully');
-        } else {
-          logCall('CallController', 'Making voice call end API call...');
-          await ApiService.initiateVoiceCall(payload);
-          logCall('CallController', 'Voice call end API called successfully');
-        }
+        // Use consolidated status API for both voice and video calls to ensure proper wallet deduction
+        logCall('CallController', `Making ${session.type} call end API call using consolidated status endpoint...`);
+        await ApiService.updateConsolidatedCallStatus({
+          callId: callIdToUse,
+          action: 'end',
+          userId: parseInt(userId),
+          duration: session.duration || 0
+        });
+        logCall('CallController', `${session.type} call end API called successfully via consolidated status endpoint`);
 
         logCall('CallController', 'End call API completed successfully');
       } catch (err) {

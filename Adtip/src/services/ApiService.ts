@@ -2901,6 +2901,20 @@ export default class ApiService {
     return this.post('/api/adtipcall', data);
   }
 
+  // Consolidated Call Status API (for ending calls with proper wallet deduction)
+  static async updateConsolidatedCallStatus(data: {
+    callId: number;
+    action: 'accept' | 'decline' | 'end' | 'missed';
+    userId: number;
+    duration?: number;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    data?: any;
+  }> {
+    return this.post('/api/initiate-call/status', data);
+  }
+
   // ===== WITHDRAWAL APIs =====
 
   // Get withdrawal settings
