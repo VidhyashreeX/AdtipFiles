@@ -15,12 +15,16 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useMissedCalls } from '../../hooks/useMissedCalls';
+import { useWallet } from '../../hooks/useWallet';
 import Header from '../../components/common/Header';
 import ScreenTransition from '../../components/common/ScreenTransition';
 import Icon from 'react-native-vector-icons/Feather';
 import { Contact } from '../../types/api';
 import { MainNavigatorParamList } from '../../types/navigation';
 import CallController from '../../services/calling/CallController';
+import { checkPremiumAccess, logPremiumAccessAttempt } from '../../utils/premiumAccessUtils';
+import PremiumAccessModal from '../../components/modals/PremiumAccessModal';
+import Logger from '../../utils/logger';
 
 type NavigationProp = NativeStackNavigationProp<MainNavigatorParamList, 'MissedCalls'>;
 
@@ -171,8 +175,13 @@ export default function MissedCallsScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
+  const { isPremium } = useWallet();
   
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Premium popup state
+  const [showPremiumPopup, setShowPremiumPopup] = useState(false);
+  const [premiumFeature, setPremiumFeature] = useState<'voice_call' | 'video_call' | 'chat' | 'general'>('general');
 
   // Use the missed calls hook
   const {
@@ -208,6 +217,29 @@ export default function MissedCallsScreen() {
   // Call handlers
   const handleVideoCall = useCallback(async (contact: Contact) => {
     try {
+      // Check premium access for video calling features
+      const accessResult = checkPremiumAccess({
+        feature: 'video_call',
+        isPremium,
+        userId: user?.id,
+      });
+
+      // Log the access attempt for analytics
+      logPremiumAccessAttempt(
+        'video_call',
+        isPremium,
+        user?.id,
+        { contactId: contact.id, contactName: contact.name }
+      );
+
+      // If user doesn't have premium access, show upgrade modal
+      if (!accessResult.hasAccess) {
+        Logger.debug('MissedCallsScreen', 'Non-premium user attempting video call, showing premium popup')
+        setPremiumFeature('video_call')
+        setShowPremiumPopup(true)
+        return
+      }
+
       const callController = CallController.getInstance();
       const success = await callController.startCall(
         contact.id.toString(),
@@ -224,10 +256,33 @@ export default function MissedCallsScreen() {
       console.error('[MissedCallsScreen] Video call error:', error);
       Alert.alert('Call Failed', 'Unable to start video call. Please try again.');
     }
-  }, [user, navigation]);
+  }, [user, navigation, isPremium]);
 
   const handleVoiceCall = useCallback(async (contact: Contact) => {
     try {
+      // Check premium access for voice calling features
+      const accessResult = checkPremiumAccess({
+        feature: 'voice_call',
+        isPremium,
+        userId: user?.id,
+      });
+
+      // Log the access attempt for analytics
+      logPremiumAccessAttempt(
+        'voice_call',
+        isPremium,
+        user?.id,
+        { contactId: contact.id, contactName: contact.name }
+      );
+
+      // If user doesn't have premium access, show upgrade modal
+      if (!accessResult.hasAccess) {
+        Logger.debug('MissedCallsScreen', 'Non-premium user attempting voice call, showing premium popup')
+        setPremiumFeature('voice_call')
+        setShowPremiumPopup(true)
+        return
+      }
+
       const callController = CallController.getInstance();
       const success = await callController.startCall(
         contact.id.toString(),
@@ -244,7 +299,7 @@ export default function MissedCallsScreen() {
       console.error('[MissedCallsScreen] Voice call error:', error);
       Alert.alert('Call Failed', 'Unable to start voice call. Please try again.');
     }
-  }, [user, navigation]);
+  }, [user, navigation, isPremium]);
 
   const handleChat = useCallback((contact: Contact) => {
     navigation.navigate('FCMChat', {
@@ -387,6 +442,17 @@ export default function MissedCallsScreen() {
             />
           )}
         </View>
+
+        {/* Premium Access Modal */}
+        <PremiumAccessModal
+          visible={showPremiumPopup}
+          feature={premiumFeature}
+          onClose={() => setShowPremiumPopup(false)}
+          onUpgrade={() => {
+            setShowPremiumPopup(false)
+            navigation.navigate('PremiumUser' as never)
+          }}
+        />
       </View>
     </ScreenTransition>
   );
