@@ -443,16 +443,19 @@ export default function MissedCallsScreen() {
           )}
         </View>
 
-        {/* Premium Access Modal */}
-        <PremiumAccessModal
-          visible={showPremiumPopup}
-          feature={premiumFeature}
-          onClose={() => setShowPremiumPopup(false)}
-          onUpgrade={() => {
+              {/* Premium Access Modal */}
+      <PremiumAccessModal
+        visible={showPremiumPopup}
+        feature={premiumFeature}
+        onClose={() => setShowPremiumPopup(false)}
+        onUpgrade={() => {
+          // Use setTimeout to avoid scheduling updates during animation
+          setTimeout(() => {
             setShowPremiumPopup(false)
             navigation.navigate('PremiumUser' as never)
-          }}
-        />
+          }, 100)
+        }}
+      />
       </View>
     </ScreenTransition>
   );

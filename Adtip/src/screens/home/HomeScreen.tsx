@@ -41,6 +41,7 @@ import {HOME_ENDPOINTS} from '../../constants/apiEndpoints';
 import shareService from '../../services/ShareService';
 import { usePosts, useGuestPosts, useLikeMutation, useFollowMutation, useSubscriptionStatus, useCategories, useSearchUsers, useWalletBalance } from '../../hooks/useQueries';
 import { useUserWallet } from '../../contexts/UserDataContext';
+import { useWallet } from '../../hooks/useWallet';
 
 import { useFCMChat } from '../../contexts/FCMChatContext';
 import { useNetInfo } from '@react-native-community/netinfo';
@@ -48,6 +49,7 @@ import { formatPremiumExpiryDate } from '../../utils/dateUtils';
 import PubScaleService from '../../services/PubScaleService';
 import Logger from '../../utils/logger';
 import VersionCheckService from '../../services/VersionCheckService';
+import { checkPremiumAccess, logPremiumAccessAttempt } from '../../utils/premiumAccessUtils';
 
 // Components
 import Header from '../../components/common/Header';
@@ -60,8 +62,7 @@ import BannerCarousel from '../../components/home/BannerCarousel';
 import PremiumUpgradeAlert from '../../components/common/PremiumUpgradeAlert';
 import LoginPromptModal from '../../components/modals/LoginPromptModal';
 import PubScaleCreditAlert from '../../components/common/PubScaleCreditAlert';
-
-
+import PremiumAccessModal from '../../components/modals/PremiumAccessModal';
 
 import ScreenTransition from '../../components/common/ScreenTransition';
 import RewardPopup from '../../components/RewardPopup';
@@ -194,7 +195,7 @@ const ExternalLinkBanner: React.FC<ExternalLinkBannerProps> = ({ isPremium, onUp
         >
           <View style={styles.earnCardContent}>
             <View style={styles.earnCardTextContainer}>
-              <Text style={styles.earnCardTitle}>Play games to earn up to ₹10000</Text>
+              <Text style={styles.earnCardTitle}>Play games to earn upto ₹10000</Text>
               <Text style={styles.earnCardDescription}>
                 {isPremium ? 'Click to play exciting games and earn rewards!' : 'Premium feature - Upgrade to unlock games!'}
               </Text>
@@ -223,7 +224,14 @@ const ExternalLinkBanner: React.FC<ExternalLinkBannerProps> = ({ isPremium, onUp
 
 const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn: _onWatchAndEarn, onInstallToEarn, isLoading }) => {
   const {colors} = useTheme();
+  const {user} = useAuth();
+  const {isPremium} = useWallet();
+  const navigation = useNavigation<AppNavigationProps>();
   const styles = createHomeScreenStyles(colors);
+  
+  // Premium popup state
+  const [showPremiumPopup, setShowPremiumPopup] = useState(false);
+  const [premiumFeature, setPremiumFeature] = useState<'install_to_earn' | 'general'>('install_to_earn');
   
   // Define earn cards data - Only Install to Earn
   const earnCardsData = [
@@ -232,7 +240,33 @@ const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn: _onWatchAnd
       title: 'Install to Earn upto ₹2000 per task',
       description: 'Complete tasks to earn rewards',
       iconName: 'coins',
-      onPress: onInstallToEarn,
+      onPress: () => {
+        // Check premium access for install to earn features
+        const accessResult = checkPremiumAccess({
+          feature: 'install_to_earn',
+          isPremium,
+          userId: user?.id,
+        });
+
+        // Log the access attempt for analytics
+        logPremiumAccessAttempt(
+          'install_to_earn',
+          isPremium,
+          user?.id,
+          { taskType: 'install_to_earn' }
+        );
+
+        // If user doesn't have premium access, show upgrade modal
+        if (!accessResult.hasAccess) {
+          Logger.debug('EarnCardsRow', 'Non-premium user attempting install to earn access, showing premium popup')
+          setPremiumFeature('install_to_earn')
+          setShowPremiumPopup(true)
+          return
+        }
+
+        // Proceed with the original onPress function
+        onInstallToEarn();
+      },
       gradientColors: ['#FF6B35', '#FF8E53', '#E55A2B'],
     },
   ];
@@ -286,6 +320,20 @@ const EarnCardsRow: React.FC<EarnCardsRowProps> = ({ onWatchAndEarn: _onWatchAnd
   return (
     <View style={styles.earnCardsCarouselSection}>
       {earnCardsData.map(renderEarnCard)}
+      
+      {/* Premium Access Modal */}
+      <PremiumAccessModal
+        visible={showPremiumPopup}
+        feature={premiumFeature}
+        onClose={() => setShowPremiumPopup(false)}
+        onUpgrade={() => {
+          // Use setTimeout to avoid scheduling updates during animation
+          setTimeout(() => {
+            setShowPremiumPopup(false)
+            navigation.navigate('PremiumUser' as never)
+          }, 100)
+        }}
+      />
     </View>
   );
 };
@@ -1362,8 +1410,8 @@ const HomeScreen: React.FC = () => {
             setShowPremiumUpgradeAlert(false);
             navigation.navigate('PremiumUser' as never);
           }}
-          title="🎮 Premium Games Locked!"
-          description="Upgrade to Premium to access exciting games and earn more rewards!"
+          title="🎮 Play Games to Earn - Premium Feature!"
+          description="Upgrade to Premium to access exciting games and earn up to ₹10000! Play now and start earning rewards."
         />
 
       </View>

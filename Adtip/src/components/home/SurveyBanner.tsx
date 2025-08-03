@@ -35,9 +35,13 @@ import CPXRewardService from '../../services/CPXRewardService';
 
 // Utils
 import Logger from '../../utils/logger';
+import { checkPremiumAccess, logPremiumAccessAttempt } from '../../utils/premiumAccessUtils';
 
 // Context
 import { useCPXResearch, useCPXResearchSafe } from '../../contexts/CPXResearchContext';
+
+// Components
+import PremiumAccessModal from '../modals/PremiumAccessModal';
 
 interface SurveyBannerProps {
   isPremium: boolean;
@@ -58,6 +62,10 @@ const SurveyBanner: React.FC<SurveyBannerProps> = ({
   const { user, isGuest } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [surveyCount, setSurveyCount] = useState(0);
+
+  // Premium popup state
+  const [showPremiumPopup, setShowPremiumPopup] = useState(false);
+  const [premiumFeature, setPremiumFeature] = useState<'survey' | 'general'>('survey');
 
   // CPX Research refs for method binding (only used when not rendering at root)
   const markTransactionAsPaidRef = useRef<any>(null);
@@ -98,57 +106,37 @@ const SurveyBanner: React.FC<SurveyBannerProps> = ({
         onRewardEarned?.(finalAmount, isPremiumUser);
       } else {
         Alert.alert(
-          'Reward Processing Failed',
-          response.error || 'There was an issue processing your survey reward. Please try again.',
+          'Reward Processing Error',
+          response.message || 'Failed to process survey reward. Please contact support.',
           [{ text: 'OK', style: 'default' }]
         );
       }
     } catch (error) {
-      Logger.error('SurveyBanner', 'Error processing survey reward', error);
+      Logger.error('SurveyBanner', 'Error processing survey reward:', error);
       Alert.alert(
         'Error',
-        'Failed to process survey reward. Please contact support if this continues.',
+        'Failed to process survey reward. Please try again later.',
         [{ text: 'OK', style: 'default' }]
       );
     }
   }, [user?.id, onRewardEarned]);
 
-  // CPX Research callbacks
-  const cpxCallbacks = createCPXCallbacks(handleRewardEarned);
-
-  // Enhanced callbacks with survey count tracking
-  const onSurveysUpdate = useCallback((surveys: any[]) => {
-    setSurveyCount(surveys?.length || 0);
-    cpxCallbacks.onSurveysUpdate?.(surveys);
-  }, [cpxCallbacks]);
-
-  const onTransactionsUpdate = useCallback(async (transactions: any[]) => {
-    Logger.info('SurveyBanner', 'CPX Research transactions updated', { count: transactions?.length || 0 });
-
-    if (transactions && transactions.length > 0) {
-      // Process new completed transactions
-      for (const transaction of transactions) {
-        if (transaction.status === 'completed' && transaction.amount > 0) {
-          try {
-            await handleRewardEarned(
-              parseFloat(transaction.amount),
-              isPremium
-            );
-          } catch (error) {
-            Logger.error('SurveyBanner', 'Error processing transaction reward', error);
-          }
-        }
-      }
+  // Create CPX Research callbacks
+  const cpxCallbacks = createCPXCallbacks({
+    onRewardEarned: handleRewardEarned,
+    onSurveysUpdate: (surveys: any[]) => {
+      setSurveyCount(surveys?.length || 0);
+      Logger.info('SurveyBanner', 'Surveys updated:', { count: surveys?.length || 0 });
+    },
+    onTransactionsUpdate: (transactions: any[]) => {
+      Logger.info('SurveyBanner', 'Transactions updated:', { count: transactions?.length || 0 });
+    },
+    onWebViewWasClosed: () => {
+      Logger.info('SurveyBanner', 'Survey webview was closed');
+      // Refresh surveys when webview closes
+      fetchSurveysAndTransactionsRef.current?.();
     }
-
-    cpxCallbacks.onTransactionsUpdate?.(transactions);
-  }, [cpxCallbacks, handleRewardEarned, isPremium]);
-
-  const onWebViewWasClosed = useCallback(() => {
-    cpxCallbacks.onWebViewWasClosed?.();
-    // Refresh surveys after closing webview
-    fetchSurveysAndTransactionsRef.current?.();
-  }, [cpxCallbacks]);
+  });
 
   // Handle banner press
   const handleBannerPress = useCallback(async () => {
@@ -167,6 +155,29 @@ const SurveyBanner: React.FC<SurveyBannerProps> = ({
     if (!user?.id) {
       Logger.error('SurveyBanner', 'No user ID available for survey access');
       return;
+    }
+
+    // Check premium access for survey features
+    const accessResult = checkPremiumAccess({
+      feature: 'survey',
+      isPremium,
+      userId: user?.id,
+    });
+
+    // Log the access attempt for analytics
+    logPremiumAccessAttempt(
+      'survey',
+      isPremium,
+      user?.id,
+      { surveyCount }
+    );
+
+    // If user doesn't have premium access, show upgrade modal
+    if (!accessResult.hasAccess) {
+      Logger.debug('SurveyBanner', 'Non-premium user attempting survey access, showing premium popup')
+      setPremiumFeature('survey')
+      setShowPremiumPopup(true)
+      return
     }
 
     try {
@@ -230,7 +241,7 @@ const SurveyBanner: React.FC<SurveyBannerProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [isGuest, user?.id, onUpgrade, surveyCount]);
+  }, [isGuest, user?.id, onUpgrade, surveyCount, isPremium]);
 
   // Fetch surveys on component mount
   useEffect(() => {
@@ -285,9 +296,9 @@ const SurveyBanner: React.FC<SurveyBannerProps> = ({
         <View style={styles.cpxContainer}>
           <CpxResearch
             {...cpxConfig}
-            onSurveysUpdate={onSurveysUpdate}
-            onTransactionsUpdate={onTransactionsUpdate}
-            onWebViewWasClosed={onWebViewWasClosed}
+            onSurveysUpdate={cpxCallbacks.onSurveysUpdate}
+            onTransactionsUpdate={cpxCallbacks.onTransactionsUpdate}
+            onWebViewWasClosed={cpxCallbacks.onWebViewWasClosed}
             bindMarkTransactionAsPaid={(fn: any) => {
               markTransactionAsPaidRef.current = fn;
               Logger.info('SurveyBanner', 'bindMarkTransactionAsPaid called');
@@ -328,6 +339,20 @@ const SurveyBanner: React.FC<SurveyBannerProps> = ({
           </View>
         </LinearGradient>
       </TouchableOpacity>
+
+      {/* Premium Access Modal */}
+      <PremiumAccessModal
+        visible={showPremiumPopup}
+        feature={premiumFeature}
+        onClose={() => setShowPremiumPopup(false)}
+        onUpgrade={() => {
+          // Use setTimeout to avoid scheduling updates during animation
+          setTimeout(() => {
+            setShowPremiumPopup(false)
+            onUpgrade()
+          }, 100)
+        }}
+      />
     </View>
   );
 };
@@ -461,7 +486,7 @@ export const CPXResearchProvider: React.FC<{
     cpxCallbacks.onSurveysUpdate?.(surveys);
   }, [cpxCallbacks]);
 
-  const onTransactionsUpdate = useCallback((transactions: any[]) => {
+  const onTransactionsUpdate = useCallback(async (transactions: any[]) => {
     cpxCallbacks.onTransactionsUpdate?.(transactions);
   }, [cpxCallbacks]);
 

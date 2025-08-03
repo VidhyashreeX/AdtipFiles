@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   Easing,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { Crown, Phone, Video, MessageCircle, Star, CheckCircle } from 'lucide-react-native';
+import { Crown, Phone, Video, MessageCircle, Star, CheckCircle, BarChart3, Download } from 'lucide-react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
@@ -20,7 +20,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 interface PremiumAccessModalProps {
   visible: boolean;
   onClose: () => void;
-  feature: 'voice_call' | 'video_call' | 'chat' | 'general';
+  feature: 'voice_call' | 'video_call' | 'chat' | 'survey' | 'install_to_earn' | 'general';
   onUpgrade?: () => void;
 }
 
@@ -38,54 +38,103 @@ const PremiumAccessModal: React.FC<PremiumAccessModalProps> = ({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnimationRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  // Memoized animation functions
+  const startEntranceAnimation = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 100,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, scaleAnim, slideAnim]);
+
+  const startPulseAnimation = useCallback(() => {
+    // Stop any existing pulse animation
+    if (pulseAnimationRef.current) {
+      pulseAnimationRef.current.stop();
+    }
+
+    pulseAnimationRef.current = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.1,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulseAnimationRef.current.start();
+  }, [pulseAnim]);
+
+  const stopPulseAnimation = useCallback(() => {
+    if (pulseAnimationRef.current) {
+      pulseAnimationRef.current.stop();
+      pulseAnimationRef.current = null;
+    }
+  }, []);
+
+  const startExitAnimation = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onClose();
+    });
+  }, [fadeAnim, scaleAnim, onClose]);
 
   useEffect(() => {
     if (visible) {
-      // Start entrance animations
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          tension: 100,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start();
-
-      // Start pulsing animation for icon
-      const pulseAnimation = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.1,
-            duration: 1000,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 1000,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      pulseAnimation.start();
+      // Use setTimeout to avoid scheduling updates during render
+      const timer = setTimeout(() => {
+        startEntranceAnimation();
+        startPulseAnimation();
+      }, 0);
 
       return () => {
-        pulseAnimation.stop();
+        clearTimeout(timer);
+        stopPulseAnimation();
       };
+    } else {
+      stopPulseAnimation();
     }
-  }, [visible, fadeAnim, scaleAnim, slideAnim, pulseAnim]);
+  }, [visible, startEntranceAnimation, startPulseAnimation, stopPulseAnimation]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopPulseAnimation();
+    };
+  }, [stopPulseAnimation]);
 
   const getFeatureInfo = () => {
     switch (feature) {
@@ -119,6 +168,26 @@ const PremiumAccessModal: React.FC<PremiumAccessModalProps> = ({
             { icon: CheckCircle, title: 'Advanced Features', subtitle: 'Rich media & file sharing' }
           ]
         };
+      case 'survey':
+        return {
+          icon: BarChart3,
+          title: '📊 Surveys - Premium Feature',
+          description: 'Survey participation is available for premium users only. Upgrade to access high-paying surveys and earn up to ₹1000 per survey.',
+          benefits: [
+            { icon: BarChart3, title: 'High-Paying Surveys', subtitle: 'Earn up to ₹1000 per survey' },
+            { icon: CheckCircle, title: '4x Premium Rewards', subtitle: 'Enhanced earning potential' }
+          ]
+        };
+      case 'install_to_earn':
+        return {
+          icon: Download,
+          title: '📱 Install to Earn - Premium Feature',
+          description: 'Install to earn tasks are available for premium users only. Upgrade to access high-paying tasks and earn up to ₹2000 per task.',
+          benefits: [
+            { icon: Download, title: 'High-Paying Tasks', subtitle: 'Earn up to ₹2000 per task' },
+            { icon: CheckCircle, title: 'Premium Rewards', subtitle: 'Enhanced earning potential' }
+          ]
+        };
       default:
         return {
           icon: Crown,
@@ -137,7 +206,7 @@ const PremiumAccessModal: React.FC<PremiumAccessModalProps> = ({
 
   const handleUpgrade = () => {
     console.log(`🚀 [PremiumAccessModal] User clicked upgrade for ${feature}`);
-    handleClose();
+    startExitAnimation();
     if (onUpgrade) {
       onUpgrade();
     } else {
@@ -146,20 +215,7 @@ const PremiumAccessModal: React.FC<PremiumAccessModalProps> = ({
   };
 
   const handleClose = () => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      onClose();
-    });
+    startExitAnimation();
   };
 
   const styles = createStyles(colors, isDarkMode);

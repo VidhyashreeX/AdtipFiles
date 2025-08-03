@@ -18,7 +18,7 @@ export interface PremiumAccessResult {
 }
 
 export interface PremiumAccessOptions {
-  feature: 'voice_call' | 'video_call' | 'chat' | 'general';
+  feature: 'voice_call' | 'video_call' | 'chat' | 'survey' | 'install_to_earn' | 'general';
   userId?: string | number;
   isPremium: boolean;
   showAlert?: boolean;
@@ -44,6 +44,8 @@ export const checkPremiumAccess = (options: PremiumAccessOptions): PremiumAccess
     voice_call: 'Voice calling is available for premium users only. Upgrade to premium to make voice calls.',
     video_call: 'Video calling is available for premium users only. Upgrade to premium to make video calls.',
     chat: 'Chat feature is available for premium users only. Upgrade to premium to start chatting.',
+    survey: 'Survey participation is available for premium users only. Upgrade to premium to access high-paying surveys.',
+    install_to_earn: 'Install to earn tasks are available for premium users only. Upgrade to premium to access high-paying tasks.',
     general: 'This feature is available for premium users only. Upgrade to premium to access all features.',
   };
 
@@ -76,10 +78,12 @@ export const checkPremiumAccess = (options: PremiumAccessOptions): PremiumAccess
  * Premium access hook result interface
  */
 export interface UsePremiumAccessResult {
-  checkAccess: (feature: 'voice_call' | 'video_call' | 'chat' | 'general') => PremiumAccessResult;
+  checkAccess: (feature: 'voice_call' | 'video_call' | 'chat' | 'survey' | 'install_to_earn' | 'general') => PremiumAccessResult;
   hasVoiceCallAccess: boolean;
   hasVideoCallAccess: boolean;
   hasChatAccess: boolean;
+  hasSurveyAccess: boolean;
+  hasInstallToEarnAccess: boolean;
   isPremium: boolean;
 }
 
@@ -97,6 +101,12 @@ export const createPremiumAccessChecker = (isPremium: boolean, userId?: string |
     checkChatAccess: (showAlert = false) => 
       checkPremiumAccess({ feature: 'chat', isPremium, userId, showAlert }),
     
+    checkSurveyAccess: (showAlert = false) => 
+      checkPremiumAccess({ feature: 'survey', isPremium, userId, showAlert }),
+    
+    checkInstallToEarnAccess: (showAlert = false) => 
+      checkPremiumAccess({ feature: 'install_to_earn', isPremium, userId, showAlert }),
+    
     checkGeneralAccess: (showAlert = false) => 
       checkPremiumAccess({ feature: 'general', isPremium, userId, showAlert }),
     
@@ -104,6 +114,8 @@ export const createPremiumAccessChecker = (isPremium: boolean, userId?: string |
     hasVoiceCallAccess: isPremium,
     hasVideoCallAccess: isPremium,
     hasChatAccess: isPremium,
+    hasSurveyAccess: isPremium,
+    hasInstallToEarnAccess: isPremium,
     isPremium,
   };
 };
@@ -115,6 +127,8 @@ export const PREMIUM_RESTRICTION_MESSAGES = {
   VOICE_CALL: 'Voice calling is available for premium users only.',
   VIDEO_CALL: 'Video calling is available for premium users only.',
   CHAT: 'Chat feature is available for premium users only.',
+  SURVEY: 'Survey participation is available for premium users only.',
+  INSTALL_TO_EARN: 'Install to earn tasks are available for premium users only.',
   GENERAL: 'This feature is available for premium users only.',
   UPGRADE_CTA: 'Upgrade to premium to access all features.',
 } as const;
@@ -128,7 +142,7 @@ export const logPremiumAccessAttempt = (
   userId?: string | number,
   additionalData?: Record<string, any>
 ) => {
-  Logger.info('PremiumAccessAttempt', {
+  Logger.info('PremiumAccessAttempt', `Access attempt for ${feature}`, {
     feature,
     isPremium,
     userId,
@@ -151,7 +165,7 @@ export const usePremiumAccess = (): UsePremiumAccessResult => {
   );
 
   const checkAccess = useMemo(() =>
-    (feature: 'voice_call' | 'video_call' | 'chat' | 'general') =>
+    (feature: 'voice_call' | 'video_call' | 'chat' | 'survey' | 'install_to_earn' | 'general') =>
       checkPremiumAccess({ feature, isPremium, userId: user?.id }),
     [isPremium, user?.id]
   );
@@ -161,6 +175,8 @@ export const usePremiumAccess = (): UsePremiumAccessResult => {
     hasVoiceCallAccess: isPremium,
     hasVideoCallAccess: isPremium,
     hasChatAccess: isPremium,
+    hasSurveyAccess: isPremium,
+    hasInstallToEarnAccess: isPremium,
     isPremium,
   };
 };
