@@ -309,10 +309,12 @@ const PostItem: React.FC<PostItemProps> = ({
   }, []);
 
   const handleVideoEnd = useCallback(() => {
+    // Only call onPromotedView for promotional posts that haven't been viewed
     if (isPromoted && !hasBeenViewed && onPromotedView) {
       setHasRewarded(true);
       onPromotedView(id);
     }
+    // For non-promotional videos, just handle normal video end behavior
     // Video ended, could restart or show replay button
   }, [isPromoted, hasBeenViewed, onPromotedView, id]);
 

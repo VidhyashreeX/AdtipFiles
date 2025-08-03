@@ -1181,7 +1181,7 @@ const HomeScreen: React.FC = () => {
           onUserPress={handleUserProfilePress}
           onFollow={handleUserFollow}
           isPromoted={item.is_promoted === 1}
-          onPromotedView={handlePromotedPostView}
+          onPromotedView={item.is_promoted === 1 ? handlePromotedPostView : undefined}
           duration_days={item.duration_days}
           created_at={item.created_at}
           remaining_budget={item.remaining_budget}
