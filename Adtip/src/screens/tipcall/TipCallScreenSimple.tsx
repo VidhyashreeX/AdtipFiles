@@ -718,7 +718,7 @@ const TipCallScreenSimple = () => {
           return
         }
 
-        TipCallLogger.debug('Call permissions granted:', permissionResult)
+        Logger.debug('TipCallScreen', 'Call permissions granted:', permissionResult)
 
         // Convert balance to number for calculations
         const numericBalance = parseFloat(balance || '0')

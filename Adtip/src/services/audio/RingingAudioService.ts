@@ -159,7 +159,7 @@ class RingingAudioService {
     try {
       // Try to use native module if available
       const { IncomingCallModule } = NativeModules;
-      if (IncomingCallModule && IncomingCallModule.playBeep) {
+      if (IncomingCallModule && typeof IncomingCallModule === 'object' && IncomingCallModule.playBeep) {
         IncomingCallModule.playBeep();
       } else {
         // Fallback: log the beep (in a real implementation, you might use react-native-sound)

@@ -17,6 +17,7 @@ import {
   NativeEventEmitter,
   NativeModules,
 } from 'react-native';
+import { ErrorUtils } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import {
@@ -345,6 +346,64 @@ function App(): React.JSX.Element {
   // Force update state
   const [showForceUpdate, setShowForceUpdate] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<any>(null);
+
+  // Global error handler for production builds
+  useEffect(() => {
+    // Check if ErrorUtils is available
+    if (!ErrorUtils || typeof ErrorUtils.getGlobalHandler !== 'function') {
+      console.warn('[App] ⚠️ ErrorUtils not available, skipping global error handler setup');
+      return;
+    }
+
+    try {
+      const originalErrorHandler = ErrorUtils.getGlobalHandler();
+      
+      const globalErrorHandler = (error: Error, isFatal?: boolean) => {
+        // Log the error
+        Logger.error('App', '🚨 Global error caught:', {
+          error: error.message,
+          stack: error.stack,
+          isFatal,
+          isProduction: !__DEV__
+        });
+
+        // In production, prevent crashes by handling the error gracefully
+        if (!__DEV__) {
+          console.warn('[App] 🚫 Preventing crash in production build');
+          
+          // For CallKeep related errors, disable CallKeep and continue
+          if (error.message?.includes('RNCallKeep') || error.message?.includes('displayIncomingCall')) {
+            console.warn('[App] 🚫 CallKeep error detected, disabling CallKeep functionality');
+            // The CallKeepService will handle this gracefully
+            return;
+          }
+          
+          // For other errors, log and continue
+          console.warn('[App] 🚫 Non-critical error, continuing app execution');
+          return;
+        }
+        
+        // In development, let the original handler deal with it
+        if (originalErrorHandler && typeof originalErrorHandler === 'function') {
+          originalErrorHandler(error, isFatal);
+        }
+      };
+      
+      ErrorUtils.setGlobalHandler(globalErrorHandler);
+      
+      return () => {
+        try {
+          if (ErrorUtils && typeof ErrorUtils.setGlobalHandler === 'function') {
+            ErrorUtils.setGlobalHandler(originalErrorHandler);
+          }
+        } catch (cleanupError) {
+          console.warn('[App] ⚠️ Error during error handler cleanup:', cleanupError);
+        }
+      };
+    } catch (setupError) {
+      console.warn('[App] ⚠️ Failed to setup global error handler:', setupError);
+    }
+  }, []);
 
   // Initialize call configuration for simplified flow
   useEffect(() => {

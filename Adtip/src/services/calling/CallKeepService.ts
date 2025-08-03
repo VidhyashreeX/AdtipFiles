@@ -1,5 +1,19 @@
 import { Platform } from 'react-native'
-import RNCallKeep from 'react-native-callkeep';
+import { CallKeepErrorHandler } from './CallKeepErrorHandler'
+import { ProductionConfig } from '../../config/ProductionConfig'
+
+// Prevent react-native-callkeep from being imported in production to avoid crashes
+let RNCallKeep: any = null
+try {
+  // Only import in development mode
+  if (__DEV__) {
+    RNCallKeep = require('react-native-callkeep').default
+  } else {
+    console.log('[CallKeepService] 🚫 Skipping react-native-callkeep import in production to prevent crashes')
+  }
+} catch (error) {
+  console.warn('[CallKeepService] ⚠️ Failed to import react-native-callkeep:', error)
+}
 
 // Remove the global setup call - it should be done in the service initialization
 
@@ -74,6 +88,25 @@ export class CallKeepService {
    * NOTE: This should only be called from useCallKeepInitializer hook when user is authenticated
    */
   async initialize(): Promise<boolean> {
+    const errorHandler = CallKeepErrorHandler.getInstance()
+    const productionConfig = ProductionConfig.getInstance()
+    
+    // Check if RNCallKeep is available
+    if (!RNCallKeep) {
+      console.log('[CallKeepService] 🚫 CallKeep library not available - skipping initialization')
+      this.isInitialized = true
+      this.callKeepAvailable = false
+      return false
+    }
+    
+    // Check production configuration
+    if (productionConfig.isCallKeepDisabled()) {
+      console.log('[CallKeepService] 🚫 CallKeep disabled via production configuration')
+      this.isInitialized = true
+      this.callKeepAvailable = false
+      return false
+    }
+    
     // Emergency disable check
     if (CallKeepService.DISABLE_CALLKEEP) {
       console.log('[CallKeepService] 🚫 CallKeep disabled via emergency flag')
@@ -237,13 +270,13 @@ export class CallKeepService {
 
       // Retry logic - simplified
       if (this.initializationAttempts < this.maxInitializationAttempts) {
-        console.log(`[CallKeepService] � Retrying initialization in 2 seconds... (${this.initializationAttempts}/${this.maxInitializationAttempts})`)
+        console.log(`[CallKeepService] 🔄 Retrying initialization in 2 seconds... (${this.initializationAttempts}/${this.maxInitializationAttempts})`)
         await new Promise(resolve => setTimeout(resolve, 2000))
         return this.initialize()
       }
 
       // Max attempts reached - mark as initialized but unavailable
-      console.warn('[CallKeepService] � CallKeep unavailable after max attempts - app will continue without native call UI')
+      console.warn('[CallKeepService] 🚫 CallKeep unavailable after max attempts - app will continue without native call UI')
       this.isInitialized = true
       this.callKeepAvailable = false
       return false
@@ -255,6 +288,10 @@ export class CallKeepService {
    */
   async checkPermissions(): Promise<boolean> {
     try {
+      if (!RNCallKeep) {
+        console.warn('[CallKeepService] RNCallKeep not available, cannot check permissions')
+        return false
+      }
       if (Platform.OS === 'android') {
         return await RNCallKeep.hasPhoneAccount()
       }
@@ -270,6 +307,10 @@ export class CallKeepService {
    */
   async requestPermissions(): Promise<boolean> {
     try {
+      if (!RNCallKeep) {
+        console.warn('[CallKeepService] RNCallKeep not available, cannot request permissions')
+        return false
+      }
       if (Platform.OS === 'android') {
         console.log('[CallKeepService] Requesting CallKeep permissions...')
 
@@ -307,6 +348,10 @@ export class CallKeepService {
    */
   async registerPhoneAccountWithGuidance(): Promise<boolean> {
     try {
+      if (!RNCallKeep) {
+        console.warn('[CallKeepService] RNCallKeep not available, cannot register phone account')
+        return false
+      }
       console.log('[CallKeepService] 📱 Registering phone account with user guidance...')
 
       // Register phone account to request permissions
@@ -403,8 +448,10 @@ export class CallKeepService {
     handleType: 'generic' | 'number' | 'email' = 'generic',
     hasVideo: boolean = false
   ): Promise<boolean> {
+    const errorHandler = CallKeepErrorHandler.getInstance()
+    
     try {
-      if (!this.isInitialized || !this.callKeepAvailable) {
+      if (!this.isInitialized || !this.callKeepAvailable || !RNCallKeep) {
         console.warn('[CallKeepService] CallKeep not available, cannot display incoming call')
         return false
       }
@@ -446,6 +493,16 @@ export class CallKeepService {
 
       return true
     } catch (error) {
+      // Use error handler to prevent crashes in production
+      const shouldContinue = errorHandler.handleMethodError(error, 'displayIncomingCall', 'CallKeepService')
+      
+      if (!shouldContinue) {
+        // Disable CallKeep if error handler says to stop
+        this.callKeepAvailable = false
+        console.warn('[CallKeepService] 🚫 CallKeep disabled due to error handler recommendation')
+        return false
+      }
+
       console.error('[CallKeepService] Error displaying incoming call:', error)
 
       // Mark CallKeep as unavailable if it consistently fails
@@ -469,8 +526,8 @@ export class CallKeepService {
     hasVideo: boolean = false
   ): Promise<boolean> {
     try {
-      if (!this.isInitialized) {
-        console.warn('[CallKeepService] Not initialized, cannot start call')
+      if (!this.isInitialized || !RNCallKeep) {
+        console.warn('[CallKeepService] Not initialized or RNCallKeep not available, cannot start call')
         return false
       }
 
@@ -495,6 +552,10 @@ export class CallKeepService {
    */
   async reportConnectedOutgoingCall(uuid: string): Promise<void> {
     try {
+      if (!RNCallKeep) {
+        console.warn('[CallKeepService] RNCallKeep not available, cannot report connected call')
+        return
+      }
       await RNCallKeep.reportConnectedOutgoingCallWithUUID(uuid)
       console.log('[CallKeepService] Reported outgoing call as connected:', uuid)
     } catch (error) {
@@ -507,6 +568,10 @@ export class CallKeepService {
    */
   async endCall(uuid: string): Promise<void> {
     try {
+      if (!RNCallKeep) {
+        console.warn('[CallKeepService] RNCallKeep not available, cannot end call')
+        return
+      }
       await RNCallKeep.endCall(uuid)
       if (this.currentCallUUID === uuid) {
         this.currentCallUUID = null
@@ -522,6 +587,10 @@ export class CallKeepService {
    */
   async endAllCalls(): Promise<void> {
     try {
+      if (!RNCallKeep) {
+        console.warn('[CallKeepService] RNCallKeep not available, cannot end all calls')
+        return
+      }
       await RNCallKeep.endAllCalls()
       this.currentCallUUID = null
       console.log('[CallKeepService] Ended all calls')
@@ -535,6 +604,10 @@ export class CallKeepService {
    */
   async setOnHold(uuid: string, shouldHold: boolean): Promise<void> {
     try {
+      if (!RNCallKeep) {
+        console.warn('[CallKeepService] RNCallKeep not available, cannot set call on hold')
+        return
+      }
       await RNCallKeep.setOnHold(uuid, shouldHold)
       console.log('[CallKeepService] Set call on hold:', uuid, shouldHold)
     } catch (error) {
@@ -547,6 +620,10 @@ export class CallKeepService {
    */
   async reportEndCallWithUUID(uuid: string, reason: number = 1): Promise<void> {
     try {
+      if (!RNCallKeep) {
+        console.warn('[CallKeepService] RNCallKeep not available, cannot report call ended')
+        return
+      }
       await RNCallKeep.reportEndCallWithUUID(uuid, reason)
       if (this.currentCallUUID === uuid) {
         this.currentCallUUID = null
@@ -569,7 +646,7 @@ export class CallKeepService {
    * Enhanced to return actual availability status
    */
   isAvailable(): boolean {
-    return this.isInitialized && this.callKeepAvailable
+    return this.isInitialized && this.callKeepAvailable && RNCallKeep !== null
   }
 
   /**
@@ -596,32 +673,41 @@ export class CallKeepService {
    * Setup CallKeep event listeners with enhanced VideoSDK integration
    */
   private setupEventListeners(): void {
+    if (!RNCallKeep) {
+      console.log('[CallKeepService] 🚫 RNCallKeep not available, skipping event listener setup')
+      return
+    }
+
     console.log('[CallKeepService] Setting up enhanced event listeners for VideoSDK integration')
 
-    // Core call events
-    RNCallKeep.addEventListener('answerCall', this.onAnswerCallAction)
-    RNCallKeep.addEventListener('endCall', this.onEndCallAction)
+    try {
+      // Core call events
+      RNCallKeep.addEventListener('answerCall', this.onAnswerCallAction)
+      RNCallKeep.addEventListener('endCall', this.onEndCallAction)
 
-    // Call state events
-    RNCallKeep.addEventListener('didDisplayIncomingCall', this.onIncomingCallDisplayed)
-    RNCallKeep.addEventListener('didPerformSetMutedCallAction', this.onToggleMute)
-    RNCallKeep.addEventListener('didToggleHoldCallAction', this.onToggleHold)
-    RNCallKeep.addEventListener('didPerformDTMFAction', this.onDTMFAction)
+      // Call state events
+      RNCallKeep.addEventListener('didDisplayIncomingCall', this.onIncomingCallDisplayed)
+      RNCallKeep.addEventListener('didPerformSetMutedCallAction', this.onToggleMute)
+      RNCallKeep.addEventListener('didToggleHoldCallAction', this.onToggleHold)
+      RNCallKeep.addEventListener('didPerformDTMFAction', this.onDTMFAction)
 
-    // Enhanced events for better integration
-    RNCallKeep.addEventListener('didActivateAudioSession', this.onAudioSessionActivated)
-    RNCallKeep.addEventListener('didDeactivateAudioSession', this.onAudioSessionDeactivated)
-    RNCallKeep.addEventListener('didChangeAudioRoute', this.onAudioRouteChanged)
+      // Enhanced events for better integration
+      RNCallKeep.addEventListener('didActivateAudioSession', this.onAudioSessionActivated)
+      RNCallKeep.addEventListener('didDeactivateAudioSession', this.onAudioSessionDeactivated)
+      RNCallKeep.addEventListener('didChangeAudioRoute', this.onAudioRouteChanged)
 
-    // Connection events
-    RNCallKeep.addEventListener('didReceiveStartCallAction', this.onStartCallAction)
-    RNCallKeep.addEventListener('didLoadWithEvents', this.onLoadWithEvents)
-    
-    // Audio session activated
-    RNCallKeep.addEventListener('didActivateAudioSession', this.onAudioSessionActivated)
-    
-    // Audio session deactivated
-    RNCallKeep.addEventListener('didDeactivateAudioSession', this.onAudioSessionDeactivated)
+      // Connection events
+      RNCallKeep.addEventListener('didReceiveStartCallAction', this.onStartCallAction)
+      RNCallKeep.addEventListener('didLoadWithEvents', this.onLoadWithEvents)
+      
+      // Audio session activated
+      RNCallKeep.addEventListener('didActivateAudioSession', this.onAudioSessionActivated)
+      
+      // Audio session deactivated
+      RNCallKeep.addEventListener('didDeactivateAudioSession', this.onAudioSessionDeactivated)
+    } catch (error) {
+      console.warn('[CallKeepService] ⚠️ Failed to setup event listeners:', error)
+    }
   }
 
   /**

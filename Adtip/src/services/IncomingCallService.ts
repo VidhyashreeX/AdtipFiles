@@ -1,13 +1,24 @@
 import { NativeModules, NativeEventEmitter } from 'react-native';
 
+// Check if IncomingCallModule exists to prevent crashes
 const { IncomingCallModule } = NativeModules;
+const isModuleAvailable = IncomingCallModule && typeof IncomingCallModule === 'object';
 
 class IncomingCallService {
   private static instance: IncomingCallService;
-  private eventEmitter: NativeEventEmitter;
+  private eventEmitter: NativeEventEmitter | null = null;
 
   private constructor() {
-    this.eventEmitter = new NativeEventEmitter(IncomingCallModule);
+    if (isModuleAvailable) {
+      try {
+        this.eventEmitter = new NativeEventEmitter(IncomingCallModule);
+      } catch (error) {
+        console.warn('[IncomingCallService] Failed to create event emitter:', error);
+        this.eventEmitter = null;
+      }
+    } else {
+      console.warn('[IncomingCallService] IncomingCallModule not available, using fallback mode');
+    }
   }
 
   public static getInstance(): IncomingCallService {
@@ -21,20 +32,34 @@ class IncomingCallService {
    * Listen for incoming call broadcasts from native Android
    */
   public onIncomingCall(callback: (callData: any) => void): () => void {
-    const subscription = this.eventEmitter.addListener(
-      'ADTIP_INCOMING_CALL_RECEIVED',
-      callback
-    );
+    if (!this.eventEmitter) {
+      console.warn('[IncomingCallService] Event emitter not available, returning no-op unsubscribe');
+      return () => {}; // Return no-op unsubscribe function
+    }
 
-    return () => subscription.remove();
+    try {
+      const subscription = this.eventEmitter.addListener(
+        'ADTIP_INCOMING_CALL_RECEIVED',
+        callback
+      );
+
+      return () => subscription.remove();
+    } catch (error) {
+      console.warn('[IncomingCallService] Failed to add incoming call listener:', error);
+      return () => {}; // Return no-op unsubscribe function
+    }
   }
 
   /**
    * Add listener (required for React Native 0.65+)
    */
   public addListener(eventName: string): void {
-    if (IncomingCallModule && IncomingCallModule.addListener) {
-      IncomingCallModule.addListener(eventName);
+    if (isModuleAvailable && IncomingCallModule && IncomingCallModule.addListener) {
+      try {
+        IncomingCallModule.addListener(eventName);
+      } catch (error) {
+        console.warn('[IncomingCallService] Failed to add listener:', error);
+      }
     }
   }
 
@@ -42,8 +67,12 @@ class IncomingCallService {
    * Remove listeners (required for React Native 0.65+)
    */
   public removeListeners(count: number): void {
-    if (IncomingCallModule && IncomingCallModule.removeListeners) {
-      IncomingCallModule.removeListeners(count);
+    if (isModuleAvailable && IncomingCallModule && IncomingCallModule.removeListeners) {
+      try {
+        IncomingCallModule.removeListeners(count);
+      } catch (error) {
+        console.warn('[IncomingCallService] Failed to remove listeners:', error);
+      }
     }
   }
 
@@ -51,11 +80,21 @@ class IncomingCallService {
    * Listen for answer/decline actions from native Android
    */
   public onCallAction(callback: (event: { action: 'ANSWER' | 'DECLINE', sessionId: string }) => void): () => void {
-    const subscription = this.eventEmitter.addListener(
-      'onCallAction',
-      callback
-    );
-    return () => subscription.remove();
+    if (!this.eventEmitter) {
+      console.warn('[IncomingCallService] Event emitter not available, returning no-op unsubscribe');
+      return () => {}; // Return no-op unsubscribe function
+    }
+
+    try {
+      const subscription = this.eventEmitter.addListener(
+        'onCallAction',
+        callback
+      );
+      return () => subscription.remove();
+    } catch (error) {
+      console.warn('[IncomingCallService] Failed to add call action listener:', error);
+      return () => {}; // Return no-op unsubscribe function
+    }
   }
 }
 

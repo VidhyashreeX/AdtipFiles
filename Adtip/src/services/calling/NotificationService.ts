@@ -5,7 +5,9 @@ import CallKitService from './CallKitService'
 import NotificationPersistenceService from './NotificationPersistenceService'
 import { logCall, logError, logWarn } from '../../utils/ProductionLogger'
 
+// Check if IncomingCallModule exists to prevent crashes
 const { IncomingCallModule } = NativeModules
+const isIncomingCallModuleAvailable = IncomingCallModule && typeof IncomingCallModule === 'object'
 
 class NotificationService {
   private static _instance: NotificationService
@@ -78,7 +80,7 @@ class NotificationService {
     }
 
     // Trigger native call handling for Android
-    if (Platform.OS === 'android' && IncomingCallModule) {
+    if (Platform.OS === 'android' && isIncomingCallModuleAvailable) {
       try {
         await IncomingCallModule.triggerIncomingCall(sessionId, callerName, type, meetingId || '', token || '')
         logCall('NotificationService', 'Native incoming call triggered')
@@ -152,7 +154,7 @@ class NotificationService {
     logCall('NotificationService', 'Hiding notification', { id })
 
     // End native call handling
-    if (Platform.OS === 'android' && IncomingCallModule) {
+    if (Platform.OS === 'android' && isIncomingCallModuleAvailable) {
       try {
         await IncomingCallModule.endCall()
         logCall('NotificationService', 'Native call ended')
@@ -193,7 +195,7 @@ class NotificationService {
     logCall('NotificationService', 'Hiding all call notifications')
 
     // End native call handling
-    if (Platform.OS === 'android' && IncomingCallModule) {
+    if (Platform.OS === 'android' && isIncomingCallModuleAvailable) {
       try {
         await IncomingCallModule.endCall()
         logCall('NotificationService', 'Native call ended')

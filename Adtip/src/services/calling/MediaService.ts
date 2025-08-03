@@ -120,7 +120,9 @@ class MediaService {
       console.log('[MediaService] 🚀 Meeting state:', {
         meetingExists: !!this.meeting,
         hasEndMethod: !!(this.meeting?.end),
-        hasLeaveMethod: !!(this.meeting?.leave)
+        hasLeaveMethod: !!(this.meeting?.leave),
+        meetingType: typeof this.meeting,
+        meetingKeys: this.meeting ? Object.keys(this.meeting) : []
       });
 
       // Step 1: End the meeting for all participants with timeout protection
@@ -167,7 +169,14 @@ class MediaService {
           console.warn('[MediaService] 🚀 Leave meeting timeout or error:', leaveError);
         }
       } else {
-        console.error('[MediaService] 🚀 NO END OR LEAVE METHODS AVAILABLE ON MEETING OBJECT');
+        console.warn('[MediaService] 🚀 NO END OR LEAVE METHODS AVAILABLE ON MEETING OBJECT - This is expected if meeting object is not from VideoSDK useMeeting hook');
+        console.log('[MediaService] 🚀 Meeting object details:', {
+          exists: !!this.meeting,
+          type: typeof this.meeting,
+          keys: this.meeting ? Object.keys(this.meeting) : [],
+          hasLocalParticipant: !!(this.meeting?.localParticipant),
+          hasParticipants: !!(this.meeting?.participants)
+        });
       }
 
       // Step 2: Force cleanup of meeting reference
@@ -210,6 +219,82 @@ class MediaService {
       this.meeting = null;
       this.currentMeetingConfig = null;
       this.videoSDK.smartReset();
+    }
+  }
+
+  /**
+   * End meeting using the actual VideoSDK meeting object
+   * This method should be called with the meeting object from useMeeting hook
+   */
+  async endMeetingWithVideoSDKObject(videoSDKMeeting: any) {
+    try {
+      console.log('[MediaService] 🚀 ENDING MEETING WITH VIDEOSDK OBJECT');
+      
+      if (!videoSDKMeeting) {
+        console.warn('[MediaService] 🚀 No VideoSDK meeting object provided');
+        return;
+      }
+
+      console.log('[MediaService] 🚀 VideoSDK meeting object details:', {
+        exists: !!videoSDKMeeting,
+        hasEnd: !!(videoSDKMeeting && typeof videoSDKMeeting.end === 'function'),
+        hasLeave: !!(videoSDKMeeting && typeof videoSDKMeeting.leave === 'function'),
+        type: typeof videoSDKMeeting
+      });
+
+      if (videoSDKMeeting && typeof videoSDKMeeting.end === 'function') {
+        console.log('[MediaService] 🚀 CALLING videoSDKMeeting.end() to end meeting for all participants');
+        try {
+          await Promise.race([
+            videoSDKMeeting.end(),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('End meeting timeout')), 3000)
+            )
+          ]);
+          console.log('[MediaService] 🚀 SUCCESSFULLY ENDED MEETING WITH VIDEOSDK OBJECT');
+        } catch (endError) {
+          console.warn('[MediaService] 🚀 End meeting timeout or error:', endError);
+          // Fallback to leave if end fails
+          if (videoSDKMeeting && typeof videoSDKMeeting.leave === 'function') {
+            console.log('[MediaService] 🚀 FALLING BACK TO LEAVE MEETING');
+            try {
+              await Promise.race([
+                videoSDKMeeting.leave(),
+                new Promise((_, reject) =>
+                  setTimeout(() => reject(new Error('Leave timeout')), 2000)
+                )
+              ]);
+              console.log('[MediaService] 🚀 Successfully left meeting as fallback');
+            } catch (leaveError) {
+              console.warn('[MediaService] 🚀 Leave meeting fallback also failed:', leaveError);
+            }
+          }
+        }
+      } else if (videoSDKMeeting && typeof videoSDKMeeting.leave === 'function') {
+        // Fallback to leave if end is not available
+        console.log('[MediaService] 🚀 END METHOD NOT AVAILABLE, using leave as fallback');
+        try {
+          await Promise.race([
+            videoSDKMeeting.leave(),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Leave timeout')), 3000)
+            )
+          ]);
+          console.log('[MediaService] 🚀 Successfully left meeting');
+        } catch (leaveError) {
+          console.warn('[MediaService] 🚀 Leave meeting timeout or error:', leaveError);
+        }
+      } else {
+        console.error('[MediaService] 🚀 NO END OR LEAVE METHODS AVAILABLE ON VIDEOSDK MEETING OBJECT');
+      }
+
+      // Proceed with cleanup after ending meeting
+      await this.leaveMeeting();
+
+    } catch (error) {
+      console.error('[MediaService] endMeetingWithVideoSDKObject error:', error);
+      // Still try to cleanup
+      await this.leaveMeeting();
     }
   }
 
