@@ -401,7 +401,7 @@ const HomeScreen: React.FC = () => {
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [selectedCommentPostId, setSelectedCommentPostId] = useState<number | null>(null);
   // Removed modal states - now using direct navigation to Profile screen
-  const [isGloballyMuted, setIsGloballyMuted] = useState(true);
+  const [isGloballyMuted, setIsGloballyMuted] = useState(false);
   const [showPubScaleCreditAlert, setShowPubScaleCreditAlert] = useState(false);
 
   // Add premium state
