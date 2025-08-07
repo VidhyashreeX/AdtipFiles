@@ -127,6 +127,28 @@ class CallSignalingService {
           }
           break
         }
+
+        case 'PARTICIPANT_READY': {
+          try {
+            console.log('[CallSignalingService] Remote participant is ready to join meeting')
+            // This signal indicates the remote participant is ready to join the VideoSDK meeting
+            // Trigger the actual VideoSDK meeting join
+            const currentSession = store.session
+            if (currentSession && currentSession.meetingId && currentSession.token) {
+              console.log('[CallSignalingService] Triggering delayed VideoSDK meeting join')
+              const mediaService = (await import('./MediaService')).default.getInstance()
+              await mediaService.joinMeetingDirectly(
+                currentSession.meetingId,
+                currentSession.token,
+                currentSession.peerName || 'User',
+                currentSession.type
+              )
+            }
+          } catch (readyError) {
+            console.error('[CallSignalingService] Error handling PARTICIPANT_READY:', readyError)
+          }
+          break
+        }
         case 'CALL_END': {
           try {
             if (store.session?.sessionId !== payload.sessionId) {
@@ -192,6 +214,24 @@ class CallSignalingService {
       console.log('[CallSignalingService] CALL_ACCEPT signal sent successfully')
     } catch (error) {
       console.error('[CallSignalingService] Error sending CALL_ACCEPT signal:', error)
+      // Don't throw - just log to prevent app crashes
+    }
+  }
+
+  async sendParticipantReady(recipientId: string, sessionId: string) {
+    try {
+      console.log('[CallSignalingService] Sending PARTICIPANT_READY signal:', { recipientId, sessionId })
+      await this.sendSignal(recipientId, {
+        type: 'PARTICIPANT_READY',
+        sessionId,
+        // Add additional fields to ensure proper FCM message structure
+        callType: 'voice', // Default, will be overridden by actual call type
+        meetingId: 'ready',
+        token: 'ready'
+      })
+      console.log('[CallSignalingService] PARTICIPANT_READY signal sent successfully')
+    } catch (error) {
+      console.error('[CallSignalingService] Error sending PARTICIPANT_READY signal:', error)
       // Don't throw - just log to prevent app crashes
     }
   }

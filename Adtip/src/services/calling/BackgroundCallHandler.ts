@@ -8,7 +8,6 @@ import CallStateManager from './CallStateManager'
 import BackgroundMediaService from './BackgroundMediaService'
 import VideoSDKService from '../videosdk/VideoSDKService'
 import CallBillingService from './CallBillingService'
-import WebSocketService from '../WebSocketService'
 import * as NavigationService from '../../navigation/NavigationService'
 
 // Safe notifee import
@@ -187,6 +186,7 @@ export class BackgroundCallHandler {
       store.actions.setStatus('connecting')
 
       // Step 4: Prepare media configuration
+      const backgroundMediaService = BackgroundMediaService.getInstance()
       const mediaConfig = await backgroundMediaService.prepareMediaForCall(this.pendingBackgroundCall.callType)
       console.log('[BackgroundCallHandler] Media config:', mediaConfig)
 
@@ -329,51 +329,34 @@ export class BackgroundCallHandler {
 
       const initResults = {
         videoSDK: false,
-        webSocket: false,
         billing: false,
         media: false,
         notifications: false
       }
 
-      // 1. Initialize VideoSDK Service
+      // 1. Initialize VideoSDK Service (includes WebSocket functionality)
       try {
         console.log('[BackgroundCallHandler] Initializing VideoSDK service...')
         const videoSDKService = VideoSDKService.getInstance()
 
-        // Check if already initialized
-        if (!videoSDKService.isInitialized()) {
+        // Check if already initialized (use try-catch since isInitialized is private)
+        try {
           await videoSDKService.initialize()
           console.log('[BackgroundCallHandler] VideoSDK service initialized')
-        } else {
-          console.log('[BackgroundCallHandler] VideoSDK service already initialized')
+        } catch (error) {
+          // If already initialized, this will throw an error, which is fine
+          console.log('[BackgroundCallHandler] VideoSDK service already initialized or initialization failed:', error)
         }
 
-        // Ensure WebSocket is ready
-        if (!videoSDKService.isWebSocketReady()) {
-          await videoSDKService.ensureWebSocketConnection()
+        // Ensure WebSocket is ready (VideoSDK handles WebSocket internally)
+        if (!videoSDKService.isWebSocketHealthy()) {
+          await videoSDKService.ensureWebSocketReadyForMeeting()
           console.log('[BackgroundCallHandler] VideoSDK WebSocket connection ensured')
         }
 
         initResults.videoSDK = true
       } catch (error) {
         console.error('[BackgroundCallHandler] VideoSDK initialization failed:', error)
-      }
-
-      // 2. Initialize WebSocket Service
-      try {
-        console.log('[BackgroundCallHandler] Initializing WebSocket service...')
-        const webSocketService = WebSocketService.getInstance()
-
-        if (!webSocketService.isConnected()) {
-          await webSocketService.connect()
-          console.log('[BackgroundCallHandler] WebSocket service connected')
-        } else {
-          console.log('[BackgroundCallHandler] WebSocket service already connected')
-        }
-
-        initResults.webSocket = true
-      } catch (error) {
-        console.error('[BackgroundCallHandler] WebSocket initialization failed:', error)
       }
 
       // 3. Initialize Billing Service
@@ -410,7 +393,7 @@ export class BackgroundCallHandler {
       // 5. Initialize Notification Service
       try {
         console.log('[BackgroundCallHandler] Initializing notification service...')
-        const notificationService = NotificationService.getInstance()
+        NotificationService.getInstance()
         // Notification service is initialized in constructor, just verify it's ready
         console.log('[BackgroundCallHandler] Notification service ready')
         initResults.notifications = true
@@ -467,7 +450,7 @@ export class BackgroundCallHandler {
       // Method 3: Direct navigation as last resort
       setTimeout(() => {
         try {
-          NavigationService.navigate('MeetingScreenSimple', {
+          NavigationService.navigate('MeetingScreen', {
             sessionId: callData.sessionId,
             meetingId: callData.meetingId,
             token: callData.token,
@@ -597,14 +580,12 @@ export class BackgroundCallHandler {
       try {
         // Ensure VideoSDK is fully ready for UI interaction
         const videoSDKService = VideoSDKService.getInstance()
-        if (videoSDKService.isInitialized()) {
-          console.log('[BackgroundCallHandler] VideoSDK ready for foreground interaction')
-        }
+        // VideoSDK service is ready if we can get the instance
+        console.log('[BackgroundCallHandler] VideoSDK ready for foreground interaction')
 
-        // Ensure WebSocket is stable
-        const webSocketService = WebSocketService.getInstance()
-        if (webSocketService.isConnected()) {
-          console.log('[BackgroundCallHandler] WebSocket stable for foreground operation')
+        // VideoSDK handles WebSocket internally, so we just check if it's healthy
+        if (videoSDKService.isWebSocketHealthy()) {
+          console.log('[BackgroundCallHandler] VideoSDK WebSocket stable for foreground operation')
         }
 
         console.log('[BackgroundCallHandler] All services ready for foreground call handling')

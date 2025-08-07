@@ -30,6 +30,7 @@ interface CloudflareStreamPlayerProps {
   onLoad?: () => void;
   onError?: (error: any) => void;
   onProgress?: (progress: any) => void;
+  onEnd?: () => void; // Add onEnd callback for video completion
   style?: any;
   resizeMode?: 'contain' | 'cover' | 'stretch';
   useStreamPlayer?: boolean; // Toggle between Stream and fallback
@@ -49,6 +50,7 @@ const CloudflareStreamPlayer: React.FC<CloudflareStreamPlayerProps> = ({
   onLoad,
   onError,
   onProgress,
+  onEnd,
   style,
   resizeMode = 'contain',
   useStreamPlayer = true,
@@ -193,6 +195,11 @@ const CloudflareStreamPlayer: React.FC<CloudflareStreamPlayerProps> = ({
     onError?.(error);
   };
 
+  const handleVideoEnd = () => {
+    Logger.debug('CloudflareStreamPlayer', 'Video playback ended');
+    onEnd?.();
+  };
+
   // Determine video source with proper validation
   const getVideoSource = () => {
     // Only use Stream HLS if we have a valid, ready stream
@@ -330,6 +337,7 @@ const CloudflareStreamPlayer: React.FC<CloudflareStreamPlayerProps> = ({
         onLoad={handleVideoLoad}
         onError={handleVideoError}
         onProgress={onProgress}
+        onEnd={handleVideoEnd}
         muted={muted}
         paused={paused} // Add paused control for proper playback
         repeat={false}

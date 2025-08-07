@@ -277,9 +277,28 @@ const Controls = () => {
   const actions = useCallStore(state => state.actions)
   const controller = CallController.getInstance()
 
-  // Use actual VideoSDK state instead of call store state for mic/camera
-  const micOn = localParticipant?.micOn ?? false
-  const webcamOn = localParticipant?.webcamOn ?? false
+  // Local state for optimistic UI updates
+  const [optimisticMicOn, setOptimisticMicOn] = useState<boolean | null>(null)
+  const [optimisticWebcamOn, setOptimisticWebcamOn] = useState<boolean | null>(null)
+
+  // Use optimistic state if available, otherwise fall back to VideoSDK state
+  const actualMicOn = localParticipant?.micOn ?? false
+  const actualWebcamOn = localParticipant?.webcamOn ?? false
+  const micOn = optimisticMicOn !== null ? optimisticMicOn : actualMicOn
+  const webcamOn = optimisticWebcamOn !== null ? optimisticWebcamOn : actualWebcamOn
+
+  // Reset optimistic state when VideoSDK state catches up
+  useEffect(() => {
+    if (optimisticMicOn !== null && optimisticMicOn === actualMicOn) {
+      setOptimisticMicOn(null)
+    }
+  }, [optimisticMicOn, actualMicOn])
+
+  useEffect(() => {
+    if (optimisticWebcamOn !== null && optimisticWebcamOn === actualWebcamOn) {
+      setOptimisticWebcamOn(null)
+    }
+  }, [optimisticWebcamOn, actualWebcamOn])
 
   // Subscribe to speaker state from call store for real-time updates
   const speakerOn = media.speaker
@@ -391,11 +410,17 @@ const Controls = () => {
     animateButton(micButtonScale)
 
     try {
+      // Optimistic UI update for immediate feedback
+      const newMicState = !micOn
+      setOptimisticMicOn(newMicState)
+
       toggleMic()
       // Update call store to match VideoSDK state
-      actions.updateMedia({ mic: !micOn })
+      actions.updateMedia({ mic: newMicState })
     } catch (error) {
       logError('Controls', 'Error toggling microphone', error)
+      // Reset optimistic state on error
+      setOptimisticMicOn(null)
     } finally {
       setTimeout(() => {
         setIsToggling(prev => ({ ...prev, mic: false }))
@@ -410,11 +435,17 @@ const Controls = () => {
     animateButton(cameraButtonScale)
 
     try {
+      // Optimistic UI update for immediate feedback
+      const newWebcamState = !webcamOn
+      setOptimisticWebcamOn(newWebcamState)
+
       toggleWebcam()
       // Update call store to match VideoSDK state
-      actions.updateMedia({ cam: !webcamOn })
+      actions.updateMedia({ cam: newWebcamState })
     } catch (error) {
       logError('Controls', 'Error toggling camera', error)
+      // Reset optimistic state on error
+      setOptimisticWebcamOn(null)
     } finally {
       setTimeout(() => {
         setIsToggling(prev => ({ ...prev, camera: false }))

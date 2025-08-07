@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useCallback, useEffect } from 'react';
+import { AppState } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useUserPremiumStatus } from '../../../contexts/UserDataContext';
 import { useInshortsReward } from '../../../hooks/useInshortsReward';
+import { useShorts } from '../../../contexts/ShortsContext';
 import { TipShortsLogger } from '../../../utils/logger';
 
 interface TipShortsRewardContextType {
@@ -37,7 +40,9 @@ export const TipShortsRewardProvider: React.FC<TipShortsRewardProviderProps> = (
 }) => {
   const { user, isGuest } = useAuth();
   const { isPremium } = useUserPremiumStatus();
-  
+  const isFocused = useIsFocused();
+  const { setGlobalPlayState } = useShorts();
+
   // Use the Inshorts reward hook
   const {
     shortsCount,
@@ -51,7 +56,7 @@ export const TipShortsRewardProvider: React.FC<TipShortsRewardProviderProps> = (
     userId: user?.id,
   });
 
-  // Debug Inshorts reward state changes
+  // Debug Inshorts reward state changes and manage audio when popup appears
   useEffect(() => {
     TipShortsLogger.debug('TipShortsRewardManager - Inshorts reward state changed:', {
       shortsCount,
@@ -61,7 +66,19 @@ export const TipShortsRewardProvider: React.FC<TipShortsRewardProviderProps> = (
       userId: user?.id,
       isGuest
     });
-  }, [shortsCount, showInshortsRewardPopup, earnedAmount, isPremium, user?.id, isGuest]);
+
+    // Pause audio when reward popup appears, resume when it disappears
+    if (showInshortsRewardPopup) {
+      TipShortsLogger.debug('Inshorts reward popup appeared - pausing audio');
+      setGlobalPlayState(false);
+    } else {
+      // Only resume if screen is focused and app is active
+      if (isFocused && AppState.currentState === 'active') {
+        TipShortsLogger.debug('Inshorts reward popup dismissed - resuming audio');
+        setGlobalPlayState(true);
+      }
+    }
+  }, [shortsCount, showInshortsRewardPopup, earnedAmount, isPremium, user?.id, isGuest, setGlobalPlayState, isFocused]);
 
   // Handle video completion for reward system
   const handleVideoCompletion = useCallback((videoId: string) => {

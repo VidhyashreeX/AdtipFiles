@@ -893,12 +893,13 @@ class CallController {
       const { actions } = useCallStore.getState()
       actions.setStatus('connecting')
 
-      // Initialize media and join meeting
+      // Initialize media but don't join meeting yet
       await this.media.initialize()
 
-      // Join the meeting if we have meeting details
+      // Navigate to meeting screen but don't join VideoSDK meeting yet
+      // The meeting screen will handle the delayed join logic
       if (session.meetingId && session.token) {
-        await this.media.joinMeeting(
+        await this.media.navigateToMeetingWithoutJoining(
           session.meetingId,
           session.token,
           session.peerName || 'User',
@@ -939,6 +940,14 @@ class CallController {
         logCall('CallController', 'Call status update sent successfully')
       } catch (statusError) {
         logError('CallController', 'Failed to send call status update', statusError)
+      }
+
+      // Send PARTICIPANT_READY signal to indicate we're ready to join the VideoSDK meeting
+      try {
+        await this.signaling.sendParticipantReady(session.peerId, session.sessionId)
+        logCall('CallController', 'PARTICIPANT_READY signal sent successfully')
+      } catch (readyError) {
+        logError('CallController', 'Failed to send PARTICIPANT_READY signal', readyError)
       }
 
       // Update status to in_call only after everything is set up

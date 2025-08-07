@@ -505,6 +505,11 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
                 isShort={true} // Mark as short video for proper aspect ratio handling
                 onLoad={handleVideoLoadLocal}
                 onProgress={handleVideoProgress}
+                onEnd={() => {
+                  if (onVideoCompletion && item?.id) {
+                    onVideoCompletion(item.id);
+                  }
+                }}
                 onError={(error) => {
                   console.error('[EnhancedShortCard] Video playback error:', {
                     error,

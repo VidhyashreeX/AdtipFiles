@@ -126,7 +126,7 @@ const TipShortsEnhanced = () => {
     userId: user?.id,
   });
 
-  // Debug Inshorts reward state changes
+  // Debug Inshorts reward state changes and manage audio when popup appears
   useEffect(() => {
     console.log('🎁 [TipShortsEnhanced] Inshorts reward state changed:', {
       shortsCount,
@@ -136,7 +136,19 @@ const TipShortsEnhanced = () => {
       userId: user?.id,
       isGuest
     });
-  }, [shortsCount, showInshortsRewardPopup, earnedAmount, isPremium, user?.id, isGuest]);
+
+    // Pause audio when reward popup appears, resume when it disappears
+    if (showInshortsRewardPopup) {
+      TipShortsLogger.debug('Inshorts reward popup appeared - pausing audio');
+      setGlobalPlayState(false);
+    } else {
+      // Only resume if screen is focused and app is active
+      if (isFocused && AppState.currentState === 'active') {
+        TipShortsLogger.debug('Inshorts reward popup dismissed - resuming audio');
+        setGlobalPlayState(true);
+      }
+    }
+  }, [shortsCount, showInshortsRewardPopup, earnedAmount, isPremium, user?.id, isGuest, setGlobalPlayState, isFocused]);
 
   // Safe parameter destructuring to prevent undefined access
   const { shorts: passedShorts, startIndex = 0, shortId } = route.params || {};

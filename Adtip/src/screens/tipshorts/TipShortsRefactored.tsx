@@ -129,15 +129,27 @@ const TipShortsRefactored = () => {
       setShowLoginPrompt(true);
       return;
     }
+    if (!user?.id) return;
 
     try {
-      await ApiService.followChannel(channelId);
-      Alert.alert('Success', 'Channel followed successfully!');
+      // Call follow API, ensure channelId and userId are numbers
+      const response = await ApiService.saveChannelFollowers({
+        channelId: Number(channelId),
+        userId: Number(user.id),
+        follow: 1 // 1 to follow, 0 to unfollow
+      });
+      TipShortsLogger.debug('Follow response:', response);
+
+      // Show success message based on response
+      if (response?.message) {
+        TipShortsLogger.debug('Follow action completed:', response.message);
+        Alert.alert('Success', 'Channel followed successfully!');
+      }
     } catch (error) {
       TipShortsLogger.error('Error following channel:', error);
       Alert.alert('Error', 'Failed to follow channel. Please try again.');
     }
-  }, [isGuest]);
+  }, [user?.id, isGuest]);
 
   // Handle channel navigation
   const handleChannelNavigation = useCallback((channelData: { id: string; name: string; avatar?: string }) => {

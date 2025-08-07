@@ -70,6 +70,73 @@ class MediaService {
     }
   }
 
+  async navigateToMeetingWithoutJoining(meetingId: string, token: string, name: string, type: CallType) {
+    try {
+      // Ensure complete state isolation from previous calls
+      await this.ensureCleanState()
+
+      // Use smart reset to avoid unnecessary re-initialization
+      this.videoSDK.smartReset(meetingId)
+      await this.initialize()
+
+      // Store meeting config for later use but don't join yet
+      this.currentMeetingConfig = { meetingId, token, name, type }
+
+      console.log('[MediaService] Navigating to meeting without joining:', { meetingId, name, type })
+
+      // Navigate to meeting screen with background-aware navigation
+      // The meeting screen will handle the delayed join logic
+      const { AppState } = await import('react-native')
+
+      if (AppState.currentState === 'background' || AppState.currentState === 'inactive') {
+        console.log('[MediaService] Using background-aware navigation (delayed join)')
+        NavigationService.navigateToMeetingFromBackground({
+          meetingId,
+          token,
+          callType: type,
+          displayName: name,
+          recipientName: name, // Will be updated by caller
+          isInitiator: false, // Will be updated by caller
+          delayedJoin: true // Flag to indicate delayed join
+        })
+      } else {
+        console.log('[MediaService] Using regular navigation (delayed join)')
+        NavigationService.navigateToMeeting({
+          meetingId,
+          token,
+          callType: type,
+          displayName: name,
+          recipientName: name, // Will be updated by caller
+          isInitiator: false, // Will be updated by caller
+          delayedJoin: true // Flag to indicate delayed join
+        })
+      }
+
+      return true
+    } catch (error) {
+      console.error('[MediaService] navigateToMeetingWithoutJoining error:', error)
+      return false
+    }
+  }
+
+  async joinMeetingDirectly(meetingId: string, token: string, name: string, type: CallType) {
+    try {
+      // This method joins the VideoSDK meeting directly without navigation
+      // Used for delayed join scenarios
+      console.log('[MediaService] Joining VideoSDK meeting directly:', { meetingId, name, type })
+
+      // Store meeting config
+      this.currentMeetingConfig = { meetingId, token, name, type }
+
+      // The actual VideoSDK join will be handled by the MeetingScreen component
+      // We just need to trigger the join signal
+      return true
+    } catch (error) {
+      console.error('[MediaService] joinMeetingDirectly error:', error)
+      return false
+    }
+  }
+
   /**
    * Ensure clean state before starting new meeting
    */
