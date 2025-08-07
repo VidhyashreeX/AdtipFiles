@@ -631,7 +631,7 @@ const MeetingContent = () => {
   // Debug logging for isActiveInstance check
   useEffect(() => {
     if (sessionIsValid && globalComponentKey) {
-      logCall('[MeetingContent] Active instance check', {
+      logCall('[MeetingContent]', 'Active instance check', {
         globalComponentKey,
         hasGlobalInstance: !!global.meetingComponentInstances?.[globalComponentKey],
         globalInstanceValue: global.meetingComponentInstances?.[globalComponentKey],
@@ -649,7 +649,7 @@ const MeetingContent = () => {
   // Validate and reset participant state for new sessions
   useEffect(() => {
     if (session?.sessionId && session.sessionId !== lastSessionId.current) {
-      logCall('[MeetingScreen] New session detected, validating participant state', {
+      logCall('[MeetingScreen]', 'New session detected, validating participant state', {
         newSessionId: session.sessionId,
         lastSessionId: lastSessionId.current,
         localParticipantId,
@@ -662,7 +662,7 @@ const MeetingContent = () => {
       // Force participant state validation after a brief delay
       setTimeout(() => {
         const currentParticipants = [...participants.values()]
-        logCall('[MeetingScreen] Post-session-change participant validation', {
+        logCall('[MeetingScreen]', 'Post-session-change participant validation', {
           sessionId: session.sessionId,
           localId: localParticipant?.id,
           totalParticipants: currentParticipants.length,
@@ -1077,6 +1077,15 @@ const MeetingContent = () => {
   // Use the validated remote participants
   const remoteParticipants = validRemoteParticipants
 
+  // Debug logging for participant state
+  console.log('Participant Debug:', {
+    status,
+    totalParticipants: allParticipants.length,
+    localParticipantId,
+    remoteParticipantsCount: remoteParticipants.length,
+    remoteParticipantIds: remoteParticipants.map(p => p.id)
+  })
+
   // Ringing logic: Start ringing when connecting and no remote participants, stop when remote participant joins
   useEffect(() => {
     const isOutgoingCall = session?.direction === 'outgoing'
@@ -1106,7 +1115,29 @@ const MeetingContent = () => {
   }, [ringingAudioService])
 
   const isVideo = session?.type === 'video'
-  
+
+  // Helper function to determine the correct status text
+  const getCallStatusText = () => {
+    const hasRemoteParticipants = remoteParticipants.length > 0
+
+    // Debug logging
+    console.log('getCallStatusText:', { status, hasRemoteParticipants, remoteCount: remoteParticipants.length })
+
+    // Always show "Ringing..." if no remote participants, regardless of status
+    if (!hasRemoteParticipants) {
+      if (status === 'outgoing') {
+        return 'Calling...'
+      } else if (status === 'connecting') {
+        return 'Connecting...'
+      } else {
+        return 'Ringing...'
+      }
+    }
+
+    // Only show "Connected" when we actually have remote participants
+    return 'Connected'
+  }
+
   return (
     <SafeAreaEnforcer
       statusBarStyle="light"
@@ -1114,20 +1145,17 @@ const MeetingContent = () => {
       edges={['top', 'left', 'right']}
     >
       <View style={styles.container}>
-      
+
       {/* Header info */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>
           {session?.peerName || 'Connecting...'}
         </Text>
         <Text style={styles.headerSubtitle}>
-          {status === 'outgoing' ? 'Calling...' :
-           status === 'connecting' ? 'Connecting...' :
-           status === 'in_call' ? `${session?.type} call` :
-           'Call'}
+          {getCallStatusText()}
         </Text>
-        {/* Show timer when call is active */}
-        {status === 'in_call' && (
+        {/* Show timer when call is active and participants are connected */}
+        {status === 'in_call' && remoteParticipants.length > 0 && (
           <View style={styles.timerContainer}>
             <VideoSDKCallTimer />
           </View>
@@ -1155,16 +1183,13 @@ const MeetingContent = () => {
             </RingingAvatar>
           </View>
           <Text style={styles.callStatus}>
-            {status === 'outgoing' ? 'Calling...' :
-             status === 'connecting' ? 'Connecting...' :
-             status === 'in_call' ? 'Connected' :
-             'Connecting...'}
+            {getCallStatusText()}
           </Text>
 
           {/* Show muted status for participants */}
-          {status === 'in_call' && (
+          {status === 'in_call' && remoteParticipants.length > 0 && (
             <MutedStatusDisplay
-              localMicOn={micOn}
+              localMicOn={localParticipant?.micOn ?? false}
               remoteParticipants={remoteParticipants}
             />
           )}
@@ -1208,26 +1233,26 @@ const MeetingScreenSimple = () => {
   // More comprehensive session validation with detailed checks
   const sessionIsValid = useMemo(() => {
     if (!session) {
-      logCall('[MeetingScreenSimple] Session validation failed: no session');
+      logCall('[MeetingScreenSimple]', 'Session validation failed: no session');
       return false;
     }
 
     if (!session.sessionId) {
-      logCall('[MeetingScreenSimple] Session validation failed: no sessionId');
+      logCall('[MeetingScreenSimple]', 'Session validation failed: no sessionId');
       return false;
     }
 
     if (!session.meetingId || session.meetingId.startsWith('temp-')) {
-      logCall('[MeetingScreenSimple] Session validation failed: invalid meetingId', session.meetingId);
+      logCall('[MeetingScreenSimple]', 'Session validation failed: invalid meetingId', session.meetingId);
       return false;
     }
 
     if (!session.token || session.token === 'temp-token') {
-      logCall('[MeetingScreenSimple] Session validation failed: invalid token');
+      logCall('[MeetingScreenSimple]', 'Session validation failed: invalid token');
       return false;
     }
 
-    logCall('[MeetingScreenSimple] Session validation passed', {
+    logCall('[MeetingScreenSimple]', 'Session validation passed', {
       sessionId: session.sessionId,
       meetingId: session.meetingId,
       hasToken: !!session.token,

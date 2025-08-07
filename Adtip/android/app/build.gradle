@@ -166,7 +166,7 @@ android {
         abi {
             reset()
             enable enableSeparateBuildPerCPUArchitecture
-            universalApk false  // Set to true if you want a universal APK alongside ABI-specific ones
+            universalApk true  // Enable universal APK to prevent architecture mismatch issues
             include "armeabi-v7a", "arm64-v8a"
         }
     }

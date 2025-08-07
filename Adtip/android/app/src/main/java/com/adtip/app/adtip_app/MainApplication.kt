@@ -51,9 +51,24 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
-    SoLoader.init(this, OpenSourceMergedSoMapping)
-    if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
-      load()
+    try {
+      SoLoader.init(this, OpenSourceMergedSoMapping)
+      if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
+        load()
+      }
+    } catch (e: Exception) {
+      // Log the error and try fallback initialization
+      android.util.Log.e("MainApplication", "SoLoader initialization failed", e)
+      try {
+        // Fallback: Initialize SoLoader without merged mapping
+        SoLoader.init(this, false)
+        if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
+          load()
+        }
+      } catch (fallbackException: Exception) {
+        android.util.Log.e("MainApplication", "SoLoader fallback initialization also failed", fallbackException)
+        // Continue anyway - the app might still work
+      }
     }
   }
 }
