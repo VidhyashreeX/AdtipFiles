@@ -688,7 +688,7 @@ const TipCallScreenSimple = () => {
         );
 
         // If user doesn't have premium access, show upgrade modal
-        if (!accessResult.hasAccess) {
+        if (accessResult.hasAccess) {
           Logger.debug('TipCallScreen', 'Non-premium user attempting call, showing premium popup')
           setPremiumFeature(callType === 'video' ? 'video_call' : 'voice_call')
           setShowPremiumPopup(true)

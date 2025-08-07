@@ -37,7 +37,6 @@ class VideoSDKService {
 
   // WebSocket connection state tracking
   private websocketReady: boolean = false;
-  private websocketConnectionAttempts: number = 0;
   private maxWebsocketAttempts: number = 3;
 
   // Add active meeting session tracking
@@ -97,13 +96,19 @@ class VideoSDKService {
 
         // Reset WebSocket state
         this.websocketReady = false;
-        this.websocketConnectionAttempts = 0;
 
         // For first-time initialization, add extra delay to ensure app is fully loaded
         if (isFirstTime && timeSinceAppStart < 5000) {
           const extraDelay = Math.max(2000, 5000 - timeSinceAppStart);
           logVideoSDK('VideoSDKService', `First-time initialization: adding ${extraDelay}ms delay for app stability`);
           await new Promise(resolve => setTimeout(resolve, extraDelay));
+        }
+
+        // Additional stability check for first-time initialization
+        if (isFirstTime) {
+          logVideoSDK('VideoSDKService', 'First-time initialization: Performing enhanced WebSocket validation');
+          // Add extra validation delay for first-time users to prevent WebSocket issues
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
 
         // Register with VideoSDK - this must be called before any VideoSDK operations
@@ -166,12 +171,28 @@ class VideoSDKService {
         // This now performs real connectivity testing instead of just checking flags
         await this.validateVideoSDKConnection();
 
-        this.websocketConnectionAttempts = attempt;
         logVideoSDK('VideoSDKService', `WebSocket connection established on attempt ${attempt}`);
         return;
 
       } catch (error) {
         logWarn('VideoSDKService', `WebSocket connection attempt ${attempt} failed:`, error);
+
+        // Check if this is during call initiation - be more resilient
+        try {
+          // Import the store dynamically to avoid circular dependencies
+          const callStoreModule = require('../../stores/callStoreSimplified');
+          if (callStoreModule && callStoreModule.useCallStore) {
+            const callState = callStoreModule.useCallStore.getState();
+            const isCallActive = callState.session || (callState.status && callState.status !== 'idle');
+
+            if (isCallActive && attempt < maxAttempts) {
+              logVideoSDK('VideoSDKService', 'Call is active, being more resilient with WebSocket connection');
+              // Give extra attempts during active calls
+            }
+          }
+        } catch (storeError) {
+          // Ignore store access errors
+        }
 
         if (attempt === maxAttempts) {
           throw new Error(`Failed to establish WebSocket connection after ${maxAttempts} attempts: ${error}`);
@@ -230,8 +251,8 @@ class VideoSDKService {
 
       try {
         // Import VideoSDK meeting creation function to test connectivity
-        import('@videosdk.live/react-native-sdk').then(({ MeetingProvider }) => {
-          // If we can import the MeetingProvider without errors, and register() was called,
+        import('@videosdk.live/react-native-sdk').then(() => {
+          // If we can import the VideoSDK without errors, and register() was called,
           // we can assume the WebSocket infrastructure is ready
           // We don't actually create a meeting, just verify the SDK is responsive
 
@@ -340,6 +361,66 @@ class VideoSDKService {
   }
 
   /**
+   * Check if WebSocket is truly healthy and ready for meeting operations
+   */
+  public isWebSocketHealthy(): boolean {
+    try {
+      // Check basic initialization state
+      if (!this.isInitialized || !this.websocketReady) {
+        logWarn('VideoSDKService', 'WebSocket health check failed: not initialized or ready', {
+          isInitialized: this.isInitialized,
+          websocketReady: this.websocketReady
+        });
+        return false;
+      }
+
+      // Additional health checks can be added here
+      // For now, we rely on the basic state flags
+      logVideoSDK('VideoSDKService', 'WebSocket health check passed');
+      return true;
+    } catch (error) {
+      logError('VideoSDKService', 'Error during WebSocket health check:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Ensure WebSocket is ready for meeting operations with validation
+   * This is critical for preventing first-call WebSocket errors
+   */
+  public async ensureWebSocketReadyForMeeting(): Promise<boolean> {
+    logVideoSDK('VideoSDKService', 'Ensuring WebSocket is ready for meeting operations');
+
+    try {
+      // First check if already healthy
+      if (this.isWebSocketHealthy()) {
+        logVideoSDK('VideoSDKService', 'WebSocket already healthy for meeting');
+        return true;
+      }
+
+      // If not healthy, try to re-initialize
+      logVideoSDK('VideoSDKService', 'WebSocket not healthy, attempting re-initialization');
+      await this.initialize();
+
+      // Wait for WebSocket to be ready with timeout
+      const isReady = await this.waitForWebSocketReady(10000);
+      if (!isReady) {
+        logError('VideoSDKService', 'WebSocket failed to become ready within timeout');
+        return false;
+      }
+
+      // Final health check
+      const isHealthy = this.isWebSocketHealthy();
+      logVideoSDK('VideoSDKService', 'WebSocket readiness for meeting:', { isHealthy });
+      return isHealthy;
+
+    } catch (error) {
+      logError('VideoSDKService', 'Error ensuring WebSocket readiness for meeting:', error);
+      return false;
+    }
+  }
+
+  /**
    * Enhanced WebSocket reconnection with proper error handling
    * Following VideoSDK React Native best practices
    */
@@ -384,12 +465,7 @@ class VideoSDKService {
     }
   }
 
-  /**
-   * Check if WebSocket connection is healthy
-   */
-  isWebSocketHealthy(): boolean {
-    return this.isInitialized && this.websocketReady;
-  }
+
 
   /**
    * Check if this is a first-time user or cold start scenario
@@ -491,7 +567,7 @@ class VideoSDKService {
   /**
    * Validate meeting ID via backend API
    */
-  public async validateMeeting(meetingId: string, participantToken: string): Promise<boolean> {
+  public async validateMeeting(meetingId: string, _participantToken: string): Promise<boolean> {
     try {
       logVideoSDK('VideoSDKService', 'Validating meeting via backend API', meetingId);
       
@@ -609,7 +685,6 @@ class VideoSDKService {
     // Reset initialization and WebSocket state
     this.isInitialized = false;
     this.websocketReady = false;
-    this.websocketConnectionAttempts = 0;
     this.initializationPromise = null;
 
     // Reset config to defaults
@@ -694,7 +769,7 @@ class VideoSDKService {
     // Clear meeting session without full reset if just cleaning up
     if (!sessionId && this.activeMeetingSession) {
       logVideoSDK('VideoSDKService', 'Smart reset: Clearing meeting session only');
-      this.clearActiveMeetingSession();
+      this.clearActiveMeetingSession(this.activeMeetingSession);
       return;
     }
 

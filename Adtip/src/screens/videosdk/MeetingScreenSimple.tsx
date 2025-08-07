@@ -536,7 +536,16 @@ const MeetingContent = () => {
           initialLoadRef.current = false
         }
 
-        logCall('[MeetingContent] Joining meeting with ID:', session.meetingId)
+        // CRITICAL FIX: Ensure WebSocket is ready before joining to prevent first-call failures
+        logCall('[MeetingContent] Ensuring WebSocket is ready before joining meeting')
+        //const videoSDK = VideoSDKService.getInstance()
+        const isWebSocketReady = await videoSDK.ensureWebSocketReadyForMeeting()
+
+        if (!isWebSocketReady) {
+          throw new Error('WebSocket is not ready for meeting operations')
+        }
+
+        logCall('[MeetingContent] WebSocket confirmed ready, joining meeting with ID:', session.meetingId)
         await meeting.join()
         joinedRef.current = true
         logCall('[MeetingContent] Successfully joined meeting')

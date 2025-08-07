@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Platform, AppState, AppStateStatus } from 'react-native';
 import { useCallStore } from '../stores/callStoreSimplified';
 import AdRotationService from '../services/AdRotationService';
+import { isCallInitiationActive } from '../utils/CallInitiationFlag';
 
 // Test Ad Unit ID (for development/testing)
 const TEST_APP_OPEN_AD_UNIT_ID = TestIds.APP_OPEN; // Official Google test ID for app open ads
@@ -176,11 +177,18 @@ export function useAppOpenAd() {
         !isAdCurrentlyShowing
       ) {
         // ✅ FIX: Check if a call is in progress before showing an ad using Zustand store
-        const { useCallStore } = require('../stores/callStoreSimplified');
-        const session = useCallStore.getState().session;
+        const callState = useCallStore.getState();
+        const session = callState.session;
+        const status = callState.status;
 
-        if (session) {
-          console.log('[AppOpenAdManager] Suppressing ad because a call is active.');
+        // Check both session and status to catch calls in all phases, plus global flag
+        const isInitiationActive = isCallInitiationActive();
+        if (session || (status && status !== 'idle') || isInitiationActive) {
+          console.log('[AppOpenAdManager] Suppressing ad because a call is active.', {
+            hasSession: !!session,
+            status: status,
+            isCallInitiationInProgress: isInitiationActive
+          });
           return;
         }
         
@@ -192,9 +200,18 @@ export function useAppOpenAd() {
         setTimeout(() => {
           // Double-check call state again after delay using Zustand store
           try {
-            const updatedSession = useCallStore.getState().session;
-            if (updatedSession) {
-              console.log('[AppOpenAdManager] Suppressing delayed ad because a call is now active.');
+            const updatedCallState = useCallStore.getState();
+            const updatedSession = updatedCallState.session;
+            const updatedStatus = updatedCallState.status;
+
+            // Check both session and status again, plus global flag
+            const isInitiationActiveDelayed = isCallInitiationActive();
+            if (updatedSession || (updatedStatus && updatedStatus !== 'idle') || isInitiationActiveDelayed) {
+              console.log('[AppOpenAdManager] Suppressing delayed ad because a call is now active.', {
+                hasSession: !!updatedSession,
+                status: updatedStatus,
+                isCallInitiationInProgress: isInitiationActiveDelayed
+              });
               return;
             }
             showAdIfAppropriate();
@@ -305,13 +322,15 @@ export function useAppOpenAd() {
     }
   }, [adLoaded]);
 
-  return { 
-    showAd, 
-    adLoaded, 
-    adVisible, 
+  return {
+    showAd,
+    adLoaded,
+    adVisible,
     setAdVisible,
     showAdIfAppropriate, // For manual control if needed
     forceLoadAd, // Force reload an ad
     isAdCurrentlyShowing: adVisible // Current showing state
   };
 }
+
+// Note: Call initiation flag functions are now in utils/CallInitiationFlag.ts

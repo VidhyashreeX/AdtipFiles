@@ -558,6 +558,15 @@ class CallController {
     try {
       logCall('CallController', 'Starting optimized call flow', { recipientId, recipientName, callType });
 
+      // Set flag to prevent AppOpenAdManager interference during critical call initiation
+      try {
+        const { setCallInitiationInProgress } = require('../../utils/CallInitiationFlag');
+        setCallInitiationInProgress(true);
+      } catch (error) {
+        // Ignore import errors - flag is optional
+        logCall('CallController', 'Could not set call initiation flag (non-critical):', error);
+      }
+
       // Validate permissions before starting call
       const permissionManager = PermissionManagerService.getInstance()
       const permissionResult = await permissionManager.requestCallPermissions(callType === 'video')
@@ -621,9 +630,27 @@ class CallController {
       // ASYNC: Make API call in background and update session when ready
       this.handleAsyncCallInitiation(userId, recipientId, callType, backendSessionId)
 
+      // Clear the flag after initial setup is complete (after a short delay)
+      setTimeout(() => {
+        try {
+          const { setCallInitiationInProgress } = require('../../utils/CallInitiationFlag');
+          setCallInitiationInProgress(false);
+        } catch (error) {
+          // Ignore import errors
+        }
+      }, 3000); // 3 seconds should be enough for initial setup
+
       return true
     } catch (error) {
       logError('CallController', 'startCallOptimized error', error);
+
+      // Clear the flag on error
+      try {
+        const { setCallInitiationInProgress } = require('../../utils/CallInitiationFlag');
+        setCallInitiationInProgress(false);
+      } catch (importError) {
+        // Ignore import errors
+      }
 
       // Reset call state
       const { actions } = useCallStore.getState()
@@ -752,8 +779,24 @@ class CallController {
         callId: backendCallId
       });
 
+      // Clear the call initiation flag now that API call is complete
+      try {
+        const { setCallInitiationInProgress } = require('../../utils/CallInitiationFlag');
+        setCallInitiationInProgress(false);
+      } catch (importError) {
+        // Ignore import errors
+      }
+
     } catch (error) {
       logError('CallController', 'Async call initiation error', error);
+
+      // Clear the call initiation flag on error
+      try {
+        const { setCallInitiationInProgress } = require('../../utils/CallInitiationFlag');
+        setCallInitiationInProgress(false);
+      } catch (importError) {
+        // Ignore import errors
+      }
 
       // API error - exit meeting screen with failed status
       const { actions } = useCallStore.getState()

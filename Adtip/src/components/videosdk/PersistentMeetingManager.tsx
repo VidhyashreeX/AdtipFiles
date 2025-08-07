@@ -399,11 +399,20 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
       logCall(`[PersistentMeetingContent] Join attempt ${joinAttemptsRef.current} for session:`, config.sessionId)
 
       try {
-        logCall('[PersistentMeetingContent] Joining meeting with ID:', config.meetingId)
+        // CRITICAL FIX: Ensure WebSocket is ready before joining to prevent first-call failures
+        logCall('[PersistentMeetingContent] Ensuring WebSocket is ready before joining meeting')
+        const videoSDK = VideoSDKService.getInstance()
+        const isWebSocketReady = await videoSDK.ensureWebSocketReadyForMeeting()
+
+        if (!isWebSocketReady) {
+          throw new Error('WebSocket is not ready for meeting operations')
+        }
+
+        logCall('[PersistentMeetingContent] WebSocket confirmed ready, joining meeting with ID:', config.meetingId)
         await meeting.join()
         joinedRef.current = true
         logCall('[PersistentMeetingContent] Successfully joined meeting', config.meetingId)
-        
+
         // Update status based on call direction
         if (status === 'outgoing') {
           actions.setStatus('connecting')
@@ -429,11 +438,22 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
         if (joinAttemptsRef.current < 3) {
           // Enhanced retry logic with WebSocket reconnection
           if (isWebSocketError || isVideoSDKError) {
-            logCall('PersistentMeetingContent', 'WebSocket/VideoSDK error detected, attempting reconnection')
+            logCall('PersistentMeetingContent', 'WebSocket/VideoSDK error detected, attempting comprehensive reconnection')
 
             try {
               // Ensure VideoSDK is properly initialized before reconnection
               const videoSDK = VideoSDKService.getInstance()
+
+              // For first attempt, ensure WebSocket is ready for meeting operations
+              if (joinAttemptsRef.current === 1) {
+                logCall('PersistentMeetingContent', 'First retry - ensuring WebSocket readiness for meeting')
+                const isReady = await videoSDK.ensureWebSocketReadyForMeeting()
+                if (isReady) {
+                  logCall('PersistentMeetingContent', 'WebSocket confirmed ready after first failure, retrying join')
+                  setTimeout(joinMeeting, 2000)
+                  return
+                }
+              }
 
               // Check if VideoSDK needs re-initialization
               const status = videoSDK.getInitializationStatus()
@@ -443,25 +463,28 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
               }
 
               // Attempt WebSocket reconnection with enhanced error handling
-              const reconnected = await videoSDK.handleWebSocketReconnection(err, 1, 3)
+              const reconnected = await videoSDK.handleWebSocketReconnection(err, joinAttemptsRef.current, 3)
 
               if (reconnected && videoSDK.isWebSocketHealthy()) {
                 logCall('PersistentMeetingContent', 'WebSocket reconnection successful, retrying join')
-                // Longer delay after reconnection to ensure stability
-                setTimeout(joinMeeting, 3000)
+                // Progressive delay based on attempt number
+                const retryDelay = 2000 + (joinAttemptsRef.current * 1000)
+                setTimeout(joinMeeting, retryDelay)
               } else {
                 logWarn('PersistentMeetingContent', 'WebSocket reconnection failed, using extended retry')
-                setTimeout(joinMeeting, 2500)
+                const retryDelay = 3000 + (joinAttemptsRef.current * 1500)
+                setTimeout(joinMeeting, retryDelay)
               }
             } catch (reconnectError) {
               logError('PersistentMeetingContent', 'Error during WebSocket reconnection', reconnectError)
               // Fallback to standard retry with progressive delay
-              const retryDelay = 1500 * joinAttemptsRef.current
+              const retryDelay = 2000 * joinAttemptsRef.current
               setTimeout(joinMeeting, retryDelay)
             }
           } else {
-            // Standard retry for non-WebSocket errors
-            setTimeout(joinMeeting, 1000)
+            // Standard retry for non-WebSocket errors with progressive delay
+            const retryDelay = 1000 + (joinAttemptsRef.current * 500)
+            setTimeout(joinMeeting, retryDelay)
           }
         } else {
           logError('PersistentMeetingContent', 'All join attempts failed', { finalError: errorMessage })
