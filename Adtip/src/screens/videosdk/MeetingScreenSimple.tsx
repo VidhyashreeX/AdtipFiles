@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useMemo } from 'react'
+import React, { useEffect, useRef, useMemo, useState } from 'react'
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator
+  ActivityIndicator,
+  Animated
 } from 'react-native'
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -67,6 +68,130 @@ class VideoSDKErrorBoundary extends React.Component<
 }
 
 // Layout components
+
+// Muted status display component for audio calls
+const MutedStatusDisplay: React.FC<{
+  localMicOn: boolean;
+  remoteParticipants: any[];
+}> = ({ localMicOn, remoteParticipants }) => {
+  const mutedParticipants = [];
+
+  // Check local participant
+  if (!localMicOn) {
+    mutedParticipants.push('You are muted');
+  }
+
+  // Check remote participants
+  remoteParticipants.forEach(participant => {
+    const { micOn: remoteMicOn } = useParticipant(participant.id);
+    if (!remoteMicOn) {
+      mutedParticipants.push(`${participant.displayName || 'Participant'} is muted`);
+    }
+  });
+
+  if (mutedParticipants.length === 0) {
+    return null;
+  }
+
+  return (
+    <View style={styles.mutedStatusContainer}>
+      {mutedParticipants.map((text, index) => (
+        <Text key={index} style={styles.mutedText}>
+          {text}
+        </Text>
+      ))}
+    </View>
+  );
+};
+
+// Ringing animation component for audio calls
+const RingingAvatar: React.FC<{
+  children: React.ReactNode;
+  isRinging: boolean;
+}> = ({ children, isRinging }) => {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const ringAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (isRinging) {
+      // Start pulse animation
+      const pulseAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+
+      // Start ring animation
+      const ringAnimation = Animated.loop(
+        Animated.timing(ringAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        })
+      );
+
+      pulseAnimation.start();
+      ringAnimation.start();
+
+      return () => {
+        pulseAnimation.stop();
+        ringAnimation.stop();
+      };
+    } else {
+      // Reset animations
+      pulseAnim.setValue(1);
+      ringAnim.setValue(0);
+    }
+  }, [isRinging, pulseAnim, ringAnim]);
+
+  const ringScale = ringAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.5],
+  });
+
+  const ringOpacity = ringAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.8, 0.4, 0],
+  });
+
+  return (
+    <View style={styles.ringingContainer}>
+      {/* Outer ring animation */}
+      {isRinging && (
+        <Animated.View
+          style={[
+            styles.ringingRing,
+            {
+              transform: [{ scale: ringScale }],
+              opacity: ringOpacity,
+            },
+          ]}
+        />
+      )}
+
+      {/* Avatar with pulse animation */}
+      <Animated.View
+        style={[
+          styles.ringingAvatar,
+          {
+            transform: [{ scale: pulseAnim }],
+          },
+        ]}
+      >
+        {children}
+      </Animated.View>
+    </View>
+  );
+};
 
 const ParticipantVideo = ({ participantId, isLocal = false }: { participantId: string; isLocal?: boolean }) => {
   const {
@@ -148,7 +273,7 @@ const ParticipantVideo = ({ participantId, isLocal = false }: { participantId: s
 const Controls = () => {
   const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>()
   const { status, session, media } = useCallStore()
-  const { toggleMic, toggleWebcam, leave, localParticipant } = useMeeting()
+  const { toggleMic, toggleWebcam, leave, localParticipant, participants } = useMeeting()
   const actions = useCallStore(state => state.actions)
   const controller = CallController.getInstance()
 
@@ -159,11 +284,53 @@ const Controls = () => {
   // Subscribe to speaker state from call store for real-time updates
   const speakerOn = media.speaker
 
+  // Enhanced state for UI feedback
+  const [isToggling, setIsToggling] = useState({ mic: false, camera: false, speaker: false })
+  const [activeSpeaker, setActiveSpeaker] = useState<string | null>(null)
+
+  // Animation values for button feedback
+  const micButtonScale = useRef(new Animated.Value(1)).current
+  const cameraButtonScale = useRef(new Animated.Value(1)).current
+  const speakerButtonScale = useRef(new Animated.Value(1)).current
+
+  // Track active speaker - simplified version since isActiveSpeaker is not available
+  useEffect(() => {
+    const remoteParticipants = Array.from(participants.values()).filter(p => p.id !== localParticipant?.id)
+
+    // Find the first participant who has their mic on (simplified active speaker detection)
+    const currentSpeaker = remoteParticipants.find(p => p.micOn)
+
+    if (currentSpeaker) {
+      setActiveSpeaker(currentSpeaker.id)
+    } else if (localParticipant?.micOn) {
+      setActiveSpeaker(localParticipant.id)
+    } else {
+      setActiveSpeaker(null)
+    }
+  }, [participants, localParticipant])
+
+  // Enhanced button animation
+  const animateButton = (animatedValue: Animated.Value) => {
+    Animated.sequence([
+      Animated.timing(animatedValue, {
+        toValue: 0.9,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(animatedValue, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start()
+  }
+
   const handleEndCall = async () => {
     try {
       logCall('MeetingScreenSimple', '🔥 HANDLE END CALL - INSTANT UI NAVIGATION');
 
       // Stop ringing immediately
+      const ringingAudioService = RingingAudioService.getInstance()
       ringingAudioService.stopRinging()
 
       // Navigate immediately for instant UI response
@@ -217,75 +384,170 @@ const Controls = () => {
     }
   }
 
-  const handleToggleMic = () => {
-    toggleMic()
-    // Update call store to match VideoSDK state
-    actions.updateMedia({ mic: !micOn })
+  const handleToggleMic = async () => {
+    if (isToggling.mic) return // Prevent double-tap
+
+    setIsToggling(prev => ({ ...prev, mic: true }))
+    animateButton(micButtonScale)
+
+    try {
+      toggleMic()
+      // Update call store to match VideoSDK state
+      actions.updateMedia({ mic: !micOn })
+    } catch (error) {
+      logError('Controls', 'Error toggling microphone', error)
+    } finally {
+      setTimeout(() => {
+        setIsToggling(prev => ({ ...prev, mic: false }))
+      }, 300)
+    }
   }
 
-  const handleToggleCamera = () => {
-    toggleWebcam()
-    // Update call store to match VideoSDK state
-    actions.updateMedia({ cam: !webcamOn })
+  const handleToggleCamera = async () => {
+    if (isToggling.camera) return // Prevent double-tap
+
+    setIsToggling(prev => ({ ...prev, camera: true }))
+    animateButton(cameraButtonScale)
+
+    try {
+      toggleWebcam()
+      // Update call store to match VideoSDK state
+      actions.updateMedia({ cam: !webcamOn })
+    } catch (error) {
+      logError('Controls', 'Error toggling camera', error)
+    } finally {
+      setTimeout(() => {
+        setIsToggling(prev => ({ ...prev, camera: false }))
+      }, 300)
+    }
   }
-  
-  const handleToggleSpeaker = () => {
-    // TODO: implement speaker toggle
-    actions.updateMedia({ speaker: !speakerOn })
+
+  const handleToggleSpeaker = async () => {
+    if (isToggling.speaker) return // Prevent double-tap
+
+    setIsToggling(prev => ({ ...prev, speaker: true }))
+    animateButton(speakerButtonScale)
+
+    try {
+      // TODO: implement actual speaker toggle functionality
+      actions.updateMedia({ speaker: !speakerOn })
+      logCall('Controls', 'Speaker toggled', { speakerOn: !speakerOn })
+    } catch (error) {
+      logError('Controls', 'Error toggling speaker', error)
+    } finally {
+      setTimeout(() => {
+        setIsToggling(prev => ({ ...prev, speaker: false }))
+      }, 300)
+    }
   }
   
   return (
     <View style={styles.controlsContainer}>
-      <TouchableOpacity
-        style={[
-          styles.controlButton,
-          { backgroundColor: micOn ? '#00D4AA' : '#FF3B30' }
-        ]}
-        onPress={handleToggleMic}
-      >
-        {micOn ? (
-          <Mic size={22} color="#fff" />
-        ) : (
-          <MicOff size={22} color="#fff" />
-        )}
-      </TouchableOpacity>
-
-      {session?.type === 'video' && (
-        <TouchableOpacity
-          style={[
-            styles.controlButton,
-            { backgroundColor: webcamOn ? '#00D4AA' : '#FF3B30' }
-          ]}
-          onPress={handleToggleCamera}
-        >
-          {webcamOn ? (
-            <Camera size={22} color="#fff" />
-          ) : (
-            <CameraOff size={22} color="#fff" />
-          )}
-        </TouchableOpacity>
+      {/* Active Speaker Indicator */}
+      {activeSpeaker && (
+        <View style={styles.activeSpeakerIndicator}>
+          <Text style={styles.activeSpeakerText}>
+            {activeSpeaker === localParticipant?.id ? 'You are speaking' : 'Speaking...'}
+          </Text>
+        </View>
       )}
-      
-      <TouchableOpacity
-        style={[
-          styles.controlButton,
-          { backgroundColor: speakerOn ? '#00D4AA' : '#333' }
-        ]}
-        onPress={handleToggleSpeaker}
-      >
-        <Volume2
-          size={22}
-          color="#fff"
-          fill={speakerOn ? '#fff' : 'transparent'}
-        />
-      </TouchableOpacity>
-      
-      <TouchableOpacity 
-        style={[styles.controlButton, styles.endCallButton]} 
-        onPress={handleEndCall}
-      >
-        <Phone size={22} color="#fff" style={{ transform: [{rotate: '135deg'}] }} />
-      </TouchableOpacity>
+
+      <View style={styles.controlButtonsRow}>
+        {/* Microphone Control */}
+        <Animated.View style={{ transform: [{ scale: micButtonScale }] }}>
+          <TouchableOpacity
+            style={[
+              styles.controlButton,
+              styles.enhancedControlButton,
+              {
+                backgroundColor: micOn ? '#00D4AA' : '#FF3B30',
+                opacity: isToggling.mic ? 0.7 : 1
+              }
+            ]}
+            onPress={handleToggleMic}
+            disabled={isToggling.mic}
+            activeOpacity={0.8}
+          >
+            {micOn ? (
+              <Mic size={24} color="#fff" />
+            ) : (
+              <MicOff size={24} color="#fff" />
+            )}
+            {isToggling.mic && (
+              <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="small" color="#fff" />
+              </View>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Camera Control (only for video calls) */}
+        {session?.type === 'video' && (
+          <Animated.View style={{ transform: [{ scale: cameraButtonScale }] }}>
+            <TouchableOpacity
+              style={[
+                styles.controlButton,
+                styles.enhancedControlButton,
+                {
+                  backgroundColor: webcamOn ? '#00D4AA' : '#FF3B30',
+                  opacity: isToggling.camera ? 0.7 : 1
+                }
+              ]}
+              onPress={handleToggleCamera}
+              disabled={isToggling.camera}
+              activeOpacity={0.8}
+            >
+              {webcamOn ? (
+                <Camera size={24} color="#fff" />
+              ) : (
+                <CameraOff size={24} color="#fff" />
+              )}
+              {isToggling.camera && (
+                <View style={styles.loadingOverlay}>
+                  <ActivityIndicator size="small" color="#fff" />
+                </View>
+              )}
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+
+        {/* Speaker Control */}
+        <Animated.View style={{ transform: [{ scale: speakerButtonScale }] }}>
+          <TouchableOpacity
+            style={[
+              styles.controlButton,
+              styles.enhancedControlButton,
+              {
+                backgroundColor: speakerOn ? '#00D4AA' : '#333',
+                opacity: isToggling.speaker ? 0.7 : 1
+              }
+            ]}
+            onPress={handleToggleSpeaker}
+            disabled={isToggling.speaker}
+            activeOpacity={0.8}
+          >
+            <Volume2
+              size={24}
+              color="#fff"
+              fill={speakerOn ? '#fff' : 'transparent'}
+            />
+            {isToggling.speaker && (
+              <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="small" color="#fff" />
+              </View>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* End Call Button */}
+        <TouchableOpacity
+          style={[styles.controlButton, styles.enhancedControlButton, styles.endCallButton]}
+          onPress={handleEndCall}
+          activeOpacity={0.8}
+        >
+          <Phone size={24} color="#fff" style={{ transform: [{rotate: '135deg'}] }} />
+        </TouchableOpacity>
+      </View>
     </View>
   )
 }
@@ -704,6 +966,7 @@ const MeetingContent = () => {
   useEffect(() => {
     const backAction = () => {
       // Stop ringing immediately
+      const ringingAudioService = RingingAudioService.getInstance()
       ringingAudioService.stopRinging()
 
       // Navigate immediately for instant UI response
@@ -852,11 +1115,13 @@ const MeetingContent = () => {
         /* Audio call UI */
         <View style={styles.audioContainer}>
           <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {session?.peerName?.[0]?.toUpperCase() || '?'}
-              </Text>
-            </View>
+            <RingingAvatar isRinging={status === 'outgoing' || status === 'connecting'}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>
+                  {session?.peerName?.[0]?.toUpperCase() || '?'}
+                </Text>
+              </View>
+            </RingingAvatar>
           </View>
           <Text style={styles.callStatus}>
             {status === 'outgoing' ? 'Calling...' :
@@ -864,6 +1129,14 @@ const MeetingContent = () => {
              status === 'in_call' ? 'Connected' :
              'Connecting...'}
           </Text>
+
+          {/* Show muted status for participants */}
+          {status === 'in_call' && (
+            <MutedStatusDisplay
+              localMicOn={micOn}
+              remoteParticipants={remoteParticipants}
+            />
+          )}
         </View>
       )}
       
@@ -1274,19 +1547,59 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   controlsContainer: {
+    paddingVertical: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    paddingHorizontal: 16,
+  },
+  activeSpeakerIndicator: {
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(0, 212, 170, 0.2)',
+    borderRadius: 20,
+    alignSelf: 'center',
+  },
+  activeSpeakerText: {
+    color: '#00D4AA',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  controlButtonsRow: {
     flexDirection: 'row',
     justifyContent: 'space-evenly',
-    paddingVertical: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    alignItems: 'center',
   },
   controlButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#333',
     justifyContent: 'center',
     alignItems: 'center',
     marginHorizontal: 8,
+    position: 'relative',
+  },
+  enhancedControlButton: {
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   endCallButton: {
     backgroundColor: '#FF4343',
@@ -1342,6 +1655,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  // Ringing animation styles
+  ringingContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  ringingRing: {
+    position: 'absolute',
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 2,
+    borderColor: '#00D4AA',
+  },
+  ringingAvatar: {
+    // This will wrap the existing avatar styles
+  },
+  // Muted status styles
+  mutedStatusContainer: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  mutedText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 4,
+    textAlign: 'center',
   },
 })
 

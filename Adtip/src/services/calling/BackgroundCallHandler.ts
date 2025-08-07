@@ -1,4 +1,4 @@
-import { AppState } from 'react-native'
+import { AppState, Linking } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useCallStore } from '../../stores/callStoreSimplified'
 import { startPersistentCall } from '../../components/videosdk/PersistentMeetingManager'
@@ -6,6 +6,9 @@ import NotificationService from './NotificationService'
 import CallKeepService from './CallKeepService'
 import CallStateManager from './CallStateManager'
 import BackgroundMediaService from './BackgroundMediaService'
+import VideoSDKService from '../videosdk/VideoSDKService'
+import CallBillingService from './CallBillingService'
+import WebSocketService from '../WebSocketService'
 import * as NavigationService from '../../navigation/NavigationService'
 
 // Safe notifee import
@@ -77,6 +80,16 @@ export class BackgroundCallHandler {
       this.pendingBackgroundCall = backgroundCall
       await this.persistCallData(backgroundCall)
 
+      // Initialize critical services immediately for background call handling
+      console.log('[BackgroundCallHandler] Pre-initializing services for background call')
+      const servicesReady = await this.initializeServicesForBackgroundCall(backgroundCall)
+
+      if (servicesReady) {
+        console.log('[BackgroundCallHandler] Services pre-initialized successfully')
+      } else {
+        console.warn('[BackgroundCallHandler] Some services failed to pre-initialize')
+      }
+
       // Update call store immediately (even in background)
       const store = useCallStore.getState()
       store.actions.setSession({
@@ -91,12 +104,16 @@ export class BackgroundCallHandler {
       })
       store.actions.setStatus('ringing')
 
-      // Show notification immediately
+      // Show notification immediately with enhanced data
       const notificationService = NotificationService.getInstance()
       await notificationService.showIncomingCall(
         backgroundCall.sessionId,
         backgroundCall.callerName,
-        backgroundCall.callType
+        backgroundCall.callType,
+        false, // not concurrent call
+        backgroundCall.meetingId,
+        backgroundCall.token,
+        backgroundCall.callerId
       )
 
       // Also show CallKeep native UI if available
@@ -141,21 +158,28 @@ export class BackgroundCallHandler {
 
       console.log('[BackgroundCallHandler] Accepting background call:', this.pendingBackgroundCall.sessionId)
 
-      // Step 1: Initialize media for background call
-      const backgroundMediaService = BackgroundMediaService.getInstance()
-      const mediaInitialized = await backgroundMediaService.initializeForBackgroundCall(this.pendingBackgroundCall.callType)
+      // Step 1: Initialize all required services
+      const servicesInitialized = await this.initializeServicesForBackgroundCall(this.pendingBackgroundCall)
 
-      if (!mediaInitialized) {
-        console.error('[BackgroundCallHandler] Failed to initialize media for background call')
-        // Don't fail completely, continue with call but log the issue
+      if (!servicesInitialized) {
+        console.error('[BackgroundCallHandler] Critical services failed to initialize')
+        // Still attempt to continue but with reduced functionality
+        console.warn('[BackgroundCallHandler] Continuing with limited service availability')
+      } else {
+        console.log('[BackgroundCallHandler] All critical services initialized successfully')
       }
 
-      // Step 2: Validate media setup
-      const validation = await backgroundMediaService.validateMediaSetup(this.pendingBackgroundCall.callType)
-      if (!validation.isValid) {
-        console.warn('[BackgroundCallHandler] Media setup validation failed:', validation.issues)
-        // Try to force reinitialize
-        await backgroundMediaService.forceReinitialize(this.pendingBackgroundCall.callType)
+      // Step 2: Additional media validation for background calls
+      try {
+        const backgroundMediaService = BackgroundMediaService.getInstance()
+        const validation = await backgroundMediaService.validateMediaSetup(this.pendingBackgroundCall.callType)
+        if (!validation.isValid) {
+          console.warn('[BackgroundCallHandler] Media setup validation failed:', validation.issues)
+          // Try to force reinitialize
+          await backgroundMediaService.forceReinitialize(this.pendingBackgroundCall.callType)
+        }
+      } catch (mediaError) {
+        console.error('[BackgroundCallHandler] Media validation error:', mediaError)
       }
 
       // Step 3: Update call store status
@@ -266,6 +290,204 @@ export class BackgroundCallHandler {
   }
 
   /**
+   * Create deep link for call navigation with proper credentials
+   */
+  private createCallDeepLink(callData: BackgroundCallData): string {
+    try {
+      // Enhanced deep link format for better navigation
+      const baseUrl = 'adtip://call/meeting'
+      const path = `${baseUrl}/${callData.sessionId}`
+
+      // Add all necessary parameters as query string
+      const params = new URLSearchParams({
+        meetingId: callData.meetingId,
+        token: callData.token,
+        callerName: callData.callerName,
+        callerId: callData.callerId,
+        callType: callData.callType,
+        direction: 'incoming',
+        timestamp: callData.timestamp.toString(),
+        source: 'notification'
+      })
+
+      const deepLink = `${path}?${params.toString()}`
+      console.log('[BackgroundCallHandler] Created deep link:', deepLink)
+      return deepLink
+    } catch (error) {
+      console.error('[BackgroundCallHandler] Error creating deep link:', error)
+      // Fallback to basic navigation
+      return 'adtip://call/meeting'
+    }
+  }
+
+  /**
+   * Initialize all required services for background call handling
+   */
+  private async initializeServicesForBackgroundCall(callData: BackgroundCallData): Promise<boolean> {
+    try {
+      console.log('[BackgroundCallHandler] Initializing services for background call:', callData.sessionId)
+
+      const initResults = {
+        videoSDK: false,
+        webSocket: false,
+        billing: false,
+        media: false,
+        notifications: false
+      }
+
+      // 1. Initialize VideoSDK Service
+      try {
+        console.log('[BackgroundCallHandler] Initializing VideoSDK service...')
+        const videoSDKService = VideoSDKService.getInstance()
+
+        // Check if already initialized
+        if (!videoSDKService.isInitialized()) {
+          await videoSDKService.initialize()
+          console.log('[BackgroundCallHandler] VideoSDK service initialized')
+        } else {
+          console.log('[BackgroundCallHandler] VideoSDK service already initialized')
+        }
+
+        // Ensure WebSocket is ready
+        if (!videoSDKService.isWebSocketReady()) {
+          await videoSDKService.ensureWebSocketConnection()
+          console.log('[BackgroundCallHandler] VideoSDK WebSocket connection ensured')
+        }
+
+        initResults.videoSDK = true
+      } catch (error) {
+        console.error('[BackgroundCallHandler] VideoSDK initialization failed:', error)
+      }
+
+      // 2. Initialize WebSocket Service
+      try {
+        console.log('[BackgroundCallHandler] Initializing WebSocket service...')
+        const webSocketService = WebSocketService.getInstance()
+
+        if (!webSocketService.isConnected()) {
+          await webSocketService.connect()
+          console.log('[BackgroundCallHandler] WebSocket service connected')
+        } else {
+          console.log('[BackgroundCallHandler] WebSocket service already connected')
+        }
+
+        initResults.webSocket = true
+      } catch (error) {
+        console.error('[BackgroundCallHandler] WebSocket initialization failed:', error)
+      }
+
+      // 3. Initialize Billing Service
+      try {
+        console.log('[BackgroundCallHandler] Initializing billing service...')
+        const billingService = CallBillingService.getInstance()
+
+        // Pre-validate billing for the call
+        const minBalanceReq = billingService.getMinimumBalanceRequirements()
+        const requiredBalance = callData.callType === 'voice' ? minBalanceReq.voice : minBalanceReq.video
+
+        console.log('[BackgroundCallHandler] Billing service ready, minimum balance required:', requiredBalance)
+        initResults.billing = true
+      } catch (error) {
+        console.error('[BackgroundCallHandler] Billing service initialization failed:', error)
+      }
+
+      // 4. Initialize Media Service
+      try {
+        console.log('[BackgroundCallHandler] Initializing media service...')
+        const backgroundMediaService = BackgroundMediaService.getInstance()
+
+        const mediaInitialized = await backgroundMediaService.initializeForBackgroundCall(callData.callType)
+        if (mediaInitialized) {
+          console.log('[BackgroundCallHandler] Media service initialized successfully')
+          initResults.media = true
+        } else {
+          console.warn('[BackgroundCallHandler] Media service initialization failed')
+        }
+      } catch (error) {
+        console.error('[BackgroundCallHandler] Media service initialization failed:', error)
+      }
+
+      // 5. Initialize Notification Service
+      try {
+        console.log('[BackgroundCallHandler] Initializing notification service...')
+        const notificationService = NotificationService.getInstance()
+        // Notification service is initialized in constructor, just verify it's ready
+        console.log('[BackgroundCallHandler] Notification service ready')
+        initResults.notifications = true
+      } catch (error) {
+        console.error('[BackgroundCallHandler] Notification service initialization failed:', error)
+      }
+
+      // Log initialization results
+      const successCount = Object.values(initResults).filter(Boolean).length
+      const totalServices = Object.keys(initResults).length
+
+      console.log('[BackgroundCallHandler] Service initialization results:', {
+        ...initResults,
+        successRate: `${successCount}/${totalServices}`,
+        allCriticalServicesReady: initResults.videoSDK && initResults.media && initResults.notifications
+      })
+
+      // Return true if critical services are ready
+      return initResults.videoSDK && initResults.media && initResults.notifications
+    } catch (error) {
+      console.error('[BackgroundCallHandler] Error during service initialization:', error)
+      return false
+    }
+  }
+
+  /**
+   * Navigate to call screen using deep link
+   */
+  private async navigateToCallScreen(callData: BackgroundCallData): Promise<boolean> {
+    try {
+      console.log('[BackgroundCallHandler] Navigating to call screen for:', callData.sessionId)
+
+      // Method 1: Try deep linking first
+      const deepLink = this.createCallDeepLink(callData)
+      const canOpenDeepLink = await Linking.canOpenURL(deepLink)
+
+      if (canOpenDeepLink) {
+        await Linking.openURL(deepLink)
+        console.log('[BackgroundCallHandler] Successfully navigated via deep link')
+        return true
+      }
+
+      // Method 2: Use persistent call as fallback
+      console.log('[BackgroundCallHandler] Deep link failed, using persistent call')
+      startPersistentCall({
+        sessionId: callData.sessionId,
+        meetingId: callData.meetingId,
+        token: callData.token,
+        peerName: callData.callerName,
+        callType: callData.callType,
+        direction: 'incoming'
+      })
+
+      // Method 3: Direct navigation as last resort
+      setTimeout(() => {
+        try {
+          NavigationService.navigate('MeetingScreenSimple', {
+            sessionId: callData.sessionId,
+            meetingId: callData.meetingId,
+            token: callData.token,
+            callerName: callData.callerName,
+            callType: callData.callType
+          })
+          console.log('[BackgroundCallHandler] Direct navigation completed')
+        } catch (navError) {
+          console.error('[BackgroundCallHandler] Direct navigation failed:', navError)
+        }
+      }, 500)
+
+      return true
+    } catch (error) {
+      console.error('[BackgroundCallHandler] Error navigating to call screen:', error)
+      return false
+    }
+  }
+
+  /**
    * Setup app state listener to handle foreground transitions
    */
   private setupAppStateListener(): void {
@@ -297,7 +519,11 @@ export class BackgroundCallHandler {
 
             switch (detail.pressAction?.id) {
               case 'answer':
-                // Use CallStateManager to prevent race conditions
+                console.log('[BackgroundCallHandler] Answering call from notification')
+                // Navigate to call screen first
+                await this.navigateToCallScreen(this.pendingBackgroundCall)
+
+                // Then use CallStateManager to handle the call acceptance
                 const stateManager = CallStateManager.getInstance()
                 await stateManager.queueAction({
                   type: 'ACCEPT_CALL',
@@ -330,6 +556,9 @@ export class BackgroundCallHandler {
 
             switch (detail.pressAction?.id) {
               case 'answer':
+                console.log('[BackgroundCallHandler] Answering call from background notification')
+                // Navigate to call screen and accept call
+                await this.navigateToCallScreen(this.pendingBackgroundCall)
                 await this.acceptBackgroundCall()
                 break
               case 'decline':
@@ -346,6 +575,51 @@ export class BackgroundCallHandler {
   }
 
   /**
+   * Ensure all services are ready when app comes to foreground
+   */
+  private async ensureServicesReadyForForeground(): Promise<boolean> {
+    try {
+      if (!this.pendingBackgroundCall) {
+        return true
+      }
+
+      console.log('[BackgroundCallHandler] Ensuring services are ready for foreground call')
+
+      // Re-initialize services to ensure they're ready for foreground operation
+      const servicesReady = await this.initializeServicesForBackgroundCall(this.pendingBackgroundCall)
+
+      if (!servicesReady) {
+        console.error('[BackgroundCallHandler] Failed to ensure services are ready for foreground')
+        return false
+      }
+
+      // Additional foreground-specific initialization
+      try {
+        // Ensure VideoSDK is fully ready for UI interaction
+        const videoSDKService = VideoSDKService.getInstance()
+        if (videoSDKService.isInitialized()) {
+          console.log('[BackgroundCallHandler] VideoSDK ready for foreground interaction')
+        }
+
+        // Ensure WebSocket is stable
+        const webSocketService = WebSocketService.getInstance()
+        if (webSocketService.isConnected()) {
+          console.log('[BackgroundCallHandler] WebSocket stable for foreground operation')
+        }
+
+        console.log('[BackgroundCallHandler] All services ready for foreground call handling')
+        return true
+      } catch (error) {
+        console.error('[BackgroundCallHandler] Error in foreground service preparation:', error)
+        return false
+      }
+    } catch (error) {
+      console.error('[BackgroundCallHandler] Error ensuring services ready for foreground:', error)
+      return false
+    }
+  }
+
+  /**
    * Process pending call when app comes to foreground
    */
   private async processCallWhenForeground(): Promise<void> {
@@ -354,7 +628,15 @@ export class BackgroundCallHandler {
 
       console.log('[BackgroundCallHandler] Processing pending call in foreground')
 
-      // Check if call is still valid (not expired)
+      // Step 1: Ensure all services are ready for foreground operation
+      const servicesReady = await this.ensureServicesReadyForForeground()
+      if (!servicesReady) {
+        console.error('[BackgroundCallHandler] Services not ready for foreground call, aborting')
+        await this.clearPendingCall()
+        return
+      }
+
+      // Step 2: Check if call is still valid (not expired)
       const callAge = Date.now() - this.pendingBackgroundCall.timestamp
       const MAX_CALL_AGE = 60000 // 1 minute
 

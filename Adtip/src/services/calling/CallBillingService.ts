@@ -40,6 +40,12 @@ class CallBillingService {
     videoPremium: 7,
   };
 
+  // Minimum balance requirements in rupees
+  private readonly MINIMUM_BALANCE_REQUIREMENTS = {
+    voice: 4,  // 4 rupees minimum for voice calls
+    video: 7,  // 7 rupees minimum for video calls
+  };
+
   // Warning thresholds in seconds before call ends
   private readonly WARNING_THRESHOLDS = [300, 120, 60, 30, 10]; // 5 min, 2 min, 1 min, 30s, 10s
 
@@ -66,6 +72,32 @@ class CallBillingService {
   }
 
   /**
+   * Check if user has minimum balance required for call type
+   */
+  public checkMinimumBalance(
+    callType: 'voice' | 'video',
+    currentBalance: number
+  ): { hasMinimumBalance: boolean; requiredAmount: number; shortfall: number } {
+    const requiredAmount = this.MINIMUM_BALANCE_REQUIREMENTS[callType];
+    const hasMinimumBalance = currentBalance >= requiredAmount;
+    const shortfall = hasMinimumBalance ? 0 : requiredAmount - currentBalance;
+
+    console.log('[CallBillingService] Minimum balance check:', {
+      callType,
+      currentBalance,
+      requiredAmount,
+      hasMinimumBalance,
+      shortfall
+    });
+
+    return {
+      hasMinimumBalance,
+      requiredAmount,
+      shortfall
+    };
+  }
+
+  /**
    * Calculate call billing information based on user type, call type, and balance
    */
   public async calculateCallBilling(
@@ -80,6 +112,16 @@ class CallBillingService {
       currentBalance,
       isPremium
     });
+
+    // Check minimum balance requirement first
+    const balanceCheck = this.checkMinimumBalance(callType, currentBalance);
+    if (!balanceCheck.hasMinimumBalance) {
+      console.warn('[CallBillingService] Insufficient balance for call:', {
+        required: balanceCheck.requiredAmount,
+        current: currentBalance,
+        shortfall: balanceCheck.shortfall
+      });
+    }
 
     // Determine rate per minute
     let ratePerMinute: number;
@@ -372,6 +414,13 @@ class CallBillingService {
    */
   public getCallRates(): CallRates {
     return { ...this.CALL_RATES };
+  }
+
+  /**
+   * Get minimum balance requirements for display
+   */
+  public getMinimumBalanceRequirements(): { voice: number; video: number } {
+    return { ...this.MINIMUM_BALANCE_REQUIREMENTS };
   }
 
   /**

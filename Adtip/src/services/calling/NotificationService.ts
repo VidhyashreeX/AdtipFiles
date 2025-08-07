@@ -27,13 +27,96 @@ class NotificationService {
     })
   }
 
-  private async createChannels() {
-    await notifee.createChannel({ id: this.incomingChannel, name: 'Incoming Calls', importance: AndroidImportance.HIGH, sound: 'default', vibration: true })
-    await notifee.createChannel({ id: this.ongoingChannel, name: 'Ongoing Calls', importance: AndroidImportance.DEFAULT })
+  /**
+   * Create deep link for call navigation
+   */
+  private createCallDeepLink(callData: {
+    sessionId: string;
+    meetingId: string;
+    token: string;
+    callerName: string;
+    callerId: string;
+    callType: CallType;
+  }): string {
+    try {
+      const baseUrl = 'adtip://call/meeting'
+      const path = `${baseUrl}/${callData.sessionId}`
+
+      const params = new URLSearchParams({
+        meetingId: callData.meetingId,
+        token: callData.token,
+        callerName: callData.callerName,
+        callerId: callData.callerId,
+        callType: callData.callType,
+        direction: 'incoming',
+        source: 'notification'
+      })
+
+      return `${path}?${params.toString()}`
+    } catch (error) {
+      logError('NotificationService', 'Error creating deep link', error)
+      return 'adtip://call/meeting'
+    }
   }
 
-  async showIncomingCall(sessionId: string, callerName: string, type: CallType, isConcurrentCall: boolean = false, meetingId?: string, token?: string) {
-    logCall('NotificationService', 'Showing incoming call notification', { sessionId, callerName, type, isConcurrentCall })
+  /**
+   * Initialize enhanced notification channels with better categorization
+   */
+  private async initializeEnhancedChannels() {
+    try {
+      // Voice call specific channel
+      await notifee.createChannel({
+        id: 'voice-calls',
+        name: 'Voice Calls',
+        importance: AndroidImportance.HIGH,
+        sound: 'default',
+        vibration: true,
+        description: 'Voice call notifications with enhanced caller information'
+      })
+
+      // Video call specific channel
+      await notifee.createChannel({
+        id: 'video-calls',
+        name: 'Video Calls',
+        importance: AndroidImportance.HIGH,
+        sound: 'default',
+        vibration: true,
+        description: 'Video call notifications with enhanced caller information'
+      })
+
+      // Missed calls channel
+      await notifee.createChannel({
+        id: 'missed-calls',
+        name: 'Missed Calls',
+        importance: AndroidImportance.DEFAULT,
+        description: 'Notifications for missed calls'
+      })
+
+      logCall('NotificationService', 'Enhanced notification channels initialized')
+    } catch (error) {
+      logError('NotificationService', 'Failed to initialize enhanced channels', error)
+    }
+  }
+
+  private async createChannels() {
+    await notifee.createChannel({
+      id: this.incomingChannel,
+      name: 'Incoming Calls',
+      importance: AndroidImportance.HIGH,
+      sound: 'default',
+      vibration: true,
+      description: 'Notifications for incoming voice and video calls'
+    })
+    await notifee.createChannel({
+      id: this.ongoingChannel,
+      name: 'Ongoing Calls',
+      importance: AndroidImportance.DEFAULT,
+      description: 'Persistent notifications for active calls'
+    })
+  }
+
+  async showIncomingCall(sessionId: string, callerName: string, type: CallType, isConcurrentCall: boolean = false, meetingId?: string, token?: string, callerId?: string, callerAvatar?: string) {
+    logCall('NotificationService', 'Showing incoming call notification', { sessionId, callerName, type, isConcurrentCall, callerId })
 
     // Check if CallKeep is handling the call first
     const callKeepService = await this.getCallKeepService()
@@ -92,33 +175,76 @@ class NotificationService {
     // Show Notifee notification as primary/fallback
     if (!notificationShown) {
       try {
+        // Enhanced notification content
+        const callTypeIcon = type === 'voice' ? '📞' : '📹';
+        const callTypeText = type === 'voice' ? 'Voice Call' : 'Video Call';
+        const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        const enhancedTitle = isConcurrentCall
+          ? `${callTypeIcon} New ${callTypeText} (while in call)`
+          : `${callTypeIcon} Incoming ${callTypeText}`;
+
+        const enhancedBody = isConcurrentCall
+          ? `${callerName}\nAccept to end current call • ${currentTime}`
+          : `${callerName}\n${currentTime}`;
+
         await notifee.displayNotification({
           id: sessionId,
-          title: isConcurrentCall ? `New ${type} call (while in call)` : `Incoming ${type} call`,
-          body: isConcurrentCall ? `${callerName} - Accept to end current call` : callerName,
+          title: enhancedTitle,
+          body: enhancedBody,
           android: {
             channelId: this.incomingChannel,
             category: 'call' as any,
             fullScreenAction: { id: 'default' },
             actions: isConcurrentCall ? [
-              { title: 'Accept & End Current', pressAction: { id: 'answer' } },
-              { title: 'Decline', pressAction: { id: 'decline' } },
+              { title: '✅ Accept & End Current', pressAction: { id: 'answer' } },
+              { title: '❌ Decline', pressAction: { id: 'decline' } },
             ] : [
-              { title: 'Answer', pressAction: { id: 'answer' } },
-              { title: 'Decline', pressAction: { id: 'decline' } },
+              { title: '✅ Answer', pressAction: { id: 'answer' } },
+              { title: '❌ Decline', pressAction: { id: 'decline' } },
             ],
             importance: AndroidImportance.HIGH,
             pressAction: { id: 'default' },
             sound: 'default',
             vibrationPattern: isConcurrentCall ? [200, 300, 200, 300, 200, 300] : [300, 1000, 300, 1000],
+            // Enhanced styling
+            color: type === 'voice' ? '#4CAF50' : '#2196F3',
+            largeIcon: callerAvatar || undefined,
+            style: {
+              type: 1, // BigTextStyle
+              text: enhancedBody,
+            },
+            // Add caller info to notification
+            person: {
+              name: callerName,
+              id: callerId || sessionId,
+              icon: callerAvatar || undefined,
+            },
+          },
+          ios: {
+            categoryId: 'call',
+            sound: 'default',
+            critical: true,
+            criticalVolume: 1.0,
           },
           data: {
             sessionId,
             callerName,
+            callerId: callerId || '',
             type,
             meetingId: meetingId || '',
             token: token || '',
-            isConcurrentCall: isConcurrentCall.toString()
+            isConcurrentCall: isConcurrentCall.toString(),
+            timestamp: Date.now().toString(),
+            // Deep link data for proper navigation
+            deepLink: this.createCallDeepLink({
+              sessionId,
+              meetingId: meetingId || '',
+              token: token || '',
+              callerName,
+              callerId: callerId || '',
+              callType: type
+            }),
           },
         })
 
@@ -138,14 +264,32 @@ class NotificationService {
   }
 
   async showOngoingCall(sessionId: string, peerName: string, type: CallType) {
+    const callTypeIcon = type === 'voice' ? '📞' : '📹';
+    const callTypeText = type === 'voice' ? 'Voice Call' : 'Video Call';
+    const startTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
     await notifee.displayNotification({
       id: sessionId,
-      title: `${type} call`,
-      body: `Talking with ${peerName}`,
+      title: `${callTypeIcon} ${callTypeText} in progress`,
+      body: `Connected with ${peerName} • Started ${startTime}`,
       android: {
         channelId: this.ongoingChannel,
         ongoing: true,
-        actions: [{ title: 'End', pressAction: { id: 'end' } }],
+        actions: [{ title: '📞 End Call', pressAction: { id: 'end' } }],
+        color: type === 'voice' ? '#4CAF50' : '#2196F3',
+        style: {
+          type: 1, // BigTextStyle
+          text: `Connected with ${peerName}\nStarted at ${startTime}\nTap to return to call`,
+        },
+      },
+      ios: {
+        categoryId: 'ongoing-call',
+      },
+      data: {
+        sessionId,
+        peerName,
+        type,
+        startTime,
       },
     })
   }

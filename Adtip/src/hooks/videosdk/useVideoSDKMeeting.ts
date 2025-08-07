@@ -50,6 +50,8 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
   const startTimeRef = useRef<number>(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasJoinedRef = useRef<boolean>(false);
+  const hasRemoteParticipantRef = useRef<boolean>(false);
+  const participantLeftTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Set up meeting configuration
   logCall('VideoSDKMeeting', '⚙️ SETTING UP VIDEOSDK MEETING WITH EVENT HANDLERS');
@@ -58,13 +60,13 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
       logCall('VideoSDKMeeting', '🟢 MEETING JOINED EVENT FIRED');
       logCall('VideoSDKMeeting', 'Meeting joined successfully');
       setCallStatus('connected');
-      startTimeRef.current = Date.now();
-      startDurationTimer();
+      // Don't start timer yet - wait for remote participant to join
       props.onMeetingJoined?.();
       hasJoinedRef.current = true;
       logCall('VideoSDKMeeting', '✅ Meeting joined setup complete', {
         hasJoinedRef: hasJoinedRef.current,
-        callStatus: 'connected'
+        callStatus: 'connected',
+        note: 'Timer will start when remote participant joins'
       });
     },
     onMeetingLeft: () => {
@@ -78,6 +80,7 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
 
       setCallStatus('ended');
       stopDurationTimer();
+      hasRemoteParticipantRef.current = false; // Reset for next call
 
       // Comprehensive notification cleanup when meeting ends
       const cleanupNotifications = async () => {
@@ -126,6 +129,15 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
         participantId: participant?.id,
         displayName: participant?.displayName
       });
+
+      // Start timer when first remote participant joins
+      if (!hasRemoteParticipantRef.current && participant?.id !== mMeeting?.localParticipant?.id) {
+        logCall('VideoSDKMeeting', '⏱️ Starting call timer - first remote participant joined');
+        startTimeRef.current = Date.now();
+        startDurationTimer();
+        hasRemoteParticipantRef.current = true;
+      }
+
       updateParticipantCount();
       logCall('VideoSDKMeeting', '🟢 Participant joined processing complete');
     },
@@ -136,10 +148,16 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
       });
       updateParticipantCount();
 
+      // Clear any existing timeout
+      if (participantLeftTimeoutRef.current) {
+        clearTimeout(participantLeftTimeoutRef.current);
+        participantLeftTimeoutRef.current = null;
+      }
+
       // Check if this was the other participant in a 1-on-1 call
       // If so, we should end the meeting for the remaining participant
       logCall('VideoSDKMeeting', '🟡 Setting up participant count check timeout');
-      setTimeout(() => {
+      participantLeftTimeoutRef.current = setTimeout(() => {
         const currentParticipants = mMeeting?.participants;
         const participantCount = currentParticipants ? Object.keys(currentParticipants).length : 0;
 
@@ -174,6 +192,9 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
             hasJoined: hasJoinedRef.current
           });
         }
+
+        // Clear the timeout reference
+        participantLeftTimeoutRef.current = null;
       }, 1000); // Small delay to ensure participant count is updated
 
       logCall('VideoSDKMeeting', '🟡 PARTICIPANT LEFT EVENT PROCESSING COMPLETE');
@@ -268,6 +289,11 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
       if (startTimeRef.current > 0) {
         const duration = Math.floor((Date.now() - startTimeRef.current) / 1000);
         setMetrics(prev => ({ ...prev, duration }));
+
+        // Update duration in call store
+        const { useCallStore } = require('../../stores/callStoreSimplified');
+        const { actions } = useCallStore.getState();
+        actions.updateDuration(duration);
       }
     }, 1000);
   };
@@ -373,6 +399,14 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
     return () => {
       logCall('VideoSDKMeeting', 'Component unmounting - cleaning up');
       stopDurationTimer();
+      hasRemoteParticipantRef.current = false; // Reset for next call
+
+      // Clear participant left timeout
+      if (participantLeftTimeoutRef.current) {
+        clearTimeout(participantLeftTimeoutRef.current);
+        participantLeftTimeoutRef.current = null;
+      }
+
       // Attempt to end meeting for all participants if still connected
       if (hasJoinedRef.current && mMeeting && typeof mMeeting.end === 'function') {
         try {

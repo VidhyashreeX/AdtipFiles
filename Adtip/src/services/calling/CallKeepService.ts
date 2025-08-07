@@ -32,8 +32,8 @@ export class CallKeepService {
   private initializationAttempts = 0
   private maxInitializationAttempts = 3
   private callKeepAvailable = true
-  private static DISABLE_CALLKEEP = true // Emergency disable flag - TEMPORARILY ENABLED TO FIX CRASH
-  private static DISABLE_VIVO_CALLKEEP = true // Emergency disable for Vivo devices to prevent blank screen
+  private static DISABLE_CALLKEEP = false // Emergency disable flag - RE-ENABLED WITH PROPER SAFEGUARDS
+  private static DISABLE_VIVO_CALLKEEP = true // Keep Vivo devices disabled to prevent blank screen
   private needsManualPermissionSetup = false // Track if manual setup is needed
 
   private constructor() {
@@ -141,6 +141,25 @@ export class CallKeepService {
         this.isInitialized = true
         this.callKeepAvailable = false
         return false
+      }
+
+      // Enhanced pre-initialization checks
+      console.log('[CallKeepService] 🔍 Running pre-initialization checks...')
+
+      // Check if we're in a valid state to initialize CallKeep
+      if (Platform.OS === 'android') {
+        // For Android, ensure we have basic permissions
+        try {
+          const hasBasicPermissions = await this.checkBasicPermissions()
+          if (!hasBasicPermissions) {
+            console.warn('[CallKeepService] ⚠️ Basic permissions not available, deferring initialization')
+            this.isInitialized = true
+            this.callKeepAvailable = false
+            return false
+          }
+        } catch (permError) {
+          console.warn('[CallKeepService] ⚠️ Permission check failed, continuing with initialization:', permError)
+        }
       }
 
       // Simplified setup options based on VideoSDK recommendations
@@ -279,6 +298,24 @@ export class CallKeepService {
       console.warn('[CallKeepService] 🚫 CallKeep unavailable after max attempts - app will continue without native call UI')
       this.isInitialized = true
       this.callKeepAvailable = false
+      return false
+    }
+  }
+
+  /**
+   * Check basic permissions required for CallKeep initialization
+   */
+  private async checkBasicPermissions(): Promise<boolean> {
+    try {
+      if (Platform.OS === 'android' && RNCallKeep) {
+        // Check if we have basic phone account permissions
+        const hasPhoneAccount = await RNCallKeep.hasPhoneAccount()
+        console.log('[CallKeepService] 🔍 Basic permissions check - hasPhoneAccount:', hasPhoneAccount)
+        return hasPhoneAccount
+      }
+      return true // iOS doesn't need this check
+    } catch (error) {
+      console.warn('[CallKeepService] ⚠️ Basic permissions check failed:', error)
       return false
     }
   }

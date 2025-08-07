@@ -723,11 +723,12 @@ const TipCallScreenSimple = () => {
         // Convert balance to number for calculations
         const numericBalance = parseFloat(balance || '0')
 
-        // Check minimum balance requirement
-        if (numericBalance < 1) {
+        // Check minimum balance requirement using CallBillingService
+        const balanceCheck = billingService.checkMinimumBalance(callType, numericBalance)
+        if (!balanceCheck.hasMinimumBalance) {
           Alert.alert(
             'Insufficient Balance',
-            'You need at least ₹1 to make a call. Please add money to your wallet.',
+            `You need at least ₹${balanceCheck.requiredAmount} to make a ${callType} call. Please add ₹${balanceCheck.shortfall.toFixed(2)} to your wallet.`,
             [
               { text: 'Cancel', style: 'cancel' },
               { text: 'Add Funds', onPress: () => navigation.navigate('AddFundsScreen' as never) }
@@ -797,11 +798,12 @@ const TipCallScreenSimple = () => {
         // Convert balance to number for calculations
         const numericBalance = parseFloat(balance || '0')
 
-        // Check minimum balance requirement
-        if (numericBalance < 1) {
+        // Check minimum balance requirement using CallBillingService
+        const balanceCheck = billingService.checkMinimumBalance(callType, numericBalance)
+        if (!balanceCheck.hasMinimumBalance) {
           Alert.alert(
             'Insufficient Balance',
-            'You need at least ₹1 to make a call. Please add money to your wallet.',
+            `You need at least ₹${balanceCheck.requiredAmount} to make a ${callType} call. Please add ₹${balanceCheck.shortfall.toFixed(2)} to your wallet.`,
             [
               { text: 'Cancel', style: 'cancel' },
               { text: 'Add Funds', onPress: () => navigation.navigate('AddFundsScreen' as never) }

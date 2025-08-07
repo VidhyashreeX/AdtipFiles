@@ -46,6 +46,7 @@ import { FCMChatProvider } from './src/contexts/FCMChatContext';
 import { DataProvider } from './src/providers/DataProvider';
 import { EnhancedQueryProvider } from './src/providers/QueryProvider';
 import { KeyboardAvoiderProvider } from '@good-react-native/keyboard-avoider';
+import CallEndModalProvider from './src/components/providers/CallEndModalProvider';
 
 // Components & Navigators
 import Sidebar from './src/components/sidebar/Sidebar';
@@ -574,9 +575,10 @@ function App(): React.JSX.Element {
                         <ShortsProvider>
                           <TabNavigatorProvider>
                             <SidebarProvider>
-                              <GestureHandlerRootView style={{ flex: 1 }}>
-                                <AppNavigator />
-                                <PersistentMeetingManager />
+                              <CallEndModalProvider>
+                                <GestureHandlerRootView style={{ flex: 1 }}>
+                                  <AppNavigator />
+                                  <PersistentMeetingManager />
                               {/* REMOVE Sidebar from here since it's now in UltraFastLoader */}
 
                               {/* Ad Debugger - only shows in development */}
@@ -593,7 +595,8 @@ function App(): React.JSX.Element {
 
                               {/* Theme test modal for debugging dark mode issues (only in debug builds) */}
                               <ThemeTestModal />
-                              </GestureHandlerRootView>
+                                </GestureHandlerRootView>
+                              </CallEndModalProvider>
                             </SidebarProvider>
                           </TabNavigatorProvider>
                         </ShortsProvider>

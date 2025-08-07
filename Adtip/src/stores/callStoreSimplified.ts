@@ -22,6 +22,7 @@ export interface CallSession {
   type: CallType
   startedAt?: number
   endedAt?: number
+  duration?: number // call duration in seconds
   callId?: number // backend call record id for payment processing
 }
 
@@ -42,6 +43,7 @@ interface CallStore {
     setStatus: (s: CallStatus) => void
     setSession: (session: CallSession | null) => void
     updateMedia: (updates: Partial<MediaState>) => void
+    updateDuration: (duration: number) => void
   }
 }
 
@@ -98,6 +100,11 @@ export const useCallStore = create<CallStore>()(
         updateMedia: (updates: Partial<MediaState>) => {
           console.log('[CallStore] Updating media state:', updates);
           set((state: CallStore) => ({ media: { ...state.media, ...updates } }));
+        },
+        updateDuration: (duration: number) => {
+          set((state: CallStore) => ({
+            session: state.session ? { ...state.session, duration } : null
+          }));
         },
       },
     }))

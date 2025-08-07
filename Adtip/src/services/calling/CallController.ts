@@ -19,6 +19,7 @@ import ApiService from '../ApiService'
 import CallStateCleanup from '../../utils/callStateCleanup'
 import { startPersistentCall, updatePersistentCallStatus, updatePersistentCallConfig, endPersistentCall } from '../../components/videosdk/PersistentMeetingManager'
 import PermissionManagerService from '../PermissionManagerService'
+import CallEndModalService from './CallEndModalService'
 import { logCall, logError, logWarn } from '../../utils/ProductionLogger'
 
 /**
@@ -89,8 +90,10 @@ class CallController {
                 session.sessionId,
                 session.peerName,
                 session.type,
+                false, // not concurrent call
                 session.meetingId,
-                session.token
+                session.token,
+                session.peerId // caller ID
               )
             }
             break
@@ -1202,6 +1205,29 @@ class CallController {
       }
       
       logCall('CallController', 'Call cleanup completed')
+
+      // Show call end modal with billing information
+      try {
+        if (currentSession && currentSession.duration && currentSession.duration > 0) {
+          const callEndModalService = CallEndModalService.getInstance();
+          const isCallInitiator = currentSession.direction === 'outgoing';
+
+          // Show modal with proper billing calculation
+          await callEndModalService.showCallEndModalWithProperBilling(
+            currentSession.type,
+            isCallInitiator,
+            currentSession.duration,
+            isCallInitiator ? undefined : currentSession.peerName, // callerName (if we received)
+            isCallInitiator ? currentSession.peerName : undefined, // receiverName (if we made)
+            false // TODO: Get actual premium status
+          );
+
+          logCall('CallController', 'Call end modal triggered successfully');
+        }
+      } catch (modalError) {
+        logError('CallController', 'Error showing call end modal', modalError);
+      }
+
     } catch (cleanupError) {
       logError('CallController', 'Error during call cleanup', cleanupError)
     } finally {
@@ -1287,7 +1313,7 @@ class CallController {
         }
 
         // Show incoming call notification with concurrent call context
-        this.notification.showIncomingCall(sessionId, callerName, callType, true) // true indicates concurrent call
+        this.notification.showIncomingCall(sessionId, callerName, callType, true, undefined, undefined, callerId) // true indicates concurrent call
 
         // Use a different vibration pattern for concurrent calls
         this.startVibrate(true) // true for concurrent call pattern
@@ -1311,7 +1337,7 @@ class CallController {
       actions.setStatus('ringing')
 
       // Show incoming call notification
-      this.notification.showIncomingCall(sessionId, callerName, callType)
+      this.notification.showIncomingCall(sessionId, callerName, callType, false, meetingId, token, callerId)
 
       // Start vibration
       this.startVibrate()

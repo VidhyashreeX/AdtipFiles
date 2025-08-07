@@ -1,13 +1,15 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   StyleSheet,
   Dimensions,
   Animated,
   TouchableOpacity,
+  Text,
 } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { ParticipantView } from '@videosdk.live/react-native-sdk';
+import { Camera, CameraOff } from 'lucide-react-native';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -30,10 +32,44 @@ const WhatsAppStyleVideoLayout: React.FC<WhatsAppStyleVideoLayoutProps> = ({
     y: 80,
   });
 
+  // Enhanced state for better self-view management
+  const [isLocalVideoVisible, setIsLocalVideoVisible] = useState(true);
+  const [localVideoOpacity] = useState(new Animated.Value(1));
+
   // Animation values for dragging
   const translateX = useRef(new Animated.Value(localVideoPosition.x)).current;
   const translateY = useRef(new Animated.Value(localVideoPosition.y)).current;
   const scale = useRef(new Animated.Value(1)).current;
+
+  // Ensure local video stays visible when remote participant connects
+  useEffect(() => {
+    if (localParticipantId) {
+      setIsLocalVideoVisible(true);
+      // Animate in if it was hidden
+      Animated.timing(localVideoOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [localParticipantId, remoteParticipantId, localVideoOpacity]);
+
+  // Handle camera state changes with smooth transitions
+  useEffect(() => {
+    if (localWebcamOn) {
+      Animated.timing(localVideoOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(localVideoOpacity, {
+        toValue: 0.8, // Keep slightly visible even when camera is off
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [localWebcamOn, localVideoOpacity]);
 
   // Local video dimensions
   const LOCAL_VIDEO_WIDTH = 120;
@@ -122,8 +158,8 @@ const WhatsAppStyleVideoLayout: React.FC<WhatsAppStyleVideoLayoutProps> = ({
         )}
       </View>
 
-      {/* Local participant (draggable overlay) */}
-      {localWebcamOn && localParticipantId && (
+      {/* Local participant (draggable overlay) - Always show when participant exists */}
+      {localParticipantId && isLocalVideoVisible && (
         <PanGestureHandler
           onGestureEvent={onPanGestureEvent}
           onHandlerStateChange={onPanHandlerStateChange}
@@ -137,6 +173,7 @@ const WhatsAppStyleVideoLayout: React.FC<WhatsAppStyleVideoLayoutProps> = ({
                   { translateY },
                   { scale },
                 ],
+                opacity: localVideoOpacity,
               },
             ]}
           >
@@ -145,11 +182,30 @@ const WhatsAppStyleVideoLayout: React.FC<WhatsAppStyleVideoLayoutProps> = ({
               onPress={handleLocalVideoTap}
               activeOpacity={0.8}
             >
-              <ParticipantView
-                participantId={localParticipantId}
-                style={styles.localVideo}
-              />
+              {localWebcamOn ? (
+                <ParticipantView
+                  participantId={localParticipantId}
+                  style={styles.localVideo}
+                />
+              ) : (
+                // Show placeholder when camera is off but keep the self-view container
+                <View style={styles.localVideoPlaceholder}>
+                  <View style={styles.cameraOffIndicator}>
+                    <CameraOff size={20} color="#fff" />
+                  </View>
+                  <Text style={styles.localVideoLabel}>You</Text>
+                </View>
+              )}
             </TouchableOpacity>
+
+            {/* Camera status indicator */}
+            <View style={styles.localVideoStatusIndicator}>
+              {localWebcamOn ? (
+                <Camera size={12} color="#00D4AA" />
+              ) : (
+                <CameraOff size={12} color="#FF3B30" />
+              )}
+            </View>
           </Animated.View>
         </PanGestureHandler>
       )}
@@ -204,6 +260,37 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
+  },
+  localVideoPlaceholder: {
+    flex: 1,
+    backgroundColor: '#1F2C34',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cameraOffIndicator: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 59, 48, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  localVideoLabel: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  localVideoStatusIndicator: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 
