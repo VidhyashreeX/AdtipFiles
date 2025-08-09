@@ -21,10 +21,12 @@ import { startPersistentCall, updatePersistentCallStatus, updatePersistentCallCo
 import PermissionManagerService from '../PermissionManagerService'
 import CallEndModalService from './CallEndModalService'
 import { logCall, logError, logWarn } from '../../utils/ProductionLogger'
+import CallBillingService from './CallBillingService'
+import WalletService from '../WalletService'
 
 /**
  * CallController - Main orchestration layer for call flows
- * 
+ *
  * Handles:
  * 1. Outgoing call initiation
  * 2. Incoming call handling
@@ -39,11 +41,11 @@ class CallController {
   private media: MediaService
   private notification: NotificationService
   private videoSDK: VideoSDKService
-  
+
   private vibrateInterval: NodeJS.Timeout | null = null
   private lastCallId?: number; // <-- Store last callId for bulletproof end call
   private pendingIncomingCall: any = null; // Store pending incoming call for concurrent call handling
-  
+
   // Call timeout management for internet issues and auto-end functionality
   private callTimeoutId: NodeJS.Timeout | null = null
   private maxCallDurationMs: number = 10 * 60 * 1000 // 10 minutes
@@ -54,25 +56,25 @@ class CallController {
     if (!CallController._instance) CallController._instance = new CallController()
     return CallController._instance
   }
-  
+
   private constructor() {
     // Initialize services
     this.signaling = CallSignalingService.getInstance()
     this.media = MediaService.getInstance()
     this.notification = NotificationService.getInstance()
     this.videoSDK = VideoSDKService.getInstance()
-    
+
     // Set up listeners
     this.setupStoreListeners()
     this.setupNotificationListeners()
   }
-  
+
   /**
    * Listen to store changes and coordinate actions
    */
   private setupStoreListeners() {
     const { getState, subscribe } = useCallStore
-    
+
     // When call status changes
     subscribe(
       state => state.status,
@@ -98,42 +100,55 @@ class CallController {
             }
             break
           }
-          
+
           case 'connecting': {
             // Stop vibrating
             this.stopVibrate()
             break
           }
-          
+
           case 'in_call': {
             const session = getState().session
             if (session) {
               // Show ongoing call notification
               this.notification.showOngoingCall(
                 session.sessionId,
-                session.peerName, 
+                session.peerName,
                 session.type
               )
-              
+
               // Start call timeout monitoring to prevent VideoSDK charges
               this.startCallTimeout()
+
+              // Start billing enforcement once the call is actually connected
+              this.startBillingEnforcement(session).catch((err) => {
+                logWarn('CallController', 'Failed to start billing enforcement', err as any)
+              })
             }
             break
           }
-          
+
           case 'ended': {
             // Stop vibrating
             this.stopVibrate()
-            
+
             // Clear call timeout monitoring
             this.clearCallTimeout()
-            
+
+            // Stop billing enforcement timers
+            try {
+              const billingService = CallBillingService.getInstance()
+              billingService.stopCallBilling()
+            } catch (err) {
+              logWarn('CallController', 'Failed to stop billing enforcement', err as any)
+            }
+
             // Hide notifications
             const session = getState().session
             if (session) {
               this.notification.hideNotification(session.sessionId)
             }
-            
+
             // Clean up the session
             setTimeout(() => {
               this.cleanup()
@@ -143,7 +158,7 @@ class CallController {
         }
       }
     )
-    
+
     // When status changes, update persistent meeting manager
     subscribe(
       state => state.status,
@@ -155,9 +170,10 @@ class CallController {
             updatePersistentCallStatus(status)
             break
           }
-          
+
           case 'ended': {
             // End persistent call
+
             endPersistentCall()
             break
           }
@@ -165,7 +181,7 @@ class CallController {
       }
     )
   }
-  
+
   /**
    * Listen to notification interactions
    */
@@ -220,7 +236,7 @@ class CallController {
       }
     })
   }
-  
+
   /**
    * Start phone vibration
    * @param isConcurrentCall - Use different pattern for concurrent calls
@@ -235,7 +251,7 @@ class CallController {
       Vibration.vibrate([1000, 500, 1000, 500], true)
     }
   }
-  
+
   /**
    * Stop phone vibration
    */
@@ -254,14 +270,14 @@ class CallController {
     this.clearCallTimeout()
     this.callStartTime = Date.now()
     this.isCallTimedOut = false
-    
+
     logCall('CallController', `Starting call timeout monitoring (${this.maxCallDurationMs / 60000} minutes)`)
-    
+
     this.callTimeoutId = setTimeout(async () => {
       if (!this.isCallTimedOut) {
         this.isCallTimedOut = true
         logCall('CallController', '⚠️ Call timeout reached - auto-ending call to prevent VideoSDK charges')
-        
+
         try {
           await this.endCall()
           logCall('CallController', '✅ Call auto-ended successfully due to timeout')
@@ -295,7 +311,7 @@ class CallController {
     const remaining = this.maxCallDurationMs - elapsed
     return Math.max(0, Math.floor(remaining / 1000))
   }
-  
+
   /**
    * Emergency recovery for critical errors
    */
@@ -365,7 +381,7 @@ class CallController {
       }
     }
   }
-  
+
   /**
    * Get user info from storage
    */
@@ -374,7 +390,7 @@ class CallController {
     const userName = await AsyncStorage.getItem('userName') || 'Unknown User'
     return { userId, userName }
   }
-  
+
   /**
    * Get token for peer's FCM
    */
@@ -387,7 +403,7 @@ class CallController {
       return null
     }
   }
-  
+
   /**
    * Helper to fetch FCM token for a given user id
    */
@@ -400,7 +416,7 @@ class CallController {
       return null
     }
   }
-  
+
   /**
    * Helper to send call status update via ApiService
    */
@@ -422,7 +438,7 @@ class CallController {
       logWarn('CallController', 'sendCallStatusUpdate error', err)
     }
   }
-  
+
   /**
    * Start an outgoing call
    */
@@ -521,10 +537,10 @@ class CallController {
         callId // Store the callId for payment processing when ending the call
       })
       actions.setStatus('outgoing')
-      
+
       // Initialize media
       await this.media.initialize()
-      
+
       // Show outgoing call notification
       this.notification.showOngoingCall(backendSessionId, recipientName, callType)
 
@@ -540,15 +556,15 @@ class CallController {
         callType,
         direction: 'outgoing'
       })
-      
+
       return true
     } catch (error) {
       logError('CallController', 'startCall error', error)
-      
+
       // Reset call state
       const { actions } = useCallStore.getState()
       actions.reset()
-      
+
       return false
     }
   }
@@ -961,23 +977,23 @@ class CallController {
       return false
     }
   }
-  
+
   /**
    * Decline incoming call
    */
   async declineCall() {
     const store = useCallStore.getState()
     const session = store.session
-    
+
     if (!session || store.status !== 'ringing') return false
-    
+
     try {
       // Stop vibrating
       this.stopVibrate()
-      
+
       // Hide incoming notification
       this.notification.hideNotification(session.sessionId)
-      
+
       // Send end signal
       try {
         await this.signaling.sendEnd(session.peerId, session.sessionId)
@@ -1002,18 +1018,18 @@ class CallController {
 
       // CallManagerService removed - billing handled by CallBillingService
       logCall('CallController', 'Missed call cleanup completed')
-      
+
       // Update status
       const { actions } = useCallStore.getState()
       actions.setStatus('ended')
-      
+
       return true
     } catch (error) {
       logError('CallController', 'declineCall error', error)
       return false
     }
   }
-  
+
   // Flag to prevent duplicate endCall operations
   private isEndingCall = false;
 
@@ -1028,7 +1044,7 @@ class CallController {
     }
 
     this.isEndingCall = true;
-    
+
     // Clear call timeout monitoring immediately
     this.clearCallTimeout()
 
@@ -1059,14 +1075,14 @@ class CallController {
           const isOutgoingCall = session.direction === 'outgoing';
           const originalCallerId = isOutgoingCall ? parseInt(userId) : parseInt(session.peerId);
           const originalReceiverId = isOutgoingCall ? parseInt(session.peerId) : parseInt(userId);
-        
+
         const payload = {
           callerId: originalCallerId,
           receiverId: originalReceiverId,
           action: 'end' as const,
           callId: callIdToUse
         };
-        
+
         logCall('CallController', 'Calling end API with payload', {
           payload,
           callType: session.type,
@@ -1075,7 +1091,7 @@ class CallController {
           originalReceiverId,
           callId: callIdToUse
         });
-        
+
         // Use consolidated status API for both voice and video calls to ensure proper wallet deduction
         logCall('CallController', `Making ${session.type} call end API call using consolidated status endpoint...`);
         await ApiService.updateConsolidatedCallStatus({
@@ -1182,7 +1198,7 @@ class CallController {
           logError('CallController', 'End signal retry also failed', retryError)
         }
       }
-      
+
       // Meeting already ended above, just clean up media service
       try {
         logCall('CallController', '🚀 CLEANING UP MEDIA SERVICE (meeting already ended)');
@@ -1191,28 +1207,28 @@ class CallController {
       } catch (mediaError) {
         logError('CallController', '🚀 FAILED TO CLEANUP MEDIA SERVICE', mediaError)
       }
-      
+
       // Comprehensive notification cleanup
       try {
         if (currentSession && currentSession.sessionId) {
           logCall('CallController', 'Hiding notifications');
           this.notification.hideNotification(currentSession.sessionId)
         }
-        
+
         // Stop foreground service
         if (global.resolveForegroundService) {
           global.resolveForegroundService()
         }
         await notifee.stopForegroundService()
-        
+
         // Clear all call-related notifications as fallback
         await notifee.cancelAllNotifications()
-        
+
         logCall('CallController', 'Notification cleanup completed');
       } catch (notificationError) {
         logError('CallController', 'Failed to cleanup notifications', notificationError)
       }
-      
+
       logCall('CallController', 'Call cleanup completed')
 
       // Show call end modal with billing information
@@ -1245,7 +1261,33 @@ class CallController {
     }
     return true;
   }
-  
+
+  /**
+   * Begin billing enforcement using current session state
+   */
+  async startBillingEnforcement(session: ReturnType<typeof useCallStore.getState>['session']): Promise<void> {
+    try {
+      if (!session) return
+      const { userId } = await this.getUserInfo()
+      const [balanceStr, premiumStatus] = await Promise.all([
+        WalletService.getWalletBalance(userId),
+        WalletService.checkPremiumStatus(userId),
+      ])
+      const numericBalance = parseFloat(balanceStr || '0')
+      const isPremium = !!premiumStatus?.isPremium
+      const billingService = CallBillingService.getInstance()
+      await billingService.startCallBilling(
+        session.sessionId,
+        userId,
+        session.type,
+        numericBalance,
+        isPremium
+      )
+    } catch (err) {
+      throw err
+    }
+  }
+
   /**
    * Handle incoming FCM message for call
    */
@@ -1413,4 +1455,4 @@ class CallController {
   }
 }
 
-export default CallController 
+export default CallController

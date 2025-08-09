@@ -114,8 +114,10 @@ const AppNavigator = () => {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
-  // Check if user needs to complete profile details
-  const needsUserDetails = isAuthenticated && (!user?.name || user?.isSaveUserDetails !== 1);
+  // Check if user needs to complete profile details (robust check across possible name fields)
+  const hasName = Boolean(user?.name?.trim?.() || (user as any)?.firstname?.trim?.() || (user as any)?.firstName?.trim?.());
+  const hasCompleted = user?.isSaveUserDetails === 1 || (user as any)?.isSaveUserDetails === true;
+  const needsUserDetails = isAuthenticated && !(hasName && hasCompleted);
 
   // Memoize the initialization complete callback to prevent re-renders
   const handleInitializationComplete = useCallback(() => {

@@ -493,7 +493,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
         throw new Error(data.message || 'Failed to update user details');
       }
 
-      const updatedUser = data.data[0];
+      const updatedUser = { ...data.data[0], isSaveUserDetails: 1 };
       await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
       await AsyncStorage.setItem('is_premium', updatedUser.is_premium ? '1' : '0');

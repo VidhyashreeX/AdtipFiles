@@ -320,7 +320,7 @@ const PostViewerScreen: React.FC<PostViewerScreenProps> = () => {
       <PostItem
         key={`post-${item.id}-${index}`}
         id={item.id}
-        username={item.user_name ? String(item.user_name) : (currentUser?.name || "Unknown")}
+        username={item.user_name ? String(item.user_name) : "Unknown"}
         profileImage={item.user_profile_image}
         postImage={item.media_url}
         caption={item.content}

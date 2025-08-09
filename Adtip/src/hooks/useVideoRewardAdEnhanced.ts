@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { useUserPremiumStatus } from '../contexts/UserDataContext';
-import { ApiService } from '../services/ApiService';
+import ApiService from '../services/ApiService';
 import { useTipShortsStore } from '../stores/tipShortsStore';
 
 interface UseVideoRewardAdProps {
@@ -53,18 +53,18 @@ export const useVideoRewardAdEnhanced = ({ isGuest, userId }: UseVideoRewardAdPr
       setIsProcessingReward(true);
       console.log('💰 [useVideoRewardAdEnhanced] Crediting reward to wallet:', { userId, amount, isPremium });
 
-      const response = await ApiService.creditAdReward(Number(userId), amount);
+      const response = await ApiService.creditAdReward({ userId: Number(userId), amount });
       
       console.log('💰 [useVideoRewardAdEnhanced] Credit response:', response);
 
-      if (response.success) {
+      if (response.status === 200 || response.success === true) {
         setCreditedStatus(true);
         setLastRewardTime(Date.now());
         console.log('✅ [useVideoRewardAdEnhanced] Reward credited successfully:', response.data);
         return true;
       } else {
         console.error('❌ [useVideoRewardAdEnhanced] Failed to credit reward:', response.message);
-        Alert.alert('Error', response.message || 'Failed to credit reward');
+        Alert.alert('Error', (response as any).message || 'Failed to credit reward');
         return false;
       }
     } catch (error) {

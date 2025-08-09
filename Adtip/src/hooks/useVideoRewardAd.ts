@@ -4,6 +4,7 @@ import ApiService from '../services/ApiService';
 import { useNavigation } from '@react-navigation/native';
 import { useRewardedAd } from '../googleads';
 import { useUserPremiumStatus } from '../contexts/UserDataContext';
+import { useWallet as useWalletContext } from '../contexts/WalletContext';
 
 const NON_PREMIUM_REWARD = 0.03;
 const PREMIUM_REWARD = 0.10;
@@ -32,6 +33,7 @@ export const useVideoRewardAd = ({
   const [earnedAmount, setEarnedAmount] = useState(0);
   const [hasBeenCredited, setHasBeenCredited] = useState(false);
   const navigation = useNavigation();
+  const walletCtx = useWalletContext();
 
   // Get premium status using the same logic as the header toggle
   const { isPremium } = useUserPremiumStatus();
@@ -112,15 +114,21 @@ export const useVideoRewardAd = ({
       console.log('💰 [useVideoRewardAd] Crediting wallet with amount:', amountToCredit);
 
       // Use ApiService instead of direct fetch
-      await ApiService.creditAdReward({
+      const resp = await ApiService.creditAdReward({
         userId: Number(userId),
         amount: amountToCredit
       });
 
-      console.log('✅ [useVideoRewardAd] Wallet credited successfully');
+      if (resp?.status === 200 || resp?.success === true) {
+        console.log('✅ [useVideoRewardAd] Wallet credited successfully');
+        try { await walletCtx.refreshBalance(); } catch {}
+      } else {
+        console.warn('❌ [useVideoRewardAd] Wallet credit response not success:', resp);
+      }
     } catch (error) {
       console.error('❌ [useVideoRewardAd] Error crediting wallet:', error);
-      throw error;
+      // Surface a friendly error but don't throw to avoid breaking the flow
+      Alert.alert('Error', 'Failed to credit reward to wallet. Please try again later.');
     }
   }, [userId, earnedAmount]);
 

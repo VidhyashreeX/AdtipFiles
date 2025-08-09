@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import Video from 'react-native-video';
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Play, Pause, VolumeX, Volume2, AlertTriangle, Image as ImageIcon } from 'lucide-react-native';
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Play, Pause, VolumeX, Volume2, AlertTriangle, Image as ImageIcon, IndianRupee } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { 
   createSecureImageSource, 
@@ -399,11 +399,15 @@ const PostItem: React.FC<PostItemProps> = ({
           >
             <View style={styles.modalBackdrop}>
               <View style={styles.modalContent}>
-                <TouchableOpacity 
-                  style={styles.modalClose} 
-                  onPress={() => { 
-                    if (canClosePromoModal || hasBeenViewed) setShowPromoModal(false); 
-                  }} 
+                {/* Paid Post Indicator in Modal */}
+                <View style={[styles.paidPostIndicator, { top: 60, left: 20 }]}>
+                  <IndianRupee size={16} color="#fff" />
+                </View>
+                <TouchableOpacity
+                  style={styles.modalClose}
+                  onPress={() => {
+                    if (canClosePromoModal || hasBeenViewed) setShowPromoModal(false);
+                  }}
                   disabled={!canClosePromoModal && !hasBeenViewed}
                 >
                   <Text style={{ fontSize: 18, color: (canClosePromoModal || hasBeenViewed) ? '#333' : '#aaa' }}>✕</Text>
@@ -460,6 +464,12 @@ const PostItem: React.FC<PostItemProps> = ({
         // Non-promoted or expired/exhausted: show media as usual
         <TouchableOpacity onPress={handlePostPress} activeOpacity={1}>
           <View style={styles.mediaContainer}>
+            {/* Paid Post Indicator */}
+            {isPromoted && isPromoActive && (
+              <View style={styles.paidPostIndicator}>
+                <IndianRupee size={16} color="#fff" />
+              </View>
+            )}
             {media_type === 'image' && postImage && (
               <ContentFastImage 
                 source={postImage} 
@@ -761,6 +771,26 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: '600',
+  },
+  paidPostIndicator: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: '#FF6B35',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 20,
+    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   promoButtonContainer: {
     width: '100%',

@@ -197,7 +197,10 @@ const CloudflareStreamPlayer: React.FC<CloudflareStreamPlayerProps> = ({
 
   const handleVideoEnd = () => {
     Logger.debug('CloudflareStreamPlayer', 'Video playback ended');
-    onEnd?.();
+    // For Shorts, we auto-repeat and do not trigger parent onEnd to avoid advancing
+    if (!isShort) {
+      onEnd?.();
+    }
   };
 
   // Determine video source with proper validation
@@ -340,7 +343,7 @@ const CloudflareStreamPlayer: React.FC<CloudflareStreamPlayerProps> = ({
         onEnd={handleVideoEnd}
         muted={muted}
         paused={paused} // Add paused control for proper playback
-        repeat={false}
+        repeat={isShort ? true : false}
         playWhenInactive={false}
         playInBackground={false}
         bufferConfig={{

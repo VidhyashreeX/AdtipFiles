@@ -1,18 +1,18 @@
 # Inshorts Reward Implementation
 
 ## Overview
-This implementation adds a money credit popup that shows after every 10 shorts in the TipShorts screen. Users earn different amounts based on their premium status.
+This implementation adds a money credit popup that shows after every 5 shorts in the TipShorts screen. Users earn different amounts based on their premium status.
 
 ## Features
 
 ### Reward System
-- **Non-premium users**: ₹0.03 per 10 shorts
-- **Premium users**: ₹0.10 per 10 shorts
-- **Strict counting**: Exactly 10 shorts required, no duplication allowed
+- **Non-premium users**: ₹0.03 per 5 shorts
+- **Premium users**: ₹0.10 per 5 shorts
+- **Strict counting**: Exactly 5 shorts required, no duplication allowed
 - **No guest rewards**: Guest users cannot earn rewards
 
 ### Popup Behavior
-- Shows after every 10 shorts are viewed
+- Shows after every 5 shorts are viewed
 - **Non-premium users**: 
   - "Start Now" button navigates to PremiumUser component
   - "Got it!" button closes popup and credits wallet
@@ -47,7 +47,7 @@ This implementation adds a money credit popup that shows after every 10 shorts i
 The system automatically tracks short views and shows the reward popup after 10 shorts. No additional integration needed.
 
 ### For Users
-1. Watch 10 shorts
+1. Watch 5 shorts
 2. Reward popup appears automatically
 3. Click "Start Now" (non-premium) or "Got it!" (premium)
 4. Reward is credited to wallet
@@ -59,7 +59,7 @@ The system automatically tracks short views and shows the reward popup after 10 
 
 ## Testing
 - Test with both premium and non-premium users
-- Verify strict 10-short counting
+- Verify strict 5-short counting
 - Check anti-duplication protection
 - Test navigation to PremiumUser component
 - Verify wallet crediting functionality 

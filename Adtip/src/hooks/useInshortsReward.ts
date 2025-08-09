@@ -6,7 +6,7 @@ import { useUserPremiumStatus } from '../contexts/UserDataContext';
 
 const NON_PREMIUM_REWARD = 0.03;
 const PREMIUM_REWARD = 0.10;
-const SHORTS_REQUIRED = 10;
+const SHORTS_REQUIRED = 5;
 
 interface UseInshortsRewardProps {
   isGuest: boolean;
@@ -94,9 +94,9 @@ export const useInshortsReward = ({
       const newCount = prev + 1;
       console.log(`🎬 [useInshortsReward] Short viewed. Count: ${newCount}/${SHORTS_REQUIRED} (User: ${userId}, Premium: ${isPremium})`);
 
-      // Show reward popup after exactly 10 shorts
+      // Show reward popup after exactly 5 shorts
       if (newCount === SHORTS_REQUIRED) {
-        console.log('🎁 [useInshortsReward] 10th short reached! Showing reward popup...');
+        console.log('🎁 [useInshortsReward] 5th short reached! Showing reward popup...');
         const rewardAmount = getRewardAmount();
         setEarnedAmount(rewardAmount);
         setHasBeenCredited(false); // Reset credit tracking for new reward cycle

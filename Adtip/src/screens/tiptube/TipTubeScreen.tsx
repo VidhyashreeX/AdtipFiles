@@ -22,6 +22,9 @@ import { CirclePlay, Gamepad2, Search } from 'lucide-react-native';
 import RazorpayCheckout from 'react-native-razorpay';
 import debounce from 'lodash.debounce';
 
+// Import the new insufficient balance modal
+import InsufficientBalanceModal from '../../components/modals/InsufficientBalanceModal';
+
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -48,6 +51,7 @@ import {
 } from '../../utils/mediaUtils';
 
 import ApiService from '../../services/ApiService';
+import { useWallet as useWalletContext } from '../../contexts/WalletContext';
 import { API_BASE_URL } from '../../constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PubScaleService from '../../services/PubScaleService';
@@ -178,6 +182,7 @@ const TipTubeScreen = () => {
   const { isDarkMode, colors } = useTheme();
   const { contentPaddingBottom } = useTabNavigator();
   const { user, isGuest } = useAuth();
+  const walletCtx = useWalletContext();
   const { clearCache } = useDataContext();
   const { requireAuth } = useGuestGuard();
   const navigation = useNavigation<any>();
@@ -209,12 +214,15 @@ const TipTubeScreen = () => {
   // Analytics premium alert state
   const [showAnalyticsPremiumAlert, setShowAnalyticsPremiumAlert] = useState(false);
 
+  // Insufficient balance modal state
+  const [showInsufficientBalanceModal, setShowInsufficientBalanceModal] = useState(false);
+
   // Content Creator Premium State - Using shared context
-  const { 
-    isContentCreatorPremium, 
-    contentCreatorPremiumData, 
+  const {
+    isContentCreatorPremium,
+    contentCreatorPremiumData,
     refreshContentCreatorPremiumStatus,
-    isLoading: contentCreatorPremiumLoading 
+    isLoading: contentCreatorPremiumLoading
   } = useContentCreatorPremium();
 
   // Refs
@@ -223,7 +231,7 @@ const TipTubeScreen = () => {
 
   // Enhanced data layer using React Query v5
   const categoryId = categoryToIdMap[selectedCategory] || 0;
-  
+
   // Use different hooks based on guest mode and search state
   const authenticatedVideosQuery = searchQuery && searchQuery.trim()
     ? useSearchVideos(searchQuery.trim(), user?.id)
@@ -280,7 +288,7 @@ const TipTubeScreen = () => {
         isFirstRun.current = false;
         return;
       }
-      
+
       console.log('[TipTubeScreen] Screen focused. Refetching videos.');
       refreshVideos();
     }, [refreshVideos])
@@ -427,7 +435,7 @@ const TipTubeScreen = () => {
       firstPage: isGuest ? (videosData as any)?.data?.slice(0, 2) : (videosData as any)?.pages?.[0]?.data?.slice(0, 2),
       allVideosCount: allVideos.length
     });
-    
+
     // Transform API videos to Video interface format
     const transformedVideos = allVideos.map((apiVideo: any) => ({
       id: apiVideo.id || 0,
@@ -446,12 +454,12 @@ const TipTubeScreen = () => {
       contentCreatorPlanId: apiVideo.content_creator_plan_id || 0,
       has_content_creator_premium: apiVideo.has_content_creator_premium || 0 // Added for new logic
     }));
-    
+
     console.log('[TipTubeScreen] Transformed videos:', {
       count: transformedVideos.length,
       firstVideo: transformedVideos[0]
     });
-    
+
     return transformedVideos;
   }, [videosData, isGuest]);
 
@@ -751,11 +759,9 @@ const TipTubeScreen = () => {
               video: { ...video, videoUrl },
               upNextVideos: shuffleArray(videos.filter((v: Video) => v.id !== video.id)).slice(0, 10)
             });
+            try { await walletCtx.refreshBalance(); } catch {}
           } else {
-            Alert.alert(
-              'Insufficient Balance',
-              'You do not have enough balance to watch this video.'
-            );
+            setShowInsufficientBalanceModal(true);
           }
         } else {
           // Case 2: Paid video, owner does NOT have content creator premium
@@ -766,11 +772,9 @@ const TipTubeScreen = () => {
               video: { ...video, videoUrl },
               upNextVideos: shuffleArray(videos.filter((v: Video) => v.id !== video.id)).slice(0, 10)
             });
+            try { await walletCtx.refreshBalance(); } catch {}
           } else {
-            Alert.alert(
-              'Insufficient Balance',
-              'You do not have enough balance to watch this video.'
-            );
+            setShowInsufficientBalanceModal(true);
           }
         }
       } else {
@@ -826,15 +830,15 @@ const TipTubeScreen = () => {
 
     return (
       <View style={styles.emptyContainer}>
-        <Icon 
-          name={hasSearchQuery ? "search" : "video"} 
-          size={48} 
-          color={colors.text.tertiary} 
+        <Icon
+          name={hasSearchQuery ? "search" : "video"}
+          size={48}
+          color={colors.text.tertiary}
         />
         <Text style={styles.emptyText}>
-          {videosError && !isOnline 
+          {videosError && !isOnline
             ? 'You\'re offline. Videos will load when you\'re back online.'
-            : videosError 
+            : videosError
             ? 'Failed to load videos. Please try again.'
             : hasSearchQuery
             ? `No videos found for "${searchQuery.trim()}"`
@@ -1111,7 +1115,27 @@ const TipTubeScreen = () => {
           searchQuery={searchQuery}
           rightComponent={<ChannelProfileComponent />}
         />
-        
+
+        {/* Debug Overlay Button - Only visible in debug builds */}
+        {__DEV__ && (
+          <TouchableOpacity
+            style={{
+              position: 'absolute',
+              top: 100,
+              right: 20,
+              backgroundColor: 'rgba(255, 0, 0, 0.8)',
+              padding: 10,
+              borderRadius: 20,
+              zIndex: 1000,
+            }}
+            onPress={() => setShowInsufficientBalanceModal(true)}
+          >
+            <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
+              Test Modal
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {initialLoading ? (
           renderSkeletonLoading()
         ) : (
@@ -1192,6 +1216,13 @@ const TipTubeScreen = () => {
           onGoBack={handleAnalyticsPremiumGoBack}
         />
 
+        {/* Insufficient Balance Modal */}
+        <InsufficientBalanceModal
+          visible={showInsufficientBalanceModal}
+          onClose={() => setShowInsufficientBalanceModal(false)}
+          title="Insufficient Balance"
+          message="You do not have enough balance to watch this paid video. Add funds to your wallet to continue."
+        />
 
         </View>
       </ScreenTransition>
