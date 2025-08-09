@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.adtip.app.adtip_app",
+      "sha256_cert_fingerprints": [
+        "AA:67:95:16:E6:F2:92:9D:BC:3C:EF:4D:3C:E2:8A:B3:CF:E7:77:8A:DD:19:71:3D:FA:35:C3:D6:95:08:AE:51"
+      ]
+    }
+  }
+]
