@@ -2,34 +2,22 @@
 // Removed legacy callStore import to prevent dual store confusion
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  SafeAreaView,
   StatusBar,
   StyleSheet,
-  View,
-  ActivityIndicator,
   useWindowDimensions,
   Text,
-  Platform,
-  Linking,
-  Alert,
-  AppState,
-  AppStateStatus,
-  NativeEventEmitter,
-  NativeModules,
 } from 'react-native';
-import { ErrorUtils } from 'react-native';
+
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import {
   SafeAreaProvider,
-  SafeAreaView as SafeAreaViewRN,
   useSafeAreaInsets
 } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { getApps } from '@react-native-firebase/app';
-import messaging from '@react-native-firebase/messaging';
 import mobileAds from 'react-native-google-mobile-ads';
-import { useAppOpenAd, AdDebugger } from './src/googleads';
+import { useAppOpenAd } from './src/googleads';
 
 // Contexts
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -37,8 +25,7 @@ import { WalletProvider } from './src/contexts/WalletContext';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { ShortsProvider } from './src/contexts/ShortsContext';
 import { SidebarProvider } from './src/contexts/SidebarContext';
-import { VideoSDKProvider } from './src/contexts/VideoSDKContext';
-import { useTabNavigator, TabNavigatorProvider } from './src/contexts/TabNavigatorContext';
+import { TabNavigatorProvider } from './src/contexts/TabNavigatorContext';
 //import { CallProvider, useCall, ActiveCall } from './src/contexts/CallProvider';
 import { ContentCreatorPremiumProvider } from './src/contexts/ContentCreatorPremiumContext';
 import { UserDataProvider } from './src/contexts/UserDataContext';
@@ -49,10 +36,8 @@ import { KeyboardAvoiderProvider } from '@good-react-native/keyboard-avoider';
 import CallEndModalProvider from './src/components/providers/CallEndModalProvider';
 
 // Components & Navigators
-import Sidebar from './src/components/sidebar/Sidebar';
 import MainNavigator from './src/navigation/MainNavigator';
-import AuthNavigator from './src/navigation/AuthNavigator';
-import { navigationRef, navigateWithRetry, getCurrentRoute, isNavigationReady } from './src/navigation/NavigationService';
+import { navigationRef } from './src/navigation/NavigationService';
 
 // Services
 import FirebaseService from './src/services/FirebaseService';

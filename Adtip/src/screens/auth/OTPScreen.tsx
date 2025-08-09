@@ -138,7 +138,7 @@ const OTPScreen = ({ navigation, route }) => {
         {/* Title and subtitle */}
         <Text style={[styles.title, { color: colors.text.primary }]}>Enter OTP</Text>
         <Text style={[styles.subtitle, { color: colors.text.tertiary }]}>
-          We've sent a 6-digit verification code to{'\n'}{countryCode} {mobileNumber}
+          We&apos;ve sent a 6-digit verification code to{'\n'}{countryCode} {mobileNumber}
         </Text>
         
         {/* OTP input */}

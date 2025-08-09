@@ -93,6 +93,8 @@ const ShortsSkeleton = memo(() => {
   );
 });
 
+ShortsSkeleton.displayName = 'ShortsSkeleton';
+
 // Main TipShorts Enhanced Component with TanStack Query
 const TipShortsEnhanced = () => {
   // const { colors } = useTheme(); // Unused for now
