@@ -1,10 +1,10 @@
 import { FirebaseMessagingTypes } from '@react-native-firebase/messaging'
-import messaging from '@react-native-firebase/messaging'
 import notifee, { AndroidImportance, EventType } from '@notifee/react-native'
-import { AppState, Platform } from 'react-native'
+import { AppState } from 'react-native'
 import { useCallStore, CallType, CallSession } from '../../stores/callStoreSimplified'
 import CallStateCleanup from '../../utils/callStateCleanup'
 import { startPersistentCall } from '../../components/videosdk/PersistentMeetingManager'
+import CallKeepService from './CallKeepService'
 
 /**
  * ReliableCallManager - Single source of truth for all call handling
@@ -20,6 +20,7 @@ class ReliableCallManager {
   private appStateSubscription: any = null
   private currentCallSession: CallSession | null = null
   private processingMessage = false
+  private callKeepService: CallKeepService
 
   // Notification channels
   private readonly INCOMING_CHANNEL = 'reliable-incoming-calls'
@@ -34,6 +35,7 @@ class ReliableCallManager {
 
   private constructor() {
     // Private constructor for singleton
+    this.callKeepService = CallKeepService.getInstance()
   }
 
   /**
@@ -47,6 +49,37 @@ class ReliableCallManager {
 
     try {
       console.log('[ReliableCallManager] Initializing...')
+
+      // Initialize CallKeepService for native call UI - MANDATORY for optimal call experience
+      try {
+        console.log('[ReliableCallManager] Initializing CallKeepService (required for native call UI)...')
+        const initResult = await this.callKeepService.initialize()
+
+        if (initResult) {
+          console.log('[ReliableCallManager] ✅ CallKeepService initialized successfully - native call UI available')
+        } else {
+          console.warn('[ReliableCallManager] ⚠️ CallKeepService initialization failed - checking status...')
+
+          const status = this.callKeepService.getCallKeepStatus()
+          if (status.needsPermissions) {
+            console.warn('[ReliableCallManager] 📱 Phone account permissions required for optimal call experience')
+            console.warn('[ReliableCallManager] 💡 User should enable in Settings > Apps > Adtip > Phone Account')
+
+            // Show user-friendly guidance
+            this.showCallKeepPermissionGuidance()
+
+            // Show alert immediately to help user enable CallKeep
+            setTimeout(() => {
+              this.callKeepService.showPhoneAccountGuidanceAlert().catch(error => {
+                console.warn('[ReliableCallManager] Could not show guidance alert:', error)
+              })
+            }, 1000) // Reduced delay to show alert sooner
+          }
+        }
+      } catch (callKeepError) {
+        console.error('[ReliableCallManager] ❌ CallKeepService initialization error:', callKeepError)
+        console.warn('[ReliableCallManager] 📱 Will use custom notifications - functionality preserved')
+      }
 
       // Create notification channels first
       await this.createNotificationChannels()
@@ -190,7 +223,7 @@ class ReliableCallManager {
       // Fallback to direct type field (legacy format)
       else if (data.type) {
         parsedData = data
-        messageType = data.type
+        messageType = typeof data.type === 'string' ? data.type : String(data.type)
       }
       else {
         console.log('[ReliableCallManager] No call data found in FCM message, ignoring')
@@ -355,7 +388,7 @@ class ReliableCallManager {
       console.log('[ReliableCallManager] Handling call accept:', data)
 
       const sessionId = data.sessionId
-      if (this.currentCallSession?.sessionId === sessionId) {
+      if (this.currentCallSession?.sessionId === sessionId && this.currentCallSession) {
         await this.updateCallStore(this.currentCallSession, 'connecting')
         await this.hideIncomingCallNotification(sessionId)
       }
@@ -463,12 +496,35 @@ class ReliableCallManager {
   }
 
   /**
-   * Show incoming call notification with fallback handling
+   * Show incoming call notification with CallKeep native UI first, then fallback to Notifee
    */
   private async showIncomingCallNotification(session: CallSession): Promise<void> {
     try {
       console.log('[ReliableCallManager] Showing incoming call notification')
 
+      // Try CallKeep native UI first
+      if (this.callKeepService.isAvailable()) {
+        console.log('[ReliableCallManager] Attempting to show CallKeep native UI')
+        const callKeepSuccess = await this.callKeepService.displayIncomingCall(
+          session.sessionId,
+          session.peerName,
+          session.peerName,
+          'generic',
+          session.type === 'video'
+        )
+
+        if (callKeepSuccess) {
+          console.log('[ReliableCallManager] CallKeep native UI displayed successfully')
+          return // CallKeep handled the call, no need for Notifee
+        } else {
+          console.warn('[ReliableCallManager] CallKeep failed, falling back to Notifee notification')
+        }
+      } else {
+        console.log('[ReliableCallManager] 📱 CallKeep not available - using custom notification UI')
+        console.log('[ReliableCallManager] 💡 This provides the same functionality with custom notifications')
+      }
+
+      // Fallback to Notifee notification
       await notifee.displayNotification({
         id: session.sessionId,
         title: `Incoming ${session.type} call`,
@@ -497,7 +553,7 @@ class ReliableCallManager {
         },
       })
 
-      console.log('[ReliableCallManager] Incoming call notification displayed')
+      console.log('[ReliableCallManager] Notifee notification displayed')
     } catch (error) {
       console.error('[ReliableCallManager] Failed to show incoming call notification:', error)
       // Try fallback notification
@@ -553,10 +609,17 @@ class ReliableCallManager {
   }
 
   /**
-   * Hide incoming call notification
+   * Hide incoming call notification (both CallKeep and Notifee)
    */
   private async hideIncomingCallNotification(sessionId: string): Promise<void> {
     try {
+      // Hide CallKeep call if active
+      if (this.callKeepService.getCurrentCallUUID() === sessionId) {
+        await this.callKeepService.endCall(sessionId)
+        console.log('[ReliableCallManager] CallKeep call ended')
+      }
+
+      // Hide Notifee notifications
       await notifee.cancelNotification(sessionId)
       await notifee.cancelNotification(sessionId + '_fallback')
       console.log('[ReliableCallManager] Incoming call notification hidden')
@@ -650,6 +713,20 @@ class ReliableCallManager {
    */
   isReady(): boolean {
     return this.isInitialized
+  }
+
+  /**
+   * Show guidance for enabling CallKeep permissions
+   */
+  private showCallKeepPermissionGuidance(): void {
+    console.log('[ReliableCallManager] 📋 CallKeep Permission Guidance:')
+    console.log('[ReliableCallManager] 📱 To enable native call interface:')
+    console.log('[ReliableCallManager] 1️⃣ Open Android Settings')
+    console.log('[ReliableCallManager] 2️⃣ Go to Apps > Adtip')
+    console.log('[ReliableCallManager] 3️⃣ Tap "Phone Account"')
+    console.log('[ReliableCallManager] 4️⃣ Toggle ON to enable')
+    console.log('[ReliableCallManager] ✨ This enables native phone app call interface')
+    console.log('[ReliableCallManager] 💡 App works perfectly without this - just uses custom notifications')
   }
 }
 

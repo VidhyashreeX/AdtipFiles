@@ -236,14 +236,15 @@ class MediaService {
           console.warn('[MediaService] 🚀 Leave meeting timeout or error:', leaveError);
         }
       } else {
-        console.warn('[MediaService] 🚀 NO END OR LEAVE METHODS AVAILABLE ON MEETING OBJECT - This is expected if meeting object is not from VideoSDK useMeeting hook');
-        console.log('[MediaService] 🚀 Meeting object details:', {
+        console.log('[MediaService] 🔄 Meeting object cleanup - no VideoSDK methods available');
+        console.log('[MediaService] 💡 This is normal during cleanup or when meeting was not properly initialized');
+        console.log('[MediaService] 📋 Meeting object status:', {
           exists: !!this.meeting,
           type: typeof this.meeting,
-          keys: this.meeting ? Object.keys(this.meeting) : [],
           hasLocalParticipant: !!(this.meeting?.localParticipant),
           hasParticipants: !!(this.meeting?.participants)
         });
+        console.log('[MediaService] ✅ Proceeding with standard cleanup process');
       }
 
       // Step 2: Force cleanup of meeting reference

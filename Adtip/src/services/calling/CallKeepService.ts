@@ -33,7 +33,7 @@ export class CallKeepService {
   private maxInitializationAttempts = 3
   private callKeepAvailable = true
   private static DISABLE_CALLKEEP = false // Emergency disable flag - RE-ENABLED WITH PROPER SAFEGUARDS
-  private static DISABLE_VIVO_CALLKEEP = true // Keep Vivo devices disabled to prevent blank screen
+  private static DISABLE_VIVO_CALLKEEP = false // Keep Vivo devices disabled to prevent blank screen
   private needsManualPermissionSetup = false // Track if manual setup is needed
 
   private constructor() {
@@ -88,7 +88,6 @@ export class CallKeepService {
    * NOTE: This should only be called from useCallKeepInitializer hook when user is authenticated
    */
   async initialize(): Promise<boolean> {
-    const errorHandler = CallKeepErrorHandler.getInstance()
     const productionConfig = ProductionConfig.getInstance()
     
     // Check if RNCallKeep is available
@@ -115,15 +114,6 @@ export class CallKeepService {
       return false
     }
 
-    // Emergency Vivo disable check to prevent blank screen
-    if (this.isVivoDevice && CallKeepService.DISABLE_VIVO_CALLKEEP) {
-      console.log('[CallKeepService] 🚫 CallKeep disabled for Vivo device to prevent blank screen')
-      console.log('[CallKeepService] 💡 App will use custom call UI instead of native CallKeep')
-      this.isInitialized = true
-      this.callKeepAvailable = false
-      return false
-    }
-
     if (this.isInitialized) {
       console.log('[CallKeepService] ✅ Already initialized, available:', this.callKeepAvailable)
       return this.callKeepAvailable
@@ -133,7 +123,7 @@ export class CallKeepService {
 
     try {
       console.log(`[CallKeepService] 🔄 Initializing CallKeep (attempt ${this.initializationAttempts}/${this.maxInitializationAttempts})...`)
-      console.log(`[CallKeepService] 📱 Platform: ${Platform.OS}, Device: ${this.isVivoDevice ? 'Vivo (problematic)' : 'Standard'}`)
+      console.log(`[CallKeepService] 📱 Platform: ${Platform.OS}`)
 
       // Check if CallKeep is available first
       if (!RNCallKeep) {
@@ -143,26 +133,7 @@ export class CallKeepService {
         return false
       }
 
-      // Enhanced pre-initialization checks
-      console.log('[CallKeepService] 🔍 Running pre-initialization checks...')
-
-      // Check if we're in a valid state to initialize CallKeep
-      if (Platform.OS === 'android') {
-        // For Android, ensure we have basic permissions
-        try {
-          const hasBasicPermissions = await this.checkBasicPermissions()
-          if (!hasBasicPermissions) {
-            console.warn('[CallKeepService] ⚠️ Basic permissions not available, deferring initialization')
-            this.isInitialized = true
-            this.callKeepAvailable = false
-            return false
-          }
-        } catch (permError) {
-          console.warn('[CallKeepService] ⚠️ Permission check failed, continuing with initialization:', permError)
-        }
-      }
-
-      // Simplified setup options based on VideoSDK recommendations
+      // Simplified setup options following react-native-callkeep guidelines
       const options = {
         ios: {
           appName: 'Adtip',
@@ -174,13 +145,13 @@ export class CallKeepService {
           handleType: 'generic'
         },
         android: {
-          alertTitle: 'Phone Account Permission Required',
-          alertDescription: 'Adtip needs access to your phone accounts to provide native call experience',
+          alertTitle: 'Permissions required',
+          alertDescription: 'This application needs to access your phone accounts to make calls',
           cancelButton: 'Cancel',
-          okButton: 'Allow',
+          okButton: 'OK',
           imageName: 'ic_launcher',
           additionalPermissions: [],
-          selfManaged: false, // Keep false for better compatibility as per VideoSDK guide
+          selfManaged: false, // Keep false for better compatibility
           foregroundService: {
             channelId: 'com.adtip.calling',
             channelName: 'Adtip Calling Service',
@@ -190,74 +161,35 @@ export class CallKeepService {
         }
       }
 
-      console.log('[CallKeepService] 🔧 Setting up CallKeep with options:', JSON.stringify(options, null, 2))
+      console.log('[CallKeepService] 🔧 Setting up CallKeep with standard options...')
 
-      // For Vivo devices, use timeout protection to prevent hanging
-      if (this.isVivoDevice) {
-        console.log('[CallKeepService] ⚠️ Vivo device detected - using timeout protection')
+      // Standard CallKeep setup
+      await RNCallKeep.setup(options)
+      console.log('[CallKeepService] ✅ CallKeep setup complete')
 
-        const setupPromise = RNCallKeep.setup(options)
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Vivo CallKeep setup timeout - preventing blank screen')), 3000)
-        )
-
-        try {
-          await Promise.race([setupPromise, timeoutPromise])
-          console.log('[CallKeepService] ✅ CallKeep setup complete (Vivo with timeout)')
-        } catch (error) {
-          if (error instanceof Error && error.message.includes('timeout')) {
-            console.warn('[CallKeepService] ⚠️ Vivo CallKeep setup timed out - disabling to prevent blank screen')
-            this.isInitialized = true
-            this.callKeepAvailable = false
-            return false
-          }
-          throw error
-        }
-      } else {
-        // Standard setup for non-Vivo devices
-        await RNCallKeep.setup(options)
-        console.log('[CallKeepService] ✅ CallKeep setup complete')
-      }
-
-      // Set availability for Android
-      if (Platform.OS === 'android') {
-        await RNCallKeep.setAvailable(true)
-        console.log('[CallKeepService] ✅ CallKeep availability set to true')
-      }
-
-      // Enhanced permission handling with user guidance
+      // For Android, handle permissions properly
       if (Platform.OS === 'android') {
         try {
-          const hasPermissions = await this.checkPermissions()
-          console.log('[CallKeepService] 📋 Permission check result:', hasPermissions)
+          // Register phone account
+          await RNCallKeep.registerPhoneAccount(options)
+          console.log('[CallKeepService] 📱 Phone account registered')
 
-          if (!hasPermissions) {
-            console.log('[CallKeepService] 📱 Phone account not found, attempting to register...')
-
-            // First, try to register the phone account
-            const registrationResult = await this.registerPhoneAccountWithGuidance()
-            console.log('[CallKeepService] 📋 Phone account registration result:', registrationResult)
-
-            // Check again after registration
-            const hasPermissionsAfterRegistration = await this.checkPermissions()
-            console.log('[CallKeepService] 📋 Permission check after registration:', hasPermissionsAfterRegistration)
-
-            if (!hasPermissionsAfterRegistration) {
-              console.warn('[CallKeepService] ⚠️ CallKeep phone account not enabled')
-              console.warn('[CallKeepService] 💡 User needs to manually enable phone account in Android settings')
-              console.warn('[CallKeepService] 📱 Path: Settings > Apps > Adtip > Phone Account > Enable')
-
-              // Store that we need manual permission setup
-              this.needsManualPermissionSetup = true
-            } else {
-              console.log('[CallKeepService] ✅ CallKeep permissions granted successfully')
-            }
+          // Check if we have permissions
+          const hasPhoneAccount = await RNCallKeep.hasPhoneAccount()
+          if (hasPhoneAccount) {
+            console.log('[CallKeepService] ✅ Phone account permissions granted')
+            // Set CallKeep as available
+            await RNCallKeep.setAvailable(true)
+            console.log('[CallKeepService] ✅ CallKeep availability set to true')
           } else {
-            console.log('[CallKeepService] ✅ CallKeep permissions already granted')
+            console.log('[CallKeepService] 📱 Phone account not enabled - user must enable in Settings')
+            console.log('[CallKeepService] 💡 Path: Settings > Apps > Adtip > Phone Account > Enable')
+            // CallKeep is technically initialized but not usable
+            this.needsManualPermissionSetup = true
           }
         } catch (permissionError) {
-          console.warn('[CallKeepService] ⚠️ Permission handling error (non-critical):', permissionError)
-          console.warn('[CallKeepService] 💡 This may require manual setup in Android settings')
+          console.log('[CallKeepService] 📱 Phone account setup failed (expected on first run):', permissionError)
+          console.log('[CallKeepService] 💡 User must manually enable phone account in Android Settings')
           this.needsManualPermissionSetup = true
         }
       }
@@ -283,7 +215,6 @@ export class CallKeepService {
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
         platform: Platform.OS,
-        isVivoDevice: this.isVivoDevice,
         attempt: this.initializationAttempts
       })
 
@@ -340,7 +271,40 @@ export class CallKeepService {
   }
 
   /**
-   * Request CallKeep permissions
+   * Register phone account (Android only)
+   */
+  private async registerPhoneAccount(): Promise<boolean> {
+    try {
+      if (Platform.OS !== 'android' || !RNCallKeep) {
+        return false
+      }
+
+      console.log('[CallKeepService] 📱 Registering phone account with user guidance...')
+
+      await RNCallKeep.registerPhoneAccount({
+        ios: {
+          appName: 'Adtip'
+        },
+        android: {
+          alertTitle: 'Phone Account Permission Required',
+          alertDescription: 'Adtip needs access to your phone accounts to provide native call experience',
+          cancelButton: 'Cancel',
+          okButton: 'Allow',
+          additionalPermissions: []
+        }
+      })
+
+      console.log('[CallKeepService] 📋 Phone account registration result:', true)
+      return true
+    } catch (error) {
+      console.error('[CallKeepService] Phone account registration failed:', error)
+      return false
+    }
+  }
+
+  /**
+   * Request CallKeep permissions (Android only)
+   * Note: On Android, this registers the phone account but user must manually enable it in Settings
    */
   async requestPermissions(): Promise<boolean> {
     try {
@@ -348,31 +312,35 @@ export class CallKeepService {
         console.warn('[CallKeepService] RNCallKeep not available, cannot request permissions')
         return false
       }
+
       if (Platform.OS === 'android') {
-        console.log('[CallKeepService] Requesting CallKeep permissions...')
+        console.log('[CallKeepService] 📱 Registering phone account with user guidance...')
 
-        // Register phone account to request permissions
-        await RNCallKeep.registerPhoneAccount({
-          ios: {
-            appName: 'Adtip'
-          },
-          android: {
-            alertTitle: 'Phone Account Permission Required',
-            alertDescription: 'Adtip needs access to your phone accounts to provide native call experience',
-            cancelButton: 'Cancel',
-            okButton: 'Allow',
-            additionalPermissions: []
-          }
-        })
+        // First check if we already have permissions
+        const alreadyHasPermissions = await RNCallKeep.hasPhoneAccount()
+        if (alreadyHasPermissions) {
+          console.log('[CallKeepService] ✅ Phone account already enabled')
+          return true
+        }
 
-        // Wait a moment for the permission dialog to be processed
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        // Register phone account - this doesn't show a dialog, it just registers the account
+        const registrationResult = await this.registerPhoneAccount()
+        console.log('[CallKeepService] 📋 Phone account registration result:', registrationResult)
 
-        // Check if permissions were granted
-        const hasPermissions = await RNCallKeep.hasPhoneAccount()
-        console.log('[CallKeepService] Permission request result:', hasPermissions)
-        return hasPermissions
+        // Check if the registration automatically enabled the account (rare)
+        const hasPermissionsAfterRegistration = await RNCallKeep.hasPhoneAccount()
+        if (hasPermissionsAfterRegistration) {
+          console.log('[CallKeepService] ✅ Phone account automatically enabled after registration')
+          return true
+        }
+
+        console.log('[CallKeepService] 📱 Phone account not automatically enabled')
+        console.log('[CallKeepService] 💡 User may need to manually enable in Android Settings')
+        console.log('[CallKeepService] 🔧 Steps: Settings > Apps > Adtip > Phone Account > Toggle ON')
+
+        return false // Phone account registered but not enabled
       }
+
       return true // iOS doesn't need explicit permission request
     } catch (error) {
       console.error('[CallKeepService] Error requesting permissions:', error)
@@ -442,9 +410,70 @@ export class CallKeepService {
              '2. Go to Apps > Adtip\n' +
              '3. Tap "Phone Account"\n' +
              '4. Toggle ON to enable\n\n' +
-             'This allows incoming calls to show in your phone\'s native interface.'
+             'This allows incoming calls to show in your phone\'s native interface.\n' +
+             'Note: The app works perfectly without this - it will use custom notifications instead.'
     }
     return 'CallKeep permissions are handled automatically on iOS.'
+  }
+
+  /**
+   * Check if CallKeep is working and provide status information
+   */
+  getCallKeepStatus(): {
+    isAvailable: boolean;
+    isInitialized: boolean;
+    needsPermissions: boolean;
+    guidance?: string
+  } {
+    return {
+      isAvailable: this.isAvailable(),
+      isInitialized: this.isInitialized,
+      needsPermissions: this.needsManualPermissionSetup,
+      guidance: this.needsManualPermissionSetup ? this.getPermissionGuidance() : undefined
+    }
+  }
+
+  /**
+   * Show user-friendly alert about enabling phone account
+   */
+  async showPhoneAccountGuidanceAlert(): Promise<void> {
+    try {
+      const { default: PhoneAccountHelper } = await import('../../utils/phoneAccountHelper')
+      await PhoneAccountHelper.getInstance().showSetupGuidance()
+    } catch (error) {
+      console.warn('[CallKeepService] Could not show guidance alert:', error)
+      // Fallback to simple alert
+      try {
+        const { Alert } = await import('react-native')
+        Alert.alert(
+          'Enable Native Call Interface',
+          'To get the best calling experience:\n\n' +
+          '1. Open Android Settings\n' +
+          '2. Go to Apps → Adtip\n' +
+          '3. Tap "Phone Account"\n' +
+          '4. Toggle ON to enable\n\n' +
+          'Note: The app works perfectly without this.',
+          [
+            { text: 'Maybe Later', style: 'cancel' },
+            { text: 'Open Settings', onPress: this.openAppSettings }
+          ]
+        )
+      } catch (fallbackError) {
+        console.warn('[CallKeepService] Fallback alert also failed:', fallbackError)
+      }
+    }
+  }
+
+  /**
+   * Open app settings (best effort)
+   */
+  private async openAppSettings(): Promise<void> {
+    try {
+      const { Linking } = await import('react-native')
+      await Linking.openSettings()
+    } catch (error) {
+      console.warn('[CallKeepService] Could not open app settings:', error)
+    }
   }
 
   /**

@@ -45,7 +45,7 @@ import VideoSDKService from './src/services/videosdk/VideoSDKService';
 import PermissionManagerService from './src/services/PermissionManagerService';
 import PubScaleService from './src/services/PubScaleService';
 
-import IncomingCallService from './src/services/IncomingCallService';
+
 
 // Constants
 import { COLORS } from './src/constants/colors';
@@ -71,7 +71,7 @@ import useFCMMessageRouter from './src/hooks/useFCMMessageRouter';
 
 // Import call store (simplified)
 import { useCallStore } from './src/stores/callStoreSimplified';
-import CallController from './src/services/calling/CallController';
+
 import CallConfig from './src/config/CallConfig';
 import PersistentMeetingManager from './src/components/videosdk/PersistentMeetingManager';
 
@@ -255,56 +255,15 @@ const AppNavigator = () => {
     }, 2000); // Initialize after other services
   }, [isInitialized, isAuthenticated]);
 
-  // Setup incoming call handling with Unified Call Service
-  useEffect(() => {
-    const handleIncomingCallBroadcast = async (data: any) => {
-      Logger.debug('App', 'Received incoming call broadcast:', data);
-
-      if (data && data.isIncomingCall) {
-        try {
-          // Incoming calls are now handled by CallSignalingService via FCM
-          Logger.info('App', '✅ Incoming call handled by CallSignalingService');
-        } catch (error) {
-          Logger.error('App', 'Error handling incoming call broadcast:', error);
-        }
-      }
-    };
-
-    // Use the new IncomingCallService for cleaner event handling
-    const incomingCallService = IncomingCallService.getInstance();
-    const unsubscribe = incomingCallService.onIncomingCall(handleIncomingCallBroadcast);
-
-    return () => {
-      unsubscribe();
-    };
-  }, []);
+  // Incoming call handling is now managed by ReliableCallManager via FCM
+  // No need for manual event handling here as FCM messages are routed automatically
 
   // Navigation handler for call status changes is no longer needed
   // The PersistentMeetingManager handles call UI directly
   // Removed to prevent conflicts with persistent meeting component
 
-  useEffect(() => {
-    // Listen for native call actions (answer/decline)
-    const removeCallActionListener = IncomingCallService.getInstance().onCallAction(async (event) => {
-      if (event.action === 'ANSWER') {
-        // If only sessionId is present, fetch call details from backend or cache
-        // For demo, just log and skip if details are missing
-        if (!event.sessionId) {
-          console.warn('[App] Native ANSWER event missing sessionId');
-          return;
-        }
-        // TODO: Fetch call details using sessionId if needed
-        // Example: const callDetails = await ApiService.getCallDetails(event.sessionId);
-        // if (callDetails) { CallController.getInstance().handleIncomingCall(callDetails); }
-        Logger.debug('App', 'Native answered call, sessionId:', event.sessionId);
-      } else if (event.action === 'DECLINE') {
-        CallController.getInstance().declineCall();
-      }
-    });
-    return () => {
-      removeCallActionListener();
-    };
-  }, []);
+  // CallKeep native call actions are handled automatically by CallKeepService event listeners
+  // No need for manual event handling here as CallKeepService sets up its own listeners
 
   // Always use UltraFastLoader unless user needs profile completion
   if (!needsUserDetails) {
