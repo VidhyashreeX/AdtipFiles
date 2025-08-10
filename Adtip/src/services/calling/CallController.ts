@@ -14,6 +14,7 @@ import CallSignalingService from './CallSignalingService'
 import MediaService from './MediaService'
 import NotificationService from './NotificationService'
 import VideoSDKService from '../videosdk/VideoSDKService'
+import CallKeepService from './CallKeepService'
 import * as NavigationService from '../../navigation/NavigationService'
 import ApiService from '../ApiService'
 import CallStateCleanup from '../../utils/callStateCleanup'
@@ -41,6 +42,7 @@ class CallController {
   private media: MediaService
   private notification: NotificationService
   private videoSDK: VideoSDKService
+  private callKeep: CallKeepService
 
   private vibrateInterval: NodeJS.Timeout | null = null
   private lastCallId?: number; // <-- Store last callId for bulletproof end call
@@ -63,6 +65,7 @@ class CallController {
     this.media = MediaService.getInstance()
     this.notification = NotificationService.getInstance()
     this.videoSDK = VideoSDKService.getInstance()
+    this.callKeep = CallKeepService.getInstance()
 
     // Set up listeners
     this.setupStoreListeners()
@@ -626,25 +629,62 @@ class CallController {
         callId: undefined // Will be set when API responds
       })
 
-      // Set status to outgoing and immediately transition to connecting
+      // Set status to outgoing
       actions.setStatus('outgoing')
-      actions.setStatus('connecting')
 
-      // Initialize media
-      await this.media.initialize()
+      // Try to use CallKeep for native UI first
+      let usingCallKeep = false
+      try {
+        // Check if CallKeep is available and initialized
+        if (this.callKeep.isAvailable()) {
+          logCall('CallController', 'Using CallKeep for native outgoing call UI');
+          
+          // Start the call through CallKeep - this shows native call UI
+          const callKeepStarted = await this.callKeep.startCall(
+            backendSessionId,
+            recipientName,
+            recipientName, // contactIdentifier
+            'generic',
+            callType === 'video'
+          )
+          
+          if (callKeepStarted) {
+            usingCallKeep = true
+            logCall('CallController', 'CallKeep outgoing call started successfully');
+            
+            // Set status to connecting since CallKeep is handling the UI
+            actions.setStatus('connecting')
+          } else {
+            logCall('CallController', 'CallKeep startCall failed, falling back to custom UI');
+          }
+        } else {
+          logCall('CallController', 'CallKeep not available, using custom call UI');
+        }
+      } catch (callKeepError) {
+        logCall('CallController', 'CallKeep integration failed, using custom UI:', callKeepError);
+      }
 
-      // Show outgoing call notification
-      this.notification.showOngoingCall(backendSessionId, recipientName, callType)
+      // If CallKeep is not being used, show custom UI
+      if (!usingCallKeep) {
+        // Transition to connecting for custom UI
+        actions.setStatus('connecting')
+        
+        // Initialize media
+        await this.media.initialize()
 
-      // Start persistent call with temporary data - this will show the meeting screen immediately
-      startPersistentCall({
-        sessionId: backendSessionId,
-        meetingId: 'temp-' + backendSessionId,
-        token: 'temp-token',
-        peerName: recipientName,
-        callType,
-        direction: 'outgoing'
-      })
+        // Show outgoing call notification
+        this.notification.showOngoingCall(backendSessionId, recipientName, callType)
+
+        // Start persistent call with temporary data - this will show the meeting screen immediately
+        startPersistentCall({
+          sessionId: backendSessionId,
+          meetingId: 'temp-' + backendSessionId,
+          token: 'temp-token',
+          peerName: recipientName,
+          callType,
+          direction: 'outgoing'
+        })
+      }
 
       // ASYNC: Make API call in background and update session when ready
       this.handleAsyncCallInitiation(userId, recipientId, callType, backendSessionId)
@@ -1023,6 +1063,17 @@ class CallController {
       const { actions } = useCallStore.getState()
       actions.setStatus('ended')
 
+      // Reject CallKeep call if it was active
+      try {
+        if (session.callId && this.callKeep.isAvailable()) {
+          logCall('CallController', 'Rejecting CallKeep call');
+          const RNCallKeep = require('react-native-callkeep').default;
+          RNCallKeep.rejectCall(session.callId);
+        }
+      } catch (callKeepError) {
+        logWarn('CallController', 'Failed to reject CallKeep call', callKeepError);
+      }
+
       return true
     } catch (error) {
       logError('CallController', 'declineCall error', error)
@@ -1172,6 +1223,17 @@ class CallController {
       const { actions: endActions } = useCallStore.getState();
       endActions.setStatus('ended');
       logCall('CallController', '🚀 Call status set to ended, current status:', useCallStore.getState().status);
+
+      // End CallKeep call if it was active
+      try {
+        if (currentSession?.callId && this.callKeep.isAvailable()) {
+          logCall('CallController', 'Ending CallKeep call');
+          const RNCallKeep = require('react-native-callkeep').default;
+          RNCallKeep.endCall(currentSession.callId);
+        }
+      } catch (callKeepError) {
+        logWarn('CallController', 'Failed to end CallKeep call', callKeepError);
+      }
 
       // Clear active meeting session in VideoSDK service
       if (currentSession && currentSession.sessionId) {

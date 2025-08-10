@@ -2,17 +2,18 @@ import { Platform } from 'react-native'
 import { CallKeepErrorHandler } from './CallKeepErrorHandler'
 import { ProductionConfig } from '../../config/ProductionConfig'
 
-// Prevent react-native-callkeep from being imported in production to avoid crashes
+// Import react-native-callkeep with proper error handling
 let RNCallKeep: any = null
 try {
-  // Only import in development mode
-  if (__DEV__) {
-    RNCallKeep = require('react-native-callkeep').default
-  } else {
-    console.log('[CallKeepService] 🚫 Skipping react-native-callkeep import in production to prevent crashes')
-  }
+  // Try different import methods
+  const callKeepModule = require('react-native-callkeep')
+  RNCallKeep = callKeepModule.default || callKeepModule
+  console.log('[CallKeepService] ✅ Successfully imported react-native-callkeep')
+  console.log('[CallKeepService] 📋 Module structure:', Object.keys(callKeepModule))
+  console.log('[CallKeepService] 📋 Available methods:', Object.keys(RNCallKeep || {}))
 } catch (error) {
   console.warn('[CallKeepService] ⚠️ Failed to import react-native-callkeep:', error)
+  RNCallKeep = null
 }
 
 // Remove the global setup call - it should be done in the service initialization
@@ -97,6 +98,11 @@ export class CallKeepService {
       this.callKeepAvailable = false
       return false
     }
+
+    // Debug: Check what methods are available
+    console.log('[CallKeepService] 🔍 RNCallKeep object type:', typeof RNCallKeep)
+    console.log('[CallKeepService] 🔍 Available methods on RNCallKeep:', Object.keys(RNCallKeep))
+    console.log('[CallKeepService] 🔍 startCall method type:', typeof RNCallKeep.startCall)
     
     // Check production configuration
     if (productionConfig.isCallKeepDisabled()) {
@@ -597,6 +603,12 @@ export class CallKeepService {
         return false
       }
 
+      // Check if startCall method exists
+      if (typeof RNCallKeep.startCall !== 'function') {
+        console.warn('[CallKeepService] RNCallKeep.startCall is not a function:', typeof RNCallKeep.startCall)
+        return false
+      }
+
       console.log('[CallKeepService] Starting outgoing call:', {
         uuid,
         handle,
@@ -712,7 +724,20 @@ export class CallKeepService {
    * Enhanced to return actual availability status
    */
   isAvailable(): boolean {
-    return this.isInitialized && this.callKeepAvailable && RNCallKeep !== null
+    if (!this.isInitialized || !this.callKeepAvailable || !RNCallKeep) {
+      return false
+    }
+
+    // Check if required methods exist
+    const requiredMethods = ['startCall', 'endCall', 'answerIncomingCall', 'rejectCall']
+    for (const method of requiredMethods) {
+      if (typeof RNCallKeep[method] !== 'function') {
+        console.warn(`[CallKeepService] Required method ${method} is not available`)
+        return false
+      }
+    }
+
+    return true
   }
 
   /**
@@ -878,6 +903,30 @@ export class CallKeepService {
    */
   private onStartCallAction = (args: { handle: string; callUUID?: string; name?: string }) => {
     console.log('[CallKeepService] Start call action:', args.callUUID, args.handle)
+    
+    // When user initiates a call from CallKeep native UI, we need to handle the call flow
+    if (args.callUUID) {
+      try {
+        console.log('[CallKeepService] Outgoing call initiated via CallKeep native UI:', {
+          uuid: args.callUUID,
+          handle: args.handle,
+          name: args.name
+        })
+        
+        // The actual call logic should already be handled by CallController
+        // since we called startCall() from there. This event just confirms
+        // that the user pressed the call button in the native UI.
+        
+        // We should immediately transition to connecting state since the user confirmed
+        // For outgoing calls, we don't need to report connecting as that's automatic
+        // The call will be reported as connected when the actual connection is established
+        
+      } catch (error) {
+        console.error('[CallKeepService] Error handling start call action:', error)
+        // If there's an error, end the call to clean up
+        this.endCall(args.callUUID)
+      }
+    }
   }
 
   /**
