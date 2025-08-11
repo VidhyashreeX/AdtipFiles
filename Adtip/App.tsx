@@ -64,6 +64,7 @@ import ForceUpdateModal from './src/components/common/ForceUpdateModal';
 import VersionCheckService from './src/services/VersionCheckService';
 import ForceUpdateDebugButton from './src/components/debug/ForceUpdateDebugButton';
 import ThemeTestModal from './src/components/debug/ThemeTestModal';
+import CallKeepTestButtons from './src/components/debug/CallKeepTestButtons';
 
 import { RootStackParamList } from 'src/types/navigation';
 import useReliableCallManager from './src/hooks/useReliableCallManager';
@@ -541,6 +542,9 @@ function App(): React.JSX.Element {
 
                               {/* Theme test modal for debugging dark mode issues (only in debug builds) */}
                               <ThemeTestModal />
+
+                              {/* CallKeep test buttons for triggering native UI (only in debug builds) */}
+                              <CallKeepTestButtons />
                                 </GestureHandlerRootView>
                               </CallEndModalProvider>
                             </SidebarProvider>
