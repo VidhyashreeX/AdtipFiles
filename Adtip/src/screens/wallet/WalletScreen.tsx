@@ -259,27 +259,51 @@ const WalletScreen = () => {
             <Text style={[styles.withdrawButtonText, {color: '#FFFFFF'}, !canWithdraw && styles.disabledButtonText]}>Withdraw</Text>
           </TouchableOpacity>
         </View>
+<View style={styles.withdrawalInfoContainer}>
+  <Text style={[styles.withdrawalInfoTitle, { color: colors.text.primary }]}>
+    Withdrawal Information
+  </Text>
 
-        {/* Withdrawal Minimum Info Section */}
-        <View style={styles.withdrawalInfoContainer}>
-          <Text style={[styles.withdrawalInfoTitle, { color: colors.text.primary }]}>
-            Withdrawal Information
-          </Text>
-          <View style={styles.withdrawalInfoItem}>
-            <Text style={[styles.withdrawalInfoLabel, { color: colors.text.secondary }]}>
-              Minimum withdrawal:
-            </Text>
-            <Text style={[styles.withdrawalInfoValue, { color: isPremium ? '#4CAF50' : colors.text.primary }]}>
-              ₹{isPremium ? '1,000' : '5,000'} {isPremium ? '(Premium)' : '(Non-premium)'}
-            </Text>
-          </View>
-          <Text style={[styles.withdrawalInfoNote, { color: colors.text.tertiary }]}>
-            {isPremium
-              ? 'As a premium user, you enjoy lower withdrawal minimums and faster processing.'
-              : 'Upgrade to premium for lower withdrawal minimums and faster processing.'
-            }
-          </Text>
-        </View>
+  <View style={styles.withdrawalInfoItem}>
+    <Text style={[styles.withdrawalInfoLabel, { color: colors.text.secondary }]}>
+      Minimum withdrawal:
+    </Text>
+    <Text style={[
+      styles.withdrawalInfoValue,
+      { color: isPremium ? '#4CAF50' : colors.text.primary }
+    ]}>
+      ₹{isPremium ? '1,000' : '5,000'} {isPremium ? '(Premium)' : '(Non-premium)'}
+    </Text>
+  </View>
+
+  {isPremium ? (
+    <Text style={[styles.withdrawalInfoNote, { color: colors.text.tertiary }]}>
+      As a premium user, you enjoy a lower withdrawal minimum of ₹1,000 and faster processing.
+    </Text>
+  ) : (
+    <Text style={[styles.withdrawalInfoNote, { color: colors.text.tertiary }]}>
+      Upgrade to{' '}
+      <Text
+        style={[styles.bold, { color: '#4CAF50' }]}
+        onPress={() => navigation.navigate('PremiumUser' as never)}
+      >
+        Premium
+      </Text>{' '}
+      to withdraw as little as{' '}
+      <Text
+        style={[styles.bold, { color: '#4CAF50' }]}
+        onPress={() => navigation.navigate('PremiumUser' as never)}
+      >
+        ₹1,000
+      </Text>{' '}
+      with faster processing.
+    </Text>
+  )}
+</View>
+
+
+
+
       </LinearGradient>
     );
   };
@@ -467,6 +491,9 @@ const WalletScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  bold: {
+    fontWeight: 'bold',
   },
   contentContainer: {
     paddingBottom: Platform.OS === 'ios' ? 90 : 70, 
