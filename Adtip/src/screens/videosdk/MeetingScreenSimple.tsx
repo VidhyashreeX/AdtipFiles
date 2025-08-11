@@ -850,6 +850,17 @@ const MeetingContent = () => {
           // Brief delay before moving to in_call
           setTimeout(() => {
             actions.setStatus('in_call')
+            // Report to CallKeep that outgoing call is connected
+            try {
+              const CallKeepService = require('../../services/calling/CallKeepService').default
+              const callKeepInstance = CallKeepService.getInstance()
+              if (callKeepInstance.isAvailable() && session?.callId) {
+                const RNCallKeep = require('react-native-callkeep').default
+                RNCallKeep.reportConnectedOutgoingCall(session.callId)
+              }
+            } catch (error) {
+              console.warn('[MeetingScreen] Failed to report connected outgoing call to CallKeep:', error)
+            }
           }, 1000)
         } else {
           actions.setStatus('in_call')

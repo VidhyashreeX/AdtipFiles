@@ -179,7 +179,7 @@ const WithdrawalHistory: React.FC<WithdrawalHistoryProps> = ({
         No Withdrawal History
       </Text>
       <Text style={[styles.emptySubtitle, { color: colors.text.secondary }]}>
-        You haven't made any withdrawal requests yet.
+        You haven&apos;t made any withdrawal requests yet.
       </Text>
     </View>
   );

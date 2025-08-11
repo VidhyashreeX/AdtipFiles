@@ -121,6 +121,8 @@ const AnimatedMenuItem: React.FC<{
   );
 });
 
+AnimatedMenuItem.displayName = 'AnimatedMenuItem';
+
 const Sidebar: React.FC = () => {
   const {colors, isDarkMode} = useTheme();
   const {isSidebarOpen, closeSidebar, openSidebar} = useSidebar(); // Assuming openSidebar exists

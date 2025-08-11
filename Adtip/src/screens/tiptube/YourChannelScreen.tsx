@@ -33,6 +33,7 @@ import {
   getFallbackThumbnailUrl
 } from '../../utils/mediaUtils';
 import ComingSoonModal from '../../components/modals/ComingSoonModal';
+import InsufficientBalanceModal from '../../components/modals/InsufficientBalanceModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const VIDEO_CARD_WIDTH = (SCREEN_WIDTH - 48) / 2; // 2 videos per row
@@ -56,6 +57,7 @@ const YourChannelScreen: React.FC = () => {
 
   // Modal state
   const [showComingSoonModal, setShowComingSoonModal] = useState(false);
+  const [showInsufficientBalanceModal, setShowInsufficientBalanceModal] = useState(false);
 
   const styles = createStyles(colors, isDarkMode, insets.top);
 
@@ -373,10 +375,7 @@ const YourChannelScreen: React.FC = () => {
               upNextVideos: []
             });
           } else {
-            Alert.alert(
-              'Insufficient Balance',
-              'You do not have enough balance to watch this video.'
-            );
+            setShowInsufficientBalanceModal(true);
           }
         } else {
           // Case 2: Paid video, owner does NOT have content creator premium
@@ -406,10 +405,7 @@ const YourChannelScreen: React.FC = () => {
               upNextVideos: []
             });
           } else {
-            Alert.alert(
-              'Insufficient Balance',
-              'You do not have enough balance to watch this video.'
-            );
+            setShowInsufficientBalanceModal(true);
           }
         }
       } else {
@@ -719,6 +715,14 @@ const YourChannelScreen: React.FC = () => {
         title="Coming Soon"
         feature="Paid Video Analytics"
         description="Get detailed insights into your paid video performance, revenue tracking, and audience analytics. This premium feature will be available soon!"
+      />
+
+      {/* Insufficient Balance Modal */}
+      <InsufficientBalanceModal
+        visible={showInsufficientBalanceModal}
+        onClose={() => setShowInsufficientBalanceModal(false)}
+        title="Insufficient Balance"
+        message="You do not have enough balance to watch this paid video. Add funds to your wallet to continue."
       />
     </View>
   );

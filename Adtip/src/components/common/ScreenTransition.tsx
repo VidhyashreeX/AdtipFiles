@@ -50,10 +50,10 @@ const ScreenTransition: React.FC<ScreenTransitionProps> = ({
       scale.value = 1;
       if (stableOnEnterComplete.current && !hasCompletedInitialAnimation.current) {
         hasCompletedInitialAnimation.current = true;
-        // Use setTimeout to avoid scheduling updates during render
-        setTimeout(() => {
+        // Use setImmediate to avoid scheduling updates during render
+        setImmediate(() => {
           stableOnEnterComplete.current?.();
-        }, 0);
+        });
       }
       return;
     }
@@ -77,8 +77,12 @@ const ScreenTransition: React.FC<ScreenTransitionProps> = ({
       }, (finished) => {
         if (finished && stableOnEnterComplete.current && !hasCompletedInitialAnimation.current) {
           hasCompletedInitialAnimation.current = true;
+          // Use runOnJS properly to avoid useInsertionEffect warnings
           runOnJS(() => {
-            stableOnEnterComplete.current?.();
+            // Schedule callback for next frame to avoid scheduling updates during render
+            setImmediate(() => {
+              stableOnEnterComplete.current?.();
+            });
           })();
         }
       });

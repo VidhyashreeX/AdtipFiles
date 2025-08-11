@@ -113,6 +113,7 @@ import PremiumUserScreen from '../screens/premium/PremiumUserScreen';
 
 // Import ContentCreatorPremiumScreen
 import ContentCreatorPremiumScreen from '../screens/premium/ContentCreatorPremiumScreen';
+import ContentCreatorPremiumApplicationScreen from '../screens/premium/ContentCreatorPremiumApplicationScreen';
 
 // Import PermissionsScreen
 import PermissionsScreen from '../screens/settings/PermissionsScreen';
@@ -440,6 +441,7 @@ const MainNavigator = () => {
       <Stack.Screen name="SubscriptionScreen" component={SubscriptionScreen} />
       <Stack.Screen name="PremiumUser" component={PremiumUserScreen} />
       <Stack.Screen name="ContentCreatorPremium" component={ContentCreatorPremiumScreen} />
+      <Stack.Screen name="ContentCreatorPremiumApplication" component={ContentCreatorPremiumApplicationScreen} />
       <Stack.Screen name="ContentCreatorSubscriptionScreen" component={ContentCreatorSubscriptionScreen} />
       <Stack.Screen name="UserPremiumBenefits" component={UserPremiumBenefitsScreen} />
       <Stack.Screen name="ContentCreatorPremiumBenefits" component={ContentCreatorPremiumBenefitsScreen} />

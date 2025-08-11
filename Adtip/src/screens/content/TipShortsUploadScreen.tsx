@@ -536,12 +536,17 @@ const TipShortsUploadScreen: React.FC = () => {
 
       const compressionOption = COMPRESSION_OPTIONS.find(opt => opt.key === selectedCompression)!;
       
+      // Map compression option to quality level
+      const qualityMap: { [key: string]: 'low' | 'medium' | 'high' } = {
+        'whatsapp': 'low',
+        'balanced': 'medium',
+        'high': 'high'
+      };
+
       const compressionOptions: VideoCompressionOptions = {
-        quality: 'low', // Always use low for shorts
-        maxSize: compressionOption.maxSize,
-        outputFormat: 'mp4',
-        compressionMethod: 'manual',
-        bitrate: compressionOption.bitrate,
+        quality: qualityMap[selectedCompression] || 'medium', // Respect user selection
+        compressionMethod: 'auto', // Use auto compression for better results
+        minimumFileSizeForCompress: 0, // Always compress
       };
 
       // Simulate compression progress

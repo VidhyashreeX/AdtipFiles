@@ -135,17 +135,21 @@ export const withGuestGuard = <P extends object>(
   screenName: string,
   fallbackMessage?: string
 ) => {
-  return (props: P) => {
+  const GuardedComponent = (props: P) => {
     const { checkScreenAccess, showLoginPrompt } = useGuestGuard();
 
     if (!checkScreenAccess(screenName)) {
-      // @ts-ignoreShow login prompt immediately for restricted screens
+      // @ts-expect-error Show login prompt immediately for restricted screens
       showLoginPrompt(fallbackMessage || `Login to access ${screenName}`);
       return null; // Don't render the component
     }
 
     return React.createElement(WrappedComponent, props);
   };
+
+  GuardedComponent.displayName = `withGuestGuard(${WrappedComponent.displayName || WrappedComponent.name || 'Component'})`;
+
+  return GuardedComponent;
 };
 
 /**

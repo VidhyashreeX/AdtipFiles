@@ -688,11 +688,11 @@ const TipCallScreenSimple = () => {
         );
 
         // If user doesn't have premium access, show upgrade modal
-        if (accessResult.hasAccess) {
+        if (!accessResult.hasAccess) {
           Logger.debug('TipCallScreen', 'Non-premium user attempting call, showing premium popup')
-          setPremiumFeature(callType === 'video' ? 'video_call' : 'voice_call')
+          /*setPremiumFeature(callType === 'video' ? 'video_call' : 'voice_call')
           setShowPremiumPopup(true)
-          return
+          return*/
         }
 
         // First, request runtime permissions for camera and microphone
@@ -1598,16 +1598,23 @@ const TipCallBannersCarousel: React.FC<TipCallBannersCarouselProps> = ({ isPremi
   // Auto-scroll every 4 seconds
   useEffect(() => {
     if (TIPCALL_BANNERS.length <= 1) return;
+
     const interval = setInterval(() => {
-      const nextIndex = (currentIndex + 1) % TIPCALL_BANNERS.length;
-      setCurrentIndex(nextIndex);
-      flatListRef.current?.scrollToIndex({
-        index: nextIndex,
-        animated: true,
+      setCurrentIndex(prevIndex => {
+        const nextIndex = (prevIndex + 1) % TIPCALL_BANNERS.length;
+        // Use setTimeout to avoid scheduling updates during render
+        setTimeout(() => {
+          flatListRef.current?.scrollToIndex({
+            index: nextIndex,
+            animated: true,
+          });
+        }, 0);
+        return nextIndex;
       });
     }, 4000);
+
     return () => clearInterval(interval);
-  }, [currentIndex]);
+  }, []); // Remove currentIndex from dependencies to prevent loop
 
   const handleScroll = (event: any) => {
     const contentOffset = event.nativeEvent.contentOffset.x;

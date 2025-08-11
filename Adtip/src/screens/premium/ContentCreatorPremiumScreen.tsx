@@ -276,6 +276,17 @@ const ContentCreatorPremiumScreen = () => {
                   <Text style={[styles.benefitText, { color: colors.text.primary }]}>Access to premium content creation tools</Text>
                 </View>
               </View>
+
+              {/* Apply for Free Premium Button */}
+              <TouchableOpacity
+                style={styles.applyFreeButton}
+                onPress={() => navigation.navigate('ContentCreatorPremiumApplication' as never)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.applyFreeButtonText, { color: colors.primary }]}>
+                  Apply for Free Content Creator Premium
+                </Text>
+              </TouchableOpacity>
             </View>
 
             {/* Action Buttons */}
@@ -351,6 +362,20 @@ const styles = StyleSheet.create({
   benefitsList: { marginTop: 8 },
   benefitItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   benefitText: { marginLeft: 8, fontSize: 14 },
+  applyFreeButton: {
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    alignItems: 'center'
+  },
+  applyFreeButtonText: {
+    fontSize: 14,
+    fontWeight: '600'
+  },
   actionButtons: { marginHorizontal: 20, marginBottom: 20 },
   cancelButton: { backgroundColor: '#FEE2E2', borderRadius: 8, padding: 14, alignItems: 'center', marginBottom: 12 },
   cancelButtonText: { color: '#EF4444', fontWeight: 'bold', fontSize: 16, marginLeft: 8 },

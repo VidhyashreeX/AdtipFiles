@@ -23,7 +23,7 @@ export interface UploadSystemConfig {
 // Default configuration - Stream enabled at 100%
 export const DEFAULT_UPLOAD_CONFIG: UploadSystemConfig = {
   useStreamUploads: true, // Stream enabled
-  streamUploadPercentage: 0, // 100% Stream uploads
+  streamUploadPercentage: 100, // 100% Stream uploads (was incorrectly set to 0)
   enableR2Fallback: true, // Always maintain R2 fallback
 
   preferStreamForTipShorts: true, // TipShorts benefit most from Stream (mobile data savings)

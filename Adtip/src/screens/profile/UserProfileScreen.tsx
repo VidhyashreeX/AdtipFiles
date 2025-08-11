@@ -51,6 +51,7 @@ interface Post {
   created_at?: string;
   is_liked?: boolean;
   user_id?: number;
+  user_name?: string;
 }
 
 const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
@@ -327,6 +328,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
           created_at: p.created_at,
           is_liked: p.is_liked,
           user_id: p.user_id,
+          user_name: profileData.user.name, // Add user name from profile data
         }));
         setPosts(postsData);
 
@@ -348,11 +350,19 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
       try {
         const postsResponse = await ApiService.getUserPosts(userId, 1, 100, currentUser?.id || 0);
         if (postsResponse?.data) {
+          const userName = postsResponse.data.length > 0 ? postsResponse.data[0].name : 'Unknown User';
           const postsData: Post[] = postsResponse.data.map((p: any) => ({
             id: p.id,
             media_url: getFullImageUrl(p.media_url),
             media_type: p.media_type,
             is_premium: p.is_premium,
+            user_name: userName, // Add user name from posts data
+            content: p.content,
+            likeCount: p.likeCount || p.like_count,
+            commentCount: p.commentCount || p.comment_count,
+            created_at: p.created_at,
+            is_liked: p.is_liked,
+            user_id: p.user_id,
           }));
           setPosts(postsData);
 

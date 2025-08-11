@@ -139,19 +139,19 @@ const TipShopScreen: React.FC = () => {
 
   const handleProductPress = (productId: number) => {
     // Navigate to product detail
-    // @ts-ignore
+    // @ts-expect-error ProductDetail screen not yet defined in navigation types
     navigation.navigate('ProductDetail', {productId});
   };
 
   const handleSeeAllPress = (section: string) => {
     // Navigate to product listing with filter
-    // @ts-ignore
+    // @ts-expect-error ProductListing screen not yet defined in navigation types
     navigation.navigate('ProductListing', {section});
   };
 
   const handleSearchPress = () => {
     // Navigate to search screen
-    // @ts-ignore
+    // @ts-expect-error Search screen not yet defined in navigation types
     navigation.navigate('Search', {source: 'shop'});
   };
 

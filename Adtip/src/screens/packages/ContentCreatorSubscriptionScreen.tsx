@@ -308,7 +308,15 @@ const ContentCreatorSubscriptionScreen = () => {
       />
       
       <Header title="Subscription Plans" showSearch={false} showWallet={false} />
-      
+      <TouchableOpacity
+        style={styles.applyFreeButton}
+        onPress={() => navigation.navigate('ContentCreatorPremiumApplication' as never)}
+        activeOpacity={0.8}
+      >
+        <Text style={[styles.applyFreeButtonText, { color: colors.primary }]}>
+          Apply for Free Content Creator Premium
+        </Text>
+      </TouchableOpacity>
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -684,6 +692,23 @@ const styles = StyleSheet.create({
   securityText: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  applyFreeButton: {
+    marginTop: 16,
+    marginBottom: 16,
+    marginLeft: 16,
+    marginRight: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    alignItems: 'center'
+  },
+  applyFreeButtonText: {
+    fontSize: 14,
+    fontWeight: '600'
   },
 });
 

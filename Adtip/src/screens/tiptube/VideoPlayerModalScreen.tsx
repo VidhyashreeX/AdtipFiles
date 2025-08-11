@@ -38,6 +38,7 @@ import { createSecureVideoSource } from '../../utils/mediaUtils';
 import ApiService from '../../services/ApiService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCommentCount } from '../../hooks/useComments';
+import { OrientationManager } from '../../utils/OrientationUtils';
 import shareService from '../../services/ShareService';
 import { getSetting } from '../../utils/settingsStorage';
 
@@ -79,7 +80,7 @@ const VideoPlayerModalScreen: React.FC = () => {
   const { video, cardLayout, upNextVideos } = route.params;
   const { isDarkMode, colors } = useTheme();
   const { user } = useAuth ? useAuth() : { user: null };
-  
+
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [videoSource, setVideoSource] = useState<any>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
@@ -142,6 +143,14 @@ const VideoPlayerModalScreen: React.FC = () => {
       return () => subscription.remove();
     }, [])
   );
+  // Lock orientation for media screen while mounted
+  useEffect(() => {
+    OrientationManager.unlockAllOrientations();
+    
+    return () => {
+      OrientationManager.lockToPortrait();
+    };
+  }, []);
 
   // Fade-in animation on mount
   useEffect(() => {
@@ -209,7 +218,7 @@ const VideoPlayerModalScreen: React.FC = () => {
       'worklet';
       if (event.translationY > 0) {
         dragY.value = event.translationY * 0.8;
-        
+
         // Reduce content opacity during drag
         const progress = Math.min(event.translationY / (SCREEN_HEIGHT * 0.3), 1);
         contentOpacity.value = interpolate(
@@ -218,7 +227,7 @@ const VideoPlayerModalScreen: React.FC = () => {
           [1, 0.5],
           Extrapolate.CLAMP
         );
-        
+
         // Keep backdrop more opaque to prevent white flash
         backdropOpacity.value = interpolate(
           progress,
@@ -311,10 +320,10 @@ const VideoPlayerModalScreen: React.FC = () => {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: 'transparent' }}>
       <StatusBar backgroundColor="transparent" barStyle="light-content" translucent />
-      
+
       {/* Fixed Backdrop - Prevents white flash */}
       <Animated.View style={[StyleSheet.absoluteFillObject, backdropStyle]} />
-      
+
       {/* Content Layer */}
       <Animated.View style={[{ flex: 1 }, contentStyle]}>
         {/* Video Player */}        <GestureDetector gesture={dragGesture}>
@@ -406,7 +415,7 @@ const VideoPlayerModalScreen: React.FC = () => {
                 )}
               </View>
             )}
-            
+
             {!isVideoReady && !videoError && videoSource && (
               <View style={styles.loadingOverlay}>
                 <ActivityIndicator size="large" color="#fff" />
@@ -417,7 +426,7 @@ const VideoPlayerModalScreen: React.FC = () => {
 
         {/* Close Button */}
         <View style={styles.modalHeader}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.modalCloseButton}
             onPress={handleClose}
             activeOpacity={0.7}
@@ -425,7 +434,7 @@ const VideoPlayerModalScreen: React.FC = () => {
             <Text style={styles.modalCloseButtonText}>✕</Text>
           </TouchableOpacity>
         </View>
-        
+
         {/* Content Section */}
         <View style={styles.contentSection}>
           <ScrollView
@@ -444,7 +453,7 @@ const VideoPlayerModalScreen: React.FC = () => {
                   {(video.views || 0).toLocaleString()} views • {video.posted}
                 </Text>
               </View>
-              
+
 
             </View>
 
@@ -526,15 +535,15 @@ const VideoPlayerModalScreen: React.FC = () => {
                       key={`upnext-${item.id}`}
                       style={styles.upNextVideoItem}
                     >
-                      <MemoizedRelatedVideoCard 
-                        item={item} 
+                      <MemoizedRelatedVideoCard
+                        item={item}
                         onPress={() => {
                           navigation.replace('VideoPlayerModal', {
                             video: item,
                             cardLayout: null,
                             upNextVideos: shuffleArray(upNextVideos.filter((v: Video) => v.id !== video.id))
                           });
-                        }} 
+                        }}
                       />
                     </View>
                   ))}
@@ -545,7 +554,7 @@ const VideoPlayerModalScreen: React.FC = () => {
             </View>
           </ScrollView>
         </View>
-        
+
         {/* Reddit-style Video Comments Modal */}
         {video?.id && (
           <VideoCommentsModal

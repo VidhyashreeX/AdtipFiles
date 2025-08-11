@@ -1,0 +1,511 @@
+[DEBUG:App] All services marked as ready for instant app start
+IncomingCallService.ts:20 [IncomingCallService] IncomingCallModule not available, using fallback mode Error Component Stack:
+    at AppNavigator (App.tsx:97:59)
+    at RNGestureHandlerRootView (<anonymous>)
+    at GestureHandlerRootView (GestureHandlerRootView.android.tsx:12:8)
+    at CallEndModalProvider (CallEndModalProvider.tsx:9:78)
+    at SidebarProvider (SidebarContext.tsx:18:11)
+    at TabNavigatorProvider (TabNavigatorContext.tsx:16:84)
+    at ShortsProvider (ShortsContext.tsx:24:73)
+    at DataProvider (DataProvider.tsx:16:69)
+    at ContentCreatorPremiumProvider (ContentCreatorPremiumContext.tsx:35:103)
+    at WalletProvider (WalletContext.tsx:36:72)
+    at FCMChatProvider (FCMChatContext.tsx:59:75)
+    at UserDataProvider (UserDataContext.tsx:39:77)
+    at QueryClientProvider (QueryClientProvider.js:20:9)
+    at EnhancedQueryProvider (QueryProvider.tsx:60:79)
+    at AuthProvider (AuthContext.tsx:89:11)
+    at ThemeProvider (ThemeContext.tsx:22:11)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at CssInterop.View (api.js:32:48)
+    at KeyboardAvoiderProvider (KeyboardAvoiderProvider.tsx:7:13)
+    at SafeAreaEnv (react-native-safe-area-context.native.js:17:36)
+    at RNCSafeAreaProvider (<anonymous>)
+    at SafeAreaProvider (SafeAreaContext.tsx:35:11)
+    at SafeAreaProviderShim (react-native-safe-area-context.native.js:41:52)
+    at RNGestureHandlerRootView (<anonymous>)
+    at GestureHandlerRootView (GestureHandlerRootView.android.tsx:12:8)
+    at AppErrorBoundary (AppErrorBoundary.tsx:19:29)
+    at App (App.tsx:327:48)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at CssInterop.View (api.js:32:48)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at CssInterop.View (api.js:32:48)
+    at AppContainer (AppContainer-dev.js:88:11)
+    at Adtip(RootComponent) (getCachedComponentWithDebugName.js:26:42)
+anonymous @ console.js:654
+overrideMethod @ backend.js:17042
+anonymous @ setUpDeveloperTools.js:40
+registerWarning @ LogBox.js:171
+anonymous @ LogBox.js:84
+IncomingCallService @ IncomingCallService.ts:20
+getInstance @ IncomingCallService.ts:26
+anonymous @ App.tsx:274
+reactStackBottomFrame @ ReactFabric-dev.js:14849
+runWithFiberInDEV @ ReactFabric-dev.js:571
+commitHookEffectListMount @ ReactFabric-dev.js:9575
+commitHookPassiveMountEffects @ ReactFabric-dev.js:9695
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10863
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10867
+flushPassiveEffects @ ReactFabric-dev.js:12564
+anonymous @ ReactFabric-dev.js:12430
+Show 122 more frames
+Show less
+IncomingCallService.ts:36 [IncomingCallService] Event emitter not available, returning no-op unsubscribe Error Component Stack:
+    at AppNavigator (App.tsx:97:59)
+    at RNGestureHandlerRootView (<anonymous>)
+    at GestureHandlerRootView (GestureHandlerRootView.android.tsx:12:8)
+    at CallEndModalProvider (CallEndModalProvider.tsx:9:78)
+    at SidebarProvider (SidebarContext.tsx:18:11)
+    at TabNavigatorProvider (TabNavigatorContext.tsx:16:84)
+    at ShortsProvider (ShortsContext.tsx:24:73)
+    at DataProvider (DataProvider.tsx:16:69)
+    at ContentCreatorPremiumProvider (ContentCreatorPremiumContext.tsx:35:103)
+    at WalletProvider (WalletContext.tsx:36:72)
+    at FCMChatProvider (FCMChatContext.tsx:59:75)
+    at UserDataProvider (UserDataContext.tsx:39:77)
+    at QueryClientProvider (QueryClientProvider.js:20:9)
+    at EnhancedQueryProvider (QueryProvider.tsx:60:79)
+    at AuthProvider (AuthContext.tsx:89:11)
+    at ThemeProvider (ThemeContext.tsx:22:11)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at CssInterop.View (api.js:32:48)
+    at KeyboardAvoiderProvider (KeyboardAvoiderProvider.tsx:7:13)
+    at SafeAreaEnv (react-native-safe-area-context.native.js:17:36)
+    at RNCSafeAreaProvider (<anonymous>)
+    at SafeAreaProvider (SafeAreaContext.tsx:35:11)
+    at SafeAreaProviderShim (react-native-safe-area-context.native.js:41:52)
+    at RNGestureHandlerRootView (<anonymous>)
+    at GestureHandlerRootView (GestureHandlerRootView.android.tsx:12:8)
+    at AppErrorBoundary (AppErrorBoundary.tsx:19:29)
+    at App (App.tsx:327:48)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at CssInterop.View (api.js:32:48)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at CssInterop.View (api.js:32:48)
+    at AppContainer (AppContainer-dev.js:88:11)
+    at Adtip(RootComponent) (getCachedComponentWithDebugName.js:26:42)
+anonymous @ console.js:654
+overrideMethod @ backend.js:17042
+anonymous @ setUpDeveloperTools.js:40
+registerWarning @ LogBox.js:171
+anonymous @ LogBox.js:84
+onIncomingCall @ IncomingCallService.ts:36
+anonymous @ App.tsx:275
+reactStackBottomFrame @ ReactFabric-dev.js:14849
+runWithFiberInDEV @ ReactFabric-dev.js:571
+commitHookEffectListMount @ ReactFabric-dev.js:9575
+commitHookPassiveMountEffects @ ReactFabric-dev.js:9695
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10863
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10867
+flushPassiveEffects @ ReactFabric-dev.js:12564
+anonymous @ ReactFabric-dev.js:12430
+Show 122 more frames
+Show less
+IncomingCallService.ts:84 [IncomingCallService] Event emitter not available, returning no-op unsubscribe Error Component Stack:
+    at AppNavigator (App.tsx:97:59)
+    at RNGestureHandlerRootView (<anonymous>)
+    at GestureHandlerRootView (GestureHandlerRootView.android.tsx:12:8)
+    at CallEndModalProvider (CallEndModalProvider.tsx:9:78)
+    at SidebarProvider (SidebarContext.tsx:18:11)
+    at TabNavigatorProvider (TabNavigatorContext.tsx:16:84)
+    at ShortsProvider (ShortsContext.tsx:24:73)
+    at DataProvider (DataProvider.tsx:16:69)
+    at ContentCreatorPremiumProvider (ContentCreatorPremiumContext.tsx:35:103)
+    at WalletProvider (WalletContext.tsx:36:72)
+    at FCMChatProvider (FCMChatContext.tsx:59:75)
+    at UserDataProvider (UserDataContext.tsx:39:77)
+    at QueryClientProvider (QueryClientProvider.js:20:9)
+    at EnhancedQueryProvider (QueryProvider.tsx:60:79)
+    at AuthProvider (AuthContext.tsx:89:11)
+    at ThemeProvider (ThemeContext.tsx:22:11)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at CssInterop.View (api.js:32:48)
+    at KeyboardAvoiderProvider (KeyboardAvoiderProvider.tsx:7:13)
+    at SafeAreaEnv (react-native-safe-area-context.native.js:17:36)
+    at RNCSafeAreaProvider (<anonymous>)
+    at SafeAreaProvider (SafeAreaContext.tsx:35:11)
+    at SafeAreaProviderShim (react-native-safe-area-context.native.js:41:52)
+    at RNGestureHandlerRootView (<anonymous>)
+    at GestureHandlerRootView (GestureHandlerRootView.android.tsx:12:8)
+    at AppErrorBoundary (AppErrorBoundary.tsx:19:29)
+    at App (App.tsx:327:48)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at CssInterop.View (api.js:32:48)
+    at RCTView (<anonymous>)
+    at View (View.js:32:34)
+    at CssInterop.View (api.js:32:48)
+    at AppContainer (AppContainer-dev.js:88:11)
+    at Adtip(RootComponent) (getCachedComponentWithDebugName.js:26:42)
+anonymous @ console.js:654
+overrideMethod @ backend.js:17042
+anonymous @ setUpDeveloperTools.js:40
+registerWarning @ LogBox.js:171
+anonymous @ LogBox.js:84
+onCallAction @ IncomingCallService.ts:84
+anonymous @ App.tsx:288
+reactStackBottomFrame @ ReactFabric-dev.js:14849
+runWithFiberInDEV @ ReactFabric-dev.js:571
+commitHookEffectListMount @ ReactFabric-dev.js:9575
+commitHookPassiveMountEffects @ ReactFabric-dev.js:9695
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10863
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10976
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10856
+recursivelyTraversePassiveMountEffects @ ReactFabric-dev.js:10837
+commitPassiveMountOnFiber @ ReactFabric-dev.js:10867
+flushPassiveEffects @ ReactFabric-dev.js:12564
+anonymous @ ReactFabric-dev.js:12430
+Show 122 more frames
+Show less
+ContentCreatorPremiumContext.tsx:42 🔄 [ContentCreatorPremiumContext] Refreshing content creator premium status for user:
+CallKeepService.ts:15 [CallKeepService] ⚠️ Failed to import react-native-callkeep: Error: Exception in HostObject::get for prop 'RNCallKeep': com.facebook.react.internal.turbomodule.core.TurboModuleInteropUtils$ParsingException: Unable to parse @ReactMethod annotations from native module: RNCallKeep. Details: Module exports two methods to JavaScript with the same name: "displayIncomingCall
+	at com.facebook.react.internal.turbomodule.core.TurboModuleInteropUtils.getMethodDescriptorsFromModule(TurboModuleInteropUtils.java:83)
+	at com.facebook.react.internal.turbomodule.core.TurboModuleManager.getMethodDescriptorsFromModule(TurboModuleManager.java:127)
+	at com.facebook.jni.NativeRunnable.run(Native Method)
+	at android.os.Handler.handleCallback(Handler.java:959)
+	at android.os.Handler.dispatchMessage(Handler.java:100)
+	at com.facebook.react.bridge.queue.MessageQueueThreadHandler.dispatchMessage(MessageQueueThreadHandler.kt:20)
+	at android.os.Looper.loopOnce(Looper.java:249)
+	at android.os.Looper.loop(Looper.java:337)
+	at com.facebook.react.bridge.queue.MessageQueueThreadImpl$Companion.startNewBackgroundThread$lambda$1(MessageQueueThreadImpl.kt:175)
+	at com.facebook.react.bridge.queue.MessageQueueThreadImpl$Companion.$r8$lambda$ldnZnqelhYFctGaUKkOKYj5rxo4(Unknown Source:0)
+	at com.facebook.react.bridge.queue.MessageQueueThreadImpl$Companion$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at java.lang.Thread.run(Thread.java:1012)
+    [useCallKeepInitializer] ⚠️ CallKeep initialization failed (app continues normally)
+anonymous	@	useCallKeepInitializer.ts:39
+Show 5 more frames
+useCallKeepInitializer.ts:40 [useCallKeepInitializer] 📋 App will use custom call UI instead of native UI
+anonymous	@	useCallKeepInitializer.ts:40
+Show 5 more frames

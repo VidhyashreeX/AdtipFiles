@@ -3,7 +3,9 @@ import { Text, StyleSheet, View } from 'react-native';
 import { Clock } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 
-interface VideoSDKCallTimerProps {}
+interface VideoSDKCallTimerProps {
+  // Add props here if needed in the future
+}
 
 const VideoSDKCallTimer: React.FC<VideoSDKCallTimerProps> = () => {
   const { colors } = useTheme();
