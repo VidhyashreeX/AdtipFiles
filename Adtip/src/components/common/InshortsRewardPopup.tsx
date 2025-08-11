@@ -84,7 +84,7 @@ const InshortsRewardPopup: React.FC<InshortsRewardPopupProps> = ({
             </Text>
             
             <Text style={[styles.subtitle, { color: colors.text.secondary }]}>
-              You've earned ₹{earnedAmount.toFixed(2)} for every 10 inshorts!
+              You've earned ₹{earnedAmount.toFixed(2)} for every 5 inshorts!
             </Text>
 
             <View style={styles.amountContainer}>
