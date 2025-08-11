@@ -78,9 +78,10 @@ const ContactCard = ({
   onBlockUser?: () => void
 }) => {
   // Check if user is actually online based on their status
-  const isOnline = contact.online_status === 1 || contact.online_status === true
-  const isAvailable = contact.is_available === 1 || contact.is_available === true
-  const isDndEnabled = contact.dnd === 1 || contact.dnd === true
+const isOnline = Boolean(contact.online_status)
+const isAvailable = Boolean(contact.is_available)
+const isDndEnabled = Boolean(contact.dnd)
+
 
   // User is considered online and available if they are online, available, and not in DND mode
   const isUserOnlineAndAvailable = isOnline && isAvailable && !isDndEnabled

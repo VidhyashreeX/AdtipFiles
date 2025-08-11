@@ -121,7 +121,9 @@
             android:windowSoftInputMode="adjustPan"
             android:exported="true"
             android:showWhenLocked="true"
-            android:turnScreenOn="true"> 
+            android:turnScreenOn="true"
+            android:screenOrientation="fullSensor"> <!-- ✅ Enable auto-rotate -->
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
