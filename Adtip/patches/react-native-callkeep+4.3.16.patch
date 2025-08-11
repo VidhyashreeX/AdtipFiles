@@ -1,30 +1,142 @@
+diff --git a/node_modules/react-native-callkeep/android/.classpath b/node_modules/react-native-callkeep/android/.classpath
+new file mode 100644
+index 0000000..bbe97e5
+--- /dev/null
++++ b/node_modules/react-native-callkeep/android/.classpath
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<classpath>
++	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-17/"/>
++	<classpathentry kind="con" path="org.eclipse.buildship.core.gradleclasspathcontainer"/>
++	<classpathentry kind="output" path="bin/default"/>
++</classpath>
+diff --git a/node_modules/react-native-callkeep/android/.project b/node_modules/react-native-callkeep/android/.project
+new file mode 100644
+index 0000000..f214454
+--- /dev/null
++++ b/node_modules/react-native-callkeep/android/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>react-native-callkeep</name>
++	<comment>Project react-native-callkeep created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1753177987938</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/react-native-callkeep/android/.settings/org.eclipse.buildship.core.prefs b/node_modules/react-native-callkeep/android/.settings/org.eclipse.buildship.core.prefs
+new file mode 100644
+index 0000000..1675490
+--- /dev/null
++++ b/node_modules/react-native-callkeep/android/.settings/org.eclipse.buildship.core.prefs
+@@ -0,0 +1,2 @@
++connection.project.dir=../../../android
++eclipse.preferences.version=1
+diff --git a/node_modules/react-native-callkeep/android/bin/build/generated/source/buildConfig/debug/io/wazo/callkeep/BuildConfig.class b/node_modules/react-native-callkeep/android/bin/build/generated/source/buildConfig/debug/io/wazo/callkeep/BuildConfig.class
+new file mode 100644
+index 0000000..ddb98f4
+Binary files /dev/null and b/node_modules/react-native-callkeep/android/bin/build/generated/source/buildConfig/debug/io/wazo/callkeep/BuildConfig.class differ
+diff --git a/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/Constants.class b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/Constants.class
+new file mode 100644
+index 0000000..2c6b154
+Binary files /dev/null and b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/Constants.class differ
+diff --git a/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/MapUtils.class b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/MapUtils.class
+new file mode 100644
+index 0000000..721ab39
+Binary files /dev/null and b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/MapUtils.class differ
+diff --git a/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepBackgroundMessagingService.class b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepBackgroundMessagingService.class
+new file mode 100644
+index 0000000..be63755
+Binary files /dev/null and b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepBackgroundMessagingService.class differ
+diff --git a/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepModule$CallStateListener.class b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepModule$CallStateListener.class
+new file mode 100644
+index 0000000..e40bef8
+Binary files /dev/null and b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepModule$CallStateListener.class differ
+diff --git a/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepModule$LegacyCallStateListener.class b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepModule$LegacyCallStateListener.class
+new file mode 100644
+index 0000000..8d88a24
+Binary files /dev/null and b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepModule$LegacyCallStateListener.class differ
+diff --git a/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepModule$VoiceBroadcastReceiver.class b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepModule$VoiceBroadcastReceiver.class
+new file mode 100644
+index 0000000..789f60e
+Binary files /dev/null and b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepModule$VoiceBroadcastReceiver.class differ
+diff --git a/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepModule.class b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepModule.class
+new file mode 100644
+index 0000000..0f34c98
+Binary files /dev/null and b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepModule.class differ
+diff --git a/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepPackage.class b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepPackage.class
+new file mode 100644
+index 0000000..81512fb
+Binary files /dev/null and b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/RNCallKeepPackage.class differ
+diff --git a/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/VoiceConference.class b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/VoiceConference.class
+new file mode 100644
+index 0000000..d94329c
+Binary files /dev/null and b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/VoiceConference.class differ
+diff --git a/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/VoiceConnection.class b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/VoiceConnection.class
+new file mode 100644
+index 0000000..deeb013
+Binary files /dev/null and b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/VoiceConnection.class differ
+diff --git a/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/VoiceConnectionService.class b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/VoiceConnectionService.class
+new file mode 100644
+index 0000000..02e7c57
+Binary files /dev/null and b/node_modules/react-native-callkeep/android/bin/src/main/java/io/wazo/callkeep/VoiceConnectionService.class differ
 diff --git a/node_modules/react-native-callkeep/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java b/node_modules/react-native-callkeep/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java
-index 025480a..b76e2ad 100644
+index 025480a..2722d74 100644
 --- a/node_modules/react-native-callkeep/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java
 +++ b/node_modules/react-native-callkeep/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java
-@@ -434,12 +434,10 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
+@@ -434,10 +434,10 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
          this.hasListeners = false;
      }
  
 -    @ReactMethod
-     public void displayIncomingCall(String uuid, String number, String callerName) {
-         this.displayIncomingCall(uuid, number, callerName, false, null);
-     }
+-    public void displayIncomingCall(String uuid, String number, String callerName) {
+-        this.displayIncomingCall(uuid, number, callerName, false, null);
+-    }
++    // @ReactMethod
++    // public void displayIncomingCall(String uuid, String number, String callerName) {
++    //     this.displayIncomingCall(uuid, number, callerName, false, null);
++    // }
  
--    @ReactMethod
+     @ReactMethod
      public void displayIncomingCall(String uuid, String number, String callerName, boolean hasVideo) {
-         this.displayIncomingCall(uuid, number, callerName, hasVideo, null);
-     }
-@@ -483,12 +481,10 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
+@@ -483,10 +483,10 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
          conn.onAnswer();
      }
  
 -    @ReactMethod
-     public void startCall(String uuid, String number, String callerName) {
-         this.startCall(uuid, number, callerName, false, null);
-     }
+-    public void startCall(String uuid, String number, String callerName) {
+-        this.startCall(uuid, number, callerName, false, null);
+-    }
++    // @ReactMethod
++    // public void startCall(String uuid, String number, String callerName) {
++    //     this.startCall(uuid, number, callerName, false, null);
++    // }
  
--    @ReactMethod
+     @ReactMethod
      public void startCall(String uuid, String number, String callerName, boolean hasVideo) {
-         this.startCall(uuid, number, callerName, hasVideo, null);
-     }
