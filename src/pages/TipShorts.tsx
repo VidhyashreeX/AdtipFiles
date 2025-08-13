@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Heart, MessageSquare, Share2, ThumbsDown, Maximize2, Minimize2, VolumeX, Volume2, Play, Pause } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "../contexts/SidebarContext";
 
@@ -38,6 +39,7 @@ const NAVBAR_HEIGHT = 72; // px, assumed navbar height for non-fullscreen state
 
 const TipShorts = () => {
   const [shorts, setShorts] = useState<TipShort[]>([]);
+  const { id: shortIdParam } = useParams(); 
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -51,6 +53,20 @@ const TipShorts = () => {
     const stored = localStorage.getItem('shortsGlobalMuted');
     return stored ? JSON.parse(stored) : false;
   });
+   const [showCopied, setShowCopied] = useState(false);
+
+const handleShare = async (short) => {
+  const url = `${window.location.origin}/short/${short.id}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    setShowCopied(true);
+    setTimeout(() => setShowCopied(false), 1800); // Hide after 1.8 seconds
+  } catch(error) {
+    console.error(error);
+    // Optionally you can show error toast here
+  }
+};
+
   const [isGlobalPlaying, setIsGlobalPlaying] = useState(() => {
     const stored = localStorage.getItem('shortsGlobalPlaying');
     return stored ? JSON.parse(stored) : true;
@@ -75,56 +91,97 @@ const TipShorts = () => {
     setSidebarWidth(isCollapsed ? 64 : 256);
   }, [isCollapsed, isMobile]);
 
-  // --- Fetch shorts ---
-  const fetchShorts = useCallback(async (pageNum: number) => {
+const fetchShorts = useCallback(
+  async (pageNum: number) => {
     setLoading(true);
     setError(null);
+
+    const isPublic = !isAuthenticated && !localStorage.getItem("UserLoggedIn");
+    const userId = localStorage.getItem("userId") || "50816";
+
     try {
-      const isPublic = !isAuthenticated && !localStorage.getItem("UserLoggedIn");
-      const userId = localStorage.getItem("userId") || "50816";
-      let apiUrl = isPublic
-        ? `${BASE_URL}/getpublicshots`
-        : `${BASE_URL}/getshots/${userId}`;
-      // If API supports pagination, add ?page=pageNum&limit=SHORTS_PAGE_SIZE
-      // For now, fetch all and slice client-side
-      const res = await fetch(apiUrl);
-      if (!res.ok) throw new Error(`Failed to load tip shorts: ${res.status}`);
-      const data = await res.json();
-      const rawShorts = Array.isArray(data.data) ? data.data : [];
-      const normalized: TipShort[] = rawShorts.map((short): TipShort | null => {
-        const s = short as any;
-        if (!s.video_link) return null;
-        return {
-          id: s.id,
-          user: {
-            name: s.channelName || "Unknown",
-            avatar: s.channel_profile && s.channel_profile !== "null" ? s.channel_profile : "/placeholder.svg",
-            isVerified: false,
-          },
-          content: {
-            video: s.video_link,
-            description: s.video_description || s.name || "No description",
-            likes: Number(s.total_likes || 0),
-            comments: Number(s.total_comments || 0),
-            shares: 0,
-            thumbnail: s.video_Thumbnail || s.channel_profile || "/placeholder.svg",
-          },
-          musicName: s.name || "Unknown",
-        };
-      }).filter((s): s is TipShort => s !== null);
-      // Simulate pagination if API doesn't support it
-      const start = (pageNum - 1) * SHORTS_PAGE_SIZE;
-      const end = start + SHORTS_PAGE_SIZE;
-      const pageShorts = normalized.slice(start, end);
-      setShorts(prev => pageNum === 1 ? pageShorts : [...prev, ...pageShorts]);
-      // Only set hasMore to false if there are truly no more shorts to load
-      setHasMore(pageShorts.length > 0);
+      let normalized: TipShort[] = [];
+
+      if (shortIdParam) {
+        // Deep link mode — one short only
+        const res = await fetch(`${BASE_URL}/getShortById/${userId}/${shortIdParam}`);
+        if (!res.ok) throw new Error(`Failed to load short: ${res.status}`);
+        const data = await res.json();
+        const s = data.data?.[0];
+        if (s && s.video_link) {
+          normalized = [
+            {
+              id: s.id,
+              user: {
+                name: s.channelName || "Unknown",
+                avatar: s.channel_profile && s.channel_profile !== "null" ? s.channel_profile : "/placeholder.svg",
+                isVerified: false,
+              },
+              content: {
+                video: s.video_link,
+                description: s.video_desciption || s.name || "No description",
+                likes: Number(s.total_likes || 0),
+                comments: Number(s.total_comments || 0),
+                shares: 0,
+                thumbnail: s.video_Thumbnail || s.channel_profile || "/placeholder.svg",
+              },
+              musicName: s.name || "Unknown",
+            },
+          ];
+        }
+        setHasMore(false); // no pagination for single mode
+      } else {
+        // Normal paginated feed
+        const apiUrl = isPublic
+          ? `${BASE_URL}/getpublicshots`
+          : `${BASE_URL}/getshots/${userId}`;
+
+        const res = await fetch(apiUrl);
+        if (!res.ok) throw new Error(`Failed to load tip shorts: ${res.status}`);
+        const data = await res.json();
+        const rawShorts = Array.isArray(data.data) ? data.data : [];
+
+        normalized = rawShorts
+          .map((s: any): TipShort | null => {
+            if (!s.video_link) return null;
+            return {
+              id: s.id,
+              user: {
+                name: s.channelName || "Unknown",
+                avatar: s.channel_profile && s.channel_profile !== "null" ? s.channel_profile : "/placeholder.svg",
+                isVerified: false,
+              },
+              content: {
+                video: s.video_link,
+                description: s.video_desciption || s.name || "No description",
+                likes: Number(s.total_likes || 0),
+                comments: Number(s.total_comments || 0),
+                shares: 0,
+                thumbnail: s.video_Thumbnail || s.channel_profile || "/placeholder.svg",
+              },
+              musicName: s.name || "Unknown",
+            };
+          })
+          .filter((s): s is TipShort => s !== null);
+
+        // Simulate pagination
+        const start = (pageNum - 1) * SHORTS_PAGE_SIZE;
+        const end = start + SHORTS_PAGE_SIZE;
+        const pageShorts = normalized.slice(start, end);
+        normalized = pageNum === 1 ? pageShorts : [...shorts, ...pageShorts];
+        setHasMore(pageShorts.length > 0);
+      }
+
+      setShorts(normalized);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, BASE_URL]);
+  },
+  [isAuthenticated, BASE_URL, shortIdParam]
+);
+
 
   // --- Initial Fetch & Pagination ---
   useEffect(() => {
@@ -605,10 +662,14 @@ const TipShorts = () => {
                         <MessageSquare className="w-8 h-8 text-white" />
                         <span className="text-white text-xs mt-1">{short.content.comments}</span>
                       </button>
-                      <button className="flex flex-col items-center">
-                        <Share2 className="w-8 h-8 text-white" />
-                        <span className="text-white text-xs mt-1">{short.content.shares}</span>
-                      </button>
+                    <button
+  className="flex flex-col items-center"
+  onClick={() => handleShare(short)}
+>
+  <Share2 className="w-8 h-8 text-white" />
+  <span className="text-white text-xs mt-1">{short.content.shares}</span>
+</button>
+
                       <button className="flex flex-col items-center mt-2">
                         <div className="w-8 h-8 rounded-full flex items-center justify-center">
                             <span className="text-white text-2xl font-bold leading-none">...</span>
@@ -633,6 +694,27 @@ const TipShorts = () => {
             </div>
           )}
         </div>
+      {showCopied && (
+  <div className="fixed bottom-8 left-1/2 -translate-x-1/2 px-5 py-3 
+                  bg-white/10 backdrop-blur-lg border border-white/20 
+                  text-white rounded-full shadow-lg flex items-center space-x-2 
+                  transition-all animate-fade-in-out z-50">
+    <svg
+      className="w-5 h-5 text-emerald-300"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      viewBox="0 0 24 24"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+    <span className="text-sm text-gray-900 dark:text-white">
+  Link copied to clipboard!
+</span>
+  </div>
+)}
+
+
       </div>
     </>
   );

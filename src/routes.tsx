@@ -80,7 +80,7 @@ const router = createBrowserRouter([
 				element: <TipTube />,
 			},
 			{
-				path: "tipshort",
+				path: "short/:id?",
 				element: <TipShorts />,
 			},
 			{

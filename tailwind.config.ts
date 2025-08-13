@@ -81,7 +81,15 @@ export default {
 				'slide-in': {
 					'0%': { transform: 'translateX(-100%)' },
 					'100%': { transform: 'translateX(0)' }
-				}
+          
+				}   ,
+         "fade-in-out": {
+          "0%": { opacity: "0" },
+          "10%": { opacity: "1" },
+          "90%": { opacity: "1" },
+          "100%": { opacity: "0" },
+        },
+        
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',

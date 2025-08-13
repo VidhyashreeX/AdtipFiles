@@ -191,6 +191,10 @@ export const contentAPI = {
   getShorts: (userId: string) =>
     api.get(`/getshots/${userId}`),
 
+  // ⭐ New: Fetch a single short by ID (for deep linking)
+  getShortById: (userId: string, shortId: string) =>
+    api.get(`/getShortById/${userId}/${shortId}`),
+
   checkPremium: (userId: string) =>
     api.get(`/check-premium/${userId}`),
 };

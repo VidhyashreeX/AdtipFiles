@@ -46,6 +46,9 @@ const AppRoutes = () => {
       {/* Protected Routes */}
       <Route element={<ProtectedRoute />}>
         <Route path="/complete-profile" element={<CompleteProfile />} />
+        <Route path="/short/:id?" element={<TipShorts />} />
+        {/* Optional: redirect old /tipshorts to new /short route */}
+<Route path="/tipshorts" element={<Navigate to="/short" replace />} />
         <Route path="/home" element={<Home />} />
         <Route path="/wallet" element={<Wallet />} />
         <Route path="/tipshorts" element={<TipShorts />} />
