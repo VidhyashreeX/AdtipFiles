@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import CallController from '../../services/calling/CallController';
 import NotificationService from '../../services/calling/NotificationService';
 import { CallKeepService } from '../../services/calling/CallKeepService';
+import { Logger } from '../../utils/ProductionLogger';
 
 /**
  * CallKeep Test Buttons Component
@@ -27,6 +28,35 @@ const CallKeepTestButtons: React.FC = () => {
   if (!__DEV__) {
     return null;
   }
+
+  // Log component initialization and CallKeep status
+  useEffect(() => {
+    Logger.info('CallKeepTestButtons', '🔧 CallKeep test buttons initialized', {
+      isDev: __DEV__,
+      platform: Platform.OS
+    });
+
+    // Check CallKeep availability on mount
+    const checkCallKeepStatus = async () => {
+      try {
+        const callKeepService = CallKeepService.getInstance();
+        const isAvailable = callKeepService.isAvailable();
+        const status = callKeepService.getCallKeepStatus();
+
+        Logger.info('CallKeepTestButtons', '📊 CallKeep status check', {
+          isAvailable,
+          status,
+          platform: Platform.OS
+        });
+      } catch (error) {
+        Logger.warn('CallKeepTestButtons', '⚠️ CallKeep status check failed', {
+          error: error.message || error
+        });
+      }
+    };
+
+    checkCallKeepStatus();
+  }, []);
 
   /**
    * Test incoming call with native CallKeep UI
@@ -59,12 +89,22 @@ const CallKeepTestButtons: React.FC = () => {
         );
         
         if (success) {
+          Logger.info('CallKeepTestButtons', '✅ Native incoming call UI triggered successfully', {
+            sessionId: testSessionId,
+            callerName: testCallerName,
+            callType: 'voice'
+          });
+
           Alert.alert(
             'Native Incoming Call Triggered',
             'CallKeep native incoming call UI should now be visible. Check your phone\'s call interface.',
             [{ text: 'OK' }]
           );
         } else {
+          Logger.error('CallKeepTestButtons', '❌ CallKeep displayIncomingCall failed', {
+            sessionId: testSessionId,
+            callerName: testCallerName
+          });
           throw new Error('CallKeep displayIncomingCall failed');
         }
       } else {
@@ -79,7 +119,13 @@ const CallKeepTestButtons: React.FC = () => {
           testMeetingId,
           testToken
         );
-        
+
+        Logger.info('CallKeepTestButtons', '📞 Incoming call fallback triggered via NotificationService', {
+          sessionId: testSessionId,
+          callerName: testCallerName,
+          callType: 'voice'
+        });
+
         Alert.alert(
           'Incoming Call Test',
           'Test incoming call triggered. If CallKeep is available, you should see native UI.',
@@ -89,9 +135,17 @@ const CallKeepTestButtons: React.FC = () => {
       
     } catch (error) {
       console.error('[CallKeepTestButtons] Incoming call test failed:', error);
+
+      Logger.error('CallKeepTestButtons', '❌ Incoming call test failed', {
+        error: error.message || error,
+        sessionId: testSessionId,
+        callerName: testCallerName,
+        stack: error.stack
+      });
+
       Alert.alert(
-        'Test Failed',
-        `Failed to trigger incoming call: ${error}`,
+        'Incoming Call Test Failed',
+        `Failed to trigger incoming call:\n\n${error.message || error}\n\nCheck console for details.`,
         [{ text: 'OK' }]
       );
     } finally {
@@ -129,12 +183,23 @@ const CallKeepTestButtons: React.FC = () => {
         );
         
         if (success) {
+          Logger.info('CallKeepTestButtons', '✅ Native outgoing call UI triggered successfully', {
+            callUUID: testCallUUID,
+            recipientName: testRecipientName,
+            callType: 'voice',
+            method: 'CallKeepService.startCall'
+          });
+
           Alert.alert(
             'Native Outgoing Call Triggered',
             'CallKeep native outgoing call UI should now be visible. Check your phone\'s call interface.',
             [{ text: 'OK' }]
           );
         } else {
+          Logger.error('CallKeepTestButtons', '❌ CallKeep startCall failed', {
+            callUUID: testCallUUID,
+            recipientName: testRecipientName
+          });
           throw new Error('CallKeep startCall failed');
         }
       } else {
@@ -143,10 +208,24 @@ const CallKeepTestButtons: React.FC = () => {
         
         const controller = CallController.getInstance();
         const success = await controller.startCall(testRecipientId, testRecipientName, 'voice');
-        
+
+        if (success) {
+          Logger.info('CallKeepTestButtons', '✅ Outgoing call fallback triggered via CallController', {
+            recipientId: testRecipientId,
+            recipientName: testRecipientName,
+            callType: 'voice',
+            method: 'CallController.startCall'
+          });
+        } else {
+          Logger.error('CallKeepTestButtons', '❌ CallController startCall failed', {
+            recipientId: testRecipientId,
+            recipientName: testRecipientName
+          });
+        }
+
         Alert.alert(
           'Outgoing Call Test',
-          success 
+          success
             ? 'Test outgoing call started. If CallKeep is available, you should see native UI.'
             : 'Test outgoing call failed to start.',
           [{ text: 'OK' }]
@@ -155,9 +234,17 @@ const CallKeepTestButtons: React.FC = () => {
       
     } catch (error) {
       console.error('[CallKeepTestButtons] Outgoing call test failed:', error);
+
+      Logger.error('CallKeepTestButtons', '❌ Outgoing call test failed', {
+        error: error.message || error,
+        recipientId: testRecipientId,
+        recipientName: testRecipientName,
+        stack: error.stack
+      });
+
       Alert.alert(
-        'Test Failed',
-        `Failed to trigger outgoing call: ${error}`,
+        'Outgoing Call Test Failed',
+        `Failed to trigger outgoing call:\n\n${error.message || error}\n\nCheck console for details.`,
         [{ text: 'OK' }]
       );
     } finally {
@@ -191,21 +278,46 @@ const CallKeepTestButtons: React.FC = () => {
         );
         
         if (success) {
+          Logger.info('CallKeepTestButtons', '✅ Native video call UI triggered successfully', {
+            callUUID: testCallUUID,
+            recipientName: testRecipientName,
+            callType: 'video',
+            method: 'CallKeepService.startCall'
+          });
+
           Alert.alert(
             'Native Video Call Triggered',
             'CallKeep native video call UI should now be visible.',
             [{ text: 'OK' }]
           );
         } else {
+          Logger.error('CallKeepTestButtons', '❌ CallKeep video startCall failed', {
+            callUUID: testCallUUID,
+            recipientName: testRecipientName
+          });
           throw new Error('CallKeep video startCall failed');
         }
       } else {
         const controller = CallController.getInstance();
         const success = await controller.startCall(testRecipientId, testRecipientName, 'video');
-        
+
+        if (success) {
+          Logger.info('CallKeepTestButtons', '✅ Video call fallback triggered via CallController', {
+            recipientId: testRecipientId,
+            recipientName: testRecipientName,
+            callType: 'video',
+            method: 'CallController.startCall'
+          });
+        } else {
+          Logger.error('CallKeepTestButtons', '❌ CallController video startCall failed', {
+            recipientId: testRecipientId,
+            recipientName: testRecipientName
+          });
+        }
+
         Alert.alert(
           'Video Call Test',
-          success 
+          success
             ? 'Test video call started. If CallKeep is available, you should see native UI.'
             : 'Test video call failed to start.',
           [{ text: 'OK' }]
@@ -214,9 +326,17 @@ const CallKeepTestButtons: React.FC = () => {
       
     } catch (error) {
       console.error('[CallKeepTestButtons] Video call test failed:', error);
+
+      Logger.error('CallKeepTestButtons', '❌ Video call test failed', {
+        error: error.message || error,
+        recipientId: testRecipientId,
+        recipientName: testRecipientName,
+        stack: error.stack
+      });
+
       Alert.alert(
-        'Test Failed',
-        `Failed to trigger video call: ${error}`,
+        'Video Call Test Failed',
+        `Failed to trigger video call:\n\n${error.message || error}\n\nCheck console for details.`,
         [{ text: 'OK' }]
       );
     } finally {
