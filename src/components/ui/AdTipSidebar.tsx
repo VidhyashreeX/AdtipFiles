@@ -81,7 +81,7 @@ const AdTipSidebar = () => {
   // Main navigation items
   const mainNavItems = [
     { to: "/home", label: "Home", icon: <Home className="h-5 w-5" /> },
-    { to: "/tiptube", label: "TipTube", icon: <Play className="h-5 w-5" /> },
+    { to: "/watch", label: "TipTube", icon: <Play className="h-5 w-5" /> },
     { to: "/short", label: "TipShorts", icon: <Video className="h-5 w-5" /> },
     { to: "/tipcall", label: "TipCall", icon: <Phone className="h-5 w-5" /> },
     // Install to Earn menu item (no route, just action)

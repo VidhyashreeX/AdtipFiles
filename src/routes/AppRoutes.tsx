@@ -20,6 +20,7 @@ import NotFound from "../pages/NotFound";
 import Home from "../pages/Home";
 import CompleteProfile from "../pages/CompleteProfile";
 import TipShorts from "../pages/TipShorts";
+import TipTube from "@/pages/TipTube";
 
 const ProtectedRoute = () => {
   const { isAuthenticated, authLoading } = useAuth();
@@ -46,6 +47,8 @@ const AppRoutes = () => {
       {/* Protected Routes */}
       <Route element={<ProtectedRoute />}>
         <Route path="/complete-profile" element={<CompleteProfile />} />
+          <Route path="/watch/:id?" element={<TipTube />} />
+          <Route path="/tiptube" element={<Navigate to="/watch" replace />} />
         <Route path="/short/:id?" element={<TipShorts />} />
         {/* Optional: redirect old /tipshorts to new /short route */}
 <Route path="/tipshorts" element={<Navigate to="/short" replace />} />

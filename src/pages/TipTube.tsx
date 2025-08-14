@@ -2,6 +2,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 
+import { useParams } from "react-router-dom";
+
+
 // Add icons for categories (use emoji or SVG for demo)
 const categories = [
   { name: "All", icon: "🏠" },
@@ -134,11 +137,54 @@ const marketplaceMenu = [
 
 const TipTube = () => {
   const [selectedCategory, setSelectedCategory] = useState("All");
+  
   const [videos, setVideos] = useState<Video[]>([]);
+const { id: videoIdParam } = useParams();
+const [showRewardPopup, setShowRewardPopup] = useState(false);
+const handleVideoComplete = (video) => {
+  // Only reward if opened from a shareable link
+  // i.e., we're in deep link mode AND the fetched video's ID matches the deep link
+  if (videoIdParam && video && String(video.id) === String(videoIdParam)) {
+    console.log(`User watched shared video ${video.id} fully - credit Rs.1`);
+    
+    // Optional: reward API call if logged in
+    /*
+    if (userId && token) {
+      fetch(`${BASE_URL}/credit-reward/${userId}`, { 
+        method: 'POST', 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
+    }
+    */
+
+    setShowRewardPopup(true);
+  }
+};
+
+
   const [offset, setOffset] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [showPlayer, setShowPlayer] = useState(false);
+  const [showCopied, setShowCopied] = useState(false);
+
+const handleAdTubeShare = async (apiVideo: any) => {
+  if (!apiVideo?.id || apiVideo.id === 0) {
+    console.error("Cannot share: video ID is missing or invalid", apiVideo);
+    return;
+  }
+
+  const url = `${window.location.origin}/watch/${apiVideo.id}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    setShowCopied(true);
+    setTimeout(() => setShowCopied(false), 1800);
+  } catch (error) {
+    console.error("Failed to copy URL:", error);
+  }
+};
+
+
   const [currentVideo, setCurrentVideo] = useState<Video | null>(null);
   const [search, setSearch] = useState("");
   const [hoveredVideoId, setHoveredVideoId] = useState<number | null>(null);
@@ -170,27 +216,73 @@ const TipTube = () => {
   });
 
   // Fetch videos (infinite scroll)
-  const fetchVideos = useCallback(async (reset = false) => {
+ const fetchVideos = useCallback(
+  async (reset = false) => {
     setLoading(true);
-    const usePublicApi = !localStorage.getItem("UserLoggedIn") || !userId || !token;
-    const apiEndpoint = usePublicApi 
-      ? `${BASE_URL}/getpublicvideos/${categoryToIdMap[selectedCategory] || 0}/${reset ? 1 : offset}`
-      : `${BASE_URL}/getvideos/${userId}/${categoryToIdMap[selectedCategory] || 0}/${reset ? 1 : offset}`;
+
     try {
+      const usePublicApi =
+        !localStorage.getItem("UserLoggedIn") || !userId || !token;
+
+      const apiEndpoint = usePublicApi
+        ? `${BASE_URL}/getpublicvideos/${categoryToIdMap[selectedCategory] || 0}/${
+            reset ? 1 : offset
+          }`
+        : `${BASE_URL}/getvideos/${userId}/${
+            categoryToIdMap[selectedCategory] || 0
+          }/${reset ? 1 : offset}`;
+
       const res = await fetch(apiEndpoint, {
         method: "GET",
-        headers: { "Content-Type": "application/json", ...(usePublicApi ? {} : { Authorization: `Bearer ${token}` }) },
+        headers: {
+          "Content-Type": "application/json",
+          ...(usePublicApi ? {} : { Authorization: `Bearer ${token}` }),
+        },
       });
+
       const data = await res.json();
-      const videoList = Array.isArray(data.data) ? data.data.map(transformVideoData) : [];
-      setVideos(prev => reset ? videoList : [...prev, ...videoList]);
+      const videoList = Array.isArray(data.data)
+        ? data.data.map(transformVideoData)
+        : [];
+
+      // ⭐ If we're in deep-link mode (/watch/:id)
+      if (videoIdParam) {
+        const foundVideo = videoList.find(
+          (video) => String(video.id) === String(videoIdParam)
+        );
+
+        if (foundVideo) {
+          setCurrentVideo(foundVideo);
+          setVideos([]); // Optional: hide the rest of the list
+          setHasMore(false);
+        } else {
+          // If not found in first page, optionally fallback to fetching more or showing "not found"
+          setHasMore(false);
+        }
+        return; // Stop normal feed flow
+      }
+
+      // Normal feed mode — update the video list
+      setVideos((prev) => (reset ? videoList : [...prev, ...videoList]));
       setHasMore(videoList.length > 0);
-        } catch (err) {
+    } catch (err) {
+      console.error("Error fetching videos", err);
       setHasMore(false);
     } finally {
       setLoading(false);
     }
-  }, [selectedCategory, offset, BASE_URL, userId, token]);
+  },
+  [
+    videoIdParam,
+    selectedCategory,
+    offset,
+    BASE_URL,
+    userId,
+    token,
+    categoryToIdMap,
+  ]
+);
+
 
   // Initial fetch and on category/search change
   useEffect(() => {
@@ -269,6 +361,7 @@ const TipTube = () => {
                 src={currentVideo.videoUrl}
                 poster={currentVideo.thumbnail}
                 controls
+                 onEnded={() => handleVideoComplete(currentVideo)}
                 autoPlay
                 className="w-full aspect-video max-h-[70vh] object-contain bg-black"
                 style={{ background: 'black' }}
@@ -300,10 +393,26 @@ const TipTube = () => {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2V4m0 16v-7" /></svg>
                   Dislike
                 </button>
-                <button className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 7.165 6 9.388 6 12v2.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-                  Share
-                </button>
+              <button
+    onClick={() => handleAdTubeShare(currentVideo)}
+  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 font-medium hover:bg-gray-200"
+>
+  <svg
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 7.165 6 9.388 6 12v2.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+    />
+  </svg>
+  Share
+</button>
+
               </div>
               <button onClick={() => setCurrentVideo(null)} className="mt-4 px-4 py-2 rounded-full bg-gray-200 text-gray-700 font-medium hover:bg-gray-300">Back to Feed</button>
             </div>
@@ -313,24 +422,39 @@ const TipTube = () => {
             <div className="flex flex-col gap-3">
               {videos.filter(v => v.id !== currentVideo.id).map((video, idx) => (
                 <div
-                  key={video.id}
-                  className="flex gap-3 bg-white rounded-lg shadow hover:shadow-md cursor-pointer overflow-hidden"
-                  onClick={() => setCurrentVideo(video)}
-                >
-                  <img
-                    src={video.thumbnail || "/placeholder.svg"}
-                    alt={video.title}
-                    className="w-36 h-20 object-cover flex-shrink-0"
-                  />
-                  <div className="flex flex-col justify-between py-2 pr-2 min-w-0 flex-1">
-                    <div className="font-semibold text-gray-900 text-sm line-clamp-2">{video.title}</div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <img src={video.avatar || "/placeholder.svg"} alt={video.creatorName} className="w-6 h-6 rounded-full" />
-                      <span className="text-xs text-gray-600 truncate">{video.creatorName}</span>
-                    </div>
-                    <span className="text-xs text-gray-500 mt-1">{video.views.toLocaleString()} views • {video.posted}</span>
-                  </div>
-                </div>
+  key={video.id}
+  className="flex gap-3 bg-white rounded-lg shadow hover:shadow-md cursor-pointer overflow-hidden"
+  onClick={() => {
+    setCurrentVideo(video);
+feedRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+
+  }}
+>
+  <img
+    src={video.thumbnail || "/placeholder.svg"}
+    alt={video.title}
+    className="w-36 h-20 object-cover flex-shrink-0"
+  />
+  <div className="flex flex-col justify-between py-2 pr-2 min-w-0 flex-1">
+    <div className="font-semibold text-gray-900 text-sm line-clamp-2">
+      {video.title}
+    </div>
+    <div className="flex items-center gap-2 mt-1">
+      <img
+        src={video.avatar || "/placeholder.svg"}
+        alt={video.creatorName}
+        className="w-6 h-6 rounded-full"
+      />
+      <span className="text-xs text-gray-600 truncate">
+        {video.creatorName}
+      </span>
+    </div>
+    <span className="text-xs text-gray-500 mt-1">
+      {video.views.toLocaleString()} views • {video.posted}
+    </span>
+  </div>
+</div>
+
               ))}
               {loading && (
                 <div className="flex justify-center py-4 text-adtip-teal font-medium">Loading more...</div>
@@ -422,6 +546,50 @@ const TipTube = () => {
       {!loading && !hasMore && videos.length === 0 && (
         <div className="text-center text-gray-500 py-12">No videos found.</div>
       )}
+      {/* Copied Toast */}
+      {showCopied && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 px-5 py-3 
+                        bg-white/10 backdrop-blur-lg border border-white/20 
+                        text-white rounded-full shadow-lg flex items-center space-x-2 
+                        transition-all animate-fade-in-out z-50">
+          <svg
+            className="w-5 h-5 text-emerald-300"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          <span className="text-sm text-gray-900 dark:text-white">
+            Link copied to clipboard!
+          </span>
+        </div>
+      )}
+      {showRewardPopup && (
+  <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg p-6 max-w-sm w-full text-center">
+      <h2 className="text-xl font-bold mb-3">🎉 Congratulations!</h2>
+      <p className="mb-2">You earned ₹1 for watching this video</p>
+      <p className="mb-4 text-gray-600">Credit added to your wallet</p>
+      <button
+        onClick={() => window.location.href = "/login"}
+        className="bg-blue-500 text-white px-4 py-2 rounded mb-2 w-full"
+      >
+        Login Now
+      </button>
+      <button
+        onClick={() =>
+          window.location.href = "https://play.google.com/store/apps/details?id=com.adtip.app.adtip_app&hl=en_IN"
+        }
+        className="border border-blue-500 text-blue-500 px-4 py-2 rounded w-full"
+      >
+        Download AdTip App
+      </button>
+    </div>
+  </div>
+)}
+
     </div>
   );
 };

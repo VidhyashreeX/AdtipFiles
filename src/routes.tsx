@@ -76,7 +76,7 @@ const router = createBrowserRouter([
 				element: <EditProfile />,
 			},
 			{
-				path: "tiptube",
+				path: "watch/:id?",
 				element: <TipTube />,
 			},
 			{

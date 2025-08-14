@@ -54,6 +54,15 @@ const TipShorts = () => {
     return stored ? JSON.parse(stored) : false;
   });
    const [showCopied, setShowCopied] = useState(false);
+   const [showRewardPopup, setShowRewardPopup] = useState(false);
+   const handleVideoComplete = (short) => {
+  // only reward when opened via deep link
+  if (shortIdParam) {
+    // You can also add an API call here to credit Rs.1 if logged in
+    console.log(`User watched short ${short.id} fully - credit Rs.1`);
+    setShowRewardPopup(true);
+  }
+};
 
 const handleShare = async (short) => {
   const url = `${window.location.origin}/short/${short.id}`;
@@ -585,12 +594,12 @@ const fetchShorts = useCallback(
                   ref={el => el && videoRefs.current.set(short.id, el)}
                   className="w-full h-full object-contain"
                   data-video-id={short.id}
-                  loop
                   playsInline
                   muted={isMuted[short.id] ?? true}
                   poster={short.content.thumbnail}
                   tabIndex={-1}
                   controls={false}
+                  onEnded={() => handleVideoComplete(short)}
                   style={{ background: 'black' }}
                 >
                   <source src={short.content.video} type="video/mp4" />
@@ -711,6 +720,27 @@ const fetchShorts = useCallback(
     <span className="text-sm text-gray-900 dark:text-white">
   Link copied to clipboard!
 </span>
+  </div>
+)}
+{showRewardPopup && (
+  <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg p-6 max-w-sm w-full text-center">
+      <h2 className="text-xl font-bold mb-3">🎉 Congratulations!</h2>
+      <p className="mb-2">You earned ₹1 for watching this video</p>
+      <p className="mb-4 text-gray-600">Credit added to your wallet</p>
+      <button
+        onClick={() => window.location.href = "/login"}
+        className="bg-blue-500 text-white px-4 py-2 rounded mb-2 w-full"
+      >
+        Login Now
+      </button>
+      <button
+        onClick={() => window.location.href = "https://play.google.com/store/apps/details?id=com.adtip.app.adtip_app&hl=en_IN"} // your app store link
+        className="border border-blue-500 text-blue-500 px-4 py-2 rounded w-full"
+      >
+        Download AdTip App
+      </button>
+    </div>
   </div>
 )}
 
