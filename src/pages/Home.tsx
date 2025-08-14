@@ -4,6 +4,8 @@ import { Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "../contexts/AuthContext";
 import VideoLoginPrompt from "../components/VideoLoginPrompt";
+import { useParams } from 'react-router-dom';
+import { FiShare2 } from "react-icons/fi"; // Feather's clean share icon
 import axios from "axios";
 import RandomAvatar, { getRandomAvatar } from "../components/RandomAvatar";
 
@@ -149,6 +151,25 @@ const bannerData = [
 const Home = () => {
   const [activeTab, setActiveTab] = useState<"for-you" | "following">("for-you");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [showCopied, setShowCopied] = useState(false);
+  const handlePostShare = async (post) => {
+  if (!post?.id) {
+    console.error("Cannot share: post ID is missing or invalid", post);
+    return;
+  }
+
+  // Generate the shareable link
+  
+    const url = `${window.location.origin}/post/${post.id}`;
+
+  try {
+    await navigator.clipboard.writeText(url); // Copy to clipboard
+    setShowCopied(true); // Show toast
+    setTimeout(() => setShowCopied(false), 1800); // Hide toast after 1.8s
+  } catch (error) {
+    console.error("Failed to copy link:", error);
+  }
+};
   const [showLoginPrompt, setShowLoginPrompt] = useState<boolean>(false);
   const [postViewCount, setPostViewCount] = useState<number>(0);
   const { isAuthenticated, user } = useAuth();
@@ -158,6 +179,7 @@ const Home = () => {
   const [page, setPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [walletBalance, setWalletBalance] = useState<string | null>(null);
+  const { postId } = useParams();
   const [hasMore, setHasMore] = useState<boolean>(true);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadingRef = useRef<HTMLDivElement | null>(null);
@@ -242,104 +264,164 @@ const Home = () => {
   }, [fetchWalletBalance]);
 
   // Fetch posts with infinite scroll
-  const fetchPosts = useCallback(async (shouldAppend = false) => {
-    // If not authenticated, fetch premium posts for guests
-    if (!isAuthenticated) {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await axios.get(`${BASE_URL}/list-premium-posts`);
-        if (response.data.status && Array.isArray(response.data.data)) {
-          setFeedData(response.data.data);
-          setTotalPages(1); // No pagination for guest premium posts
-          setHasMore(false); // No infinite scroll for guests
-        } else {
+ 
+ const fetchPosts = useCallback(
+    async (shouldAppend = false) => {
+      // GUEST MODE — Only show premium posts when browsing normally (no postId)
+      if (!isAuthenticated && !postId) {
+        setLoading(true);
+        setError(null);
+        try {
+          const response = await axios.get(`${BASE_URL}/list-premium-posts`);
+          if (response.data.status && Array.isArray(response.data.data)) {
+            setFeedData(response.data.data);
+            setPage(1);
+            setHasMore(false);
+          } else {
+            setFeedData([]);
+            setError("No premium posts available for guests.");
+            setHasMore(false);
+          }
+        } catch {
           setFeedData([]);
-          setError("No premium posts available for guests.");
+          setError("Failed to load premium posts. Please try again later.");
           setHasMore(false);
+        } finally {
+          setLoading(false);
         }
-      } catch (err: any) {
-        setFeedData([]);
-        setError("Failed to load premium posts. Please try again later.");
-        setHasMore(false);
-      } finally {
-        setLoading(false);
+        return;
       }
-      return;
-    }
-    
     if (!shouldAppend && loading) return; // Prevent multiple simultaneous initial loads
     if (shouldAppend && (!hasMore || loading)) return; // Don't fetch if no more data or already loading
 
-    const abortController = new AbortController();
-    try {
-      setLoading(true);
-      setError(null);
-      const categoryObj = popularCategories.find((cat) => cat.name === selectedCategory);
-      const categoryId = categoryObj ? categoryObj.id : 0;
-      const payload = {
-        category: categoryId,
-        page: String(shouldAppend ? page : 1),
-        limit: "5",
-        loggined_user_id: userId ? String(userId) : "0",
-      };
-      const response = await axios.post<ApiResponse>(
-        `${BASE_URL}/list-posts`,
-        payload,
-        {
+      const abortController = new AbortController();
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        // --------------------------
+        // SINGLE POST MODE (/post/:id)
+        // --------------------------
+        if (postId) {
+          const response = await axios.get(`${BASE_URL}/post/${postId}`, {
+            headers: isAuthenticated
+              ? { Authorization: `Bearer ${token}` }
+              : {},
+            signal: abortController.signal,
+          });
+
+          if (response.data && response.data.status) {
+            // Unwrap array from API
+            const rawPost = Array.isArray(response.data.data)
+              ? response.data.data[0]
+              : response.data.data;
+
+            const sanitizedPost = {
+              ...rawPost,
+              media_url: rawPost.media_url || "",
+              user_name: rawPost.user_name || "Anonymous",
+              user_profile_image: rawPost.user_profile_image || null,
+              address: rawPost.address || "Location not provided",
+              title: rawPost.title || "Untitled",
+              content: rawPost.content || "No content",
+            };
+
+            setFeedData([sanitizedPost]); // Keep inside array for mapping in UI
+            setPage(1);
+            setHasMore(false);
+          } else {
+            setFeedData([]);
+            setError("Post not found.");
+            setHasMore(false);
+          }
+          return; // IMPORTANT: Stop here, don’t load feed
+        }
+
+        // --------------------------
+        // MULTI POST MODE (Feed view)
+        // --------------------------
+        const categoryObj = popularCategories.find(
+          (cat) => cat.name === selectedCategory
+        );
+        const categoryId = categoryObj ? categoryObj.id : 0;
+
+        const payload = {
+          category: categoryId,
+          page: String(shouldAppend ? page : 1),
+          limit: "5",
+          loggined_user_id: userId ? String(userId) : "0",
+        };
+
+        const response = await axios.post(`${BASE_URL}/list-posts`, payload, {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
           timeout: 10000,
           signal: abortController.signal,
-        }
-      );
-      if (response.data.status) {
-        const sanitizedPosts = response.data.data.map((post) => ({
-          ...post,
-          media_url: post.media_url || "",
-          user_name: post.user_name || "Anonymous",
-          user_profile_image: post.user_profile_image || null,
-          address: post.address || "Location not provided",
-          title: post.title || "Untitled",
-          content: post.content || "No content",
-        }));
-        
-        if (shouldAppend) {
-          // Append new posts for infinite scroll
-          setFeedData(prevData => [...prevData, ...sanitizedPosts]);
+        });
+
+        if (response.data.status) {
+          const sanitizedPosts = response.data.data.map((post) => ({
+            ...post,
+            media_url: post.media_url || "",
+            user_name: post.user_name || "Anonymous",
+            user_profile_image: post.user_profile_image || null,
+            address: post.address || "Location not provided",
+            title: post.title || "Untitled",
+            content: post.content || "No content",
+          }));
+
+          if (shouldAppend) {
+            setFeedData((prev) => [...prev, ...sanitizedPosts]);
+          } else {
+            setFeedData(sanitizedPosts);
+          }
+
+          setHasMore(page < response.data.pagination.total_page);
+
+          if (
+            sanitizedPosts.length > 0 &&
+            page < response.data.pagination.total_page
+          ) {
+            setPage((prevPage) => prevPage + 1);
+          } else {
+            setHasMore(false);
+          }
         } else {
-          // Replace all posts (when category changes)
-          setFeedData(sanitizedPosts);
+          throw new Error(response.data.message || "Failed to fetch posts");
         }
-        
-        // Update pagination info
-        setTotalPages(response.data.pagination.total_page);
-        setHasMore(page < response.data.pagination.total_page);
-        
-        // If we got posts and there are more pages, increment the page for next fetch
-        if (sanitizedPosts.length > 0 && page < response.data.pagination.total_page) {
-          setPage(prevPage => prevPage + 1);
-        } else {
-          setHasMore(false);
-        }
-      } else {
-        throw new Error(response.data.message || "Failed to fetch posts");
+      } catch (err: any) {
+        if (err.name === "AbortError") return;
+        setError(
+          err.message === "Network Error"
+            ? "Unable to connect to the server. Please check your connection."
+            : err.response?.data?.message || err.message || "Failed to load posts"
+        );
+        setHasMore(false);
+      } finally {
+        setLoading(false);
       }
-    } catch (err: any) {
-      if (err.name === "AbortError") return;
-      setError(
-        err.message === "Network Error"
-          ? "Unable to connect to the server. Please check your internet connection."
-          : err.response?.data?.message || err.message || "Failed to load posts"
-      );
-      setHasMore(false);
-    } finally {
-      setLoading(false);
-    }
-    return () => abortController.abort();
-  }, [isAuthenticated, userId, token, selectedCategory, page, loading, hasMore]);
+
+      return () => abortController.abort();
+    },
+    [
+      isAuthenticated,
+      userId,
+      token,
+      popularCategories,
+      postId,
+      page,
+      loading,
+      hasMore,
+      selectedCategory,
+      BASE_URL,
+    ]
+  );
+    useEffect(() => {
+    fetchPosts();
+  }, [fetchPosts]);
 
   // Initial data load
   useEffect(() => {
@@ -549,18 +631,42 @@ const Home = () => {
                     <div className="px-3 pt-2 pb-3">
                       <h4 className="font-medium text-sm mb-1 text-gray-900 line-clamp-2">{post.title}</h4>
                       <p className="text-xs text-gray-700 mb-2 line-clamp-3">{post.content}</p>
-                      {/* Action bar */}
-                      <div className="flex items-center gap-6 text-gray-600 text-sm mt-2">
-                        <div className="flex items-center gap-1">
-                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-                          <span className="text-xs">{post.likeCount}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z"/></svg>
-                          <span className="text-xs">{post.commentCount}</span>
-                        </div>
-                        <div className="ml-auto text-xs text-gray-400">{post.views || 0} views</div>
-                      </div>
+          {/* Action bar */}
+<div className="flex items-center gap-6 text-gray-600 text-sm mt-2">
+  {/* Likes */}
+  <div className="flex items-center gap-1">
+    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5
+               2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09
+               C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5
+               c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+    </svg>
+    <span className="text-xs">{post.likeCount}</span>
+  </div>
+
+  {/* Comments */}
+  <div className="flex items-center gap-1">
+    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5
+               a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z"/>
+    </svg>
+    <span className="text-xs">{post.commentCount}</span>
+  </div>
+
+  {/* Share */}
+  <button
+onClick={() => handlePostShare(post)}
+    className="flex items-center gap-1 hover:text-blue-500 transition-colors duration-200"
+  >
+    <FiShare2 className="w-5 h-5" />
+    <span className="text-xs">Share</span>
+  </button>
+
+  {/* Views */}
+  <div className="ml-auto text-xs text-gray-400">{post.views || 0} views</div>
+</div>
+
+
                     </div>
                   </div>
                 ))}
@@ -645,6 +751,25 @@ const Home = () => {
           className="w-14 h-14 object-contain drop-shadow-lg rounded-2xl border border-gray-200 bg-white p-2"
         />
       </a>
+      {showCopied && (
+  <div className="fixed bottom-8 left-1/2 -translate-x-1/2 px-5 py-3 
+                  bg-white/10 backdrop-blur-lg border border-white/20 
+                  text-white rounded-full shadow-lg flex items-center space-x-2 
+                  transition-all animate-fade-in-out z-50">
+    <svg
+      className="w-5 h-5 text-emerald-300"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      viewBox="0 0 24 24"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+    <span className="text-sm text-gray-900 dark:text-white">
+      Link copied to clipboard!
+    </span>
+  </div>
+)}
     </div>
   );
 };

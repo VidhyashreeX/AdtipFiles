@@ -83,6 +83,8 @@ const router = createBrowserRouter([
 				path: "short/:id?",
 				element: <TipShorts />,
 			},
+				{path:"/post/:postId?" ,
+				element:<Home/>},
 			{
 				path: "onboarding",
 				element: <Onboarding />,
@@ -163,6 +165,7 @@ const router = createBrowserRouter([
 				path: "post-ads",
 				element: <PostAds />,
 			},
+		
 			{
 				path: "analysis",
 				element: <Analysis />,
