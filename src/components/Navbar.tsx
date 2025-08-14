@@ -13,6 +13,7 @@ import {
   ToggleLeft,
   ToggleRight,
   Menu,
+  CirclePlay,
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -187,7 +188,7 @@ const Navbar = () => {
             <span className="text-[10px] sm:text-xs mt-1">Home</span>
           </Link>
           <Link
-            to="/tiptube"
+           to="/watch"
             className={`flex flex-col items-center ${isActive("/tiptube") ? "text-adtip-teal" : "text-gray-500"}`}
           >
             <Video className="h-5 w-5 sm:h-6 sm:w-6" />
@@ -202,11 +203,11 @@ const Navbar = () => {
             </div>
           </Link>
           <Link
-            to="/tipcall"
-            className={`flex flex-col items-center ${isActive("/tipcall") ? "text-adtip-teal" : "text-gray-500"}`}
+            to="/short"
+            className={`flex flex-col items-center ${isActive("/tipshort") ? "text-adtip-teal" : "text-gray-500"}`}
           >
-            <PhoneCall className="h-5 w-5 sm:h-6 sm:w-6" />
-            <span className="text-[10px] sm:text-xs mt-1">TipCall</span>
+            <CirclePlay className="h-5 w-5 sm:h-6 sm:w-6" />
+            <span className="text-[10px] sm:text-xs mt-1">TipShort</span>
           </Link>
           <Link
             to="/profile"
