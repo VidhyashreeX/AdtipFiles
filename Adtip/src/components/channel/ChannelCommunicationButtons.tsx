@@ -327,7 +327,7 @@ const ChannelCommunicationButtons: React.FC<CommunicationButtonsProps> = ({
             <Video size={18} color="#FFFFFF" />
           )}
           <Text style={styles.videoCallButtonText}>
-            {isLoading === 'video' ? 'Connecting...' : 'Video Call'}
+            {isLoading === 'video' ? 'Ringing...' : 'Video Call'}
           </Text>
         </TouchableOpacity>
 

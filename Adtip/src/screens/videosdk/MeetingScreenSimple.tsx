@@ -1302,14 +1302,14 @@ const MeetingContent = () => {
       if (session?.direction === 'outgoing') {
         return 'Ringing...'  // Outgoing call waiting for answer
       } else if (session?.direction === 'incoming') {
-        return 'Connecting...'  // Incoming call connecting
+        return 'Ringing...'  // Incoming call connecting
       } else if (status === 'outgoing') {
         return 'Ringing...'
       } else if (status === 'connecting') {
-        return 'Connecting...'
+        return 'Ringing...'
       } else if (status === 'in_call') {
         // Even if status is in_call, if no remote participants, still show ringing
-        return session?.direction === 'outgoing' ? 'Ringing...' : 'Connecting...'
+        return session?.direction === 'outgoing' ? 'Ringing...' : 'Ringing...'
       } else {
         return 'Ringing...'  // Default to ringing when waiting
       }
@@ -1330,7 +1330,7 @@ const MeetingContent = () => {
       {/* Header info */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>
-          {session?.peerName || 'Connecting...'}
+          {session?.peerName || 'Ringing...'}
         </Text>
         <Text style={styles.headerSubtitle}>
           {getCallStatusText()}
@@ -1674,7 +1674,7 @@ const MeetingScreenSimple = () => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#fff" />
-        <Text style={styles.loadingText}>Connecting...</Text>
+        <Text style={styles.loadingText}>Ringing...</Text>
       </View>
     )
   }

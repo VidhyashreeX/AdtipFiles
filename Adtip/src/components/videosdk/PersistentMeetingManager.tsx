@@ -558,7 +558,7 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>
-            {config?.peerName || 'Connecting...'}
+            {config?.peerName || 'Ringing...'}
           </Text>
           <Text style={styles.headerSubtitle}>
             Preparing call...
@@ -590,11 +590,11 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>
-          {config.peerName || 'Connecting...'}
+          {config.peerName || 'Ringing...'}
         </Text>
         <Text style={styles.headerSubtitle}>
           {status === 'outgoing' ? 'Calling...' : 
-           status === 'connecting' ? 'Connecting...' :
+           status === 'connecting' ? 'Ringing...' :
            status === 'in_call' ? `${config.callType} call` :
            'Call'}
         </Text>
@@ -611,8 +611,8 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
                 <ActivityIndicator size="large" color="#fff" />
                 <Text style={styles.placeholderText}>
                   {status === 'outgoing' ? 'Ringing...' :
-                   status === 'connecting' ? 'Connecting...' :
-                   status === 'in_call' ? (config.direction === 'outgoing' ? 'Ringing...' : 'Connecting...') :
+                   status === 'connecting' ? 'Ringing...' :
+                   status === 'in_call' ? (config.direction === 'outgoing' ? 'Ringing...' : 'Ringing...') :
                    'Waiting for participant...'}
                 </Text>
               </View>
@@ -637,9 +637,9 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
           <Text style={styles.callStatus}>
             {remoteParticipants.length > 0 ? 'Connected' :
              status === 'outgoing' ? 'Ringing...' :
-             status === 'connecting' ? 'Connecting...' :
-             status === 'in_call' ? (config.direction === 'outgoing' ? 'Ringing...' : 'Connecting...') :
-             'Connecting...'}
+             status === 'connecting' ? 'Ringing...' :
+             status === 'in_call' ? (config.direction === 'outgoing' ? 'Ringing...' : 'Ringing...') :
+             'Ringing...'}
           </Text>
         </View>
       )}

@@ -9,7 +9,7 @@ interface CallConnectingOverlayProps {
 
 const CallConnectingOverlay: React.FC<CallConnectingOverlayProps> = ({
   isVisible,
-  message = 'Connecting...'
+  message = 'Ringing...'
 }) => {
   const spinValue = useRef(new Animated.Value(0)).current;
   const fadeValue = useRef(new Animated.Value(0)).current;
