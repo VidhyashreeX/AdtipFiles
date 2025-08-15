@@ -5,12 +5,20 @@ import { Platform } from 'react-native';
 /**
  * Hook to initialize CallKeep only when user is authenticated and in main app
  * This prevents CallKeep from blocking the initial app startup
+ *
+ * CALLKEEP DISABLED - Always skips initialization to fix Vivo device issues
  */
 const useCallKeepInitializer = () => {
   const { isAuthenticated, isInitialized } = useAuth();
   const hasInitialized = useRef(false);
 
   useEffect(() => {
+    // CALLKEEP DISABLED - Skip all initialization to fix white screen on Vivo devices
+    console.log('[useCallKeepInitializer] 🚫 CallKeep initialization DISABLED - Using custom UI only');
+    return;
+
+    // DISABLED CODE BELOW
+    /*
     // Only initialize CallKeep when:
     // 1. User is authenticated
     // 2. Auth system is initialized
@@ -127,6 +135,7 @@ const useCallKeepInitializer = () => {
 
       initializeCallKeep();
     }
+    */ // END OF DISABLED CALLKEEP CODE
   }, [isAuthenticated, isInitialized]);
 
   // Reset initialization flag if user logs out

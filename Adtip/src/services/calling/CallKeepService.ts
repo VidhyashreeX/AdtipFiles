@@ -2,19 +2,24 @@ import { Platform } from 'react-native'
 import { CallKeepErrorHandler } from './CallKeepErrorHandler'
 import { ProductionConfig } from '../../config/ProductionConfig'
 
+// CALLKEEP DISABLED - Causing white screen on Vivo devices
 // Import react-native-callkeep with proper error handling
 let RNCallKeep: any = null
-try {
-  // Try different import methods
-  const callKeepModule = require('react-native-callkeep')
-  RNCallKeep = callKeepModule.default || callKeepModule
-  console.log('[CallKeepService] ✅ Successfully imported react-native-callkeep')
-  console.log('[CallKeepService] 📋 Module structure:', Object.keys(callKeepModule))
-  console.log('[CallKeepService] 📋 Available methods:', Object.keys(RNCallKeep || {}))
-} catch (error) {
-  console.warn('[CallKeepService] ⚠️ Failed to import react-native-callkeep:', error)
-  RNCallKeep = null
-}
+// DISABLED: CallKeep is completely disabled to fix Vivo device issues
+console.log('[CallKeepService] 🚫 CallKeep is DISABLED - Using custom UI only')
+RNCallKeep = null
+
+// try {
+//   // Try different import methods
+//   const callKeepModule = require('react-native-callkeep')
+//   RNCallKeep = callKeepModule.default || callKeepModule
+//   console.log('[CallKeepService] ✅ Successfully imported react-native-callkeep')
+//   console.log('[CallKeepService] 📋 Module structure:', Object.keys(callKeepModule))
+//   console.log('[CallKeepService] 📋 Available methods:', Object.keys(RNCallKeep || {}))
+// } catch (error) {
+//   console.warn('[CallKeepService] ⚠️ Failed to import react-native-callkeep:', error)
+//   RNCallKeep = null
+// }
 
 // Remove the global setup call - it should be done in the service initialization
 
@@ -89,8 +94,16 @@ export class CallKeepService {
    * NOTE: This should only be called from useCallKeepInitializer hook when user is authenticated
    */
   async initialize(): Promise<boolean> {
+    // CALLKEEP DISABLED - Always return false to use custom UI only
+    console.log('[CallKeepService] 🚫 CallKeep is DISABLED - Using custom UI only')
+    this.isInitialized = true
+    this.callKeepAvailable = false
+    return false
+
+    // DISABLED CODE BELOW - CallKeep initialization completely disabled
+    /*
     const productionConfig = ProductionConfig.getInstance()
-    
+
     // Check if RNCallKeep is available
     if (!RNCallKeep) {
       console.log('[CallKeepService] 🚫 CallKeep library not available - skipping initialization')
@@ -237,6 +250,7 @@ export class CallKeepService {
       this.callKeepAvailable = false
       return false
     }
+    */ // END OF DISABLED CALLKEEP CODE
   }
 
   /**

@@ -90,8 +90,15 @@ export class CallUICoordinator {
 
   /**
    * Determine if CallKeep should be used
+   * CALLKEEP DISABLED - Always returns false to use custom UI only
    */
   private async shouldUseCallKeep(options: CallUIOptions): Promise<boolean> {
+    // CALLKEEP DISABLED - Always use custom UI to fix Vivo device issues
+    console.log('[CallUICoordinator] 🚫 CallKeep DISABLED - Using custom UI only')
+    return false
+
+    // DISABLED CODE BELOW
+    /*
     // Force custom UI if requested
     if (options.forceCustomUI) {
       console.log('[CallUICoordinator] Forcing custom UI as requested')
@@ -130,6 +137,7 @@ export class CallUICoordinator {
 
     console.log('[CallUICoordinator] Using CallKeep native UI')
     return true
+    */ // END OF DISABLED CALLKEEP CODE
   }
 
   /**

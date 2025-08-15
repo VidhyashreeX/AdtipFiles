@@ -4,6 +4,11 @@ import { NativeModules, Platform } from 'react-native'
 import CallKitService from './CallKitService'
 import NotificationPersistenceService from './NotificationPersistenceService'
 import { logCall, logError, logWarn } from '../../utils/ProductionLogger'
+import NotifeeCallHandler from '../notification/NotifeeCallHandler'
+
+// Import default logo for notifications
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const defaultLogo = require('../../assets/images/logo.png')
 
 // Check if IncomingCallModule exists to prevent crashes
 const { IncomingCallModule } = NativeModules
@@ -125,6 +130,25 @@ class NotificationService {
       return // Let CallKeep handle the call UI
     }
 
+    // Try using NotifeeCallHandler first for better reliability
+    try {
+      const notifeeHandler = NotifeeCallHandler.getInstance()
+      const success = await notifeeHandler.displayIncomingCall({
+        sessionId,
+        callerName,
+        callType: type,
+        meetingId,
+        token
+      })
+
+      if (success) {
+        logCall('NotificationService', 'NotifeeCallHandler notification displayed successfully')
+        return
+      }
+    } catch (error) {
+      logWarn('NotificationService', 'NotifeeCallHandler failed, falling back to legacy notification', error)
+    }
+
     // Add to persistence queue for reliability only if CallKeep is not available
     const persistenceService = NotificationPersistenceService.getInstance()
     await persistenceService.addPendingCall({
@@ -209,7 +233,10 @@ class NotificationService {
             vibrationPattern: isConcurrentCall ? [200, 300, 200, 300, 200, 300] : [300, 1000, 300, 1000],
             // Enhanced styling
             color: type === 'voice' ? '#4CAF50' : '#2196F3',
-            largeIcon: callerAvatar || undefined,
+            // Only add largeIcon if callerAvatar is a valid string URL or use default logo
+            largeIcon: (callerAvatar && typeof callerAvatar === 'string' && callerAvatar.trim() !== '')
+              ? callerAvatar
+              : defaultLogo,
             style: {
               type: 1, // BigTextStyle
               text: enhancedBody,
@@ -218,7 +245,10 @@ class NotificationService {
             person: {
               name: callerName,
               id: callerId || sessionId,
-              icon: callerAvatar || undefined,
+              // Only add icon if callerAvatar is a valid string URL
+              icon: (callerAvatar && typeof callerAvatar === 'string' && callerAvatar.trim() !== '')
+                ? callerAvatar
+                : undefined,
             },
           },
           ios: {

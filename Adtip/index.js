@@ -255,6 +255,11 @@ async function showHighPriorityCallNotification(sessionId, callerName, callType)
   }
 }
 
+// CALLKEEP DISABLED - Background task registration disabled to fix Vivo device issues
+console.log('[Index] 🚫 CallKeep background task DISABLED - Using custom UI only');
+
+// DISABLED CODE BELOW
+/*
 // Register CallKeep headless task for background call handling
 AppRegistry.registerHeadlessTask('RNCallKeepBackgroundMessage', () => ({ name, callUUID, handle }) => {
   console.log(`[Index] CallKeep background task: name=${name}, callUUID=${callUUID}, handle=${handle}`);
@@ -278,5 +283,6 @@ AppRegistry.registerHeadlessTask('RNCallKeepBackgroundMessage', () => ({ name, c
     }
   });
 });
+*/ // END OF DISABLED CALLKEEP CODE
 
 AppRegistry.registerComponent(appName, () => App);

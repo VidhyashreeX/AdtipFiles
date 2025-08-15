@@ -7,7 +7,8 @@ includeBuild('../node_modules/@react-native/gradle-plugin')
 /*include ':rnwebrtc'
 project(':rnwebrtc').projectDir = new File(rootProject.projectDir, '../node_modules/@videosdk.live/react-native-webrtc/android')
 */
-include ':react-native-callkeep'
-project(':react-native-callkeep').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-callkeep/android')
+// CALLKEEP DISABLED - Causing white screen on Vivo devices
+// include ':react-native-callkeep'
+// project(':react-native-callkeep').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-callkeep/android')
 include ':rnincallmanager'
 project(':rnincallmanager').projectDir = new File(rootProject.projectDir, '../node_modules/@videosdk.live/react-native-incallmanager/android')

@@ -1,6 +1,7 @@
 import notifee, { EventType } from '@notifee/react-native';
-import { Logger } from '../../utils/logger';
+import { logCall, logError } from '../../utils/ProductionLogger';
 import NavigationService from '../../navigation/SimplifiedNavigationService';
+import CallController from '../calling/CallController';
 
 /**
  * Notifee Call Handler
@@ -120,8 +121,8 @@ class NotifeeCallHandler {
 
     } catch (error) {
       console.error('[NotifeeCallHandler] Error handling notification event:', error);
-      Logger.error('NotifeeCallHandler', 'Notification event handling failed', {
-        error: error.message || error,
+      logError('NotifeeCallHandler', 'Notification event handling failed', {
+        error: error instanceof Error ? error.message : String(error),
         context
       });
     }
@@ -179,7 +180,8 @@ class NotifeeCallHandler {
 
       // Try to accept the call through CallController
       try {
-        const callAccepted = await CallController.acceptCall();
+        const callController = CallController.getInstance();
+        const callAccepted = await callController.acceptCall();
         console.log('[NotifeeCallHandler] CallController.acceptCall() result:', callAccepted);
       } catch (acceptError) {
         console.warn('[NotifeeCallHandler] CallController.acceptCall() failed, proceeding with navigation:', acceptError);
@@ -202,7 +204,7 @@ class NotifeeCallHandler {
       });
 
       if (navigationSuccess) {
-        Logger.info('NotifeeCallHandler', '✅ Call answered - navigated to meeting', {
+        logCall('NotifeeCallHandler', '✅ Call answered - navigated to meeting', {
           sessionId: params.sessionId,
           callerName: params.callerName,
           callType: params.callType,
@@ -214,8 +216,8 @@ class NotifeeCallHandler {
 
     } catch (error) {
       console.error('[NotifeeCallHandler] Failed to handle answer call:', error);
-      Logger.error('NotifeeCallHandler', 'Answer call handling failed', {
-        error: error.message || error,
+      logError('NotifeeCallHandler', 'Answer call handling failed', {
+        error: error instanceof Error ? error.message : String(error),
         sessionId: params.sessionId
       });
     }
@@ -231,15 +233,15 @@ class NotifeeCallHandler {
       // Dismiss the notification
       await notifee.cancelNotification(sessionId);
 
-      Logger.info('NotifeeCallHandler', '✅ Call declined', {
+      logCall('NotifeeCallHandler', '✅ Call declined', {
         sessionId,
         context
       });
 
     } catch (error) {
       console.error('[NotifeeCallHandler] Failed to handle decline call:', error);
-      Logger.error('NotifeeCallHandler', 'Decline call handling failed', {
-        error: error.message || error,
+      logError('NotifeeCallHandler', 'Decline call handling failed', {
+        error: error instanceof Error ? error.message : String(error),
         sessionId
       });
     }
@@ -275,7 +277,7 @@ class NotifeeCallHandler {
         android: {
           channelId,
           importance: 4, // HIGH
-          category: 'call',
+          category: 'call' as any,
           fullScreenAction: {
             id: 'answer_call',
             launchActivity: 'default',
@@ -306,19 +308,19 @@ class NotifeeCallHandler {
           sessionId: params.sessionId,
           callerName: params.callerName,
           callType: params.callType,
-          meetingId: params.meetingId,
-          token: params.token,
+          meetingId: params.meetingId || '',
+          token: params.token || '',
           type: 'incoming_call'
         }
       });
 
-      Logger.info('NotifeeCallHandler', '✅ Incoming call notification displayed', params);
+      logCall('NotifeeCallHandler', '✅ Incoming call notification displayed', params);
       return true;
 
     } catch (error) {
       console.error('[NotifeeCallHandler] Failed to display incoming call:', error);
-      Logger.error('NotifeeCallHandler', 'Display incoming call failed', {
-        error: error.message || error,
+      logError('NotifeeCallHandler', 'Display incoming call failed', {
+        error: error instanceof Error ? error.message : String(error),
         ...params
       });
       return false;

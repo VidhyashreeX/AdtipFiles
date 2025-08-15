@@ -11,7 +11,8 @@ import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import com.facebook.soloader.SoLoader
-import io.wazo.callkeep.RNCallKeepPackage;
+// CALLKEEP DISABLED - Causing white screen on Vivo devices
+// import io.wazo.callkeep.RNCallKeepPackage;
 
 // VideoSDK Imports
 import live.videosdk.rnwebrtc.WebRTCModulePackage
@@ -32,8 +33,9 @@ class MainApplication : Application(), ReactApplication {
         packages.add(InCallManagerPackage())
         // pubscale
         packages.add(PubscaleOfferwallPackage())
+        // CALLKEEP DISABLED - Causing white screen on Vivo devices
         // Add CallKeep package for native call handling
-        packages.add(RNCallKeepPackage());
+        // packages.add(RNCallKeepPackage());
         
         return packages
       }

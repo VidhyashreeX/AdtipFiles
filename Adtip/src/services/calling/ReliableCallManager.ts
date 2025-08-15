@@ -50,6 +50,11 @@ class ReliableCallManager {
     try {
       console.log('[ReliableCallManager] Initializing...')
 
+      // CALLKEEP DISABLED - Skip CallKeep initialization to fix Vivo device issues
+      console.log('[ReliableCallManager] 🚫 CallKeep DISABLED - Using custom UI only')
+
+      // DISABLED CODE BELOW
+      /*
       // Initialize CallKeepService for native call UI - MANDATORY for optimal call experience
       try {
         console.log('[ReliableCallManager] Initializing CallKeepService (required for native call UI)...')
@@ -80,6 +85,7 @@ class ReliableCallManager {
         console.error('[ReliableCallManager] ❌ CallKeepService initialization error:', callKeepError)
         console.warn('[ReliableCallManager] 📱 Will use custom notifications - functionality preserved')
       }
+      */ // END OF DISABLED CALLKEEP CODE
 
       // Create notification channels first
       await this.createNotificationChannels()
