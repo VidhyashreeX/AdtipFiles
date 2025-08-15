@@ -109,7 +109,8 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
 
     if (isCallMessage) {
       console.log('[Index] 📞 Processing call message in killed state');
-      await handleBackgroundCallNotification(remoteMessage);
+      // Use FCMMessageRouter for call messages (same pattern as chat)
+      await handleBackgroundCallMessage(remoteMessage);
     } else {
       console.log('[Index] 💬 Processing non-call message in killed state');
       await handleBackgroundGeneralMessage(remoteMessage);
@@ -124,43 +125,57 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
   }
 });
 
-// OPTIMIZED CALL NOTIFICATION HANDLER FOR KILLED STATE
-// Uses Notifee directly for maximum reliability when app is killed
-async function handleBackgroundCallNotification(remoteMessage) {
+// CALL MESSAGE HANDLER USING FCM ROUTER PATTERN (SAME AS CHAT)
+// This mirrors the successful chat message handling approach
+async function handleBackgroundCallMessage(remoteMessage) {
   try {
-    console.log('[Index] 📞 Handling call notification in killed state');
+    console.log('[Index] 📞 Handling call message using FCMMessageRouter pattern');
+
+    // Use FCMMessageRouter for call messages (same pattern that works for chat)
+    const { FCMMessageRouter } = await import('./src/services/FCMMessageRouter');
+    const router = FCMMessageRouter.getInstance();
+    await router.initialize();
+    await router.routeMessage(remoteMessage, 'background');
+
+    console.log('[Index] ✅ Call message routed successfully via FCMMessageRouter');
+
+  } catch (error) {
+    console.error('[Index] ❌ Error routing call message via FCMMessageRouter:', error);
+
+    // Fallback to direct notification display
+    try {
+      console.log('[Index] 📞 Falling back to direct notification display');
+      await handleDirectCallNotification(remoteMessage);
+    } catch (fallbackError) {
+      console.error('[Index] ❌ Direct notification fallback also failed:', fallbackError);
+    }
+  }
+}
+
+// DIRECT CALL NOTIFICATION FALLBACK
+// Only used if FCMMessageRouter fails
+async function handleDirectCallNotification(remoteMessage) {
+  try {
+    console.log('[Index] 📞 Creating direct call notification as fallback');
 
     const callData = remoteMessage.data;
     const sessionId = callData.sessionId || callData.uuid || `call-${Date.now()}`;
     const callerName = callData.callerName || callData.peerName || 'Unknown Caller';
     const callType = callData.callType || 'voice';
-    const meetingId = callData.meetingId || '';
-    const token = callData.token || '';
 
-    console.log('[Index] 📞 Call data extracted:', {
-      sessionId,
-      callerName,
-      callType,
-      hasMeetingId: !!meetingId,
-      hasToken: !!token
-    });
-
-    // Use Notifee directly for killed state - most reliable approach
+    // Use Notifee directly as last resort
     const notifee = require('@notifee/react-native').default;
 
     // Create high-priority call channel
     const channelId = await notifee.createChannel({
-      id: 'adtip_incoming_calls_killed',
-      name: 'Incoming Calls (Background)',
+      id: 'adtip_call_fallback_killed',
+      name: 'Call Notifications (Fallback)',
       importance: 4, // HIGH
       sound: 'default',
       vibration: true,
-      bypassDnd: true, // Bypass Do Not Disturb
     });
 
-    console.log('[Index] 📞 Created notification channel:', channelId);
-
-    // Display full-screen call notification
+    // Display basic call notification
     await notifee.displayNotification({
       id: sessionId,
       title: `Incoming ${callType} call`,
@@ -169,64 +184,26 @@ async function handleBackgroundCallNotification(remoteMessage) {
         channelId,
         importance: 4, // HIGH
         category: 'call',
-        fullScreenAction: {
-          id: 'answer_call',
-          launchActivity: 'default',
-        },
+        pressAction: { id: 'default', launchActivity: 'default' },
         actions: [
-          {
-            title: '✅ Answer',
-            pressAction: {
-              id: 'answer',
-              launchActivity: 'default'
-            },
-          },
-          {
-            title: '❌ Decline',
-            pressAction: { id: 'decline' },
-          },
+          { title: 'Open App', pressAction: { id: 'open', launchActivity: 'default' } },
         ],
-        ongoing: true,
-        autoCancel: false,
         sound: 'default',
         vibrationPattern: [300, 1000, 300, 1000],
-        pressAction: {
-          id: 'default',
-          launchActivity: 'default'
-        },
-        // Use default app icon for killed state
-        largeIcon: require('./src/assets/images/logo.png'),
-      },
-      ios: {
-        categoryId: 'call',
-        sound: 'default',
-        critical: true,
-        criticalVolume: 1.0,
       },
       data: {
         sessionId,
         callerName,
         callType,
-        meetingId,
-        token,
         type: 'incoming_call',
-        timestamp: Date.now().toString(),
-        // Add deep link for proper navigation when app opens
-        deepLink: `adtip://call/meeting/${sessionId}?meetingId=${meetingId}&token=${token}&callerName=${encodeURIComponent(callerName)}&callType=${callType}`
+        timestamp: Date.now().toString()
       }
     });
 
-    console.log('[Index] ✅ Call notification displayed successfully in killed state');
+    console.log('[Index] ✅ Direct call notification displayed as fallback');
 
   } catch (error) {
-    console.error('[Index] ❌ Error displaying call notification in killed state:', error);
-
-    // Fallback to basic notification
-    try {
-      await showBasicCallNotification(remoteMessage.data);
-    } catch (fallbackError) {
-      console.error('[Index] ❌ Fallback notification also failed:', fallbackError);
-    }
+    console.error('[Index] ❌ Direct call notification failed:', error);
   }
 }
 

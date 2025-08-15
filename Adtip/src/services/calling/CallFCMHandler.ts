@@ -19,18 +19,31 @@ export class CallFCMHandler implements FCMHandler {
 
   /**
    * Check if this handler can process the message
+   * Updated to handle incoming_call and call types for killed state compatibility
    */
   canHandle(message: FirebaseMessagingTypes.RemoteMessage): boolean {
     const messageType = this.extractMessageType(message)
-    
+    const messageData = message.data || {}
+
     const callMessageTypes = [
+      'call', 'incoming_call',  // Added for killed state compatibility
       'CALL_INITIATED', 'CALL_INITIATE',
       'CALL_ACCEPT', 'CALL_ACCEPTED',
       'CALL_END', 'CALL_ENDED',
       'CALL_REJECT', 'CALL_REJECTED'
     ]
 
-    return callMessageTypes.includes(messageType || '')
+    // Check message type
+    if (messageType && callMessageTypes.includes(messageType)) {
+      return true
+    }
+
+    // Also check for call-specific data fields (same as index.js and FCMMessageRouter)
+    if (messageData.sessionId || messageData.callType || messageData.callerName) {
+      return true
+    }
+
+    return false
   }
 
   /**
@@ -56,6 +69,8 @@ export class CallFCMHandler implements FCMHandler {
       }
 
       switch (messageType) {
+        case 'call':
+        case 'incoming_call':  // Handle killed state call notifications
         case 'CALL_INITIATED':
         case 'CALL_INITIATE':
           await this.handleIncomingCall(callData, context)

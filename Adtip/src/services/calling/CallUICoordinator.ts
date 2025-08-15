@@ -185,8 +185,11 @@ export class CallUICoordinator {
         options.sessionId,
         options.callerName,
         options.callType === 'audio' || options.callType === 'voice' ? 'voice' : 'video',
+        false, // isConcurrentCall
         options.meetingId,
-        options.token
+        options.token,
+        undefined, // callerId (not available in options)
+        undefined  // callerAvatar (not available in options)
       )
 
       this.currentState = {

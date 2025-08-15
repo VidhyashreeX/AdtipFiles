@@ -55,11 +55,14 @@ export class FCMMessageRouter {
       });
 
       const messageType = this.extractMessageType(remoteMessage);
+      const messageData = remoteMessage.data || {};
       Logger.info('[FCMMessageRouter] Detected message type:', messageType);
 
-      if (this.isCallMessage(messageType)) {
+      if (this.isCallMessage(messageType, messageData)) {
+        Logger.info('[FCMMessageRouter] Routing to call handler');
         await this.routeToCallHandler(remoteMessage, context);
       } else if (this.isChatMessage(messageType)) {
+        Logger.info('[FCMMessageRouter] Routing to chat handler');
         // Route chat messages to WatermelonLocalChatManager
         await this.routeToChatHandler(remoteMessage, context);
       } else {
@@ -96,19 +99,30 @@ export class FCMMessageRouter {
 
   /**
    * Determine if message is call-related
-   * Preserves exact logic from existing index.js implementation
+   * Updated to match index.js logic for killed state compatibility
    */
-  private isCallMessage(messageType: string | null): boolean {
-    if (!messageType) return false;
+  private isCallMessage(messageType: string | null, messageData: any = {}): boolean {
+    if (!messageType && !messageData) return false;
 
-    // Call message types (preserving existing logic exactly)
+    // Call message types (matching index.js logic exactly)
     const callMessageTypes = [
-      'CALL_INITIATED', 'CALL_INITIATE', 
-      'CALL_ACCEPT', 'CALL_ACCEPTED', 
+      'call', 'incoming_call',
+      'CALL_INITIATED', 'CALL_INITIATE',
+      'CALL_ACCEPT', 'CALL_ACCEPTED',
       'CALL_END', 'CALL_ENDED'
     ];
 
-    return callMessageTypes.includes(messageType);
+    // Check message type
+    if (messageType && callMessageTypes.includes(messageType)) {
+      return true;
+    }
+
+    // Also check for call-specific data fields (same as index.js)
+    if (messageData.sessionId || messageData.callType || messageData.callerName) {
+      return true;
+    }
+
+    return false;
   }
 
   /**
