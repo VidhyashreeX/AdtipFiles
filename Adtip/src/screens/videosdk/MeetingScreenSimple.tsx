@@ -25,7 +25,7 @@ import {
 
 import { useCallStore } from '../../stores/callStoreSimplified'
 import CallController from '../../services/calling/CallController'
-import { MainNavigatorParamList } from '../../types/navigation'
+import { MainNavigatorParamList, RootStackParamList } from '../../types/navigation'
 import VideoSDKService from '../../services/videosdk/VideoSDKService'
 import { logError, logWarn, logVideoSDK, logCall } from '../../utils/ProductionLogger'
 import SafeAreaEnforcer from '../../components/common/SafeAreaEnforcer'
@@ -1224,7 +1224,7 @@ const MeetingContent = () => {
   )
 }
 
-type MeetingScreenRouteProp = RouteProp<MainNavigatorParamList, 'Meeting'>
+type MeetingScreenRouteProp = RouteProp<RootStackParamList, 'Meeting'>
 
 // Global type declarations at the top of the file
 declare global {
@@ -1240,6 +1240,7 @@ const MeetingScreenSimple = () => {
   const route = useRoute<MeetingScreenRouteProp>()
   const session = useCallStore(state => state.session)
   const status = useCallStore(state => state.status)
+  const { actions } = useCallStore.getState()
   const navigation = useNavigation()
 
   // Remove debugging state since we're using persistent call approach
@@ -1250,6 +1251,47 @@ const MeetingScreenSimple = () => {
   const hasInitialized = useRef(false)
   const isMountedRef = useRef(true)
   const [videoSDKReady, setVideoSDKReady] = React.useState(false)
+
+  // Initialize session from route parameters if not already set (for deep links)
+  useEffect(() => {
+    if (!session && route.params) {
+      const { meetingId, token, callData, callType, recipientName } = route.params;
+
+      if (meetingId && token && callData?.sessionId) {
+        logCall('[MeetingScreenSimple]', 'Initializing session from deep link route params', {
+          sessionId: callData.sessionId,
+          meetingId,
+          hasToken: !!token,
+          direction: callData.direction,
+          type: callData.type || callType
+        });
+
+        // Initialize session in call store
+        actions.setSession({
+          sessionId: callData.sessionId,
+          meetingId,
+          token,
+          peerId: 'unknown', // Will be updated when participants join
+          peerName: callData.callerName || recipientName || 'Unknown Caller',
+          direction: callData.direction || 'incoming',
+          type: callData.type || callType || 'video',
+          startedAt: Date.now()
+        });
+
+        // Set appropriate status for incoming calls
+        if (callData.direction === 'incoming' || !callData.direction) {
+          actions.setStatus('connecting');
+        }
+      } else {
+        logCall('[MeetingScreenSimple]', 'Route params missing required data for session initialization', {
+          hasMeetingId: !!meetingId,
+          hasToken: !!token,
+          hasCallData: !!callData,
+          hasSessionId: !!callData?.sessionId
+        });
+      }
+    }
+  }, [session, route.params, actions]);
 
   // More comprehensive session validation with detailed checks
   const sessionIsValid = useMemo(() => {

@@ -9,7 +9,11 @@ export interface CallSystemConfig {
   enableUnifiedCallService: boolean;
   enableCallSignalingService: boolean;
   enableFirebaseServiceListeners: boolean;
-  
+
+  // UI Configuration
+  forceCustomUI: boolean;
+  enableCallKeep: boolean;
+
   // Debug settings
   enableDebugLogs: boolean;
   enableVerboseLogging: boolean;
@@ -22,6 +26,11 @@ export const DEFAULT_CALL_CONFIG: CallSystemConfig = {
   enableUnifiedCallService: false,
   enableCallSignalingService: false,
   enableFirebaseServiceListeners: false,
+
+  // Force custom UI for better reliability - CallKeep often fails
+  forceCustomUI: true,
+  enableCallKeep: false,
+
   enableDebugLogs: __DEV__,
   enableVerboseLogging: false,
 };
@@ -107,6 +116,20 @@ export const CallConfig = {
       enableCallSignalingService: true,
       enableFirebaseServiceListeners: true,
     });
+  },
+
+  /**
+   * Check if custom UI should be forced (bypassing CallKeep)
+   */
+  shouldForceCustomUI(): boolean {
+    return callConfig.forceCustomUI;
+  },
+
+  /**
+   * Check if CallKeep should be used
+   */
+  shouldUseCallKeep(): boolean {
+    return callConfig.enableCallKeep && !callConfig.forceCustomUI;
   },
 };
 

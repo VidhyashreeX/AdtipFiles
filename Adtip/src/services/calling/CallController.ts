@@ -20,6 +20,7 @@ import ApiService from '../ApiService'
 import CallStateCleanup from '../../utils/callStateCleanup'
 import { startPersistentCall, updatePersistentCallStatus, updatePersistentCallConfig, endPersistentCall } from '../../components/videosdk/PersistentMeetingManager'
 import PermissionManagerService from '../PermissionManagerService'
+import CallConfig from '../../config/CallConfig'
 import CallEndModalService from './CallEndModalService'
 import { logCall, logError, logWarn } from '../../utils/ProductionLogger'
 import CallBillingService from './CallBillingService'
@@ -632,36 +633,49 @@ class CallController {
       // Set status to outgoing
       actions.setStatus('outgoing')
 
-      // Try to use CallKeep for native UI first
+      // Check configuration for UI preference
       let usingCallKeep = false
-      try {
-        // Check if CallKeep is available and initialized
-        if (this.callKeep.isAvailable()) {
-          logCall('CallController', 'Using CallKeep for native outgoing call UI');
-          
-          // Start the call through CallKeep - this shows native call UI
-          const callKeepStarted = await this.callKeep.startCall(
-            backendSessionId,
-            recipientName,
-            recipientName, // contactIdentifier
-            'generic',
-            callType === 'video'
-          )
-          
-          if (callKeepStarted) {
-            usingCallKeep = true
-            logCall('CallController', 'CallKeep outgoing call started successfully');
-            
-            // Set status to connecting since CallKeep is handling the UI
-            actions.setStatus('connecting')
+      const forceCustomUI = CallConfig.shouldForceCustomUI();
+      const enableCallKeep = CallConfig.shouldUseCallKeep();
+
+      logCall('CallController', 'UI Configuration:', {
+        forceCustomUI,
+        enableCallKeep,
+        callKeepAvailable: this.callKeep.isAvailable()
+      });
+
+      if (!forceCustomUI && enableCallKeep) {
+        try {
+          // Check if CallKeep is available and initialized
+          if (this.callKeep.isAvailable()) {
+            logCall('CallController', 'Using CallKeep for native outgoing call UI');
+
+            // Start the call through CallKeep - this shows native call UI
+            const callKeepStarted = await this.callKeep.startCall(
+              backendSessionId,
+              recipientName,
+              recipientName, // contactIdentifier
+              'generic',
+              callType === 'video'
+            )
+
+            if (callKeepStarted) {
+              usingCallKeep = true
+              logCall('CallController', 'CallKeep outgoing call started successfully');
+
+              // Set status to connecting since CallKeep is handling the UI
+              actions.setStatus('connecting')
+            } else {
+              logCall('CallController', 'CallKeep startCall failed, falling back to custom UI');
+            }
           } else {
-            logCall('CallController', 'CallKeep startCall failed, falling back to custom UI');
+            logCall('CallController', 'CallKeep not available, using custom call UI');
           }
-        } else {
-          logCall('CallController', 'CallKeep not available, using custom call UI');
+        } catch (callKeepError) {
+          logCall('CallController', 'CallKeep integration failed, using custom UI:', callKeepError);
         }
-      } catch (callKeepError) {
-        logCall('CallController', 'CallKeep integration failed, using custom UI:', callKeepError);
+      } else {
+        logCall('CallController', 'Custom UI forced by configuration - skipping CallKeep entirely');
       }
 
       // If CallKeep is not being used, show custom UI

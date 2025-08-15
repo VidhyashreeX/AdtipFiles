@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Linking } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Linking, PanResponder, Animated, Dimensions } from 'react-native';
 import notifee, { AndroidImportance } from '@notifee/react-native';
 import Logger from '../../utils/logger';
 import NavigationService from '../../navigation/SimplifiedNavigationService';
 import { useTheme } from '../../contexts/ThemeContext';
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 // Fallback theme colors when navigation theme is not available
 const fallbackTheme = {
@@ -32,8 +34,68 @@ const DebugButtonsList: React.FC = () => {
     console.warn('[DebugButtonsList] Navigation theme not available, using fallback theme');
     colors = fallbackTheme.colors;
   }
-  
+
   const [isLoading, setIsLoading] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
+
+  // Animation values for dragging
+  const pan = useRef(new Animated.ValueXY({ x: 10, y: 50 })).current;
+  const scale = useRef(new Animated.Value(1)).current;
+
+  // PanResponder for dragging
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Only allow dragging from the title bar area
+        return Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
+      },
+      onPanResponderGrant: () => {
+        pan.setOffset({
+          x: (pan.x as any)._value,
+          y: (pan.y as any)._value,
+        });
+        Animated.spring(scale, {
+          toValue: 1.05,
+          useNativeDriver: false,
+        }).start();
+      },
+      onPanResponderMove: Animated.event(
+        [null, { dx: pan.x, dy: pan.y }],
+        { useNativeDriver: false }
+      ),
+      onPanResponderRelease: () => {
+        pan.flattenOffset();
+
+        // Snap to edges if close enough
+        const currentX = (pan.x as any)._value;
+        const currentY = (pan.y as any)._value;
+
+        let newX = currentX;
+        let newY = currentY;
+
+        // Snap to left or right edge
+        if (currentX < screenWidth / 2) {
+          newX = 10; // Left edge
+        } else {
+          newX = screenWidth - 220; // Right edge (220 is approximate width)
+        }
+
+        // Keep within screen bounds
+        newY = Math.max(50, Math.min(screenHeight - 300, currentY));
+
+        Animated.parallel([
+          Animated.spring(pan, {
+            toValue: { x: newX, y: newY },
+            useNativeDriver: false,
+          }),
+          Animated.spring(scale, {
+            toValue: 1,
+            useNativeDriver: false,
+          }),
+        ]).start();
+      },
+    })
+  ).current;
 
   // Only show in debug builds
   if (!__DEV__) {
@@ -97,13 +159,14 @@ const DebugButtonsList: React.FC = () => {
 
     } catch (error) {
       console.error('[DebugButtonsList] Notifee test failed:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
       Logger.error('DebugButtonsList', '❌ Notifee incoming call test failed', {
-        error: error.message || error
+        error: errorMessage
       });
 
       Alert.alert(
         'Notifee Test Failed',
-        `Failed to display Notifee notification:\n\n${error.message || error}`,
+        `Failed to display Notifee notification:\n\n${errorMessage}`,
         [{ text: 'OK' }]
       );
     } finally {
@@ -161,13 +224,14 @@ const DebugButtonsList: React.FC = () => {
 
     } catch (error) {
       console.error('[DebugButtonsList] Outgoing call test failed:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
       Logger.error('DebugButtonsList', '❌ Outgoing call test failed', {
-        error: error.message || error
+        error: errorMessage
       });
 
       Alert.alert(
         'Outgoing Call Test Failed',
-        `Failed to initiate outgoing call:\n\n${error.message || error}`,
+        `Failed to initiate outgoing call:\n\n${errorMessage}`,
         [{ text: 'OK' }]
       );
     } finally {
@@ -227,73 +291,125 @@ const DebugButtonsList: React.FC = () => {
   const cardColor = colors.card || '#1a1a1a';
 
   return (
-    <View style={[styles.container, { backgroundColor: cardColor }]}>
-      <Text style={[styles.title, { color: textColor }]}>
-        🧪 Debug Tests
-      </Text>
-      
-      <TouchableOpacity
-        style={[styles.button, styles.notifeeButton, isLoading && styles.buttonDisabled]}
-        onPress={testNotifeeIncomingCall}
-        disabled={isLoading}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.buttonText}>
-          📱 Test Notifee Incoming Call
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          backgroundColor: cardColor,
+          transform: [
+            { translateX: pan.x },
+            { translateY: pan.y },
+            { scale: scale }
+          ]
+        }
+      ]}
+      {...panResponder.panHandlers}
+    >
+      {/* Title bar with minimize button */}
+      <View style={styles.titleBar}>
+        <Text style={[styles.title, { color: textColor }]}>
+          🧪 Debug Tests
         </Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.minimizeButton}
+          onPress={() => setIsMinimized(!isMinimized)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.minimizeButtonText, { color: textColor }]}>
+            {isMinimized ? '□' : '−'}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-      <TouchableOpacity
-        style={[styles.button, styles.ringingButton, isLoading && styles.buttonDisabled]}
-        onPress={testOutgoingCallRinging}
-        disabled={isLoading}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.buttonText}>
-          📞 Test Outgoing Call Ringing
-        </Text>
-      </TouchableOpacity>
+      {!isMinimized && (
+        <>
+          <TouchableOpacity
+            style={[styles.button, styles.notifeeButton, isLoading && styles.buttonDisabled]}
+            onPress={testNotifeeIncomingCall}
+            disabled={isLoading}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.buttonText}>
+              📱 Test Notifee Incoming Call
+            </Text>
+          </TouchableOpacity>
 
-      <TouchableOpacity
-        style={[styles.button, styles.settingsButton]}
-        onPress={openNotificationSettings}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.buttonText}>
-          ⚙️ Notification Settings
-        </Text>
-      </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.button, styles.ringingButton, isLoading && styles.buttonDisabled]}
+            onPress={testOutgoingCallRinging}
+            disabled={isLoading}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.buttonText}>
+              📞 Test Outgoing Call Ringing
+            </Text>
+          </TouchableOpacity>
 
-      <TouchableOpacity
-        style={[styles.button, styles.deepLinkButton]}
-        onPress={testDeepLink}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.buttonText}>
-          🔗 Test Deep Link
-        </Text>
-      </TouchableOpacity>
-    </View>
+          <TouchableOpacity
+            style={[styles.button, styles.settingsButton]}
+            onPress={openNotificationSettings}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.buttonText}>
+              ⚙️ Notification Settings
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.deepLinkButton]}
+            onPress={testDeepLink}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.buttonText}>
+              🔗 Test Deep Link
+            </Text>
+          </TouchableOpacity>
+        </>
+      )}
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 50,
-    left: 10,
     padding: 10,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#333',
     minWidth: 200,
+    maxWidth: 220,
     zIndex: 1000,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  titleBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 2,
   },
   title: {
     fontSize: 14,
     fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 10,
+    flex: 1,
+  },
+  minimizeButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  minimizeButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   button: {
     paddingVertical: 8,
