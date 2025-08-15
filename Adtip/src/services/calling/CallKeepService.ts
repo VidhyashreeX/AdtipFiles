@@ -440,6 +440,123 @@ export class CallKeepService {
   }
 
   /**
+   * Check phone account status with detailed logging and retry mechanism
+   */
+  async checkPhoneAccountStatus(): Promise<{
+    hasPhoneAccount: boolean;
+    isCallKeepAvailable: boolean;
+    canDisplayCalls: boolean;
+    statusMessage: string;
+  }> {
+    try {
+      if (!RNCallKeep) {
+        return {
+          hasPhoneAccount: false,
+          isCallKeepAvailable: false,
+          canDisplayCalls: false,
+          statusMessage: 'CallKeep library not available'
+        }
+      }
+
+      // Try multiple times with delay - sometimes Android needs time to register the account
+      let hasPhoneAccount = false
+      let attempts = 0
+      const maxAttempts = 3
+
+      while (!hasPhoneAccount && attempts < maxAttempts) {
+        attempts++
+        console.log(`[CallKeepService] Phone account check attempt ${attempts}/${maxAttempts}`)
+
+        try {
+          hasPhoneAccount = await RNCallKeep.hasPhoneAccount()
+          console.log(`[CallKeepService] Attempt ${attempts} - hasPhoneAccount: ${hasPhoneAccount}`)
+
+          if (!hasPhoneAccount && attempts < maxAttempts) {
+            // Try to re-register the phone account
+            console.log('[CallKeepService] Re-registering phone account...')
+            await RNCallKeep.registerPhoneAccount(this.getSetupOptions())
+
+            // Wait a bit for Android to process
+            await new Promise(resolve => setTimeout(resolve, 1000))
+          }
+        } catch (checkError) {
+          console.warn(`[CallKeepService] Attempt ${attempts} failed:`, checkError)
+          if (attempts === maxAttempts) {
+            throw checkError
+          }
+        }
+      }
+
+      const isCallKeepAvailable = this.isAvailable()
+      const canDisplayCalls = hasPhoneAccount && isCallKeepAvailable
+
+      let statusMessage = ''
+      if (!hasPhoneAccount) {
+        statusMessage = 'Phone account not enabled. Go to Settings > Apps > Adtip > Phone Account and enable it.'
+      } else if (!isCallKeepAvailable) {
+        statusMessage = 'CallKeep not properly initialized'
+      } else {
+        statusMessage = 'CallKeep ready for incoming calls'
+      }
+
+      console.log('[CallKeepService] Final phone account status check:', {
+        hasPhoneAccount,
+        isCallKeepAvailable,
+        canDisplayCalls,
+        statusMessage,
+        attempts
+      })
+
+      return {
+        hasPhoneAccount,
+        isCallKeepAvailable,
+        canDisplayCalls,
+        statusMessage
+      }
+    } catch (error) {
+      console.error('[CallKeepService] Error checking phone account status:', error)
+      return {
+        hasPhoneAccount: false,
+        isCallKeepAvailable: false,
+        canDisplayCalls: false,
+        statusMessage: `Error checking status: ${error instanceof Error ? error.message : String(error)}`
+      }
+    }
+  }
+
+  /**
+   * Get the setup options used for CallKeep initialization
+   */
+  private getSetupOptions() {
+    return {
+      ios: {
+        appName: 'Adtip',
+        supportsVideo: true,
+        maximumCallGroups: '1',
+        maximumCallsPerCallGroup: '1',
+        includesCallsInRecents: true,
+        imageName: 'ic_launcher',
+        handleType: 'generic'
+      },
+      android: {
+        alertTitle: 'Permissions required',
+        alertDescription: 'This application needs to access your phone accounts to make calls',
+        cancelButton: 'Cancel',
+        okButton: 'OK',
+        imageName: 'ic_launcher',
+        additionalPermissions: [],
+        selfManaged: false,
+        foregroundService: {
+          channelId: 'com.adtip.calling',
+          channelName: 'Adtip Calling Service',
+          notificationTitle: 'Adtip is handling a call',
+          notificationIcon: 'ic_launcher'
+        }
+      }
+    }
+  }
+
+  /**
    * Show user-friendly alert about enabling phone account
    */
   async showPhoneAccountGuidanceAlert(): Promise<void> {
@@ -510,6 +627,45 @@ export class CallKeepService {
   }
 
   /**
+   * Force refresh phone account status and re-register if needed
+   */
+  async refreshPhoneAccountStatus(): Promise<boolean> {
+    try {
+      if (!RNCallKeep || Platform.OS !== 'android') {
+        return true
+      }
+
+      console.log('[CallKeepService] 🔄 Refreshing phone account status...')
+
+      // Re-register the phone account
+      await RNCallKeep.registerPhoneAccount(this.getSetupOptions())
+      console.log('[CallKeepService] 📱 Phone account re-registered')
+
+      // Wait for Android to process
+      await new Promise(resolve => setTimeout(resolve, 1500))
+
+      // Check status
+      const hasPhoneAccount = await RNCallKeep.hasPhoneAccount()
+      console.log('[CallKeepService] 📋 Phone account status after refresh:', hasPhoneAccount)
+
+      if (hasPhoneAccount) {
+        // Set CallKeep as available
+        await RNCallKeep.setAvailable(true)
+        this.needsManualPermissionSetup = false
+        console.log('[CallKeepService] ✅ Phone account refreshed successfully')
+      } else {
+        this.needsManualPermissionSetup = true
+        console.log('[CallKeepService] ⚠️ Phone account still not enabled after refresh')
+      }
+
+      return hasPhoneAccount
+    } catch (error) {
+      console.error('[CallKeepService] Error refreshing phone account status:', error)
+      return false
+    }
+  }
+
+  /**
    * Display incoming call in native UI
    * Enhanced with availability checking and graceful degradation
    */
@@ -521,19 +677,44 @@ export class CallKeepService {
     hasVideo: boolean = false
   ): Promise<boolean> {
     const errorHandler = CallKeepErrorHandler.getInstance()
-    
+
     try {
       if (!this.isInitialized || !this.callKeepAvailable || !RNCallKeep) {
         console.warn('[CallKeepService] CallKeep not available, cannot display incoming call')
         return false
       }
 
-      console.log('[CallKeepService] Displaying incoming call:', {
+      // Check phone account status before attempting to display call
+      let hasPhoneAccount = await RNCallKeep.hasPhoneAccount()
+
+      if (!hasPhoneAccount) {
+        console.warn('[CallKeepService] ❌ Phone account not enabled - attempting refresh...')
+
+        // Try to refresh the phone account status
+        hasPhoneAccount = await this.refreshPhoneAccountStatus()
+
+        if (!hasPhoneAccount) {
+          console.warn('[CallKeepService] ❌ Phone account still not enabled after refresh')
+          console.warn('[CallKeepService] 💡 User must enable: Settings > Apps > Adtip > Phone Account')
+
+          // Show user guidance
+          this.showPhoneAccountGuidanceAlert().catch(err => {
+            console.warn('[CallKeepService] Could not show guidance alert:', err)
+          })
+
+          return false
+        } else {
+          console.log('[CallKeepService] ✅ Phone account enabled after refresh!')
+        }
+      }
+
+      console.log('[CallKeepService] ✅ Displaying incoming call with phone account enabled:', {
         uuid,
         handle,
         localizedCallerName,
         hasVideo,
-        isVivoDevice: this.isVivoDevice
+        isVivoDevice: this.isVivoDevice,
+        hasPhoneAccount
       })
 
       this.currentCallUUID = uuid
@@ -563,11 +744,12 @@ export class CallKeepService {
         )
       }
 
+      console.log('[CallKeepService] ✅ CallKeep displayIncomingCall completed successfully')
       return true
     } catch (error) {
       // Use error handler to prevent crashes in production
       const shouldContinue = errorHandler.handleMethodError(error, 'displayIncomingCall', 'CallKeepService')
-      
+
       if (!shouldContinue) {
         // Disable CallKeep if error handler says to stop
         this.callKeepAvailable = false
@@ -575,7 +757,7 @@ export class CallKeepService {
         return false
       }
 
-      console.error('[CallKeepService] Error displaying incoming call:', error)
+      console.error('[CallKeepService] ❌ Error displaying incoming call:', error)
 
       // Mark CallKeep as unavailable if it consistently fails
       if (this.isVivoDevice) {

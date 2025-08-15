@@ -127,15 +127,30 @@ export const useVideoSDKMeeting = (props: UseVideoSDKMeetingProps) => {
     onParticipantJoined: (participant) => {
       logCall('VideoSDKMeeting', '🟢 PARTICIPANT JOINED EVENT FIRED', {
         participantId: participant?.id,
-        displayName: participant?.displayName
+        displayName: participant?.displayName,
+        localParticipantId: mMeeting?.localParticipant?.id
       });
 
-      // Start timer when first remote participant joins
-      if (!hasRemoteParticipantRef.current && participant?.id !== mMeeting?.localParticipant?.id) {
-        logCall('VideoSDKMeeting', '⏱️ Starting call timer - first remote participant joined');
-        startTimeRef.current = Date.now();
-        startDurationTimer();
-        hasRemoteParticipantRef.current = true;
+      // Check if this is a remote participant (not the local participant)
+      const isRemoteParticipant = participant?.id !== mMeeting?.localParticipant?.id;
+
+      if (isRemoteParticipant) {
+        logCall('VideoSDKMeeting', '🎯 Remote participant joined - stopping ringing');
+
+        // Stop ringing for outgoing calls when remote participant joins
+        if (props.onRemoteParticipantJoined) {
+          props.onRemoteParticipantJoined(participant);
+        }
+
+        // Start timer when first remote participant joins
+        if (!hasRemoteParticipantRef.current) {
+          logCall('VideoSDKMeeting', '⏱️ Starting call timer - first remote participant joined');
+          startTimeRef.current = Date.now();
+          startDurationTimer();
+          hasRemoteParticipantRef.current = true;
+        }
+      } else {
+        logCall('VideoSDKMeeting', '👤 Local participant joined (self)');
       }
 
       updateParticipantCount();

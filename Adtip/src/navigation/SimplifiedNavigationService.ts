@@ -127,10 +127,30 @@ class NavigationManager {
       return false;
     }
 
-    return this.navigate('Main', {
-      screen: 'Meeting',
-      params: params,
-    } as any);
+    try {
+      // Direct navigation to Meeting screen (it's at root level)
+      Logger.info('NavigationService', 'Navigating to Meeting screen', {
+        meetingId: params.meetingId,
+        callType: params.callType,
+        displayName: params.displayName
+      });
+
+      if (!this.isReady()) {
+        Logger.warn('NavigationService', 'Navigation not ready, queueing meeting navigation');
+        this.queueNavigation(() => this.navigateToMeeting(params));
+        return false;
+      }
+
+      // Meeting screen is at root level, not nested in Main
+      navigationRef.navigate('Meeting' as any, params);
+      this.updateCurrentRoute();
+      Logger.info('NavigationService', 'Successfully navigated to Meeting screen');
+      return true;
+
+    } catch (error) {
+      Logger.error('NavigationService', 'Failed to navigate to Meeting screen', error);
+      return false;
+    }
   }
 
   navigateToAuth(screen?: 'Onboarding' | 'Login' | 'OTP' | 'UserDetails'): boolean {
@@ -184,12 +204,17 @@ class NavigationManager {
 
   private async processRetryQueue() {
     let retries = 0;
-    
+
     while (this.retryQueue.length > 0 && retries < this.maxRetries) {
       if (this.isReady()) {
         const navigationFn = this.retryQueue.shift();
         if (navigationFn) {
-          navigationFn();
+          try {
+            navigationFn();
+            Logger.debug('NavigationService', 'Successfully processed queued navigation');
+          } catch (error) {
+            Logger.error('NavigationService', 'Error executing queued navigation', error);
+          }
         }
       } else {
         retries++;
@@ -198,7 +223,11 @@ class NavigationManager {
     }
 
     if (this.retryQueue.length > 0) {
-      Logger.error('NavigationService', `Failed to process ${this.retryQueue.length} queued navigations`);
+      Logger.error('NavigationService', `Failed to process ${this.retryQueue.length} queued navigations`, {
+        queueLength: this.retryQueue.length,
+        maxRetries: this.maxRetries,
+        isReady: this.isReady()
+      });
       this.retryQueue = []; // Clear failed queue
     }
   }

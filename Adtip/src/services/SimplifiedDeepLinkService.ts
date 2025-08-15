@@ -138,20 +138,26 @@ class SimplifiedDeepLinkService {
 
     try {
       const navigator = route.navigator || 'Main';
-      
+
       Logger.debug('SimplifiedDeepLinkService', 'Navigating to:', {
         navigator,
         screen: route.screen,
         params: route.params,
       });
 
-      // Simple navigation - let React Navigation handle the complexity
-      if (navigator === 'Main') {
+      // Handle root-level screens (like Meeting) differently
+      if (navigator === null || route.screen === 'Meeting' || route.screen === 'MeetingSimple') {
+        // Direct navigation to root-level screens
+        Logger.debug('SimplifiedDeepLinkService', 'Direct navigation to root-level screen:', route.screen);
+        navigationRef.navigate(route.screen as any, route.params);
+      } else if (navigator === 'Main') {
+        // Navigation through Main navigator
         navigationRef.navigate('Main' as any, {
           screen: route.screen,
           params: route.params,
         });
       } else {
+        // Navigation through other navigators
         navigationRef.navigate(navigator as any, {
           screen: route.screen,
           params: route.params,
@@ -258,6 +264,65 @@ class SimplifiedDeepLinkService {
           screen: 'Settings',
           navigator: 'Main',
         }),
+      },
+
+      // Meeting/Call deep links - these should navigate to Meeting screen (root level)
+      {
+        pattern: /adtip:\/\/meeting\?(.+)/,
+        handler: (matches) => {
+          const queryString = matches[1];
+          const params = new URLSearchParams(queryString);
+
+          return {
+            screen: 'Meeting',
+            params: {
+              meetingId: params.get('meetingId') || 'unknown',
+              token: params.get('token') || 'unknown',
+              displayName: 'User', // Default display name
+              callType: params.get('callType') || 'video',
+              isInitiator: false,
+              recipientName: params.get('callerName') || 'Unknown Caller',
+              callData: {
+                sessionId: params.get('sessionId') || `session-${Date.now()}`,
+                direction: 'incoming',
+                type: params.get('callType') || 'video',
+                callerName: params.get('callerName') || 'Unknown Caller'
+              }
+            },
+            navigator: null, // Meeting is at root level, not nested
+          };
+        },
+      },
+
+      // Call deep links with path parameters
+      {
+        pattern: /adtip:\/\/call\/(\w+)\/(.+)/,
+        handler: (matches) => {
+          const callType = matches[1]; // incoming, outgoing, active, etc.
+          const pathParams = matches[2].split('/');
+
+          // Extract sessionId, meetingId, token from path
+          const sessionId = pathParams[0] || `session-${Date.now()}`;
+          const meetingId = pathParams[1] || `meeting-${Date.now()}`;
+          const token = pathParams[2] ? decodeURIComponent(pathParams[2]) : `token-${Date.now()}`;
+
+          return {
+            screen: 'Meeting',
+            params: {
+              meetingId,
+              token,
+              displayName: 'User',
+              callType: 'video',
+              isInitiator: callType === 'outgoing',
+              callData: {
+                sessionId,
+                direction: callType === 'outgoing' ? 'outgoing' : 'incoming',
+                type: 'video'
+              }
+            },
+            navigator: null, // Meeting is at root level
+          };
+        },
       },
 
       // Fallback for any other adtip:// links - go to home

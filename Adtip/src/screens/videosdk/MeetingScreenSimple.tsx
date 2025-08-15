@@ -1097,22 +1097,32 @@ const MeetingContent = () => {
     remoteParticipantIds: remoteParticipants.map(p => p.id)
   })
 
-  // Ringing logic: Start ringing when connecting and no remote participants, stop when remote participant joins
+  // Enhanced ringing logic: Start ringing when connecting and no remote participants, stop when remote participant joins
   useEffect(() => {
     const isOutgoingCall = session?.direction === 'outgoing'
     const isConnecting = status === 'connecting' || status === 'outgoing'
     const hasRemoteParticipants = remoteParticipants.length > 0
 
+    console.log('[MeetingScreenSimple] Ringing state check:', {
+      isOutgoingCall,
+      isConnecting,
+      hasRemoteParticipants,
+      status,
+      remoteParticipantsCount: remoteParticipants.length,
+      sessionDirection: session?.direction
+    })
+
+    // Enhanced ringing logic for outgoing calls
     if (isOutgoingCall && isConnecting && !hasRemoteParticipants) {
       // Start ringing sound in earpiece for outgoing calls when connecting and no remote participant yet
       if (!ringingAudioService.isCurrentlyRinging()) {
-        console.log('[MeetingScreen] Starting ringing sound - waiting for remote participant to join')
+        console.log('[MeetingScreenSimple] 🔔 Starting ringing sound - waiting for remote participant to join')
         ringingAudioService.startRinging()
       }
     } else {
       // Stop ringing when remote participant joins or call status changes
       if (ringingAudioService.isCurrentlyRinging()) {
-        console.log('[MeetingScreen] Stopping ringing sound - remote participant joined or call status changed')
+        console.log('[MeetingScreenSimple] 🔕 Stopping ringing sound - remote participant joined or call status changed')
         ringingAudioService.stopRinging()
       }
     }

@@ -65,6 +65,7 @@ import VersionCheckService from './src/services/VersionCheckService';
 import ForceUpdateDebugButton from './src/components/debug/ForceUpdateDebugButton';
 import ThemeTestModal from './src/components/debug/ThemeTestModal';
 import CallKeepTestButtons from './src/components/debug/CallKeepTestButtons';
+import DebugButtonsList from './src/components/debug/DebugButtonsList';
 
 import { RootStackParamList } from 'src/types/navigation';
 import useReliableCallManager from './src/hooks/useReliableCallManager';
@@ -147,6 +148,16 @@ const AppNavigator = () => {
             }
           } else {
             Logger.warn('App', 'Background: Firebase service initialization failed');
+          }
+
+          // Initialize Notifee call handler for custom notifications
+          try {
+            const { default: NotifeeCallHandler } = await import('./src/services/notification/NotifeeCallHandler');
+            const notifeeHandler = NotifeeCallHandler.getInstance();
+            await notifeeHandler.initialize();
+            Logger.info('App', 'Background: Notifee call handler initialized successfully');
+          } catch (error) {
+            Logger.warn('App', 'Background: Notifee call handler initialization failed:', error);
           }
         } catch (error) {
           Logger.error('App', 'Background: Firebase initialization error:', error);
@@ -545,6 +556,9 @@ function App(): React.JSX.Element {
 
                               {/* CallKeep test buttons for triggering native UI (only in debug builds) */}
                               <CallKeepTestButtons />
+
+                              {/* Debug buttons list for comprehensive testing (only in debug builds) */}
+                              <DebugButtonsList />
                                 </GestureHandlerRootView>
                               </CallEndModalProvider>
                             </SidebarProvider>

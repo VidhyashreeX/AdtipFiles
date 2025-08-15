@@ -46,9 +46,10 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
-    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
 
-    <!-- CALLLEEP SELF-MANAGED PERMISSIONS -->
+    <!-- CALLKEEP MANAGED CONNECTION PERMISSIONS -->
+    <!-- Note: Using managed connections (not self-managed) for better system integration -->
+    <!-- MANAGE_OWN_CALLS removed - conflicts with managed connections -->
     <uses-permission android:name="android.permission.BIND_TELECOM_CONNECTION_SERVICE" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <!-- ADD_VOICEMAIL removed - not used by core app functionality -->

@@ -71,24 +71,33 @@ global.resolveForegroundService = () => {
 
 // CallEventTask removed - using simplified calling flow
 
-// Enhanced background message handler with centralized FCM routing
-// Uses FCMMessageRouter to coordinate between call and chat messages
+// Enhanced background message handler with simplified call handling
+// Prioritizes CallKeep for incoming calls when app is killed
 messaging().setBackgroundMessageHandler(async remoteMessage => {
   console.log('[Index] Background message received:', remoteMessage);
 
   try {
-    // Use FCMMessageRouter to handle all FCM messages
-    // This preserves existing call functionality while adding chat support
-    const { FCMMessageRouter } = await import('./src/services/FCMMessageRouter');
-    const router = FCMMessageRouter.getInstance();
+    // Check if this is a call message
+    const messageType = remoteMessage?.data?.type || remoteMessage?.data?.messageType;
+    const isCallMessage = messageType === 'call' || messageType === 'incoming_call' ||
+                         remoteMessage?.data?.sessionId || remoteMessage?.data?.callType;
 
-    // Initialize router if needed
-    await router.initialize();
+    if (isCallMessage) {
+      console.log('[Index] Processing background call message');
 
-    // Route message to appropriate handler (call or chat)
-    await router.routeMessage(remoteMessage, 'background');
-    console.log('[Index] Background message routed successfully');
+      // For call messages, use simplified direct CallKeep handling
+      await handleBackgroundCall(remoteMessage);
+    } else {
+      console.log('[Index] Processing non-call background message');
 
+      // For non-call messages, use FCMMessageRouter
+      const { FCMMessageRouter } = await import('./src/services/FCMMessageRouter');
+      const router = FCMMessageRouter.getInstance();
+      await router.initialize();
+      await router.routeMessage(remoteMessage, 'background');
+    }
+
+    console.log('[Index] Background message processed successfully');
     return Promise.resolve();
   } catch (error) {
     console.error('[Index] Error processing background message:', error);
@@ -96,6 +105,155 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
     return Promise.resolve();
   }
 });
+
+// Simplified background call handler for killed app state
+async function handleBackgroundCall(remoteMessage) {
+  try {
+    console.log('[Index] Handling background call with direct CallKeep');
+
+    const callData = remoteMessage.data;
+    const sessionId = callData.sessionId || callData.uuid || `call-${Date.now()}`;
+    const callerName = callData.callerName || callData.peerName || 'Unknown Caller';
+    const callType = callData.callType || 'voice';
+
+    // Try to initialize CallKeep directly for background calls
+    let RNCallKeep;
+    try {
+      RNCallKeep = require('react-native-callkeep').default;
+    } catch (importError) {
+      console.warn('[Index] CallKeep not available in background');
+      return;
+    }
+
+    if (!RNCallKeep) {
+      console.warn('[Index] CallKeep not available');
+      return;
+    }
+
+    // Simple CallKeep setup for background context
+    const options = {
+      ios: {
+        appName: 'Adtip',
+        supportsVideo: true,
+        maximumCallGroups: '1',
+        maximumCallsPerCallGroup: '1',
+      },
+      android: {
+        alertTitle: 'Permissions required',
+        alertDescription: 'This application needs to access your phone accounts to make calls',
+        cancelButton: 'Cancel',
+        okButton: 'OK',
+        imageName: 'ic_launcher',
+        additionalPermissions: [],
+        selfManaged: false,
+        foregroundService: {
+          channelId: 'com.adtip.calling',
+          channelName: 'Adtip Calling Service',
+          notificationTitle: 'Adtip is handling a call',
+          notificationIcon: 'ic_launcher'
+        }
+      }
+    };
+
+    // Initialize CallKeep for background
+    await RNCallKeep.setup(options);
+
+    // Check if phone account is available
+    const hasPhoneAccount = await RNCallKeep.hasPhoneAccount();
+    if (!hasPhoneAccount) {
+      console.warn('[Index] ❌ Phone account not enabled - cannot display CallKeep UI');
+      console.warn('[Index] 💡 User must enable: Settings > Apps > Adtip > Phone Account');
+
+      // Fallback to high-priority notification
+      await showHighPriorityCallNotification(sessionId, callerName, callType);
+      return;
+    }
+
+    // Display incoming call via CallKeep
+    console.log('[Index] ✅ Displaying CallKeep incoming call in background');
+    await RNCallKeep.displayIncomingCall(
+      sessionId,
+      callerName,
+      callerName,
+      'generic',
+      callType === 'video'
+    );
+
+    console.log('[Index] ✅ Background CallKeep call displayed successfully');
+
+  } catch (error) {
+    console.error('[Index] Error in background call handling:', error);
+
+    // Fallback to notification
+    try {
+      const callData = remoteMessage.data;
+      const sessionId = callData.sessionId || `call-${Date.now()}`;
+      const callerName = callData.callerName || 'Unknown Caller';
+      const callType = callData.callType || 'voice';
+
+      await showHighPriorityCallNotification(sessionId, callerName, callType);
+    } catch (notifError) {
+      console.error('[Index] Fallback notification also failed:', notifError);
+    }
+  }
+}
+
+// High-priority notification fallback for when CallKeep fails
+async function showHighPriorityCallNotification(sessionId, callerName, callType) {
+  try {
+    console.log('[Index] Showing high-priority call notification fallback');
+
+    // Use Notifee for high-priority notification
+    const notifee = require('@notifee/react-native').default;
+
+    // Create high-priority channel
+    const channelId = await notifee.createChannel({
+      id: 'adtip_call_channel',
+      name: 'Incoming Calls',
+      importance: 4, // HIGH
+      sound: 'default',
+      vibration: true,
+    });
+
+    // Display full-screen notification
+    await notifee.displayNotification({
+      title: `Incoming ${callType} call`,
+      body: `${callerName} is calling...`,
+      android: {
+        channelId,
+        importance: 4, // HIGH
+        fullScreenAction: {
+          id: 'answer_call',
+          launchActivity: 'default',
+        },
+        actions: [
+          {
+            title: 'Answer',
+            pressAction: { id: 'answer', launchActivity: 'default' },
+          },
+          {
+            title: 'Decline',
+            pressAction: { id: 'decline' },
+          },
+        ],
+        category: 'call',
+        ongoing: true,
+        autoCancel: false,
+      },
+      data: {
+        sessionId,
+        callerName,
+        callType,
+        type: 'incoming_call'
+      }
+    });
+
+    console.log('[Index] ✅ High-priority call notification displayed');
+
+  } catch (error) {
+    console.error('[Index] Failed to show high-priority notification:', error);
+  }
+}
 
 // Register CallKeep headless task for background call handling
 AppRegistry.registerHeadlessTask('RNCallKeepBackgroundMessage', () => ({ name, callUUID, handle }) => {

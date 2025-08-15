@@ -71,8 +71,20 @@ export const CallKeepDebugScreen: React.FC = () => {
 
   const testIncomingCall = async () => {
     const callKeepService = CallKeepService.getInstance()
-    if (!callKeepService.isAvailable()) {
-      addLog('❌ CallKeep not available for incoming call test')
+
+    // First check phone account status
+    addLog('🔍 Checking phone account status...')
+    const phoneAccountStatus = await callKeepService.checkPhoneAccountStatus()
+    addLog(`📱 Phone Account Status: ${phoneAccountStatus.statusMessage}`)
+    addLog(`✅ Has Phone Account: ${phoneAccountStatus.hasPhoneAccount}`)
+    addLog(`🔧 CallKeep Available: ${phoneAccountStatus.isCallKeepAvailable}`)
+    addLog(`📞 Can Display Calls: ${phoneAccountStatus.canDisplayCalls}`)
+
+    if (!phoneAccountStatus.canDisplayCalls) {
+      addLog('❌ Cannot display calls - check phone account permissions')
+      if (!phoneAccountStatus.hasPhoneAccount) {
+        addLog('💡 Enable phone account: Settings > Apps > Adtip > Phone Account')
+      }
       return
     }
 
@@ -85,11 +97,17 @@ export const CallKeepDebugScreen: React.FC = () => {
     )
     addLog(`📋 Incoming call result: ${result}`)
 
-    // End the test call after 3 seconds
+    if (result) {
+      addLog('✅ CallKeep UI should now be visible!')
+    } else {
+      addLog('❌ CallKeep UI failed to display')
+    }
+
+    // End the test call after 5 seconds
     setTimeout(() => {
       callKeepService.endCall(uuid)
       addLog('📞 Test call ended')
-    }, 3000)
+    }, 5000)
   }
 
   const enableVivoTesting = async () => {
@@ -152,6 +170,41 @@ export const CallKeepDebugScreen: React.FC = () => {
           disabled={isLoading}
         >
           <Text style={styles.buttonText}>Test Permissions</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.button, styles.infoButton]}
+          onPress={() => runTest('Phone Account Status', async () => {
+            const callKeepService = CallKeepService.getInstance()
+            const status = await callKeepService.checkPhoneAccountStatus()
+            addLog('📱 Phone Account Status Check:')
+            addLog(`✅ Has Phone Account: ${status.hasPhoneAccount}`)
+            addLog(`🔧 CallKeep Available: ${status.isCallKeepAvailable}`)
+            addLog(`📞 Can Display Calls: ${status.canDisplayCalls}`)
+            addLog(`💬 Status: ${status.statusMessage}`)
+          })}
+          disabled={isLoading}
+        >
+          <Text style={styles.buttonText}>Check Phone Account</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.button, styles.refreshButton]}
+          onPress={() => runTest('Refresh Phone Account', async () => {
+            const callKeepService = CallKeepService.getInstance()
+            addLog('🔄 Refreshing phone account status...')
+            const success = await callKeepService.refreshPhoneAccountStatus()
+            if (success) {
+              addLog('✅ Phone account refreshed successfully!')
+              addLog('📞 Try the incoming call test again')
+            } else {
+              addLog('❌ Phone account refresh failed')
+              addLog('💡 You may need to enable it manually in Settings')
+            }
+          })}
+          disabled={isLoading}
+        >
+          <Text style={styles.buttonText}>Refresh Account</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -250,8 +303,14 @@ const styles = StyleSheet.create({
   warningButton: {
     backgroundColor: '#FF9500',
   },
-  permissionButton: {
+  infoButton: {
     backgroundColor: '#5856D6',
+  },
+  refreshButton: {
+    backgroundColor: '#32D74B',
+  },
+  permissionButton: {
+    backgroundColor: '#007AFF',
   },
   dangerButton: {
     backgroundColor: '#FF3B30',
