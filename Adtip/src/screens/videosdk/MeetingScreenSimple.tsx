@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo, useState } from 'react'
+import React, { useEffect, useRef, useMemo, useState, useCallback } from 'react'
 import {
   View,
   Text,
@@ -589,7 +589,44 @@ const MeetingContent = () => {
   logCall('[MeetingContent]', 'Component rendering...')
 
   const navigation = useNavigation() // Add navigation hook
-  const meeting = useMeeting()
+
+  // VideoSDK event handlers for participant management
+  const onParticipantJoined = useCallback((participant: any) => {
+    logCall('[MeetingContent]', 'Participant joined', {
+      participantId: participant.id,
+      displayName: participant.displayName
+    });
+
+    // Update status to in_call when someone joins
+    const store = useCallStore.getState();
+    const currentStatus = store.status;
+    if (currentStatus === 'connecting' || currentStatus === 'outgoing' || currentStatus === 'ringing') {
+      logCall('[MeetingContent]', 'Updating status to in_call due to participant join');
+      store.actions.setStatus('in_call');
+    }
+  }, []);
+
+  const onParticipantLeft = useCallback((participant: any) => {
+    logCall('[MeetingContent]', 'Participant left', {
+      participantId: participant.id,
+      displayName: participant.displayName
+    });
+  }, []);
+
+  const onMeetingJoined = useCallback(() => {
+    logCall('[MeetingContent]', 'Meeting joined successfully');
+  }, []);
+
+  const onMeetingLeft = useCallback(() => {
+    logCall('[MeetingContent]', 'Meeting left');
+  }, []);
+
+  const meeting = useMeeting({
+    onParticipantJoined,
+    onParticipantLeft,
+    onMeetingJoined,
+    onMeetingLeft,
+  })
   const { participants, localParticipant, join, leave } = meeting
   const localParticipantId = localParticipant?.id
   const localWebcamOn = localParticipant?.webcamOn ?? false
@@ -691,7 +728,9 @@ const MeetingContent = () => {
     return () => {
       // Only clear if this component set the reference
       if (hasSetMeetingRef.current) {
-        logCall('[MeetingContent] Clearing meeting reference for session', session?.sessionId);
+        logCall('[MeetingContent]', 'Clearing meeting reference for session', {
+          sessionId: session?.sessionId
+        });
         mediaService.setMeetingRef(null);
         hasSetMeetingRef.current = false;
       }
@@ -723,7 +762,7 @@ const MeetingContent = () => {
 
       // Clear any existing meeting reference to prevent participant state bleeding
       if (mediaService.isMeetingActive()) {
-        logCall('[MeetingScreen] Clearing previous meeting reference for new session')
+        logCall('[MeetingScreen]', 'Clearing previous meeting reference for new session')
         mediaService.setMeetingRef(null)
       }
 
@@ -744,7 +783,7 @@ const MeetingContent = () => {
       const shouldAllowJoin = sessionIsValid && callIsActive && (isActiveInstance || isIncomingCall)
 
       if (!shouldAllowJoin) {
-        logCall('[MeetingContent] Cannot join - validation failed:', {
+        logCall('[MeetingContent]', 'Cannot join - validation failed', {
           sessionIsValid,
           callIsActive,
           isActiveInstance,
@@ -1051,30 +1090,65 @@ const MeetingContent = () => {
   
   // Extra validation to prevent local participant from being treated as remote
   const validRemoteParticipants = allParticipants.filter(p => {
-    const isNotLocal = p.id !== localParticipantId
-    
+    // Primary check: not the current local participant
+    const isNotCurrentLocal = p.id !== localParticipantId
+
+    // Secondary check: not any variation of "local"
+    const isNotLocalVariant = p.id !== 'local' && !p.id.includes('local')
+
+    // Tertiary check: different display name (if both have names)
+    const hasDifferentName = !localParticipant?.displayName ||
+                            !p.displayName ||
+                            p.displayName !== localParticipant.displayName
+
+    // Quaternary check: ensure we have a valid local participant ID to compare against
+    const hasValidLocalId = localParticipantId && localParticipantId !== 'undefined'
+
     // Additional validation: check if this participant ID was ever our local ID
-    // This prevents session bleeding where previous local ID appears as remote
     if (lastSessionId.current && session?.sessionId !== lastSessionId.current) {
-      logCall('[MeetingScreen] Cross-session participant validation:', {
+      logCall('[MeetingScreen]', 'Cross-session participant validation', {
         participantId: p.id,
         currentLocalId: localParticipantId,
         sessionId: session?.sessionId,
         lastSessionId: lastSessionId.current
       })
     }
-    
-    return isNotLocal
+
+    // Only consider as remote if ALL checks pass
+    const isDefinitelyRemote = hasValidLocalId &&
+                               isNotCurrentLocal &&
+                               isNotLocalVariant &&
+                               hasDifferentName
+
+    // Debug logging for each participant
+    if (!isDefinitelyRemote) {
+      console.log('[ParticipantFilter] Excluding participant:', {
+        participantId: p.id,
+        participantName: p.displayName,
+        localParticipantId,
+        localParticipantName: localParticipant?.displayName,
+        isNotCurrentLocal,
+        isNotLocalVariant,
+        hasDifferentName,
+        hasValidLocalId,
+        reason: !hasValidLocalId ? 'No valid local ID' :
+                !isNotCurrentLocal ? 'Same as local ID' :
+                !isNotLocalVariant ? 'Local variant ID' :
+                !hasDifferentName ? 'Same display name' : 'Unknown'
+      })
+    }
+
+    return isDefinitelyRemote
   })
 
   // Comprehensive debug logging to track participant state issues
-  logCall('[MeetingScreen] Participant debug:', {
+  logCall('[MeetingScreen]', 'Participant debug', {
     sessionId: session?.sessionId,
     localParticipantId,
     totalParticipants: allParticipants.length,
     validRemoteParticipants: validRemoteParticipants.length,
-    participantIds: allParticipants.map(p => ({ 
-      id: p.id, 
+    participantIds: allParticipants.map(p => ({
+      id: p.id,
       displayName: p.displayName,
       isLocal: p.id === localParticipantId,
       webcamOn: p.webcamOn,
@@ -1097,22 +1171,58 @@ const MeetingContent = () => {
     remoteParticipantIds: remoteParticipants.map(p => p.id)
   })
 
-  // Enhanced ringing logic: Start ringing when connecting and no remote participants, stop when remote participant joins
+  // Enhanced participant detection and status management with debouncing
   useEffect(() => {
     const isOutgoingCall = session?.direction === 'outgoing'
     const isConnecting = status === 'connecting' || status === 'outgoing'
     const hasRemoteParticipants = remoteParticipants.length > 0
 
-    console.log('[MeetingScreenSimple] Ringing state check:', {
+    console.log('[MeetingScreenSimple] Participant state check:', {
       isOutgoingCall,
       isConnecting,
       hasRemoteParticipants,
       status,
       remoteParticipantsCount: remoteParticipants.length,
-      sessionDirection: session?.direction
+      sessionDirection: session?.direction,
+      participantIds: remoteParticipants.map(p => p.id),
+      participantDetails: remoteParticipants.map(p => ({
+        id: p.id,
+        displayName: p.displayName,
+        micOn: p.micOn,
+        webcamOn: p.webcamOn
+      }))
     })
 
-    // Enhanced ringing logic for outgoing calls
+    // Add a small delay to prevent false positives during initial meeting setup
+    const participantCheckTimeout = setTimeout(() => {
+      // Re-check participants after delay to ensure they're real remote participants
+      const currentRemoteParticipants = remoteParticipants.filter(p =>
+        p.id !== localParticipantId &&
+        p.id !== 'local' &&
+        !p.id.includes('local')
+      )
+
+      const hasValidRemoteParticipants = currentRemoteParticipants.length > 0
+
+      // Update call status based on participant presence
+      if (hasValidRemoteParticipants && (status === 'connecting' || status === 'outgoing' || status === 'ringing')) {
+        console.log('[MeetingScreenSimple] Valid remote participant confirmed, updating status to in_call');
+        actions.setStatus('in_call');
+      } else if (!hasValidRemoteParticipants && isOutgoingCall && status !== 'connecting') {
+        console.log('[MeetingScreenSimple] Outgoing call with no participants, setting to connecting');
+        actions.setStatus('connecting');
+      }
+    }, 1000) // 1 second delay to let participant state settle
+
+    return () => clearTimeout(participantCheckTimeout)
+  }, [remoteParticipants.length, status, session?.direction, actions, localParticipantId])
+
+  // Enhanced ringing logic for outgoing calls
+  useEffect(() => {
+    const isOutgoingCall = session?.direction === 'outgoing'
+    const isConnecting = status === 'connecting' || status === 'outgoing'
+    const hasRemoteParticipants = remoteParticipants.length > 0
+
     if (isOutgoingCall && isConnecting && !hasRemoteParticipants) {
       // Start ringing sound in earpiece for outgoing calls when connecting and no remote participant yet
       if (!ringingAudioService.isCurrentlyRinging()) {
@@ -1135,27 +1245,50 @@ const MeetingContent = () => {
     }
   }, [ringingAudioService])
 
+
+
   const isVideo = session?.type === 'video'
 
   // Helper function to determine the correct status text
   const getCallStatusText = () => {
-    const hasRemoteParticipants = remoteParticipants.length > 0
+    // Use the already filtered remoteParticipants (no double filtering)
+    const hasValidRemoteParticipants = remoteParticipants.length > 0
 
-    // Debug logging
-    console.log('getCallStatusText:', { status, hasRemoteParticipants, remoteCount: remoteParticipants.length })
+    // Enhanced debug logging
+    console.log('getCallStatusText:', {
+      status,
+      hasValidRemoteParticipants,
+      remoteCount: remoteParticipants.length,
+      sessionDirection: session?.direction,
+      meetingJoined: !!meeting,
+      localParticipantId,
+      localParticipantName: localParticipant?.displayName,
+      remoteParticipantDetails: remoteParticipants.map(p => ({
+        id: p.id,
+        displayName: p.displayName,
+        webcamOn: p.webcamOn,
+        micOn: p.micOn
+      })),
+      allParticipantsCount: participants?.size || 0
+    })
 
-    // Always show "Ringing..." if no remote participants, regardless of status
-    if (!hasRemoteParticipants) {
-      if (status === 'outgoing') {
-        return 'Calling...'
+    // Show appropriate status based on call state and participants
+    if (!hasValidRemoteParticipants) {
+      // No valid remote participants yet
+      if (session?.direction === 'outgoing') {
+        return 'Ringing...'  // Outgoing call waiting for answer
+      } else if (session?.direction === 'incoming') {
+        return 'Connecting...'  // Incoming call connecting
+      } else if (status === 'outgoing') {
+        return 'Ringing...'
       } else if (status === 'connecting') {
         return 'Connecting...'
       } else {
-        return 'Ringing...'
+        return 'Ringing...'  // Default to ringing when waiting
       }
     }
 
-    // Only show "Connected" when we actually have remote participants
+    // Has valid remote participants - call is active
     return 'Connected'
   }
 
@@ -1246,7 +1379,7 @@ const MeetingScreenSimple = () => {
   // Remove debugging state since we're using persistent call approach
 
   // Enhanced component instance tracking with stricter validation
-  const componentId = useRef(Math.random().toString(36).substr(2, 9))
+  const componentId = useRef(Math.random().toString(36).substring(2, 11))
   const isComponentActive = useRef(false) // Start as inactive until validated
   const hasInitialized = useRef(false)
   const isMountedRef = useRef(true)
@@ -1396,7 +1529,7 @@ const MeetingScreenSimple = () => {
   useEffect(() => {
     if (!isMountedRef.current) return
     
-    logCall('[MeetingScreenSimple] Component mounted with details', {
+    logCall('[MeetingScreenSimple]', 'Component mounted with details', {
       componentId: componentId.current,
       sessionId: session?.sessionId,
       status
@@ -1404,7 +1537,7 @@ const MeetingScreenSimple = () => {
     
     // Comprehensive validation before allowing component to become active
     if (!sessionIsValid) {
-      logCall('[MeetingScreenSimple] Session invalid, not activating component', {
+      logCall('[MeetingScreenSimple]', 'Session invalid, not activating component', {
         sessionId: session?.sessionId,
         meetingId: session?.meetingId,
         hasToken: !!session?.token
@@ -1418,7 +1551,7 @@ const MeetingScreenSimple = () => {
     }
     
     if (!globalComponentKey) {
-      logCall('[MeetingScreenSimple] No valid global component key, not activating')
+      logCall('[MeetingScreenSimple]', 'No valid global component key, not activating')
       return
     }
     
@@ -1430,7 +1563,11 @@ const MeetingScreenSimple = () => {
     // Check if another component is already handling this session
     const existingComponentId = global.meetingComponentInstances[globalComponentKey]
     if (existingComponentId && existingComponentId !== componentId.current) {
-      logWarn('MeetingScreenSimple', `Another component instance already exists for session: ${session.sessionId}. Existing ID: ${existingComponentId}, Current ID: ${componentId.current}. NOT ACTIVATING`)
+      logWarn('MeetingScreenSimple', 'Another component instance already exists for session', {
+        sessionId: session?.sessionId,
+        existingId: existingComponentId,
+        currentId: componentId.current
+      })
       isComponentActive.current = false
       return
     }
@@ -1440,12 +1577,18 @@ const MeetingScreenSimple = () => {
     isComponentActive.current = true
     hasInitialized.current = true
     
-    logCall('[MeetingScreenSimple] Component activated and registered for session:', session.sessionId, 'Component ID:', componentId.current)
+    logCall('[MeetingScreenSimple]', 'Component activated and registered for session', {
+      sessionId: session?.sessionId,
+      componentId: componentId.current
+    })
     
     return () => {
       if (!isMountedRef.current) return
 
-      logCall('[MeetingScreenSimple] Component cleanup for session:', session?.sessionId, 'Component ID:', componentId.current)
+      logCall('[MeetingScreenSimple]', 'Component cleanup for session', {
+        sessionId: session?.sessionId,
+        componentId: componentId.current
+      })
 
       // Enhanced cleanup with state validation
       const currentSessionId = session?.sessionId;
@@ -1453,7 +1596,9 @@ const MeetingScreenSimple = () => {
       // Only cleanup if this component was the active one
       if (globalComponentKey && global.meetingComponentInstances?.[globalComponentKey] === componentId.current) {
         delete global.meetingComponentInstances[globalComponentKey]
-        logCall('[MeetingScreenSimple] Cleaned up global component registration for session:', currentSessionId)
+        logCall('[MeetingScreenSimple]', 'Cleaned up global component registration for session', {
+          sessionId: currentSessionId
+        })
       }
 
       // Clear VideoSDK active meeting session if this component owns it
@@ -1463,7 +1608,7 @@ const MeetingScreenSimple = () => {
           videoSDK.clearActiveMeetingSession(currentSessionId);
           logCall('[MeetingScreenSimple] Cleared VideoSDK active meeting session:', currentSessionId);
         } catch (error) {
-          logError('[MeetingScreenSimple] Error clearing VideoSDK session during cleanup', error);
+          logError('[MeetingScreenSimple]', 'Error clearing VideoSDK session during cleanup', error);
         }
       }
 
@@ -1483,12 +1628,12 @@ const MeetingScreenSimple = () => {
   
   // STRICT early returns - prevent ANY rendering if conditions not met
   if (!isMountedRef.current) {
-    logCall('[MeetingScreenSimple] Component unmounted, returning null')
+    logCall('[MeetingScreenSimple]', 'Component unmounted, returning null')
     return null
   }
   
   if (!sessionIsValid) {
-    logCall('[MeetingScreenSimple] Session not valid, showing loading')
+    logCall('[MeetingScreenSimple]', 'Session not valid, showing loading')
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#fff" />
@@ -1524,28 +1669,31 @@ const MeetingScreenSimple = () => {
   }
 
   // Only create MeetingProvider if this is the active component instance AND we have a valid session
-  logCall('MeetingScreenSimple', 'Rendering active component for session', { sessionId: session.sessionId, componentId: componentId.current })
+  logCall('MeetingScreenSimple', 'Rendering active component for session', {
+    sessionId: session?.sessionId,
+    componentId: componentId.current
+  })
 
   const meetingConfig = {
-    meetingId: session.meetingId,
+    meetingId: session?.meetingId || '',
     micEnabled: true,
-    webcamEnabled: session.type === 'video',
+    webcamEnabled: session?.type === 'video',
     name: "User", // TODO: get from AsyncStorage
     notification: {
-      title: `${session.type} call`,
-      message: `with ${session.peerName}`
+      title: `${session?.type || 'voice'} call`,
+      message: `with ${session?.peerName || 'Unknown'}`
     }
   }
 
   logCall('MeetingScreenSimple', 'MeetingProvider config', {
-    token: session.token ? 'present' : 'missing',
+    token: session?.token ? 'present' : 'missing',
     config: meetingConfig
   })
 
   return (
     <MeetingProvider
-      key={`meeting-${session.sessionId}-${componentId.current}`} // Force new provider for each session
-      token={session.token}
+      key={`meeting-${session?.sessionId}-${componentId.current}`} // Force new provider for each session
+      token={session?.token || ''}
       config={meetingConfig}
     >
       <MeetingContent />
@@ -1807,7 +1955,7 @@ const styles = StyleSheet.create({
 })
 
 // Enhanced export with error boundary
-const MeetingScreenSimpleWithErrorBoundary: React.FC<{ route: any }> = ({ route }) => {
+const MeetingScreenSimpleWithErrorBoundary: React.FC = () => {
   const handleVideoSDKError = (error: Error) => {
     logError('MeetingScreenSimple', 'VideoSDK error occurred, attempting recovery', error);
 
@@ -1822,7 +1970,7 @@ const MeetingScreenSimpleWithErrorBoundary: React.FC<{ route: any }> = ({ route 
 
   return (
     <VideoSDKErrorBoundary onError={handleVideoSDKError}>
-      <MeetingScreenSimple route={route} />
+      <MeetingScreenSimple />
     </VideoSDKErrorBoundary>
   );
 };

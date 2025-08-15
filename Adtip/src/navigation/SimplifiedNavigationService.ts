@@ -171,6 +171,24 @@ class NavigationManager {
   isReady(): boolean {
     const ready = navigationRef.isReady();
     this.state.isReady = ready;
+
+    // Enhanced readiness check - also verify we have a current route
+    if (ready) {
+      try {
+        const currentRoute = navigationRef.getCurrentRoute();
+        const hasRoute = !!currentRoute;
+        Logger.debug('NavigationService', 'Navigation readiness check', {
+          isReady: ready,
+          hasRoute,
+          currentRoute: currentRoute?.name
+        });
+        return hasRoute;
+      } catch (error) {
+        Logger.warn('NavigationService', 'Navigation ready but no route available yet');
+        return false;
+      }
+    }
+
     return ready;
   }
 
@@ -204,30 +222,50 @@ class NavigationManager {
 
   private async processRetryQueue() {
     let retries = 0;
+    const maxRetries = 10; // Increased from 3 to 10
+    const baseDelay = 100; // Start with shorter delay
 
-    while (this.retryQueue.length > 0 && retries < this.maxRetries) {
+    while (this.retryQueue.length > 0 && retries < maxRetries) {
       if (this.isReady()) {
         const navigationFn = this.retryQueue.shift();
         if (navigationFn) {
           try {
             navigationFn();
             Logger.debug('NavigationService', 'Successfully processed queued navigation');
+            return; // Exit early on success
           } catch (error) {
             Logger.error('NavigationService', 'Error executing queued navigation', error);
           }
         }
       } else {
         retries++;
-        await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+        // Exponential backoff with max delay of 1000ms
+        const delay = Math.min(baseDelay * Math.pow(1.5, retries), 1000);
+        Logger.debug('NavigationService', `Navigation not ready, retry ${retries}/${maxRetries} in ${delay}ms`);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
 
     if (this.retryQueue.length > 0) {
-      Logger.error('NavigationService', `Failed to process ${this.retryQueue.length} queued navigations`, {
+      Logger.error('NavigationService', `Failed to process ${this.retryQueue.length} queued navigations after ${maxRetries} retries`, {
         queueLength: this.retryQueue.length,
-        maxRetries: this.maxRetries,
-        isReady: this.isReady()
+        maxRetries,
+        isReady: this.isReady(),
+        currentRoute: this.getCurrentRoute()
       });
+
+      // Force navigation as last resort
+      Logger.warn('NavigationService', 'Attempting force navigation as last resort');
+      const navigationFn = this.retryQueue.shift();
+      if (navigationFn) {
+        try {
+          navigationFn();
+          Logger.info('NavigationService', 'Force navigation succeeded');
+        } catch (error) {
+          Logger.error('NavigationService', 'Force navigation also failed', error);
+        }
+      }
+
       this.retryQueue = []; // Clear failed queue
     }
   }

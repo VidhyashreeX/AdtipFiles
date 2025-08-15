@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,9 @@ import {
   StyleSheet,
   Alert,
   Platform,
+  PanResponder,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import CallController from '../../services/calling/CallController';
@@ -13,19 +16,83 @@ import NotificationService from '../../services/calling/NotificationService';
 import { CallKeepService } from '../../services/calling/CallKeepService';
 import { Logger } from '../../utils/ProductionLogger';
 
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
 /**
  * CallKeep Test Buttons Component
- * 
+ *
  * Provides test buttons for triggering incoming and outgoing native CallKeep UI
  * Only visible in debug builds (__DEV__ === true)
- * Positioned at top left of screen
+ * Draggable and closable for better UX
  */
 const CallKeepTestButtons: React.FC = () => {
   const { colors } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
 
-  // Only show in debug builds
-  if (!__DEV__) {
+  // Animation values for dragging
+  const pan = useRef(new Animated.ValueXY({
+    x: 10,
+    y: Platform.OS === 'ios' ? 60 : 40
+  })).current;
+  const scale = useRef(new Animated.Value(1)).current;
+
+  // PanResponder for dragging
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
+      },
+      onPanResponderGrant: () => {
+        pan.setOffset({
+          x: (pan.x as any)._value,
+          y: (pan.y as any)._value,
+        });
+        Animated.spring(scale, {
+          toValue: 1.05,
+          useNativeDriver: false,
+        }).start();
+      },
+      onPanResponderMove: Animated.event(
+        [null, { dx: pan.x, dy: pan.y }],
+        { useNativeDriver: false }
+      ),
+      onPanResponderRelease: () => {
+        pan.flattenOffset();
+
+        // Snap to edges if close enough
+        const currentX = (pan.x as any)._value;
+        const currentY = (pan.y as any)._value;
+
+        let newX = currentX;
+        let newY = currentY;
+
+        // Snap to left or right edge
+        if (currentX < screenWidth / 2) {
+          newX = 10; // Left edge
+        } else {
+          newX = screenWidth - 120; // Right edge (120 is approximate width)
+        }
+
+        // Keep within screen bounds
+        newY = Math.max(50, Math.min(screenHeight - 200, currentY));
+
+        Animated.parallel([
+          Animated.spring(pan, {
+            toValue: { x: newX, y: newY },
+            useNativeDriver: false,
+          }),
+          Animated.spring(scale, {
+            toValue: 1,
+            useNativeDriver: false,
+          }),
+        ]).start();
+      },
+    })
+  ).current;
+
+  // Only show in debug builds or if not visible
+  if (!__DEV__ || !isVisible) {
     return null;
   }
 
@@ -345,11 +412,37 @@ const CallKeepTestButtons: React.FC = () => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.title, { color: colors.text }]}>
-        CallKeep Test
-      </Text>
-      
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+          borderColor: colors.border,
+          transform: [
+            { translateX: pan.x },
+            { translateY: pan.y },
+            { scale: scale }
+          ]
+        }
+      ]}
+      {...panResponder.panHandlers}
+    >
+      {/* Title bar with close button */}
+      <View style={styles.titleBar}>
+        <Text style={[styles.title, { color: colors.text }]}>
+          📞 CallKeep Test
+        </Text>
+        <TouchableOpacity
+          style={styles.closeButton}
+          onPress={() => setIsVisible(false)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.closeButtonText, { color: colors.text }]}>
+            ×
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <TouchableOpacity
         style={[
           styles.button,
@@ -394,30 +487,48 @@ const CallKeepTestButtons: React.FC = () => {
           📹 Video
         </Text>
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : 40, // Account for status bar
-    left: 10,
-    borderRadius: 8,
-    padding: 8,
+    borderRadius: 10,
+    padding: 10,
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     zIndex: 9999,
-    minWidth: 100,
+    minWidth: 120,
+    borderWidth: 1,
+  },
+  titleBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 2,
   },
   title: {
     fontSize: 12,
     fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 6,
+    flex: 1,
+  },
+  closeButton: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  closeButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   button: {
     paddingVertical: 8,

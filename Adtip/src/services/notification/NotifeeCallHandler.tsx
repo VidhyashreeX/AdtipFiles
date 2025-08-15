@@ -148,7 +148,44 @@ class NotifeeCallHandler {
       const meetingId = params.meetingId || `meeting-${Date.now()}`;
       const token = params.token || `token-${Date.now()}`;
 
-      // Navigate to meeting screen
+      // Initialize session in call store for proper call acceptance
+      const { useCallStore } = await import('../../stores/callStoreSimplified');
+      const store = useCallStore.getState();
+
+      console.log('[NotifeeCallHandler] Current call store state:', {
+        hasSession: !!store.session,
+        currentSessionId: store.session?.sessionId,
+        targetSessionId: params.sessionId,
+        status: store.status
+      });
+
+      if (!store.session || store.session.sessionId !== params.sessionId) {
+        console.log('[NotifeeCallHandler] Initializing session for call acceptance');
+        store.actions.setSession({
+          sessionId: params.sessionId,
+          meetingId,
+          token,
+          peerId: 'unknown',
+          peerName: params.callerName,
+          direction: 'incoming',
+          type: params.callType === 'video' ? 'video' : 'voice',
+          startedAt: Date.now()
+        });
+
+        // Set status to ringing so acceptCall() can work
+        store.actions.setStatus('ringing');
+        console.log('[NotifeeCallHandler] Session initialized and status set to ringing');
+      }
+
+      // Try to accept the call through CallController
+      try {
+        const callAccepted = await CallController.acceptCall();
+        console.log('[NotifeeCallHandler] CallController.acceptCall() result:', callAccepted);
+      } catch (acceptError) {
+        console.warn('[NotifeeCallHandler] CallController.acceptCall() failed, proceeding with navigation:', acceptError);
+      }
+
+      // Navigate to meeting screen regardless of CallController result
       const navigationSuccess = NavigationService.navigateToMeeting({
         meetingId,
         token,
@@ -245,14 +282,14 @@ class NotifeeCallHandler {
           },
           actions: [
             {
-              title: '✅ Answer',
+              title: 'Answer',
               pressAction: { 
                 id: 'answer',
                 launchActivity: 'default'
               },
             },
             {
-              title: '❌ Decline',
+              title: 'Decline',
               pressAction: { id: 'decline' },
             },
           ],

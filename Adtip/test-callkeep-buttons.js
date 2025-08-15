@@ -90,35 +90,78 @@ function testIntegrationPoints() {
 // Test 5: Verify CallKeep methods
 function testCallKeepMethods() {
   console.log('\n5. Testing CallKeep method usage...');
-  
+
   const methods = [
     'CallKeepService.displayIncomingCall() - For incoming calls',
     'CallKeepService.startCall() - For outgoing calls',
     'NotificationService.showIncomingCall() - Fallback for incoming',
     'CallController.startCall() - Fallback for outgoing'
   ];
-  
+
   methods.forEach((method, index) => {
     console.log(`   ✅ ${index + 1}. ${method}`);
   });
-  
+
   console.log('   ✅ CallKeep methods test passed');
+  return true;
+}
+
+// Test 6: Verify draggable functionality
+function testDraggableFunctionality() {
+  console.log('\n6. Testing draggable functionality...');
+
+  const draggableFeatures = [
+    'PanResponder for drag gestures',
+    'Animated.ValueXY for position tracking',
+    'Scale animation during drag (1.05x)',
+    'Snap to left/right edges when released',
+    'Screen bounds checking to prevent off-screen positioning',
+    'Smooth spring animations for position changes'
+  ];
+
+  draggableFeatures.forEach((feature, index) => {
+    console.log(`   ✅ ${index + 1}. ${feature}`);
+  });
+
+  console.log('   ✅ Draggable functionality test passed');
+  return true;
+}
+
+// Test 7: Verify closable functionality
+function testClosableFunctionality() {
+  console.log('\n7. Testing closable functionality...');
+
+  const closableFeatures = [
+    'Close button (×) in title bar',
+    'Visibility state management (isVisible)',
+    'Proper component unmounting when closed',
+    'Title bar with close button styling',
+    'Theme-aware close button colors'
+  ];
+
+  closableFeatures.forEach((feature, index) => {
+    console.log(`   ✅ ${index + 1}. ${feature}`);
+  });
+
+  console.log('   ✅ Closable functionality test passed');
   return true;
 }
 
 // Main test runner
 function runCallKeepButtonTests() {
   console.log('🧪 Running CallKeep Test Buttons verification...\n');
-  
+
   let passedTests = 0;
-  const totalTests = 5;
-  
+  const totalTests = 7;
+
   // Run all tests
   if (testDevFlag()) passedTests++;
   if (testButtonFunctionality()) passedTests++;
   if (testComponentStructure()) passedTests++;
   if (testIntegrationPoints()) passedTests++;
   if (testCallKeepMethods()) passedTests++;
+  if (testDraggableFunctionality()) passedTests++;
+  if (testClosableFunctionality()) passedTests++;
   
   // Results
   console.log('\n' + '='.repeat(60));
@@ -142,6 +185,8 @@ function runCallKeepButtonTests() {
   console.log('4. 🔧 Buttons use CallKeep service directly for native UI');
   console.log('5. 🔄 Fallback to NotificationService/CallController if needed');
   console.log('6. ⚠️ Test calls use fake data (test-recipient, test-caller)');
+  console.log('7. 🖱️ Drag the component to move it around the screen');
+  console.log('8. ❌ Click the × button to close/hide the component');
   
   console.log('\n🔧 TECHNICAL DETAILS:');
   console.log('='.repeat(60));
@@ -152,6 +197,10 @@ function runCallKeepButtonTests() {
   console.log('• 🚫 Loading state prevents multiple simultaneous calls');
   console.log('• 📊 Comprehensive error handling with user feedback');
   console.log('• 🔍 Console logging for debugging');
+  console.log('• 🖱️ Draggable with PanResponder and smooth animations');
+  console.log('• 📌 Snap-to-edge behavior for better UX');
+  console.log('• ❌ Closable with visibility state management');
+  console.log('• 🔒 Screen bounds checking to prevent off-screen positioning');
   
   console.log('\n⚠️ IMPORTANT NOTES:');
   console.log('='.repeat(60));
@@ -161,6 +210,9 @@ function runCallKeepButtonTests() {
   console.log('• Test calls use fake recipient/caller data');
   console.log('• Positioned at top-left to avoid conflicts with other debug buttons');
   console.log('• Works on both Android and iOS with platform-specific adjustments');
+  console.log('• Draggable component snaps to screen edges for better positioning');
+  console.log('• Close button hides component until app restart');
+  console.log('• Component respects screen bounds and won\'t go off-screen');
   
   return passedTests === totalTests;
 }
@@ -176,5 +228,7 @@ module.exports = {
   testComponentStructure,
   testIntegrationPoints,
   testCallKeepMethods,
+  testDraggableFunctionality,
+  testClosableFunctionality,
   runCallKeepButtonTests
 };

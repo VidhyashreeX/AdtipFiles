@@ -4,8 +4,9 @@ import { API_BASE_URL } from '../constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ApiEndpoints from '../constants/apiEndpoints';
 import { FCM_SERVER_URL, FCM_CHAT_SERVER_URL } from '../constants/api';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import messaging, { AuthorizationStatus } from '@react-native-firebase/messaging';
+import { navigationRef } from '../navigation/NavigationService';
 import FirebaseService from './FirebaseService';
 import { Logger } from '../utils/ProductionLogger';
 import {
@@ -312,45 +313,82 @@ apiClient.interceptors.response.use(
         timestamp: new Date().toISOString()
       });
 
-      // Handle 401 Unauthorized - attempt token refresh
-      if (error.response.status === 401 && !originalRequest._retry) {
-        originalRequest._retry = true;
+      // Handle 401 Unauthorized - check for FORCED_LOGOUT first
+      if (error.response.status === 401) {
+        const errorData = error.response.data;
 
-        try {
-          console.log('🔄 Attempting token refresh...');
-          const currentToken = await AsyncStorage.getItem('accessToken');
+        // Check if this is a FORCED_LOGOUT error (user logged in on another device)
+        if (errorData?.code === 'FORCED_LOGOUT') {
+          console.log('🚨 FORCED_LOGOUT detected - user logged in on another device');
 
-          if (currentToken) {
-            // Attempt to refresh token
-            const refreshResponse = await axios.post(
-              `${API_BASE_URL}/api/refresh-token`,
-              {},
+          // Clear all stored auth data
+          await AsyncStorage.multiRemove(['accessToken', '@auth_token', 'user', 'userId']);
+
+          // Show user-friendly alert explaining the situation
+          Alert.alert(
+            'Logged Out',
+            'You have been logged out because your account was accessed from another device. This can happen if:\n\n• You logged in on a different device\n• You reinstalled the app without signing out first\n\nPlease log in again to continue using the app.',
+            [
               {
-                headers: {
-                  'Authorization': `Bearer ${currentToken}`,
-                  'Content-Type': 'application/json'
+                text: 'OK',
+                onPress: () => {
+                  // Navigate to login screen
+                  if (navigationRef.isReady()) {
+                    navigationRef.reset({
+                      index: 0,
+                      routes: [{ name: 'Auth' }],
+                    });
+                  }
                 }
               }
-            );
+            ],
+            { cancelable: false }
+          );
 
-            if (refreshResponse.data.status && refreshResponse.data.accessToken) {
-              const newToken = refreshResponse.data.accessToken;
-              await AsyncStorage.setItem('accessToken', newToken);
+          // Don't retry the request, just reject
+          return Promise.reject(error);
+        }
 
-              // Update the original request with new token
-              originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        // Handle other 401 errors - attempt token refresh
+        if (!originalRequest._retry) {
+          originalRequest._retry = true;
 
-              console.log('✅ Token refreshed successfully, retrying original request');
-              return apiClient(originalRequest);
+          try {
+            console.log('🔄 Attempting token refresh...');
+            const currentToken = await AsyncStorage.getItem('accessToken');
+
+            if (currentToken) {
+              // Attempt to refresh token
+              const refreshResponse = await axios.post(
+                `${API_BASE_URL}/api/refresh-token`,
+                {},
+                {
+                  headers: {
+                    'Authorization': `Bearer ${currentToken}`,
+                    'Content-Type': 'application/json'
+                  }
+                }
+              );
+
+              if (refreshResponse.data.status && refreshResponse.data.accessToken) {
+                const newToken = refreshResponse.data.accessToken;
+                await AsyncStorage.setItem('accessToken', newToken);
+
+                // Update the original request with new token
+                originalRequest.headers.Authorization = `Bearer ${newToken}`;
+
+                console.log('✅ Token refreshed successfully, retrying original request');
+                return apiClient(originalRequest);
+              }
             }
+          } catch (refreshError) {
+            console.error('❌ Token refresh failed:', refreshError);
+
+            // Clear stored auth data
+            await AsyncStorage.multiRemove(['accessToken', '@auth_token', 'user']);
+
+            console.warn('🚨 User needs to re-authenticate - token refresh failed');
           }
-        } catch (refreshError) {
-          console.error('❌ Token refresh failed:', refreshError);
-
-          // Clear stored auth data
-          await AsyncStorage.multiRemove(['accessToken', '@auth_token', 'user']);
-
-          console.warn('🚨 User needs to re-authenticate - token refresh failed');
         }
       }
 
