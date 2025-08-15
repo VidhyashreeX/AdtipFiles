@@ -113,15 +113,12 @@ class FirebaseService {
   }
 
   /**
-   * Set background message handler with v22.2.1 improvements
+   * Background message handler removed to prevent conflicts
+   * All background messages are now handled by the unified handler in index.js
    */
   private _setBackgroundMessageHandler(msg: FirebaseMessagingTypes.Module): void {
-    msg.setBackgroundMessageHandler(async (remoteMessage) => {
-      console.log('[FCM] Background message received - handled by CallSignalingService:', remoteMessage);
-
-      // Note: Call handling is now centralized in CallSignalingService
-      // which automatically processes FCM messages via its own listener
-    });
+    console.log('[FirebaseService] Background message handling delegated to unified handler in index.js');
+    // REMOVED: setBackgroundMessageHandler to prevent conflicts with unified handler
   }
 
   // ✅ REMOVED: Legacy _handleBackgroundCall method

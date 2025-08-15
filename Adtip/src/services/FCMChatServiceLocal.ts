@@ -270,10 +270,9 @@ export class FCMChatServiceLocal {
       await this.handleFCMMessage(remoteMessage, 'foreground');
     });
 
-    // Handle background messages
-    messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-      await this.handleFCMMessage(remoteMessage, 'background');
-    });
+    // REMOVED: setBackgroundMessageHandler to prevent conflicts
+    // Background messages are now handled by the unified handler in index.js
+    console.log('[FCMChatServiceLocal] Background message handling delegated to unified handler in index.js');
 
     // Handle notification interactions
     notifee.onForegroundEvent(({ type, detail }) => {

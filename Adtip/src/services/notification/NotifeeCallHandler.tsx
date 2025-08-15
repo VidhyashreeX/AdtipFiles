@@ -24,6 +24,7 @@ class NotifeeCallHandler {
 
   /**
    * Initialize Notifee event handlers
+   * Enhanced for killed app state support
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) {
@@ -32,20 +33,21 @@ class NotifeeCallHandler {
     }
 
     try {
-      console.log('[NotifeeCallHandler] Initializing notification event handlers...');
+      console.log('[NotifeeCallHandler] Initializing notification event handlers for all app states...');
 
       // Handle foreground notification events
       notifee.onForegroundEvent(async ({ type, detail }) => {
         await this.handleNotificationEvent(type, detail, 'foreground');
       });
 
-      // Handle background notification events
+      // Handle background notification events (including killed state)
       notifee.onBackgroundEvent(async ({ type, detail }) => {
+        console.log('[NotifeeCallHandler] Background event received:', { type, actionId: detail.pressAction?.id });
         await this.handleNotificationEvent(type, detail, 'background');
       });
 
       this.isInitialized = true;
-      console.log('[NotifeeCallHandler] ✅ Notification handlers initialized');
+      console.log('[NotifeeCallHandler] ✅ Notification handlers initialized for all app states');
 
     } catch (error) {
       console.error('[NotifeeCallHandler] Failed to initialize:', error);

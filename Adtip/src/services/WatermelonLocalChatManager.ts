@@ -928,25 +928,10 @@ export class WatermelonLocalChatManager {
       }
     });
 
-    messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-      // Check for chat messages in both direct data and info field formats
-      const isDirectChatMessage = remoteMessage.data?.type === 'chat_message';
-      const isInfoChatMessage = remoteMessage.data?.info &&
-        (() => {
-          try {
-            const infoString = typeof remoteMessage.data.info === 'string' ? remoteMessage.data.info : JSON.stringify(remoteMessage.data.info);
-            const parsed = JSON.parse(infoString);
-            return parsed.type === 'chat_message';
-          } catch {
-            return false;
-          }
-        })();
-
-      if (isDirectChatMessage || isInfoChatMessage) {
-        Logger.info('[WatermelonLocalChatManager] 📱 Background chat message received');
-        await this.handleIncomingFCMMessage(remoteMessage);
-      }
-    });
+    // REMOVED: setBackgroundMessageHandler to prevent conflicts
+    // Background messages are now handled by the unified handler in index.js
+    // which routes chat messages to FCMMessageRouter -> WatermelonLocalChatManager
+    console.log('[WatermelonLocalChatManager] Background message handling delegated to unified handler in index.js');
 
     Logger.info('[WatermelonLocalChatManager] ✅ FCM message handlers setup complete');
   }
