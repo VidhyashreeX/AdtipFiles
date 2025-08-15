@@ -231,6 +231,47 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
       participantId: participant?.id,
       displayName: participant?.displayName
     });
+
+    // CRITICAL FIX: Only update status to in_call when a REMOTE participant joins
+    // Check if this is not the local participant joining
+    const localParticipantId = meeting?.localParticipant?.id;
+    
+    if (participant.id !== localParticipantId && 
+        participant.id !== 'local' && 
+        !participant.id.includes('local')) {
+      // This is a remote participant - update status
+      const store = useCallStore.getState();
+      const currentStatus = store.status;
+      const currentSession = store.session;
+      
+      if (currentStatus === 'connecting' || currentStatus === 'outgoing' || currentStatus === 'ringing') {
+        logCall('PersistentMeetingContent', '🟢 Remote participant joined - updating status to in_call', {
+          remoteParticipantId: participant.id,
+          localParticipantId
+        });
+        store.actions.setStatus('in_call');
+        
+        // Report to CallKeep that outgoing call is connected (if applicable)
+        if (currentSession?.direction === 'outgoing') {
+          try {
+            const CallKeepService = require('../../services/calling/CallKeepService').default
+            const callKeepInstance = CallKeepService.getInstance()
+            if (callKeepInstance.isAvailable() && currentSession?.callId) {
+              const RNCallKeep = require('react-native-callkeep').default
+              RNCallKeep.reportConnectedOutgoingCall(currentSession.callId)
+              logCall('PersistentMeetingContent', '🟢 Reported connected outgoing call to CallKeep')
+            }
+          } catch (error) {
+            console.warn('[PersistentMeetingManager] Failed to report connected outgoing call to CallKeep:', error)
+          }
+        }
+      }
+    } else {
+      logCall('PersistentMeetingContent', '🟢 Local participant joined - not changing status', {
+        participantId: participant.id,
+        localParticipantId
+      });
+    }
   };
 
   const onParticipantLeft = (participant: any) => {
@@ -400,7 +441,7 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
 
       try {
         // CRITICAL FIX: Ensure WebSocket is ready before joining to prevent first-call failures
-        logCall('[PersistentMeetingContent] Ensuring WebSocket is ready before joining meeting')
+        logCall('[PersistentMeetingContent]', 'Ensuring WebSocket is ready before joining meeting')
         const videoSDK = VideoSDKService.getInstance()
         const isWebSocketReady = await videoSDK.ensureWebSocketReadyForMeeting()
 
@@ -413,13 +454,16 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
         joinedRef.current = true
         logCall('[PersistentMeetingContent] Successfully joined meeting', config.meetingId)
 
-        // Update status based on call direction
+        // CRITICAL FIX: Don't automatically set status to 'in_call' until remote participants join
+        // Keep status as 'connecting' until remote participants actually join
         if (status === 'outgoing') {
           actions.setStatus('connecting')
-          setTimeout(() => actions.setStatus('in_call'), 1000)
-        } else {
-          actions.setStatus('in_call')
+          // DON'T automatically set to in_call - let onParticipantJoined handle it
+        } else if (status !== 'connecting') {
+          // For incoming calls, ensure we're in connecting state
+          actions.setStatus('connecting')
         }
+        // Status will be changed to 'in_call' by onParticipantJoined when remote participant joins
       } catch (err: any) {
         const errorMessage = err?.message || String(err)
         logWarn('PersistentMeetingContent', `Join attempt ${joinAttemptsRef.current} failed`, { error: errorMessage })
@@ -566,8 +610,9 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
               <View style={styles.videoPlaceholder}>
                 <ActivityIndicator size="large" color="#fff" />
                 <Text style={styles.placeholderText}>
-                  {status === 'outgoing' ? 'Calling...' :
+                  {status === 'outgoing' ? 'Ringing...' :
                    status === 'connecting' ? 'Connecting...' :
+                   status === 'in_call' ? (config.direction === 'outgoing' ? 'Ringing...' : 'Connecting...') :
                    'Waiting for participant...'}
                 </Text>
               </View>
@@ -590,9 +635,10 @@ const PersistentMeetingContent = React.forwardRef<any, { config: MeetingConfig |
             </View>
           </View>
           <Text style={styles.callStatus}>
-            {status === 'outgoing' ? 'Calling...' :
+            {remoteParticipants.length > 0 ? 'Connected' :
+             status === 'outgoing' ? 'Ringing...' :
              status === 'connecting' ? 'Connecting...' :
-             status === 'in_call' ? 'Connected' :
+             status === 'in_call' ? (config.direction === 'outgoing' ? 'Ringing...' : 'Connecting...') :
              'Connecting...'}
           </Text>
         </View>
@@ -828,7 +874,7 @@ export const updatePersistentCallConfig = (updates: {
       finalToken: updatedConfig.token ? 'present' : 'missing'
     });
   } else {
-    logWarn('[PersistentMeetingManager] Cannot update config - missing setters or config');
+    logWarn('[PersistentMeetingManager]', 'Cannot update config - missing setters or config');
   }
 }
 

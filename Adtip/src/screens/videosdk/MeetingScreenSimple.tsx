@@ -597,12 +597,46 @@ const MeetingContent = () => {
       displayName: participant.displayName
     });
 
-    // Update status to in_call when someone joins
-    const store = useCallStore.getState();
-    const currentStatus = store.status;
-    if (currentStatus === 'connecting' || currentStatus === 'outgoing' || currentStatus === 'ringing') {
-      logCall('[MeetingContent]', 'Updating status to in_call due to participant join');
-      store.actions.setStatus('in_call');
+    // CRITICAL FIX: Only update status to in_call when a REMOTE participant joins
+    // Check if this is not the local participant joining
+    const meeting = useMeeting();
+    const localParticipantId = meeting?.localParticipant?.id;
+    
+    if (participant.id !== localParticipantId && 
+        participant.id !== 'local' && 
+        !participant.id.includes('local')) {
+      // This is a remote participant - update status
+      const store = useCallStore.getState();
+      const currentStatus = store.status;
+      const currentSession = store.session;
+      
+      if (currentStatus === 'connecting' || currentStatus === 'outgoing' || currentStatus === 'ringing') {
+        logCall('[MeetingContent]', 'Remote participant joined - updating status to in_call', {
+          remoteParticipantId: participant.id,
+          localParticipantId
+        });
+        store.actions.setStatus('in_call');
+        
+        // Report to CallKeep that outgoing call is connected (if applicable)
+        if (currentSession?.direction === 'outgoing') {
+          try {
+            const CallKeepService = require('../../services/calling/CallKeepService').default
+            const callKeepInstance = CallKeepService.getInstance()
+            if (callKeepInstance.isAvailable() && currentSession?.callId) {
+              const RNCallKeep = require('react-native-callkeep').default
+              RNCallKeep.reportConnectedOutgoingCall(currentSession.callId)
+              logCall('[MeetingContent]', 'Reported connected outgoing call to CallKeep')
+            }
+          } catch (error) {
+            console.warn('[MeetingScreen] Failed to report connected outgoing call to CallKeep:', error)
+          }
+        }
+      }
+    } else {
+      logCall('[MeetingContent]', 'Local participant joined - not changing status', {
+        participantId: participant.id,
+        localParticipantId
+      });
     }
   }, []);
 
@@ -797,7 +831,7 @@ const MeetingContent = () => {
 
       // If this is an incoming call and VideoSDK session is not active, try to set it
       if (isIncomingCall && !isVideoSDKSessionActive && session?.sessionId) {
-        logCall('[MeetingContent] Incoming call detected, setting VideoSDK session as active...')
+        logCall('[MeetingContent]', 'Incoming call detected, setting VideoSDK session as active...')
         const videoSDK = VideoSDKService.getInstance()
         videoSDK.setActiveMeetingSession(session.sessionId)
 
@@ -807,7 +841,7 @@ const MeetingContent = () => {
           const backgroundMediaService = BackgroundMediaService.getInstance()
 
           if (!backgroundMediaService.isMediaReady()) {
-            logCall('[MeetingContent] Background call detected, initializing media...')
+            logCall('[MeetingContent]', 'Background call detected, initializing media...')
             await backgroundMediaService.initializeForBackgroundCall(session.type)
           }
         } catch (error) {
@@ -829,12 +863,12 @@ const MeetingContent = () => {
 
         // Make sure VideoSDK is ready before each attempt with enhanced first-time handling
         const videoSDK = VideoSDKService.getInstance()
-        const status = videoSDK.getInitializationStatus()
+        const videoSDKStatus = videoSDK.getInitializationStatus()
         const isFirstTimeOrColdStart = videoSDK.isFirstTimeOrColdStart()
 
-        if (!status.initialized || !status.websocketReady || isFirstTimeOrColdStart) {
+        if (!videoSDKStatus.initialized || !videoSDKStatus.websocketReady || isFirstTimeOrColdStart) {
           logVideoSDK('MeetingContent', 'VideoSDK not ready or first-time/cold start, ensuring initialization', {
-            status,
+            status: videoSDKStatus,
             isFirstTimeOrColdStart,
             initialLoad: initialLoadRef.current
           })
@@ -852,7 +886,7 @@ const MeetingContent = () => {
         // If this is the first join after app load, add extra delay and validation
         // to ensure WebSocket is fully connected and stable
         if (initialLoadRef.current) {
-          logCall('[MeetingContent] First join after app load - ensuring WebSocket is ready with enhanced validation')
+          logCall('[MeetingContent]', 'First join after app load - ensuring WebSocket is ready with enhanced validation')
 
           // Use longer timeout for first-time users
           const websocketReady = await videoSDK.waitForWebSocketReady(15000)
@@ -862,14 +896,14 @@ const MeetingContent = () => {
 
           // Additional delay for first-time stability
           const extraDelay = isFirstTimeOrColdStart ? INITIAL_DELAY_MS * 2 : INITIAL_DELAY_MS
-          logCall(`[MeetingContent] Adding ${extraDelay}ms stability delay for first join`)
+          logCall('[MeetingContent]', `Adding ${extraDelay}ms stability delay for first join`)
           await new Promise(resolve => setTimeout(resolve, extraDelay))
 
           initialLoadRef.current = false
         }
 
         // CRITICAL FIX: Ensure WebSocket is ready before joining to prevent first-call failures
-        logCall('[MeetingContent] Ensuring WebSocket is ready before joining meeting')
+        logCall('[MeetingContent]', 'Ensuring WebSocket is ready before joining meeting')
         //const videoSDK = VideoSDKService.getInstance()
         const isWebSocketReady = await videoSDK.ensureWebSocketReadyForMeeting()
 
@@ -877,33 +911,22 @@ const MeetingContent = () => {
           throw new Error('WebSocket is not ready for meeting operations')
         }
 
-        logCall('[MeetingContent] WebSocket confirmed ready, joining meeting with ID:', session.meetingId)
+        logCall('[MeetingContent]', 'WebSocket confirmed ready, joining meeting with ID:', session.meetingId)
         await meeting.join()
         joinedRef.current = true
-        logCall('[MeetingContent] Successfully joined meeting')
+        logCall('[MeetingContent]', 'Successfully joined meeting')
         
-        // For outgoing calls, transition from 'outgoing' -> 'connecting' -> 'in_call'
-        // For incoming calls, transition from 'connecting' -> 'in_call'
+        // CRITICAL FIX: Don't automatically set status to 'in_call' until remote participants join
+        // For outgoing calls, keep status as 'connecting' until remote participants join
+        // For incoming calls, keep status as 'connecting' until call is truly established
         if (status === 'outgoing') {
           actions.setStatus('connecting')
-          // Brief delay before moving to in_call
-          setTimeout(() => {
-            actions.setStatus('in_call')
-            // Report to CallKeep that outgoing call is connected
-            try {
-              const CallKeepService = require('../../services/calling/CallKeepService').default
-              const callKeepInstance = CallKeepService.getInstance()
-              if (callKeepInstance.isAvailable() && session?.callId) {
-                const RNCallKeep = require('react-native-callkeep').default
-                RNCallKeep.reportConnectedOutgoingCall(session.callId)
-              }
-            } catch (error) {
-              console.warn('[MeetingScreen] Failed to report connected outgoing call to CallKeep:', error)
-            }
-          }, 1000)
-        } else {
-          actions.setStatus('in_call')
+          // DON'T automatically set to in_call - let onParticipantJoined handle it
+        } else if (status !== 'connecting') {
+          // For incoming calls, ensure we're in connecting state
+          actions.setStatus('connecting')
         }
+        // Status will be changed to 'in_call' by onParticipantJoined when remote participant joins
       } catch (err: any) {
         logWarn('MeetingContent', `Join attempt ${joinAttemptsRef.current} failed: ${err?.message || err}`)
 
@@ -964,19 +987,19 @@ const MeetingContent = () => {
     return () => {
       if (!isMountedRef.current) return
       
-      logCall('[MeetingContent] Component unmounting, performing comprehensive cleanup for session:', session?.sessionId);
+      logCall('[MeetingContent]', 'Component unmounting, performing comprehensive cleanup for session:', session?.sessionId || 'unknown');
 
       // Step 1: End meeting for all participants with timeout protection
       if (joinedRef.current && meeting.end) {
         try {
-          logCall('[MeetingContent] Ending meeting for all participants on cleanup');
+          logCall('[MeetingContent]', 'Ending meeting for all participants on cleanup');
           Promise.race([
             meeting.end(),
             new Promise((_, reject) =>
               setTimeout(() => reject(new Error('Cleanup end timeout')), 2000)
             )
           ]).then(() => {
-            logCall('[MeetingContent] Successfully ended meeting for all participants on cleanup');
+            logCall('[MeetingContent]', 'Successfully ended meeting for all participants on cleanup');
           }).catch((error) => {
             logWarn('MeetingContent', 'Error or timeout ending meeting on cleanup, trying leave as fallback', error);
             // Fallback to leave if end fails
@@ -987,7 +1010,7 @@ const MeetingContent = () => {
                   setTimeout(() => reject(new Error('Cleanup leave timeout')), 1000)
                 )
               ]).then(() => {
-                logCall('[MeetingContent] Successfully left meeting as fallback on cleanup');
+                logCall('[MeetingContent]', 'Successfully left meeting as fallback on cleanup');
               }).catch((leaveError) => {
                 logWarn('MeetingContent', 'Error or timeout with leave fallback on cleanup', leaveError);
               });
@@ -999,14 +1022,14 @@ const MeetingContent = () => {
       } else if (joinedRef.current && meeting.leave) {
         // Fallback to leave if end is not available
         try {
-          logCall('[MeetingContent] End method not available, using leave as fallback on cleanup');
+          logCall('[MeetingContent]', 'End method not available, using leave as fallback on cleanup');
           Promise.race([
             meeting.leave(),
             new Promise((_, reject) =>
               setTimeout(() => reject(new Error('Cleanup leave timeout')), 2000)
             )
           ]).then(() => {
-            logCall('[MeetingContent] Successfully left meeting on cleanup');
+            logCall('[MeetingContent]', 'Successfully left meeting on cleanup');
           }).catch((error) => {
             logWarn('MeetingContent', 'Error or timeout leaving meeting on cleanup', error);
           });
@@ -1026,7 +1049,7 @@ const MeetingContent = () => {
         hasSetMeetingRef.current = false;
       }
 
-      logCall('[MeetingContent] Component cleanup complete');
+      logCall('[MeetingContent]', 'Component cleanup complete');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionIsValid, callIsActive, isActiveInstance, meeting])
@@ -1055,7 +1078,7 @@ const MeetingContent = () => {
         navigation.goBack()
       } else {
         // If can't go back, reset to TipCall screen
-        navigation.reset({
+        (navigation as any).reset({
           index: 0,
           routes: [
             {
@@ -1272,9 +1295,10 @@ const MeetingContent = () => {
       allParticipantsCount: participants?.size || 0
     })
 
-    // Show appropriate status based on call state and participants
+    // CRITICAL FIX: Always prioritize participant count over status
+    // Don't show "Connected" until we actually have remote participants
     if (!hasValidRemoteParticipants) {
-      // No valid remote participants yet
+      // No valid remote participants yet - show appropriate waiting message
       if (session?.direction === 'outgoing') {
         return 'Ringing...'  // Outgoing call waiting for answer
       } else if (session?.direction === 'incoming') {
@@ -1283,12 +1307,15 @@ const MeetingContent = () => {
         return 'Ringing...'
       } else if (status === 'connecting') {
         return 'Connecting...'
+      } else if (status === 'in_call') {
+        // Even if status is in_call, if no remote participants, still show ringing
+        return session?.direction === 'outgoing' ? 'Ringing...' : 'Connecting...'
       } else {
         return 'Ringing...'  // Default to ringing when waiting
       }
     }
 
-    // Has valid remote participants - call is active
+    // Has valid remote participants - call is truly connected
     return 'Connected'
   }
 

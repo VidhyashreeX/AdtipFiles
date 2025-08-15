@@ -770,7 +770,7 @@ class CallController {
 
         // API failed - exit meeting screen with failed status
         const { actions } = useCallStore.getState()
-        actions.setStatus('failed')
+        actions.setStatus('ended')
 
         // End the persistent call
         setTimeout(() => {
@@ -873,7 +873,7 @@ class CallController {
 
       // API error - exit meeting screen with failed status
       const { actions } = useCallStore.getState()
-      actions.setStatus('failed')
+      actions.setStatus('ended')
 
       // End the persistent call
       setTimeout(() => {
@@ -1020,8 +1020,11 @@ class CallController {
         logError('CallController', 'Failed to send PARTICIPANT_READY signal', readyError)
       }
 
-      // Update status to in_call only after everything is set up
-      actions.setStatus('in_call')
+      // CRITICAL FIX: Don't set status to in_call yet - let onParticipantJoined handle it
+      // Keep status as 'connecting' until remote participants join
+      // actions.setStatus('in_call') // Commented out - will be set by onParticipantJoined
+      
+      logCall('CallController', 'Call accepted - status will be updated when remote participant joins')
 
       return true
     } catch (error) {
