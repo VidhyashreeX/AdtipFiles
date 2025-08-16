@@ -286,19 +286,49 @@ class NotifeeCallHandler {
     token?: string;
   }): Promise<boolean> {
     try {
-      console.log('[NotifeeCallHandler] Displaying incoming call notification:', params);
+      console.log('[NotifeeCallHandler] 🔔 DISPLAYING INCOMING CALL NOTIFICATION:', params);
 
-      // Create high-priority channel if not exists
-      const channelId = await notifee.createChannel({
-        id: 'adtip_incoming_calls',
-        name: 'Incoming Calls',
+      // Check if Notifee is available
+      if (!notifee) {
+        console.error('[NotifeeCallHandler] ❌ Notifee is not available');
+        return false;
+      }
+
+      // Check notification permissions
+      const settings = await notifee.getNotificationSettings();
+      console.log('[NotifeeCallHandler] 🔔 Notification settings:', settings);
+
+      if (settings.authorizationStatus !== 1) { // AUTHORIZED = 1
+        console.warn('[NotifeeCallHandler] ⚠️ Notifications not authorized:', settings.authorizationStatus);
+      }
+
+      // Use the same channel ID as chat notifications to match Firebase messaging behavior
+      const channelId = 'chat_messages';
+
+      // Ensure channel exists (defensive programming) - using same config as chat notifications
+      console.log('[NotifeeCallHandler] 🔔 Creating/verifying channel:', channelId);
+      const createdChannelId = await notifee.createChannel({
+        id: channelId,
+        name: 'Chat Messages',
         importance: 4, // HIGH
         sound: 'default',
         vibration: true,
+        vibrationPattern: [300, 500], // Match chat notification pattern
+        lights: true,
+        lightColor: '#00D4AA',
+        badge: true, // Match chat notification config
       });
+      console.log('[NotifeeCallHandler] 🔔 Channel created/verified:', createdChannelId);
 
       // Display notification
-      await notifee.displayNotification({
+      console.log('[NotifeeCallHandler] 🔔 About to display notification with data:', {
+        id: params.sessionId,
+        channelId,
+        title: `Incoming ${params.callType} call`,
+        body: `${params.callerName} is calling...`
+      });
+
+      const notificationResult = await notifee.displayNotification({
         id: params.sessionId,
         title: `Incoming ${params.callType} call`,
         body: `${params.callerName} is calling...`,
@@ -313,7 +343,7 @@ class NotifeeCallHandler {
           actions: [
             {
               title: 'Answer',
-              pressAction: { 
+              pressAction: {
                 id: 'answer',
                 launchActivity: 'default'
               },
@@ -322,26 +352,35 @@ class NotifeeCallHandler {
               title: 'Decline',
               pressAction: { id: 'decline' },
             },
+            {
+              title: 'End',
+              pressAction: { id: 'end' },
+            },
           ],
           ongoing: true,
           autoCancel: false,
           sound: 'default',
-          vibrationPattern: [300, 1000, 300, 1000],
+          vibrationPattern: [300, 500], // Match chat notification pattern
           pressAction: {
             id: 'default',
             launchActivity: 'default'
-          }
+          },
+          // Use same icon as chat notifications to generate same Firebase logs
+          smallIcon: 'ic_notification',
+          color: '#FF6B35' // Match chat notification color
         },
         data: {
           sessionId: params.sessionId,
           callerName: params.callerName,
           callType: params.callType,
+          type: params.callType,
           meetingId: params.meetingId || '',
           token: params.token || '',
-          type: 'incoming_call'
+          messageType: 'incoming_call'
         }
       });
 
+      console.log('[NotifeeCallHandler] 🔔 ✅ INCOMING CALL NOTIFICATION DISPLAYED SUCCESSFULLY:', notificationResult);
       logCall('NotifeeCallHandler', '✅ Incoming call notification displayed', params);
       return true;
 

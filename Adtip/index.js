@@ -5,7 +5,7 @@
 import { AppRegistry } from 'react-native';
 import App from './App';
 import { name as appName } from './app.json';
-import { getApps, initializeApp } from '@react-native-firebase/app';
+import { getApps } from '@react-native-firebase/app';
 import notifee from '@notifee/react-native';
 import { register } from '@videosdk.live/react-native-sdk';
 import messaging from '@react-native-firebase/messaging';
@@ -42,7 +42,7 @@ if (getApps().length === 0) {
 // This promise is resolved when stopForegroundService is called.
 let foregroundServiceResolver = null;
 
-notifee.registerForegroundService(notification => {
+notifee.registerForegroundService(() => {
   console.log('[Index] Foreground service started for call events');
 
   return new Promise((resolve) => {
@@ -134,33 +134,65 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
   });
 
   try {
-    // Extract message data with multiple format support
-    const messageData = remoteMessage.data || {};
-    const messageType = messageData.type || messageData.messageType || messageData.info?.type;
+    // Robust extraction (handles nested JSON in data.info)
+    const rawData = remoteMessage.data || {};
+    let parsedInfo = null;
+    if (rawData.info && typeof rawData.info === 'string') {
+      try {
+        parsedInfo = JSON.parse(rawData.info);
+      } catch (e) {
+        console.warn('[Index] ⚠️ Failed to parse data.info JSON:', e?.message);
+      }
+    } else if (rawData.info && typeof rawData.info === 'object') {
+      parsedInfo = rawData.info; // Already an object
+    }
 
-    // Check if this is a call-related message
-    const isCallMessage = messageType === 'call' ||
-                         messageType === 'incoming_call' ||
-                         messageType === 'CALL_INITIATED' ||
-                         messageType === 'CALL_INITIATE' ||
-                         messageData.sessionId ||
-                         messageData.callType ||
-                         messageData.callerName;
+    // Flatten potential call/chat fields from nested structure (mirrors ReliableCallManager logic)
+    const unified = {
+      // top-level fallbacks
+      ...rawData,
+      // parsed info overrides
+      ...(parsedInfo || {}),
+      // explicit flattened call fields
+      sessionId: rawData.sessionId || parsedInfo?.sessionId || parsedInfo?.uuid || rawData.uuid,
+      uuid: rawData.uuid || parsedInfo?.uuid,
+      callerName: rawData.callerName || parsedInfo?.callerName || parsedInfo?.callerInfo?.name,
+      callType: rawData.callType || parsedInfo?.callType || parsedInfo?.videoSDKInfo?.callType,
+      meetingId: rawData.meetingId || parsedInfo?.meetingId || parsedInfo?.videoSDKInfo?.meetingId,
+      token: rawData.token || parsedInfo?.token || parsedInfo?.videoSDKInfo?.token,
+      type: rawData.type || rawData.messageType || parsedInfo?.type || parsedInfo?.messageType
+    };
+
+    const messageType = unified.type;
+
+    const isCallMessage = (() => {
+      const callTypes = ['call', 'incoming_call', 'CALL_INITIATED', 'CALL_INITIATE', 'CALL_ACCEPT', 'CALL_ACCEPTED', 'CALL_END', 'CALL_ENDED'];
+      if (callTypes.includes(messageType)) return true;
+      // presence of flattened call identifiers
+      if (unified.sessionId || unified.callType || unified.callerName || unified.meetingId) return true;
+      return false;
+    })();
 
     if (isCallMessage) {
-      console.log('[Index] 📞 Processing call message in killed state');
-      // Use FCMMessageRouter for call messages (same pattern as chat)
+      console.log('[Index] 📞 Processing call message in killed state (detected via unified parsing)');
+      // Attach unified data back onto remoteMessage for downstream handlers (non-destructive)
+      remoteMessage.data = { ...remoteMessage.data, ...unified };
       await handleBackgroundCallMessage(remoteMessage);
     } else {
-      console.log('[Index] 💬 Processing non-call message in killed state');
-      await handleBackgroundGeneralMessage(remoteMessage);
+      const isChat = messageType === 'chat_message' || parsedInfo?.type === 'chat_message';
+      if (!isChat && parsedInfo?.type === 'CALL_INITIATED' && !isCallMessage) {
+        console.warn('[Index] ⚠️ Detected CALL_INITIATED inside info but call heuristics failed – forcing call path');
+        await handleBackgroundCallMessage(remoteMessage);
+      } else {
+        console.log('[Index] 💬 Processing non-call message in killed state');
+        await handleBackgroundGeneralMessage(remoteMessage);
+      }
     }
 
     console.log('[Index] ✅ Background message processed successfully');
     return Promise.resolve();
   } catch (error) {
     console.error('[Index] ❌ Error processing background message:', error);
-    // Always resolve to prevent app crashes in killed state
     return Promise.resolve();
   }
 });
@@ -170,51 +202,22 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
 async function handleBackgroundCallMessage(remoteMessage) {
   try {
     console.log('[Index] 📞 Handling call message in killed state using NotifeeCallHandler');
-    console.log('[Index] 📞 Raw FCM message data:', JSON.stringify(remoteMessage.data, null, 2));
 
-    // Parse call data from FCM message (same pattern as chat messages)
-    let callData = {};
-    const rawData = remoteMessage.data || {};
-
-    // First, try to parse the 'info' field (new format used by backend)
-    if (rawData.info && typeof rawData.info === 'string') {
-      try {
-        const parsedInfo = JSON.parse(rawData.info);
-        console.log('[Index] 📞 Parsed info field:', JSON.stringify(parsedInfo, null, 2));
-
-        // Extract call data from parsed info
-        callData = {
-          sessionId: parsedInfo.uuid || parsedInfo.sessionId,
-          callerName: parsedInfo.callerInfo?.name || 'Unknown Caller',
-          callType: parsedInfo.videoSDKInfo?.callType || parsedInfo.callType || 'voice',
-          meetingId: parsedInfo.videoSDKInfo?.meetingId || parsedInfo.meetingId,
-          token: parsedInfo.videoSDKInfo?.token || parsedInfo.token,
-          type: parsedInfo.type
-        };
-      } catch (parseError) {
-        console.warn('[Index] 📞 Failed to parse info field, falling back to direct data:', parseError);
-        callData = rawData;
-      }
-    } else {
-      // Fallback to direct data extraction (legacy format)
-      console.log('[Index] 📞 Using direct data extraction (legacy format)');
-      callData = rawData;
+    // Re-parse for safety (in case upstream handler didn't flatten fully)
+    const data = remoteMessage.data || {};
+    let info = null;
+    if (data.info && typeof data.info === 'string') {
+      try { info = JSON.parse(data.info); } catch { /* ignore */ }
+    } else if (data.info && typeof data.info === 'object') {
+      info = data.info;
     }
 
-    // Extract final call parameters with fallbacks
-    const sessionId = callData.sessionId || callData.uuid || `call-${Date.now()}`;
-    const callerName = callData.callerName || callData.peerName || 'Unknown Caller';
-    const callType = callData.callType || callData.type || 'voice';
-    const meetingId = callData.meetingId || `meeting-${Date.now()}`;
-    const token = callData.token || `token-${Date.now()}`;
-
-    console.log('[Index] 📞 Extracted call parameters:', {
-      sessionId,
-      callerName,
-      callType,
-      meetingId,
-      token: token ? 'present' : 'missing'
-    });
+    // Prefer flattened values but fall back to nested info structure
+    const sessionId = data.sessionId || data.uuid || info?.sessionId || info?.uuid || `call-${Date.now()}`;
+    const callerName = data.callerName || info?.callerName || info?.callerInfo?.name || 'Unknown Caller';
+    const callType = (data.callType || info?.callType || info?.videoSDKInfo?.callType || 'voice') === 'video' ? 'video' : 'voice';
+    const meetingId = data.meetingId || info?.meetingId || info?.videoSDKInfo?.meetingId || `meeting-${Date.now()}`;
+    const token = data.token || info?.token || info?.videoSDKInfo?.token || `token-${Date.now()}`;
 
     // Ensure NotifeeCallHandler is properly initialized for killed state
     const { default: NotifeeCallHandler } = await import('./src/services/notification/NotifeeCallHandler');
@@ -226,6 +229,7 @@ async function handleBackgroundCallMessage(remoteMessage) {
       console.log('[Index] ✅ NotifeeCallHandler initialized for killed state');
     }
 
+    // Extract call data from FCM message
     // Use NotifeeCallHandler to display the notification (same as foreground)
     const success = await handler.displayIncomingCall({
       sessionId,
@@ -272,52 +276,33 @@ async function handleBackgroundCallMessage(remoteMessage) {
 async function handleDirectCallNotification(remoteMessage) {
   try {
     console.log('[Index] 📞 Creating enhanced direct call notification for killed state');
-
-    // Parse call data using same logic as handleBackgroundCallMessage
-    let callData = {};
-    const rawData = remoteMessage.data || {};
-
-    // First, try to parse the 'info' field (new format used by backend)
-    if (rawData.info && typeof rawData.info === 'string') {
-      try {
-        const parsedInfo = JSON.parse(rawData.info);
-        console.log('[Index] 📞 Direct notification - Parsed info field:', JSON.stringify(parsedInfo, null, 2));
-
-        // Extract call data from parsed info
-        callData = {
-          sessionId: parsedInfo.uuid || parsedInfo.sessionId,
-          callerName: parsedInfo.callerInfo?.name || 'Unknown Caller',
-          callType: parsedInfo.videoSDKInfo?.callType || parsedInfo.callType || 'voice',
-          meetingId: parsedInfo.videoSDKInfo?.meetingId || parsedInfo.meetingId,
-          token: parsedInfo.videoSDKInfo?.token || parsedInfo.token,
-          type: parsedInfo.type
-        };
-      } catch (parseError) {
-        console.warn('[Index] 📞 Direct notification - Failed to parse info field:', parseError);
-        callData = rawData;
-      }
-    } else {
-      // Fallback to direct data extraction (legacy format)
-      console.log('[Index] 📞 Direct notification - Using direct data extraction');
-      callData = rawData;
+    const data = remoteMessage.data || {};
+    let info = null;
+    if (data.info && typeof data.info === 'string') {
+      try { info = JSON.parse(data.info); } catch {}
+    } else if (data.info && typeof data.info === 'object') {
+      info = data.info;
     }
-
-    const sessionId = callData.sessionId || callData.uuid || `call-${Date.now()}`;
-    const callerName = callData.callerName || callData.peerName || 'Unknown Caller';
-    const callType = callData.callType || callData.type || 'voice';
-    const meetingId = callData.meetingId || `meeting-${Date.now()}`;
-    const token = callData.token || `token-${Date.now()}`;
+    const sessionId = data.sessionId || data.uuid || info?.sessionId || info?.uuid || `call-${Date.now()}`;
+    const callerName = data.callerName || info?.callerName || info?.callerInfo?.name || data.peerName || 'Unknown Caller';
+    const callType = (data.callType || info?.callType || info?.videoSDKInfo?.callType || data.type || 'voice');
+    const meetingId = data.meetingId || info?.meetingId || info?.videoSDKInfo?.meetingId || `meeting-${Date.now()}`;
+    const token = data.token || info?.token || info?.videoSDKInfo?.token || `token-${Date.now()}`;
 
     // Use Notifee directly for maximum reliability in killed state
     const notifee = require('@notifee/react-native').default;
 
     // Use SAME channel ID as NotifeeCallHandler for consistency
     const channelId = await notifee.createChannel({
-      id: 'adtip_incoming_calls',
-      name: 'Incoming Calls',
+      id: 'chat_messages', // Use same channel as chat notifications
+      name: 'Chat Messages', // Match chat notification channel name
       importance: 4, // HIGH
       sound: 'default',
       vibration: true,
+      vibrationPattern: [300, 500], // Match chat notification pattern
+      lights: true,
+      lightColor: '#00D4AA',
+      badge: true,
     });
 
     // Display notification with SAME structure as NotifeeCallHandler
@@ -349,11 +334,14 @@ async function handleDirectCallNotification(remoteMessage) {
         ongoing: true,
         autoCancel: false,
         sound: 'default',
-        vibrationPattern: [300, 1000, 300, 1000],
+        vibrationPattern: [300, 500], // Match chat notification pattern
         pressAction: {
           id: 'default',
           launchActivity: 'default'
-        }
+        },
+        // Use same icon as chat notifications to generate same Firebase logs
+        smallIcon: 'ic_notification',
+        color: '#FF6B35' // Match chat notification color
       },
       data: {
         sessionId,
@@ -387,7 +375,8 @@ async function handleDirectCallNotification(remoteMessage) {
         android: {
           channelId: 'adtip_general',
           importance: 4,
-          pressAction: { id: 'default', launchActivity: 'default' }
+          pressAction: { id: 'default', launchActivity: 'default' },
+          smallIcon: 'ic_notification'
         }
       });
 
@@ -456,6 +445,7 @@ async function showGeneralNotification(remoteMessage) {
       android: {
         channelId,
         pressAction: { id: 'default', launchActivity: 'default' },
+        smallIcon: 'ic_notification',
       },
       data: messageData
     });

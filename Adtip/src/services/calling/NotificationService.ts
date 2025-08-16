@@ -16,7 +16,7 @@ const isIncomingCallModuleAvailable = IncomingCallModule && typeof IncomingCallM
 
 class NotificationService {
   private static _instance: NotificationService
-  private incomingChannel = 'incoming-calls'
+  private incomingChannel = 'chat_messages' // Use same channel as chat notifications
   private ongoingChannel = 'ongoing-calls'
 
   static getInstance() {
@@ -106,10 +106,14 @@ class NotificationService {
   private async createChannels() {
     await notifee.createChannel({
       id: this.incomingChannel,
-      name: 'Incoming Calls',
+      name: 'Chat Messages', // Match chat notification channel name
       importance: AndroidImportance.HIGH,
       sound: 'default',
       vibration: true,
+      vibrationPattern: [300, 500], // Match chat notification pattern
+      lights: true,
+      lightColor: '#00D4AA',
+      badge: true,
       description: 'Notifications for incoming voice and video calls'
     })
     await notifee.createChannel({
@@ -230,9 +234,10 @@ class NotificationService {
             importance: AndroidImportance.HIGH,
             pressAction: { id: 'default' },
             sound: 'default',
-            vibrationPattern: isConcurrentCall ? [200, 300, 200, 300, 200, 300] : [300, 1000, 300, 1000],
-            // Enhanced styling
-            color: type === 'voice' ? '#4CAF50' : '#2196F3',
+            vibrationPattern: [300, 500], // Match chat notification pattern
+            // Use same icon and color as chat notifications to generate same Firebase logs
+            smallIcon: 'ic_notification',
+            color: '#FF6B35', // Match chat notification color
             // Only add largeIcon if callerAvatar is a valid string URL or use default logo
             largeIcon: (callerAvatar && typeof callerAvatar === 'string' && callerAvatar.trim() !== '')
               ? callerAvatar
@@ -412,11 +417,11 @@ class NotificationService {
   async initializeEnhancedChannels() {
     await notifee.createChannel({
       id: this.incomingChannel,
-      name: 'Incoming Calls',
+      name: 'Chat Messages', // Match chat notification channel name
       importance: AndroidImportance.HIGH,
       sound: 'default',
       vibration: true,
-      vibrationPattern: [300, 1000, 300, 1000],
+      vibrationPattern: [300, 500], // Match chat notification pattern
       lights: true,
       lightColor: '#00D4AA',
       badge: true,

@@ -22,8 +22,8 @@ class ReliableCallManager {
   private processingMessage = false
   private callKeepService: CallKeepService
 
-  // Notification channels
-  private readonly INCOMING_CHANNEL = 'reliable-incoming-calls'
+  // Notification channels - using same channel as chat notifications for consistency
+  private readonly INCOMING_CHANNEL = 'chat_messages'
   private readonly ONGOING_CHANNEL = 'reliable-ongoing-calls'
 
   static getInstance(): ReliableCallManager {
@@ -145,11 +145,11 @@ class ReliableCallManager {
     try {
       await notifee.createChannel({
         id: this.INCOMING_CHANNEL,
-        name: 'Incoming Calls',
+        name: 'Chat Messages', // Match chat notification channel name
         importance: AndroidImportance.HIGH,
         sound: 'default',
         vibration: true,
-        vibrationPattern: [300, 1000, 300, 1000],
+        vibrationPattern: [300, 500], // Match chat notification pattern
         lights: true,
         lightColor: '#00D4AA',
         badge: true,
@@ -567,9 +567,12 @@ class ReliableCallManager {
           importance: AndroidImportance.HIGH,
           pressAction: { id: 'default' },
           sound: 'default',
-          vibrationPattern: [300, 1000, 300, 1000],
+          vibrationPattern: [300, 500], // Match chat notification pattern
           ongoing: true,
           autoCancel: false,
+          // Use same icon as chat notifications to generate same Firebase logs
+          smallIcon: 'ic_notification',
+          color: '#FF6B35', // Match chat notification color
         },
         data: {
           sessionId: session.sessionId,
@@ -603,7 +606,10 @@ class ReliableCallManager {
           channelId: this.INCOMING_CHANNEL,
           importance: AndroidImportance.HIGH,
           sound: 'default',
-          vibrationPattern: [300, 1000, 300, 1000],
+          vibrationPattern: [300, 500], // Match chat notification pattern
+          // Use same icon as chat notifications to generate same Firebase logs
+          smallIcon: 'ic_notification',
+          color: '#FF6B35', // Match chat notification color
         },
         data: { sessionId: session.sessionId },
       })

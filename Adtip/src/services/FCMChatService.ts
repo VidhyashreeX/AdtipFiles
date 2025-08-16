@@ -792,7 +792,7 @@ class FCMChatService {
           pressAction: { id: 'default' },
           sound: 'default',
           vibrationPattern: [300, 500],
-          // smallIcon will use default app icon if not specified
+          smallIcon: 'ic_notification',
         },
         data: {
           type: 'chat_message',

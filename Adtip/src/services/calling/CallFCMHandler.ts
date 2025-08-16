@@ -57,6 +57,7 @@ export class CallFCMHandler implements FCMHandler {
       console.log('[CallFCMHandler] Processing call message:', {
         context,
         messageType: this.extractMessageType(message),
+        hasNotification: !!message.notification,
         data: message.data
       })
 

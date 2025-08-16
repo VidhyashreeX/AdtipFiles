@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Platform } from 'react-native'
-import notifee from '@notifee/react-native'
+import notifee, { AndroidImportance } from '@notifee/react-native'
 
 interface PendingCall {
   sessionId: string
@@ -254,8 +254,9 @@ class NotificationPersistenceService {
         body: `${callerName} tried to call you`,
         android: {
           channelId: 'missed-calls',
-          importance: notifee.AndroidImportance.HIGH,
+          importance: AndroidImportance.HIGH,
           pressAction: { id: 'default' },
+          smallIcon: 'ic_notification',
           actions: [
             { title: 'Call Back', pressAction: { id: 'callback' } },
             { title: 'Dismiss', pressAction: { id: 'dismiss' } },
