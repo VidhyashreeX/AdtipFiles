@@ -19,6 +19,8 @@ import {
   SidebarGroupContent,
 } from "./sidebar-components";
 import postAdsLogo from '/logo.png'; // Use your Post Advertisers logo path here
+import SubmissionForm from "./SubmissionForm";
+
 
 interface NavItem {
   to: string;
@@ -31,14 +33,66 @@ interface NavItem {
 const AdTipSidebar = () => {
   const location = useLocation();
   const { user } = useAuth();
-  const [isCreatePostOpen, setIsCreatePostOpen] = React.useState(false);
+
+  // Keep all your original sidebar mobile props
   const { isCollapsed, toggleSidebar, isMobile, openMobile, setOpenMobile } = useSidebar();
   const sidebarRef = React.useRef<HTMLDivElement>(null);
+ 
+
   const [isHovered, setIsHovered] = React.useState(false);
 
-  const isActive = (path: string) => {
-    return location.pathname === path;
-  };
+  const [isCreatePostOpen, setIsCreatePostOpen] = React.useState(false);
+  const [showChannelForm, setShowChannelForm] = React.useState(false);
+  const [showCreatePost, setShowCreatePost] = React.useState(false);
+
+  const isActive = (path: string) => location.pathname === path;
+
+  // ✅ mainNavItems now dynamic
+  const [mainNavItems, setMainNavItems] = React.useState([
+    { to: "/home", label: "Home", icon: <Home className="h-5 w-5" /> },
+    { to: "/watch", label: "TipTube", icon: <Play className="h-5 w-5" /> },
+    { to: "/short", label: "TipShorts", icon: <Video className="h-5 w-5" /> },
+    { to: "/tipcall", label: "TipCall", icon: <Phone className="h-5 w-5" /> },
+  ]);
+React.useEffect(() => {
+  const savedChannels = JSON.parse(localStorage.getItem("channels") || "[]");
+  if (savedChannels.length) {
+    setMainNavItems(prevItems => {
+      const defaultItems = prevItems.filter(item => !item.to.startsWith("/channel/"));
+      return [
+        ...defaultItems,
+        ...savedChannels.map(ch => ({
+          to: `/channel/${encodeURIComponent(ch.name)}`,
+          label: ch.name,
+          icon: <User className="h-5 w-5" />
+        }))
+      ];
+    });
+  }
+}, []);
+
+
+  // On channel created → add to menu
+const handleChannelCreated = (data: { name: string }) => {
+  setMainNavItems(prevItems => {
+    // Remove any existing channel entries (keep only default menu)
+    const defaultItems = prevItems.filter(
+      item => !item.to.startsWith("/channel/")
+    );
+    // Add the new one
+    return [
+      ...defaultItems,
+      {
+        to: `/channel/${encodeURIComponent(data.name)}`,
+        label: data.name,
+        icon: <User className="h-5 w-5" />,
+      }
+    ];
+  });
+  setShowChannelForm(false);
+  setShowCreatePost(true);
+};
+
 
   // Close sidebar on route change in mobile mode
   React.useEffect(() => {
@@ -70,31 +124,6 @@ const AdTipSidebar = () => {
     }
   }, [isHovered, handleWheel]);
 
-  // Handler for Install to Earn
-  /*const handleInstallToEarn = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const userId = localStorage.getItem('userId') || '58422';
-    const url = `https://wow.pubscale.com/?app_id=39604779&user_id=${userId}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
-  };*/
-
-  // Main navigation items
-  const mainNavItems = [
-    { to: "/home", label: "Home", icon: <Home className="h-5 w-5" /> },
-    { to: "/watch", label: "TipTube", icon: <Play className="h-5 w-5" /> },
-    { to: "/short", label: "TipShorts", icon: <Video className="h-5 w-5" /> },
-    { to: "/tipcall", label: "TipCall", icon: <Phone className="h-5 w-5" /> },
-    // Install to Earn menu item (no route, just action)
-    /*{
-      to: "#install-to-earn",
-      label: "Install to Earn",
-      icon: <BadgeDollarSign className="h-5 w-5" />,
-      onClick: handleInstallToEarn,
-      isInstallToEarn: true,
-    },*/
-  ];
-  
-  // E-commerce items
   const ecommerceItems = [
     { to: "/tip-shop", label: "Tip Shop", icon: <ShoppingCart className="h-5 w-5" /> },
     { to: "/analysis", label: "Analysis", icon: <BarChart3 className="h-5 w-5" /> },
@@ -119,28 +148,64 @@ const AdTipSidebar = () => {
   // Main sidebar content
   const sidebarContent = (
     <div>
-      {/* Post button or icon */}
-      <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
-        <DialogTrigger asChild>
-          <Button
-            className={cn(
-              "mb-4 bg-adtip-teal hover:bg-adtip-teal/90",
-              isCollapsed && !isMobile
-                ? "mx-2 w-[48px] h-[40px] flex items-center justify-center p-0"
-                : "w-[calc(100%-32px)] mx-4 px-4 py-2"
-            )}
-          >
-            {isCollapsed && !isMobile ? (
-              <PlusCircle className="h-5 w-5" />
-            ) : (
-              <>
-                <PlusCircle className="h-5 w-5 mr-2" />
-                Create Post
-              </>
-            )}
-          </Button>
-        </DialogTrigger>
-        <CreatePostDialog onClose={() => setIsCreatePostOpen(false)} />
+      {/* Post button */}
+      <Dialog
+        open={isCreatePostOpen}
+        onOpenChange={(open) => {
+          setIsCreatePostOpen(open);
+          if (!open) {
+            setShowChannelForm(false);
+            setShowCreatePost(false);
+          }
+        }}
+      >
+       <DialogTrigger asChild>
+  <Button
+    className={cn(
+      "mb-4 bg-adtip-teal hover:bg-adtip-teal/90",
+      isCollapsed && !isMobile
+        ? "mx-2 w-[48px] h-[40px] flex items-center justify-center p-0"
+        : "w-[calc(100%-32px)] mx-4 px-4 py-2"
+    )}
+    onClick={() => {
+      // Check if there's already a channel in menu
+      const hasChannel = mainNavItems.some(item => item.to.startsWith("/channel/"));
+      if (hasChannel) {
+        // If channel exists → skip channel form, go to upload video
+        setShowChannelForm(false);
+        setShowCreatePost(true);
+      } else {
+        // No channel yet → show create channel form
+        setShowChannelForm(true);
+        setShowCreatePost(false);
+      }
+    }}
+  >
+    {isCollapsed && !isMobile ? (
+      <PlusCircle className="h-5 w-5" />
+    ) : (
+      <>
+        <PlusCircle className="h-5 w-5 mr-2" />
+        {mainNavItems.some(item => item.to.startsWith("/channel/")) ? "Upload Video" : "Create Channel"}
+      </>
+    )}
+  </Button>
+</DialogTrigger>
+
+
+        {showChannelForm && (
+          <SubmissionForm onSuccess={handleChannelCreated} />
+        )}
+
+        {showCreatePost && (
+          <CreatePostDialog
+            onClose={() => {
+              setIsCreatePostOpen(false);
+              setShowChannelForm(false);
+              setShowCreatePost(false);
+            }}
+          />
+        )}
       </Dialog>
 
       {/* Navigation Groups */}

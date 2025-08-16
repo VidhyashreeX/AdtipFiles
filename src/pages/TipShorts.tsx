@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Heart, MessageSquare, Share2, ThumbsDown, Maximize2, Minimize2, VolumeX, Volume2, Play, Pause } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
@@ -6,6 +6,8 @@ import { useNavigate } from "react-router-dom";
 import { useParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "../contexts/SidebarContext";
+import ShareModal from "@/components/ShareModal"; // Adjust path if needed
+
 
 interface TipShort {
   id: number;
@@ -47,13 +49,42 @@ const TipShorts = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPlaying, setIsPlaying] = useState<{ [key: number]: boolean }>({});
+   const [watchedCount, setWatchedCount] = useState(0);
+  const rewardedShorts = useRef(new Set<number>());
+  const [showRewardPopupCount, setShowRewardPopupCount] = useState(false);
   const [isMuted, setIsMuted] = useState<{ [key: number]: boolean }>({});
   const [liked, setLiked] = useState<{ [key: number]: boolean }>({});
   const [isGlobalMuted, setIsGlobalMuted] = useState(() => {
     const stored = localStorage.getItem('shortsGlobalMuted');
     return stored ? JSON.parse(stored) : false;
   });
-   const [showCopied, setShowCopied] = useState(false);
+
+   const [shareOpen, setShareOpen] = useState(false);
+   const handleVideoPlay = (short) => {
+    if (!rewardedShorts.current.has(short.id)) {
+      rewardedShorts.current.add(short.id);
+      setWatchedCount((count) => count + 1);
+      console.log(`Short ${short.id} started playing - count incremented`);
+    }
+  };
+  // Show popup after 5 unique plays
+  useEffect(() => {
+    if (watchedCount >= 5) {
+      setShowRewardPopupCount(true);
+      setWatchedCount(0); // reset count for next rewards
+
+      // Hide popup automatically after 3 seconds
+      const timer = setTimeout(() => {
+        setShowRewardPopupCount(false);
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [watchedCount]);
+const [selectedShort, setSelectedShort] = useState<{ id: number } | null>(null);
+
+
+
    const [showRewardPopup, setShowRewardPopup] = useState(false);
    const handleVideoComplete = (short) => {
   // only reward when opened via deep link
@@ -64,17 +95,12 @@ const TipShorts = () => {
   }
 };
 
-const handleShare = async (short) => {
-  const url = `${window.location.origin}/short/${short.id}`;
-  try {
-    await navigator.clipboard.writeText(url);
-    setShowCopied(true);
-    setTimeout(() => setShowCopied(false), 1800); // Hide after 1.8 seconds
-  } catch(error) {
-    console.error(error);
-    // Optionally you can show error toast here
-  }
+const handleShare = (short) => {
+  setSelectedShort(short);
+  setShareOpen(true);
 };
+
+
 
   const [isGlobalPlaying, setIsGlobalPlaying] = useState(() => {
     const stored = localStorage.getItem('shortsGlobalPlaying');
@@ -600,6 +626,7 @@ const fetchShorts = useCallback(
                   tabIndex={-1}
                   controls={false}
                   onEnded={() => handleVideoComplete(short)}
+                            onPlay={() => handleVideoPlay(short)} // Track play here
                   style={{ background: 'black' }}
                 >
                   <source src={short.content.video} type="video/mp4" />
@@ -673,7 +700,11 @@ const fetchShorts = useCallback(
                       </button>
                     <button
   className="flex flex-col items-center"
-  onClick={() => handleShare(short)}
+onClick={() => {
+  setSelectedShort(short); // 'short' exists here in the map() loop
+  setShareOpen(true);
+}}
+
 >
   <Share2 className="w-8 h-8 text-white" />
   <span className="text-white text-xs mt-1">{short.content.shares}</span>
@@ -703,24 +734,19 @@ const fetchShorts = useCallback(
             </div>
           )}
         </div>
-      {showCopied && (
-  <div className="fixed bottom-8 left-1/2 -translate-x-1/2 px-5 py-3 
-                  bg-white/10 backdrop-blur-lg border border-white/20 
-                  text-white rounded-full shadow-lg flex items-center space-x-2 
-                  transition-all animate-fade-in-out z-50">
-    <svg
-      className="w-5 h-5 text-emerald-300"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      viewBox="0 0 24 24"
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-    </svg>
-    <span className="text-sm text-gray-900 dark:text-white">
-  Link copied to clipboard!
-</span>
-  </div>
+          {/* Reward popup */}
+      {showRewardPopupCount && (
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-green-600 text-white rounded-md px-6 py-3 shadow-lg z-50">
+          🎉 Congratulations! You earned ₹1 for playing 5 reels
+        </div>
+      )}
+
+{selectedShort && (
+  <ShareModal
+    shareUrl={`${window.location.origin}/short/${selectedShort.id}`}
+    open={shareOpen}
+    onClose={() => setShareOpen(false)}
+  />
 )}
 {showRewardPopup && (
   <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">

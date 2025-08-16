@@ -8,6 +8,7 @@ import { useParams } from 'react-router-dom';
 import { FiShare2 } from "react-icons/fi"; // Feather's clean share icon
 import axios from "axios";
 import RandomAvatar, { getRandomAvatar } from "../components/RandomAvatar";
+import ShareModal from "@/components/ShareModal";
 
 // Define TypeScript interfaces
 interface User {
@@ -152,24 +153,18 @@ const Home = () => {
   const [activeTab, setActiveTab] = useState<"for-you" | "following">("for-you");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [showCopied, setShowCopied] = useState(false);
-  const handlePostShare = async (post) => {
+  const [shareOpen, setShareOpen] = useState(false);
+const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
+
+ const handlePostShare = (post: { id: number }) => {
   if (!post?.id) {
     console.error("Cannot share: post ID is missing or invalid", post);
     return;
   }
-
-  // Generate the shareable link
-  
-    const url = `${window.location.origin}/post/${post.id}`;
-
-  try {
-    await navigator.clipboard.writeText(url); // Copy to clipboard
-    setShowCopied(true); // Show toast
-    setTimeout(() => setShowCopied(false), 1800); // Hide toast after 1.8s
-  } catch (error) {
-    console.error("Failed to copy link:", error);
-  }
+  setSelectedPost(post);
+  setShareOpen(true);
 };
+
   const [showLoginPrompt, setShowLoginPrompt] = useState<boolean>(false);
   const [postViewCount, setPostViewCount] = useState<number>(0);
   const { isAuthenticated, user } = useAuth();
@@ -654,13 +649,14 @@ const Home = () => {
   </div>
 
   {/* Share */}
-  <button
-onClick={() => handlePostShare(post)}
-    className="flex items-center gap-1 hover:text-blue-500 transition-colors duration-200"
-  >
-    <FiShare2 className="w-5 h-5" />
-    <span className="text-xs">Share</span>
-  </button>
+ <button
+  onClick={() => handlePostShare(post)}
+  className="flex items-center gap-1 hover:text-blue-500 transition-colors duration-200"
+>
+  <FiShare2 className="w-5 h-5" />
+  <span className="text-xs">Share</span>
+</button>
+
 
   {/* Views */}
   <div className="ml-auto text-xs text-gray-400">{post.views || 0} views</div>
@@ -751,25 +747,14 @@ onClick={() => handlePostShare(post)}
           className="w-14 h-14 object-contain drop-shadow-lg rounded-2xl border border-gray-200 bg-white p-2"
         />
       </a>
-      {showCopied && (
-  <div className="fixed bottom-8 left-1/2 -translate-x-1/2 px-5 py-3 
-                  bg-white/10 backdrop-blur-lg border border-white/20 
-                  text-white rounded-full shadow-lg flex items-center space-x-2 
-                  transition-all animate-fade-in-out z-50">
-    <svg
-      className="w-5 h-5 text-emerald-300"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      viewBox="0 0 24 24"
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-    </svg>
-    <span className="text-sm text-gray-900 dark:text-white">
-      Link copied to clipboard!
-    </span>
-  </div>
+{selectedPost && (
+  <ShareModal
+    shareUrl={`${window.location.origin}/post/${selectedPost.id}`}
+    open={shareOpen}
+    onClose={() => setShareOpen(false)}
+  />
 )}
+
     </div>
   );
 };

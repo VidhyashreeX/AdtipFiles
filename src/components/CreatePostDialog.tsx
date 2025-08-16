@@ -17,7 +17,9 @@ const CreatePostDialog: React.FC<CreatePostDialogProps> = ({ onClose }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
-  
+  const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
+  ? import.meta.env.VITE_API_URL
+  : `${import.meta.env.VITE_API_URL}/api`;
   const [title, setTitle] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [category, setCategory] = React.useState("");
@@ -26,76 +28,152 @@ const CreatePostDialog: React.FC<CreatePostDialogProps> = ({ onClose }) => {
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
   const [isVideo, setIsVideo] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [videoThumbnail, setVideoThumbnail] = React.useState<string>("");
+  
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
 
-    // Validate file type based on post type
-    const isVideoFile = file.type.startsWith('video/');
-    const isImageFile = file.type.startsWith('image/');
-    
-    if (postType === "post" && !isImageFile) {
-      toast({
-        title: "Invalid file type",
-        description: "Please upload an image for regular posts",
-        variant: "destructive",
-      });
-      return;
-    }
-    if ((postType === "tip-tube" || postType === "tip-shorts") && !isVideoFile) {
-      toast({
-        title: "Invalid file type",
-        description: `Please upload a video for ${postType === "tip-tube" ? "Tip Tube" : "Tip Shorts"}`,
-        variant: "destructive",
-      });
-      return;
-    }
+  const isVideoFile = file.type.startsWith("video/");
+  const isImageFile = file.type.startsWith("image/");
 
-    setIsVideo(isVideoFile);
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    setSelectedFile(file);
-  };
+  setIsVideo(isVideoFile);
+
+  // Local preview with blob URL for instant UI feedback
+  const url = URL.createObjectURL(file);
+  setPreviewUrl(url);
+  setSelectedFile(file);
+
+  if (isImageFile) {
+    // Convert image to base64 to send as thumbnail
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      // Save base64 string as thumbnail
+      const base64String = reader.result as string;
+      setPreviewUrl(base64String); // preview with base64
+      setVideoThumbnail(base64String); // save thumbnail for uploading
+    };
+    reader.readAsDataURL(file);
+  } else {
+    // For videos, use a fallback thumbnail until backend processes it
+    setVideoThumbnail("https://placehold.co/600x400?text=Thumbnail");
+  }
+};
+
 
   const triggerFileInput = () => {
     fileInputRef.current?.click();
   };
+// Utility to generate a thumbnail file from video
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!title.trim()) {
-      toast({
-        title: "Title required",
-        description: "Please enter a title for your post",
-        variant: "destructive",
-      });
-      return;
+  // Validation
+  if (!title.trim()) {
+    toast({
+      title: "Title required",
+      description: "Please enter a title for your post",
+      variant: "destructive",
+    });
+    return;
+  }
+  if (!selectedFile) {
+    toast({
+      title: "File required",
+      description: "Please select a file to upload",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  setIsLoading(true);
+
+  try {
+    const isShot = postType === "tip-shorts";
+    const isTube = postType === "tip-tube";
+
+    // Don't send placeholder or blob URL!
+    // Decide what to send for thumbnail.
+    // Recommend leaving this blank (""), or send a valid URL if you have one.
+    // If backend expects a string, you may have to send a static value until backend generates a real one.
+    // For example, to send previewUrl (not recommended for blob:) use: const videoThumbnail = previewUrl;
+    // For now, send an empty string:
+    const videoThumbnail = previewUrl; // Or replace with actual thumbnail URL if available
+
+    // If you have a real video link after upload/storage, use it here
+    const videoLinkToSend = ""; // Fill this with your actual video URL
+    const videoLink =
+      videoLinkToSend.trim() !== "" ? videoLinkToSend : "";
+
+    // Debug logging
+    console.log("Uploading video_Thumbnail:", videoThumbnail);
+    console.log("Uploading videoLink:", videoLink);
+
+    // Build FormData for upload
+    const formData = new FormData();
+    formData.append("file", selectedFile); // Actual video file
+    formData.append("name", title.trim());
+    formData.append("isShot", String(isShot));
+    formData.append("categoryId", String(parseInt(category) || 0));
+    formData.append("channelId", "123"); // Update if needed
+    formData.append("videoLink", videoLink); // Pass URL if available, else blank
+    formData.append("videoDesciption", description.trim());
+    formData.append("createdby", "123"); // Update as needed
+    formData.append("play_duration", "00:00");
+    formData.append("video_Thumbnail", videoThumbnail);
+
+    // Debug: Print all form-data entries
+    console.log("FormData entries:");
+    for (const [key, value] of formData.entries()) {
+      console.log(key, value);
     }
 
-    if (!selectedFile) {
-      toast({
-        title: "File required",
-        description: "Please select a file to upload",
-        variant: "destructive",
-      });
-      return;
+    const res = await fetch(`${BASE_URL}/uploadshot`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("UserLoggedIn") || ""}`,
+      },
+      body: formData,
+    });
+
+    const text = await res.text();
+    let data: any = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(`Invalid response: ${text}`);
     }
 
-    setIsLoading(true);
+    if (!res.ok || data.status !== 200) {
+      throw new Error(data.message || `Upload failed (status ${res.status})`);
+    }
 
-    // Simulate uploading
-    setTimeout(() => {
-      toast({
-        title: `${postType === "post" ? "Post" : postType === "tip-tube" ? "Tip Tube" : "Tip Shorts"} created successfully`,
-        description: "Your content has been uploaded",
-      });
-      setIsLoading(false);
-      onClose();
-      navigate(postType === "post" ? "/home" : "/tiptube");
-    }, 1500);
-  };
+    toast({
+      title: isTube
+        ? "Tip Tube created successfully"
+        : "Tip Shorts created successfully",
+      description: "Your video content has been uploaded",
+    });
+
+    setIsLoading(false);
+    onClose();
+    navigate(isTube ? "/tiptube" : "/tipshorts");
+  } catch (err: any) {
+    console.error("Upload error:", err);
+    toast({
+      title: "Upload failed",
+      description: err.message || String(err),
+      variant: "destructive",
+    });
+    setIsLoading(false);
+  }
+};
+
+
+
+
+
 
   React.useEffect(() => {
     // Reset form when post type changes

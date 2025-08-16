@@ -45,6 +45,7 @@ import PricingOffers from "./pages/PricingOffers";
 import ChoosePlan from "./pages/ChoosePlan";
 import RazorpayCheckout from "@/pages/RazorpayCheckout";
 import Wallet from "./components/Wallet";
+import ChannelPage from "./pages/ChannelPage";
 
 const router = createBrowserRouter([
 	{
@@ -75,6 +76,11 @@ const router = createBrowserRouter([
 				path: "edit-profile",
 				element: <EditProfile />,
 			},
+			{
+    path: "channel/:channelName",
+    element: <ChannelPage />,
+},
+
 			{
 				path: "watch/:id?",
 				element: <TipTube />,

@@ -3,6 +3,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 
 import { useParams } from "react-router-dom";
+import ShareModal from "@/components/ShareModal";
 
 
 // Add icons for categories (use emoji or SVG for demo)
@@ -137,6 +138,10 @@ const marketplaceMenu = [
 
 const TipTube = () => {
   const [selectedCategory, setSelectedCategory] = useState("All");
+  // At the top of your AdTubeWatchPage component (or wherever this button is used)
+const [shareOpen, setShareOpen] = useState(false);
+const [selectedVideo, setSelectedVideo] = useState<{ id: number } | null>(null);
+
   
   const [videos, setVideos] = useState<Video[]>([]);
 const { id: videoIdParam } = useParams();
@@ -166,23 +171,17 @@ const handleVideoComplete = (video) => {
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [showPlayer, setShowPlayer] = useState(false);
-  const [showCopied, setShowCopied] = useState(false);
 
-const handleAdTubeShare = async (apiVideo: any) => {
+
+const handleAdTubeShare = (apiVideo: any) => {
   if (!apiVideo?.id || apiVideo.id === 0) {
     console.error("Cannot share: video ID is missing or invalid", apiVideo);
     return;
   }
-
-  const url = `${window.location.origin}/watch/${apiVideo.id}`;
-  try {
-    await navigator.clipboard.writeText(url);
-    setShowCopied(true);
-    setTimeout(() => setShowCopied(false), 1800);
-  } catch (error) {
-    console.error("Failed to copy URL:", error);
-  }
+  setSelectedVideo({ id: apiVideo.id });
+  setShareOpen(true);
 };
+
 
 
   const [currentVideo, setCurrentVideo] = useState<Video | null>(null);
@@ -393,8 +392,8 @@ const handleAdTubeShare = async (apiVideo: any) => {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2V4m0 16v-7" /></svg>
                   Dislike
                 </button>
-              <button
-    onClick={() => handleAdTubeShare(currentVideo)}
+          <button
+  onClick={() => handleAdTubeShare(currentVideo)}
   className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 font-medium hover:bg-gray-200"
 >
   <svg
@@ -412,6 +411,7 @@ const handleAdTubeShare = async (apiVideo: any) => {
   </svg>
   Share
 </button>
+
 
               </div>
               <button onClick={() => setCurrentVideo(null)} className="mt-4 px-4 py-2 rounded-full bg-gray-200 text-gray-700 font-medium hover:bg-gray-300">Back to Feed</button>
@@ -547,25 +547,15 @@ feedRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
         <div className="text-center text-gray-500 py-12">No videos found.</div>
       )}
       {/* Copied Toast */}
-      {showCopied && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 px-5 py-3 
-                        bg-white/10 backdrop-blur-lg border border-white/20 
-                        text-white rounded-full shadow-lg flex items-center space-x-2 
-                        transition-all animate-fade-in-out z-50">
-          <svg
-            className="w-5 h-5 text-emerald-300"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-          </svg>
-          <span className="text-sm text-gray-900 dark:text-white">
-            Link copied to clipboard!
-          </span>
-        </div>
-      )}
+{selectedVideo && (
+  <ShareModal
+    shareUrl={`${window.location.origin}/watch/${selectedVideo.id}`}
+    open={shareOpen}
+    onClose={() => setShareOpen(false)}
+  />
+)}
+
+
       {showRewardPopup && (
   <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
     <div className="bg-white rounded-lg p-6 max-w-sm w-full text-center">

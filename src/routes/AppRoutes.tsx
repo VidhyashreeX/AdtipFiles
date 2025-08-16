@@ -21,6 +21,7 @@ import Home from "../pages/Home";
 import CompleteProfile from "../pages/CompleteProfile";
 import TipShorts from "../pages/TipShorts";
 import TipTube from "@/pages/TipTube";
+import ChannelPage from "@/pages/ChannelPage";
 
 const ProtectedRoute = () => {
   const { isAuthenticated, authLoading } = useAuth();
@@ -52,6 +53,7 @@ const AppRoutes = () => {
         <Route path="/short/:id?" element={<TipShorts />} />
         {/* Optional: redirect old /tipshorts to new /short route */}
 <Route path="/tipshorts" element={<Navigate to="/short" replace />} />
+ <Route path="/channel/:channelName" element={<ChannelPage />} />
         <Route path="/home" element={<Home />} />
         <Route path="/wallet" element={<Wallet />} />
         <Route path="/tipshorts" element={<TipShorts />} />
