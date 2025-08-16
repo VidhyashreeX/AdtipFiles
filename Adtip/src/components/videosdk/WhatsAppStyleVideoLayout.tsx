@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,9 +6,11 @@ import {
   Animated,
   TouchableOpacity,
   Text,
+  AppState,
 } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { ParticipantView } from '@videosdk.live/react-native-sdk';
+import MemoryManagedParticipantView from './MemoryManagedParticipantView';
 import { Camera, CameraOff } from 'lucide-react-native';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -26,6 +28,12 @@ const WhatsAppStyleVideoLayout: React.FC<WhatsAppStyleVideoLayoutProps> = ({
   localWebcamOn,
   remoteWebcamOn,
 }) => {
+  // Memory management refs
+  const isMountedRef = useRef(true);
+  const localVideoRef = useRef<any>(null);
+  const remoteVideoRef = useRef<any>(null);
+  const animationRefs = useRef<Animated.CompositeAnimation[]>([]);
+
   // Local video position state
   const [localVideoPosition, setLocalVideoPosition] = useState({
     x: screenWidth - 140, // Default to top-right
@@ -147,9 +155,10 @@ const WhatsAppStyleVideoLayout: React.FC<WhatsAppStyleVideoLayoutProps> = ({
       {/* Remote participant (full screen background) */}
       <View style={styles.remoteVideoContainer}>
         {remoteWebcamOn && remoteParticipantId ? (
-          <ParticipantView
+          <MemoryManagedParticipantView
             participantId={remoteParticipantId}
             style={styles.remoteVideo}
+            onCleanup={() => console.log('[WhatsAppStyleVideoLayout] Remote participant view cleaned up')}
           />
         ) : (
           <View style={styles.videoPlaceholder}>
@@ -183,9 +192,10 @@ const WhatsAppStyleVideoLayout: React.FC<WhatsAppStyleVideoLayoutProps> = ({
               activeOpacity={0.8}
             >
               {localWebcamOn ? (
-                <ParticipantView
+                <MemoryManagedParticipantView
                   participantId={localParticipantId}
                   style={styles.localVideo}
+                  onCleanup={() => console.log('[WhatsAppStyleVideoLayout] Local participant view cleaned up')}
                 />
               ) : (
                 // Show placeholder when camera is off but keep the self-view container
@@ -211,6 +221,64 @@ const WhatsAppStyleVideoLayout: React.FC<WhatsAppStyleVideoLayoutProps> = ({
       )}
     </View>
   );
+};
+
+// Add memory cleanup and app state management
+const WhatsAppStyleVideoLayoutWithCleanup: React.FC<WhatsAppStyleVideoLayoutProps> = (props) => {
+  const isMountedRef = useRef(true);
+  const animationsRef = useRef<Animated.CompositeAnimation[]>([]);
+
+  // Memory cleanup function
+  const cleanup = useCallback(() => {
+    console.log('[WhatsAppStyleVideoLayout] Performing memory cleanup');
+
+    // Stop all running animations
+    animationsRef.current.forEach(animation => {
+      try {
+        animation.stop();
+      } catch (error) {
+        console.warn('[WhatsAppStyleVideoLayout] Error stopping animation:', error);
+      }
+    });
+    animationsRef.current = [];
+
+    // Mark as unmounted
+    isMountedRef.current = false;
+  }, []);
+
+  // Handle app state changes for memory management
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: string) => {
+      if (!isMountedRef.current) return;
+
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        console.log('[WhatsAppStyleVideoLayout] App backgrounded - pausing video rendering');
+        // VideoSDK handles video pausing internally, but we can stop animations
+        animationsRef.current.forEach(animation => {
+          try {
+            animation.stop();
+          } catch (error) {
+            console.warn('[WhatsAppStyleVideoLayout] Error stopping animation on background:', error);
+          }
+        });
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      subscription?.remove();
+    };
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanup();
+    };
+  }, [cleanup]);
+
+  return <WhatsAppStyleVideoLayout {...props} />;
 };
 
 const styles = StyleSheet.create({
@@ -294,4 +362,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default WhatsAppStyleVideoLayout;
+export default WhatsAppStyleVideoLayoutWithCleanup;

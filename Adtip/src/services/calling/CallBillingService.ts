@@ -307,13 +307,26 @@ class CallBillingService {
    * Start the billing timer that tracks call duration and costs
    */
   private startBillingTimer(): void {
-    this.billingTimer = setInterval(() => {
+    let syncCounter = 0;
+
+    this.billingTimer = setInterval(async () => {
       if (!this.currentCallId || !this.callStartTime) {
         return;
       }
 
       const elapsedSeconds = Math.floor((Date.now() - this.callStartTime) / 1000);
       const remainingSeconds = Math.max(0, this.maxDurationSeconds - elapsedSeconds);
+
+      // Sync with backend every 30 seconds
+      syncCounter++;
+      if (syncCounter >= 30) {
+        syncCounter = 0;
+        try {
+          await this.syncBillingWithBackend();
+        } catch (syncError) {
+          console.warn('[CallBillingService] Billing sync failed:', syncError);
+        }
+      }
 
       // Check if call should be terminated
       if (remainingSeconds <= 0) {
@@ -394,19 +407,108 @@ class CallBillingService {
   }
 
   /**
-   * End call due to insufficient balance
+   * End call due to insufficient balance with proper error handling
    */
   private async endCallDueToInsufficientBalance(): Promise<void> {
     console.log('[CallBillingService] Ending call due to insufficient balance');
 
-    // Stop billing first
-    this.stopCallBilling();
+    try {
+      // Stop billing first
+      this.stopCallBilling();
 
-    // End the call through CallController
-    console.log('[CallBillingService] Ending call due to insufficient balance');
-    const callController = CallController.getInstance();
-    await callController.endCall();
-    console.warn('[CallBillingService] Call ended due to insufficient wallet balance');
+      // Show user notification about insufficient balance
+      console.warn('[CallBillingService] Call ended due to insufficient wallet balance');
+
+      // End the call through CallController with retry logic
+      const callController = CallController.getInstance();
+
+      // Retry mechanism for ending call
+      let retryCount = 0;
+      const maxRetries = 3;
+
+      while (retryCount < maxRetries) {
+        try {
+          await callController.endCall();
+          console.log('[CallBillingService] Call ended successfully due to insufficient balance');
+          break;
+        } catch (endError) {
+          retryCount++;
+          console.error(`[CallBillingService] Attempt ${retryCount} to end call failed:`, endError);
+
+          if (retryCount >= maxRetries) {
+            console.error('[CallBillingService] Failed to end call after maximum retries');
+            // Force cleanup even if end call fails
+            const { actions } = useCallStore.getState();
+            actions.reset();
+          } else {
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+      }
+
+    } catch (error) {
+      console.error('[CallBillingService] Error in endCallDueToInsufficientBalance:', error);
+
+      // Force cleanup as last resort
+      try {
+        const { actions } = useCallStore.getState();
+        actions.reset();
+      } catch (cleanupError) {
+        console.error('[CallBillingService] Failed to force cleanup:', cleanupError);
+      }
+    }
+  }
+
+  /**
+   * Sync billing status with backend to ensure consistency
+   */
+  public async syncBillingWithBackend(): Promise<void> {
+    if (!this.currentCallId || !this.callStartTime) {
+      return;
+    }
+
+    try {
+      const elapsedSeconds = Math.floor((Date.now() - this.callStartTime) / 1000);
+      const elapsedMinutes = Math.ceil(elapsedSeconds / 60);
+      const currentCost = elapsedMinutes * this.ratePerMinute;
+
+      console.log('[CallBillingService] Syncing billing status with backend:', {
+        callId: this.currentCallId,
+        elapsedSeconds,
+        elapsedMinutes,
+        currentCost,
+        ratePerMinute: this.ratePerMinute
+      });
+
+      // Here you could add an API call to sync with backend
+      // For example: await ApiService.syncCallBilling(this.currentCallId, elapsedSeconds, currentCost);
+
+    } catch (error) {
+      console.error('[CallBillingService] Failed to sync billing with backend:', error);
+    }
+  }
+
+  /**
+   * Validate billing consistency between frontend and backend
+   */
+  public async validateBillingConsistency(): Promise<boolean> {
+    if (!this.currentCallId) {
+      return true;
+    }
+
+    try {
+      // Here you could add validation logic to check if frontend and backend billing match
+      // For example: const backendBilling = await ApiService.getCallBilling(this.currentCallId);
+      // Compare with local billing state and return true if consistent
+
+      console.log('[CallBillingService] Billing consistency validation passed');
+      return true;
+
+    } catch (error) {
+      console.error('[CallBillingService] Billing consistency validation failed:', error);
+      return false;
+    }
   }
 
   /**

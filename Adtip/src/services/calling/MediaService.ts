@@ -2,10 +2,12 @@ import { MeetingProvider, useMeeting } from '@videosdk.live/react-native-sdk'
 import VideoSDKService from '../videosdk/VideoSDKService'
 import { CallType } from '../../stores/callStoreSimplified'
 import * as NavigationService from '../../navigation/NavigationService'
+import VideoCallMemoryManager from './VideoCallMemoryManager'
 
 class MediaService {
   private static _instance: MediaService
   private videoSDK = VideoSDKService.getInstance()
+  private memoryManager = VideoCallMemoryManager.getInstance()
   private meeting: any | null = null
   private currentMeetingConfig: {
     meetingId: string
@@ -27,6 +29,12 @@ class MediaService {
     try {
       // Ensure complete state isolation from previous calls
       await this.ensureCleanState()
+
+      // Start memory management for video calls
+      if (type === 'video') {
+        console.log('[MediaService] Starting memory management for video call')
+        await this.memoryManager.startMemoryManagement()
+      }
 
       // Use smart reset to avoid unnecessary re-initialization
       this.videoSDK.smartReset(meetingId)
@@ -271,7 +279,11 @@ class MediaService {
       // Step 4: Use smart reset to avoid unnecessary re-initialization
       this.videoSDK.smartReset();
 
-      // Step 5: Force garbage collection hint
+      // Step 5: Stop memory management
+      console.log('[MediaService] 🚀 STOPPING MEMORY MANAGEMENT');
+      this.memoryManager.stopMemoryManagement();
+
+      // Step 6: Force garbage collection hint
       if (global.gc) {
         global.gc();
       }
@@ -287,6 +299,7 @@ class MediaService {
       this.meeting = null;
       this.currentMeetingConfig = null;
       this.videoSDK.smartReset();
+      this.memoryManager.stopMemoryManagement();
     }
   }
 

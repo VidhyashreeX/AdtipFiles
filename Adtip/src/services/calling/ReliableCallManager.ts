@@ -438,8 +438,28 @@ class ReliableCallManager {
       console.log('[ReliableCallManager] Current session:', this.currentCallSession?.sessionId)
       console.log('[ReliableCallManager] Notification sessionId:', sessionId)
 
-      // Verify this action is for the current call
-      if (this.currentCallSession?.sessionId !== sessionId) {
+      // Try to recover session from call store if not available
+      if (!this.currentCallSession) {
+        console.log('[ReliableCallManager] No current session, trying to recover from call store')
+        const { useCallStore } = await import('../../stores/callStoreSimplified')
+        const store = useCallStore.getState()
+
+        if (store.session && store.session.sessionId === sessionId) {
+          console.log('[ReliableCallManager] Recovered session from call store')
+          this.currentCallSession = store.session
+        } else {
+          console.warn('[ReliableCallManager] Could not recover session, proceeding anyway for end action')
+          // For end actions, we can proceed even without session
+          if (detail.pressAction?.id === 'end' || detail.pressAction?.id === 'decline') {
+            console.log('[ReliableCallManager] Proceeding with end action without session')
+          } else {
+            return
+          }
+        }
+      }
+
+      // Verify this action is for the current call (skip check for end actions if no session)
+      if (this.currentCallSession && this.currentCallSession.sessionId !== sessionId) {
         console.warn('[ReliableCallManager] Notification action for different session, ignoring')
         return
       }
@@ -542,6 +562,7 @@ class ReliableCallManager {
           actions: [
             { title: 'Answer', pressAction: { id: 'answer' } },
             { title: 'Decline', pressAction: { id: 'decline' } },
+            { title: 'End', pressAction: { id: 'end' } },
           ],
           importance: AndroidImportance.HIGH,
           pressAction: { id: 'default' },
@@ -554,8 +575,10 @@ class ReliableCallManager {
           sessionId: session.sessionId,
           callerName: session.peerName,
           type: session.type,
+          callType: session.type,
           meetingId: session.meetingId,
-          token: session.token
+          token: session.token,
+          messageType: 'incoming_call'
         },
       })
 

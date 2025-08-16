@@ -277,28 +277,61 @@ const Controls = () => {
   const actions = useCallStore(state => state.actions)
   const controller = CallController.getInstance()
 
-  // Local state for optimistic UI updates
+  // Local state for immediate UI updates with better synchronization
   const [optimisticMicOn, setOptimisticMicOn] = useState<boolean | null>(null)
   const [optimisticWebcamOn, setOptimisticWebcamOn] = useState<boolean | null>(null)
+  const [lastToggleTime, setLastToggleTime] = useState({ mic: 0, camera: 0 })
 
   // Use optimistic state if available, otherwise fall back to VideoSDK state
   const actualMicOn = localParticipant?.micOn ?? false
   const actualWebcamOn = localParticipant?.webcamOn ?? false
+
+  // Use optimistic state for immediate feedback, but with timeout fallback
   const micOn = optimisticMicOn !== null ? optimisticMicOn : actualMicOn
   const webcamOn = optimisticWebcamOn !== null ? optimisticWebcamOn : actualWebcamOn
 
-  // Reset optimistic state when VideoSDK state catches up
+  // Reset optimistic state when VideoSDK state catches up OR after timeout
   useEffect(() => {
-    if (optimisticMicOn !== null && optimisticMicOn === actualMicOn) {
-      setOptimisticMicOn(null)
+    if (optimisticMicOn !== null) {
+      if (optimisticMicOn === actualMicOn) {
+        // VideoSDK state caught up
+        setOptimisticMicOn(null)
+      } else {
+        // Timeout fallback - reset after 2 seconds
+        const timeout = setTimeout(() => {
+          setOptimisticMicOn(null)
+        }, 2000)
+        return () => clearTimeout(timeout)
+      }
     }
   }, [optimisticMicOn, actualMicOn])
 
   useEffect(() => {
-    if (optimisticWebcamOn !== null && optimisticWebcamOn === actualWebcamOn) {
-      setOptimisticWebcamOn(null)
+    if (optimisticWebcamOn !== null) {
+      if (optimisticWebcamOn === actualWebcamOn) {
+        // VideoSDK state caught up
+        setOptimisticWebcamOn(null)
+      } else {
+        // Timeout fallback - reset after 2 seconds
+        const timeout = setTimeout(() => {
+          setOptimisticWebcamOn(null)
+        }, 2000)
+        return () => clearTimeout(timeout)
+      }
     }
   }, [optimisticWebcamOn, actualWebcamOn])
+
+  // Force UI update when VideoSDK state changes
+  useEffect(() => {
+    logCall('Controls', 'VideoSDK state changed', {
+      actualMicOn,
+      actualWebcamOn,
+      optimisticMicOn,
+      optimisticWebcamOn,
+      finalMicOn: micOn,
+      finalWebcamOn: webcamOn
+    })
+  }, [actualMicOn, actualWebcamOn, optimisticMicOn, optimisticWebcamOn, micOn, webcamOn])
 
   // Subscribe to speaker state from call store for real-time updates
   const speakerOn = media.speaker
@@ -306,6 +339,7 @@ const Controls = () => {
   // Enhanced state for UI feedback
   const [isToggling, setIsToggling] = useState({ mic: false, camera: false, speaker: false })
   const [activeSpeaker, setActiveSpeaker] = useState<string | null>(null)
+  const [forceRefresh, setForceRefresh] = useState(0)
 
   // Animation values for button feedback
   const micButtonScale = useRef(new Animated.Value(1)).current
@@ -346,14 +380,23 @@ const Controls = () => {
 
   const handleEndCall = async () => {
     try {
-      logCall('MeetingScreenSimple', '🔥 HANDLE END CALL - INSTANT UI NAVIGATION');
+      logCall('MeetingScreenSimple', '🔥 HANDLE END CALL - STARTING PROPER END SEQUENCE');
 
       // Stop ringing immediately
       const ringingAudioService = RingingAudioService.getInstance()
       ringingAudioService.stopRinging()
 
-      // Navigate immediately for instant UI response
-      logCall('MeetingScreenSimple', '🔥 Navigating immediately for instant UI');
+      // Set call status to ended to prevent UI issues
+      const { actions } = useCallStore.getState();
+      actions.setStatus('ended');
+
+      // Call endCall and wait for it to complete properly
+      logCall('MeetingScreenSimple', '🔥 Calling controller.endCall() and waiting for completion');
+      await controller.endCall();
+
+      logCall('MeetingScreenSimple', '🔥 endCall completed, now navigating');
+
+      // Navigate after endCall completes
       if (navigation.canGoBack()) {
         logCall('MeetingScreenSimple', '🔥 Using navigation.goBack()');
         navigation.goBack()
@@ -373,17 +416,18 @@ const Controls = () => {
         })
       }
 
-      // Run endCall in background without waiting
-      logCall('MeetingScreenSimple', '🔥 Starting background endCall process');
-      controller.endCall().then(() => {
-        logCall('MeetingScreenSimple', '🔥 Background endCall completed successfully');
-      }).catch((error) => {
-        logError('MeetingScreenSimple', '🔥 Background endCall error', error);
-      });
-
-      logCall('MeetingScreenSimple', '🔥 handleEndCall instant navigation completed');
+      logCall('MeetingScreenSimple', '🔥 handleEndCall completed successfully');
     } catch (error) {
       logError('MeetingScreenSimple', '🔥 Error in handleEndCall', error);
+
+      // Force cleanup on error
+      try {
+        const { actions } = useCallStore.getState();
+        actions.reset();
+      } catch (resetError) {
+        logError('MeetingScreenSimple', '🔥 Error resetting call store', resetError);
+      }
+
       // Still navigate back even if there's an error
       if (navigation.canGoBack()) {
         navigation.goBack()
@@ -413,10 +457,25 @@ const Controls = () => {
       // Optimistic UI update for immediate feedback
       const newMicState = !micOn
       setOptimisticMicOn(newMicState)
+      setLastToggleTime(prev => ({ ...prev, mic: Date.now() }))
 
-      toggleMic()
+      logCall('Controls', 'Toggling microphone', {
+        currentState: micOn,
+        newState: newMicState,
+        actualMicOn,
+        optimisticMicOn
+      })
+
+      // Call VideoSDK toggle
+      await toggleMic()
+
       // Update call store to match VideoSDK state
       actions.updateMedia({ mic: newMicState })
+
+      // Force UI refresh to ensure icon updates
+      setForceRefresh(prev => prev + 1)
+
+      logCall('Controls', 'Microphone toggle completed', { newMicState })
     } catch (error) {
       logError('Controls', 'Error toggling microphone', error)
       // Reset optimistic state on error
@@ -438,10 +497,25 @@ const Controls = () => {
       // Optimistic UI update for immediate feedback
       const newWebcamState = !webcamOn
       setOptimisticWebcamOn(newWebcamState)
+      setLastToggleTime(prev => ({ ...prev, camera: Date.now() }))
 
-      toggleWebcam()
+      logCall('Controls', 'Toggling camera', {
+        currentState: webcamOn,
+        newState: newWebcamState,
+        actualWebcamOn,
+        optimisticWebcamOn
+      })
+
+      // Call VideoSDK toggle
+      await toggleWebcam()
+
       // Update call store to match VideoSDK state
       actions.updateMedia({ cam: newWebcamState })
+
+      // Force UI refresh to ensure icon updates
+      setForceRefresh(prev => prev + 1)
+
+      logCall('Controls', 'Camera toggle completed', { newWebcamState })
     } catch (error) {
       logError('Controls', 'Error toggling camera', error)
       // Reset optimistic state on error

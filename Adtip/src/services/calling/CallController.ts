@@ -1100,18 +1100,43 @@ class CallController {
 
   // Flag to prevent duplicate endCall operations
   private isEndingCall = false;
+  private endCallPromise: Promise<boolean> | null = null;
 
   /**
    * End active call
    */
   async endCall() {
-    // Prevent duplicate endCall operations
-    if (this.isEndingCall) {
-      logCall('CallController', 'endCall already in progress, skipping duplicate call');
+    // If endCall is already in progress, return the existing promise
+    if (this.isEndingCall && this.endCallPromise) {
+      logCall('CallController', 'endCall already in progress, returning existing promise');
+      return this.endCallPromise;
+    }
+
+    // If already ended, return immediately
+    const store = useCallStore.getState();
+    if (store.status === 'ended') {
+      logCall('CallController', 'Call already ended, skipping');
       return true;
     }
 
     this.isEndingCall = true;
+
+    // Create and store the promise
+    this.endCallPromise = this.performEndCall();
+
+    try {
+      const result = await this.endCallPromise;
+      return result;
+    } finally {
+      this.isEndingCall = false;
+      this.endCallPromise = null;
+    }
+  }
+
+  /**
+   * Perform the actual end call operation
+   */
+  private async performEndCall(): Promise<boolean> {
 
     // Clear call timeout monitoring immediately
     this.clearCallTimeout()
@@ -1122,6 +1147,8 @@ class CallController {
 
       if (!session) {
         logWarn('CallController', 'No session found in store on endCall');
+        // Even without session, ensure UI is cleaned up
+        await this.forceNavigationCleanup();
         return false;
       }
 
@@ -1334,11 +1361,32 @@ class CallController {
 
     } catch (cleanupError) {
       logError('CallController', 'Error during call cleanup', cleanupError)
-    } finally {
-      // Reset the flag to allow future endCall operations
-      this.isEndingCall = false;
+      // Force navigation cleanup even on error
+      await this.forceNavigationCleanup();
     }
+
     return true;
+  }
+
+  /**
+   * Force navigation cleanup when call ending fails
+   */
+  private async forceNavigationCleanup(): Promise<void> {
+    try {
+      logCall('CallController', 'Forcing navigation cleanup');
+
+      // Reset call store
+      const { actions } = useCallStore.getState();
+      actions.reset();
+
+      // Force navigation back to TipCall
+      const NavigationService = await import('../../navigation/NavigationService');
+      NavigationService.navigateToTipCall();
+
+      logCall('CallController', 'Force navigation cleanup completed');
+    } catch (error) {
+      logError('CallController', 'Error in force navigation cleanup', error);
+    }
   }
 
   /**

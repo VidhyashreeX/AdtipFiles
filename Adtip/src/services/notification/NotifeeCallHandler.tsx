@@ -101,8 +101,15 @@ class NotifeeCallHandler {
         } = notificationData;
 
         // Only handle call-related notifications
-        if (messageType !== 'incoming_call') {
-          console.log('[NotifeeCallHandler] Not a call notification, ignoring');
+        // Check multiple possible indicators for call notifications
+        const isCallNotification = messageType === 'incoming_call' ||
+                                   notificationData.type === 'incoming_call' ||
+                                   notificationData.callType ||
+                                   notificationData.sessionId ||
+                                   notificationData.meetingId;
+
+        if (!isCallNotification) {
+          console.log('[NotifeeCallHandler] Not a call notification, ignoring. Data:', notificationData);
           return;
         }
 
@@ -130,6 +137,7 @@ class NotifeeCallHandler {
             break;
 
           case 'decline':
+          case 'end':
             await this.handleDeclineCall(sessionId, context);
             break;
 

@@ -170,6 +170,51 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
 async function handleBackgroundCallMessage(remoteMessage) {
   try {
     console.log('[Index] 📞 Handling call message in killed state using NotifeeCallHandler');
+    console.log('[Index] 📞 Raw FCM message data:', JSON.stringify(remoteMessage.data, null, 2));
+
+    // Parse call data from FCM message (same pattern as chat messages)
+    let callData = {};
+    const rawData = remoteMessage.data || {};
+
+    // First, try to parse the 'info' field (new format used by backend)
+    if (rawData.info && typeof rawData.info === 'string') {
+      try {
+        const parsedInfo = JSON.parse(rawData.info);
+        console.log('[Index] 📞 Parsed info field:', JSON.stringify(parsedInfo, null, 2));
+
+        // Extract call data from parsed info
+        callData = {
+          sessionId: parsedInfo.uuid || parsedInfo.sessionId,
+          callerName: parsedInfo.callerInfo?.name || 'Unknown Caller',
+          callType: parsedInfo.videoSDKInfo?.callType || parsedInfo.callType || 'voice',
+          meetingId: parsedInfo.videoSDKInfo?.meetingId || parsedInfo.meetingId,
+          token: parsedInfo.videoSDKInfo?.token || parsedInfo.token,
+          type: parsedInfo.type
+        };
+      } catch (parseError) {
+        console.warn('[Index] 📞 Failed to parse info field, falling back to direct data:', parseError);
+        callData = rawData;
+      }
+    } else {
+      // Fallback to direct data extraction (legacy format)
+      console.log('[Index] 📞 Using direct data extraction (legacy format)');
+      callData = rawData;
+    }
+
+    // Extract final call parameters with fallbacks
+    const sessionId = callData.sessionId || callData.uuid || `call-${Date.now()}`;
+    const callerName = callData.callerName || callData.peerName || 'Unknown Caller';
+    const callType = callData.callType || callData.type || 'voice';
+    const meetingId = callData.meetingId || `meeting-${Date.now()}`;
+    const token = callData.token || `token-${Date.now()}`;
+
+    console.log('[Index] 📞 Extracted call parameters:', {
+      sessionId,
+      callerName,
+      callType,
+      meetingId,
+      token: token ? 'present' : 'missing'
+    });
 
     // Ensure NotifeeCallHandler is properly initialized for killed state
     const { default: NotifeeCallHandler } = await import('./src/services/notification/NotifeeCallHandler');
@@ -180,14 +225,6 @@ async function handleBackgroundCallMessage(remoteMessage) {
       await handler.initialize();
       console.log('[Index] ✅ NotifeeCallHandler initialized for killed state');
     }
-
-    // Extract call data from FCM message
-    const callData = remoteMessage.data;
-    const sessionId = callData.sessionId || callData.uuid || `call-${Date.now()}`;
-    const callerName = callData.callerName || callData.peerName || 'Unknown Caller';
-    const callType = callData.callType || callData.type || 'voice';
-    const meetingId = callData.meetingId || `meeting-${Date.now()}`;
-    const token = callData.token || `token-${Date.now()}`;
 
     // Use NotifeeCallHandler to display the notification (same as foreground)
     const success = await handler.displayIncomingCall({
@@ -236,7 +273,35 @@ async function handleDirectCallNotification(remoteMessage) {
   try {
     console.log('[Index] 📞 Creating enhanced direct call notification for killed state');
 
-    const callData = remoteMessage.data;
+    // Parse call data using same logic as handleBackgroundCallMessage
+    let callData = {};
+    const rawData = remoteMessage.data || {};
+
+    // First, try to parse the 'info' field (new format used by backend)
+    if (rawData.info && typeof rawData.info === 'string') {
+      try {
+        const parsedInfo = JSON.parse(rawData.info);
+        console.log('[Index] 📞 Direct notification - Parsed info field:', JSON.stringify(parsedInfo, null, 2));
+
+        // Extract call data from parsed info
+        callData = {
+          sessionId: parsedInfo.uuid || parsedInfo.sessionId,
+          callerName: parsedInfo.callerInfo?.name || 'Unknown Caller',
+          callType: parsedInfo.videoSDKInfo?.callType || parsedInfo.callType || 'voice',
+          meetingId: parsedInfo.videoSDKInfo?.meetingId || parsedInfo.meetingId,
+          token: parsedInfo.videoSDKInfo?.token || parsedInfo.token,
+          type: parsedInfo.type
+        };
+      } catch (parseError) {
+        console.warn('[Index] 📞 Direct notification - Failed to parse info field:', parseError);
+        callData = rawData;
+      }
+    } else {
+      // Fallback to direct data extraction (legacy format)
+      console.log('[Index] 📞 Direct notification - Using direct data extraction');
+      callData = rawData;
+    }
+
     const sessionId = callData.sessionId || callData.uuid || `call-${Date.now()}`;
     const callerName = callData.callerName || callData.peerName || 'Unknown Caller';
     const callType = callData.callType || callData.type || 'voice';
