@@ -23,17 +23,22 @@ class NotifeeCallHandler {
   }
 
   /**
+   * Check if handler is initialized
+   */
+  get isReady(): boolean {
+    return this.isInitialized;
+  }
+
+  /**
    * Initialize Notifee event handlers
    * Enhanced for killed app state support
    */
   async initialize(): Promise<void> {
-    if (this.isInitialized) {
-      console.log('[NotifeeCallHandler] Already initialized');
-      return;
-    }
-
     try {
       console.log('[NotifeeCallHandler] Initializing notification event handlers for all app states...');
+
+      // Always set up handlers (even if already initialized) to ensure they work in killed state
+      // This is safe because Notifee handles multiple registrations gracefully
 
       // Handle foreground notification events
       notifee.onForegroundEvent(async ({ type, detail }) => {
@@ -42,7 +47,11 @@ class NotifeeCallHandler {
 
       // Handle background notification events (including killed state)
       notifee.onBackgroundEvent(async ({ type, detail }) => {
-        console.log('[NotifeeCallHandler] Background event received:', { type, actionId: detail.pressAction?.id });
+        console.log('[NotifeeCallHandler] Background event received:', {
+          type,
+          actionId: detail.pressAction?.id,
+          notificationId: detail.notification?.id
+        });
         await this.handleNotificationEvent(type, detail, 'background');
       });
 
@@ -51,7 +60,8 @@ class NotifeeCallHandler {
 
     } catch (error) {
       console.error('[NotifeeCallHandler] Failed to initialize:', error);
-      throw error;
+      // Don't throw in killed state scenarios - just log and continue
+      console.warn('[NotifeeCallHandler] Continuing despite initialization error to prevent app crashes');
     }
   }
 
@@ -64,11 +74,17 @@ class NotifeeCallHandler {
     context: 'foreground' | 'background'
   ): Promise<void> {
     try {
-      console.log(`[NotifeeCallHandler] ${context} event:`, { type, actionId: detail.pressAction?.id });
+      console.log(`[NotifeeCallHandler] ${context} event:`, {
+        type,
+        actionId: detail.pressAction?.id,
+        notificationId: detail.notification?.id,
+        hasData: !!detail.notification?.data
+      });
 
-      if (type === EventType.ACTION_PRESS) {
+      // Handle both ACTION_PRESS and PRESS events for maximum compatibility
+      if (type === EventType.ACTION_PRESS || type === EventType.PRESS) {
         const notificationData = detail.notification?.data;
-        const actionId = detail.pressAction?.id;
+        const actionId = detail.pressAction?.id || 'default';
 
         if (!notificationData) {
           console.warn('[NotifeeCallHandler] No notification data found');
@@ -95,7 +111,8 @@ class NotifeeCallHandler {
           sessionId,
           callerName,
           callType,
-          context
+          context,
+          eventType: type
         });
 
         switch (actionId) {
@@ -125,7 +142,8 @@ class NotifeeCallHandler {
       console.error('[NotifeeCallHandler] Error handling notification event:', error);
       logError('NotifeeCallHandler', 'Notification event handling failed', {
         error: error instanceof Error ? error.message : String(error),
-        context
+        context,
+        eventType: type
       });
     }
   }
