@@ -1141,6 +1141,16 @@ class CallController {
     // Clear call timeout monitoring immediately
     this.clearCallTimeout()
 
+    // CRITICAL FIX: Stop native ringing service when call ends
+    try {
+      const { default: CallRingingNativeService } = await import('./CallRingingNativeService');
+      const ringingService = CallRingingNativeService.getInstance();
+      await ringingService.stopRinging();
+      logCall('CallController', '✅ Native ringing service stopped for call end');
+    } catch (ringingError) {
+      logError('CallController', '❌ Error stopping native ringing service on call end:', ringingError);
+    }
+
     try {
       const store = useCallStore.getState()
       let session = store.session

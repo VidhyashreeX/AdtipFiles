@@ -3176,4 +3176,42 @@ export default class ApiService {
       throw this.handleError(error);
     }
   }
+
+  /**
+   * Sync call billing status with backend for real-time balance validation
+   */
+  static async syncCallBilling(params: {
+    callId: string;
+    userId: string;
+    elapsedSeconds: number;
+    callType: 'voice' | 'video';
+  }): Promise<{
+    success: boolean;
+    data?: {
+      shouldContinueCall: boolean;
+      remainingBalance: number | null;
+      maxDurationSeconds: number | null;
+      currentCost: number;
+      ratePerMinute: number;
+      elapsedSeconds: number;
+      callId: string;
+    };
+    error?: string;
+    message?: string;
+  }> {
+    try {
+      console.log('[ApiService] Syncing call billing:', params);
+
+      const response = await this.makeRequest('/api/call-billing-sync', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+
+      console.log('[ApiService] Call billing sync response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Call billing sync error:', error);
+      throw this.handleError(error);
+    }
+  }
 }

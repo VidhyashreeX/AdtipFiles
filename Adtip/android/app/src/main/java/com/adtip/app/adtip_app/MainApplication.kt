@@ -21,6 +21,9 @@ import live.videosdk.rnincallmanager.InCallManagerPackage
 // PubScale Offerwall Import
 import com.adtip.app.adtip_app.PubscaleOfferwallPackage
 
+// Call Ringing Service Import
+import com.adtip.app.adtip_app.CallRingingPackage
+
 class MainApplication : Application(), ReactApplication {
 
   override val reactNativeHost: ReactNativeHost =
@@ -33,6 +36,8 @@ class MainApplication : Application(), ReactApplication {
         packages.add(InCallManagerPackage())
         // pubscale
         packages.add(PubscaleOfferwallPackage())
+        // Call ringing service for proper ringtone and vibration
+        packages.add(CallRingingPackage())
         // CALLKEEP DISABLED - Causing white screen on Vivo devices
         // Add CallKeep package for native call handling
         // packages.add(RNCallKeepPackage());

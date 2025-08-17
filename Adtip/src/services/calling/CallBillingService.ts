@@ -317,18 +317,22 @@ class CallBillingService {
       const elapsedSeconds = Math.floor((Date.now() - this.callStartTime) / 1000);
       const remainingSeconds = Math.max(0, this.maxDurationSeconds - elapsedSeconds);
 
-      // Sync with backend every 30 seconds
+      // Sync with backend every 30 seconds for real-time balance validation
       syncCounter++;
       if (syncCounter >= 30) {
         syncCounter = 0;
         try {
-          await this.syncBillingWithBackend();
+          const shouldContinue = await this.syncBillingWithBackend();
+          if (!shouldContinue) {
+            // Backend terminated the call due to insufficient balance
+            return;
+          }
         } catch (syncError) {
           console.warn('[CallBillingService] Billing sync failed:', syncError);
         }
       }
 
-      // Check if call should be terminated
+      // Check if call should be terminated based on local calculation
       if (remainingSeconds <= 0) {
         console.log('[CallBillingService] Call time limit reached, ending call');
         this.endCallDueToInsufficientBalance().catch(err =>
@@ -463,9 +467,9 @@ class CallBillingService {
   /**
    * Sync billing status with backend to ensure consistency
    */
-  public async syncBillingWithBackend(): Promise<void> {
-    if (!this.currentCallId || !this.callStartTime) {
-      return;
+  public async syncBillingWithBackend(): Promise<boolean> {
+    if (!this.currentCallId || !this.callStartTime || !this.userId) {
+      return true; // Continue call if no billing info
     }
 
     try {
@@ -481,11 +485,55 @@ class CallBillingService {
         ratePerMinute: this.ratePerMinute
       });
 
-      // Here you could add an API call to sync with backend
-      // For example: await ApiService.syncCallBilling(this.currentCallId, elapsedSeconds, currentCost);
+      // Call the new billing sync API
+      const { default: ApiService } = await import('../ApiService');
+      const response = await ApiService.syncCallBilling({
+        callId: this.currentCallId,
+        userId: this.userId,
+        elapsedSeconds,
+        callType: this.callType || 'voice'
+      });
+
+      if (response.success && response.data) {
+        const { shouldContinueCall, remainingBalance, maxDurationSeconds } = response.data;
+
+        console.log('[CallBillingService] Backend billing sync response:', {
+          shouldContinueCall,
+          remainingBalance,
+          maxDurationSeconds,
+          currentCost: response.data.currentCost
+        });
+
+        // Update local state with backend response
+        if (maxDurationSeconds !== null && maxDurationSeconds !== undefined) {
+          // Update max duration based on current balance
+          const newMaxDuration = elapsedSeconds + maxDurationSeconds;
+          if (newMaxDuration < this.maxDurationSeconds) {
+            console.log('[CallBillingService] Updating max duration based on current balance:', {
+              oldMax: this.maxDurationSeconds,
+              newMax: newMaxDuration,
+              additionalSeconds: maxDurationSeconds
+            });
+            this.maxDurationSeconds = newMaxDuration;
+          }
+        }
+
+        // If backend says call should not continue, terminate immediately
+        if (!shouldContinueCall) {
+          console.warn('[CallBillingService] Backend indicates insufficient balance, terminating call');
+          await this.endCallDueToInsufficientBalance();
+          return false;
+        }
+
+        return true;
+      } else {
+        console.error('[CallBillingService] Backend billing sync failed:', response);
+        return true; // Continue call on API failure to avoid false terminations
+      }
 
     } catch (error) {
       console.error('[CallBillingService] Failed to sync billing with backend:', error);
+      return true; // Continue call on error to avoid false terminations
     }
   }
 

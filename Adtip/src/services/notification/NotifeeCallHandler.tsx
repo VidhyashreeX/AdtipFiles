@@ -173,9 +173,34 @@ class NotifeeCallHandler {
       // Dismiss the notification
       await notifee.cancelNotification(params.sessionId);
 
+      // CRITICAL FIX: Stop native ringing service when call is answered
+      try {
+        const { default: CallRingingNativeService } = await import('../calling/CallRingingNativeService');
+        const ringingService = CallRingingNativeService.getInstance();
+        await ringingService.stopRinging();
+        console.log('[NotifeeCallHandler] ✅ Native ringing service stopped for call answer');
+      } catch (ringingError) {
+        console.error('[NotifeeCallHandler] ❌ Error stopping native ringing service:', ringingError);
+      }
+
       // Use provided meeting details or generate fallback
       const meetingId = params.meetingId || `meeting-${Date.now()}`;
       const token = params.token || `token-${Date.now()}`;
+
+      // CRITICAL FIX: Initialize media services for killed state scenarios
+      console.log('[NotifeeCallHandler] Initializing media services for killed state call acceptance');
+      const { default: BackgroundMediaService } = await import('../calling/BackgroundMediaService');
+      const backgroundMediaService = BackgroundMediaService.getInstance();
+
+      // Initialize media permissions before call acceptance
+      const mediaInitialized = await backgroundMediaService.initializeForBackgroundCall(
+        params.callType === 'video' ? 'video' : 'voice'
+      );
+
+      if (!mediaInitialized) {
+        console.error('[NotifeeCallHandler] Failed to initialize media services for killed state');
+        // Still proceed but log the issue - user will see permission prompts in meeting screen
+      }
 
       // Initialize session in call store for proper call acceptance
       const { useCallStore } = await import('../../stores/callStoreSimplified');
@@ -206,40 +231,78 @@ class NotifeeCallHandler {
         console.log('[NotifeeCallHandler] Session initialized and status set to ringing');
       }
 
-      // Try to accept the call through CallController
+      // CRITICAL FIX: Properly handle call acceptance with error handling
+      let callAccepted = false;
       try {
         const callController = CallController.getInstance();
-        const callAccepted = await callController.acceptCall();
+        callAccepted = await callController.acceptCall();
         console.log('[NotifeeCallHandler] CallController.acceptCall() result:', callAccepted);
+
+        if (!callAccepted) {
+          console.error('[NotifeeCallHandler] Call acceptance failed - likely due to permission issues');
+          // Don't navigate to meeting screen if call acceptance failed
+          throw new Error('Call acceptance failed - permissions may not be granted');
+        }
       } catch (acceptError) {
-        console.warn('[NotifeeCallHandler] CallController.acceptCall() failed, proceeding with navigation:', acceptError);
+        console.error('[NotifeeCallHandler] CallController.acceptCall() failed:', acceptError);
+
+        // For killed state scenarios, try to handle permission issues gracefully
+        if (params.context === 'background') {
+          console.log('[NotifeeCallHandler] Attempting to recover from killed state permission issues');
+
+          // Try to request permissions explicitly
+          const { default: PermissionManagerService } = await import('../PermissionManagerService');
+          const permissionManager = PermissionManagerService.getInstance();
+          const permissionResult = await permissionManager.requestCallPermissions(params.callType === 'video');
+
+          if (permissionResult.microphone && (params.callType !== 'video' || permissionResult.camera)) {
+            console.log('[NotifeeCallHandler] Permissions granted, retrying call acceptance');
+            try {
+              const callController = CallController.getInstance();
+              callAccepted = await callController.acceptCall();
+              console.log('[NotifeeCallHandler] Retry CallController.acceptCall() result:', callAccepted);
+            } catch (retryError) {
+              console.error('[NotifeeCallHandler] Retry call acceptance also failed:', retryError);
+              throw new Error('Call acceptance failed even after permission retry');
+            }
+          } else {
+            console.error('[NotifeeCallHandler] Required permissions not granted for call acceptance');
+            throw new Error('Required permissions not granted for call acceptance');
+          }
+        } else {
+          throw acceptError;
+        }
       }
 
-      // Navigate to meeting screen regardless of CallController result
-      const navigationSuccess = NavigationService.navigateToMeeting({
-        meetingId,
-        token,
-        displayName: 'User', // This should be the current user's name
-        callType: params.callType === 'video' ? 'video' : 'voice',
-        isInitiator: false, // This is an incoming call
-        recipientName: params.callerName,
-        callData: {
-          sessionId: params.sessionId,
-          direction: 'incoming',
-          type: params.callType,
-          callerName: params.callerName
-        }
-      });
-
-      if (navigationSuccess) {
-        logCall('NotifeeCallHandler', '✅ Call answered - navigated to meeting', {
-          sessionId: params.sessionId,
-          callerName: params.callerName,
-          callType: params.callType,
-          context: params.context
+      // Only navigate to meeting screen if call acceptance succeeded
+      if (callAccepted) {
+        const navigationSuccess = NavigationService.navigateToMeeting({
+          meetingId,
+          token,
+          displayName: 'User', // This should be the current user's name
+          callType: params.callType === 'video' ? 'video' : 'voice',
+          isInitiator: false, // This is an incoming call
+          recipientName: params.callerName,
+          callData: {
+            sessionId: params.sessionId,
+            direction: 'incoming',
+            type: params.callType,
+            callerName: params.callerName
+          }
         });
+
+        if (navigationSuccess) {
+          logCall('NotifeeCallHandler', '✅ Call answered - navigated to meeting', {
+            sessionId: params.sessionId,
+            callerName: params.callerName,
+            callType: params.callType,
+            context: params.context
+          });
+        } else {
+          throw new Error('Navigation to meeting screen failed');
+        }
       } else {
-        throw new Error('Navigation to meeting screen failed');
+        throw new Error('Cannot navigate to meeting - call acceptance failed');
       }
 
     } catch (error) {
@@ -248,6 +311,22 @@ class NotifeeCallHandler {
         error: error instanceof Error ? error.message : String(error),
         sessionId: params.sessionId
       });
+
+      // CRITICAL FIX: Clean up call state if answer handling fails
+      try {
+        const { useCallStore } = await import('../../stores/callStoreSimplified');
+        const store = useCallStore.getState();
+        if (store.session?.sessionId === params.sessionId) {
+          console.log('[NotifeeCallHandler] Cleaning up failed call state');
+          store.actions.setStatus('ended');
+          // Don't clear session immediately to allow for debugging
+        }
+      } catch (cleanupError) {
+        console.error('[NotifeeCallHandler] Failed to clean up call state:', cleanupError);
+      }
+
+      // Re-throw error to ensure proper error handling upstream
+      throw error;
     }
   }
 
@@ -260,6 +339,16 @@ class NotifeeCallHandler {
 
       // Dismiss the notification
       await notifee.cancelNotification(sessionId);
+
+      // CRITICAL FIX: Stop native ringing service when call is declined
+      try {
+        const { default: CallRingingNativeService } = await import('../calling/CallRingingNativeService');
+        const ringingService = CallRingingNativeService.getInstance();
+        await ringingService.stopRinging();
+        console.log('[NotifeeCallHandler] ✅ Native ringing service stopped for call decline');
+      } catch (ringingError) {
+        console.error('[NotifeeCallHandler] ❌ Error stopping native ringing service:', ringingError);
+      }
 
       logCall('NotifeeCallHandler', '✅ Call declined', {
         sessionId,
@@ -292,6 +381,21 @@ class NotifeeCallHandler {
       if (!notifee) {
         console.error('[NotifeeCallHandler] ❌ Notifee is not available');
         return false;
+      }
+
+      // CRITICAL FIX: Start native ringing service for proper ringtone and vibration
+      try {
+        const { default: CallRingingNativeService } = await import('../calling/CallRingingNativeService');
+        const ringingService = CallRingingNativeService.getInstance();
+
+        const ringingStarted = await ringingService.startRinging(params.callerName, params.sessionId);
+        if (ringingStarted) {
+          console.log('[NotifeeCallHandler] ✅ Native ringing service started successfully');
+        } else {
+          console.warn('[NotifeeCallHandler] ⚠️ Native ringing service failed, notification will use basic sound');
+        }
+      } catch (ringingError) {
+        console.error('[NotifeeCallHandler] ❌ Error starting native ringing service:', ringingError);
       }
 
       // Check notification permissions
