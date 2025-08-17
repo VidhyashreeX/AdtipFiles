@@ -197,11 +197,13 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
   }
 });
 
-// CALL MESSAGE HANDLER OPTIMIZED FOR KILLED STATE
-// Use the same reliable pattern as chat notifications for maximum consistency
+// ENHANCED CALL MESSAGE HANDLER WITH SERVICE ORCHESTRATION FOR KILLED STATE
+// Uses Service Orchestrator to ensure all services are properly initialized
 async function handleBackgroundCallMessage(remoteMessage) {
+  const startTime = Date.now();
+
   try {
-    console.log('[Index] 📞 Handling call message in killed state using NotifeeCallHandler');
+    console.log('[Index] 📞 Handling call message in killed state with enhanced service orchestration');
 
     // Re-parse for safety (in case upstream handler didn't flatten fully)
     const data = remoteMessage.data || {};
@@ -219,7 +221,43 @@ async function handleBackgroundCallMessage(remoteMessage) {
     const meetingId = data.meetingId || info?.meetingId || info?.videoSDKInfo?.meetingId || `meeting-${Date.now()}`;
     const token = data.token || info?.token || info?.videoSDKInfo?.token || `token-${Date.now()}`;
 
-    // Ensure NotifeeCallHandler is properly initialized for killed state
+    console.log('[Index] 📞 Extracted call data:', {
+      sessionId,
+      callerName,
+      callType,
+      meetingId: meetingId ? 'present' : 'missing',
+      token: token ? 'present' : 'missing'
+    });
+
+    // Step 1: Initialize Service Orchestrator for killed state wake-up
+    console.log('[Index] 🚀 Starting enhanced killed state wake-up sequence...');
+
+    const { default: KilledStateServiceOrchestrator } = await import('./src/services/KilledStateServiceOrchestrator');
+    const orchestrator = KilledStateServiceOrchestrator.getInstance();
+
+    // Initialize orchestrator if not already done
+    if (!orchestrator.isReady()) {
+      await orchestrator.initialize();
+      console.log('[Index] ✅ Service orchestrator initialized');
+    }
+
+    // Step 2: Wake up all required services for incoming call
+    const wakeUpSuccess = await orchestrator.wakeUpForIncomingCall({
+      sessionId,
+      meetingId,
+      token,
+      callerName,
+      callType
+    });
+
+    if (!wakeUpSuccess) {
+      console.warn('[Index] ⚠️ Service wake-up failed, proceeding with fallback...');
+    } else {
+      console.log('[Index] ✅ All services woken up successfully');
+    }
+
+    // Step 3: Display call notification using NotifeeCallHandler
+    console.log('[Index] 📞 Displaying call notification...');
     const { default: NotifeeCallHandler } = await import('./src/services/notification/NotifeeCallHandler');
     const handler = NotifeeCallHandler.getInstance();
 
@@ -229,24 +267,29 @@ async function handleBackgroundCallMessage(remoteMessage) {
       console.log('[Index] ✅ NotifeeCallHandler initialized for killed state');
     }
 
-    // Extract call data from FCM message
-    // Use NotifeeCallHandler to display the notification (same as foreground)
+    // Display the incoming call notification
     const success = await handler.displayIncomingCall({
       sessionId,
       callerName,
-      callType: callType === 'video' ? 'video' : 'voice',
+      callType,
       meetingId,
       token
     });
 
     if (success) {
-      console.log('[Index] ✅ Call notification displayed successfully via NotifeeCallHandler');
+      const totalDuration = Date.now() - startTime;
+      console.log('[Index] ✅ Call notification displayed successfully', { duration: totalDuration });
     } else {
       throw new Error('NotifeeCallHandler failed to display notification');
     }
 
   } catch (error) {
-    console.error('[Index] ❌ NotifeeCallHandler failed, trying direct notification fallback:', error);
+    const totalDuration = Date.now() - startTime;
+    console.error('[Index] ❌ Enhanced killed state processing failed:', {
+      error,
+      duration: totalDuration,
+      sessionId
+    });
 
     // Fallback to direct notification if NotifeeCallHandler fails
     try {
@@ -266,8 +309,39 @@ async function handleBackgroundCallMessage(remoteMessage) {
         console.log('[Index] ✅ Call message routed successfully via FCMMessageRouter');
       } catch (routerError) {
         console.error('[Index] ❌ All call notification methods failed:', routerError);
+
+        // Emergency fallback - try basic notification display
+        try {
+          console.log('[Index] 🚨 Emergency fallback - basic notification display');
+          const { default: NotifeeCallHandler } = await import('./src/services/notification/NotifeeCallHandler');
+          const handler = NotifeeCallHandler.getInstance();
+
+          if (!handler.isReady) {
+            await handler.initialize();
+          }
+
+          await handler.displayIncomingCall({
+            sessionId: data.sessionId || `emergency-${Date.now()}`,
+            callerName: data.callerName || 'Unknown Caller',
+            callType: 'voice',
+            meetingId: data.meetingId || `emergency-meeting-${Date.now()}`,
+            token: data.token || `emergency-token-${Date.now()}`
+          });
+
+          console.log('[Index] ✅ Emergency fallback notification displayed');
+        } catch (emergencyError) {
+          console.error('[Index] ❌ Emergency fallback also failed:', emergencyError);
+        }
       }
     }
+
+    // Log final performance metrics even on failure
+    const finalDuration = Date.now() - startTime;
+    console.log('[Index] 📊 Killed state processing completed with errors', {
+      duration: finalDuration,
+      success: false,
+      sessionId: data.sessionId || 'unknown'
+    });
   }
 }
 

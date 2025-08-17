@@ -57,7 +57,7 @@ class DeepLinkService {
   }
 
   /**
-   * Handle incoming deep link with app readiness check
+   * Handle incoming deep link with enhanced app readiness check for killed state
    */
   public handleDeepLink(url: string): void {
     console.log('[DeepLinkService] Handling deep link:', url);
@@ -73,10 +73,120 @@ class DeepLinkService {
       return;
     }
 
-    // Add a small delay to ensure the app is fully initialized
-    setTimeout(() => {
-      this.navigateToScreen(parsedLink);
-    }, 150);
+    // Check if this is a call-related deep link that needs special handling
+    const isCallLink = parsedLink.screen === 'Meeting' || parsedLink.screen === 'MeetingSimple';
+
+    if (isCallLink) {
+      console.log('[DeepLinkService] Call deep link detected, using enhanced killed state handling');
+      this.handleCallDeepLink(parsedLink);
+    } else {
+      // Regular deep link handling with standard delay
+      setTimeout(() => {
+        this.navigateToScreen(parsedLink);
+      }, 150);
+    }
+  }
+
+  /**
+   * Handle call-related deep links with service readiness checks
+   */
+  private async handleCallDeepLink(parsedLink: ParsedDeepLink): Promise<void> {
+    const startTime = Date.now();
+
+    try {
+      console.log('[DeepLinkService] 🚀 Starting enhanced call deep link handling', {
+        screen: parsedLink.screen,
+        params: parsedLink.params
+      });
+
+      // Step 1: Check if Service Orchestrator is available and services are ready
+      try {
+        const { default: KilledStateServiceOrchestrator } = await import('./KilledStateServiceOrchestrator');
+        const orchestrator = KilledStateServiceOrchestrator.getInstance();
+
+        if (orchestrator.isReady()) {
+          // Services are already initialized, proceed with navigation
+          console.log('[DeepLinkService] ✅ Services already ready, proceeding with navigation');
+          this.navigateToScreen(parsedLink);
+          return;
+        }
+      } catch (error) {
+        console.warn('[DeepLinkService] Service orchestrator not available, using fallback timing');
+      }
+
+      // Step 2: Wait for VideoSDK readiness (critical for call screens)
+      await this.waitForVideoSDKReadiness();
+
+      // Step 3: Add additional delay for app stability in killed state scenarios
+      const timeSinceStart = Date.now() - startTime;
+      const additionalDelay = Math.max(500, 2000 - timeSinceStart); // Ensure at least 2 seconds total
+
+      console.log('[DeepLinkService] ⏳ Adding stability delay for killed state navigation', {
+        additionalDelay,
+        totalTime: timeSinceStart + additionalDelay
+      });
+
+      setTimeout(() => {
+        this.navigateToScreen(parsedLink);
+
+        const totalDuration = Date.now() - startTime;
+        console.log('[DeepLinkService] ✅ Call deep link navigation completed', {
+          duration: totalDuration,
+          screen: parsedLink.screen
+        });
+      }, additionalDelay);
+
+    } catch (error) {
+      console.error('[DeepLinkService] ❌ Enhanced call deep link handling failed:', error);
+
+      // Fallback to regular navigation with extended delay
+      setTimeout(() => {
+        console.log('[DeepLinkService] 🔄 Using fallback navigation for call deep link');
+        this.navigateToScreen(parsedLink);
+      }, 3000); // Extended delay for safety
+    }
+  }
+
+  /**
+   * Wait for VideoSDK to be ready before navigating to call screens
+   */
+  private async waitForVideoSDKReadiness(): Promise<void> {
+    const maxWaitTime = 5000; // 5 seconds max wait
+    const startTime = Date.now();
+
+    return new Promise((resolve) => {
+      const checkVideoSDK = async () => {
+        try {
+          // Dynamically import VideoSDK service to avoid circular dependencies
+          const VideoSDKServiceModule = await import('./videosdk/VideoSDKService');
+          const videoSDKService = VideoSDKServiceModule.default.getInstance();
+
+          const status = videoSDKService.getInitializationStatus();
+
+          if (status.initialized && status.websocketReady) {
+            console.log('[DeepLinkService] ✅ VideoSDK ready for call navigation');
+            resolve();
+            return;
+          }
+
+          // Check if we've exceeded max wait time
+          if (Date.now() - startTime > maxWaitTime) {
+            console.warn('[DeepLinkService] ⚠️ VideoSDK readiness timeout, proceeding anyway');
+            resolve();
+            return;
+          }
+
+          // Check again in 200ms
+          setTimeout(checkVideoSDK, 200);
+
+        } catch (error) {
+          console.warn('[DeepLinkService] ⚠️ Error checking VideoSDK readiness:', error);
+          resolve(); // Don't block navigation on errors
+        }
+      };
+
+      checkVideoSDK();
+    });
   }
 
   /**

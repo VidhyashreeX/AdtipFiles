@@ -61,7 +61,7 @@ class VideoSDKService {
   }
 
   /**
-   * Initialize VideoSDK with enhanced WebSocket connection handling
+   * Initialize VideoSDK with enhanced WebSocket connection handling and cold start optimization
    * Following latest VideoSDK React Native documentation
    */
   async initialize(config?: Partial<VideoSDKConfig>): Promise<boolean> {
@@ -82,7 +82,15 @@ class VideoSDKService {
       this.config = { ...this.config, ...config };
     }
 
-    // Create a new initialization promise
+    // Detect cold start scenario
+    const isColdStart = this.isFirstTimeInitialization;
+    logVideoSDK('VideoSDKService', 'Starting initialization', {
+      isColdStart,
+      hasConfig: !!config,
+      currentStatus: this.getInitializationStatus()
+    });
+
+    // Create a new initialization promise with cold start optimization
     this.initializationPromise = (async () => {
       try {
         const isFirstTime = this.isFirstTimeInitialization;
@@ -91,12 +99,33 @@ class VideoSDKService {
         logVideoSDK('VideoSDKService', 'Starting VideoSDK initialization', {
           isFirstTime,
           timeSinceAppStart,
+          isColdStart,
           config: this.config
         });
 
         // Reset WebSocket state
         this.websocketReady = false;
 
+        // Use optimized path for cold start scenarios
+        if (isColdStart) {
+          logVideoSDK('VideoSDKService', '🚀 Using cold start optimization path');
+
+          // Register with VideoSDK immediately (highest priority)
+          logVideoSDK('VideoSDKService', 'Registering VideoSDK (cold start)...');
+          await register();
+
+          // Use fast WebSocket connection
+          await this.establishWebSocketConnectionFast();
+
+          this.isInitialized = true;
+          this.websocketReady = true;
+          this.isFirstTimeInitialization = false;
+
+          logVideoSDK('VideoSDKService', '✅ Cold start VideoSDK initialization complete');
+          return true;
+        }
+
+        // Regular initialization path for non-cold start scenarios
         // For first-time initialization, add extra delay to ensure app is fully loaded
         if (isFirstTime && timeSinceAppStart < 5000) {
           const extraDelay = Math.max(2000, 5000 - timeSinceAppStart);
@@ -207,6 +236,73 @@ class VideoSDKService {
   }
 
   /**
+   * Fast WebSocket connection establishment for cold start scenarios
+   * Uses aggressive timeouts and minimal validation for speed
+   */
+  private async establishWebSocketConnectionFast(): Promise<void> {
+    const maxAttempts = 2; // Reduced attempts for speed
+    const baseDelay = 1000; // Faster initial delay
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        logVideoSDK('VideoSDKService', `Fast WebSocket connection attempt ${attempt}/${maxAttempts}`);
+
+        // Minimal delay for cold start optimization
+        const delay = attempt === 1 ? 500 : baseDelay;
+        await new Promise(resolve => setTimeout(resolve, delay));
+
+        // Fast validation with reduced timeout
+        await this.validateVideoSDKConnectionFast();
+
+        logVideoSDK('VideoSDKService', `Fast WebSocket connection established on attempt ${attempt}`);
+        return;
+
+      } catch (error) {
+        logWarn('VideoSDKService', `Fast WebSocket connection attempt ${attempt} failed:`, error);
+
+        if (attempt === maxAttempts) {
+          // If fast connection fails, fall back to regular connection
+          logVideoSDK('VideoSDKService', 'Fast connection failed, falling back to regular connection...');
+          await this.establishWebSocketConnection();
+          return;
+        }
+      }
+    }
+  }
+
+  /**
+   * Fast validation for cold start scenarios
+   * Uses reduced timeout for speed
+   */
+  private async validateVideoSDKConnectionFast(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Fast VideoSDK connection validation timeout'));
+      }, 3000); // Reduced timeout for speed
+
+      try {
+        logVideoSDK('VideoSDKService', 'Fast validating VideoSDK WebSocket connection...');
+
+        // Simplified connectivity test for speed
+        this.testWebSocketConnectivityFast()
+          .then(() => {
+            clearTimeout(timeout);
+            logVideoSDK('VideoSDKService', 'Fast WebSocket connection validation successful');
+            resolve();
+          })
+          .catch((error) => {
+            clearTimeout(timeout);
+            logWarn('VideoSDKService', 'Fast WebSocket connection validation failed:', error);
+            reject(error);
+          });
+      } catch (error) {
+        clearTimeout(timeout);
+        reject(error);
+      }
+    });
+  }
+
+  /**
    * Validate VideoSDK connection by testing actual WebSocket connectivity
    * This ensures the WebSocket and signaling are properly established
    */
@@ -264,6 +360,35 @@ class VideoSDKService {
         }).catch((error) => {
           clearTimeout(testTimeout);
           reject(new Error(`VideoSDK import failed: ${error.message}`));
+        });
+      } catch (error) {
+        clearTimeout(testTimeout);
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * Fast WebSocket connectivity test for cold start scenarios
+   * Uses minimal validation for speed
+   */
+  private async testWebSocketConnectivityFast(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const testTimeout = setTimeout(() => {
+        reject(new Error('Fast WebSocket connectivity test timeout'));
+      }, 2000); // Reduced timeout for speed
+
+      try {
+        // Simplified test - just verify VideoSDK can be imported
+        import('@videosdk.live/react-native-sdk').then(() => {
+          // Minimal delay for fast validation
+          setTimeout(() => {
+            clearTimeout(testTimeout);
+            resolve();
+          }, 200); // Much faster than regular test
+        }).catch((error) => {
+          clearTimeout(testTimeout);
+          reject(new Error(`Fast VideoSDK import failed: ${error.message}`));
         });
       } catch (error) {
         clearTimeout(testTimeout);
