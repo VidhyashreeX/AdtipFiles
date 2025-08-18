@@ -20,8 +20,18 @@ import {
   Line 
 } from "recharts";
 import { Users, ShoppingBag, UserCircle, Megaphone } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
 import axios from "axios";
+
 import { useParams } from "react-router-dom";
+const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
+  ? import.meta.env.VITE_API_URL
+  : `${import.meta.env.VITE_API_URL}/api`;
+
+
+
+
 
 const generateMockData = (numPoints: number) => {
   const data = [];
@@ -123,6 +133,132 @@ const ChannelAnalytics = () => {
 
 const Analysis = () => {
   const { channelId } = useParams();
+  const channelData = JSON.parse(localStorage.getItem("channelData") || "{}");
+const [walletBalance, setWalletBalance] = useState<number>(0);
+const [loading, setLoading] = useState<boolean>(true);
+const [error, setError] = useState<string | null>(null);
+  const { user, isAuthenticated } = useAuth();
+  const userId = user?.id || null;
+  const token = user?.accessToken || null;
+    const [authLoading, setAuthLoading] = useState<boolean>(true);
+    const navigate = useNavigate();
+// Auth initialization effect (same as Wallet.tsx)
+useEffect(() => {
+  if (user === null && isAuthenticated === false) {
+    return;
+  }
+  setAuthLoading(false);
+  if (!userId || !token) {
+    setError("Please sign in to view your wallet.");
+    navigate("/login");
+  }
+}, [user, isAuthenticated, userId, token, navigate]);
+useEffect(() => {
+  const fetchWalletData = async () => {
+    if (!userId || !token) return;
+    try {
+      setLoading(true);
+      const balanceResponse = await axios.get(`${BASE_URL}/getfunds/${userId}`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (balanceResponse.status === 200) {
+        setWalletBalance(parseFloat(balanceResponse.data.availableBalance) || 0);
+      } else {
+        throw new Error(`Unexpected response status: ${balanceResponse.status}`);
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  if (!authLoading) {
+    fetchWalletData();
+  }
+}, [userId, token, navigate, authLoading]);
+const [totalWithdraw, setTotalWithdraw] = useState<number>(0);
+useEffect(() => {
+  const fetchWalletData = async () => {
+    if (!userId || !token) return;
+    try {
+      setLoading(true);
+
+      // ✅ Fetch balance
+      const balanceResponse = await axios.get(`${BASE_URL}/getfunds/${userId}`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (balanceResponse.status === 200) {
+        setWalletBalance(parseFloat(balanceResponse.data.availableBalance) || 0);
+      }
+
+      // ✅ Fetch withdrawal stats
+      const withdrawalResponse = await axios.get(`${BASE_URL}/withdrawal-stats/${userId}`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (withdrawalResponse.status === 200 && withdrawalResponse.data.status === 200) {
+
+        const total = withdrawalResponse.data.data?.wallet?.total_amount || 0;
+  setTotalWithdraw(total);
+        console.log("withdrawalResponse:", withdrawalResponse.data);
+
+      }
+
+    } catch (err: any) {
+      console.error("Wallet data error:", err.response?.data || err.message);
+      setError("Error: " + (err.response?.data?.message || err.message));
+    } finally {
+      setLoading(false);
+      
+    }
+  };
+
+  if (!authLoading) {
+    fetchWalletData();
+  }
+}, [userId, token, navigate, authLoading]);
+const [totalViews, setTotalViews] = useState<number>(0);
+useEffect(() => {
+  const fetchChannelAnalytics = async () => {
+    if (!channelId || !token) return;
+    try {
+      const analyticsResponse = await axios.get(
+        `${BASE_URL}/analytics/${channelId}`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      // ✅ Your backend returns { status: true, data: {...} }
+      if (analyticsResponse.data.status === true && analyticsResponse.data.data) {
+        setTotalViews(analyticsResponse.data.data.total_views || 0);
+        console.log("Channel Analytics:", analyticsResponse.data.data);
+      }
+    } catch (err) {
+      console.error("Error fetching channel analytics:", err);
+    }
+  };
+
+  fetchChannelAnalytics();
+}, [channelId, token]);
+
+
+
+
+function calculateEarnedMoney(totalViews?: number) {
+  return totalViews ? Math.floor(totalViews / 100000) * 1000 : 0;
+}
   if (channelId) {
     return <ChannelAnalytics />;
   }
@@ -225,31 +361,46 @@ const Analysis = () => {
               </CardContent>
             </Card>
 
-            <Card className="col-span-1">
-              <CardHeader>
-                <CardTitle>Creator Statistics</CardTitle>
-                <CardDescription>Key creator metrics</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-gray-500 text-sm">Total Creators</p>
-                    <p className="text-2xl font-bold">2,134</p>
-                    <p className="text-green-500 text-xs mt-1">↑ 8.7% from last month</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-gray-500 text-sm">Avg Content Posted</p>
-                    <p className="text-2xl font-bold">5.3 / week</p>
-                    <p className="text-green-500 text-xs mt-1">↑ 2.1% from last month</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-gray-500 text-sm">Avg Engagement Rate</p>
-                    <p className="text-2xl font-bold">4.2%</p>
-                    <p className="text-green-500 text-xs mt-1">↑ 0.5% from last month</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+           <Card className="col-span-1">
+  <CardHeader>
+    <CardTitle>Creator Statistics</CardTitle>
+    <CardDescription>Views, Earnings, Withdrawals, Balance</CardDescription>
+  </CardHeader>
+  <CardContent>
+    <div className="space-y-4">
+      <div className="bg-gray-50 rounded-lg p-4">
+        <p className="text-gray-500 text-sm">Total Views</p>
+   <p className="text-2xl font-bold">{totalViews}</p>
+      </div>
+      <div className="bg-gray-50 rounded-lg p-4">
+        <p className="text-gray-500 text-sm">Total Earned Money</p>
+        <p className="text-2xl font-bold">
+          ₹{calculateEarnedMoney(channelData?.totalViews)}
+        </p>
+      </div>
+    <div className="bg-gray-50 rounded-lg p-4">
+  <p className="text-gray-500 text-sm">Total Withdraw</p>
+  {loading ? (
+    <p className="text-lg font-bold">Loading...</p>
+  ) : (
+    <p className="text-lg font-bold">₹{totalWithdraw.toFixed(2)}</p>
+  )}
+</div>
+    <div className="bg-gray-50 rounded-lg p-4 ">
+  <p className="text-gray-500 text-xs mb-1">Available Balance</p>
+  {loading ? (
+    <p className="text-lg font-bold">Loading...</p>
+  ) : error ? (
+    <p className="text-lg font-bold text-red-500">{error}</p>
+  ) : (
+<p className="text-lg font-bold">₹{walletBalance.toFixed(2)}</p>
+
+  )}
+</div>
+    </div>
+  </CardContent>
+</Card>
+
           </div>
         </TabsContent>
         
