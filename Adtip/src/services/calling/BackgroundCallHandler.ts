@@ -420,11 +420,19 @@ export class BackgroundCallHandler {
   }
 
   /**
-   * Navigate to call screen using deep link
+   * Navigate to call screen using deep link with killed state support
    */
   private async navigateToCallScreen(callData: BackgroundCallData): Promise<boolean> {
     try {
       console.log('[BackgroundCallHandler] Navigating to call screen for:', callData.sessionId)
+
+      // Check if app is being launched from killed state
+      const isKilledState = await this.isAppLaunchedFromKilledState()
+
+      if (isKilledState) {
+        console.log('[BackgroundCallHandler] App launched from killed state, ensuring proper initialization')
+        await this.ensureAppInitializationForKilledState()
+      }
 
       // Method 1: Try deep linking first
       const deepLink = this.createCallDeepLink(callData)
@@ -447,9 +455,13 @@ export class BackgroundCallHandler {
         direction: 'incoming'
       })
 
-      // Method 3: Direct navigation as last resort
-      setTimeout(() => {
+      // Method 3: Direct navigation as last resort with proper timing for killed state
+      const navigationDelay = isKilledState ? 2000 : 500 // Longer delay for killed state
+      setTimeout(async () => {
         try {
+          // Ensure navigation is ready before attempting direct navigation
+          await this.waitForNavigationReady(isKilledState ? 5000 : 2000)
+
           NavigationService.navigate('MeetingScreen', {
             sessionId: callData.sessionId,
             meetingId: callData.meetingId,
@@ -461,13 +473,87 @@ export class BackgroundCallHandler {
         } catch (navError) {
           console.error('[BackgroundCallHandler] Direct navigation failed:', navError)
         }
-      }, 500)
+      }, navigationDelay)
 
       return true
     } catch (error) {
       console.error('[BackgroundCallHandler] Error navigating to call screen:', error)
       return false
     }
+  }
+
+  /**
+   * Check if app is being launched from killed state
+   */
+  private async isAppLaunchedFromKilledState(): Promise<boolean> {
+    try {
+      // Check if this is the first time the app is being initialized
+      const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage')
+      const lastAppState = await AsyncStorage.getItem('lastAppState')
+      const currentTime = Date.now()
+      const lastActiveTime = await AsyncStorage.getItem('lastActiveTime')
+
+      // If no last state or it's been more than 30 seconds, consider it killed state
+      if (!lastAppState || !lastActiveTime) {
+        return true
+      }
+
+      const timeDiff = currentTime - parseInt(lastActiveTime, 10)
+      return timeDiff > 30000 // 30 seconds threshold
+    } catch (error) {
+      console.warn('[BackgroundCallHandler] Error checking killed state:', error)
+      return true // Assume killed state on error for safety
+    }
+  }
+
+  /**
+   * Ensure proper app initialization for killed state scenarios
+   */
+  private async ensureAppInitializationForKilledState(): Promise<void> {
+    try {
+      console.log('[BackgroundCallHandler] Ensuring app initialization for killed state')
+
+      // Wait for service orchestrator to complete initialization
+      const { default: KilledStateServiceOrchestrator } = await import('../KilledStateServiceOrchestrator')
+      const orchestrator = KilledStateServiceOrchestrator.getInstance()
+
+      if (!orchestrator.isReady()) {
+        await orchestrator.initialize()
+        console.log('[BackgroundCallHandler] Service orchestrator initialized')
+      }
+
+      // Wait for navigation to be ready
+      await this.waitForNavigationReady(3000)
+
+      console.log('[BackgroundCallHandler] App initialization complete for killed state')
+    } catch (error) {
+      console.error('[BackgroundCallHandler] Error during killed state initialization:', error)
+    }
+  }
+
+  /**
+   * Wait for navigation to be ready with timeout
+   */
+  private async waitForNavigationReady(timeout: number = 2000): Promise<void> {
+    return new Promise((resolve) => {
+      const startTime = Date.now()
+
+      const checkNavigation = () => {
+        const { navigationRef } = require('../../navigation/NavigationService')
+
+        if (navigationRef.isReady()) {
+          console.log('[BackgroundCallHandler] Navigation is ready')
+          resolve()
+        } else if (Date.now() - startTime < timeout) {
+          setTimeout(checkNavigation, 100)
+        } else {
+          console.warn('[BackgroundCallHandler] Navigation ready timeout reached')
+          resolve() // Resolve anyway to prevent hanging
+        }
+      }
+
+      checkNavigation()
+    })
   }
 
   /**
@@ -478,6 +564,15 @@ export class BackgroundCallHandler {
       if (nextAppState === 'active' && this.pendingBackgroundCall) {
         console.log('[BackgroundCallHandler] App came to foreground with pending call')
         await this.processCallWhenForeground()
+      }
+
+      // Store app state for killed state detection
+      try {
+        const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage')
+        await AsyncStorage.setItem('lastAppState', nextAppState)
+        await AsyncStorage.setItem('lastActiveTime', Date.now().toString())
+      } catch (error) {
+        console.warn('[BackgroundCallHandler] Error storing app state:', error)
       }
     })
   }
@@ -503,16 +598,30 @@ export class BackgroundCallHandler {
             switch (detail.pressAction?.id) {
               case 'answer':
                 console.log('[BackgroundCallHandler] Answering call from notification')
-                // Navigate to call screen first
-                await this.navigateToCallScreen(this.pendingBackgroundCall)
 
-                // Then use CallStateManager to handle the call acceptance
-                const stateManager = CallStateManager.getInstance()
-                await stateManager.queueAction({
-                  type: 'ACCEPT_CALL',
-                  sessionId: sessionId,
-                  source: 'NOTIFICATION'
-                })
+                // Check if app is in killed state and handle accordingly
+                const isKilledState = await this.isAppLaunchedFromKilledState()
+
+                if (isKilledState) {
+                  console.log('[BackgroundCallHandler] Handling call acceptance from killed state')
+                  // Ensure proper initialization before navigation
+                  await this.ensureAppInitializationForKilledState()
+                }
+
+                // Navigate to call screen first
+                const navigationSuccess = await this.navigateToCallScreen(this.pendingBackgroundCall)
+
+                if (navigationSuccess) {
+                  // Then use CallStateManager to handle the call acceptance
+                  const stateManager = CallStateManager.getInstance()
+                  await stateManager.queueAction({
+                    type: 'ACCEPT_CALL',
+                    sessionId: sessionId,
+                    source: 'NOTIFICATION'
+                  })
+                } else {
+                  console.error('[BackgroundCallHandler] Navigation failed, cannot accept call')
+                }
                 break
               case 'decline':
               case 'end':
@@ -540,9 +649,24 @@ export class BackgroundCallHandler {
             switch (detail.pressAction?.id) {
               case 'answer':
                 console.log('[BackgroundCallHandler] Answering call from background notification')
+
+                // Check if app is in killed state and handle accordingly
+                const isKilledState = await this.isAppLaunchedFromKilledState()
+
+                if (isKilledState) {
+                  console.log('[BackgroundCallHandler] Handling background call acceptance from killed state')
+                  // Ensure proper initialization before navigation
+                  await this.ensureAppInitializationForKilledState()
+                }
+
                 // Navigate to call screen and accept call
-                await this.navigateToCallScreen(this.pendingBackgroundCall)
-                await this.acceptBackgroundCall()
+                const navigationSuccess = await this.navigateToCallScreen(this.pendingBackgroundCall)
+
+                if (navigationSuccess) {
+                  await this.acceptBackgroundCall()
+                } else {
+                  console.error('[BackgroundCallHandler] Background navigation failed, cannot accept call')
+                }
                 break
               case 'decline':
               case 'end':

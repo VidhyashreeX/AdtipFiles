@@ -46,6 +46,27 @@ interface UltraFastLoaderProps {
   onInitializationComplete?: () => void;
 }
 
+// Helper function to check if app was launched from killed state
+const checkIfLaunchedFromKilledState = async (): Promise<boolean> => {
+  try {
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    const lastAppState = await AsyncStorage.getItem('lastAppState');
+    const lastActiveTime = await AsyncStorage.getItem('lastActiveTime');
+    const currentTime = Date.now();
+
+    // If no last state or it's been more than 30 seconds, consider it killed state
+    if (!lastAppState || !lastActiveTime) {
+      return true;
+    }
+
+    const timeDiff = currentTime - parseInt(lastActiveTime, 10);
+    return timeDiff > 30000; // 30 seconds threshold
+  } catch (error) {
+    Logger.warn('UltraFastLoader', 'Error checking killed state:', error);
+    return true; // Assume killed state on error for safety
+  }
+};
+
 // Create the RootStack inside UltraFastLoader
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
@@ -151,10 +172,20 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
     });
   }, [currentState, navigatorComponent, isInitialized]);
 
-  // ✅ PERSISTENCE: Restore navigation state on app start
+  // ✅ PERSISTENCE: Restore navigation state on app start with killed state detection
   useEffect(() => {
     const restoreState = async () => {
       try {
+        // Check if app was launched from killed state
+        const isKilledState = await checkIfLaunchedFromKilledState();
+
+        if (isKilledState) {
+          Logger.info('UltraFastLoader', 'App launched from killed state, ensuring proper initialization');
+          // Don't restore navigation state for killed state to prevent conflicts
+          setIsStateRestored(true);
+          return;
+        }
+
         if (NavigationPersistenceService.shouldRestoreState()) {
           const restoredState = await NavigationPersistenceService.restoreNavigationState();
           if (restoredState) {

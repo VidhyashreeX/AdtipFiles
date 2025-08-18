@@ -3214,4 +3214,184 @@ export default class ApiService {
       throw this.handleError(error);
     }
   }
+
+  /**
+   * Client-side wallet debit for call charges
+   */
+  static async debitWalletForCall(params: {
+    userId: number;
+    amount: number;
+    callId: string;
+    description: string;
+  }): Promise<any> {
+    try {
+      console.log('[ApiService] Debiting wallet for call:', params);
+
+      const response = await this.makeRequest('/withdrawFundFromWallet', {
+        method: 'POST',
+        body: JSON.stringify({
+          userId: params.userId,
+          withdraw_req_amount: params.amount,
+          transaction_type: 'Call Charge',
+          check_bal_flag: 'DEDUCT_BAL',
+          description: params.description,
+          reference_id: params.callId
+        }),
+      });
+
+      console.log('[ApiService] Wallet debit response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Wallet debit error:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Client-side wallet credit for call earnings
+   */
+  static async creditWalletForCall(params: {
+    userId: number;
+    amount: number;
+    callId: string;
+    description: string;
+  }): Promise<any> {
+    try {
+      console.log('[ApiService] Crediting wallet for call:', params);
+
+      const response = await this.makeRequest('/addfunds', {
+        method: 'POST',
+        body: JSON.stringify({
+          createdby: params.userId,
+          amount: params.amount,
+          transactionStatus: '1',
+          transaction_type: 'Call Earnings',
+          order_id: `call_earnings_${params.callId}_${Date.now()}`,
+          payment_id: `call_payment_${params.callId}_${Date.now()}`,
+          isCron: true, // Skip transaction record creation
+          description: params.description,
+          reference_id: params.callId
+        }),
+      });
+
+      console.log('[ApiService] Wallet credit response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Wallet credit error:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Get wallet transaction history
+   */
+  static async getWalletTransactionHistory(userId: string, limit: number = 50): Promise<any> {
+    try {
+      console.log('[ApiService] Getting wallet transaction history:', { userId, limit });
+
+      const response = await this.makeRequest(`/getfunds/${userId}?limit=${limit}`, {
+        method: 'GET',
+      });
+
+      console.log('[ApiService] Wallet transaction history response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Wallet transaction history error:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * ONE-TIME PREMIUM PAYMENT APIS - COMMENTED OUT, USING OLD SUBSCRIPTION SYSTEM
+   */
+
+  /*
+  /**
+   * Get one-time premium plans
+   */
+  /*
+  static async getOneTimePremiumPlans(): Promise<any> {
+    try {
+      console.log('[ApiService] Getting one-time premium plans');
+
+      const response = await this.makeRequest('/premium-plans-onetime', {
+        method: 'GET',
+      });
+
+      console.log('[ApiService] One-time premium plans response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] One-time premium plans error:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Purchase premium with one-time payment
+   */
+  /*
+  static async purchasePremiumOneTime(params: {
+    user_id: number;
+    plan_id: number;
+    order_id: string;
+    payment_id: string;
+    amount: number;
+    payment_status: string;
+  }): Promise<any> {
+    try {
+      console.log('[ApiService] Purchasing premium one-time:', params);
+
+      const response = await this.makeRequest('/purchase-premium-onetime', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+
+      console.log('[ApiService] Premium purchase response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Premium purchase error:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Get user's one-time premium status
+   */
+  /*
+  static async getPremiumStatusOneTime(userId: string): Promise<any> {
+    try {
+      console.log('[ApiService] Getting one-time premium status for user:', userId);
+
+      const response = await this.makeRequest(`/premium-status-onetime/${userId}`, {
+        method: 'GET',
+      });
+
+      console.log('[ApiService] Premium status response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Premium status error:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Get user's one-time premium purchase history
+   */
+  /*
+  static async getPremiumHistoryOneTime(userId: string, page: number = 1, limit: number = 10): Promise<any> {
+    try {
+      console.log('[ApiService] Getting one-time premium history:', { userId, page, limit });
+
+      const response = await this.makeRequest(`/premium-history-onetime/${userId}?page=${page}&limit=${limit}`, {
+        method: 'GET',
+      });
+
+      console.log('[ApiService] Premium history response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Premium history error:', error);
+      throw this.handleError(error);
+    }
+  }
+  */
 }

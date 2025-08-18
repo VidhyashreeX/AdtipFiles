@@ -256,6 +256,11 @@ async function handleBackgroundCallMessage(remoteMessage) {
       console.log('[Index] ✅ All services woken up successfully');
     }
 
+    // Step 2.5: Add delay for killed state to ensure app initialization
+    console.log('[Index] ⏳ Adding initialization delay for killed state...');
+    await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 second delay
+    console.log('[Index] ✅ Initialization delay complete');
+
     // Step 3: Display call notification using NotifeeCallHandler
     console.log('[Index] 📞 Displaying call notification...');
     const { default: NotifeeCallHandler } = await import('./src/services/notification/NotifeeCallHandler');

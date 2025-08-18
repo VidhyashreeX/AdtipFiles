@@ -1400,27 +1400,60 @@ class CallController {
   }
 
   /**
-   * Begin billing enforcement using current session state
+   * Begin billing enforcement using current session state with client-side transactions
    */
   async startBillingEnforcement(session: ReturnType<typeof useCallStore.getState>['session']): Promise<void> {
     try {
       if (!session) return
       const { userId } = await this.getUserInfo()
+
+      // Get caller information (current user)
       const [balanceStr, premiumStatus] = await Promise.all([
         WalletService.getWalletBalance(userId),
         WalletService.checkPremiumStatus(userId),
       ])
       const numericBalance = parseFloat(balanceStr || '0')
       const isPremium = !!premiumStatus?.isPremium
+
+      // Get receiver information for client-side transactions
+      const receiverId = session.peerId
+      let receiverIsPremium = false
+
+      try {
+        if (receiverId && receiverId !== 'unknown-caller') {
+          const receiverPremiumStatus = await WalletService.checkPremiumStatus(receiverId)
+          receiverIsPremium = !!receiverPremiumStatus?.isPremium
+          console.log('[CallController] Receiver premium status:', {
+            receiverId,
+            receiverIsPremium
+          })
+        }
+      } catch (error) {
+        console.warn('[CallController] Failed to get receiver premium status, defaulting to non-premium:', error)
+        receiverIsPremium = false
+      }
+
       const billingService = CallBillingService.getInstance()
       await billingService.startCallBilling(
         session.sessionId,
         userId,
         session.type,
         numericBalance,
-        isPremium
+        isPremium,
+        receiverId, // Pass receiver ID for client-side transactions
+        receiverIsPremium // Pass receiver premium status
       )
+
+      console.log('[CallController] Billing enforcement started with client-side transactions:', {
+        sessionId: session.sessionId,
+        callerId: userId,
+        receiverId,
+        callerIsPremium: isPremium,
+        receiverIsPremium,
+        callerBalance: numericBalance
+      })
     } catch (err) {
+      console.error('[CallController] Error starting billing enforcement:', err)
       throw err
     }
   }

@@ -13,6 +13,7 @@
 import WalletService from '../WalletService';
 import { useCallStore } from '../../stores/callStoreSimplified';
 import CallController from './CallController';
+import { ClientSideTransactionManager } from './ClientSideTransactionManager';
 
 export interface CallRates {
   voiceNonPremium: number; // ₹7 per minute
@@ -61,8 +62,12 @@ class CallBillingService {
   private isPremium: boolean = false;
   private initialBalance: number = 0;
   private warningsShown: Set<number> = new Set();
+  private clientTransactionManager: ClientSideTransactionManager;
+  private useClientSideTransactions: boolean = true; // ENABLED: Client-side transactions active
 
-  private constructor() {}
+  private constructor() {
+    this.clientTransactionManager = ClientSideTransactionManager.getInstance();
+  }
 
   public static getInstance(): CallBillingService {
     if (!CallBillingService.instance) {
@@ -157,19 +162,21 @@ class CallBillingService {
   }
 
   /**
-   * Start billing for a call
+   * Start billing for a call with optional client-side transaction management
    */
   public async startCallBilling(
     callId: string,
     userId: string,
     callType: 'voice' | 'video',
     currentBalance: number,
-    isPremium: boolean
+    isPremium: boolean,
+    receiverId?: string,
+    receiverIsPremium?: boolean
   ): Promise<void> {
     console.log('[CallBillingService] Starting call billing for:', callId);
 
     // Stop any existing billing
-    this.stopCallBilling();
+    await this.stopCallBilling();
 
     // Store call information
     this.currentCallId = callId;
@@ -179,6 +186,25 @@ class CallBillingService {
     this.initialBalance = currentBalance;
     this.callStartTime = Date.now();
     this.warningsShown.clear();
+
+    // Start client-side transaction management if enabled and receiver info is available
+    if (this.useClientSideTransactions && receiverId && receiverIsPremium !== undefined) {
+      try {
+        console.log('[CallBillingService] Starting client-side transaction management');
+        await this.clientTransactionManager.startCallTracking(
+          callId,
+          userId,
+          receiverId,
+          callType,
+          isPremium,
+          receiverIsPremium
+        );
+        console.log('[CallBillingService] Client-side transaction management started successfully');
+      } catch (error) {
+        console.error('[CallBillingService] Failed to start client-side transaction management:', error);
+        // Continue with traditional billing as fallback
+      }
+    }
 
     // Calculate billing info
     const billingInfo = await this.calculateCallBilling(userId, callType, currentBalance, isPremium);
@@ -214,10 +240,28 @@ class CallBillingService {
   }
 
   /**
-   * Stop billing for current call
+   * Stop billing for current call with client-side transaction completion
    */
-  public stopCallBilling(): void {
+  public async stopCallBilling(): Promise<void> {
     console.log('[CallBillingService] Stopping call billing');
+
+    // Stop client-side transaction management if enabled
+    if (this.useClientSideTransactions) {
+      try {
+        console.log('[CallBillingService] Stopping client-side transaction management');
+        const completedCall = await this.clientTransactionManager.stopCallTracking();
+        if (completedCall) {
+          console.log('[CallBillingService] Client-side transaction management completed:', {
+            callId: completedCall.callId,
+            totalDuration: completedCall.durationSeconds,
+            totalCallerCharge: completedCall.totalCallerCharge,
+            totalReceiverEarnings: completedCall.totalReceiverEarnings
+          });
+        }
+      } catch (error) {
+        console.error('[CallBillingService] Error stopping client-side transaction management:', error);
+      }
+    }
 
     // Clear timers
     if (this.billingTimer) {
@@ -418,7 +462,7 @@ class CallBillingService {
 
     try {
       // Stop billing first
-      this.stopCallBilling();
+      await this.stopCallBilling();
 
       // Show user notification about insufficient balance
       console.warn('[CallBillingService] Call ended due to insufficient wallet balance');
@@ -587,6 +631,57 @@ class CallBillingService {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+
+  /**
+   * Enable or disable client-side transaction management
+   */
+  public setClientSideTransactions(enabled: boolean): void {
+    this.useClientSideTransactions = enabled;
+    console.log('[CallBillingService] Client-side transactions:', enabled ? 'enabled' : 'disabled');
+  }
+
+  /**
+   * Get current client-side transaction status
+   */
+  public getClientSideTransactionStatus(): any {
+    if (!this.useClientSideTransactions) {
+      return { enabled: false, activeCall: null };
+    }
+
+    return {
+      enabled: true,
+      activeCall: this.clientTransactionManager.getCurrentCallTransaction()
+    };
+  }
+
+  /**
+   * Check caller balance using client-side transaction manager
+   */
+  public async checkCallerBalanceClientSide(): Promise<{ hasBalance: boolean; remainingMinutes: number }> {
+    if (!this.useClientSideTransactions) {
+      return { hasBalance: false, remainingMinutes: 0 };
+    }
+
+    return await this.clientTransactionManager.checkCallerBalance();
+  }
+
+  /**
+   * Rollback transactions for a failed call
+   */
+  public async rollbackCallTransactions(callId: string): Promise<void> {
+    if (!this.useClientSideTransactions) {
+      console.warn('[CallBillingService] Client-side transactions not enabled, cannot rollback');
+      return;
+    }
+
+    try {
+      await this.clientTransactionManager.rollbackCallTransactions(callId);
+      console.log('[CallBillingService] Call transactions rolled back successfully');
+    } catch (error) {
+      console.error('[CallBillingService] Error rolling back call transactions:', error);
+      throw error;
+    }
   }
 }
 
