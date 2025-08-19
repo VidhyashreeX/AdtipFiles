@@ -14,6 +14,7 @@ import WalletService from '../WalletService';
 import { useCallStore } from '../../stores/callStoreSimplified';
 import CallController from './CallController';
 import { ClientSideTransactionManager } from './ClientSideTransactionManager';
+import SettlementModalService from '../SettlementModalService';
 
 export interface CallRates {
   voiceNonPremium: number; // ₹7 per minute
@@ -257,6 +258,9 @@ class CallBillingService {
             totalCallerCharge: completedCall.totalCallerCharge,
             totalReceiverEarnings: completedCall.totalReceiverEarnings
           });
+
+          // Process final call settlement using the new API
+          await this.processCallSettlement(completedCall);
         }
       } catch (error) {
         console.error('[CallBillingService] Error stopping client-side transaction management:', error);
@@ -681,6 +685,81 @@ class CallBillingService {
     } catch (error) {
       console.error('[CallBillingService] Error rolling back call transactions:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Process final call settlement using the new settlement API
+   */
+  private async processCallSettlement(completedCall: any): Promise<void> {
+    try {
+      console.log('[CallBillingService] Processing final call settlement:', {
+        callId: completedCall.callId,
+        callType: completedCall.callType,
+        duration: completedCall.durationSeconds,
+        callerCharge: completedCall.totalCallerCharge,
+        receiverEarnings: completedCall.totalReceiverEarnings
+      });
+
+      const { default: ApiService } = await import('../ApiService');
+
+      const settlementResult = await ApiService.processCallSettlement({
+        callerId: completedCall.callerId,
+        receiverId: completedCall.receiverId,
+        callDuration: completedCall.durationSeconds,
+        callerDebitAmount: completedCall.totalCallerCharge,
+        receiverCreditAmount: completedCall.totalReceiverEarnings,
+        callId: completedCall.callId,
+        callType: completedCall.callType
+      });
+
+      if (settlementResult.success) {
+        console.log('[CallBillingService] Call settlement completed successfully:', settlementResult.data);
+
+        // Show settlement details modal to user
+        this.showSettlementModal(settlementResult.data);
+      } else {
+        console.error('[CallBillingService] Call settlement failed:', settlementResult.message);
+        // Handle settlement failure - could show error modal or retry
+      }
+
+    } catch (error) {
+      console.error('[CallBillingService] Error processing call settlement:', error);
+      // Handle error gracefully - settlement failure shouldn't crash the app
+    }
+  }
+
+  /**
+   * Show settlement details modal to user
+   */
+  private async showSettlementModal(settlementData: any): Promise<void> {
+    try {
+      console.log('[CallBillingService] Settlement details to show in modal:', settlementData);
+
+      // Get current user info
+      const { session } = useCallStore.getState();
+      if (!session) {
+        console.warn('[CallBillingService] No session found, cannot show settlement modal');
+        return;
+      }
+
+      // Determine other user info from session
+      const otherUserName = session.peerName || 'Unknown User';
+      const otherUserId = settlementData.caller.userId === this.userId
+        ? settlementData.receiver.userId
+        : settlementData.caller.userId;
+
+      // Show settlement modal using the service
+      const settlementModalService = SettlementModalService.getInstance();
+      settlementModalService.showSettlementModal({
+        settlementData,
+        currentUserId: this.userId || '',
+        otherUserName,
+        otherUserId,
+      });
+
+    } catch (error) {
+      console.error('[CallBillingService] Error showing settlement modal:', error);
     }
   }
 }

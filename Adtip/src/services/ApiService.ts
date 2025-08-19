@@ -3302,6 +3302,72 @@ export default class ApiService {
   }
 
   /**
+   * Process call settlement - final transaction processing when call ends
+   */
+  static async processCallSettlement(params: {
+    callerId: string | number;
+    receiverId: string | number;
+    callDuration: number;
+    callerDebitAmount: number;
+    receiverCreditAmount: number;
+    callId: string;
+    callType: 'voice' | 'video';
+  }): Promise<{
+    success: boolean;
+    message: string;
+    data?: any;
+  }> {
+    try {
+      console.log('[ApiService] Processing call settlement:', params);
+
+      const response = await this.makeRequest('/call/settlement', {
+        method: 'POST',
+        body: JSON.stringify({
+          callerId: String(params.callerId),
+          receiverId: String(params.receiverId),
+          callDuration: params.callDuration,
+          callerDebitAmount: params.callerDebitAmount,
+          receiverCreditAmount: params.receiverCreditAmount,
+          callId: params.callId,
+          callType: params.callType
+        }),
+      });
+
+      console.log('[ApiService] Call settlement response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Call settlement error:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Get call settlement history for a user
+   */
+  static async getCallSettlementHistory(
+    userId: string | number,
+    limit: number = 50,
+    offset: number = 0
+  ): Promise<any> {
+    try {
+      console.log('[ApiService] Getting call settlement history:', { userId, limit, offset });
+
+      const response = await this.makeRequest(
+        `/call/settlement/history/${userId}?limit=${limit}&offset=${offset}`,
+        {
+          method: 'GET',
+        }
+      );
+
+      console.log('[ApiService] Call settlement history response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] Call settlement history error:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
    * ONE-TIME PREMIUM PAYMENT APIS - COMMENTED OUT, USING OLD SUBSCRIPTION SYSTEM
    */
 
