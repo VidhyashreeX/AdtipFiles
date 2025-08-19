@@ -3,7 +3,6 @@ import { useParams } from "react-router-dom";
 import {
   Youtube,
   Instagram,
-  Phone,
   User,
   MessageSquare,
   Video,
@@ -15,14 +14,17 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-const MyChannel = () => {
+const ChannelPage = () => {
   const { channelName } = useParams();
 
-  // Load saved channel data
-  const savedData = localStorage.getItem("myChannelData");
-  const channelData = savedData ? JSON.parse(savedData) : null;
+  // Load from `channels` array in localStorage
+  const savedChannels = JSON.parse(localStorage.getItem("channels") || "[]");
 
-  // Example video list
+  // Find the channel that matches the URL param
+  const channelData = savedChannels.find(
+    (ch) => ch.channelName === decodeURIComponent(channelName || "")
+  );
+
   const [videos, setVideos] = React.useState([]);
 
   React.useEffect(() => {
@@ -37,26 +39,18 @@ const MyChannel = () => {
       }
     };
 
-    // Initial load
     fetchVideos();
-
-    // Update when a new video is saved
     window.addEventListener("videosUpdated", fetchVideos);
     return () => window.removeEventListener("videosUpdated", fetchVideos);
   }, []);
 
-  // If no channel data or name doesn't match, show error
-  if (
-    !channelData ||
-    decodeURIComponent(channelName || "") !== channelData.name
-  ) {
+  // If no matching channel
+  if (!channelData) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
         <div className="text-center space-y-4">
           <Video className="w-16 h-16 text-gray-400 mx-auto" />
-          <h1 className="text-2xl font-bold text-gray-800">
-            Channel Not Found
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-800">Channel Not Found</h1>
           <p className="text-gray-600">
             No channel data found for this page.
           </p>
@@ -66,7 +60,7 @@ const MyChannel = () => {
   }
 
   // --- Cloudflare Stream Helper ---
-  const getStreamIframeUrl = (videoId) =>
+  const getStreamIframeUrl = (videoId: string) =>
     `https://customer-94e2ffe1e7d5daf0d3de8d11c55dd2d6.cloudflarestream.com/${videoId}/iframe?autoplay=false&muted=true&controls=true`;
 
   return (
@@ -94,7 +88,7 @@ const MyChannel = () => {
         {/* Left: Info */}
         <div className="w-1/3 pr-6 flex flex-col gap-6 overflow-y-auto">
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-            {channelData.name}
+            {channelData.channelName}
           </h1>
 
           <div className="flex flex-wrap gap-2">
@@ -111,7 +105,6 @@ const MyChannel = () => {
 
           {/* Social Links */}
           <div className="flex flex-col gap-2">
-         
             {channelData.youtubeLink && (
               <Button
                 variant="outline"
@@ -154,7 +147,7 @@ const MyChannel = () => {
                 <h2 className="text-sm font-semibold text-gray-700">About</h2>
               </div>
               <p className="text-gray-600 text-sm leading-relaxed">
-                {channelData.comment}
+                {channelData.description || "No description available."}
               </p>
             </CardContent>
           </Card>
@@ -172,7 +165,6 @@ const MyChannel = () => {
                 className="group bg-white border border-gray-200 shadow-sm hover:shadow-md transition overflow-hidden"
               >
                 <div className="relative">
-                  {/* Cloudflare Stream video embed if present */}
                   {video.cloudflareVideoId ? (
                     <iframe
                       src={getStreamIframeUrl(video.cloudflareVideoId)}
@@ -216,4 +208,4 @@ const MyChannel = () => {
   );
 };
 
-export default MyChannel;
+export default ChannelPage;

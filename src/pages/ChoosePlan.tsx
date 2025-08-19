@@ -138,11 +138,7 @@ const ChoosePlan = () => {
     // Optional local state
     setMyChannels([{ name: formData.name }]);
 
-    // Persist to localStorage
-    localStorage.setItem(
-      "channels",
-      JSON.stringify([{ name: formData.name }])
-    );
+  
 
     // 🔹 Tell the sidebar instantly (custom browser event)
     window.dispatchEvent(

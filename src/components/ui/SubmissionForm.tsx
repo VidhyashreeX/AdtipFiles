@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +20,6 @@ interface SubmissionFormProps {
   onSuccess?: (data: FormData) => void;
 }
 
-
 const SubmissionForm: React.FC<SubmissionFormProps> = ({ onSuccess }) => {
   const { toast } = useToast();
   const [formData, setFormData] = useState<FormData>({
@@ -30,17 +29,19 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({ onSuccess }) => {
     instagramLink: "",
     comment: "",
   });
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleInputChange = (field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setIsSubmitting(true);
 
-    // Simulate API call
+  try {
+    // Simulate API call delay
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     toast({
@@ -48,44 +49,40 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({ onSuccess }) => {
       description: "Thank you for your submission. We'll get back to you in 48 Business hours.",
     });
 
-    setFormData({
-      name: "",
-      number: "",
-      youtubeLink: "",
-      instagramLink: "",
-      comment: "",
-    });
+    if (onSuccess) {
+      onSuccess(formData);
+    }
 
+    // Save a simple flag to localStorage indicating a channel exists
+    localStorage.setItem("hasCreatedChannel", "true");
+
+    // Optionally save form data if you wish
+    // localStorage.setItem("myChannelData", JSON.stringify(formData));
+
+    // Let sidebar or other components know instantly via event
+    window.dispatchEvent(new CustomEvent("channelCreated"));
+    window.location.href = "/";
+
+
+  } finally {
     setIsSubmitting(false);
-
-if (onSuccess) onSuccess(formData);
-
-// Save to localStorage for persistence
-localStorage.setItem("myChannelData", JSON.stringify(formData));
-
-// Optional — persist the clickable menu label
-localStorage.setItem("channels", JSON.stringify([{ name: formData.name }]));
-
-// Let sidebar know instantly
-window.dispatchEvent(new CustomEvent("channelCreated", { detail: { name: formData.name } }));
+  }
+};
 
 
-  };
+  const isFormValid = formData.name.trim() !== "" && formData.number.trim() !== "" && formData.comment.trim() !== "";
 
-  const isFormValid = formData.name && formData.number && formData.comment;
 
   return (
     <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
       <DialogHeader>
-        <DialogTitle className="text-xl">Create Channel</DialogTitle>
+        <DialogTitle className="text-xl">Creator Information Form</DialogTitle>
       </DialogHeader>
 
       <div className="w-full">
         <Card className="shadow-form border-0 bg-card/80 backdrop-blur-sm">
           <CardHeader className="space-y-1 pb-6">
-            <CardTitle className="text-2xl font-semibold text-center">
-              Submit Your Information
-            </CardTitle>
+            <CardTitle className="text-2xl font-semibold text-center">Submit Your Information</CardTitle>
             <CardDescription className="text-center">
               Fill out the form below and we'll get back to you as soon as possible
             </CardDescription>
@@ -93,7 +90,6 @@ window.dispatchEvent(new CustomEvent("channelCreated", { detail: { name: formDat
 
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Name Field */}
               <div className="space-y-2">
                 <Label htmlFor="name" className="text-sm font-medium flex items-center gap-2">
                   <User className="w-4 h-4 text-primary" />
@@ -109,7 +105,6 @@ window.dispatchEvent(new CustomEvent("channelCreated", { detail: { name: formDat
                 />
               </div>
 
-              {/* Phone Number Field */}
               <div className="space-y-2">
                 <Label htmlFor="number" className="text-sm font-medium flex items-center gap-2">
                   <Phone className="w-4 h-4 text-primary" />
@@ -125,7 +120,6 @@ window.dispatchEvent(new CustomEvent("channelCreated", { detail: { name: formDat
                 />
               </div>
 
-              {/* Social Media Links */}
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="youtube" className="text-sm font-medium flex items-center gap-2">
@@ -156,7 +150,6 @@ window.dispatchEvent(new CustomEvent("channelCreated", { detail: { name: formDat
                 </div>
               </div>
 
-              {/* Comment Field */}
               <div className="space-y-2">
                 <Label htmlFor="comment" className="text-sm font-medium flex items-center gap-2">
                   <MessageSquare className="w-4 h-4 text-primary" />
@@ -172,12 +165,10 @@ window.dispatchEvent(new CustomEvent("channelCreated", { detail: { name: formDat
                 />
               </div>
 
-          {/* Submit Button */}
-  <Button
+              <Button
                 type="submit"
-   
+                disabled={!isFormValid || isSubmitting}
                 className="w-full h-12 font-semibold text-base shadow-form disabled:opacity-50"
-
               >
                 {isSubmitting ? (
                   <div className="flex items-center gap-2">
@@ -191,15 +182,12 @@ window.dispatchEvent(new CustomEvent("channelCreated", { detail: { name: formDat
                   </div>
                 )}
               </Button>
-
             </form>
           </CardContent>
         </Card>
 
         <div className="text-center mt-4">
-          <p className="text-sm text-muted-foreground">
-            We respect your privacy and will never share your information
-          </p>
+          <p className="text-sm text-muted-foreground">We respect your privacy and will never share your information</p>
         </div>
       </div>
     </DialogContent>

@@ -1,6 +1,8 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useState, useEffect } from "react";
+import UserAvatar from "../components/ui/UserAvatar"; // Adjust path as needed
+
 import {
   User,
   Search,
@@ -14,6 +16,7 @@ import {
   ToggleRight,
   Menu,
   CirclePlay,
+  PhoneIcon,
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -111,7 +114,7 @@ const Navbar = () => {
             <input
               type="text"
               placeholder="Search users or content..."
-              className="w-full px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 text-sm md:text-base rounded-full border border-gray-300 focus:outline-none focus:border-adtip-teal"
+              className="w-full px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 pr-8 text-sm md:text-base rounded-full border border-gray-300 focus:outline-none focus:border-adtip-teal"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -119,62 +122,50 @@ const Navbar = () => {
           </div>
         </div>
 
-        {/* Right: Icons, Toggle, and Profile */}
-        <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
-          <Link
-            to="/notifications"
-            className="text-gray-500 hover:text-adtip-teal transition-colors p-1"
-          >
-            <Bell className="h-5 w-5 sm:h-6 sm:w-6" />
-          </Link>
-          {/* Toggle Button */}
-          <button
-            onClick={() => {
-              if (!user) {
-                navigate("/login");
-              } else if (!user.is_premium) {
-                navigate("/pricingoffers");
-              } else {
-                setIsToggleOn(!isToggleOn);
-              }
-            }}
-            className="flex items-center bg-gray-50 border border-gray-200 rounded-full p-1 sm:p-1.5 transition-colors hover:bg-gray-100"
-            aria-label="Toggle notifications"
-          >
-            {isToggleOn ? (
-              <ToggleRight className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 text-green-500" />
-            ) : (
-              <ToggleLeft className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 text-gray-400" />
-            )}
-          </button>
-          <Link
-            to={user ? "/wallet" : "/login"}
-            className="flex items-center text-gray-700 hover:text-adtip-teal transition-colors bg-gray-50 border border-gray-200 rounded-full px-3 py-1 mr-1"
-            style={{ minWidth: 70 }}
-          >
-            <Wallet className="h-5 w-5 sm:h-6 sm:w-6 mr-1" />
-            <span className="text-sm sm:text-base font-medium tabular-nums">
-              {isLoading
-                ? "..."
-                : balanceData && typeof balanceData.availableBalance === "string"
-                  ? `₹${parseFloat(balanceData.availableBalance).toFixed(2)}`
-                  : "₹0.00"}
-            </span>
-          </Link>
-          <Link to="/profile" className="flex items-center ml-1 sm:ml-2">
-            {user?.profile_image ? (
-              <img
-                src={user.profile_image}
-                alt="Profile"
-                className="h-7 w-7 sm:h-8 sm:w-8 md:h-9 md:w-9 rounded-full object-cover border-2 border-gray-200"
-              />
-            ) : (
-              <div className="h-7 w-7 sm:h-8 sm:w-8 md:h-9 md:w-9 rounded-full bg-gray-200 flex items-center justify-center border-2 border-gray-200">
-                <User className="h-4 w-4 sm:h-5 sm:w-5 text-gray-500" />
-              </div>
-            )}
-          </Link>
-        </div>
+      {/* Right: Icons, Toggle, and Profile */}
+<div className="flex items-center gap-2 sm:gap-3 md:gap-4">
+
+  {/* Toggle Button */}
+  <button
+    onClick={() => {
+      if (!user) {
+        navigate("/login");
+      } else if (!user.is_premium) {
+        navigate("/pricingoffers");
+      } else {
+        setIsToggleOn(!isToggleOn);
+      }
+    }}
+    className="flex items-center bg-gray-50 border border-gray-200 rounded-full p-1 sm:p-1.5 transition-colors hover:bg-gray-100"
+    aria-label="Toggle notifications"
+  >
+    {isToggleOn ? (
+      <ToggleRight className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 text-green-500" />
+    ) : (
+      <ToggleLeft className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 text-gray-400" />
+    )}
+  </button>
+
+  <Link
+    to={user ? "/wallet" : "/login"}
+    className="flex items-center text-gray-700 hover:text-adtip-teal transition-colors bg-gray-50 border border-gray-200 rounded-full px-3 py-1 mr-1"
+    style={{ minWidth: 70 }}
+  >
+    <Wallet className="h-5 w-5 sm:h-6 sm:w-6 mr-1" />
+    <span className="text-sm sm:text-base font-medium tabular-nums">
+      {isLoading
+        ? "..."
+        : balanceData && typeof balanceData.availableBalance === "string"
+        ? `₹${parseFloat(balanceData.availableBalance).toFixed(2)}`
+        : "₹0.00"}
+    </span>
+  </Link>
+
+  <Link to="/profile" className="hidden md:flex items-center ml-1 sm:ml-2">
+    <UserAvatar user={user} />
+  </Link>
+</div>
+
       </div>
 
       {/* Mobile Bottom Navigation */}
@@ -210,11 +201,11 @@ const Navbar = () => {
             <span className="text-[10px] sm:text-xs mt-1">TipShort</span>
           </Link>
           <Link
-            to="/profile"
-            className={`flex flex-col items-center ${isActive("/profile") ? "text-adtip-teal" : "text-gray-500"}`}
+            to="/tipcall"
+            className={`flex flex-col items-center ${isActive("/tipcall") ? "text-adtip-teal" : "text-gray-500"}`}
           >
-            <User className="h-5 w-5 sm:h-6 sm:w-6" />
-            <span className="text-[10px] sm:text-xs mt-1">Profile</span>
+            <PhoneIcon className="h-5 w-5 sm:h-6 sm:w-6" />
+            <span className="text-[10px] sm:text-xs mt-1">TipCall</span>
           </Link>
         </div>
       </div>
