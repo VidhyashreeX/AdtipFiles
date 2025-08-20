@@ -1,14 +1,14 @@
 import React from "react";
 import { useParams } from "react-router-dom";
 import {
-  Youtube,
-  Instagram,
   User,
   MessageSquare,
   Video,
   Star,
   Heart,
   Eye,
+  Pencil,
+  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,16 +17,30 @@ import { Button } from "@/components/ui/button";
 const ChannelPage = () => {
   const { channelName } = useParams();
 
-  // Load from `channels` array in localStorage
+  // Load channels from localStorage
   const savedChannels = JSON.parse(localStorage.getItem("channels") || "[]");
 
-  // Find the channel that matches the URL param
-  const channelData = savedChannels.find(
-    (ch) => ch.channelName === decodeURIComponent(channelName || "")
+  const [videos, setVideos] = React.useState<any[]>([]);
+  const [channels, setChannels] = React.useState(savedChannels);
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [formData, setFormData] = React.useState<any>(null);
+  const profileInputRef = React.useRef<HTMLInputElement | null>(null);
+const coverInputRef = React.useRef<HTMLInputElement | null>(null);
+const closeModal = () => {
+  setIsEditing(false);
+  setFormData(null);
+
+  // Reset file inputs
+  if (profileInputRef.current) profileInputRef.current.value = "";
+  if (coverInputRef.current) coverInputRef.current.value = "";
+};
+
+  // Find current channel
+  const channelData = channels.find(
+    (ch: any) => ch.channelName === decodeURIComponent(channelName || "")
   );
 
-  const [videos, setVideos] = React.useState([]);
-
+  // Fetch saved videos
   React.useEffect(() => {
     const fetchVideos = () => {
       try {
@@ -44,7 +58,7 @@ const ChannelPage = () => {
     return () => window.removeEventListener("videosUpdated", fetchVideos);
   }, []);
 
-  // If no matching channel
+  // If channel not found
   if (!channelData) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
@@ -59,23 +73,91 @@ const ChannelPage = () => {
     );
   }
 
-  // --- Cloudflare Stream Helper ---
+  // Cloudflare Stream Helper
   const getStreamIframeUrl = (videoId: string) =>
     `https://customer-94e2ffe1e7d5daf0d3de8d11c55dd2d6.cloudflarestream.com/${videoId}/iframe?autoplay=false&muted=true&controls=true`;
 
+  // Handle edit button click
+const handleEditClick = () => {
+  setFormData({
+    channelName: channelData.channelName,
+    description: channelData.description || "",
+    profilePhoto: null,
+    coverPhoto: null,
+  });
+  setIsEditing(true);
+};
+
+
+  // Handle save
+const handleSave = () => {
+  const updatedChannels = channels.map((ch: any) =>
+    ch.channelName === channelData.channelName
+      ? {
+          ...ch,
+          channelName: formData.channelName,
+          description: formData.description,
+          // Only update photos if user uploaded new ones
+          profilePhoto: formData.profilePhoto || ch.profilePhoto,
+          coverPhoto: formData.coverPhoto || ch.coverPhoto,
+        }
+      : ch
+  );
+
+  localStorage.setItem("channels", JSON.stringify(updatedChannels));
+  setChannels(updatedChannels);
+  closeModal();
+};
+
+
+
+  // Handlers to load uploaded images as base64 Data URLs
+  const handleFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    field: "profilePhoto" | "coverPhoto"
+  ) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFormData((prev: any) => ({
+        ...prev,
+        [field]: reader.result,
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="h-screen bg-gray-50 flex flex-col font-sans">
-      {/* Hero */}
-      <div className="relative h-48 flex-shrink-0 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-purple-500 to-pink-500"></div>
-        <div className="absolute top-0 left-0 w-full h-1/4 bg-black/10"></div>
+      {/* Hero / Cover Photo */}
+<div className="relative h-52 flex-shrink-0 overflow-visible">
 
+        {channelData.coverPhoto ? (
+          <img
+            src={channelData.coverPhoto}
+            alt="Cover"
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-purple-500 to-pink-500"></div>
+        )}
+        <div className="absolute top-0 left-0 w-full h-1/4"></div>
         {/* Avatar */}
         <div className="absolute -bottom-16 left-8">
           <div className="relative">
-            <div className="w-32 h-32 rounded-full bg-white border-4 border-white shadow-lg flex items-center justify-center">
-              <User className="w-16 h-16 text-purple-500" />
-            </div>
+            {channelData.profilePhoto ? (
+              <img
+                src={channelData.profilePhoto}
+                alt="Avatar"
+                className="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover"
+              />
+            ) : (
+              <div className="w-32 h-32 rounded-full bg-white border-4 border-white shadow-lg flex items-center justify-center">
+                <User className="w-16 h-16 text-purple-500" />
+              </div>
+            )}
             <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center shadow-md">
               <Star className="w-5 h-5 text-white" />
             </div>
@@ -87,9 +169,19 @@ const ChannelPage = () => {
       <div className="flex flex-1 overflow-hidden px-8 pb-4 mt-16">
         {/* Left: Info */}
         <div className="w-1/3 pr-6 flex flex-col gap-6 overflow-y-auto">
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-            {channelData.channelName}
-          </h1>
+          <div className="flex justify-between items-center">
+            <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+              {channelData.channelName}
+            </h1>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={handleEditClick}
+              className="text-gray-600 hover:text-purple-600"
+            >
+              <Pencil className="w-4 h-4" />
+            </Button>
+          </div>
 
           <div className="flex flex-wrap gap-2">
             <Badge className="gap-1 px-3 py-1 bg-gray-200 text-gray-800">
@@ -101,42 +193,6 @@ const ChannelPage = () => {
             <Badge className="gap-1 px-3 py-1 bg-gray-200 text-gray-800">
               <Heart className="w-4 h-4" /> 1.2M views
             </Badge>
-          </div>
-
-          {/* Social Links */}
-          <div className="flex flex-col gap-2">
-            {channelData.youtubeLink && (
-              <Button
-                variant="outline"
-                size="sm"
-                asChild
-                className="justify-start gap-2 bg-white border border-gray-200 hover:border-purple-300"
-              >
-                <a
-                  href={channelData.youtubeLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Youtube className="w-4 h-4 text-red-500" /> YouTube
-                </a>
-              </Button>
-            )}
-            {channelData.instagramLink && (
-              <Button
-                variant="outline"
-                size="sm"
-                asChild
-                className="justify-start gap-2 bg-white border border-gray-200 hover:border-purple-300"
-              >
-                <a
-                  href={channelData.instagramLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Instagram className="w-4 h-4 text-pink-500" /> Instagram
-                </a>
-              </Button>
-            )}
           </div>
 
           {/* About */}
@@ -204,6 +260,85 @@ const ChannelPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Edit Modal */}
+      {isEditing && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">Edit Channel</h2>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={closeModal}  // use closeModal here
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            {/* Form Fields */}
+            <div className="flex flex-col gap-4">
+              <label className="font-medium">Channel Name</label>
+              <input
+                className="border rounded px-3 py-2"
+                placeholder="Channel Name"
+                value={formData.channelName}
+                onChange={(e) =>
+                  setFormData({ ...formData, channelName: e.target.value })
+                }
+              />
+
+              <label className="font-medium">Profile Photo (Upload)</label>
+            <input
+  type="file"
+  accept="image/*"
+  onChange={(e) => handleFileChange(e, "profilePhoto")}
+    ref={profileInputRef}
+/>
+              {formData.profilePhoto && (
+                <img
+                  src={formData.profilePhoto}
+                  alt="Preview"
+                  className="mt-2 w-24 h-24 rounded-full object-cover border"
+
+                />
+              )}
+
+              <label className="font-medium">Cover Photo (Upload)</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleFileChange(e, "coverPhoto")}
+                ref={coverInputRef}
+              />
+              {formData.coverPhoto && (
+                <img
+                  src={formData.coverPhoto}
+                  alt="Preview"
+                  className="mt-2 w-full h-28 object-cover border rounded"
+                />
+              )}
+
+              <label className="font-medium">Description</label>
+              <textarea
+                className="border rounded px-3 py-2 h-24"
+                placeholder="Description"
+                value={formData.description || ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
+              />
+            </div>
+
+            {/* Save Button */}
+            <div className="mt-4 flex justify-end">
+              <Button onClick={handleSave} className="bg-purple-600 text-white">
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
