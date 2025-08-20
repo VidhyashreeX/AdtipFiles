@@ -29,6 +29,9 @@ import {
   SidebarGroupContent,
 } from "./sidebar-components";
 import SubmissionForm from "./SubmissionForm";
+const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
+  ? import.meta.env.VITE_API_URL
+  : `${import.meta.env.VITE_API_URL}/api`;
 
 
 interface NavItem {
@@ -229,20 +232,66 @@ navigate(`/channel`); // ✅ use channelId
       };
     }
   }, [isHovered, handleWheel]);
+
+  const [channelData, setChannelData] = React.useState<any>(null);
+  const [loading, setLoading] = React.useState<boolean>(true);
+  const [error, setError] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    const fetchChannel = async () => {
+      const storedUserId = localStorage.getItem("UserId");
+
+      if (!storedUserId) {
+        setError("User not authenticated");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await axios.get(
+          `${BASE_URL}/getchannelbyuserid/${storedUserId}`
+        );
+
+        if (response.status === 200 && response.data?.data?.length > 0) {
+          setChannelData(response.data.data[0]); // contains channelId
+        } else {
+          setError("No channel data found.");
+          setChannelData(null);
+        }
+      } catch (err) {
+        console.error("Failed to fetch channel:", err);
+        setError("Failed to fetch channel data. Try again.");
+        setChannelData(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchChannel();
+  }, []);
+
   
 
-  const ecommerceItems = [
-    { to: "/tip-shop", label: "Tip Shop", icon: <ShoppingCart className="h-5 w-5" /> },
-    { to: "/analysis", label: "Analysis", icon: <BarChart3 className="h-5 w-5" /> },
-    { to: "/follow", label: "Follow", icon: <Users className="h-5 w-5" /> },
-    { to: user ? "/wallet" : "/login", label: "My Wallet", icon: <Wallet className="h-5 w-5" /> },
-    { to: "/become-seller-full", label: "Become Seller", icon: <Store className="h-5 w-5" />, external: true },
-    { to: "/post-ads", label: "Post Advertisers", icon: <BadgeDollarSign className="h-5 w-5" /> },
-    { to: "/premium", label: "Premium Upgrade", icon: <Crown className="h-5 w-5" /> },
-    { to: "/marketplace/my-orders", label: "My Orders", icon: <Package className="h-5 w-5" /> },
-    { to: "/marketplace/cart", label: "Cart", icon: <ShoppingCart className="h-5 w-5" /> },
-    { to: "/marketplace/favorites", label: "Favorites", icon: <Heart className="h-5 w-5" /> },
-  ];
+const ecommerceItems = [
+  { to: "/tip-shop", label: "Tip Shop", icon: <ShoppingCart className="h-5 w-5" /> },
+  ...(channelData?.channelId
+    ? [
+        {
+          to: `/analysis/${channelData.channelId}`,
+          label: "Analysis",
+          icon: <BarChart3 className="h-5 w-5" />,
+        },
+      ]
+    : []),
+  { to: "/follow", label: "Follow", icon: <Users className="h-5 w-5" /> },
+  { to: user ? "/wallet" : "/login", label: "My Wallet", icon: <Wallet className="h-5 w-5" /> },
+  { to: "/become-seller-full", label: "Become Seller", icon: <Store className="h-5 w-5" />, external: true },
+  { to: "/post-ads", label: "Post Advertisers", icon: <BadgeDollarSign className="h-5 w-5" /> },
+  { to: "/premium", label: "Premium Upgrade", icon: <Crown className="h-5 w-5" /> },
+  { to: "/marketplace/my-orders", label: "My Orders", icon: <Package className="h-5 w-5" /> },
+  { to: "/marketplace/cart", label: "Cart", icon: <ShoppingCart className="h-5 w-5" /> },
+  { to: "/marketplace/favorites", label: "Favorites", icon: <Heart className="h-5 w-5" /> },
+];
+
 
   // Settings and Support items
   const supportItems = [

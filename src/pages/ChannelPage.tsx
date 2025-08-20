@@ -9,6 +9,8 @@ import {
   Eye,
   Pencil,
   X,
+  Film,
+  Smartphone,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -205,208 +207,230 @@ const handleSave = async () => {
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col font-sans">
-      {/* Hero / Cover Photo */}
-      <div className="relative h-52 flex-shrink-0 overflow-visible">
-        {channelData.profileCoverImage ? (
-          <img
-            src={channelData.profileCoverImage}
-            alt="Cover"
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-purple-500 to-pink-500"></div>
-        )}
-        <div className="absolute -bottom-16 left-8">
-          <div className="relative">
-            {channelData.profileImage ? (
-              <img
-                src={channelData.profileImage}
-                alt="Avatar"
-                className="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover"
-              />
-            ) : (
-              <div className="w-32 h-32 rounded-full bg-white border-4 border-white shadow-lg flex items-center justify-center">
-                <User className="w-16 h-16 text-purple-500" />
-              </div>
-            )}
-            <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center shadow-md">
-              <Star className="w-5 h-5 text-white" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex flex-1 overflow-hidden px-8 pb-4 mt-16">
-        {/* Left Info */}
-        <div className="w-1/3 pr-6 flex flex-col gap-6 overflow-y-auto">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-900">
-              {channelData.channelName}
-            </h1>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={handleEditClick}
-              className="text-gray-600 hover:text-purple-600"
-            >
-              <Pencil className="w-4 h-4" />
-            </Button>
-          </div>
-
-          {/* Stats */}
-          <div className="flex flex-wrap gap-2">
-            <Badge className="gap-1 px-3 py-1 bg-gray-200 text-gray-800">
-              <Eye className="w-4 h-4" /> {channelData.totalSubscribers} subs
-            </Badge>
-            <Badge className="gap-1 px-3 py-1 bg-gray-200 text-gray-800">
-              <Video className="w-4 h-4" /> {channelData.totalVideos} videos
-            </Badge>
-            <Badge className="gap-1 px-3 py-1 bg-gray-200 text-gray-800">
-              <Heart className="w-4 h-4" /> {channelData.total_ads_view} views
-            </Badge>
-          </div>
-
-          {/* About */}
-          <Card className="bg-white border border-gray-200 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <MessageSquare className="w-4 h-4 text-purple-500" />
-                <h2 className="text-sm font-semibold text-gray-700">About</h2>
-              </div>
-              <p className="text-gray-600 text-sm leading-relaxed">
-                {channelData.description || "No description available."}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Videos */}
-        <div className="w-2/3 overflow-y-auto">
-          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-            <Video className="w-5 h-5 text-purple-500" /> Uploaded Videos
-          </h2>
-          <div className="grid grid-cols-2 gap-4 pb-4">
-            {videos.map((video) => (
-              <Card
-                key={video.id}
-                className="group bg-white border border-gray-200 shadow-sm hover:shadow-md transition overflow-hidden"
-              >
-                <div className="relative">
-                  {video.cloudflareVideoId ? (
-                    <iframe
-                      src={getStreamIframeUrl(video.cloudflareVideoId)}
-                      title={video.title}
-                      width="100%"
-                      height="160"
-                      allow="autoplay; encrypted-media"
-                      frameBorder="0"
-                      allowFullScreen
-                      style={{ background: "#000" }}
-                    />
-                  ) : (
-                    <img
-                      src={video.thumbnail}
-                      alt={video.title}
-                      className="w-full h-28 object-cover"
-                    />
-                  )}
-                  {video.duration && (
-                    <Badge className="absolute bottom-1 right-1 bg-black/80 text-white text-xs">
-                      {video.duration}
-                    </Badge>
-                  )}
-                </div>
-                <CardContent className="p-3">
-                  <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 group-hover:text-purple-500 transition-colors">
-                    {video.title}
-                  </h3>
-                  {video.views && (
-                    <div className="flex items-center gap-1 text-gray-500 text-xs mt-1">
-                      <Eye className="w-3 h-3" /> {video.views} views
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Edit Modal */}
-      {isEditing && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md overflow-y-auto max-h-[90vh]">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold">Edit Channel</h2>
-              <Button size="icon" variant="ghost" onClick={closeModal}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-
-            {/* Form */}
-            <div className="flex flex-col gap-4">
-              <label className="font-medium">Channel Name</label>
-              <input
-                className="border rounded px-3 py-2"
-                placeholder="Channel Name"
-                value={formData.channelName}
-                onChange={(e) =>
-                  setFormData({ ...formData, channelName: e.target.value })
-                }
-              />
-
-              <label className="font-medium">Profile Photo (Upload)</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleFileChange(e, "profilePhoto")}
-                ref={profileInputRef}
-              />
-              {formData.profilePhoto && (
-                <img
-                  src={formData.profilePhoto}
-                  alt="Preview"
-                  className="mt-2 w-24 h-24 rounded-full object-cover border"
-                />
-              )}
-
-              <label className="font-medium">Cover Photo (Upload)</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleFileChange(e, "coverPhoto")}
-                ref={coverInputRef}
-              />
-              {formData.coverPhoto && (
-                <img
-                  src={formData.coverPhoto}
-                  alt="Preview"
-                  className="mt-2 w-full h-28 object-cover border rounded"
-                />
-              )}
-
-              <label className="font-medium">Description</label>
-              <textarea
-                className="border rounded px-3 py-2 h-24"
-                placeholder="Description"
-                value={formData.description || ""}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-              />
-            </div>
-
-            {/* Save */}
-            <div className="mt-4 flex justify-end">
-              <Button onClick={handleSave} className="bg-purple-600 text-white">
-                Save Changes
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+         {/* Hero */}
+         <div className="relative h-52 flex-shrink-0 overflow-visible">
+           {channelData.profileCoverImage ? (
+             <img
+               src={channelData.profileCoverImage}
+               alt="Cover"
+               className="w-full h-full object-cover"
+             />
+           ) : (
+             <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-purple-500 to-pink-500"></div>
+           )}
+           <div className="absolute -bottom-16 left-8">
+             <div className="relative">
+               {channelData.profileImage ? (
+                 <img
+                   src={channelData.profileImage}
+                   alt="Avatar"
+                   className="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover"
+                 />
+               ) : (
+                 <div className="w-32 h-32 rounded-full bg-white border-4 border-white shadow-lg flex items-center justify-center">
+                   <User className="w-16 h-16 text-purple-500" />
+                 </div>
+               )}
+               <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center shadow-md">
+                 <Star className="w-5 h-5 text-white" />
+               </div>
+             </div>
+           </div>
+         </div>
+   
+         {/* Content */}
+         <div className="flex flex-1 overflow-hidden px-8 pb-4 mt-16">
+           {/* Left Info */}
+           <div className="w-1/3 pr-6 flex flex-col gap-6 overflow-y-auto">
+             <div className="flex justify-start mt-2 ml-4 items-center">
+               <h1 className="text-2xl font-bold text-gray-900">
+                 {channelData.channelName}
+               </h1>
+               <Button
+                 size="icon"
+                 variant="ghost"
+                 onClick={handleEditClick}
+                 className="text-gray-600 hover:text-purple-600"
+               >
+                 <Pencil className="w-4 h-4" />
+               </Button>
+             </div>
+   
+             {/* Stats */}
+             <Card className="bg-white border border-gray-200 shadow-md">
+               <CardContent className="p-6">
+                 <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                   <Star className="w-5 h-5 text-purple-500" /> Channel Stats
+                 </h2>
+                 <div className="grid grid-cols-2 gap-4">
+                   <div className="flex items-center gap-3 p-3 rounded-lg bg-purple-50">
+                     <User className="w-5 h-5 text-purple-600" />
+                     <div>
+                       <p className="text-xs text-gray-500">Subscribers</p>
+                       <p className="font-bold text-gray-800">{channelData.totalSubscribers}</p>
+                     </div>
+                   </div>
+                   <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50">
+                     <Video className="w-5 h-5 text-blue-600" />
+                     <div>
+                       <p className="text-xs text-gray-500">Videos</p>
+                       <p className="font-bold text-gray-800">{channelData.totalVideos}</p>
+                     </div>
+                   </div>
+                   <div className="flex items-center gap-3 p-3 rounded-lg bg-pink-50">
+                     <Film className="w-5 h-5 text-pink-600" />
+                     <div>
+                       <p className="text-xs text-gray-500">Shorts</p>
+                       <p className="font-bold text-gray-800">{channelData.totalShorts}</p>
+                     </div>
+                   </div>
+                   <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50">
+                     <Smartphone className="w-5 h-5 text-green-600" />
+                     <div>
+                       <p className="text-xs text-gray-500">Reels</p>
+                       <p className="font-bold text-gray-800">{channelData.totalReels}</p>
+                     </div>
+                   </div>
+                 </div>
+   
+                
+               </CardContent>
+             </Card>
+   
+             {/* About */}
+             <Card className="bg-white border border-gray-200 shadow-sm">
+               <CardContent className="p-4">
+                 <div className="flex items-center gap-2 mb-2">
+                   <MessageSquare className="w-4 h-4 text-purple-500" />
+                   <h2 className="text-sm font-semibold text-gray-700">About</h2>
+                 </div>
+                 <p className="text-gray-600 text-sm leading-relaxed">
+                   {channelData.description || "No description available."}
+                 </p>
+               </CardContent>
+             </Card>
+           </div>
+   
+           {/* Videos */}
+           <div className="w-2/3 overflow-y-auto">
+             <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center  mt-2 gap-2">
+               <Video className="w-5 h-5 text-purple-500 " /> Uploaded Videos
+             </h2>
+             <div className="grid grid-cols-2 gap-4 pb-4">
+               {videos.map((video) => (
+                 <Card
+                   key={video.id}
+                   className="group bg-white border border-gray-200 shadow-sm hover:shadow-md transition overflow-hidden"
+                 >
+                   <div className="relative">
+                     {video.cloudflareVideoId ? (
+                       <iframe
+                         src={getStreamIframeUrl(video.cloudflareVideoId)}
+                         title={video.title}
+                         width="100%"
+                         height="160"
+                         allow="autoplay; encrypted-media"
+                         frameBorder="0"
+                         allowFullScreen
+                         style={{ background: "#000" }}
+                       />
+                     ) : (
+                       <img
+                         src={video.thumbnail}
+                         alt={video.title}
+                         className="w-full h-28 object-cover"
+                       />
+                     )}
+                     {video.duration && (
+                       <Badge className="absolute bottom-1 right-1 bg-black/80 text-white text-xs">
+                         {video.duration}
+                       </Badge>
+                     )}
+                   </div>
+                   <CardContent className="p-3">
+                     <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 group-hover:text-purple-500 transition-colors">
+                       {video.title}
+                     </h3>
+                     {video.views && (
+                       <div className="flex items-center gap-1 text-gray-500 text-xs mt-1">
+                         <Eye className="w-3 h-3" /> {video.views} views
+                       </div>
+                     )}
+                   </CardContent>
+                 </Card>
+               ))}
+             </div>
+           </div>
+         </div>
+   
+         {/* Edit Modal */}
+         {isEditing && (
+           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+             <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md overflow-y-auto max-h-[90vh]">
+               <div className="flex justify-between items-center mb-4">
+                 <h2 className="text-lg font-semibold">Edit Channel</h2>
+                 <Button size="icon" variant="ghost" onClick={closeModal}>
+                   <X className="w-4 h-4" />
+                 </Button>
+               </div>
+               {/* Form */}
+               <div className="flex flex-col gap-4">
+                 <label className="font-medium">Channel Name</label>
+                 <input
+                   className="border rounded px-3 py-2"
+                   placeholder="Channel Name"
+                   value={formData.channelName}
+                   onChange={(e) =>
+                     setFormData({ ...formData, channelName: e.target.value })
+                   }
+                 />
+                 <label className="font-medium">Profile Photo (Upload)</label>
+                 <input
+                   type="file"
+                   accept="image/*"
+                   onChange={(e) => handleFileChange(e, "profilePhoto")}
+                   ref={profileInputRef}
+                 />
+                 {formData.profilePhoto && (
+                   <img
+                     src={formData.profilePhoto}
+                     alt="Preview"
+                     className="mt-2 w-24 h-24 rounded-full object-cover border"
+                   />
+                 )}
+                 <label className="font-medium">Cover Photo (Upload)</label>
+                 <input
+                   type="file"
+                   accept="image/*"
+                   onChange={(e) => handleFileChange(e, "coverPhoto")}
+                   ref={coverInputRef}
+                 />
+                 {formData.coverPhoto && (
+                   <img
+                     src={formData.coverPhoto}
+                     alt="Preview"
+                     className="mt-2 w-full h-28 object-cover border rounded"
+                   />
+                 )}
+                 <label className="font-medium">Description</label>
+                 <textarea
+                   className="border rounded px-3 py-2 h-24"
+                   placeholder="Description"
+                   value={formData.description || ""}
+                   onChange={(e) =>
+                     setFormData({ ...formData, description: e.target.value })
+                   }
+                 />
+               </div>
+               <div className="mt-4 flex justify-end">
+                 <Button onClick={handleSave} className="bg-purple-600 text-white">
+                   Save Changes
+                 </Button>
+               </div>
+             </div>
+           </div>
+         )}
+       </div>
   );
 };
 

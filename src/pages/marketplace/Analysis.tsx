@@ -23,12 +23,23 @@ import { Users, ShoppingBag, UserCircle, Megaphone } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import axios from "axios";
+interface ChannelAnalyticsProps {
+  data: any;
+}
 
 import { useParams } from "react-router-dom";
 const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
   ? import.meta.env.VITE_API_URL
   : `${import.meta.env.VITE_API_URL}/api`;
-
+  const getAuthToken = () => {
+  try {
+    const stored = localStorage.getItem("UserLoggedIn");
+    if (!stored) return null;
+    return `Bearer ${stored}`; // 👈 prepend Bearer
+  } catch {
+    return null;
+  }
+};
 
 
 
@@ -51,7 +62,7 @@ const generateMockData = (numPoints: number) => {
 const chartData = generateMockData(12);
 
 const ChannelAnalyticsCard = ({ data }: { data: any }) => (
-  <div className="max-w-xl mx-auto bg-white rounded-2xl shadow-lg p-6 mt-8">
+  <div className="max-w-xl mx-auto bg-white rounded-2xl shadow-lg p-6 mt-8 mb-8">
     <div className="flex items-center gap-4 mb-6">
       <img
         src={data.channel_image}
@@ -100,41 +111,13 @@ const ChannelAnalyticsCard = ({ data }: { data: any }) => (
   </div>
 );
 
-const ChannelAnalytics = () => {
-  const { channelId } = useParams();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<any>(null);
-
-  useEffect(() => {
-    if (!channelId) return;
-    setLoading(true);
-    setError(null);
-    axios
-      .get(`/analytics/${channelId}`)
-      .then((res) => {
-        if (res.data.status) {
-          setData(res.data.data);
-        } else {
-          setError(res.data.message || "Failed to fetch analytics");
-        }
-      })
-      .catch((err) => {
-        setError(err.response?.data?.message || err.message || "Error fetching analytics");
-      })
-      .finally(() => setLoading(false));
-  }, [channelId]);
-
-  if (loading) return <div className="text-center py-20 text-gray-500">Loading channel analytics...</div>;
-  if (error) return <div className="text-center py-20 text-red-500">{error}</div>;
+const ChannelAnalytics: React.FC<ChannelAnalyticsProps> = ({ data }) => {
   if (!data) return null;
   return <ChannelAnalyticsCard data={data} />;
 };
 
 const Analysis = () => {
   const { channelId } = useParams();
-  const channelData = JSON.parse(localStorage.getItem("channelData") || "{}");
-const [walletBalance, setWalletBalance] = useState<number>(0);
 const [loading, setLoading] = useState<boolean>(true);
 const [error, setError] = useState<string | null>(null);
   const { user, isAuthenticated } = useAuth();
@@ -153,105 +136,39 @@ useEffect(() => {
     navigate("/login");
   }
 }, [user, isAuthenticated, userId, token, navigate]);
+
+const [creatorStats, setCreatorStats] = useState<any>(null);
+
 useEffect(() => {
-  const fetchWalletData = async () => {
-    if (!userId || !token) return;
-    try {
-      setLoading(true);
-      const balanceResponse = await axios.get(`${BASE_URL}/getfunds/${userId}`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (balanceResponse.status === 200) {
-        setWalletBalance(parseFloat(balanceResponse.data.availableBalance) || 0);
-      } else {
-        throw new Error(`Unexpected response status: ${balanceResponse.status}`);
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.message || err.message);
-    } finally {
-      setLoading(false);
+  if (!channelId ) return;
+ const fetchAnalytics = async () => {
+  try {
+    setLoading(true);
+   const res = await axios.get(`${BASE_URL}/analytics/${channelId}`, {
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: getAuthToken(),
+  },
+});
+
+
+    console.log("Channel Analytics API Response:", res.data);  // 👈 add this
+
+    if (res.data.status && res.data.data) {
+      setCreatorStats(res.data.data);
+    } else {
+      setError(res.data.message || "Failed to fetch analytics");
     }
-  };
-  if (!authLoading) {
-    fetchWalletData();
+  } catch (err: any) {
+    setError(err.response?.data?.message || err.message);
+  } finally {
+    setLoading(false);
   }
-}, [userId, token, navigate, authLoading]);
-const [totalWithdraw, setTotalWithdraw] = useState<number>(0);
-useEffect(() => {
-  const fetchWalletData = async () => {
-    if (!userId || !token) return;
-    try {
-      setLoading(true);
+};
 
-      // ✅ Fetch balance
-      const balanceResponse = await axios.get(`${BASE_URL}/getfunds/${userId}`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (balanceResponse.status === 200) {
-        setWalletBalance(parseFloat(balanceResponse.data.availableBalance) || 0);
-      }
 
-      // ✅ Fetch withdrawal stats
-      const withdrawalResponse = await axios.get(`${BASE_URL}/withdrawal-stats/${userId}`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (withdrawalResponse.status === 200 && withdrawalResponse.data.status === 200) {
-
-        const total = withdrawalResponse.data.data?.wallet?.total_amount || 0;
-  setTotalWithdraw(total);
-        console.log("withdrawalResponse:", withdrawalResponse.data);
-
-      }
-
-    } catch (err: any) {
-      console.error("Wallet data error:", err.response?.data || err.message);
-      setError("Error: " + (err.response?.data?.message || err.message));
-    } finally {
-      setLoading(false);
-      
-    }
-  };
-
-  if (!authLoading) {
-    fetchWalletData();
-  }
-}, [userId, token, navigate, authLoading]);
-const [totalViews, setTotalViews] = useState<number>(0);
-useEffect(() => {
-  const fetchChannelAnalytics = async () => {
-    if (!channelId || !token) return;
-    try {
-      const analyticsResponse = await axios.get(
-        `${BASE_URL}/analytics/${channelId}`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      // ✅ Your backend returns { status: true, data: {...} }
-      if (analyticsResponse.data.status === true && analyticsResponse.data.data) {
-        setTotalViews(analyticsResponse.data.data.total_views || 0);
-        console.log("Channel Analytics:", analyticsResponse.data.data);
-      }
-    } catch (err) {
-      console.error("Error fetching channel analytics:", err);
-    }
-  };
-
-  fetchChannelAnalytics();
-}, [channelId, token]);
+  fetchAnalytics();
+}, [channelId]);
 
 
 
@@ -259,15 +176,22 @@ useEffect(() => {
 function calculateEarnedMoney(totalViews?: number) {
   return totalViews ? Math.floor(totalViews / 100000) * 1000 : 0;
 }
-  if (channelId) {
-    return <ChannelAnalytics />;
-  }
+
 
   const [activeTab, setActiveTab] = useState("consumers");
 
   return (
     <div className="container mx-auto py-6 px-4">
       <h1 className="text-2xl font-bold mb-8">Platform Analytics</h1>
+      {channelId && (
+      <>
+        {loading && <div className="text-center py-20 text-gray-500">Loading channel analytics...</div>}
+        {error && <div className="text-center py-20 text-red-500">{error}</div>}
+        {!loading && !error && creatorStats && (
+          <ChannelAnalytics data={creatorStats} />
+        )}
+      </>
+    )}
 
       <Tabs defaultValue="consumers" value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-2 md:grid-cols-4 mb-6">
@@ -370,33 +294,26 @@ function calculateEarnedMoney(totalViews?: number) {
     <div className="space-y-4">
       <div className="bg-gray-50 rounded-lg p-4">
         <p className="text-gray-500 text-sm">Total Views</p>
-   <p className="text-2xl font-bold">{totalViews}</p>
+        <p className="text-2xl font-bold">{creatorStats?.total_views || 0}</p>
       </div>
-      <div className="bg-gray-50 rounded-lg p-4">
-        <p className="text-gray-500 text-sm">Total Earned Money</p>
-        <p className="text-2xl font-bold">
-          ₹{calculateEarnedMoney(channelData?.totalViews)}
-        </p>
-      </div>
-    <div className="bg-gray-50 rounded-lg p-4">
-  <p className="text-gray-500 text-sm">Total Withdraw</p>
-  {loading ? (
-    <p className="text-lg font-bold">Loading...</p>
-  ) : (
-    <p className="text-lg font-bold">₹{totalWithdraw.toFixed(2)}</p>
-  )}
-</div>
-    <div className="bg-gray-50 rounded-lg p-4 ">
-  <p className="text-gray-500 text-xs mb-1">Available Balance</p>
-  {loading ? (
-    <p className="text-lg font-bold">Loading...</p>
-  ) : error ? (
-    <p className="text-lg font-bold text-red-500">{error}</p>
-  ) : (
-<p className="text-lg font-bold">₹{walletBalance.toFixed(2)}</p>
 
-  )}
-</div>
+      <div className="bg-gray-50 rounded-lg p-4">
+        <p className="text-gray-500 text-sm">Paid Video Earnings</p>
+        <p className="text-2xl font-bold">₹{creatorStats?.paid_video_earned || 0}</p>
+      </div>
+
+      <div className="bg-gray-50 rounded-lg p-4">
+        <p className="text-gray-500 text-sm">Total Withdraw</p>
+       <p className="text-lg font-bold">
+  ₹{Number(creatorStats?.withdrawn ?? 0).toFixed(2)}
+</p>
+
+      </div>
+
+      <div className="bg-gray-50 rounded-lg p-4 ">
+        <p className="text-gray-500 text-xs mb-1">Available Balance</p>
+        <p className="text-lg font-bold">₹{Number(creatorStats?.available_balance??0).toFixed(2)}</p>
+      </div>
     </div>
   </CardContent>
 </Card>

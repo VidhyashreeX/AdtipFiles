@@ -173,7 +173,7 @@ const router = createBrowserRouter([
 			},
 		
 			{
-				path: "analysis",
+				path: "/analysis/:channelId",
 				element: <Analysis />,
 			},
 			{
