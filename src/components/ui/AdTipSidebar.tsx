@@ -112,14 +112,14 @@ React.useEffect(() => {
     let items = [...baseNavItems];
 
     // Add channels if any
-    if (channels.length > 0) {
-      const channelLinks = channels.map((ch) => ({
- to: `/channel/${encodeURIComponent(ch.channelName)}`,
-        label: "My Channel",
-        icon: <User className="h-5 w-5" />,
-      }));
-      items = [...items, ...channelLinks];
-    }
+if (channels.length > 0) {
+  const channelLinks = channels.map((ch) => ({
+    to: '/channel/',   // ✅ use ID not name
+    label: "My Channel",
+    icon: <User className="h-5 w-5" />,
+  }));
+  items = [...items, ...channelLinks];
+}
 
     // Add profile if small screen
     if (isSmallScreen) {
@@ -150,29 +150,30 @@ const handleChannelCreated = (data: ChannelFormData) => {
   }
 
   // 🔥 Rebuild sidebar items immediately
-  setMainNavItems((prev) => {
-    const baseItems = [...baseNavItems];
-    const channelLinks = savedChannels.map((ch) => ({
-      to: `/channel/${encodeURIComponent(ch.channelName)}`,
-      label: "My Channel",
-      icon: <User className="h-5 w-5" />,
-    }));
+setMainNavItems((prev) => {
+  const baseItems = [...baseNavItems];
+  const channelLinks = savedChannels.map((ch) => ({
+    to: '/channel',   // ✅ use ID not name
+    label: "My Channel",
+    icon: <User className="h-5 w-5" />,
+  }));
 
-    const isSmallScreen = window.matchMedia("(max-width: 767px)").matches;
-    if (isSmallScreen) {
-      return [
-        ...baseItems,
-        ...channelLinks,
-        {
-          to: "/profile",
-          label: "Profile",
-          icon: <UserAvatar user={user} />,
-        },
-      ];
-    }
+  const isSmallScreen = window.matchMedia("(max-width: 767px)").matches;
+  if (isSmallScreen) {
+    return [
+      ...baseItems,
+      ...channelLinks,
+      {
+        to: "/profile",
+        label: "Profile",
+        icon: <UserAvatar user={user} />,
+      },
+    ];
+  }
 
-    return [...baseItems, ...channelLinks];
-  });
+  return [...baseItems, ...channelLinks];
+});
+
   // ✅ mark that channel creation is done
   setHasSubmitted(false);
   localStorage.setItem("hasCreatedChannel", "false");
@@ -180,7 +181,8 @@ const handleChannelCreated = (data: ChannelFormData) => {
 
   
 
-  navigate(`/channel/${encodeURIComponent(data.channelName)}`);
+navigate(`/channel`); // ✅ use channelId
+
 };
 
 

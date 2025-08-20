@@ -77,7 +77,7 @@ const router = createBrowserRouter([
 				element: <EditProfile />,
 			},
 			{
-    path: "channel/:channelName",
+    path: "channel/",
     element: <ChannelPage />,
 },
 
