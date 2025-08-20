@@ -83,8 +83,7 @@ const Profile = () => {
 
     fetchUserData();
   }, [isAuthenticated, user, navigate]);
-
-  const handleLogout = async () => {
+   const handleLogout = async () => {
     try {
       if (user?.id) {
         // Call logout API, but don't block on it
@@ -112,6 +111,7 @@ const Profile = () => {
       localStorage.removeItem("profession");
       localStorage.removeItem("maritalStatus");
       localStorage.removeItem("age");
+       localStorage.removeItem("channels");
       // Call AuthContext logout to clear context state
       logout();
       // Redirect to login

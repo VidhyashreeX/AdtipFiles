@@ -24,6 +24,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import axios from "axios";
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -33,13 +34,40 @@ const Settings = () => {
   const [darkModeEnabled, setDarkModeEnabled] = React.useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
-    toast({
-      title: "Logged out",
-      description: "You have been logged out successfully",
-    });
+   const handleLogout = async () => {
+    try {
+      if (user?.id) {
+        // Call logout API, but don't block on it
+        await axios.post(
+          `${import.meta.env.VITE_API_URL}/api/logout`,
+          { id: user.id },
+          {
+            headers: {
+              Authorization: `Bearer ${user.accessToken}`,
+            },
+          }
+        ).catch(() => {}); // Ignore API errors
+      }
+    } catch (error) {
+      // Ignore API errors, always perform local logout
+    } finally {
+      // Always clear all localStorage keys related to auth
+      localStorage.removeItem("user");
+      localStorage.removeItem("UserLoggedIn");
+      localStorage.removeItem("UserId");
+      localStorage.removeItem("token");
+      localStorage.removeItem("name");
+      localStorage.removeItem("profileImage");
+      localStorage.removeItem("gender");
+      localStorage.removeItem("profession");
+      localStorage.removeItem("maritalStatus");
+      localStorage.removeItem("age");
+       localStorage.removeItem("channels");
+      // Call AuthContext logout to clear context state
+      logout();
+      // Redirect to login
+      navigate("/login");
+    }
   };
 
   const handleCallSupport = () => {

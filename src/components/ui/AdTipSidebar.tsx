@@ -6,7 +6,7 @@ import { LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { ChannelForm } from "./ChannelForm";
-import type { ChannelFormData } from "./ChannelForm";
+import type { Channel, ChannelFormData } from "./ChannelForm";
 
 
 
@@ -86,6 +86,7 @@ const AdTipSidebar = () => {
       localStorage.removeItem("profession");
       localStorage.removeItem("maritalStatus");
       localStorage.removeItem("age");
+       localStorage.removeItem("channels");
       // Call AuthContext logout to clear context state
       logout();
       // Redirect to login
@@ -104,27 +105,26 @@ const baseNavItems = [
 // Maintain your state as-is
 const [mainNavItems, setMainNavItems] = React.useState(baseNavItems);
 
-
+// 🟢 Effect 1: Build nav items
 React.useEffect(() => {
   function buildNavItems() {
-    const channels: ChannelFormData[] = JSON.parse(localStorage.getItem("channels") || "[]");
+const channels: Channel[] = JSON.parse(localStorage.getItem("channels") || "[]");
+
 
     const isSmallScreen = window.matchMedia("(max-width: 767px)").matches;
 
-    // Start with base items
     let items = [...baseNavItems];
 
-    // Add channels if any
-if (channels.length > 0) {
-  const channelLinks = channels.map((ch) => ({
-    to: '/channel/',   // ✅ use ID not name
-    label: "My Channel",
-    icon: <User className="h-5 w-5" />,
-  }));
-  items = [...items, ...channelLinks];
-}
+    // ✅ Only add if we have a channel with channelId
+    if (channels.length > 0 && channels[0]?.channelId) {
+      const channelLinks = channels.map((ch) => ({
+        to: '/channel',  
+        label: ch.channelName || "My Channel",
+        icon: <User className="h-5 w-5" />,
+      }));
+      items = [...items, ...channelLinks];
+    }
 
-    // Add profile if small screen
     if (isSmallScreen) {
       items.push({
         to: "/profile",
@@ -236,38 +236,44 @@ navigate(`/channel`); // ✅ use channelId
   const [channelData, setChannelData] = React.useState<any>(null);
   const [loading, setLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<string | null>(null);
-  React.useEffect(() => {
-    const fetchChannel = async () => {
-      const storedUserId = localStorage.getItem("UserId");
+React.useEffect(() => {
+  const fetchChannel = async () => {
+    const storedUserId = localStorage.getItem("UserId");
 
-      if (!storedUserId) {
-        setError("User not authenticated");
-        setLoading(false);
-        return;
-      }
+    if (!storedUserId) {
+      setError("User not authenticated");
+      setLoading(false);
+      return;
+    }
 
-      try {
-        const response = await axios.get(
-          `${BASE_URL}/getchannelbyuserid/${storedUserId}`
-        );
+    try {
+      const response = await axios.get(
+        `${BASE_URL}/getchannelbyuserid/${storedUserId}`
+      );
 
-        if (response.status === 200 && response.data?.data?.length > 0) {
-          setChannelData(response.data.data[0]); // contains channelId
-        } else {
-          setError("No channel data found.");
-          setChannelData(null);
-        }
-      } catch (err) {
-        console.error("Failed to fetch channel:", err);
-        setError("Failed to fetch channel data. Try again.");
+      if (response.status === 200 && response.data?.data?.length > 0) {
+        const channel = response.data.data[0];
+        setChannelData(channel);
+
+        // ✅ Sync to localStorage for buildNavItems
+        localStorage.setItem("channels", JSON.stringify([channel]));
+      } else {
+        setError("No channel data found.");
         setChannelData(null);
-      } finally {
-        setLoading(false);
+        localStorage.removeItem("channels");
       }
-    };
+    } catch (err) {
+      console.error("Failed to fetch channel:", err);
+      setError("Failed to fetch channel data. Try again.");
+      setChannelData(null);
+      localStorage.removeItem("channels");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchChannel();
-  }, []);
+  fetchChannel();
+}, []);
 
   
 

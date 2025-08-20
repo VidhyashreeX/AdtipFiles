@@ -18,6 +18,26 @@ export interface ChannelFormData {
   coverImage?: File;
   profileImage?: File;
 }
+export interface Channel {
+  channelId: number;
+  channelName: string;
+  description: string;
+  channelUrl: string;
+  profileImage: string;
+  profileCoverImage: string;
+  totalSubscribers: number;
+  totalVideos: number;
+  totalShorts: number;
+  createdBy: number;
+  updatedBy: number;
+  createddate: string;
+  updateddate: string;
+  total_ads_display: number;
+  total_ads_like: number;
+  total_ads_view: number;
+  total_earnings: number;
+  totalReels: number;
+}
 
 export function ChannelForm({ onSave, initialData }: ChannelFormProps) {
   const [formData, setFormData] = useState<ChannelFormData>({
