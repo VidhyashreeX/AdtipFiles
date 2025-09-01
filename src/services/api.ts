@@ -1,10 +1,7 @@
 import axios from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
-  ? import.meta.env.VITE_API_URL
-  : `${import.meta.env.VITE_API_URL}/api`;
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://api.adtip.in';
 
-// Create axios instance with default config
 const api = axios.create({
   baseURL: BASE_URL,
   headers: {
@@ -12,28 +9,33 @@ const api = axios.create({
   },
 });
 
-// Intercept requests to add auth token
+// Request interceptor to add auth token
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('UserLoggedIn');
-  // Don't check for user object, just rely on token
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
-}, (error) => {
-  return Promise.reject(error);
 });
 
-// Add response interceptor to handle auth errors
 api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
+  response => response,
+  error => {
+    console.error('API Error:', {
+      url: error.config?.url,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+    
+    // Only redirect on actual 401 (unauthorized) errors
     if (error.response?.status === 401) {
-      // Clear auth state only if token has expired
-      const token = localStorage.getItem('UserLoggedIn');
-      if (token) {
-        localStorage.removeItem('user');
-        localStorage.removeItem('UserLoggedIn');
+      console.log('🚫 401 Unauthorized - clearing auth data and redirecting');
+      localStorage.removeItem('UserLoggedIn');
+      localStorage.removeItem('user');
+      localStorage.removeItem('UserId');
+      
+      // Only redirect if we're not already on the login page
+      if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
     }
@@ -136,16 +138,44 @@ interface PostListResponse {
   };
 }
 
+export interface ChannelInfo {
+  channelId: string; // This is the key field
+  channelName: string;
+  description: string;
+  // ... other fields
+}
+
 // Auth APIs
 export const authAPI = {
-  sendOTP: (mobileNumber: string, userType: string = "2") =>
-    api.post<OTPResponse>('/otplogin', { mobileNumber, userType }),
-
-  verifyOTP: (mobile_number: string, otp: string, id: string) =>
-    api.post<VerifyOTPResponse>('/otpverify', { mobile_number, otp, id }),
+  sendOTP: (mobileNumber: string) => 
+    api.post('/api/otplogin', { 
+      mobileNumber,
+      userType: 1
+    }),
+    
+  verifyOTP: (mobileNumber: string, otp: string, id: string) => {
+    const payload = {
+      mobile_number: mobileNumber,
+      otp: otp
+    };
+    console.log('📤 Sending payload to /api/otpverify:', payload);
+    return api.post('/api/otpverify', payload)
+      .then(response => {
+        console.log('✅ verifyOTP response:', response.data);
+        return response;
+      })
+      .catch(error => {
+        console.error('❌ verifyOTP error:', {
+          status: error.response?.status,
+          data: error.response?.data,
+          payload
+        });
+        throw error;
+      });
+  },
 
   logout: (id: string) =>
-    api.post('/logout', { id }),
+    api.post('/api/logout', { id }),
 
   saveUserDetails: (data: {
     id: number;
@@ -165,15 +195,18 @@ export const authAPI = {
     languages: number;
     interests: number;
     referal_code: string;
-  }) => api.post('/saveuserdetails', data),
+  }) => api.post('/api/saveuserdetails', data),
 
-  ping: () => api.get('/ping'),
+  ping: () => api.get('/api/ping'),
 
   sendEmailOTP: (email: string, userType: string = "2") => 
-    api.post<OTPResponse>('/emailotp', { email, userType }),
+    api.post<OTPResponse>('/api/emailotp', { email, userType }),
 
   verifyEmailOTP: (email: string, otp: string, id: string) =>
-    api.post<VerifyOTPResponse>('/emailotpverify', { email, otp, id }),
+    api.post<VerifyOTPResponse>('/api/emailotpverify', { email, otp, id }),
+
+  // Add a test endpoint to verify API connectivity
+  testConnection: () => api.get('/api/ping'),
 };
 
 // Content APIs
@@ -183,32 +216,49 @@ export const contentAPI = {
     page: number;
     limit: number;
     loggined_user_id: number;
-  }) => api.post<PostListResponse>('/list-posts', params),
+  }) => api.post<PostListResponse>('/api/list-posts', params),
 
   getVideos: (userId: string, categoryId: string = "0", offset: string = "1") =>
-    api.get(`/getvideos/${userId}/${categoryId}/${offset}`),
+    api.get(`/api/getvideos/${userId}/${categoryId}/${offset}`),
+
+  // Get user's own videos (TipTube content) - using existing endpoint with user filter
+  getUserVideos: (userId: string) =>
+    api.get(`/api/getvideos/${userId}/0/1`),
+
+  // Get user's own shorts (TipShorts content) - using existing endpoint  
+  getUserShorts: (userId: string) =>
+    api.get(`/api/getshots/${userId}`),
 
   getShorts: (userId: string) =>
-    api.get(`/getshots/${userId}`),
+    api.get(`/api/getshots/${userId}`),
 
   // ⭐ New: Fetch a single short by ID (for deep linking)
   getShortById: (userId: string, shortId: string) =>
-    api.get(`/getShortById/${userId}/${shortId}`),
+    api.get(`/api/getShortById/${userId}/${shortId}`),
 
   checkPremium: (userId: string) =>
-    api.get(`/check-premium/${userId}`),
+    api.get(`/api/check-premium/${userId}`),
 };
 
 // User APIs
 export const userAPI = {
   getWalletBalance: (userId: string) =>
-    api.get<WalletResponse>(`/getfunds/${userId}`),
+    api.get<WalletResponse>(`/api/getfunds/${userId}`),
 
   getChannel: (userId: string) =>
-    api.get(`/getchannelbyuserid/${userId}`),
+    api.get(`/api/getchannelbyuserid/${userId}`),
 
   getAnalytics: (channelId: string) =>
-    api.get(`/analytics/${channelId}`),
+    api.get(`/api/analytics/${channelId}`),
+};
+
+export const uploadVideo = (formData: FormData, token: string) => {
+  return api.post('/api/uploadshot', formData, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data'
+    }
+  });
 };
 
 export default api;

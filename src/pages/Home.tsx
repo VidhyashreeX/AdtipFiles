@@ -9,6 +9,8 @@ import { FiShare2 } from "react-icons/fi"; // Feather's clean share icon
 import axios from "axios";
 import RandomAvatar, { getRandomAvatar } from "../components/RandomAvatar";
 import ShareModal from "@/components/ShareModal";
+import { getSafeImageUrl, handleImageError, createPlaceholderImage } from "../utils/imageUtils";
+import { contentAPI, userAPI } from "../services/api";
 
 // Define TypeScript interfaces
 interface User {
@@ -62,9 +64,7 @@ interface WalletResponse {
   availableBalance: string;
 }
 
-const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
-  ? import.meta.env.VITE_API_URL
-  : `${import.meta.env.VITE_API_URL}/api`;
+
 
 const popularCategories = [
   { name: "All", id: 0 },
@@ -167,7 +167,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
 
   const [showLoginPrompt, setShowLoginPrompt] = useState<boolean>(false);
   const [postViewCount, setPostViewCount] = useState<number>(0);
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, authLoading } = useAuth();
   const [feedData, setFeedData] = useState<Post[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -182,19 +182,21 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
   const userId = user?.id || null;
   const token = user?.accessToken || null;
 
+
+
   // Log component rendering and authentication status
   useEffect(() => {
-    console.log("Rendering Home component", {
-      isAuthenticated,
-      userId,
-      token,
-      selectedCategory,
-      page,
-      localStorage: {
-        adtip_user: localStorage.getItem("adtip_user"),
-      },
-      baseUrl: BASE_URL,
-    });
+    // console.log("Rendering Home component", {
+    //   isAuthenticated,
+    //   userId,
+    //   token,
+    //   selectedCategory,
+    //   page,
+    //   localStorage: {
+    //     adtip_user: localStorage.getItem("adtip_user"),
+    //   },
+
+    // });
     if (!isAuthenticated || !userId || !token) {
       console.warn("User not authenticated or missing data, skipping fetch", {
         isAuthenticated,
@@ -210,32 +212,17 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
     if (!isAuthenticated || !userId || !token) {
       return;
     }
-    const abortController = new AbortController();
+
     try {
-      console.log("Sending /api/getfunds request:", {
-        url: `${BASE_URL}/getfunds/${userId}`,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      console.info("Sending /api/getfunds request for userId:", userId);
 
-      const response = await axios.get<WalletResponse>(
-        `${BASE_URL}/getfunds/${userId}`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          signal: abortController.signal,
-        }
-      );
+      const response = await userAPI.getWalletBalance(String(userId!));
 
-      console.log("getfunds response:", {
-        status: response.data.status,
-        message: response.data.message,
-        balance: response.data.availableBalance,
-      });
+      // console.info("getfunds response:", {
+      //   status: response.data.status,
+      //   message: response.data.message,
+      //   balance: response.data.availableBalance,
+      // });
 
       if (response.data.status === 200) {
         setWalletBalance(response.data.availableBalance);
@@ -251,7 +238,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
       });
       setWalletBalance(null);
     }
-    return () => abortController.abort();
+
   }, [isAuthenticated, userId, token]);
 
   useEffect(() => {
@@ -267,7 +254,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
         setLoading(true);
         setError(null);
         try {
-          const response = await axios.get(`${BASE_URL}/list-premium-posts`);
+          const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/list-premium-posts`);
           if (response.data.status && Array.isArray(response.data.data)) {
             setFeedData(response.data.data);
             setPage(1);
@@ -289,7 +276,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
     if (!shouldAppend && loading) return; // Prevent multiple simultaneous initial loads
     if (shouldAppend && (!hasMore || loading)) return; // Don't fetch if no more data or already loading
 
-      const abortController = new AbortController();
+
 
       try {
         setLoading(true);
@@ -299,11 +286,11 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
         // SINGLE POST MODE (/post/:id)
         // --------------------------
         if (postId) {
-          const response = await axios.get(`${BASE_URL}/post/${postId}`, {
+          const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/post/${postId}`, {
             headers: isAuthenticated
               ? { Authorization: `Bearer ${token}` }
               : {},
-            signal: abortController.signal,
+
           });
 
           if (response.data && response.data.status) {
@@ -341,20 +328,13 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
         );
         const categoryId = categoryObj ? categoryObj.id : 0;
 
-        const payload = {
-          category: categoryId,
-          page: String(shouldAppend ? page : 1),
-          limit: "5",
-          loggined_user_id: userId ? String(userId) : "0",
-        };
 
-        const response = await axios.post(`${BASE_URL}/list-posts`, payload, {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          timeout: 10000,
-          signal: abortController.signal,
+
+        const response = await contentAPI.listPosts({
+          category: categoryId,
+          page: shouldAppend ? page : 1,
+          limit: 5,
+          loggined_user_id: userId || 0,
         });
 
         if (response.data.status) {
@@ -399,7 +379,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
         setLoading(false);
       }
 
-      return () => abortController.abort();
+
     },
     [
       isAuthenticated,
@@ -411,7 +391,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
       loading,
       hasMore,
       selectedCategory,
-      BASE_URL,
+
     ]
   );
     useEffect(() => {
@@ -461,7 +441,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
   }, [postViewCount, isAuthenticated]);
 
   const handlePostClick = (id: number) => {
-    console.log("Post clicked:", { postId: id });
+    // console.log("Post clicked:", { postId: id });
     if (!isAuthenticated) {
       setPostViewCount((prevCount) => prevCount + 1);
     }
@@ -564,11 +544,11 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                     <div className="flex items-center px-3 py-2">
                       {post.user_profile_image ? (
                         <img
-                          src={post.user_profile_image}
+                          src={getSafeImageUrl(post.user_profile_image)}
                           alt={post.user_name || "User"}
                           className="w-8 h-8 rounded-full object-cover border border-gray-300"
                           onError={(e) => {
-                            (e.target as HTMLImageElement).src = getRandomAvatar(post.user_id || post.user_name || post.id);
+                            handleImageError(e);
                           }}
                         />
                       ) : (
@@ -597,7 +577,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                             className="w-full h-full object-cover"
                             controls
                             preload="metadata"
-                            poster={post.thumbnail || "https://via.placeholder.com/640x800"}
+                            poster={post.thumbnail || "thumbnail.png"}
                             style={{ borderRadius: 0 }}
                           >
                             <source src={post.media_url} type="video/mp4" />

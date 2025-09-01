@@ -17,6 +17,7 @@ export interface ChannelFormData {
   description: string;
   coverImage?: File;
   profileImage?: File;
+  channelId?: string;
 }
 export interface Channel {
   channelId: number;

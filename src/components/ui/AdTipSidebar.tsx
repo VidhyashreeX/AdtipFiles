@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { ChannelForm } from "./ChannelForm";
 import type { Channel, ChannelFormData } from "./ChannelForm";
+import { userAPI } from "../../services/api";
 
 
 
@@ -29,9 +30,43 @@ import {
   SidebarGroupContent,
 } from "./sidebar-components";
 import SubmissionForm from "./SubmissionForm";
-const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
-  ? import.meta.env.VITE_API_URL
-  : `${import.meta.env.VITE_API_URL}/api`;
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://api.adtip.in';
+
+const api = axios.create({
+  baseURL: BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  }
+});
+
+// Add request interceptor for auth token
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+api.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response?.status === 500) {
+      console.error('Server Error:', {
+        endpoint: error.config.url,
+        message: error.response.data?.message || 'Internal Server Error'
+      });
+      // Optionally redirect to maintenance page or show user-friendly message
+    }
+    if (error.response?.status === 401) {
+      // Clear invalid auth data
+      localStorage.removeItem('UserLoggedIn');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
 
 
 interface NavItem {
@@ -44,7 +79,7 @@ interface NavItem {
 
 const AdTipSidebar = () => {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
 
   // Keep all your original sidebar mobile props
   const { isCollapsed, toggleSidebar, isMobile, openMobile, setOpenMobile } = useSidebar();
@@ -56,6 +91,8 @@ const AdTipSidebar = () => {
   const [isCreatePostOpen, setIsCreatePostOpen] = React.useState(false);
   const [showChannelForm, setShowChannelForm] = React.useState(false);
   const [showCreatePost, setShowCreatePost] = React.useState(false);
+  const [showPostTypeMenu, setShowPostTypeMenu] = React.useState(false);
+  const [selectedPostType, setSelectedPostType] = React.useState<'create-post' | 'tip-tube' | 'tip-shorts'>('tip-tube');
     const navigate = useNavigate();
    const { isAuthenticated, logout } = useAuth();
    const handleLogout = async () => {
@@ -144,50 +181,13 @@ const channels: Channel[] = JSON.parse(localStorage.getItem("channels") || "[]")
 
 
 // On new channel creation, update state again with helper function
-const handleChannelCreated = (data: ChannelFormData) => {
-  const savedChannels = JSON.parse(localStorage.getItem("channels") || "[]");
-
-  if (!savedChannels.some((ch: ChannelFormData) => ch.channelName === data.channelName)) {
-    savedChannels.push(data);
-    localStorage.setItem("channels", JSON.stringify(savedChannels));
+const handleChannelCreated = (formData: ChannelFormData) => {
+  // Ensure the API returns channelId in the response
+  if (formData.channelId) {
+    updateUser({ channelId: formData.channelId });
+    localStorage.setItem("channels", JSON.stringify([formData]));
   }
-
-  // 🔥 Rebuild sidebar items immediately
-setMainNavItems((prev) => {
-  const baseItems = [...baseNavItems];
-  const channelLinks = savedChannels.map((ch) => ({
-    to: '/channel',   // ✅ use ID not name
-    label: "My Channel",
-    icon: <User className="h-5 w-5" />,
-  }));
-
-  const isSmallScreen = window.matchMedia("(max-width: 767px)").matches;
-  if (isSmallScreen) {
-    return [
-      ...baseItems,
-      ...channelLinks,
-      {
-        to: "/profile",
-        label: "Profile",
-        icon: <UserAvatar user={user} />,
-      },
-    ];
-  }
-
-  return [...baseItems, ...channelLinks];
-});
-
-  // ✅ mark that channel creation is done
-  setHasSubmitted(false);
-  localStorage.setItem("hasCreatedChannel", "false");
-  setShowChannelForm(false);
-
-  
-
-navigate(`/channel`); // ✅ use channelId
-
 };
-
 
 
 
@@ -238,42 +238,36 @@ navigate(`/channel`); // ✅ use channelId
   const [error, setError] = React.useState<string | null>(null);
 React.useEffect(() => {
   const fetchChannel = async () => {
-    const storedUserId = localStorage.getItem("UserId");
-
-    if (!storedUserId) {
-      setError("User not authenticated");
-      setLoading(false);
-      return;
-    }
-
     try {
-      const response = await axios.get(
-        `${BASE_URL}/getchannelbyuserid/${storedUserId}`
-      );
+      if (!user?.id || !user?.accessToken) return;
 
-      if (response.status === 200 && response.data?.data?.length > 0) {
+      const response = await userAPI.getChannel(String(user.id));
+      
+      if (response.data?.data?.[0]?.channelId) {
         const channel = response.data.data[0];
         setChannelData(channel);
-
-        // ✅ Sync to localStorage for buildNavItems
+        updateUser({ 
+          channelId: channel.channelId.toString(),
+          // Ensure all required user data is updated
+          ...user
+        });
         localStorage.setItem("channels", JSON.stringify([channel]));
-      } else {
-        setError("No channel data found.");
-        setChannelData(null);
+      }
+    } catch (error) {
+      console.error('Channel fetch error:', error);
+      // Clear invalid channel data if 401 occurs
+      if (error.response?.status === 401) {
+        updateUser({ channelId: null });
         localStorage.removeItem("channels");
       }
-    } catch (err) {
-      console.error("Failed to fetch channel:", err);
-      setError("Failed to fetch channel data. Try again.");
-      setChannelData(null);
-      localStorage.removeItem("channels");
-    } finally {
-      setLoading(false);
     }
   };
 
+  // Only fetch if no channelId exists
+  if (user?.id && !user?.channelId) {
   fetchChannel();
-}, []);
+  }
+}, [user?.id, user?.accessToken]); // Add accessToken to dependencies
 
   
 
@@ -307,9 +301,7 @@ const ecommerceItems = [
     { to: "/terms", label: "Terms & Conditions", icon: <FileText className="h-5 w-5" /> },
   ];
 const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
-const [hasSubmitted, setHasSubmitted] = React.useState(() => {
-  return localStorage.getItem("hasCreatedChannel") === "true";
-});
+// Removed hasSubmitted state as per new logic
 
 
 
@@ -338,14 +330,19 @@ const [hasSubmitted, setHasSubmitted] = React.useState(() => {
               : "w-[calc(100%-32px)] mx-4 px-4 py-2"
           )}
           onClick={() => {
-            if (hasSubmitted) {
-              // Show channel creation form
-              setShowCreatePost(false);
+            // Wait for both user and channel data to load
+            if (!user || user.channelId === undefined) return;
+            
+            if (!user.channelId) {
+              // User doesn't have a channel, show channel creation
               setShowChannelForm(true);
+              setShowCreatePost(false);
+              setShowPostTypeMenu(false);
               setIsCreatePostOpen(true);
             } else {
-              // Show upload video form
-              setShowCreatePost(true);
+              // User has a channel, show post type menu
+              setShowPostTypeMenu(true);
+              setShowCreatePost(false);
               setShowChannelForm(false);
               setIsCreatePostOpen(true);
             }
@@ -355,15 +352,15 @@ const [hasSubmitted, setHasSubmitted] = React.useState(() => {
             <PlusCircle className="h-5 w-5" />
           ) : (
             <>
-              <PlusCircle className="h-5 w-5 " />
-              {hasSubmitted ? "Create Channel" : "Upload Video"}
+              <PlusCircle className="h-5 w-5" />
+              {user?.channelId ? "Upload Video" : "Create Channel"}
             </>
           )}
         </Button>
       </DialogTrigger>
 
     {/* Step 1: Upload Video → SubmissionForm */}
-{!hasSubmitted && showCreatePost && (
+{!user?.channelId && showCreatePost && (
 <SubmissionForm
   onSuccess={(data) => {
     const channelData: ChannelFormData = {
@@ -373,7 +370,7 @@ const [hasSubmitted, setHasSubmitted] = React.useState(() => {
     };
 
     handleChannelCreated(channelData);
-    setHasSubmitted(true);
+    // setHasSubmitted(true); // Removed as per new logic
     setShowCreatePost(false);
     setShowChannelForm(true);
   }}
@@ -382,26 +379,93 @@ const [hasSubmitted, setHasSubmitted] = React.useState(() => {
 )}
 
 {/* Step 2: After submission → Create Channel → ChannelForm */}
-{showChannelForm && (
+{/* Channel creation form */}
+{!user?.channelId && showChannelForm && (
   <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-<ChannelForm onSave={(formData) => handleChannelCreated(formData)} />
-
-
-
-
-
-
+    <ChannelForm 
+      onSave={(formData) => {
+        console.log('Full formData:', formData); // Debug log
+        handleChannelCreated(formData);
+        if (user && formData.channelId) {
+          console.log('Updating user context with channelId:', formData.channelId);
+          updateUser({ channelId: formData.channelId });
+        } else {
+          console.warn('No channelId in formData or user not available');
+        }
+      }}
+    />
   </DialogContent>
 )}
 
-{/* Optional: Keep CreatePostDialog for other flows */}
-{showCreatePost && !hasSubmitted && (
+{/* Post Type Menu */}
+{user?.channelId && showPostTypeMenu && (
+  <DialogContent className="sm:max-w-md">
+    <DialogHeader>
+      <DialogTitle>What would you like to create?</DialogTitle>
+      <DialogDescription>Choose the type of content you want to share.</DialogDescription>
+    </DialogHeader>
+    <div className="grid gap-3 py-4">
+      <Button
+        variant="outline"
+        className="w-full justify-start text-left h-auto py-4"
+        onClick={() => {
+          setSelectedPostType('create-post');
+          setShowPostTypeMenu(false);
+          setShowCreatePost(true);
+        }}
+      >
+        <div className="flex flex-col items-start">
+          <span className="font-semibold">Create Post</span>
+          <span className="text-sm text-gray-500">Share thoughts and media</span>
+        </div>
+      </Button>
+      
+      <Button
+        variant="outline"
+        className="w-full justify-start text-left h-auto py-4"
+        onClick={() => {
+          setSelectedPostType('tip-tube');
+          setShowPostTypeMenu(false);
+          setShowCreatePost(true);
+        }}
+      >
+        <div className="flex flex-col items-start">
+          <span className="font-semibold">Upload Video (TipTube)</span>
+          <span className="text-sm text-gray-500">Upload and monetize videos</span>
+        </div>
+      </Button>
+      
+      <Button
+        variant="outline"
+        className="w-full justify-start text-left h-auto py-4"
+        onClick={() => {
+          setSelectedPostType('tip-shorts');
+          setShowPostTypeMenu(false);
+          setShowCreatePost(true);
+        }}
+      >
+        <div className="flex flex-col items-start">
+          <span className="font-semibold">Create Short (TipShot)</span>
+          <span className="text-sm text-gray-500">Create engaging short videos</span>
+        </div>
+      </Button>
+    </div>
+  </DialogContent>
+)}
+
+{/* Content Creation Forms */}
+{user?.channelId && showCreatePost && (
   <CreatePostDialog
-    onClose={() => {
-      setIsCreatePostOpen(false);
-      setShowChannelForm(false);
-      setShowCreatePost(false);
+    open={showCreatePost}
+    onOpenChange={(open) => {
+      if (!open) {
+        setIsCreatePostOpen(false);
+        setShowChannelForm(false);
+        setShowCreatePost(false);
+        setShowPostTypeMenu(false);
+      }
     }}
+    postType={selectedPostType}
   />
 )}
 
@@ -535,6 +599,11 @@ const [hasSubmitted, setHasSubmitted] = React.useState(() => {
       
     </div>
   );
+
+  // React.useEffect(() => {
+  //   console.log('Current user from localStorage:', 
+  //     JSON.parse(localStorage.getItem("user") || "{}"));
+  // }, [user?.channelId]);
 
   return (
     <>

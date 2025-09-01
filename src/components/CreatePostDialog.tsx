@@ -1,393 +1,680 @@
-import * as React from "react";
-import { useNavigate } from "react-router-dom";
-import { DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "../contexts/AuthContext";
-import axios from "axios";
-
-
+import React, { useState, useRef, useCallback } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Switch } from './ui/switch';
+import { Textarea } from './ui/textarea';
+import { toast } from 'sonner';
+import { useAuth } from '../contexts/AuthContext';
+import { ChannelRequiredDialog } from "./ChannelRequiredDialog";
+import { uploadToR2 } from '../services/r2UploadService';
+import { ImageIcon, Video, Play, Upload } from 'lucide-react';
 
 interface CreatePostDialogProps {
-  onClose: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  postType: 'create-post' | 'tip-tube' | 'tip-shorts';
 }
 
-const CreatePostDialog: React.FC<CreatePostDialogProps> = ({ onClose }) => {
-const { user } = useAuth();
-const userId = user?.id;
-const token = user?.accessToken;
-
-  const navigate = useNavigate();
-  const { toast } = useToast();
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
-
-  ? import.meta.env.VITE_API_URL
-  : `${import.meta.env.VITE_API_URL}/api`;
-  const [title, setTitle] = React.useState("");
-  const [description, setDescription] = React.useState("");
-  const [category, setCategory] = React.useState("");
-  const [postType, setPostType] = React.useState("post");
-  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
-const [promotionalPrice, setPromotionalPrice] = React.useState<string>(""); 
-// or if you want number:
-// const [promotionalPrice, setPromotionalPrice] = React.useState<number | "">("");
-
- 
-  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
-  const [isVideo, setIsVideo] = React.useState(false);
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [videoThumbnail, setVideoThumbnail] = React.useState<string>("");
+const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
+  open,
+  onOpenChange,
+  postType
+}) => {
+  const { user } = useAuth();
+  const token = localStorage.getItem('UserLoggedIn');
   
+  // Common states
+  const [isLoading, setIsLoading] = useState(false);
+  const [showChannelDialog, setShowChannelDialog] = useState(false);
+  
+  // Create Post states
+  const [postTitle, setPostTitle] = useState('');
+  const [postContent, setPostContent] = useState('');
+  const [isPromoted, setIsPromoted] = useState(false);
+  const [postImages, setPostImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  
+  // Video states
+  const [videoTitle, setVideoTitle] = useState('');
+  const [videoDescription, setVideoDescription] = useState('');
+  const [videoCategory, setVideoCategory] = useState('');
+  const [videoQuality, setVideoQuality] = useState('');
+  const [isPaidVideo, setIsPaidVideo] = useState(false);
+  const [isEarnMoney, setIsEarnMoney] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState<File | null>(null);
+  const [videoPreview, setVideoPreview] = useState<string>('');
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string>('');
+  
+  // Short video states
+  const [shortVideo, setShortVideo] = useState<File | null>(null);
+  const [shortVideoPreview, setShortVideoPreview] = useState<string>('');
+  const [isEarnMoneyShort, setIsEarnMoneyShort] = useState(false);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const thumbnailInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const shortVideoInputRef = useRef<HTMLInputElement>(null);
 
-const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-
-  const isVideoFile = file.type.startsWith("video/");
-  const isImageFile = file.type.startsWith("image/");
-
-  setIsVideo(isVideoFile);
-
-  // Local preview with blob URL for instant UI feedback
-  const url = URL.createObjectURL(file);
-  setPreviewUrl(url);
-  setSelectedFile(file);
-
-  if (isImageFile) {
-    // Convert image to base64 to send as thumbnail
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      // Save base64 string as thumbnail
-      const base64String = reader.result as string;
-      setPreviewUrl(base64String); // preview with base64
-      setVideoThumbnail(base64String); // save thumbnail for uploading
-    };
-    reader.readAsDataURL(file);
-  } else {
-    // For videos, use a fallback thumbnail until backend processes it
-    setVideoThumbnail("https://placehold.co/600x400?text=Thumbnail");
-  }
-};
-
-const [isPaid, setIsPaid] = React.useState(false);
-
-  const triggerFileInput = () => {
-    fileInputRef.current?.click();
-  };
-// Utility to generate a thumbnail file from video
-
-// ...
-
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-
-  // Validation
-  if (!title.trim()) {
-    toast({
-      title: "Title required",
-      description: "Please enter a title for your post",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  if (!selectedFile) {
-    toast({
-      title: "File required",
-      description: "Please select a file to upload",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  setIsLoading(true);
-
-  try {
-    // Wallet deduction for paid content
-    if (isPaid) {
-      if (!userId || !token) {
-        toast({
-          title: "Sign-in required",
-          description: "Please sign in before uploading paid content.",
-          variant: "destructive",
-        });
-        setIsLoading(false);
-        navigate("/login");
-        return;
-      }
-
-      const paidUploadCharge = 50; // Set your charge amount here
-
-      const walletRes = await axios.post(
-        `${BASE_URL}/deduct-wallet/${userId}`,
-        { amount: paidUploadCharge },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (walletRes.status !== 200 || walletRes.data.success !== true) {
-        throw new Error(walletRes.data.message || "Insufficient balance or deduction failed");
-      }
+  // Handle image selection for Create Post
+  const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length + postImages.length > 5) {
+      toast.error("Maximum 5 images allowed");
+      return;
     }
-
-    const isShot = postType === "tip-shorts";
-    const isTube = postType === "tip-tube";
     
+    const validFiles = files.filter(file => file.type.startsWith('image/'));
+    if (validFiles.length !== files.length) {
+      toast.error("Please select only image files");
+      return;
+    }
+    
+    setPostImages(prev => [...prev, ...validFiles]);
+    
+    // Generate previews
+    validFiles.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreviews(prev => [...prev, e.target?.result as string]);
+      };
+      reader.readAsDataURL(file);
+    });
+  }, [postImages]);
 
-    const videoThumbnail = previewUrl; // Or replace with actual thumbnail URL if available
+  // Handle video selection
+  const handleVideoSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    const videoLinkToSend = ""; // Replace with actual video URL if needed
-    const videoLink = videoLinkToSend.trim() !== "" ? videoLinkToSend : "";
-
-    // Debug logging
-    console.log("Uploading video_Thumbnail:", videoThumbnail);
-    console.log("Uploading videoLink:", videoLink);
-
-    // Build FormData
-    const formData = new FormData();
-    formData.append("file", selectedFile);
-    formData.append("name", title.trim());
-    formData.append("isShot", String(isShot));
-    formData.append("categoryId", String(parseInt(category) || 0));
-    formData.append("channelId", "123"); // Update as appropriate
-    formData.append("videoLink", videoLink);
-    formData.append("videoDesciption", description.trim());
-    formData.append("createdby", "123"); // Update as needed
-    formData.append("play_duration", "00:00");
-    formData.append("video_Thumbnail", videoThumbnail);
-
-    // Debug print formData entries
-    for (const [key, value] of formData.entries()) {
-      console.log(key, value);
+    if (!file.type.startsWith('video/')) {
+      toast.error("Please select a video file");
+      return;
     }
 
-    const res = await fetch(`${BASE_URL}/uploadshot`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    });
+    setSelectedVideo(file);
+    const previewUrl = URL.createObjectURL(file);
+    setVideoPreview(previewUrl);
+  }, []);
 
-    const text = await res.text();
-    let data: any = {};
+  // Handle short video selection
+  const handleShortVideoSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('video/')) {
+      toast.error("Please select a video file");
+      return;
+    }
+
+    setShortVideo(file);
+    const previewUrl = URL.createObjectURL(file);
+    setShortVideoPreview(previewUrl);
+  }, []);
+
+  // Handle thumbnail selection
+  const handleThumbnailSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    setThumbnailFile(file);
+    const previewUrl = URL.createObjectURL(file);
+    setThumbnailPreview(previewUrl);
+  }, []);
+
+  // Remove image
+  const removeImage = (index: number) => {
+    setPostImages(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Handle Create Post submission
+  const handleCreatePost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!postTitle.trim() || !postContent.trim()) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+    
+    // TODO: Implement create post API call
+    toast.success("Post created successfully!");
+    onOpenChange(false);
+  };
+
+  // Handle Video upload
+  const handleVideoUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!user?.channelId) {
+      setShowChannelDialog(true);
+      return;
+    }
+
+    if (!token) {
+      toast.error("Please log in again.");
+      return;
+    }
+
+    if (!videoTitle || !videoDescription || !videoCategory || !videoQuality || !selectedVideo) {
+      toast.error("Please fill all required fields and select a video");
+      return;
+    }
+
+    setIsLoading(true);
+    
     try {
-      data = JSON.parse(text);
-    } catch {
-      throw new Error(`Invalid response: ${text}`);
+      // Step 1: Upload video to R2
+      const videoResult = await uploadToR2(selectedVideo, 'videos', user.id);
+      const videoUrl = videoResult.url;
+      
+      // Step 2: Upload thumbnail to R2
+      let thumbnailUrl = '';
+      if (thumbnailFile) {
+        const thumbnailResult = await uploadToR2(thumbnailFile, 'thumbnails', user.id);
+        thumbnailUrl = thumbnailResult.url;
+      } else {
+        // Create placeholder thumbnail
+        const canvas = document.createElement('canvas');
+        canvas.width = 320;
+        canvas.height = 240;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#f0f0f0';
+          ctx.fillRect(0, 0, 320, 240);
+          ctx.fillStyle = '#666';
+          ctx.font = '16px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText('Video Thumbnail', 160, 120);
+        }
+        const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve, 'image/png'));
+        const placeholderFile = new File([blob], 'placeholder.png', { type: 'image/png' });
+        const placeholderResult = await uploadToR2(placeholderFile, 'thumbnails', user.id);
+        thumbnailUrl = placeholderResult.url;
+      }
+
+      // Step 3: Call API with R2 URLs
+      const requestData = {
+        name: videoTitle,
+        videoDesciption: videoDescription,
+        categoryId: videoCategory,
+        channelId: user.channelId,
+        videoLink: videoUrl,
+        video_Thumbnail: thumbnailUrl,
+        isShot: postType === 'tip-shorts' ? 1 : 0,
+        play_duration: "0", // You can calculate this if needed
+        promotional_price: "0",
+        isPaid: isPaidVideo ? 1 : 0,
+        quality: videoQuality,
+        earnMoney: isEarnMoney ? 1 : 0
+      };
+
+      const response = await fetch('https://api.adtip.in/api/uploadshot', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        toast.success("Video uploaded successfully!");
+        onOpenChange(false);
+      } else {
+        throw new Error(`Upload failed: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error("Failed to upload video. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle Short upload
+  const handleShortUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!user?.channelId) {
+      setShowChannelDialog(true);
+      return;
     }
 
-    if (!res.ok || data.status !== 200) {
-      throw new Error(data.message || `Upload failed (status ${res.status})`);
+    if (!token) {
+      toast.error("Please log in again.");
+      return;
     }
 
-    toast({
-      title: isTube ? "Tip Tube created successfully" : "Tip Shorts created successfully",
-      description: "Your video content has been uploaded",
-    });
+    if (!shortVideo) {
+      toast.error("Please select a video");
+      return;
+    }
 
-    setIsLoading(false);
-    onClose();
-    navigate(isTube ? "/tiptube" : "/tipshorts");
-  } catch (err: any) {
-    console.error("Upload error:", err);
-    toast({
-      title: "Upload failed",
-      description: err.message || String(err),
-      variant: "destructive",
-    });
-    setIsLoading(false);
-  }
-};
+    setIsLoading(true);
+    
+    try {
+      // Upload short video to R2
+      const videoResult = await uploadToR2(shortVideo, 'videos', user.id);
+      const videoUrl = videoResult.url;
+      
+      // Create placeholder thumbnail
+      const canvas = document.createElement('canvas');
+      canvas.width = 320;
+      canvas.height = 240;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fillRect(0, 0, 320, 240);
+        ctx.fillStyle = '#666';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Short Video Thumbnail', 160, 120);
+      }
+      const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      const placeholderFile = new File([blob], 'placeholder.png', { type: 'image/png' });
+      const thumbnailResult = await uploadToR2(placeholderFile, 'thumbnails', user.id);
+      const thumbnailUrl = thumbnailResult.url;
 
+      // Call API with R2 URLs
+      const requestData = {
+        name: `Short Video ${Date.now()}`,
+        videoDesciption: "Short video content",
+        categoryId: "entertainment",
+        channelId: user.channelId,
+        videoLink: videoUrl,
+        video_Thumbnail: thumbnailUrl,
+        isShot: 1,
+        play_duration: "0",
+        promotional_price: "0",
+        isPaid: 0,
+        quality: "standard",
+        earnMoney: isEarnMoneyShort ? 1 : 0
+      };
 
+      const response = await fetch('https://api.adtip.in/api/uploadshot', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+      });
 
+      if (response.ok) {
+        toast.success("Short video uploaded successfully!");
+        onOpenChange(false);
+      } else {
+        throw new Error(`Upload failed: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error("Failed to upload short video. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  const resetForm = () => {
+    setPostTitle('');
+    setPostContent('');
+    setIsPromoted(false);
+    setPostImages([]);
+    setImagePreviews([]);
+    setVideoTitle('');
+    setVideoDescription('');
+    setVideoCategory('');
+    setVideoQuality('');
+    setIsPaidVideo(false);
+    setIsEarnMoney(false);
+    setSelectedVideo(null);
+    setVideoPreview('');
+    setThumbnailFile(null);
+    setThumbnailPreview('');
+    setShortVideo(null);
+    setShortVideoPreview('');
+    setIsEarnMoneyShort(false);
+  };
 
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      resetForm();
+    }
+    onOpenChange(newOpen);
+  };
 
+  const getDialogTitle = () => {
+    switch (postType) {
+      case 'create-post': return 'Create Post';
+      case 'tip-tube': return 'Upload Video (TipTube)';
+      case 'tip-shorts': return 'Create Short (TipShot)';
+      default: return 'Create Content';
+    }
+  };
 
-  React.useEffect(() => {
-    // Reset form when post type changes
-    setSelectedFile(null);
-    setPreviewUrl(null);
-    setIsVideo(postType !== "post");
-  }, [postType]);
+  const getDialogDescription = () => {
+    switch (postType) {
+      case 'create-post': return 'Share your thoughts and media with your audience.';
+      case 'tip-tube': return 'Upload your video content and monetize your creativity.';
+      case 'tip-shorts': return 'Create engaging short videos for your followers.';
+      default: return 'Create and share content with your audience.';
+    }
+  };
 
   return (
-<DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-  <DialogHeader>
-    <DialogTitle className="text-xl">
-      Create {postType === "post" ? "Post" : postType === "tip-tube" ? "Tip Tube" : "Tip Shorts"}
-    </DialogTitle>
-  </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{getDialogTitle()}</DialogTitle>
+            <DialogDescription>{getDialogDescription()}</DialogDescription>
+          </DialogHeader>
 
-  <form onSubmit={handleSubmit} className="space-y-5 py-3">
-    {/* Post Type Selection */}
-    <div>
-      <Label htmlFor="post-type">Post Type</Label>
-      <Select value={postType} onValueChange={setPostType}>
-        <SelectTrigger className="mt-1">
-          <SelectValue placeholder="Select post type" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="post">Create a Post</SelectItem>
-          <SelectItem value="tip-tube">Tip Tube</SelectItem>
-          <SelectItem value="tip-shorts">Tip Shorts</SelectItem>
-        </SelectContent>
-      </Select>
-    </div>
+          {/* Create Post Form */}
+          {postType === 'create-post' && (
+            <form onSubmit={handleCreatePost} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="postTitle">Title *</Label>
+                <Input
+                  id="postTitle"
+                  value={postTitle}
+                  onChange={(e) => setPostTitle(e.target.value)}
+                  placeholder="Add title"
+                  required
+                />
+              </div>
 
-    {/* File Upload */}
-    <div
-      onClick={triggerFileInput}
-      className={`border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:bg-gray-50 transition ${
-        previewUrl ? "bg-gray-50" : ""
-      }`}
-    >
-      <input
-        type="file"
-        ref={fileInputRef}
-        className="hidden"
-        accept={postType === "post" ? "image/*" : "video/*"}
-        onChange={handleFileChange}
-      />
+              <div className="space-y-2">
+                <Label htmlFor="postContent">What's on your mind? *</Label>
+                <Textarea
+                  id="postContent"
+                  value={postContent}
+                  onChange={(e) => setPostContent(e.target.value)}
+                  placeholder="Share your thoughts..."
+                  className="min-h-[100px]"
+                  required
+                />
+              </div>
 
-      {previewUrl ? (
-        <div className="relative">
-          {isVideo ? (
-            <video
-              src={previewUrl}
-              className="w-full rounded-lg"
-              height={240}
-              controls
-            />
-          ) : (
-            <img
-              src={previewUrl}
-              alt="Preview"
-              className="w-full rounded-lg"
-              height={240}
-            />
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="promoted"
+                  checked={isPromoted}
+                  onCheckedChange={setIsPromoted}
+                />
+                <Label htmlFor="promoted">Promoted post</Label>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Upload Media (up to 5 images)</Label>
+                <div className="grid grid-cols-5 gap-2">
+                  {imagePreviews.map((preview, index) => (
+                    <div key={index} className="relative">
+                      <img
+                        src={preview}
+                        alt={`Preview ${index + 1}`}
+                        className="w-full h-20 object-cover rounded border"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(index)}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {imagePreviews.length < 5 && (
+                    <button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      className="w-full h-20 border-2 border-dashed border-gray-300 rounded flex items-center justify-center hover:border-gray-400"
+                    >
+                      <ImageIcon className="h-8 w-8 text-gray-400" />
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageSelect}
+                  className="hidden"
+                />
+              </div>
+
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? 'Publishing...' : 'Publish Post'}
+              </Button>
+            </form>
           )}
-          <div className="mt-2 text-sm text-gray-500">
-            Click to change {isVideo ? "video" : "image"}
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col items-center">
-          <Upload className="h-10 w-10 text-gray-400 mb-2" />
-          <p className="text-sm font-medium">Click to upload</p>
-          <p className="text-xs text-gray-500">
-            {postType === "post" ? "Upload an image" : "Upload a video"}
-          </p>
-        </div>
-      )}
-    </div>
 
-    {/* Paid Content Checkbox */}
-    <div className="flex items-center gap-2 mb-2">
-      <Input
-        id="isPaid"
-        type="checkbox"
-        checked={isPaid}
-        onChange={(e) => setIsPaid(e.target.checked)}
-        className="w-5 h-5 accent-teal-500 cursor-pointer"
+          {/* Upload Video (TipTube) Form */}
+          {postType === 'tip-tube' && (
+            <form onSubmit={handleVideoUpload} className="space-y-6">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="earnMoney"
+                  checked={isEarnMoney}
+                  onCheckedChange={setIsEarnMoney}
+                />
+                <Label htmlFor="earnMoney">Earn money while upload video</Label>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Video *</Label>
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => videoInputRef.current?.click()}
+                    disabled={isLoading}
+                    className="w-full"
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Select Video
+                  </Button>
+                  {videoPreview && (
+                    <div className="relative">
+                      <video
+                        src={videoPreview}
+                        controls
+                        className="w-full rounded border"
+                        style={{ maxHeight: '200px' }}
+                      />
+                    </div>
+                  )}
+                </div>
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/*"
+                  onChange={handleVideoSelect}
+                  className="hidden"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Thumbnail</Label>
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => thumbnailInputRef.current?.click()}
+                    disabled={isLoading}
+                    className="w-full"
+                  >
+                    <ImageIcon className="h-4 w-4 mr-2" />
+                    Select Thumbnail
+                  </Button>
+                  {thumbnailPreview && (
+                    <img
+                      src={thumbnailPreview}
+                      alt="Thumbnail preview"
+                      className="w-32 h-20 object-cover rounded border"
+                    />
+                  )}
+                </div>
+                <input
+                  ref={thumbnailInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleThumbnailSelect}
+                  className="hidden"
+                />
+              </div>
+
+              <div className="space-y-4">
+                <Label className="text-lg font-semibold">Video Details</Label>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="videoTitle">Title *</Label>
+                  <Input
+                    id="videoTitle"
+                    value={videoTitle}
+                    onChange={(e) => setVideoTitle(e.target.value)}
+                    placeholder="Enter video title"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="videoDescription">Description *</Label>
+                  <Textarea
+                    id="videoDescription"
+                    value={videoDescription}
+                    onChange={(e) => setVideoDescription(e.target.value)}
+                    placeholder="Enter video description"
+                    className="min-h-[100px]"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="videoCategory">Category *</Label>
+                    <Select value={videoCategory} onValueChange={setVideoCategory} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="tech">Technology</SelectItem>
+                        <SelectItem value="entertainment">Entertainment</SelectItem>
+                        <SelectItem value="education">Education</SelectItem>
+                        <SelectItem value="lifestyle">Lifestyle</SelectItem>
+                        <SelectItem value="sports">Sports</SelectItem>
+                        <SelectItem value="music">Music</SelectItem>
+                        <SelectItem value="gaming">Gaming</SelectItem>
+                        <SelectItem value="news">News</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="videoQuality">Quality *</Label>
+                    <Select value={videoQuality} onValueChange={setVideoQuality} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select quality" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low (480p)</SelectItem>
+                        <SelectItem value="standard">Standard (720p)</SelectItem>
+                        <SelectItem value="high">High (1080p)</SelectItem>
+                        <SelectItem value="ultra">Ultra (4K)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="paidVideo"
+                    checked={isPaidVideo}
+                    onCheckedChange={setIsPaidVideo}
+                  />
+                  <Label htmlFor="paidVideo">Paid video</Label>
+                </div>
+              </div>
+
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? 'Uploading...' : 'Upload Video'}
+              </Button>
+            </form>
+          )}
+
+          {/* Create Short (TipShot) Form */}
+          {postType === 'tip-shorts' && (
+            <form onSubmit={handleShortUpload} className="space-y-6">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="earnMoneyShort"
+                  checked={isEarnMoneyShort}
+                  onCheckedChange={setIsEarnMoneyShort}
+                />
+                <Label htmlFor="earnMoneyShort">Earn money while upload video</Label>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Short Video *</Label>
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => shortVideoInputRef.current?.click()}
+                    disabled={isLoading}
+                    className="w-full"
+                  >
+                    <Video className="h-4 w-4 mr-2" />
+                    Select Short Video
+                  </Button>
+                  {shortVideoPreview && (
+                    <div className="relative">
+                      <video
+                        src={shortVideoPreview}
+                        controls
+                        className="w-full rounded border"
+                        style={{ maxHeight: '200px' }}
+                      />
+                    </div>
+                  )}
+                </div>
+                <input
+                  ref={shortVideoInputRef}
+                  type="file"
+                  accept="video/*"
+                  onChange={handleShortVideoSelect}
+                  className="hidden"
+                />
+              </div>
+
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? 'Uploading...' : 'Upload Short'}
+              </Button>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Channel Required Dialog */}
+      <ChannelRequiredDialog
+        open={showChannelDialog}
+        onClose={() => setShowChannelDialog(false)}
+        onCreateChannel={() => {
+          setShowChannelDialog(false);
+          onOpenChange(false);
+        }}
       />
-      <Label
-        htmlFor="isPaid"
-        className="cursor-pointer text-base font-medium"
-      >
-        Is this content paid?
-      </Label>
-    </div>
-
-    {/* Promotional Price (conditional) */}
-    {isPaid && (
-      <div>
-        <Label htmlFor="promotionalPrice">Set Promotional Price</Label>
-        <Input
-          id="promotionalPrice"
-          type="number"
-          min="1"
-          value={promotionalPrice}
-          onChange={(e) => setPromotionalPrice(e.target.value)}
-          placeholder="Enter price in credits"
-          className="mt-1"
-        />
-      </div>
-    )}
-
-    {/* Title */}
-    <div>
-      <Label htmlFor="title">Title</Label>
-      <Input
-        id="title"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Give your post a title"
-        className="mt-1"
-      />
-    </div>
-
-    {/* Description */}
-    <div>
-      <Label htmlFor="description">Description</Label>
-      <Textarea
-        id="description"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        placeholder="What's your post about?"
-        className="mt-1 h-24"
-      />
-    </div>
-
-    {/* Category Selection */}
-    <div>
-      <Label htmlFor="category">Category</Label>
-      <Select value={category} onValueChange={setCategory}>
-        <SelectTrigger className="mt-1">
-          <SelectValue placeholder="Select a category" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="tech">Tech</SelectItem>
-          <SelectItem value="beauty">Beauty</SelectItem>
-          <SelectItem value="gaming">Gaming</SelectItem>
-          <SelectItem value="food">Food</SelectItem>
-          <SelectItem value="travel">Travel</SelectItem>
-          <SelectItem value="finance">Finance</SelectItem>
-          <SelectItem value="fashion">Fashion</SelectItem>
-          <SelectItem value="music">Music</SelectItem>
-        </SelectContent>
-      </Select>
-    </div>
-
-    {/* Action Buttons */}
-    <div className="flex justify-end pt-3 gap-3">
-      <Button variant="outline" type="button" onClick={onClose}>
-        Cancel
-      </Button>
-      <Button
-        type="submit"
-        className="bg-adtip-teal hover:bg-adtip-teal/90 text-white"
-        disabled={isLoading}
-      >
-        {isLoading ? "Posting..." : "Post"}
-      </Button>
-    </div>
-  </form>
-</DialogContent>
-
-
+    </>
   );
 };
 

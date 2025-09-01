@@ -1,8 +1,35 @@
 import axios from "axios";
 
-const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
-  ? import.meta.env.VITE_API_URL
-  : `${import.meta.env.VITE_API_URL}/api`;
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://api.adtip.in';
+
+const api = axios.create({
+  baseURL: BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  }
+});
+
+// Add request interceptor for auth token
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Add response interceptor for error logging
+api.interceptors.response.use(
+  response => response,
+  error => {
+    console.error('API Error:', {
+      url: error.config?.url,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+    return Promise.reject(error);
+  }
+);
 
 export async function apiSendOtp(mobileNumber: string) {
   const url = `${BASE_URL}/otplogin`;
@@ -22,11 +49,7 @@ export async function apiSendOtp(mobileNumber: string) {
       userType: "2"
     };
 
-    const response = await axios.post(url, payload, {
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await api.post(url, payload);
 
     if (response.status !== 200) {
       throw new Error(response.data?.message || "Failed to send OTP");
@@ -88,11 +111,7 @@ export async function apiVerifyOtp(mobile_number: string, otp: string, id: strin
       id
     };
 
-    const response = await axios.post(url, payload, {
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await api.post(url, payload);
 
     if (response.status !== 200) {
       throw new Error(response.data?.message || "Failed to verify OTP");
@@ -150,12 +169,7 @@ export async function apiSaveUserDetails(payload: {
     // Log the payload for debugging
     console.log('Saving user details with payload:', JSON.stringify(payload, null, 2));
 
-    const response = await axios.post(url, payload, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('UserLoggedIn')}`,
-      },
-    });
+    const response = await api.post(url, payload);
 
     if (response.status !== 200) {
       throw new Error(response.data?.message || 'Failed to save user details');
@@ -180,11 +194,7 @@ export async function apiSaveUserDetails(payload: {
 export async function apiPing() {
   const url = `${BASE_URL}/api/ping`;
   try {
-    const response = await axios.get(url, {
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await api.get(url);
 
     if (response.status !== 200) {
       throw new Error(response.data?.message || "Failed to ping server");
@@ -215,11 +225,7 @@ export async function apiSendEmailOtp(email: string) {
       userType: "2"
     };
 
-    const response = await axios.post(url, payload, {
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await api.post(url, payload);
 
     if (response.status !== 200) {
       throw new Error(response.data?.message || "Failed to send OTP");
@@ -264,11 +270,7 @@ export async function apiVerifyEmailOtp(email: string, otp: string, id: string) 
       id
     };
 
-    const response = await axios.post(url, payload, {
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await api.post(url, payload);
 
     if (response.status !== 200) {
       throw new Error(response.data?.message || "Failed to verify OTP");
@@ -294,11 +296,7 @@ export async function apiGoogleSSO(token: string) {
       userType: "2"
     };
 
-    const response = await axios.post(url, payload, {
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await api.post(url, payload);
 
     if (response.status !== 200) {
       throw new Error(response.data?.message || "Failed to authenticate with Google");
@@ -315,3 +313,12 @@ export async function apiGoogleSSO(token: string) {
     );
   }
 }
+
+export const uploadVideo = (formData: FormData, token: string) => {
+  return api.post(`${BASE_URL}/api/uploadshot`, formData, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+};

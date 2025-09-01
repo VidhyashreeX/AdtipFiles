@@ -22,6 +22,7 @@ import { useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { useSidebar } from "../contexts/SidebarContext";
+import { userAPI } from "../services/api";
 import AdTipSidebar from "@/components/ui/AdTipSidebar";
 
 const Navbar = () => {
@@ -44,19 +45,22 @@ const Navbar = () => {
   }
 
   // Fetch wallet balance using react-query
-  const { data: balanceData, isLoading, isSuccess, error } = useQuery<BalanceResponse, Error>({
+  const { 
+    data: balanceData, 
+    isLoading, 
+    isSuccess, 
+    error // Add this to the destructured values
+  } = useQuery<BalanceResponse, Error>({ // Explicitly type the error as Error
     queryKey: ["walletBalance", user?.id],
     queryFn: async () => {
-      if (!user?.id || !user?.accessToken) {
-        throw new Error("User ID or access token missing");
+      if (!user?.id) {
+        throw new Error("User ID missing");
       }
-      const response = await axios.get(`https://api.adtip.in/api/getfunds/${user.id}`, {
-        headers: { Authorization: `Bearer ${user.accessToken}` },
-      });
-      console.log("Wallet balance response:", response.data);
+      // Use the centralized API service instead of direct axios call
+      const response = await userAPI.getWalletBalance(String(user.id));
       return response.data;
     },
-    enabled: !!user?.id && !!user?.accessToken, // Only run if user.id and accessToken exist
+    enabled: !!user?.id,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
 
@@ -64,17 +68,19 @@ const Navbar = () => {
   useEffect(() => {
     if (isSuccess && balanceData) {
       const balance = parseFloat(balanceData.availableBalance) || 0;
-      updateUserProfile({ wallet: balance });
+      // Only update if balance actually changed
+      if (user?.wallet !== balance) {
+        updateUserProfile({ wallet: balance }); // Use updateUser instead of updateUserProfile
+      }
     }
-  }, [isSuccess, balanceData, updateUserProfile]);
+  }, [isSuccess, balanceData, updateUserProfile, user?.wallet]); // Add user.wallet to dependencies
 
   // Handle error case
   useEffect(() => {
-    if (error) {
-      console.error("Failed to fetch wallet balance:", error.message);
-      updateUserProfile({ wallet: 0 }); // Fallback to 0 on error
-    }
-  }, [error, updateUserProfile]);
+    // The error handling for 401 is now handled by the interceptor in axios.interceptors.response
+    // This useEffect is no longer needed for 401 errors.
+    // If there are other specific error handling needs, they should be added here.
+  }, []);
 
   return (
     <nav className="fixed top-0 z-50 w-full bg-white shadow-sm border-b border-gray-200">

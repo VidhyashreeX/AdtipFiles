@@ -1,14 +1,37 @@
 import * as React from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, Navigate } from "react-router-dom";
 import AdTipSidebar from "./components/ui/AdTipSidebar";
 import Navbar from "./components/Navbar";
 import { cn } from "./lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { SidebarProvider, useSidebar } from "./contexts/SidebarContext";
+import { useAuthValidation } from "@/hooks/useAuthValidation";
+import { useAuth } from "./contexts/AuthContext";
 
 const AppLayoutContent = () => {
+  useAuthValidation();
+  const { isAuthenticated, authLoading } = useAuth();
   const isMobile = useIsMobile();
   const { isCollapsed } = useSidebar();
+
+  // Show loading while authentication is being determined
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-adtip-teal mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect to login if not authenticated
+  if (!isAuthenticated) {
+    console.log('🔐 User not authenticated, redirecting to login');
+    return <Navigate to="/login" replace />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />

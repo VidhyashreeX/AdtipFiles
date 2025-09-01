@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import CountrySelect from "../components/CountrySelect";
 import countryData from "../components/countryData.json";
+import { authAPI } from "../services/api";
+import toast from "react-hot-toast";
 
 const PhoneLogin: React.FC = () => {
   const navigate = useNavigate();
@@ -34,7 +36,7 @@ const PhoneLogin: React.FC = () => {
   const [pincode, setPincode] = useState<string>("");
   const [geoLocationLoading, setGeoLocationLoading] = useState<boolean>(false);
 
-  const BASE_URL = "https://your-api-url.com/";
+  const BASE_URL = import.meta.env.VITE_API_URL || 'https://api.adtip.in';
 
   // Check if user is logged in on mount
   useEffect(() => {
@@ -104,23 +106,21 @@ const PhoneLogin: React.FC = () => {
   };
 
   // Send OTP
-  const sendOTP = async () => {
+  const handleSendOTP = async () => {
     try {
       setGetOtpLoading(true);
-      const response = await axios.post(
-        `${BASE_URL}otplogin`,
-        {
-          mobileNumber: countryCode + phone,
-          userType: "2",
-        },
-        {
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      const fullPhoneNumber = countryCode + phone;
+      console.log('📱 Sending OTP to:', {
+        countryCode,
+        phone,
+        fullPhoneNumber
+      });
+      
+      const response = await authAPI.sendOTP(fullPhoneNumber);
       if (response.status === 200) {
         const userData = response.data.data[0];
         // Store for OTPVerification
-        localStorage.setItem("mobile_number", phone);
+        localStorage.setItem("mobile_number", fullPhoneNumber);
         localStorage.setItem("tempUserId", String(userData.id));
         localStorage.setItem(
           "otpCountdown",
@@ -131,11 +131,19 @@ const PhoneLogin: React.FC = () => {
         // Redirect to OTP verification
         navigate("/verify-otp");
       } else {
-        alert(response.data.message || "Failed to send OTP");
+        toast.error(response.data.message || "Failed to send OTP");
       }
     } catch (error) {
-      console.error(error);
-      alert("An error occurred");
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 404) {
+          toast.error("Authentication service unavailable");
+        } else if (error.response?.status === 400) {
+          toast.error("Invalid phone number format");
+        } else {
+          toast.error("Failed to send OTP. Please try again.");
+        }
+      }
+      console.error("OTP Error:", error);
     } finally {
       setGetOtpLoading(false);
     }
@@ -146,43 +154,38 @@ const PhoneLogin: React.FC = () => {
     if (!userId) return;
     try {
       setVerifyOtpLoading(true);
-      const response = await axios.post(
-        `${BASE_URL}otpverify`,
-        {
-          id: userId,
-          otp,
-        },
-        {
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      const response = await authAPI.verifyOTP(countryCode + phone, otp, String(userId));
       if (response.status === 200) {
-        const data = response.data.data[0];
-        const accessToken = response.data.accessToken;
-        setIsSaveUserDetails(data.isSaveUserDetails || 0);
-        setToken(accessToken);
-        setUserId(data.id);
-        setName(data.name || "");
-        setProfileImage(data.profileImage || "");
+        const { accessToken, data } = response.data;
+        const userData = {
+          ...data[0],
+          accessToken,
+          channelId: (data[0] as any).channelId || null
+        };
+        localStorage.setItem('UserLoggedIn', accessToken);
+        localStorage.setItem('user', JSON.stringify(userData));
+        setUserId(userData.id);
+        setName(userData.name || "");
+        setProfileImage(userData.profileImage || "");
 
         // Save to localStorage
         localStorage.setItem("UserLoggedIn", accessToken);
-        localStorage.setItem("UserId", String(data.id));
-        localStorage.setItem("name", data.name || "");
-        localStorage.setItem("profileImage", data.profile_image || "");
-        localStorage.setItem("gender", data.gender || "");
-        localStorage.setItem("profession", data.profession || "");
-        localStorage.setItem("maritalStatus", data.maternal_status || "");
-        localStorage.setItem("age", data.dob || "");
+        localStorage.setItem("UserId", String(userData.id));
+        localStorage.setItem("name", userData.name || "");
+        localStorage.setItem("profileImage", userData.profile_image || "");
+        localStorage.setItem("gender", userData.gender || "");
+        localStorage.setItem("profession", userData.profession || "");
+        localStorage.setItem("maritalStatus", userData.maternal_status || "");
+        localStorage.setItem("age", userData.dob || "");
 
         setIsUserLoggedIn(true);
         await checkUserDetailsAndRedirect();
       } else {
-        alert(response.data.message || "Invalid OTP");
+        toast.error(response.data.message || "Invalid OTP");
       }
     } catch (error) {
       console.error(error);
-      alert("Failed to verify OTP");
+      toast.error("Failed to verify OTP");
     } finally {
       setVerifyOtpLoading(false);
     }
@@ -224,11 +227,11 @@ const PhoneLogin: React.FC = () => {
         setIsUserLoggedIn(true);
         await checkUserDetailsAndRedirect();
       } else {
-        alert(response.data.message || "Failed to login");
+        toast.error(response.data.message || "Failed to login");
       }
     } catch (error) {
       console.error(error);
-      alert("Invalid username or password");
+      toast.error("Invalid username or password");
     } finally {
       setLoginLoading(false);
     }
@@ -264,13 +267,13 @@ const PhoneLogin: React.FC = () => {
         setTimer(40);
         setIsUserLoggedIn(false);
         navigate("/");
-        alert("Logged out successfully");
+        toast.success("Logged out successfully");
       } else {
-        alert(response.data.message || "Failed to logout");
+        toast.error(response.data.message || "Failed to logout");
       }
     } catch (error) {
       console.error(error);
-      alert("Error during logout");
+      toast.error("Error during logout");
     }
   };
 
@@ -331,7 +334,7 @@ const PhoneLogin: React.FC = () => {
         localStorage.setItem("UserLoggedIn", token);
         localStorage.setItem("name", name);
         localStorage.setItem("profileImage", profileImage);
-        alert("Account created successfully");
+        toast.success("Account created successfully");
         navigate("/dashboard");
         // Clear localStorage keys
         localStorage.removeItem("name");
@@ -346,7 +349,7 @@ const PhoneLogin: React.FC = () => {
       }
     } catch (error) {
       console.error(error);
-      alert("Error saving user details");
+      toast.error("Error saving user details");
     }
   };
 
@@ -357,7 +360,7 @@ const PhoneLogin: React.FC = () => {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            sendOTP();
+            handleSendOTP();
           }}
         >
           <div className="mb-4">
@@ -379,11 +382,74 @@ const PhoneLogin: React.FC = () => {
             />
           </div>
           <button
-            type="submit"
+            onClick={handleSendOTP}
             className="w-full bg-blue-500 text-white px-4 py-2 rounded mb-4 disabled:bg-blue-300"
             disabled={getOtpLoading}
           >
             {getOtpLoading ? "Sending..." : "Send OTP"}
+          </button>
+
+          {/* Test API Connection Button */}
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const response = await authAPI.testConnection();
+                console.log('API Test Response:', response);
+                toast.success('API connection successful');
+              } catch (error) {
+                console.error('API Test Error:', error);
+                toast.error('API connection failed');
+              }
+            }}
+            className="w-full bg-gray-500 text-white px-4 py-2 rounded mb-4"
+          >
+            Test API Connection
+          </button>
+
+          {/* Test OTP Endpoint Button */}
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const response = await authAPI.sendOTP('+911234567890');
+                console.log('OTP Test Response:', response);
+                toast.success('OTP endpoint working');
+              } catch (error: any) {
+                console.error('OTP Test Error:', error);
+                if (error.response?.status === 404) {
+                  toast.error('OTP endpoint not found - check backend');
+                } else {
+                  toast.error(`OTP endpoint error: ${error.response?.status}`);
+                }
+              }
+            }}
+            className="w-full bg-yellow-500 text-white px-4 py-2 rounded mb-4"
+          >
+            Test OTP Endpoint
+          </button>
+
+          {/* Test OTP Verification Button */}
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                // Test with sample data
+                const response = await authAPI.verifyOTP('+911234567890', '123456', '123');
+                console.log('OTP Verification Test Response:', response);
+                toast.success('OTP verification endpoint working');
+              } catch (error: any) {
+                console.error('OTP Verification Test Error:', error);
+                if (error.response?.status === 400) {
+                  toast.error('OTP verification format issue - check payload');
+                } else {
+                  toast.error(`OTP verification error: ${error.response?.status}`);
+                }
+              }
+            }}
+            className="w-full bg-green-500 text-white px-4 py-2 rounded mb-4"
+          >
+            Test OTP Verification
           </button>
 
           <input

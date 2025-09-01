@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { InputOTP } from "@/components/ui/input-otp";
-import { apiSendOtp, apiSendEmailOtp } from "../api";
+import { authAPI } from "../services/api";
 import { cn } from "@/lib/utils";
 
 const OTPVerification = () => {
@@ -24,6 +24,12 @@ const OTPVerification = () => {
     const storedEmail = localStorage.getItem("email");
     const tempUserId = localStorage.getItem("tempUserId");
 
+    console.log('🔍 OTPVerification useEffect - stored data:', {
+      storedMobile,
+      storedEmail,
+      tempUserId
+    });
+
     if (!tempUserId || (!storedMobile && !storedEmail)) {
       toast.error("Please login first");
       navigate("/login");
@@ -33,6 +39,7 @@ const OTPVerification = () => {
     if (storedMobile) {
       setMobileNumber(storedMobile);
       setVerificationType("phone");
+      console.log('📱 Setting mobile number:', storedMobile);
     } else if (storedEmail) {
       setEmail(storedEmail);
       setVerificationType("email");
@@ -69,22 +76,23 @@ const OTPVerification = () => {
       const tempUserId = localStorage.getItem("tempUserId");
       if (!tempUserId) throw new Error("Session expired. Please login again.");
 
+      console.log('🔍 OTP Verification Debug:', {
+        mobileNumber,
+        otp,
+        tempUserId,
+        verificationType
+      });
+
       let result;
       if (verificationType === "phone") {
+        console.log('📱 Verifying OTP for phone:', mobileNumber);
         result = await verifyOTP(mobileNumber, otp, tempUserId);
       } else {
         result = await verifyEmailOTP(email, otp, tempUserId);
       }
 
-      if (result?.data?.success || result?.data?.message === "OTP verify successful.") {
-        if (!result.data.data?.[0]) {
-          throw new Error("Invalid server response: missing user data");
-        }
-
-        const { id, is_registered, isSaveUserDetails = 0 } = result.data.data[0];
-        
+      if (result) {
         // Clear session data
-        localStorage.setItem("UserId", id.toString());
         localStorage.removeItem("tempUserId");
         localStorage.removeItem("mobile_number");
         localStorage.removeItem("email");
@@ -92,66 +100,57 @@ const OTPVerification = () => {
         
         toast.success("OTP verified successfully");
 
-        // Navigate based on user state
-        if (is_registered === 1) {
-          navigate(isSaveUserDetails === 0 ? "/complete-profile" : "/home", { replace: true });
-        } else {
-          navigate("/onboarding", { replace: true });
-        }
-      } else {
-        throw new Error(result?.data?.message || "Failed to verify OTP");
-      }
-    } catch (error) {
-      let errorMsg = "Failed to verify OTP";
-      // Check for HTTP 500 or similar
-      if (error && typeof error === 'object') {
-        if ('response' in error && error.response && typeof error.response.status === 'number') {
-          if (error.response.status === 500) {
-            errorMsg = "Internal Server Error (500)";
-          } else if (error.response.data && typeof error.response.data.message === 'string') {
-            errorMsg = error.response.data.message;
-          } else if (error.response.data && typeof error.response.data.sqlMessage === 'string') {
-            errorMsg = error.response.data.sqlMessage;
+        // Wait for authentication state to be properly set
+        const checkAuthState = () => {
+          const token = localStorage.getItem('UserLoggedIn');
+          const user = localStorage.getItem('user');
+          console.log('🔐 Checking auth state:', { token, user });
+          
+          if (token && user) {
+            console.log('✅ Auth state ready, redirecting to home');
+            navigate("/home", { replace: true });
+          } else {
+            console.log('⏳ Auth state not ready yet, waiting...');
+            setTimeout(checkAuthState, 200);
           }
-        } else if ('status' in error && (error as any).status === 500) {
-          errorMsg = "Internal Server Error (500)";
-        } else if ('message' in error && typeof (error as any).message === 'string') {
-          errorMsg = (error as any).message;
-        } else if ('sqlMessage' in error && typeof (error as any).sqlMessage === 'string') {
-          errorMsg = (error as any).sqlMessage;
-        } else {
-          errorMsg = JSON.stringify(error);
-        }
-      } else if (error instanceof Error) {
-        errorMsg = error.message;
+        };
+        
+        // Start checking auth state
+        setTimeout(checkAuthState, 500);
       }
-      toast.error(errorMsg);
+    } catch (error: any) {
+      console.error("OTP verification error:", error);
+      toast.error(error.message || "Failed to verify OTP");
     } finally {
       setLoading(false);
     }
   };
 
   const handleResendOTP = async () => {
-    if (countdown > 0) {
-      toast.error(`Please wait ${countdown} seconds before requesting a new OTP`);
-      return;
-    }
-
     setResendLoading(true);
     try {
-      const response = verificationType === "phone"
-        ? await apiSendOtp(mobileNumber)
-        : await apiSendEmailOtp(email);
+      let response;
+      if (verificationType === "phone") {
+        response = await authAPI.sendOTP(mobileNumber);
+      } else {
+        response = await authAPI.sendEmailOTP(email);
+      }
 
-      if (response?.data?.success || response?.data?.status === 200) {
-        localStorage.setItem("otpCountdown", (Math.floor(Date.now() / 1000) + 30).toString());
+      if (response.status === 200) {
+        const userData = response.data.data[0];
+        localStorage.setItem("tempUserId", String(userData.id));
+        localStorage.setItem(
+          "otpCountdown",
+          (Math.floor(Date.now() / 1000) + 30).toString()
+        );
         setCountdown(30);
         toast.success("OTP resent successfully");
       } else {
-        throw new Error(response?.data?.message || "Failed to resend OTP");
+        toast.error("Failed to resend OTP");
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to resend OTP");
+      console.error("Resend OTP error:", error);
+      toast.error("Failed to resend OTP");
     } finally {
       setResendLoading(false);
     }
